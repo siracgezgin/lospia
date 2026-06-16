@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useOptimistic, useActionState } from "react";
+import { useState, useEffect, useTransition, useOptimistic, useActionState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Clock, Play, Square, MessageSquare } from "lucide-react";
 import type {
@@ -200,13 +200,16 @@ function TimerPanel({ task, activeTimer, userId }: { task: Task; activeTimer: Ti
   const [localTimer, setLocalTimer] = useOptimistic<TimeEntry | null>(activeTimer);
   const [elapsed, setElapsed] = useState(0);
 
-  // Count elapsed seconds while timer is running
-  useState(() => {
+  // Drive a live seconds counter via useEffect — keeps Date.now() out of render
+  useEffect(() => {
     if (!activeTimer) return;
     const start = new Date(activeTimer.started_at).getTime();
-    const interval = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000);
+    const interval = setInterval(
+      () => setElapsed(Math.floor((Date.now() - start) / 1000)),
+      1000
+    );
     return () => clearInterval(interval);
-  });
+  }, [activeTimer]);
 
   function formatTime(s: number) {
     const h = Math.floor(s / 3600);
@@ -215,10 +218,6 @@ function TimerPanel({ task, activeTimer, userId }: { task: Task; activeTimer: Ti
     if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
     return `${m}:${String(sec).padStart(2, "0")}`;
   }
-
-  const currentElapsed = localTimer
-    ? Math.floor((Date.now() - new Date(localTimer.started_at).getTime()) / 1000)
-    : 0;
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -229,7 +228,7 @@ function TimerPanel({ task, activeTimer, userId }: { task: Task; activeTimer: Ti
         {localTimer ? (
           <div className="flex items-center gap-3">
             <span className="text-sm font-mono text-green-600 font-semibold">
-              {formatTime(Math.max(elapsed, currentElapsed))}
+              {formatTime(elapsed)}
             </span>
             <button
               onClick={() => startTransition(async () => {

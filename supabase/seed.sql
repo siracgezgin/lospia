@@ -70,6 +70,43 @@ begin
   on conflict (id) do nothing;
 
   -- -------------------------------------------------------------------------
+  -- Auth identities (REQUIRED for email/password login via GoTrue)
+  -- Each auth.users row needs a matching auth.identities row.
+  -- provider_id = user UUID for the 'email' provider (GoTrue convention).
+  -- -------------------------------------------------------------------------
+  insert into auth.identities (
+    id, user_id, provider_id, identity_data, provider,
+    last_sign_in_at, created_at, updated_at
+  ) values
+  (
+    gen_random_uuid(),
+    v_alice_id,
+    v_alice_id::text,
+    jsonb_build_object(
+      'sub',            v_alice_id::text,
+      'email',          'alice@taskos.local',
+      'email_verified', true,
+      'phone_verified', false
+    ),
+    'email',
+    now(), now(), now()
+  ),
+  (
+    gen_random_uuid(),
+    v_bob_id,
+    v_bob_id::text,
+    jsonb_build_object(
+      'sub',            v_bob_id::text,
+      'email',          'bob@taskos.local',
+      'email_verified', true,
+      'phone_verified', false
+    ),
+    'email',
+    now(), now(), now()
+  )
+  on conflict (provider_id, provider) do nothing;
+
+  -- -------------------------------------------------------------------------
   -- Profiles (normally auto-created by trigger; seed explicitly for safety)
   -- -------------------------------------------------------------------------
   insert into public.profiles (id, email, full_name) values

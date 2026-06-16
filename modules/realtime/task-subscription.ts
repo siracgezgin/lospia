@@ -5,7 +5,7 @@
 // Must be used inside a Client Component with cleanup on unmount.
 // If risky, leave REALTIME_ENABLED=false (default) — all other features work normally.
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { featureFlags } from "@/lib/utils/feature-flags";
 import type { TaskActivity } from "@/types";
@@ -24,15 +24,11 @@ interface UseTaskActivityRealtimeOptions {
 export function useTaskActivityRealtime({ taskId, onNewActivity }: UseTaskActivityRealtimeOptions): void {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const callbackRef = useRef(onNewActivity);
-  callbackRef.current = onNewActivity;
 
-  const cleanup = useCallback(() => {
-    if (channelRef.current) {
-      const supabase = createClient();
-      supabase.removeChannel(channelRef.current).catch(() => {});
-      channelRef.current = null;
-    }
-  }, []);
+  // Keep callback ref current without causing re-subscription
+  useEffect(() => {
+    callbackRef.current = onNewActivity;
+  });
 
   useEffect(() => {
     if (!featureFlags.realtime) return;
@@ -49,15 +45,17 @@ export function useTaskActivityRealtime({ taskId, onNewActivity }: UseTaskActivi
           filter: `task_id=eq.${taskId}`,
         },
         (payload) => {
-          const activity = payload.new as TaskActivity;
-          callbackRef.current(activity);
+          const _activity = payload.new as TaskActivity;
+          callbackRef.current(_activity);
         }
       )
       .subscribe();
 
     channelRef.current = channel;
 
-    // Cleanup on unmount — critical to avoid leaks
-    return cleanup;
-  }, [taskId, cleanup]);
+    return () => {
+      supabase.removeChannel(channel).catch(() => {});
+      channelRef.current = null;
+    };
+  }, [taskId]);
 }

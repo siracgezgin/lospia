@@ -78,8 +78,10 @@ export function LoginForm() {
           />
         </div>
 
-        {state?.error && (
-          <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{state.error}</p>
+        {state?.error != null && (
+          <p className="text-sm bg-red-50 border border-red-200 px-3 py-2 rounded-lg" style={{ color: '#b91c1c' }}>
+            {state.error || "Authentication failed. Please try again."}
+          </p>
         )}
 
         {state?.success && mode === "signup" && (
