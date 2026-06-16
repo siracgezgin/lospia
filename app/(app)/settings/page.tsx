@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import type { Workspace, WorkspaceMember, Profile, CustomFieldDefinition } from "@/types";
+import { ContactsManager } from "@/components/settings/ContactsManager";
+import type { Workspace, WorkspaceMember, Profile, CustomFieldDefinition, WorkspaceContact } from "@/types";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -16,7 +17,7 @@ export default async function SettingsPage() {
   const userRole = memberRows?.[0]?.role ?? "member";
   if (!workspaceId) return <div className="p-8 text-gray-500">Çalışma alanı bulunamadı.</div>;
 
-  const [wsResult, membersResult, profileResult, cfResult] = await Promise.all([
+  const [wsResult, membersResult, profileResult, cfResult, contactsResult] = await Promise.all([
     supabase.from("workspaces").select("*").eq("id", workspaceId).single(),
     supabase
       .from("workspace_members")
@@ -28,11 +29,17 @@ export default async function SettingsPage() {
       .select("*")
       .eq("workspace_id", workspaceId)
       .order("position"),
+    supabase
+      .from("workspace_contacts")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .order("created_at"),
   ]);
 
   const workspace: Workspace | null = wsResult.data;
   const profile: Profile | null = profileResult.data;
   const customFields: CustomFieldDefinition[] = cfResult.data ?? [];
+  const contacts: WorkspaceContact[] = (contactsResult.data ?? []) as WorkspaceContact[];
 
   return (
     <div className="max-w-2xl mx-auto py-8 px-4 space-y-10">
@@ -88,6 +95,15 @@ export default async function SettingsPage() {
             </div>
           ))}
         </div>
+      </section>
+
+      {/* Kişiler */}
+      <section className="space-y-4">
+        <h2 className="text-base font-semibold text-gray-700">Kişiler</h2>
+        <p className="text-xs text-gray-400 -mt-2">
+          Görevlerde iş birliği kişisi olarak seçilebilen kişiler. Sisteme giriş yapmalarına gerek yoktur.
+        </p>
+        <ContactsManager workspaceId={workspaceId} initialContacts={contacts} />
       </section>
 
       {/* Custom fields */}

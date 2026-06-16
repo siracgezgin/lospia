@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { KanbanBoard } from "@/components/board/KanbanBoard";
-import type { Task, SavedView } from "@/types";
+import type { Task, SavedView, Profile, WorkspaceContact } from "@/types";
 
 export default async function BoardPage({
   searchParams,
@@ -14,7 +14,6 @@ export default async function BoardPage({
 
   const params = await searchParams;
 
-  // Get workspace
   const { data: memberRows } = await supabase
     .from("workspace_members")
     .select("workspace_id")
@@ -29,10 +28,7 @@ export default async function BoardPage({
           <p className="text-sm text-gray-500 mb-4">
             Çalışma alanınız yüklenemedi. Bu genellikle geçici bir sorundur.
           </p>
-          <a
-            href="/board"
-            className="inline-block text-sm text-blue-600 hover:underline"
-          >
+          <a href="/board" className="inline-block text-sm text-blue-600 hover:underline">
             Yenile
           </a>
         </div>
@@ -40,8 +36,7 @@ export default async function BoardPage({
     );
   }
 
-  // Fetch tasks and saved views
-  const [tasksResult, viewsResult] = await Promise.all([
+  const [tasksResult, viewsResult, profilesResult, contactsResult] = await Promise.all([
     supabase
       .from("tasks")
       .select("*")
@@ -53,10 +48,29 @@ export default async function BoardPage({
       .eq("workspace_id", workspaceId)
       .or(`is_shared.eq.true,owner_id.eq.${user.id}`)
       .order("position"),
+    supabase
+      .from("profiles")
+      .select("id, full_name, email")
+      .in(
+        "id",
+        (
+          await supabase
+            .from("workspace_members")
+            .select("user_id")
+            .eq("workspace_id", workspaceId)
+        ).data?.map((m: { user_id: string }) => m.user_id) ?? []
+      ),
+    supabase
+      .from("workspace_contacts")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .order("created_at"),
   ]);
 
   const tasks: Task[] = tasksResult.data ?? [];
   const savedViews: SavedView[] = viewsResult.data ?? [];
+  const profiles: Pick<Profile, "id" | "full_name" | "email">[] = profilesResult.data ?? [];
+  const contacts: WorkspaceContact[] = (contactsResult.data ?? []) as WorkspaceContact[];
   const activeViewId = params.view ?? null;
 
   return (
@@ -66,6 +80,8 @@ export default async function BoardPage({
       activeViewId={activeViewId}
       workspaceId={workspaceId}
       userId={user.id}
+      profiles={profiles}
+      contacts={contacts}
     />
   );
 }

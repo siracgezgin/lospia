@@ -32,6 +32,12 @@ declare
   v_sv_blocked  uuid := '00000000-0000-0000-0000-000000000032';
   v_sv_high_pri uuid := '00000000-0000-0000-0000-000000000033';
 
+  v_contact_selen  uuid := '00000000-0000-0000-0000-000000000040';
+  v_contact_kismet uuid := '00000000-0000-0000-0000-000000000041';
+  v_contact_srn    uuid := '00000000-0000-0000-0000-000000000042';
+  v_contact_afr    uuid := '00000000-0000-0000-0000-000000000043';
+  v_contact_af     uuid := '00000000-0000-0000-0000-000000000044';
+
 begin
 
   -- -------------------------------------------------------------------------
@@ -53,7 +59,7 @@ begin
     'alice@taskos.local',
     crypt('TaskOS2024!', gen_salt('bf')),
     now(), now(), now(),
-    '{"full_name": "Alice Yıldız"}'::jsonb,
+    '{"full_name": "Siraç"}'::jsonb,
     '{"provider": "email", "providers": ["email"]}'::jsonb,
     'authenticated', 'authenticated',
     false, false,
@@ -65,7 +71,7 @@ begin
     'bob@taskos.local',
     crypt('TaskOS2024!', gen_salt('bf')),
     now(), now(), now(),
-    '{"full_name": "Bob Kaya"}'::jsonb,
+    '{"full_name": "Aslı Filinta"}'::jsonb,
     '{"provider": "email", "providers": ["email"]}'::jsonb,
     'authenticated', 'authenticated',
     false, false,
@@ -114,8 +120,8 @@ begin
   -- Profiles (normally auto-created by trigger; seed explicitly for safety)
   -- -------------------------------------------------------------------------
   insert into public.profiles (id, email, full_name) values
-    (v_alice_id, 'alice@taskos.local', 'Alice Yıldız'),
-    (v_bob_id,   'bob@taskos.local',   'Bob Kaya')
+    (v_alice_id, 'alice@taskos.local', 'Siraç'),
+    (v_bob_id,   'bob@taskos.local',   'Aslı Filinta')
   on conflict (id) do nothing;
 
   -- -------------------------------------------------------------------------
@@ -175,6 +181,17 @@ begin
     '{"filters": {"priority": ["high","urgent"]}, "sort": {"field": "due_date", "direction": "asc"}, "view_type": "board"}'::jsonb,
     true, 3
   )
+  on conflict (id) do nothing;
+
+  -- -------------------------------------------------------------------------
+  -- Workspace contacts (non-auth collaborators)
+  -- -------------------------------------------------------------------------
+  insert into public.workspace_contacts (id, workspace_id, name, email, role_label) values
+    (v_contact_selen,  v_ws_id, 'Selen',       null, null),
+    (v_contact_kismet, v_ws_id, 'Kısmet',      null, null),
+    (v_contact_srn,    v_ws_id, 'SRN',         null, null),
+    (v_contact_afr,    v_ws_id, 'AFR',         null, null),
+    (v_contact_af,     v_ws_id, 'AF',          null, null)
   on conflict (id) do nothing;
 
   -- -------------------------------------------------------------------------

@@ -13,18 +13,22 @@ import {
 } from "@tanstack/react-table";
 import { useState, useOptimistic, useTransition } from "react";
 import Link from "next/link";
-import { ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
-import type { Task, SavedView, TaskStatus, TaskPriority } from "@/types";
+import { ArrowUp, ArrowDown, ArrowUpDown, Plus, FileSpreadsheet } from "lucide-react";
+import type { Task, SavedView, TaskStatus, TaskPriority, Profile, WorkspaceContact } from "@/types";
 import { STATUS_LABELS, TASK_STATUSES, TASK_PRIORITIES, PRIORITY_LABELS, PRIORITY_ORDER } from "@/lib/utils/task-constants";
 import { FIELD_LABELS } from "@/lib/i18n/tr";
 import { updateTaskStatus } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils/cn";
+import { CreateTaskModal } from "@/components/task/CreateTaskModal";
+import { ExcelImportModal } from "@/components/task/ExcelImportModal";
 
 interface Props {
   tasks: Task[];
   savedViews: SavedView[];
   workspaceId: string;
   userId: string;
+  profiles: Pick<Profile, "id" | "full_name" | "email">[];
+  contacts: WorkspaceContact[];
 }
 
 const columnHelper = createColumnHelper<Task>();
@@ -74,7 +78,7 @@ function PriorityBadge({ priority }: { priority: TaskPriority }) {
 
 // ---- Main component ----
 
-export function TaskListView({ tasks, savedViews, workspaceId }: Props) {
+export function TaskListView({ tasks, savedViews, workspaceId, profiles, contacts }: Props) {
   // Sort by updated_at (a visible column) by default — avoids "column not found" error
   const [sorting, setSorting] = useState<SortingState>([
     { id: "updated_at", desc: true },
@@ -85,6 +89,8 @@ export function TaskListView({ tasks, savedViews, workspaceId }: Props) {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<TaskStatus | "all">("all");
   const [filterPriority, setFilterPriority] = useState<TaskPriority | "all">("all");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const filteredTasks = tasks.filter((t) => {
     if (filterStatus !== "all" && t.status !== filterStatus) return false;
@@ -206,6 +212,21 @@ export function TaskListView({ tasks, savedViews, workspaceId }: Props) {
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2 px-4 py-3 bg-white border-b border-gray-100 shrink-0">
+        <button
+          onClick={() => setModalOpen(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          <Plus size={14} />
+          Görev oluştur
+        </button>
+        <button
+          onClick={() => setImportOpen(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <FileSpreadsheet size={14} />
+          Excel&apos;den içe aktar
+        </button>
+        <div className="w-px h-5 bg-gray-200 mx-1" />
         <input
           type="search"
           placeholder="Görev ara…"
@@ -287,6 +308,22 @@ export function TaskListView({ tasks, savedViews, workspaceId }: Props) {
           </tbody>
         </table>
       </div>
+
+      {modalOpen && (
+        <CreateTaskModal
+          onClose={() => setModalOpen(false)}
+          workspaceId={workspaceId}
+          profiles={profiles}
+          contacts={contacts}
+        />
+      )}
+      {importOpen && (
+        <ExcelImportModal
+          onClose={() => setImportOpen(false)}
+          workspaceId={workspaceId}
+          contacts={contacts}
+        />
+      )}
     </div>
   );
 }

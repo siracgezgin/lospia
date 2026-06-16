@@ -19,11 +19,13 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useState, useOptimistic, useTransition, useCallback, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { GripVertical, Plus } from "lucide-react";
+import { GripVertical, Plus, FileSpreadsheet } from "lucide-react";
 import { TASK_STATUSES, STATUS_LABELS } from "@/lib/utils/task-constants";
 import { reorderTask } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils/cn";
-import type { Task, SavedView, TaskStatus } from "@/types";
+import { CreateTaskModal } from "@/components/task/CreateTaskModal";
+import { ExcelImportModal } from "@/components/task/ExcelImportModal";
+import type { Task, SavedView, TaskStatus, Profile, WorkspaceContact } from "@/types";
 
 // ---- Types ----
 
@@ -33,6 +35,8 @@ interface Props {
   activeViewId: string | null;
   workspaceId: string;
   userId: string;
+  profiles: Pick<Profile, "id" | "full_name" | "email">[];
+  contacts: WorkspaceContact[];
 }
 
 // ---- Shared card body (no drag chrome) ----
@@ -221,7 +225,7 @@ const subscribeMounted = () => () => {};
 const getMounted = () => true;
 const getServerMounted = () => false;
 
-export function KanbanBoard({ tasks: initialTasks, savedViews, activeViewId, workspaceId }: Props) {
+export function KanbanBoard({ tasks: initialTasks, savedViews, activeViewId, workspaceId, profiles, contacts }: Props) {
   const mounted = useSyncExternalStore(subscribeMounted, getMounted, getServerMounted);
 
   const sensors = useSensors(
@@ -230,6 +234,14 @@ export function KanbanBoard({ tasks: initialTasks, savedViews, activeViewId, wor
 
   const [_isPending, startTransition] = useTransition();
   const [activeTask, setActiveTask] = useState<Task | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [modalDefaultStatus, setModalDefaultStatus] = useState<TaskStatus>("backlog");
+
+  function handleAddTask(status: TaskStatus) {
+    setModalDefaultStatus(status);
+    setModalOpen(true);
+  }
 
   const [optimisticTasks, setOptimisticTasks] = useOptimistic(
     initialTasks,
@@ -344,6 +356,24 @@ export function KanbanBoard({ tasks: initialTasks, savedViews, activeViewId, wor
         </div>
       )}
 
+      {/* Action toolbar */}
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-100 bg-white shrink-0">
+        <button
+          onClick={() => { setModalDefaultStatus("backlog"); setModalOpen(true); }}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          <Plus size={14} />
+          Görev oluştur
+        </button>
+        <button
+          onClick={() => setImportOpen(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <FileSpreadsheet size={14} />
+          Excel&apos;den içe aktar
+        </button>
+      </div>
+
       {/* Pre-mount: static columns (stable HTML, no dnd-kit aria IDs) */}
       {!mounted && (
         <div className="flex gap-3 p-4 overflow-x-auto flex-1 items-start">
@@ -372,6 +402,7 @@ export function KanbanBoard({ tasks: initialTasks, savedViews, activeViewId, wor
                 key={status}
                 status={status}
                 tasks={tasksByStatus[status] ?? []}
+                onAddTask={handleAddTask}
               />
             ))}
           </div>
@@ -385,6 +416,23 @@ export function KanbanBoard({ tasks: initialTasks, savedViews, activeViewId, wor
       <p className="text-center text-xs text-gray-300 py-1">
         workspace: {workspaceId.slice(0, 8)}…
       </p>
+
+      {modalOpen && (
+        <CreateTaskModal
+          onClose={() => setModalOpen(false)}
+          workspaceId={workspaceId}
+          defaultStatus={modalDefaultStatus}
+          profiles={profiles}
+          contacts={contacts}
+        />
+      )}
+      {importOpen && (
+        <ExcelImportModal
+          onClose={() => setImportOpen(false)}
+          workspaceId={workspaceId}
+          contacts={contacts}
+        />
+      )}
     </div>
   );
 }

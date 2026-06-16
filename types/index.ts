@@ -36,6 +36,17 @@ export type CustomFieldDefinition = Database["public"]["Tables"]["custom_field_d
 
 export type WebhookEvent = Database["public"]["Tables"]["webhook_events"]["Row"];
 
+// workspace_contacts is not in the generated schema yet — define manually
+export type WorkspaceContact = {
+  id: string;
+  workspace_id: string;
+  name: string;
+  email: string | null;
+  role_label: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 // Enum aliases
 export type TaskStatus = Database["public"]["Enums"]["task_status"];
 export type TaskPriority = Database["public"]["Enums"]["task_priority"];
