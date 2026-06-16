@@ -49,7 +49,7 @@ export function AppSidebar({ workspace, savedViews }: Props) {
         </div>
         {!collapsed && (
           <span className="font-semibold text-sm text-gray-900 truncate">
-            {workspace?.name ?? "SpikOS TaskOS"}
+            {workspace?.name ?? "Aslı Filinta Operasyon"}
           </span>
         )}
       </div>

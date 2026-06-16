@@ -1,8 +1,8 @@
 @AGENTS.md
 
-# SpikOS TaskOS
+# Aslı Filinta Operasyon
 
-Internal task-management OS. Local-first, zero external cost, production-safe.
+Dahili görev yönetim sistemi. Local-first, sıfır harici maliyet, üretime hazır.
 
 ## Stack
 - Next.js 16 (App Router) · TypeScript · Tailwind v4

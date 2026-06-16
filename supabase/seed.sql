@@ -122,7 +122,7 @@ begin
   -- Workspace
   -- -------------------------------------------------------------------------
   insert into public.workspaces (id, name, slug, created_by) values
-    (v_ws_id, 'SpikOS Dev', 'spikos-dev', v_alice_id)
+    (v_ws_id, 'Aslı Filinta Çalışma Alanı', 'asli-filinta', v_alice_id)
   on conflict (id) do nothing;
 
   -- -------------------------------------------------------------------------
@@ -350,7 +350,7 @@ begin
 
   -- ARCHIVED (2)
   (v_ws_id, '[ARCHIVED] Old Trello board migration plan',
-   'Superseded by TaskOS. Archived.',
+   'Daha iyi bir sistemle değiştirildi. Arşivlendi.',
    'archived', 'low', null,
    null, null,
    '{archived,planning}',
