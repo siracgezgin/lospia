@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { KanbanBoard } from "@/components/board/KanbanBoard";
-import type { Task, SavedView } from "@/types/database";
+import type { Task, SavedView } from "@/types";
 
 export default async function BoardPage({
   searchParams,

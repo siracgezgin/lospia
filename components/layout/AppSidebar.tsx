@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { signOut } from "@/lib/actions/auth";
-import type { Workspace, SavedView } from "@/types/database";
+import type { Workspace, SavedView } from "@/types";
 
 const NAV_ITEMS = [
   { href: "/board",     label: "Board",     icon: Kanban },

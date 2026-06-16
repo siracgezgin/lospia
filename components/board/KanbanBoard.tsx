@@ -24,7 +24,7 @@ import { GripVertical, Plus } from "lucide-react";
 import { TASK_STATUSES, STATUS_LABELS } from "@/lib/utils/task-constants";
 import { reorderTask } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils/cn";
-import type { Task, SavedView, TaskStatus } from "@/types/database";
+import type { Task, SavedView, TaskStatus } from "@/types";
 
 // ---- Types ----
 

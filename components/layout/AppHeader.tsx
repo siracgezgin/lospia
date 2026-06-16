@@ -1,5 +1,5 @@
 import { NotificationBell } from "@/components/notifications/NotificationBell";
-import type { Workspace, Notification } from "@/types/database";
+import type { Workspace, Notification } from "@/types";
 
 interface Props {
   workspace: Workspace | null;

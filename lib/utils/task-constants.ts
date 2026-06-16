@@ -1,4 +1,4 @@
-import type { TaskStatus, TaskPriority } from "@/types/database";
+import type { TaskStatus, TaskPriority } from "@/types";
 
 export const TASK_STATUSES: TaskStatus[] = [
   "backlog",

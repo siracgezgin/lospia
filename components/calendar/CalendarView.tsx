@@ -18,7 +18,7 @@ import {
   parseISO,
 } from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import type { TaskStatus, TaskPriority } from "@/types/database";
+import type { TaskStatus, TaskPriority } from "@/types";
 import { cn } from "@/lib/utils/cn";
 
 type CalTask = {

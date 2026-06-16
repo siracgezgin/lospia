@@ -625,7 +625,7 @@ create policy "storage: uploader or admin can delete attachments"
     bucket_id = 'task-attachments'
     and auth.uid() is not null
     and (
-      owner = auth.uid()::text
+      owner = auth.uid()
       or is_workspace_admin((storage.foldername(name))[1]::uuid)
     )
   );

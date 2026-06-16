@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { generateKeyBetween } from "fractional-indexing";
-import type { TaskStatus, TaskPriority } from "@/types/database";
+import type { TaskStatus, TaskPriority } from "@/types";
 
 // ---- Zod schemas ----
 

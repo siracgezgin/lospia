@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import { TaskDetail } from "@/components/task/TaskDetail";
-import type { Task, TaskActivity, TimeEntry, CustomFieldDefinition, Profile } from "@/types/database";
+import type { Task, TaskActivity, TimeEntry, CustomFieldDefinition, Profile } from "@/types";
 
 export default async function TaskDetailPage({
   params,

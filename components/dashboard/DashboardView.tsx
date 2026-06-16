@@ -10,7 +10,7 @@ import {
   Cell,
 } from "recharts";
 import Link from "next/link";
-import type { TaskStatus, TaskPriority } from "@/types/database";
+import type { TaskStatus, TaskPriority } from "@/types";
 import { STATUS_LABELS } from "@/lib/utils/task-constants";
 
 interface Props {

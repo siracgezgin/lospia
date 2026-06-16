@@ -11,7 +11,7 @@ import type {
   Profile,
   TaskStatus,
   TaskPriority,
-} from "@/types/database";
+} from "@/types";
 import { STATUS_LABELS, TASK_STATUSES, TASK_PRIORITIES, PRIORITY_LABELS } from "@/lib/utils/task-constants";
 import { updateTask, addTaskComment } from "@/lib/actions/tasks";
 import { startTimer, stopTimer } from "@/lib/actions/time";
@@ -403,9 +403,9 @@ export function TaskDetail({ task, activity, activeTimer, customFields, profiles
                         <span className="text-gray-400">
                           {entry.type.replace(/_/g, " ")}
                           {entry.metadata && " → "}
-                          {entry.metadata?.to != null && (
+                          {(entry.metadata as Record<string, unknown> | null)?.to != null && (
                             <span className="font-medium text-gray-600">
-                              {String(entry.metadata.to)}
+                              {String((entry.metadata as Record<string, unknown>).to)}
                             </span>
                           )}
                         </span>

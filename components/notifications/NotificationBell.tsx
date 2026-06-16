@@ -4,7 +4,7 @@ import { Bell } from "lucide-react";
 import { useState, useTransition, useOptimistic } from "react";
 import Link from "next/link";
 import { markAllNotificationsRead, markNotificationsRead } from "@/lib/actions/tasks";
-import type { Notification } from "@/types/database";
+import type { Notification } from "@/types";
 import { cn } from "@/lib/utils/cn";
 
 interface Props {

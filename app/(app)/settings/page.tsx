@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import type { Workspace, WorkspaceMember, Profile, CustomFieldDefinition } from "@/types/database";
+import type { Workspace, WorkspaceMember, Profile, CustomFieldDefinition } from "@/types";
 
 export default async function SettingsPage() {
   const supabase = await createClient();

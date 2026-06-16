@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { TaskListView } from "@/components/list/TaskListView";
-import type { Task, SavedView } from "@/types/database";
+import type { Task, SavedView } from "@/types";
 
 export default async function ListPage() {
   const supabase = await createClient();

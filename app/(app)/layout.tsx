@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { AppHeader } from "@/components/layout/AppHeader";
-import type { Workspace, SavedView, Notification } from "@/types/database";
+import type { Workspace, SavedView, Notification } from "@/types";
 
 export default async function AppLayout({
   children,

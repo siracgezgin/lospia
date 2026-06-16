@@ -13,7 +13,7 @@ import {
 import { useState, useOptimistic, useTransition } from "react";
 import Link from "next/link";
 import { ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
-import type { Task, SavedView, TaskStatus, TaskPriority } from "@/types/database";
+import type { Task, SavedView, TaskStatus, TaskPriority } from "@/types";
 import { STATUS_LABELS, TASK_STATUSES, TASK_PRIORITIES, PRIORITY_LABELS, PRIORITY_ORDER } from "@/lib/utils/task-constants";
 import { updateTaskStatus } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils/cn";

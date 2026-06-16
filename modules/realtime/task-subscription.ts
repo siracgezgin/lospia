@@ -8,7 +8,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { featureFlags } from "@/lib/utils/feature-flags";
-import type { TaskActivity } from "@/types/database";
+import type { TaskActivity } from "@/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 interface UseTaskActivityRealtimeOptions {
