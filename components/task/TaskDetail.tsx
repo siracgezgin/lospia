@@ -1,17 +1,22 @@
 "use client";
-// Phase 7 — Task Detail (full editable implementation)
-// Placeholder: renders read-only task detail until Phase 7 completes.
 
+import { useState, useTransition, useOptimistic, useActionState } from "react";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Clock, Play, Square, MessageSquare } from "lucide-react";
 import type {
   Task,
   TaskActivity,
   TimeEntry,
   CustomFieldDefinition,
   Profile,
+  TaskStatus,
+  TaskPriority,
 } from "@/types/database";
-import { STATUS_LABELS, PRIORITY_LABELS } from "@/lib/utils/task-constants";
+import { STATUS_LABELS, TASK_STATUSES, TASK_PRIORITIES, PRIORITY_LABELS } from "@/lib/utils/task-constants";
+import { updateTask, addTaskComment } from "@/lib/actions/tasks";
+import { startTimer, stopTimer } from "@/lib/actions/time";
+import { featureFlags } from "@/lib/utils/feature-flags";
+import { cn } from "@/lib/utils/cn";
 
 interface Props {
   task: Task;
@@ -22,96 +27,390 @@ interface Props {
   userId: string;
 }
 
+// ---- Editable field components ----
+
+function EditableTitle({ task }: { task: Task }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(task.title);
+  const [_pending, startTransition] = useTransition();
+
+  function save() {
+    setEditing(false);
+    if (value.trim() === task.title) return;
+    startTransition(async () => { await updateTask({ id: task.id, title: value.trim() || task.title }); });
+  }
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") { setValue(task.title); setEditing(false); } }}
+        className="text-2xl font-bold text-gray-900 w-full border-b-2 border-blue-500 outline-none bg-transparent"
+      />
+    );
+  }
+
+  return (
+    <h1
+      className="text-2xl font-bold text-gray-900 cursor-pointer hover:text-blue-700 transition-colors"
+      onClick={() => setEditing(true)}
+      title="Click to edit"
+    >
+      {task.title}
+    </h1>
+  );
+}
+
+function EditableDescription({ task }: { task: Task }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(task.description ?? "");
+  const [_pending, startTransition] = useTransition();
+
+  function save() {
+    setEditing(false);
+    startTransition(async () => { await updateTask({ id: task.id, description: value || null }); });
+  }
+
+  if (editing) {
+    return (
+      <textarea
+        autoFocus
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={save}
+        rows={4}
+        className="w-full text-sm text-gray-600 border border-blue-400 rounded-lg px-3 py-2 outline-none resize-y"
+        placeholder="Add a description…"
+      />
+    );
+  }
+
+  return (
+    <p
+      className={cn(
+        "text-sm cursor-pointer rounded-lg px-0 py-1 hover:bg-gray-50 transition-colors",
+        task.description ? "text-gray-600 whitespace-pre-wrap" : "text-gray-400 italic"
+      )}
+      onClick={() => setEditing(true)}
+    >
+      {task.description ?? "Click to add description…"}
+    </p>
+  );
+}
+
+// ---- Field select row ----
+
+function StatusSelect({ task }: { task: Task }) {
+  const [_p, startTransition] = useTransition();
+  const [opt, setOpt] = useOptimistic<TaskStatus>(task.status);
+  return (
+    <select
+      value={opt}
+      onChange={(e) => {
+        const s = e.target.value as TaskStatus;
+        startTransition(async () => { setOpt(s); await updateTask({ id: task.id, status: s }); });
+      }}
+      className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+    >
+      {TASK_STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
+    </select>
+  );
+}
+
+function PrioritySelect({ task }: { task: Task }) {
+  const [_p, startTransition] = useTransition();
+  const [opt, setOpt] = useOptimistic<TaskPriority>(task.priority);
+  return (
+    <select
+      value={opt}
+      onChange={(e) => {
+        const p = e.target.value as TaskPriority;
+        startTransition(async () => { setOpt(p); await updateTask({ id: task.id, priority: p }); });
+      }}
+      className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+    >
+      {TASK_PRIORITIES.map((p) => <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>)}
+    </select>
+  );
+}
+
+function DueDateInput({ task, field }: { task: Task; field: "due_date" | "start_date" }) {
+  const [_p, startTransition] = useTransition();
+  const value = task[field];
+  return (
+    <input
+      type="date"
+      defaultValue={value ?? ""}
+      onChange={(e) => {
+        const val = e.target.value || null;
+        startTransition(async () => { await updateTask({ id: task.id, [field]: val }); });
+      }}
+      className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+    />
+  );
+}
+
+function TagsInput({ task }: { task: Task }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(task.tags.join(", "));
+  const [_p, startTransition] = useTransition();
+
+  function save() {
+    setEditing(false);
+    const tags = value.split(",").map((t) => t.trim()).filter(Boolean);
+    startTransition(async () => { await updateTask({ id: task.id, tags }); });
+  }
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => { if (e.key === "Enter") save(); }}
+        className="w-full text-sm border border-blue-400 rounded-lg px-2 py-1.5 focus:outline-none"
+        placeholder="tag1, tag2, tag3"
+      />
+    );
+  }
+
+  return (
+    <div
+      className="flex flex-wrap gap-1 cursor-pointer min-h-8 items-center"
+      onClick={() => setEditing(true)}
+    >
+      {task.tags.length > 0
+        ? task.tags.map((tag) => (
+            <span key={tag} className="text-xs bg-blue-50 text-blue-600 rounded px-2 py-0.5">{tag}</span>
+          ))
+        : <span className="text-xs text-gray-400 italic">Click to add tags…</span>
+      }
+    </div>
+  );
+}
+
+// ---- Timer panel ----
+
+function TimerPanel({ task, activeTimer, userId }: { task: Task; activeTimer: TimeEntry | null; userId: string }) {
+  const [_p, startTransition] = useTransition();
+  const [localTimer, setLocalTimer] = useOptimistic<TimeEntry | null>(activeTimer);
+  const [elapsed, setElapsed] = useState(0);
+
+  // Count elapsed seconds while timer is running
+  useState(() => {
+    if (!activeTimer) return;
+    const start = new Date(activeTimer.started_at).getTime();
+    const interval = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000);
+    return () => clearInterval(interval);
+  });
+
+  function formatTime(s: number) {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+    return `${m}:${String(sec).padStart(2, "0")}`;
+  }
+
+  const currentElapsed = localTimer
+    ? Math.floor((Date.now() - new Date(localTimer.started_at).getTime()) / 1000)
+    : 0;
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+          <Clock size={14} /> Time tracking
+        </h3>
+        {localTimer ? (
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-mono text-green-600 font-semibold">
+              {formatTime(Math.max(elapsed, currentElapsed))}
+            </span>
+            <button
+              onClick={() => startTransition(async () => {
+                setLocalTimer(null);
+                await stopTimer(localTimer.id, task.workspace_id, task.id);
+              })}
+              className="flex items-center gap-1 text-xs bg-red-50 text-red-600 hover:bg-red-100 rounded-lg px-2 py-1 font-medium transition-colors"
+            >
+              <Square size={12} /> Stop
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => startTransition(async () => {
+              const fakeTimer: TimeEntry = {
+                id: "optimistic",
+                workspace_id: task.workspace_id,
+                task_id: task.id,
+                user_id: userId,
+                started_at: new Date().toISOString(),
+                stopped_at: null,
+                duration_seconds: null,
+                note: null,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              };
+              setLocalTimer(fakeTimer);
+              await startTimer(task.id, task.workspace_id);
+            })}
+            className="flex items-center gap-1 text-xs bg-green-50 text-green-700 hover:bg-green-100 rounded-lg px-2 py-1 font-medium transition-colors"
+          >
+            <Play size={12} /> Start timer
+          </button>
+        )}
+      </div>
+      {!featureFlags.ai && !localTimer && (
+        <p className="text-xs text-gray-400">No timer running.</p>
+      )}
+    </div>
+  );
+}
+
+// ---- Comment form ----
+
+function CommentForm({ task }: { task: Task }) {
+  const [_s, action, pending] = useActionState(
+    async (_: null | { error?: string }, formData: FormData) => {
+      const content = formData.get("content") as string;
+      const result = await addTaskComment(task.id, task.workspace_id, content);
+      if ("error" in result) return { error: result.error };
+      return null;
+    },
+    null
+  );
+
+  return (
+    <form action={action} className="flex gap-2">
+      <input
+        name="content"
+        type="text"
+        placeholder="Add a comment…"
+        required
+        className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
+      />
+      <button
+        type="submit"
+        disabled={pending}
+        className="text-sm bg-blue-600 text-white rounded-lg px-3 py-2 hover:bg-blue-700 disabled:opacity-50 transition-colors font-medium"
+      >
+        {pending ? "…" : "Post"}
+      </button>
+    </form>
+  );
+}
+
+// ---- Main component ----
+
 export function TaskDetail({ task, activity, activeTimer, customFields, profiles, userId }: Props) {
   const assignee = profiles.find((p) => p.id === task.assignee_id);
 
   return (
-    <div className="max-w-3xl mx-auto py-6 px-4 space-y-6">
+    <div className="max-w-3xl mx-auto py-6 px-4 space-y-5">
       {/* Back */}
       <Link href="/board" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
-        <ArrowLeft size={14} />
-        Back to board
+        <ArrowLeft size={14} /> Back to board
       </Link>
 
-      {/* Title */}
-      <div className="space-y-1">
-        <h1 className="text-2xl font-bold text-gray-900">{task.title}</h1>
-        {task.description && (
-          <p className="text-gray-600 text-sm whitespace-pre-wrap">{task.description}</p>
-        )}
+      {/* Title + description */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+        <EditableTitle task={task} />
+        <EditableDescription task={task} />
       </div>
 
-      {/* Meta grid */}
-      <div className="grid grid-cols-2 gap-4 bg-white rounded-xl border border-gray-200 p-5 text-sm">
-        <MetaRow label="Status"   value={STATUS_LABELS[task.status]} />
-        <MetaRow label="Priority" value={PRIORITY_LABELS[task.priority]} />
-        <MetaRow label="Assignee" value={assignee?.full_name ?? assignee?.email ?? "Unassigned"} />
-        <MetaRow label="Due date" value={task.due_date ?? "—"} />
-        <MetaRow label="Start date" value={task.start_date ?? "—"} />
-        {task.tags.length > 0 && (
-          <div className="col-span-2">
-            <p className="text-xs text-gray-400 mb-1">Tags</p>
-            <div className="flex flex-wrap gap-1">
-              {task.tags.map((tag) => (
-                <span key={tag} className="text-xs bg-blue-50 text-blue-600 rounded px-2 py-0.5">{tag}</span>
-              ))}
-            </div>
-          </div>
-        )}
+      {/* Fields grid */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <h3 className="text-sm font-semibold text-gray-700 mb-4">Details</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <FieldRow label="Status"><StatusSelect task={task} /></FieldRow>
+          <FieldRow label="Priority"><PrioritySelect task={task} /></FieldRow>
+          <FieldRow label="Assignee">
+            <span className="text-sm text-gray-600">
+              {assignee?.full_name ?? assignee?.email ?? "Unassigned"}
+            </span>
+          </FieldRow>
+          <FieldRow label="Due date"><DueDateInput task={task} field="due_date" /></FieldRow>
+          <FieldRow label="Start date"><DueDateInput task={task} field="start_date" /></FieldRow>
+          <FieldRow label="Tags" className="col-span-2"><TagsInput task={task} /></FieldRow>
+        </div>
       </div>
 
       {/* Custom fields */}
-      {customFields.length > 0 && Object.keys(task.custom_fields).length > 0 && (
+      {customFields.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">Custom fields</h3>
-          <div className="grid grid-cols-2 gap-3 text-sm">
+          <h3 className="text-sm font-semibold text-gray-700 mb-4">Custom fields</h3>
+          <div className="grid grid-cols-2 gap-4">
             {customFields.map((cf) => {
               const val = (task.custom_fields as Record<string, unknown>)[cf.field_key];
-              if (val === undefined || val === null) return null;
               return (
-                <MetaRow key={cf.id} label={cf.name} value={String(val)} />
+                <FieldRow key={cf.id} label={cf.name}>
+                  <span className="text-sm text-gray-600">{val !== undefined && val !== null ? String(val) : "—"}</span>
+                </FieldRow>
               );
             })}
           </div>
         </div>
       )}
 
-      {/* Timer panel */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">Time tracking</h3>
-        {activeTimer ? (
-          <p className="text-sm text-green-600 font-medium">
-            Timer running since {new Date(activeTimer.started_at).toLocaleTimeString()}
-          </p>
-        ) : (
-          <p className="text-sm text-gray-400">No active timer — start one below</p>
-        )}
-        <p className="text-xs text-gray-400 mt-2">Start/stop timer wired in Phase 9</p>
-        <p className="text-xs text-gray-300">userId: {userId}</p>
-      </div>
+      {/* Timer */}
+      <TimerPanel task={task} activeTimer={activeTimer} userId={userId} />
 
-      {/* Activity log */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h3 className="text-sm font-semibold text-gray-700 mb-4">Activity</h3>
+      {/* Feature flag placeholders */}
+      {featureFlags.uploads && (
+        <div className="bg-gray-50 rounded-xl border border-dashed border-gray-300 p-5">
+          <p className="text-sm text-gray-400">📎 Attachments (UPLOADS_ENABLED)</p>
+        </div>
+      )}
+      {featureFlags.ai && (
+        <div className="bg-blue-50 rounded-xl border border-blue-100 p-5">
+          <p className="text-sm text-blue-500">✨ AI Summarize (AI_ENABLED) — see modules/ai/</p>
+        </div>
+      )}
+
+      {/* Activity log + comments */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+        <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+          <MessageSquare size={14} /> Activity
+        </h3>
+
+        <CommentForm task={task} />
+
         {activity.length === 0 ? (
           <p className="text-sm text-gray-400">No activity yet.</p>
         ) : (
-          <ol className="space-y-3">
-            {activity.map((entry) => {
+          <ol className="space-y-4 mt-2">
+            {[...activity].reverse().map((entry) => {
               const actor = profiles.find((p) => p.id === entry.user_id);
               return (
                 <li key={entry.id} className="flex gap-3 text-sm">
-                  <div className="h-6 w-6 rounded-full bg-gray-200 text-gray-500 text-xs flex items-center justify-center shrink-0 mt-0.5">
-                    {actor?.full_name?.[0]?.toUpperCase() ?? "?"}
+                  <div className="h-7 w-7 rounded-full bg-gray-200 text-gray-600 text-xs font-medium flex items-center justify-center shrink-0 mt-0.5">
+                    {actor?.full_name?.[0]?.toUpperCase() ?? actor?.email?.[0]?.toUpperCase() ?? "?"}
                   </div>
-                  <div>
-                    <span className="font-medium">{actor?.full_name ?? actor?.email ?? "Unknown"}</span>
-                    {" "}
-                    {entry.type === "comment" ? (
-                      <span className="text-gray-600">{entry.content}</span>
-                    ) : (
-                      <span className="text-gray-400 capitalize">{entry.type.replace(/_/g, " ")}</span>
-                    )}
+                  <div className="flex-1">
+                    <div>
+                      <span className="font-medium">{actor?.full_name ?? actor?.email ?? "Unknown"}</span>
+                      {" "}
+                      {entry.type === "comment" ? (
+                        <span className="text-gray-700">{entry.content}</span>
+                      ) : entry.type === "created" ? (
+                        <span className="text-gray-400">created this task</span>
+                      ) : (
+                        <span className="text-gray-400">
+                          {entry.type.replace(/_/g, " ")}
+                          {entry.metadata && " → "}
+                          {entry.metadata?.to != null && (
+                            <span className="font-medium text-gray-600">
+                              {String(entry.metadata.to)}
+                            </span>
+                          )}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-gray-400 mt-0.5">
                       {new Date(entry.created_at).toLocaleString()}
                     </p>
@@ -126,11 +425,11 @@ export function TaskDetail({ task, activity, activeTimer, customFields, profiles
   );
 }
 
-function MetaRow({ label, value }: { label: string; value: string }) {
+function FieldRow({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
-    <div>
-      <p className="text-xs text-gray-400 mb-0.5">{label}</p>
-      <p className="font-medium text-gray-700 capitalize">{value}</p>
+    <div className={className}>
+      <p className="text-xs text-gray-400 mb-1">{label}</p>
+      {children}
     </div>
   );
 }
