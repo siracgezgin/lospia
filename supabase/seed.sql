@@ -43,7 +43,9 @@ begin
     email_confirmed_at, created_at, updated_at,
     raw_user_meta_data, raw_app_meta_data,
     role, aud,
-    is_super_admin, is_sso_user
+    is_super_admin, is_sso_user,
+    -- GoTrue scans these as non-nullable strings; NULL causes a 500 error
+    confirmation_token, recovery_token, email_change_token_new, email_change
   ) values
   (
     v_alice_id,
@@ -54,7 +56,8 @@ begin
     '{"full_name": "Alice Yıldız"}'::jsonb,
     '{"provider": "email", "providers": ["email"]}'::jsonb,
     'authenticated', 'authenticated',
-    false, false
+    false, false,
+    '', '', '', ''
   ),
   (
     v_bob_id,
@@ -65,7 +68,8 @@ begin
     '{"full_name": "Bob Kaya"}'::jsonb,
     '{"provider": "email", "providers": ["email"]}'::jsonb,
     'authenticated', 'authenticated',
-    false, false
+    false, false,
+    '', '', '', ''
   )
   on conflict (id) do nothing;
 
