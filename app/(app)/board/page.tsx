@@ -22,7 +22,9 @@ export default async function BoardPage({
     .limit(1);
   const workspaceId = memberRows?.[0]?.workspace_id;
   if (!workspaceId) {
-    return <div className="p-8 text-gray-500">No workspace found. Contact an admin.</div>;
+    // Layout's provision_workspace should have handled this;
+    // if we still reach here, redirect to trigger re-provisioning.
+    redirect("/board");
   }
 
   // Fetch tasks and saved views

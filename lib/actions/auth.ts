@@ -52,12 +52,14 @@ export async function signUp(
     return { error: parsed.error.issues[0].message };
   }
 
+  const fullName = (formData.get("full_name") as string | null)?.trim() || null;
+
   const supabase = await createClient();
   const { error } = await supabase.auth.signUp({
     ...parsed.data,
     options: {
-      // Local dev: no email confirmation needed
       emailRedirectTo: undefined,
+      data: fullName ? { full_name: fullName } : undefined,
     },
   });
 

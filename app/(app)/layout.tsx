@@ -20,14 +20,32 @@ export default async function AppLayout({
     redirect("/login");
   }
 
-  // Fetch workspace (first workspace the user belongs to — V1 single workspace)
+  // Fetch workspace membership
   const { data: memberRows } = await supabase
     .from("workspace_members")
     .select("workspace_id, role")
     .eq("user_id", user.id)
     .limit(1);
 
-  const workspaceId = memberRows?.[0]?.workspace_id ?? null;
+  let workspaceId: string | null = memberRows?.[0]?.workspace_id ?? null;
+
+  // Provision profile + default workspace for new users who have no membership
+  let provisionError: string | null = null;
+  if (!workspaceId) {
+    const fullName =
+      (user.user_metadata?.full_name as string | undefined) ?? null;
+
+    const { data: provisionedWs, error: rpcError } = await supabase.rpc(
+      "provision_workspace",
+      { p_full_name: fullName }
+    );
+
+    if (rpcError) {
+      provisionError = rpcError.message;
+    } else if (provisionedWs && typeof provisionedWs === "object") {
+      workspaceId = (provisionedWs as { id: string }).id;
+    }
+  }
 
   let workspace: Workspace | null = null;
   let savedViews: SavedView[] = [];
@@ -75,7 +93,23 @@ export default async function AppLayout({
           userId={user.id}
           notifications={notifications}
         />
-        <main className="flex-1 overflow-auto">{children}</main>
+        <main className="flex-1 overflow-auto">
+          {provisionError ? (
+            <div className="p-8">
+              <div className="max-w-md mx-auto bg-red-50 border border-red-200 rounded-xl p-6">
+                <h2 className="text-lg font-semibold text-red-800 mb-2">
+                  Workspace setup failed
+                </h2>
+                <p className="text-sm text-red-700 mb-4">{provisionError}</p>
+                <p className="text-xs text-red-500">
+                  Try refreshing the page. If this persists, contact an admin.
+                </p>
+              </div>
+            </div>
+          ) : (
+            children
+          )}
+        </main>
       </div>
     </div>
   );
