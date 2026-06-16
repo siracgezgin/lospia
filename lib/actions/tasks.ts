@@ -5,7 +5,6 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { generateKeyBetween } from "fractional-indexing";
-import type { TaskStatus, TaskPriority } from "@/types";
 
 // ---- Zod schemas ----
 
@@ -15,7 +14,7 @@ const TaskStatusSchema = z.enum([
 
 const TaskPrioritySchema = z.enum(["low", "medium", "high", "urgent"]);
 
-export const CreateTaskSchema = z.object({
+const CreateTaskSchema = z.object({
   workspace_id: z.string().uuid(),
   title: z.string().min(1, "Title is required").max(500),
   description: z.string().max(10000).optional(),
@@ -28,7 +27,7 @@ export const CreateTaskSchema = z.object({
   custom_fields: z.record(z.string(), z.unknown()).default({}),
 });
 
-export const UpdateTaskSchema = z.object({
+const UpdateTaskSchema = z.object({
   id: z.string().uuid(),
   title: z.string().min(1).max(500).optional(),
   description: z.string().max(10000).nullable().optional(),
@@ -41,7 +40,7 @@ export const UpdateTaskSchema = z.object({
   custom_fields: z.record(z.string(), z.unknown()).optional(),
 });
 
-export const ReorderTaskSchema = z.object({
+const ReorderTaskSchema = z.object({
   id: z.string().uuid(),
   newStatus: TaskStatusSchema,
   prevIndex: z.string().nullable(),
@@ -146,7 +145,7 @@ export async function updateTask(
 
 export async function updateTaskStatus(
   taskId: string,
-  newStatus: TaskStatus
+  newStatus: z.infer<typeof TaskStatusSchema>
 ): Promise<{ success: true } | { error: string }> {
   return updateTask({ id: taskId, status: newStatus });
 }
@@ -389,5 +388,3 @@ export async function markAllNotificationsRead(): Promise<{ success: true } | { 
   return { success: true };
 }
 
-// Type re-exports for convenience
-export type { TaskStatus, TaskPriority };
