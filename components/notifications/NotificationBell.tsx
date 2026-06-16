@@ -38,7 +38,7 @@ export function NotificationBell({ unreadCount: initialCount, notifications = []
       <button
         onClick={() => setOpen((o) => !o)}
         className="relative p-1.5 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-        aria-label={`Notifications${optimisticCount > 0 ? ` (${optimisticCount} unread)` : ""}`}
+        aria-label={`Bildirimler${optimisticCount > 0 ? ` (${optimisticCount} okunmamış)` : ""}`}
       >
         <Bell size={18} />
         {optimisticCount > 0 && (
@@ -55,9 +55,9 @@ export function NotificationBell({ unreadCount: initialCount, notifications = []
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
               <h3 className="text-sm font-semibold text-gray-900">
-                Notifications
+                Bildirimler
                 {optimisticCount > 0 && (
-                  <span className="ml-2 text-xs font-normal text-gray-400">{optimisticCount} unread</span>
+                  <span className="ml-2 text-xs font-normal text-gray-400">{optimisticCount} okunmamış</span>
                 )}
               </h3>
               {optimisticCount > 0 && (
@@ -65,7 +65,7 @@ export function NotificationBell({ unreadCount: initialCount, notifications = []
                   onClick={handleMarkAllRead}
                   className="text-xs text-blue-600 hover:text-blue-700 font-medium"
                 >
-                  Mark all read
+                  Tümünü okundu işaretle
                 </button>
               )}
             </div>
@@ -73,7 +73,7 @@ export function NotificationBell({ unreadCount: initialCount, notifications = []
             {/* List */}
             <div className={cn("overflow-y-auto max-h-80", notifications.length === 0 && "py-8")}>
               {notifications.length === 0 ? (
-                <p className="text-center text-sm text-gray-400">No notifications yet</p>
+                <p className="text-center text-sm text-gray-400">Henüz bildirim yok</p>
               ) : (
                 notifications.slice(0, 20).map((n) => (
                   <div
@@ -110,7 +110,7 @@ export function NotificationBell({ unreadCount: initialCount, notifications = []
                       <button
                         onClick={() => handleMarkOneRead(n.id)}
                         className="text-[10px] text-gray-400 hover:text-blue-500 shrink-0 mt-0.5"
-                        title="Mark as read"
+                        title="Okundu işaretle"
                       >
                         ✓
                       </button>

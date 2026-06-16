@@ -22,9 +22,22 @@ export default async function BoardPage({
     .limit(1);
   const workspaceId = memberRows?.[0]?.workspace_id;
   if (!workspaceId) {
-    // Layout's provision_workspace should have handled this;
-    // if we still reach here, redirect to trigger re-provisioning.
-    redirect("/board");
+    return (
+      <div className="flex h-full items-center justify-center p-8">
+        <div className="max-w-sm text-center">
+          <h2 className="text-base font-semibold text-gray-800 mb-2">Çalışma alanı bulunamadı</h2>
+          <p className="text-sm text-gray-500 mb-4">
+            Çalışma alanınız yüklenemedi. Bu genellikle geçici bir sorundur.
+          </p>
+          <a
+            href="/board"
+            className="inline-block text-sm text-blue-600 hover:underline"
+          >
+            Yenile
+          </a>
+        </div>
+      </div>
+    );
   }
 
   // Fetch tasks and saved views

@@ -44,6 +44,8 @@ export default async function AppLayout({
       provisionError = rpcError.message;
     } else if (provisionedWs && typeof provisionedWs === "object") {
       workspaceId = (provisionedWs as { id: string }).id;
+    } else {
+      provisionError = "Workspace provisioning returned no data. Try refreshing.";
     }
   }
 
@@ -98,11 +100,11 @@ export default async function AppLayout({
             <div className="p-8">
               <div className="max-w-md mx-auto bg-red-50 border border-red-200 rounded-xl p-6">
                 <h2 className="text-lg font-semibold text-red-800 mb-2">
-                  Workspace setup failed
+                  Çalışma alanı kurulumu başarısız
                 </h2>
                 <p className="text-sm text-red-700 mb-4">{provisionError}</p>
                 <p className="text-xs text-red-500">
-                  Try refreshing the page. If this persists, contact an admin.
+                  Sayfayı yenilemeyi deneyin. Sorun devam ederse yöneticinize başvurun.
                 </p>
               </div>
             </div>

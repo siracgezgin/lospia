@@ -57,7 +57,7 @@ function EditableTitle({ task }: { task: Task }) {
     <h1
       className="text-2xl font-bold text-gray-900 cursor-pointer hover:text-blue-700 transition-colors"
       onClick={() => setEditing(true)}
-      title="Click to edit"
+      title="Düzenlemek için tıklayın"
     >
       {task.title}
     </h1>
@@ -83,7 +83,7 @@ function EditableDescription({ task }: { task: Task }) {
         onBlur={save}
         rows={4}
         className="w-full text-sm text-gray-600 border border-blue-400 rounded-lg px-3 py-2 outline-none resize-y"
-        placeholder="Add a description…"
+        placeholder="Açıklama ekle…"
       />
     );
   }
@@ -96,7 +96,7 @@ function EditableDescription({ task }: { task: Task }) {
       )}
       onClick={() => setEditing(true)}
     >
-      {task.description ?? "Click to add description…"}
+      {task.description ?? "Açıklama eklemek için tıklayın…"}
     </p>
   );
 }
@@ -187,7 +187,7 @@ function TagsInput({ task }: { task: Task }) {
         ? task.tags.map((tag) => (
             <span key={tag} className="text-xs bg-blue-50 text-blue-600 rounded px-2 py-0.5">{tag}</span>
           ))
-        : <span className="text-xs text-gray-400 italic">Click to add tags…</span>
+        : <span className="text-xs text-gray-400 italic">Etiket eklemek için tıklayın…</span>
       }
     </div>
   );
@@ -223,7 +223,7 @@ function TimerPanel({ task, activeTimer, userId }: { task: Task; activeTimer: Ti
     <div className="bg-white rounded-xl border border-gray-200 p-5">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
-          <Clock size={14} /> Time tracking
+          <Clock size={14} /> Zaman takibi
         </h3>
         {localTimer ? (
           <div className="flex items-center gap-3">
@@ -237,7 +237,7 @@ function TimerPanel({ task, activeTimer, userId }: { task: Task; activeTimer: Ti
               })}
               className="flex items-center gap-1 text-xs bg-red-50 text-red-600 hover:bg-red-100 rounded-lg px-2 py-1 font-medium transition-colors"
             >
-              <Square size={12} /> Stop
+              <Square size={12} /> Durdur
             </button>
           </div>
         ) : (
@@ -260,12 +260,12 @@ function TimerPanel({ task, activeTimer, userId }: { task: Task; activeTimer: Ti
             })}
             className="flex items-center gap-1 text-xs bg-green-50 text-green-700 hover:bg-green-100 rounded-lg px-2 py-1 font-medium transition-colors"
           >
-            <Play size={12} /> Start timer
+            <Play size={12} /> Zamanlayıcıyı başlat
           </button>
         )}
       </div>
       {!featureFlags.ai && !localTimer && (
-        <p className="text-xs text-gray-400">No timer running.</p>
+        <p className="text-xs text-gray-400">Çalışan zamanlayıcı yok.</p>
       )}
     </div>
   );
@@ -289,7 +289,7 @@ function CommentForm({ task }: { task: Task }) {
       <input
         name="content"
         type="text"
-        placeholder="Add a comment…"
+        placeholder="Yorum ekle…"
         required
         className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
       />
@@ -298,7 +298,7 @@ function CommentForm({ task }: { task: Task }) {
         disabled={pending}
         className="text-sm bg-blue-600 text-white rounded-lg px-3 py-2 hover:bg-blue-700 disabled:opacity-50 transition-colors font-medium"
       >
-        {pending ? "…" : "Post"}
+        {pending ? "…" : "Gönder"}
       </button>
     </form>
   );
@@ -313,7 +313,7 @@ export function TaskDetail({ task, activity, activeTimer, customFields, profiles
     <div className="max-w-3xl mx-auto py-6 px-4 space-y-5">
       {/* Back */}
       <Link href="/board" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
-        <ArrowLeft size={14} /> Back to board
+        <ArrowLeft size={14} /> Panoya dön
       </Link>
 
       {/* Title + description */}
@@ -324,25 +324,25 @@ export function TaskDetail({ task, activity, activeTimer, customFields, profiles
 
       {/* Fields grid */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h3 className="text-sm font-semibold text-gray-700 mb-4">Details</h3>
+        <h3 className="text-sm font-semibold text-gray-700 mb-4">Detaylar</h3>
         <div className="grid grid-cols-2 gap-4">
-          <FieldRow label="Status"><StatusSelect task={task} /></FieldRow>
-          <FieldRow label="Priority"><PrioritySelect task={task} /></FieldRow>
-          <FieldRow label="Assignee">
+          <FieldRow label="Durum"><StatusSelect task={task} /></FieldRow>
+          <FieldRow label="Öncelik"><PrioritySelect task={task} /></FieldRow>
+          <FieldRow label="Sorumlu">
             <span className="text-sm text-gray-600">
-              {assignee?.full_name ?? assignee?.email ?? "Unassigned"}
+              {assignee?.full_name ?? assignee?.email ?? "Atanmamış"}
             </span>
           </FieldRow>
-          <FieldRow label="Due date"><DueDateInput task={task} field="due_date" /></FieldRow>
-          <FieldRow label="Start date"><DueDateInput task={task} field="start_date" /></FieldRow>
-          <FieldRow label="Tags" className="col-span-2"><TagsInput task={task} /></FieldRow>
+          <FieldRow label="Teslim tarihi"><DueDateInput task={task} field="due_date" /></FieldRow>
+          <FieldRow label="Başlangıç tarihi"><DueDateInput task={task} field="start_date" /></FieldRow>
+          <FieldRow label="Etiketler" className="col-span-2"><TagsInput task={task} /></FieldRow>
         </div>
       </div>
 
       {/* Custom fields */}
       {customFields.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="text-sm font-semibold text-gray-700 mb-4">Custom fields</h3>
+          <h3 className="text-sm font-semibold text-gray-700 mb-4">Özel alanlar</h3>
           <div className="grid grid-cols-2 gap-4">
             {customFields.map((cf) => {
               const val = (task.custom_fields as Record<string, unknown>)[cf.field_key];
@@ -374,13 +374,13 @@ export function TaskDetail({ task, activity, activeTimer, customFields, profiles
       {/* Activity log + comments */}
       <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
         <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
-          <MessageSquare size={14} /> Activity
+          <MessageSquare size={14} /> Aktivite
         </h3>
 
         <CommentForm task={task} />
 
         {activity.length === 0 ? (
-          <p className="text-sm text-gray-400">No activity yet.</p>
+          <p className="text-sm text-gray-400">Henüz aktivite yok.</p>
         ) : (
           <ol className="space-y-4 mt-2">
             {[...activity].reverse().map((entry) => {
@@ -397,7 +397,7 @@ export function TaskDetail({ task, activity, activeTimer, customFields, profiles
                       {entry.type === "comment" ? (
                         <span className="text-gray-700">{entry.content}</span>
                       ) : entry.type === "created" ? (
-                        <span className="text-gray-400">created this task</span>
+                        <span className="text-gray-400">bu görevi oluşturdu</span>
                       ) : (
                         <span className="text-gray-400">
                           {entry.type.replace(/_/g, " ")}

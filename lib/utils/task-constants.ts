@@ -11,22 +11,22 @@ export const TASK_STATUSES: TaskStatus[] = [
 ];
 
 export const STATUS_LABELS: Record<TaskStatus, string> = {
-  backlog: "Backlog",
-  ready: "Ready",
-  in_progress: "In Progress",
-  blocked: "Blocked",
-  review: "Review",
-  done: "Done",
-  archived: "Archived",
+  backlog: "Beklemede",
+  ready: "Hazır",
+  in_progress: "Devam ediyor",
+  blocked: "Bloke",
+  review: "İncelemede",
+  done: "Tamamlandı",
+  archived: "Arşivlendi",
 };
 
 export const TASK_PRIORITIES: TaskPriority[] = ["low", "medium", "high", "urgent"];
 
 export const PRIORITY_LABELS: Record<TaskPriority, string> = {
-  low: "Low",
-  medium: "Medium",
-  high: "High",
-  urgent: "Urgent",
+  low: "Düşük",
+  medium: "Orta",
+  high: "Yüksek",
+  urgent: "Acil",
 };
 
 export const PRIORITY_ORDER: Record<TaskPriority, number> = {

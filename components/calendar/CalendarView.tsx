@@ -62,12 +62,12 @@ export function CalendarView({ tasks }: Props) {
     <div className="p-6 max-w-5xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Calendar</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Takvim</h1>
         <div className="flex items-center gap-3">
           <button
             onClick={() => setCurrent((d) => subMonths(d, 1))}
             className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"
-            aria-label="Previous month"
+            aria-label="Önceki ay"
           >
             <ChevronLeft size={18} />
           </button>
@@ -77,7 +77,7 @@ export function CalendarView({ tasks }: Props) {
           <button
             onClick={() => setCurrent((d) => addMonths(d, 1))}
             className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"
-            aria-label="Next month"
+            aria-label="Sonraki ay"
           >
             <ChevronRight size={18} />
           </button>
@@ -85,14 +85,14 @@ export function CalendarView({ tasks }: Props) {
             onClick={() => setCurrent(new Date())}
             className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
           >
-            Today
+            Bugün
           </button>
         </div>
       </div>
 
       {/* Day-of-week headers */}
       <div className="grid grid-cols-7 mb-1">
-        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+        {["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"].map((d) => (
           <div key={d} className="text-center text-xs font-semibold text-gray-400 py-1">
             {d}
           </div>
@@ -135,7 +135,7 @@ export function CalendarView({ tasks }: Props) {
                   </Link>
                 ))}
                 {dayTasks.length > 3 && (
-                  <p className="text-[10px] text-gray-400">+{dayTasks.length - 3} more</p>
+                  <p className="text-[10px] text-gray-400">+{dayTasks.length - 3} daha</p>
                 )}
               </div>
             </div>

@@ -55,7 +55,7 @@ begin
 
   -- 3. Build workspace name and slug for new user
   v_name := coalesce(nullif(trim(p_full_name), ''), split_part(v_email, '@', 1))
-            || ' Workspace';
+            || ' Çalışma Alanı';
 
   v_slug := lower(
               regexp_replace(

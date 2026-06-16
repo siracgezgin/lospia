@@ -9,12 +9,14 @@ import {
   createColumnHelper,
   type SortingState,
   type ColumnFiltersState,
+  type VisibilityState,
 } from "@tanstack/react-table";
 import { useState, useOptimistic, useTransition } from "react";
 import Link from "next/link";
 import { ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import type { Task, SavedView, TaskStatus, TaskPriority } from "@/types";
 import { STATUS_LABELS, TASK_STATUSES, TASK_PRIORITIES, PRIORITY_LABELS, PRIORITY_ORDER } from "@/lib/utils/task-constants";
+import { FIELD_LABELS } from "@/lib/i18n/tr";
 import { updateTaskStatus } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils/cn";
 
@@ -57,7 +59,7 @@ function StatusBadge({ task }: { task: Task }) {
 function PriorityBadge({ priority }: { priority: TaskPriority }) {
   return (
     <span className={cn(
-      "text-[10px] font-medium rounded px-1.5 py-0.5 leading-none capitalize",
+      "text-[10px] font-medium rounded px-1.5 py-0.5 leading-none",
       {
         low: "bg-gray-100 text-gray-500",
         medium: "bg-yellow-50 text-yellow-700",
@@ -73,10 +75,13 @@ function PriorityBadge({ priority }: { priority: TaskPriority }) {
 // ---- Main component ----
 
 export function TaskListView({ tasks, savedViews, workspaceId }: Props) {
+  // Sort by updated_at (a visible column) by default — avoids "column not found" error
   const [sorting, setSorting] = useState<SortingState>([
-    { id: "created_at", desc: true },
+    { id: "updated_at", desc: true },
   ]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  // created_at is hidden; kept so TanStack Table can sort on it if needed in future
+  const [columnVisibility] = useState<VisibilityState>({ created_at: false });
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<TaskStatus | "all">("all");
   const [filterPriority, setFilterPriority] = useState<TaskPriority | "all">("all");
@@ -90,7 +95,7 @@ export function TaskListView({ tasks, savedViews, workspaceId }: Props) {
 
   const columns = [
     columnHelper.accessor("title", {
-      header: "Task",
+      header: FIELD_LABELS.title,
       cell: (info) => (
         <div>
           <Link
@@ -99,7 +104,7 @@ export function TaskListView({ tasks, savedViews, workspaceId }: Props) {
           >
             {info.getValue()}
           </Link>
-          {info.row.original.tags.length > 0 && (
+          {(info.row.original.tags?.length ?? 0) > 0 && (
             <div className="flex gap-1 mt-1">
               {info.row.original.tags.slice(0, 4).map((tag) => (
                 <span key={tag} className="text-[10px] bg-blue-50 text-blue-500 rounded px-1 py-0.5 leading-none">
@@ -113,26 +118,26 @@ export function TaskListView({ tasks, savedViews, workspaceId }: Props) {
       enableSorting: false,
     }),
     columnHelper.accessor("status", {
-      header: "Status",
+      header: FIELD_LABELS.status,
       cell: (info) => <StatusBadge task={info.row.original} />,
       sortingFn: (a, b) =>
         TASK_STATUSES.indexOf(a.original.status) - TASK_STATUSES.indexOf(b.original.status),
     }),
     columnHelper.accessor("priority", {
-      header: "Priority",
+      header: FIELD_LABELS.priority,
       cell: (info) => <PriorityBadge priority={info.getValue()} />,
       sortingFn: (a, b) =>
         PRIORITY_ORDER[a.original.priority] - PRIORITY_ORDER[b.original.priority],
     }),
     columnHelper.accessor("due_date", {
-      header: "Due",
+      header: FIELD_LABELS.dueDate,
       cell: (info) => {
         const val = info.getValue();
         if (!val) return <span className="text-xs text-gray-400">—</span>;
         const isOverdue = val < new Date().toISOString().slice(0, 10);
         return (
           <span className={cn("text-xs", isOverdue ? "text-red-500 font-medium" : "text-gray-500")}>
-            {new Date(val).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+            {new Date(val).toLocaleDateString("tr-TR", { day: "numeric", month: "short" })}
           </span>
         );
       },
@@ -140,17 +145,26 @@ export function TaskListView({ tasks, savedViews, workspaceId }: Props) {
         (a.original.due_date ?? "9999-12-31") < (b.original.due_date ?? "9999-12-31") ? -1 : 1,
     }),
     columnHelper.accessor("assignee_id", {
-      header: "Assignee",
+      header: FIELD_LABELS.assignee,
       cell: (info) => (
-        <span className="text-xs text-gray-400">{info.getValue() ? "Assigned" : "—"}</span>
+        <span className="text-xs text-gray-400">{info.getValue() ? "Atandı" : "—"}</span>
       ),
       enableSorting: false,
     }),
     columnHelper.accessor("updated_at", {
-      header: "Updated",
+      header: FIELD_LABELS.updatedAt,
       cell: (info) => (
         <span className="text-xs text-gray-400">
-          {new Date(info.getValue()).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+          {new Date(info.getValue()).toLocaleDateString("tr-TR", { day: "numeric", month: "short" })}
+        </span>
+      ),
+    }),
+    // created_at: hidden column — allows sorting by creation date without showing the column
+    columnHelper.accessor("created_at", {
+      header: "Oluşturuldu",
+      cell: (info) => (
+        <span className="text-xs text-gray-400">
+          {new Date(info.getValue()).toLocaleDateString("tr-TR", { day: "numeric", month: "short" })}
         </span>
       ),
     }),
@@ -159,7 +173,7 @@ export function TaskListView({ tasks, savedViews, workspaceId }: Props) {
   const table = useReactTable({
     data: filteredTasks,
     columns,
-    state: { sorting, columnFilters },
+    state: { sorting, columnFilters, columnVisibility },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     getCoreRowModel: getCoreRowModel(),
@@ -194,7 +208,7 @@ export function TaskListView({ tasks, savedViews, workspaceId }: Props) {
       <div className="flex flex-wrap items-center gap-2 px-4 py-3 bg-white border-b border-gray-100 shrink-0">
         <input
           type="search"
-          placeholder="Search tasks…"
+          placeholder="Görev ara…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm w-52 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -204,7 +218,7 @@ export function TaskListView({ tasks, savedViews, workspaceId }: Props) {
           onChange={(e) => setFilterStatus(e.target.value as TaskStatus | "all")}
           className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
         >
-          <option value="all">All statuses</option>
+          <option value="all">Tüm durumlar</option>
           {TASK_STATUSES.map((s) => (
             <option key={s} value={s}>{STATUS_LABELS[s]}</option>
           ))}
@@ -214,15 +228,15 @@ export function TaskListView({ tasks, savedViews, workspaceId }: Props) {
           onChange={(e) => setFilterPriority(e.target.value as TaskPriority | "all")}
           className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
         >
-          <option value="all">All priorities</option>
+          <option value="all">Tüm öncelikler</option>
           {TASK_PRIORITIES.map((p) => (
             <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>
           ))}
         </select>
         <span className="ml-auto text-xs text-gray-400 self-center">
-          {table.getRowCount()} tasks
+          {table.getFilteredRowModel().rows.length} görev
         </span>
-        <span className="text-xs text-gray-300">· workspace: {workspaceId.slice(0, 8)}…</span>
+        <span className="text-xs text-gray-300">· çalışma alanı: {workspaceId.slice(0, 8)}…</span>
       </div>
 
       {/* Table */}
@@ -253,7 +267,7 @@ export function TaskListView({ tasks, savedViews, workspaceId }: Props) {
             {table.getRowModel().rows.length === 0 ? (
               <tr>
                 <td colSpan={columns.length} className="text-center py-16 text-gray-400 text-sm">
-                  No tasks match the current filters
+                  Geçerli filtrelerle eşleşen görev yok
                 </td>
               </tr>
             ) : (

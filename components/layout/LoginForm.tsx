@@ -32,7 +32,7 @@ export function LoginForm() {
               : "text-gray-500 hover:text-gray-700"
           }`}
         >
-          Sign in
+          Giriş yap
         </button>
         <button
           type="button"
@@ -43,7 +43,7 @@ export function LoginForm() {
               : "text-gray-500 hover:text-gray-700"
           }`}
         >
-          Sign up
+          Kayıt ol
         </button>
       </div>
 
@@ -51,7 +51,7 @@ export function LoginForm() {
         {mode === "signup" && (
           <div>
             <label htmlFor="full_name" className="block text-sm font-medium text-gray-700 mb-1">
-              Full name
+              Ad soyad
             </label>
             <input
               id="full_name"
@@ -66,7 +66,7 @@ export function LoginForm() {
 
         <div>
           <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-            Email
+            E-posta
           </label>
           <input
             id="email"
@@ -81,7 +81,7 @@ export function LoginForm() {
 
         <div>
           <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-            Password
+            Şifre
           </label>
           <input
             id="password"
@@ -102,7 +102,7 @@ export function LoginForm() {
 
         {state?.success && mode === "signup" && (
           <p className="text-sm text-green-700 bg-green-50 px-3 py-2 rounded-lg">
-            Account created! Please sign in.
+            Hesap oluşturuldu! Lütfen giriş yapın.
           </p>
         )}
 
@@ -113,11 +113,11 @@ export function LoginForm() {
         >
           {pending
             ? mode === "signin"
-              ? "Signing in…"
-              : "Creating account…"
+              ? "Giriş yapılıyor…"
+              : "Hesap oluşturuluyor…"
             : mode === "signin"
-              ? "Sign in"
-              : "Create account"}
+              ? "Giriş yap"
+              : "Hesap oluştur"}
         </button>
       </form>
 

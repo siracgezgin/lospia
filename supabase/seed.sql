@@ -156,22 +156,22 @@ begin
   -- -------------------------------------------------------------------------
   insert into public.saved_views (id, workspace_id, owner_id, name, config, is_shared, position) values
   (
-    v_sv_my_open, v_ws_id, v_alice_id, 'My open tasks',
+    v_sv_my_open, v_ws_id, v_alice_id, 'Açık işlerim',
     '{"filters": {"assignee": "me", "status": ["backlog","ready","in_progress","blocked","review"]}, "sort": {"field": "due_date", "direction": "asc"}, "view_type": "board"}'::jsonb,
     true, 0
   ),
   (
-    v_sv_due_week, v_ws_id, v_alice_id, 'Due this week',
+    v_sv_due_week, v_ws_id, v_alice_id, 'Bu hafta teslim edilecekler',
     '{"filters": {"due_within_days": 7, "status": ["backlog","ready","in_progress","blocked","review"]}, "sort": {"field": "due_date", "direction": "asc"}, "view_type": "list"}'::jsonb,
     true, 1
   ),
   (
-    v_sv_blocked, v_ws_id, v_alice_id, 'Blocked',
+    v_sv_blocked, v_ws_id, v_alice_id, 'Bloke işler',
     '{"filters": {"status": ["blocked"]}, "sort": {"field": "priority", "direction": "desc"}, "view_type": "list"}'::jsonb,
     true, 2
   ),
   (
-    v_sv_high_pri, v_ws_id, v_alice_id, 'High priority',
+    v_sv_high_pri, v_ws_id, v_alice_id, 'Yüksek öncelik',
     '{"filters": {"priority": ["high","urgent"]}, "sort": {"field": "due_date", "direction": "asc"}, "view_type": "board"}'::jsonb,
     true, 3
   )

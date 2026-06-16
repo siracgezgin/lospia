@@ -62,14 +62,14 @@ export function DashboardView({ tasksByStatus, timeLoggedSeconds, dueSoonTasks }
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+      <h1 className="text-2xl font-bold text-gray-900">Gösterge Paneli</h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Tile 1: Tasks by status — Recharts bar chart */}
         <div className="bg-white rounded-xl border border-gray-200 p-5 lg:col-span-2">
-          <h2 className="text-sm font-semibold text-gray-700 mb-4">Tasks by status</h2>
+          <h2 className="text-sm font-semibold text-gray-700 mb-4">Duruma göre görevler</h2>
           {chartData.length === 0 ? (
-            <p className="text-sm text-gray-400 py-8 text-center">No tasks yet</p>
+            <p className="text-sm text-gray-400 py-8 text-center">Henüz görev yok</p>
           ) : (
             <ResponsiveContainer width="100%" height={180}>
               <BarChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
@@ -101,13 +101,13 @@ export function DashboardView({ tasksByStatus, timeLoggedSeconds, dueSoonTasks }
 
         {/* Tile 2: Time logged this week */}
         <div className="bg-white rounded-xl border border-gray-200 p-5 flex flex-col justify-center">
-          <h2 className="text-sm font-semibold text-gray-700 mb-1">Time this week</h2>
+          <h2 className="text-sm font-semibold text-gray-700 mb-1">Bu hafta geçen süre</h2>
           <p className="text-4xl font-bold text-blue-600 mt-2">
             {formatDuration(timeLoggedSeconds)}
           </p>
-          <p className="text-xs text-gray-400 mt-2">logged by you this week</p>
+          <p className="text-xs text-gray-400 mt-2">bu hafta sizin tarafınızdan kaydedildi</p>
           {timeLoggedSeconds === 0 && (
-            <p className="text-xs text-gray-300 mt-1">Start a timer to track time</p>
+            <p className="text-xs text-gray-300 mt-1">Süre takibi için zamanlayıcı başlatın</p>
           )}
         </div>
       </div>
@@ -115,7 +115,7 @@ export function DashboardView({ tasksByStatus, timeLoggedSeconds, dueSoonTasks }
       {/* Tile 3: Due soon */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <h2 className="text-sm font-semibold text-gray-700 mb-4">
-          Overdue &amp; due within 7 days
+          Geciken ve 7 gün içinde teslim edilecekler
           {dueSoonTasks.length > 0 && (
             <span className="ml-2 text-xs font-normal bg-orange-50 text-orange-600 rounded-full px-2 py-0.5">
               {dueSoonTasks.length}
@@ -123,7 +123,7 @@ export function DashboardView({ tasksByStatus, timeLoggedSeconds, dueSoonTasks }
           )}
         </h2>
         {dueSoonTasks.length === 0 ? (
-          <p className="text-sm text-gray-400 py-6 text-center">No overdue or upcoming tasks 🎉</p>
+          <p className="text-sm text-gray-400 py-6 text-center">Geciken veya yaklaşan görev yok 🎉</p>
         ) : (
           <div className="divide-y divide-gray-100">
             {dueSoonTasks.map((task) => {
@@ -145,8 +145,8 @@ export function DashboardView({ tasksByStatus, timeLoggedSeconds, dueSoonTasks }
                     </div>
                   </div>
                   <span className={`text-xs font-medium shrink-0 ${isOverdue ? "text-red-600" : "text-orange-500"}`}>
-                    {new Date(task.due_date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
-                    {isOverdue && <span className="ml-1 text-[10px] bg-red-50 text-red-500 rounded px-1 py-0.5">overdue</span>}
+                    {new Date(task.due_date).toLocaleDateString("tr-TR", { day: "numeric", month: "short" })}
+                    {isOverdue && <span className="ml-1 text-[10px] bg-red-50 text-red-500 rounded px-1 py-0.5">gecikmiş</span>}
                   </span>
                 </div>
               );

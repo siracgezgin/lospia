@@ -14,7 +14,7 @@ export default async function CalendarPage() {
     .eq("user_id", user.id)
     .limit(1);
   const workspaceId = memberRows?.[0]?.workspace_id;
-  if (!workspaceId) return <div className="p-8 text-gray-500">No workspace found.</div>;
+  if (!workspaceId) return <div className="p-8 text-gray-500">Çalışma alanı bulunamadı.</div>;
 
   // Only tasks with dates — no full dump
   const { data } = await supabase
