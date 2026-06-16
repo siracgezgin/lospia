@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { AppHeader } from "@/components/layout/AppHeader";
-import type { Workspace, SavedView } from "@/types/database";
+import type { Workspace, SavedView, Notification } from "@/types/database";
 
 export default async function AppLayout({
   children,
@@ -32,6 +32,7 @@ export default async function AppLayout({
   let workspace: Workspace | null = null;
   let savedViews: SavedView[] = [];
   let unreadCount = 0;
+  let notifications: Notification[] = [];
 
   if (workspaceId) {
     const [wsResult, viewsResult, notifResult] = await Promise.all([
@@ -48,14 +49,16 @@ export default async function AppLayout({
         .order("position"),
       supabase
         .from("notifications")
-        .select("id", { count: "exact", head: true })
+        .select("*")
         .eq("user_id", user.id)
-        .eq("is_read", false),
+        .order("created_at", { ascending: false })
+        .limit(30),
     ]);
 
     workspace = wsResult.data;
     savedViews = viewsResult.data ?? [];
-    unreadCount = notifResult.count ?? 0;
+    notifications = notifResult.data ?? [];
+    unreadCount = notifications.filter((n: Notification) => !n.is_read).length;
   }
 
   return (
@@ -70,6 +73,7 @@ export default async function AppLayout({
           workspace={workspace}
           unreadCount={unreadCount}
           userId={user.id}
+          notifications={notifications}
         />
         <main className="flex-1 overflow-auto">{children}</main>
       </div>

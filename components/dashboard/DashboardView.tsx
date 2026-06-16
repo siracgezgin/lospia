@@ -1,7 +1,15 @@
 "use client";
-// Phase 10 — Dashboard with Recharts (full implementation)
-// Placeholder: renders basic stats until Phase 10 is built.
 
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from "recharts";
+import Link from "next/link";
 import type { TaskStatus, TaskPriority } from "@/types/database";
 import { STATUS_LABELS } from "@/lib/utils/task-constants";
 
@@ -21,79 +29,129 @@ interface Props {
 function formatDuration(seconds: number) {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
+  if (h === 0 && m === 0) return "0m";
   if (h === 0) return `${m}m`;
   return `${h}h ${m}m`;
 }
 
+const STATUS_COLORS: Record<TaskStatus, string> = {
+  backlog: "#94a3b8",
+  ready: "#60a5fa",
+  in_progress: "#818cf8",
+  blocked: "#f87171",
+  review: "#fbbf24",
+  done: "#34d399",
+  archived: "#d1d5db",
+};
+
+const PRIORITY_COLORS: Record<TaskPriority, string> = {
+  urgent: "text-red-600",
+  high: "text-orange-500",
+  medium: "text-yellow-600",
+  low: "text-gray-400",
+};
+
 export function DashboardView({ tasksByStatus, timeLoggedSeconds, dueSoonTasks }: Props) {
-  const totalTasks = tasksByStatus.reduce((s, r) => s + r.count, 0);
+  const chartData = tasksByStatus.map((row) => ({
+    status: STATUS_LABELS[row.status],
+    count: row.count,
+    color: STATUS_COLORS[row.status],
+  }));
+
+  const today = new Date().toISOString().slice(0, 10);
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Tile 1: Tasks by status */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5 md:col-span-2">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Tile 1: Tasks by status — Recharts bar chart */}
+        <div className="bg-white rounded-xl border border-gray-200 p-5 lg:col-span-2">
           <h2 className="text-sm font-semibold text-gray-700 mb-4">Tasks by status</h2>
-          {tasksByStatus.length === 0 ? (
-            <p className="text-sm text-gray-400">No tasks yet</p>
+          {chartData.length === 0 ? (
+            <p className="text-sm text-gray-400 py-8 text-center">No tasks yet</p>
           ) : (
-            <div className="space-y-2">
-              {tasksByStatus.map(({ status, count }) => (
-                <div key={status} className="flex items-center gap-3">
-                  <span className="text-xs text-gray-500 w-24 shrink-0">{STATUS_LABELS[status]}</span>
-                  <div className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden">
-                    <div
-                      className="bg-blue-500 h-2 rounded-full"
-                      style={{ width: `${Math.round((count / Math.max(totalTasks, 1)) * 100)}%` }}
-                    />
-                  </div>
-                  <span className="text-xs text-gray-400 w-6 text-right">{count}</span>
-                </div>
-              ))}
-            </div>
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                <XAxis
+                  dataKey="status"
+                  tick={{ fontSize: 10, fill: "#9ca3af" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 10, fill: "#9ca3af" }}
+                  axisLine={false}
+                  tickLine={false}
+                  allowDecimals={false}
+                />
+                <Tooltip
+                  contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb", boxShadow: "none" }}
+                  cursor={{ fill: "#f9fafb" }}
+                />
+                <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                  {chartData.map((entry, index) => (
+                    <Cell key={index} fill={entry.color} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           )}
-          <p className="text-xs text-gray-400 mt-4">Full Recharts bar chart in Phase 10</p>
         </div>
 
-        {/* Tile 2: Time logged */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-2">Time this week</h2>
-          <p className="text-3xl font-bold text-blue-600">
+        {/* Tile 2: Time logged this week */}
+        <div className="bg-white rounded-xl border border-gray-200 p-5 flex flex-col justify-center">
+          <h2 className="text-sm font-semibold text-gray-700 mb-1">Time this week</h2>
+          <p className="text-4xl font-bold text-blue-600 mt-2">
             {formatDuration(timeLoggedSeconds)}
           </p>
-          <p className="text-xs text-gray-400 mt-1">logged so far this week</p>
+          <p className="text-xs text-gray-400 mt-2">logged by you this week</p>
+          {timeLoggedSeconds === 0 && (
+            <p className="text-xs text-gray-300 mt-1">Start a timer to track time</p>
+          )}
         </div>
       </div>
 
       {/* Tile 3: Due soon */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <h2 className="text-sm font-semibold text-gray-700 mb-4">
-          Overdue & due within 7 days ({dueSoonTasks.length})
+          Overdue &amp; due within 7 days
+          {dueSoonTasks.length > 0 && (
+            <span className="ml-2 text-xs font-normal bg-orange-50 text-orange-600 rounded-full px-2 py-0.5">
+              {dueSoonTasks.length}
+            </span>
+          )}
         </h2>
         {dueSoonTasks.length === 0 ? (
-          <p className="text-sm text-gray-400">No overdue or upcoming tasks 🎉</p>
+          <p className="text-sm text-gray-400 py-6 text-center">No overdue or upcoming tasks 🎉</p>
         ) : (
-          <ul className="divide-y divide-gray-100">
+          <div className="divide-y divide-gray-100">
             {dueSoonTasks.map((task) => {
-              const isOverdue = task.due_date < new Date().toISOString().slice(0, 10);
+              const isOverdue = task.due_date < today;
               return (
-                <li key={task.id} className="py-2.5 flex items-center justify-between">
-                  <div>
-                    <a href={`/tasks/${task.id}`} className="text-sm font-medium text-gray-900 hover:text-blue-600">
+                <div key={task.id} className="py-3 flex items-center justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <Link
+                      href={`/tasks/${task.id}`}
+                      className="text-sm font-medium text-gray-900 hover:text-blue-600 truncate block"
+                    >
                       {task.title}
-                    </a>
-                    <p className="text-xs text-gray-400 capitalize">{STATUS_LABELS[task.status]}</p>
+                    </Link>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-[10px] text-gray-400 capitalize">{STATUS_LABELS[task.status]}</span>
+                      <span className={`text-[10px] font-medium capitalize ${PRIORITY_COLORS[task.priority]}`}>
+                        {task.priority}
+                      </span>
+                    </div>
                   </div>
-                  <span className={`text-xs font-medium ${isOverdue ? "text-red-600" : "text-orange-500"}`}>
+                  <span className={`text-xs font-medium shrink-0 ${isOverdue ? "text-red-600" : "text-orange-500"}`}>
                     {new Date(task.due_date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
-                    {isOverdue && " (overdue)"}
+                    {isOverdue && <span className="ml-1 text-[10px] bg-red-50 text-red-500 rounded px-1 py-0.5">overdue</span>}
                   </span>
-                </li>
+                </div>
               );
             })}
-          </ul>
+          </div>
         )}
       </div>
     </div>
