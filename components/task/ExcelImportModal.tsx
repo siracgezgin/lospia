@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { X, Upload } from "lucide-react";
 import { createTask } from "@/lib/actions/tasks";
+import { STATUS_LABELS } from "@/lib/utils/task-constants";
 import { cn } from "@/lib/utils/cn";
 import type { TaskStatus, WorkspaceContact } from "@/types";
 
@@ -40,6 +41,14 @@ const TURKISH_TO_STATUS: Record<string, TaskStatus> = {
   incelemede: "review",
   tamamlandı: "done",
   arşivlendi: "archived",
+  // English aliases (from Excel exports)
+  backlog: "backlog",
+  ready: "ready",
+  in_progress: "in_progress",
+  blocked: "blocked",
+  review: "review",
+  done: "done",
+  archived: "archived",
 };
 
 function parseStatus(raw: string): TaskStatus {
@@ -239,7 +248,7 @@ export function ExcelImportModal({ onClose, workspaceId, contacts }: Props) {
                         <td className="px-3 py-2 max-w-[160px] truncate text-gray-500">{row.description || "—"}</td>
                         <td className="px-3 py-2 text-gray-500">{row.category || "—"}</td>
                         <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{row.due_date ?? "—"}</td>
-                        <td className="px-3 py-2 text-gray-500">{row.status}</td>
+                        <td className="px-3 py-2 text-gray-500">{STATUS_LABELS[row.status]}</td>
                         <td className="px-3 py-2 text-gray-500">{row.collaborators.join(", ") || "—"}</td>
                       </tr>
                     ))}

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { generateKeyBetween } from "fractional-indexing";
+import { normalizeTags } from "@/lib/utils/normalize-tags";
 
 // ---- Zod schemas ----
 
@@ -14,34 +15,42 @@ const TaskStatusSchema = z.enum([
 
 const TaskPrioritySchema = z.enum(["low", "medium", "high", "urgent"]);
 
+// Zod v4 changed z.string().uuid() to strict RFC 9562 — rejects nil-pattern UUIDs
+// (e.g. "00000000-0000-0000-0000-000000000010") used throughout seed data.
+// Use a structural hex regex instead.
+const hexUuid = (msg: string) =>
+  z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, msg);
+
 const CreateTaskSchema = z.object({
-  workspace_id: z.string().uuid(),
-  title: z.string().min(1, "Title is required").max(500),
+  workspace_id: hexUuid("Geçersiz çalışma alanı"),
+  title: z.string().min(1, "Başlık gerekli").max(500, "Başlık çok uzun"),
   description: z.string().max(10000).optional(),
   status: TaskStatusSchema.default("backlog"),
   priority: TaskPrioritySchema.default("medium"),
-  assignee_id: z.string().uuid().nullable().optional(),
-  due_date: z.string().date().nullable().optional(),
-  start_date: z.string().date().nullable().optional(),
+  assignee_id: hexUuid("Geçersiz üye seçimi").nullable().optional(),
+  responsible_contact_id: hexUuid("Geçersiz kişi seçimi").nullable().optional(),
+  due_date: z.string().nullable().optional(),
+  start_date: z.string().nullable().optional(),
   tags: z.array(z.string().max(50)).max(20).default([]),
   custom_fields: z.record(z.string(), z.unknown()).default({}),
 });
 
 const UpdateTaskSchema = z.object({
-  id: z.string().uuid(),
-  title: z.string().min(1).max(500).optional(),
+  id: hexUuid("Geçersiz görev kimliği"),
+  title: z.string().min(1, "Başlık gerekli").max(500).optional(),
   description: z.string().max(10000).nullable().optional(),
   status: TaskStatusSchema.optional(),
   priority: TaskPrioritySchema.optional(),
-  assignee_id: z.string().uuid().nullable().optional(),
-  due_date: z.string().date().nullable().optional(),
-  start_date: z.string().date().nullable().optional(),
+  assignee_id: hexUuid("Geçersiz üye seçimi").nullable().optional(),
+  responsible_contact_id: hexUuid("Geçersiz kişi seçimi").nullable().optional(),
+  due_date: z.string().nullable().optional(),
+  start_date: z.string().nullable().optional(),
   tags: z.array(z.string().max(50)).max(20).optional(),
   custom_fields: z.record(z.string(), z.unknown()).optional(),
 });
 
 const ReorderTaskSchema = z.object({
-  id: z.string().uuid(),
+  id: hexUuid("Geçersiz görev kimliği"),
   newStatus: TaskStatusSchema,
   prevIndex: z.string().nullable(),
   nextIndex: z.string().nullable(),
@@ -52,8 +61,18 @@ const ReorderTaskSchema = z.object({
 export async function createTask(
   input: z.infer<typeof CreateTaskSchema>
 ): Promise<{ id: string } | { error: string }> {
+  if (process.env.NODE_ENV === "development") {
+    console.error("[createTask] RAW INPUT workspace_id:", JSON.stringify(input?.workspace_id), "type:", typeof input?.workspace_id);
+    console.error("[createTask] RAW INPUT assignee_id:", JSON.stringify(input?.assignee_id), "type:", typeof input?.assignee_id);
+    console.error("[createTask] RAW INPUT responsible_contact_id:", JSON.stringify(input?.responsible_contact_id));
+    console.error("[createTask] RAW INPUT title:", JSON.stringify(input?.title));
+    console.error("[createTask] ALL KEYS:", Object.keys(input ?? {}));
+  }
   const parsed = CreateTaskSchema.safeParse(input);
   if (!parsed.success) {
+    if (process.env.NODE_ENV === "development") {
+      console.error("[createTask] validation errors:", JSON.stringify(parsed.error.flatten(), null, 2));
+    }
     return { error: parsed.error.issues[0].message };
   }
 
@@ -61,12 +80,14 @@ export async function createTask(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated" };
 
+  const taskData = { ...parsed.data, tags: normalizeTags(parsed.data.tags) };
+
   // Get the last fractional_index for this status column
   const { data: lastTask } = await supabase
     .from("tasks")
     .select("fractional_index")
-    .eq("workspace_id", parsed.data.workspace_id)
-    .eq("status", parsed.data.status)
+    .eq("workspace_id", taskData.workspace_id)
+    .eq("status", taskData.status)
     .order("fractional_index", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -77,7 +98,7 @@ export async function createTask(
   const { data, error } = await supabase
     .from("tasks")
     .insert({
-      ...parsed.data,
+      ...taskData,
       fractional_index,
       created_by: user.id,
     })
@@ -89,7 +110,7 @@ export async function createTask(
   // Log creation activity
   await supabase.from("task_activity").insert({
     task_id: (data as { id: string }).id,
-    workspace_id: parsed.data.workspace_id,
+    workspace_id: taskData.workspace_id,
     user_id: user.id,
     type: "created",
     content: null,
@@ -113,7 +134,10 @@ export async function updateTask(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated" };
 
-  const { id, ...updates } = parsed.data;
+  const { id, ...rawUpdates } = parsed.data;
+  const updates = rawUpdates.tags !== undefined
+    ? { ...rawUpdates, tags: normalizeTags(rawUpdates.tags) }
+    : rawUpdates;
 
   // Fetch current state for activity logging
   const { data: currentTask } = await supabase

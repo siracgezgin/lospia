@@ -9,6 +9,7 @@ import type {
   TimeEntry,
   CustomFieldDefinition,
   Profile,
+  WorkspaceContact,
   TaskStatus,
   TaskPriority,
 } from "@/types";
@@ -24,6 +25,7 @@ interface Props {
   activeTimer: TimeEntry | null;
   customFields: CustomFieldDefinition[];
   profiles: Pick<Profile, "id" | "full_name" | "email" | "avatar_url">[];
+  contacts: WorkspaceContact[];
   userId: string;
 }
 
@@ -160,7 +162,14 @@ function TagsInput({ task }: { task: Task }) {
 
   function save() {
     setEditing(false);
-    const tags = value.split(",").map((t) => t.trim()).filter(Boolean);
+    const raw = value.split(",").map((t) => t.trim()).filter(Boolean);
+    const seen = new Set<string>();
+    const tags = raw.filter((t) => {
+      const k = t.toLowerCase();
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    }).slice(0, 10);
     startTransition(async () => { await updateTask({ id: task.id, tags }); });
   }
 
@@ -184,12 +193,107 @@ function TagsInput({ task }: { task: Task }) {
       onClick={() => setEditing(true)}
     >
       {task.tags.length > 0
-        ? task.tags.map((tag) => (
-            <span key={tag} className="text-xs bg-blue-50 text-blue-600 rounded px-2 py-0.5">{tag}</span>
+        ? [...new Set(task.tags)].map((tag, i) => (
+            <span key={`${task.id}-tag-${i}`} className="text-xs bg-blue-50 text-blue-600 rounded px-2 py-0.5">{tag}</span>
           ))
         : <span className="text-xs text-gray-400 italic">Etiket eklemek için tıklayın…</span>
       }
     </div>
+  );
+}
+
+// ---- Responsible person select ----
+
+function AssigneeSelect({
+  task,
+  profiles,
+  contacts,
+}: {
+  task: Task;
+  profiles: Pick<Profile, "id" | "full_name" | "email" | "avatar_url">[];
+  contacts: WorkspaceContact[];
+}) {
+  const [_p, startTransition] = useTransition();
+  const currentValue = task.assignee_id
+    ? `member:${task.assignee_id}`
+    : (task as { responsible_contact_id?: string | null }).responsible_contact_id
+    ? `contact:${(task as { responsible_contact_id: string }).responsible_contact_id}`
+    : "";
+  const [opt, setOpt] = useOptimistic<string>(currentValue);
+
+  function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const val = e.target.value;
+    const assignee_id = val.startsWith("member:") ? val.slice(7) : null;
+    const responsible_contact_id = val.startsWith("contact:") ? val.slice(8) : null;
+    startTransition(async () => {
+      setOpt(val);
+      await updateTask({ id: task.id, assignee_id, responsible_contact_id });
+    });
+  }
+
+  return (
+    <select
+      value={opt}
+      onChange={handleChange}
+      className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+    >
+      <option value="">— Atanmamış</option>
+      {profiles.length > 0 && (
+        <optgroup label="Üyeler">
+          {profiles.map((p) => (
+            <option key={p.id} value={`member:${p.id}`}>{p.full_name ?? p.email}</option>
+          ))}
+        </optgroup>
+      )}
+      {contacts.length > 0 && (
+        <optgroup label="Kişiler">
+          {contacts.map((c) => (
+            <option key={c.id} value={`contact:${c.id}`}>{c.name}</option>
+          ))}
+        </optgroup>
+      )}
+    </select>
+  );
+}
+
+// ---- Category / Konu ----
+
+function CategoryInput({ task }: { task: Task }) {
+  const currentVal = ((task.custom_fields as Record<string, unknown>)?.category as string) ?? "";
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(currentVal);
+  const [_p, startTransition] = useTransition();
+
+  function save() {
+    setEditing(false);
+    const fields = { ...(task.custom_fields as Record<string, unknown>) };
+    if (value.trim()) fields.category = value.trim();
+    else delete fields.category;
+    startTransition(async () => { await updateTask({ id: task.id, custom_fields: fields }); });
+  }
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") { setValue(currentVal); setEditing(false); } }}
+        className="w-full text-sm border border-blue-400 rounded-lg px-2 py-1.5 focus:outline-none"
+        placeholder="Örn: Pazarlama, Operasyon…"
+      />
+    );
+  }
+
+  return (
+    <span
+      onClick={() => setEditing(true)}
+      className="text-sm text-gray-600 cursor-pointer hover:text-blue-600 transition-colors"
+      title="Düzenlemek için tıklayın"
+    >
+      {currentVal || <span className="text-gray-400 italic">Eklemek için tıklayın…</span>}
+    </span>
   );
 }
 
@@ -306,9 +410,7 @@ function CommentForm({ task }: { task: Task }) {
 
 // ---- Main component ----
 
-export function TaskDetail({ task, activity, activeTimer, customFields, profiles, userId }: Props) {
-  const assignee = profiles.find((p) => p.id === task.assignee_id);
-
+export function TaskDetail({ task, activity, activeTimer, customFields, profiles, contacts, userId }: Props) {
   return (
     <div className="max-w-3xl mx-auto py-6 px-4 space-y-5">
       {/* Back */}
@@ -328,10 +430,11 @@ export function TaskDetail({ task, activity, activeTimer, customFields, profiles
         <div className="grid grid-cols-2 gap-4">
           <FieldRow label="Durum"><StatusSelect task={task} /></FieldRow>
           <FieldRow label="Öncelik"><PrioritySelect task={task} /></FieldRow>
-          <FieldRow label="Sorumlu">
-            <span className="text-sm text-gray-600">
-              {assignee?.full_name ?? assignee?.email ?? "Atanmamış"}
-            </span>
+          <FieldRow label="Sorumlu" className="col-span-2">
+            <AssigneeSelect task={task} profiles={profiles} contacts={contacts} />
+          </FieldRow>
+          <FieldRow label="Kategori / Konu" className="col-span-2">
+            <CategoryInput task={task} />
           </FieldRow>
           <FieldRow label="Teslim tarihi"><DueDateInput task={task} field="due_date" /></FieldRow>
           <FieldRow label="Başlangıç tarihi"><DueDateInput task={task} field="start_date" /></FieldRow>

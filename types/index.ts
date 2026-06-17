@@ -47,6 +47,18 @@ export type WorkspaceContact = {
   updated_at: string;
 };
 
+// workspace_notes — sticky note board lane (not tasks)
+export type WorkspaceNote = {
+  id: string;
+  workspace_id: string;
+  title: string;
+  body: string | null;
+  position: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 // Enum aliases
 export type TaskStatus = Database["public"]["Enums"]["task_status"];
 export type TaskPriority = Database["public"]["Enums"]["task_priority"];

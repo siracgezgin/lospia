@@ -3,13 +3,13 @@
 import {
   DndContext,
   type DragEndEvent,
-  type DragOverEvent,
   type DragStartEvent,
   DragOverlay,
   PointerSensor,
   useSensor,
   useSensors,
   closestCorners,
+  useDroppable,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -17,15 +17,38 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useState, useOptimistic, useTransition, useCallback, useSyncExternalStore } from "react";
+import {
+  useState,
+  useOptimistic,
+  useTransition,
+  useCallback,
+  useSyncExternalStore,
+  useMemo,
+} from "react";
 import Link from "next/link";
-import { GripVertical, Plus, FileSpreadsheet } from "lucide-react";
-import { TASK_STATUSES, STATUS_LABELS } from "@/lib/utils/task-constants";
-import { reorderTask } from "@/lib/actions/tasks";
+import { GripVertical, Plus, FileSpreadsheet, Users } from "lucide-react";
+import {
+  BOARD_COLUMNS,
+  CARD_STATUS_OPTIONS,
+  getTaskColId,
+  type BoardColId,
+} from "@/lib/utils/task-constants";
+import { PRIORITY_LABELS } from "@/lib/utils/task-constants";
+import { reorderTask, updateTask } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils/cn";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
 import { ExcelImportModal } from "@/components/task/ExcelImportModal";
-import type { Task, SavedView, TaskStatus, Profile, WorkspaceContact } from "@/types";
+import { NotesColumn } from "@/components/board/NotesColumn";
+import type { Task, SavedView, TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceNote } from "@/types";
+
+// ---- Priority chip styles ----
+
+const PRIORITY_CHIP: Record<TaskPriority, string> = {
+  low:    "bg-gray-100 text-gray-500",
+  medium: "bg-amber-50 text-amber-700",
+  high:   "bg-red-100 text-red-700",
+  urgent: "bg-red-200 text-red-900 font-semibold",
+};
 
 // ---- Types ----
 
@@ -37,78 +60,345 @@ interface Props {
   userId: string;
   profiles: Pick<Profile, "id" | "full_name" | "email">[];
   contacts: WorkspaceContact[];
+  notes: WorkspaceNote[];
 }
 
-// ---- Shared card body (no drag chrome) ----
+// ---- Helpers ----
 
-function CardContent({ task }: { task: Task }) {
+function encodeResponsible(task: Task) {
+  if (task.assignee_id) return `member:${task.assignee_id}`;
+  if (task.responsible_contact_id) return `contact:${task.responsible_contact_id}`;
+  return "";
+}
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString("tr-TR", { day: "numeric", month: "short" });
+}
+
+// ---- Quick-edit: Status ----
+
+function QuickStatusSelect({ task }: { task: Task }) {
+  const [_p, startTransition] = useTransition();
+  const [opt, setOpt] = useOptimistic<TaskStatus>(task.status);
+
+  function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const s = e.target.value as TaskStatus;
+    startTransition(async () => {
+      setOpt(s);
+      await updateTask({ id: task.id, status: s });
+    });
+  }
+
+  const currentLabel =
+    CARD_STATUS_OPTIONS.find((o) => o.value === opt)?.label ??
+    (opt === "review" ? "Devam ediyor" : opt === "backlog" ? "Yapılacak" : opt);
+
+  return (
+    <div className="relative inline-flex items-center">
+      <span className="text-[10px] bg-gray-100 text-gray-500 rounded px-1.5 py-0.5 leading-none pr-3 pointer-events-none">
+        {currentLabel}
+      </span>
+      <select
+        value={opt}
+        onChange={handleChange}
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+        className="absolute inset-0 opacity-0 cursor-pointer w-full text-[10px]"
+        aria-label="Durum değiştir"
+      >
+        {CARD_STATUS_OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+// ---- Quick-edit: Priority ----
+
+function QuickPrioritySelect({ task }: { task: Task }) {
+  const [_p, startTransition] = useTransition();
+  const [opt, setOpt] = useOptimistic<TaskPriority>(task.priority);
+
+  function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const p = e.target.value as TaskPriority;
+    startTransition(async () => {
+      setOpt(p);
+      await updateTask({ id: task.id, priority: p });
+    });
+  }
+
+  return (
+    <div className="relative inline-flex items-center">
+      <span className={cn("text-[10px] rounded px-1.5 py-0.5 leading-none pr-3 pointer-events-none", PRIORITY_CHIP[opt])}>
+        {PRIORITY_LABELS[opt]}
+      </span>
+      <select
+        value={opt}
+        onChange={handleChange}
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+        className="absolute inset-0 opacity-0 cursor-pointer w-full text-[10px]"
+        aria-label="Öncelik değiştir"
+      >
+        <option value="low">Düşük</option>
+        <option value="medium">Orta</option>
+        <option value="high">Yüksek</option>
+        <option value="urgent">Acil</option>
+      </select>
+    </div>
+  );
+}
+
+// ---- Quick-edit: Responsible ----
+
+function QuickAssigneeSelect({
+  task,
+  profiles,
+  contacts,
+  responsibleNames,
+}: {
+  task: Task;
+  profiles: Pick<Profile, "id" | "full_name" | "email">[];
+  contacts: WorkspaceContact[];
+  responsibleNames: Record<string, string>;
+}) {
+  const [_p, startTransition] = useTransition();
+  const [encoded, setEncoded] = useOptimistic<string>(encodeResponsible(task));
+
+  const currentName = encoded.startsWith("member:")
+    ? responsibleNames[encoded.slice(7)] ?? "—"
+    : encoded.startsWith("contact:")
+    ? responsibleNames[encoded.slice(8)] ?? "—"
+    : null;
+
+  function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const val = e.target.value;
+    startTransition(async () => {
+      setEncoded(val);
+      const assignee_id = val.startsWith("member:") ? val.slice(7) : null;
+      const responsible_contact_id = val.startsWith("contact:") ? val.slice(8) : null;
+      await updateTask({ id: task.id, assignee_id, responsible_contact_id });
+    });
+  }
+
+  return (
+    <div className="relative inline-flex items-center ml-auto shrink-0">
+      <span className="text-[10px] text-gray-400 whitespace-nowrap pr-2 pointer-events-none">
+        {currentName ?? "Atanmamış"}
+      </span>
+      <select
+        value={encoded}
+        onChange={handleChange}
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+        className="absolute inset-0 opacity-0 cursor-pointer w-full text-[10px]"
+        aria-label="Sorumlu değiştir"
+      >
+        <option value="">— Atanmamış</option>
+        {profiles.length > 0 && (
+          <optgroup label="Üyeler">
+            {profiles.map((p) => (
+              <option key={p.id} value={`member:${p.id}`}>{p.full_name ?? p.email}</option>
+            ))}
+          </optgroup>
+        )}
+        {contacts.length > 0 && (
+          <optgroup label="Kişiler">
+            {contacts.map((c) => (
+              <option key={c.id} value={`contact:${c.id}`}>{c.name}</option>
+            ))}
+          </optgroup>
+        )}
+      </select>
+    </div>
+  );
+}
+
+// ---- Card body (shared between static + sortable) ----
+
+function CardContent({
+  task,
+  profiles,
+  contacts,
+  responsibleNames,
+  interactive,
+}: {
+  task: Task;
+  profiles: Pick<Profile, "id" | "full_name" | "email">[];
+  contacts: WorkspaceContact[];
+  responsibleNames: Record<string, string>;
+  interactive: boolean;
+}) {
   const today = new Date().toISOString().slice(0, 10);
+  const isDone = task.status === "done";
+  const isBlocked = task.status === "blocked";
+  const isOverdue = !!task.due_date && task.due_date < today && !isDone;
+  const threeDaysFromNow = (() => { const d = new Date(today + "T00:00:00"); d.setDate(d.getDate() + 3); return d.toISOString().slice(0, 10); })();
+  const isDueSoon = !!task.due_date && !isOverdue && task.due_date <= threeDaysFromNow;
+
+  const category = (task.custom_fields as Record<string, unknown>)?.category as string | undefined;
+  const collaborators = (task.custom_fields as Record<string, unknown>)?.collaborators;
+  const collabCount = Array.isArray(collaborators) ? collaborators.length : 0;
+
   return (
     <div className="flex-1 min-w-0">
+      {/* Chips row */}
+      {(category || isBlocked) && (
+        <div className="flex items-center gap-1 mb-1 flex-wrap">
+          {category && (
+            <span className="text-[9px] bg-indigo-50 text-indigo-600 rounded px-1.5 py-0.5 leading-none font-medium truncate max-w-24">
+              {category}
+            </span>
+          )}
+          {isBlocked && (
+            <span className="text-[9px] bg-orange-100 text-orange-700 rounded px-1.5 py-0.5 leading-none font-medium">
+              Bekliyor
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Title */}
       <Link
         href={`/tasks/${task.id}`}
-        className="text-sm font-medium text-gray-900 hover:text-blue-600 line-clamp-2 block"
+        className={cn(
+          "text-sm font-medium line-clamp-2 block leading-snug",
+          isDone
+            ? "text-green-800 line-through decoration-green-400/60"
+            : "text-gray-900 hover:text-blue-600"
+        )}
         onClick={(e) => e.stopPropagation()}
       >
         {task.title}
       </Link>
 
+      {/* Tags */}
       {(task.tags?.length ?? 0) > 0 && (
-        <div className="flex gap-1 mt-1.5 flex-wrap">
-          {task.tags.slice(0, 3).map((tag) => (
-            <span key={tag} className="text-[10px] bg-blue-50 text-blue-600 rounded px-1.5 py-0.5 leading-none">
+        <div className="flex gap-1 mt-1 flex-wrap">
+          {[...new Set(task.tags)].slice(0, 2).map((tag, i) => (
+            <span key={`${task.id}-t-${i}`} className="text-[9px] bg-blue-50 text-blue-500 rounded px-1 py-0.5 leading-none">
               {tag}
             </span>
           ))}
         </div>
       )}
 
-      <div className="flex items-center justify-between mt-2">
-        <span className={cn("text-[10px] font-medium rounded px-1.5 py-0.5 leading-none", PRIORITY_COLORS[task.priority])}>
-          {task.priority}
-        </span>
+      {/* Meta row */}
+      <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+        {interactive ? (
+          <>
+            <QuickStatusSelect task={task} />
+            <QuickPrioritySelect task={task} />
+          </>
+        ) : (
+          <>
+            <span className="text-[10px] bg-gray-100 text-gray-500 rounded px-1.5 py-0.5 leading-none">
+              {CARD_STATUS_OPTIONS.find((o) => o.value === task.status)?.label ?? task.status}
+            </span>
+            <span className={cn("text-[10px] rounded px-1.5 py-0.5 leading-none", PRIORITY_CHIP[task.priority])}>
+              {PRIORITY_LABELS[task.priority]}
+            </span>
+          </>
+        )}
+
         {task.due_date && (
-          <span className={cn("text-[10px]", task.due_date < today ? "text-red-500 font-medium" : "text-gray-400")}>
-            {new Date(task.due_date).toLocaleDateString("tr-TR", { day: "numeric", month: "short" })}
+          <span className={cn(
+            "text-[10px]",
+            isOverdue ? "text-red-500 font-medium" : isDueSoon ? "text-amber-600" : "text-gray-400"
+          )}>
+            {isOverdue ? "⚠ " : ""}
+            {formatDate(task.due_date)}
           </span>
+        )}
+
+        {collabCount > 0 && (
+          <span className="text-[10px] text-gray-400 flex items-center gap-0.5">
+            <Users size={9} />
+            {collabCount}
+          </span>
+        )}
+
+        {interactive ? (
+          <QuickAssigneeSelect
+            task={task}
+            profiles={profiles}
+            contacts={contacts}
+            responsibleNames={responsibleNames}
+          />
+        ) : (
+          (() => {
+            const name =
+              responsibleNames[task.assignee_id ?? ""] ??
+              responsibleNames[task.responsible_contact_id ?? ""];
+            return name ? (
+              <span className="text-[10px] text-gray-400 ml-auto whitespace-nowrap truncate max-w-20">{name}</span>
+            ) : null;
+          })()
         )}
       </div>
     </div>
   );
 }
 
-// ---- Static task card (pre-mount, no DnD, no aria-describedby) ----
+// ---- Static card (pre-mount) ----
 
-function StaticTaskCard({ task }: { task: Task }) {
+function StaticTaskCard({
+  task,
+  profiles,
+  contacts,
+  responsibleNames,
+}: {
+  task: Task;
+  profiles: Pick<Profile, "id" | "full_name" | "email">[];
+  contacts: WorkspaceContact[];
+  responsibleNames: Record<string, string>;
+}) {
+  const isDone = task.status === "done";
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm group hover:border-blue-300 hover:shadow-md transition-all">
+    <div className={cn(
+      "rounded-lg border p-3 shadow-sm transition-all",
+      isDone ? "border-l-4 border-l-green-400 border-green-200 bg-green-50/40" : "bg-white border-gray-200"
+    )}>
       <div className="flex items-start gap-1.5">
-        <span className="mt-0.5 p-0.5 shrink-0 text-gray-300">
-          <GripVertical size={14} />
-        </span>
-        <CardContent task={task} />
+        <span className="mt-0.5 p-0.5 shrink-0 text-gray-200"><GripVertical size={13} /></span>
+        <CardContent task={task} profiles={profiles} contacts={contacts} responsibleNames={responsibleNames} interactive={false} />
       </div>
     </div>
   );
 }
 
-// ---- Sortable task card (post-mount, inside DndContext) ----
+// ---- Sortable card (post-mount) ----
 
-function TaskCard({ task, isDragOverlay = false }: { task: Task; isDragOverlay?: boolean }) {
+function TaskCard({
+  task,
+  profiles,
+  contacts,
+  responsibleNames,
+  isDragOverlay = false,
+}: {
+  task: Task;
+  profiles: Pick<Profile, "id" | "full_name" | "email">[];
+  contacts: WorkspaceContact[];
+  responsibleNames: Record<string, string>;
+  isDragOverlay?: boolean;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
     data: { task },
   });
+  const isDone = task.status === "done";
 
   return (
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
-        "bg-white rounded-lg border border-gray-200 p-3 shadow-sm group",
+        "rounded-lg border p-3 shadow-sm group",
+        isDone ? "border-l-4 border-l-green-400 border-green-200 bg-green-50/40" : "bg-white border-gray-200",
         isDragging && "opacity-40",
-        isDragOverlay && "shadow-lg rotate-1 border-blue-300",
-        !isDragOverlay && "hover:border-blue-300 hover:shadow-md transition-all"
+        isDragOverlay && "shadow-xl rotate-1 border-blue-400",
+        !isDragOverlay && !isDone && "hover:border-blue-300 hover:shadow-md transition-all",
       )}
     >
       <div className="flex items-start gap-1.5">
@@ -116,99 +406,85 @@ function TaskCard({ task, isDragOverlay = false }: { task: Task; isDragOverlay?:
           {...attributes}
           {...listeners}
           className="mt-0.5 p-0.5 rounded text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-          aria-label="Drag to reorder"
+          aria-label="Sürükle"
           tabIndex={-1}
         >
-          <GripVertical size={14} />
+          <GripVertical size={13} />
         </button>
-        <CardContent task={task} />
+        <CardContent
+          task={task}
+          profiles={profiles}
+          contacts={contacts}
+          responsibleNames={responsibleNames}
+          interactive={!isDragOverlay}
+        />
       </div>
     </div>
   );
 }
 
-// ---- Shared column header ----
-
-function ColumnHeader({ status, count }: { status: TaskStatus; count: number }) {
-  return (
-    <div className="flex items-center justify-between px-0.5">
-      <div className="flex items-center gap-2">
-        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-          {STATUS_LABELS[status]}
-        </h3>
-        <span className="text-[10px] text-gray-400 bg-gray-100 rounded-full px-1.5 py-0.5 leading-none">
-          {count}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-// ---- Static column (pre-mount) ----
-
-function StaticKanbanColumn({ status, tasks }: { status: TaskStatus; tasks: Task[] }) {
-  return (
-    <div className="flex flex-col gap-2 w-64 shrink-0">
-      <ColumnHeader status={status} count={tasks.length} />
-      <div
-        className={cn(
-          "flex flex-col gap-2 rounded-lg p-1 min-h-16",
-          tasks.length === 0 && "border-2 border-dashed border-gray-100"
-        )}
-      >
-        {tasks.map((task) => (
-          <StaticTaskCard key={task.id} task={task} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ---- Sortable column (post-mount, inside DndContext) ----
+// ---- Column (post-mount) ----
 
 function KanbanColumn({
-  status,
+  colDef,
   tasks,
+  profiles,
+  contacts,
+  responsibleNames,
   onAddTask,
 }: {
-  status: TaskStatus;
+  colDef: typeof BOARD_COLUMNS[number];
   tasks: Task[];
-  onAddTask?: (_status: TaskStatus) => void;
+  profiles: Pick<Profile, "id" | "full_name" | "email">[];
+  contacts: WorkspaceContact[];
+  responsibleNames: Record<string, string>;
+  onAddTask: (_colId: BoardColId) => void;
 }) {
   const taskIds = tasks.map((t) => t.id);
+  const { setNodeRef, isOver } = useDroppable({ id: colDef.id });
+  const isDoneCol = colDef.id === "tamamlandi";
 
   return (
-    <div className="flex flex-col gap-2 w-64 shrink-0">
+    <div className="flex flex-col gap-2 w-80 shrink-0">
       <div className="flex items-center justify-between px-0.5">
         <div className="flex items-center gap-2">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-            {STATUS_LABELS[status]}
+          <h3 className={cn(
+            "text-xs font-bold uppercase tracking-wider",
+            isDoneCol ? "text-green-600" : "text-gray-500"
+          )}>
+            {colDef.label}
           </h3>
           <span className="text-[10px] text-gray-400 bg-gray-100 rounded-full px-1.5 py-0.5 leading-none">
             {tasks.length}
           </span>
         </div>
-        {onAddTask && (
-          <button
-            onClick={() => onAddTask(status)}
-            className="p-0.5 text-gray-300 hover:text-blue-500 rounded transition-colors"
-            aria-label={`Add task to ${STATUS_LABELS[status]}`}
-          >
-            <Plus size={14} />
-          </button>
-        )}
+        <button
+          onClick={() => onAddTask(colDef.id)}
+          className="p-0.5 text-gray-300 hover:text-blue-500 rounded transition-colors"
+          aria-label={`${colDef.label} sütununa görev ekle`}
+        >
+          <Plus size={14} />
+        </button>
       </div>
 
       <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
         <div
+          ref={setNodeRef}
           className={cn(
-            "flex flex-col gap-2 rounded-lg p-1 min-h-16 transition-colors",
-            tasks.length === 0 && "border-2 border-dashed border-gray-100"
+            "flex flex-col gap-2 rounded-lg p-1 min-h-20 transition-colors",
+            tasks.length === 0 && "border-2 border-dashed border-gray-100",
+            isOver && "bg-blue-50/50 border-blue-200"
           )}
-          data-status={status}
+          data-col={colDef.id}
         >
           {tasks.map((task) => (
-            <TaskCard key={task.id} task={task} />
+            <TaskCard
+              key={task.id}
+              task={task}
+              profiles={profiles}
+              contacts={contacts}
+              responsibleNames={responsibleNames}
+            />
           ))}
         </div>
       </SortableContext>
@@ -216,16 +492,47 @@ function KanbanColumn({
   );
 }
 
-// ---- Main board ----
+// ---- Static column (pre-mount) ----
 
-// Server snapshot → false; client snapshot → true.
-// useSyncExternalStore is the React-recommended way to detect client-only rendering
-// without triggering the react-hooks/set-state-in-effect lint rule.
+function StaticKanbanColumn({
+  colDef,
+  tasks,
+  profiles,
+  contacts,
+  responsibleNames,
+}: {
+  colDef: typeof BOARD_COLUMNS[number];
+  tasks: Task[];
+  profiles: Pick<Profile, "id" | "full_name" | "email">[];
+  contacts: WorkspaceContact[];
+  responsibleNames: Record<string, string>;
+}) {
+  const isDoneCol = colDef.id === "tamamlandi";
+  return (
+    <div className="flex flex-col gap-2 w-80 shrink-0">
+      <div className="flex items-center gap-2 px-0.5">
+        <h3 className={cn("text-xs font-bold uppercase tracking-wider", isDoneCol ? "text-green-600" : "text-gray-500")}>
+          {colDef.label}
+        </h3>
+        <span className="text-[10px] text-gray-400 bg-gray-100 rounded-full px-1.5 py-0.5 leading-none">{tasks.length}</span>
+      </div>
+      <div className={cn("flex flex-col gap-2 rounded-lg p-1 min-h-20", tasks.length === 0 && "border-2 border-dashed border-gray-100")}>
+        {tasks.map((task) => (
+          <StaticTaskCard key={task.id} task={task} profiles={profiles} contacts={contacts} responsibleNames={responsibleNames} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---- Mounted guard ----
 const subscribeMounted = () => () => {};
 const getMounted = () => true;
 const getServerMounted = () => false;
 
-export function KanbanBoard({ tasks: initialTasks, savedViews, activeViewId, workspaceId, profiles, contacts }: Props) {
+// ---- Main board ----
+
+export function KanbanBoard({ tasks: initialTasks, savedViews, activeViewId, workspaceId, profiles, contacts, notes }: Props) {
   const mounted = useSyncExternalStore(subscribeMounted, getMounted, getServerMounted);
 
   const sensors = useSensors(
@@ -236,37 +543,49 @@ export function KanbanBoard({ tasks: initialTasks, savedViews, activeViewId, wor
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
-  const [modalDefaultStatus, setModalDefaultStatus] = useState<TaskStatus>("backlog");
+  const [modalDefaultStatus, setModalDefaultStatus] = useState<TaskStatus>("ready");
 
-  function handleAddTask(status: TaskStatus) {
-    setModalDefaultStatus(status);
+  const responsibleNames = useMemo<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    profiles.forEach((p) => { map[p.id] = p.full_name ?? p.email ?? "?"; });
+    contacts.forEach((c) => { map[c.id] = c.name; });
+    return map;
+  }, [profiles, contacts]);
+
+  function handleAddTask(colId: BoardColId) {
+    const col = BOARD_COLUMNS.find((c) => c.id === colId);
+    setModalDefaultStatus(col?.targetStatus ?? "ready");
     setModalOpen(true);
   }
 
   const [optimisticTasks, setOptimisticTasks] = useOptimistic(
     initialTasks,
-    (state: Task[], action: { type: "reorder"; id: string; status: TaskStatus; newIndex: number; fromStatus: TaskStatus }) => {
-      if (action.type === "reorder") {
-        const moved = state.find((t) => t.id === action.id);
-        if (!moved) return state;
-        const withoutMoved = state.filter((t) => t.id !== action.id);
-        const sameStatus = withoutMoved.filter((t) => t.status === action.status);
-        const otherStatus = withoutMoved.filter((t) => t.status !== action.status);
-        const newInStatus = [
-          ...sameStatus.slice(0, action.newIndex),
-          { ...moved, status: action.status },
-          ...sameStatus.slice(action.newIndex),
-        ];
-        return [...otherStatus, ...newInStatus];
-      }
-      return state;
+    (
+      state: Task[],
+      action: { type: "reorder"; id: string; status: TaskStatus; afterId: string | null }
+    ) => {
+      if (action.type !== "reorder") return state;
+      const moved = state.find((t) => t.id === action.id);
+      if (!moved) return state;
+      const updated = { ...moved, status: action.status };
+      const rest = state.filter((t) => t.id !== action.id);
+      if (!action.afterId) return [...rest, updated];
+      const idx = rest.findIndex((t) => t.id === action.afterId);
+      if (idx === -1) return [...rest, updated];
+      return [...rest.slice(0, idx + 1), updated, ...rest.slice(idx + 1)];
     }
   );
 
-  const tasksByStatus = TASK_STATUSES.reduce<Record<string, Task[]>>((acc, status) => {
-    acc[status] = optimisticTasks.filter((t) => t.status === status);
-    return acc;
-  }, {});
+  // Group tasks into 3 visual columns (archived hidden), sorted by fractional_index
+  const tasksByCol = useMemo(() => {
+    const visible = optimisticTasks.filter((t) => t.status !== "archived");
+    return BOARD_COLUMNS.reduce<Record<BoardColId, Task[]>>((acc, col) => {
+      acc[col.id] = visible
+        .filter((t) => (col.statuses as TaskStatus[]).includes(t.status))
+        .sort((a, b) => (a.fractional_index ?? "").localeCompare(b.fractional_index ?? ""));
+      return acc;
+    }, {} as Record<BoardColId, Task[]>);
+  }, [optimisticTasks]);
 
   function findTask(id: string) {
     return optimisticTasks.find((t) => t.id === id);
@@ -277,62 +596,64 @@ export function KanbanBoard({ tasks: initialTasks, savedViews, activeViewId, wor
     if (task) setActiveTask(task);
   }, [optimisticTasks]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const onDragOver = useCallback((_event: DragOverEvent) => {
-    // Cross-column move is committed on dragEnd; nothing to update optimistically here
-  }, []);
-
   const onDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
     setActiveTask(null);
-
     if (!over) return;
 
     const activeId = active.id as string;
     const overId = over.id as string;
+    const srcTask = findTask(activeId);
+    if (!srcTask) return;
 
-    const activeTask = findTask(activeId);
-    if (!activeTask) return;
+    const srcColId = getTaskColId(srcTask.status);
 
+    // Determine target column
+    let tgtColId: BoardColId;
     const overTask = findTask(overId);
-    const targetStatus: TaskStatus = overTask
-      ? overTask.status
-      : TASK_STATUSES.includes(overId as TaskStatus)
-        ? (overId as TaskStatus)
-        : activeTask.status;
+    if (overTask) {
+      tgtColId = getTaskColId(overTask.status);
+    } else if (BOARD_COLUMNS.some((c) => c.id === overId)) {
+      tgtColId = overId as BoardColId;
+    } else {
+      return;
+    }
 
-    const column = tasksByStatus[targetStatus] ?? [];
-    const overIndex = overTask ? column.findIndex((t) => t.id === overId) : column.length;
+    const tgtCol = BOARD_COLUMNS.find((c) => c.id === tgtColId)!;
 
-    const prevTask = overIndex > 0 ? column[overIndex - 1] : null;
-    const nextTask = overIndex < column.length ? column[overIndex] : null;
+    // Same visual column → keep status; cross-column → use targetStatus
+    const newStatus: TaskStatus = srcColId === tgtColId ? srcTask.status : tgtCol.targetStatus;
 
-    const prevIndex = prevTask?.id === activeId ? null : (prevTask?.fractional_index ?? null);
-    const nextIndex = nextTask?.id === activeId ? null : (nextTask?.fractional_index ?? null);
+    // Position within merged target column
+    const tgtTasks = tasksByCol[tgtColId] ?? [];
+    const overIdx = overTask ? tgtTasks.findIndex((t) => t.id === overId) : tgtTasks.length;
+    const withoutActive = tgtTasks.filter((t) => t.id !== activeId);
+    const prevTask = overIdx > 0 ? withoutActive[Math.min(overIdx - 1, withoutActive.length - 1)] : null;
+    const nextTask = overIdx < withoutActive.length ? withoutActive[overIdx] : null;
+
+    const prevIndex = prevTask?.fractional_index ?? null;
+    const nextIndex = nextTask?.fractional_index ?? null;
 
     startTransition(async () => {
       setOptimisticTasks({
         type: "reorder",
         id: activeId,
-        status: targetStatus,
-        newIndex: overIndex,
-        fromStatus: activeTask.status,
+        status: newStatus,
+        afterId: prevTask?.id ?? null,
       });
 
       const result = await reorderTask({
         id: activeId,
-        newStatus: targetStatus,
+        newStatus,
         prevIndex,
         nextIndex,
       });
 
       if ("error" in result) {
-        console.error("Reorder failed:", result.error);
+        console.error("Yeniden sıralama hatası:", result.error);
       }
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [optimisticTasks, tasksByStatus]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const visibleStatuses = TASK_STATUSES.filter((s) => s !== "archived");
+  }, [optimisticTasks, tasksByCol]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex flex-col h-full">
@@ -356,10 +677,10 @@ export function KanbanBoard({ tasks: initialTasks, savedViews, activeViewId, wor
         </div>
       )}
 
-      {/* Action toolbar */}
+      {/* Toolbar */}
       <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-100 bg-white shrink-0">
         <button
-          onClick={() => { setModalDefaultStatus("backlog"); setModalOpen(true); }}
+          onClick={() => { setModalDefaultStatus("ready"); setModalOpen(true); }}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
         >
           <Plus size={14} />
@@ -374,51 +695,64 @@ export function KanbanBoard({ tasks: initialTasks, savedViews, activeViewId, wor
         </button>
       </div>
 
-      {/* Pre-mount: static columns (stable HTML, no dnd-kit aria IDs) */}
+      {/* Pre-mount: static (no DnD) */}
       {!mounted && (
-        <div className="flex gap-3 p-4 overflow-x-auto flex-1 items-start">
-          {visibleStatuses.map((status) => (
+        <div className="flex gap-4 p-4 overflow-x-auto flex-1 items-start">
+          <NotesColumn notes={notes} workspaceId={workspaceId} />
+          {BOARD_COLUMNS.map((col) => (
             <StaticKanbanColumn
-              key={status}
-              status={status}
-              tasks={tasksByStatus[status] ?? []}
+              key={col.id}
+              colDef={col}
+              tasks={tasksByCol[col.id] ?? []}
+              profiles={profiles}
+              contacts={contacts}
+              responsibleNames={responsibleNames}
             />
           ))}
         </div>
       )}
 
-      {/* Post-mount: full DnD board (rendered only client-side, avoids aria ID mismatch) */}
+      {/* Post-mount: full DnD board */}
       {mounted && (
         <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}
           onDragStart={onDragStart}
-          onDragOver={onDragOver}
           onDragEnd={onDragEnd}
         >
-          <div className="flex gap-3 p-4 overflow-x-auto flex-1 items-start">
-            {visibleStatuses.map((status) => (
+          <div className="flex gap-4 p-4 overflow-x-auto flex-1 items-start">
+            <NotesColumn notes={notes} workspaceId={workspaceId} />
+            {BOARD_COLUMNS.map((col) => (
               <KanbanColumn
-                key={status}
-                status={status}
-                tasks={tasksByStatus[status] ?? []}
+                key={col.id}
+                colDef={col}
+                tasks={tasksByCol[col.id] ?? []}
+                profiles={profiles}
+                contacts={contacts}
+                responsibleNames={responsibleNames}
                 onAddTask={handleAddTask}
               />
             ))}
           </div>
 
           <DragOverlay>
-            {activeTask ? <TaskCard task={activeTask} isDragOverlay /> : null}
+            {activeTask ? (
+              <TaskCard
+                task={activeTask}
+                isDragOverlay
+                profiles={profiles}
+                contacts={contacts}
+                responsibleNames={responsibleNames}
+              />
+            ) : null}
           </DragOverlay>
         </DndContext>
       )}
 
-      <p className="text-center text-xs text-gray-300 py-1">
-        workspace: {workspaceId.slice(0, 8)}…
-      </p>
-
+      {/* Modals */}
       {modalOpen && (
         <CreateTaskModal
+          key={modalDefaultStatus}
           onClose={() => setModalOpen(false)}
           workspaceId={workspaceId}
           defaultStatus={modalDefaultStatus}
@@ -436,12 +770,3 @@ export function KanbanBoard({ tasks: initialTasks, savedViews, activeViewId, wor
     </div>
   );
 }
-
-// ---- Constants ----
-
-const PRIORITY_COLORS: Record<string, string> = {
-  low: "bg-gray-100 text-gray-500",
-  medium: "bg-yellow-50 text-yellow-700",
-  high: "bg-orange-50 text-orange-700",
-  urgent: "bg-red-50 text-red-600",
-};

@@ -1,5 +1,36 @@
 import type { TaskStatus, TaskPriority } from "@/types";
 
+// ---- 3-column visual board ----
+
+export type BoardColId = "yapilacak" | "devam_ediyor" | "tamamlandi";
+
+export const BOARD_COLUMNS: {
+  id: BoardColId;
+  label: string;
+  statuses: TaskStatus[];
+  targetStatus: TaskStatus;
+}[] = [
+  { id: "yapilacak",    label: "Yapılacak",    statuses: ["backlog", "ready", "blocked"], targetStatus: "ready" },
+  { id: "devam_ediyor", label: "Devam ediyor", statuses: ["in_progress", "review"],       targetStatus: "in_progress" },
+  { id: "tamamlandi",   label: "Tamamlandı",   statuses: ["done"],                        targetStatus: "done" },
+];
+
+export function getTaskColId(status: TaskStatus): BoardColId {
+  for (const col of BOARD_COLUMNS) {
+    if ((col.statuses as TaskStatus[]).includes(status)) return col.id;
+  }
+  return "yapilacak";
+}
+
+// Status options shown in the card quick-edit dropdown
+export const CARD_STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
+  { value: "ready",       label: "Yapılacak" },
+  { value: "in_progress", label: "Devam ediyor" },
+  { value: "blocked",     label: "Bekliyor" },
+  { value: "done",        label: "Tamamlandı" },
+];
+
+// ---- Internal status list (all) ----
 export const TASK_STATUSES: TaskStatus[] = [
   "backlog",
   "ready",

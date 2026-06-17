@@ -313,6 +313,7 @@ export type Database = {
           fractional_index: string
           id: string
           priority: Database["public"]["Enums"]["task_priority"]
+          responsible_contact_id: string | null
           start_date: string | null
           status: Database["public"]["Enums"]["task_status"]
           tags: string[]
@@ -330,6 +331,7 @@ export type Database = {
           fractional_index?: string
           id?: string
           priority?: Database["public"]["Enums"]["task_priority"]
+          responsible_contact_id?: string | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["task_status"]
           tags?: string[]
@@ -347,6 +349,7 @@ export type Database = {
           fractional_index?: string
           id?: string
           priority?: Database["public"]["Enums"]["task_priority"]
+          responsible_contact_id?: string | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["task_status"]
           tags?: string[]
@@ -367,6 +370,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_responsible_contact_id_fkey"
+            columns: ["responsible_contact_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_contacts"
             referencedColumns: ["id"]
           },
           {

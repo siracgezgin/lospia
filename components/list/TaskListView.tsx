@@ -11,11 +11,16 @@ import {
   type ColumnFiltersState,
   type VisibilityState,
 } from "@tanstack/react-table";
-import { useState, useOptimistic, useTransition } from "react";
+import { useState, useOptimistic, useTransition, useMemo } from "react";
 import Link from "next/link";
 import { ArrowUp, ArrowDown, ArrowUpDown, Plus, FileSpreadsheet } from "lucide-react";
 import type { Task, SavedView, TaskStatus, TaskPriority, Profile, WorkspaceContact } from "@/types";
-import { STATUS_LABELS, TASK_STATUSES, TASK_PRIORITIES, PRIORITY_LABELS, PRIORITY_ORDER } from "@/lib/utils/task-constants";
+import {
+  TASK_PRIORITIES,
+  PRIORITY_LABELS,
+  PRIORITY_ORDER,
+  CARD_STATUS_OPTIONS,
+} from "@/lib/utils/task-constants";
 import { FIELD_LABELS } from "@/lib/i18n/tr";
 import { updateTaskStatus } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils/cn";
@@ -31,9 +36,49 @@ interface Props {
   contacts: WorkspaceContact[];
 }
 
+// ---- Status display — simplified user-facing labels ----
+
+const SIMPLIFIED_STATUS_LABEL: Record<TaskStatus, string> = {
+  backlog:     "Yapılacak",
+  ready:       "Yapılacak",
+  in_progress: "Devam ediyor",
+  review:      "Devam ediyor",
+  blocked:     "Bekliyor",
+  done:        "Tamamlandı",
+  archived:    "Arşivlendi",
+};
+
+// Status filter options (user-facing groups → internal status arrays)
+type StatusFilterKey = "all" | "yapilacak" | "devam_ediyor" | "bekliyor" | "tamamlandi";
+
+const STATUS_FILTER_OPTIONS: { key: StatusFilterKey; label: string; statuses: TaskStatus[] }[] = [
+  { key: "all",          label: "Tüm durumlar",  statuses: [] },
+  { key: "yapilacak",    label: "Yapılacak",      statuses: ["backlog", "ready"] },
+  { key: "devam_ediyor", label: "Devam ediyor",   statuses: ["in_progress", "review"] },
+  { key: "bekliyor",     label: "Bekliyor",       statuses: ["blocked"] },
+  { key: "tamamlandi",   label: "Tamamlandı",     statuses: ["done"] },
+];
+
+// ---- Safe category extractor ----
+
+function safeCategory(task: Task): string {
+  try {
+    const cf = task.custom_fields;
+    if (!cf || typeof cf !== "object" || Array.isArray(cf)) return "";
+    const cat = (cf as Record<string, unknown>).category;
+    if (typeof cat === "string") return cat;
+    // Fallback: first tag
+    const tags = task.tags;
+    if (Array.isArray(tags) && tags.length > 0) return String(tags[0]);
+    return "";
+  } catch {
+    return "";
+  }
+}
+
 const columnHelper = createColumnHelper<Task>();
 
-// ---- Status badge ----
+// ---- Status badge (inline editable) ----
 function StatusBadge({ task }: { task: Task }) {
   const [_isPending, startTransition] = useTransition();
   const [optimisticStatus, setOptimisticStatus] = useOptimistic<TaskStatus>(task.status);
@@ -46,16 +91,22 @@ function StatusBadge({ task }: { task: Task }) {
   }
 
   return (
-    <select
-      value={optimisticStatus}
-      onChange={(e) => handleChange(e.target.value as TaskStatus)}
-      className="text-xs bg-gray-100 border-0 rounded-full px-2 py-0.5 text-gray-600 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
-      onClick={(e) => e.stopPropagation()}
-    >
-      {TASK_STATUSES.map((s) => (
-        <option key={s} value={s}>{STATUS_LABELS[s]}</option>
-      ))}
-    </select>
+    <div className="relative inline-flex items-center">
+      <span className="text-[11px] bg-gray-100 text-gray-600 rounded-full px-2 py-0.5 pr-5 whitespace-nowrap pointer-events-none">
+        {SIMPLIFIED_STATUS_LABEL[optimisticStatus]}
+      </span>
+      <select
+        value={optimisticStatus}
+        onChange={(e) => handleChange(e.target.value as TaskStatus)}
+        onClick={(e) => e.stopPropagation()}
+        className="absolute inset-0 opacity-0 cursor-pointer w-full"
+        aria-label="Durum değiştir"
+      >
+        {CARD_STATUS_OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+    </div>
   );
 }
 
@@ -63,12 +114,12 @@ function StatusBadge({ task }: { task: Task }) {
 function PriorityBadge({ priority }: { priority: TaskPriority }) {
   return (
     <span className={cn(
-      "text-[10px] font-medium rounded px-1.5 py-0.5 leading-none",
+      "text-[10px] font-medium rounded px-1.5 py-0.5 leading-none whitespace-nowrap",
       {
-        low: "bg-gray-100 text-gray-500",
-        medium: "bg-yellow-50 text-yellow-700",
-        high: "bg-orange-50 text-orange-700",
-        urgent: "bg-red-50 text-red-600",
+        low:    "bg-gray-100 text-gray-500",
+        medium: "bg-amber-50 text-amber-700",
+        high:   "bg-red-100 text-red-700",
+        urgent: "bg-red-200 text-red-900 font-semibold",
       }[priority]
     )}>
       {PRIORITY_LABELS[priority]}
@@ -79,28 +130,37 @@ function PriorityBadge({ priority }: { priority: TaskPriority }) {
 // ---- Main component ----
 
 export function TaskListView({ tasks, savedViews, workspaceId, profiles, contacts }: Props) {
-  // Sort by updated_at (a visible column) by default — avoids "column not found" error
-  const [sorting, setSorting] = useState<SortingState>([
-    { id: "updated_at", desc: true },
-  ]);
+  const responsibleNames = useMemo<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    profiles.forEach((p) => { map[p.id] = p.full_name ?? p.email ?? "?"; });
+    contacts.forEach((c) => { map[c.id] = c.name; });
+    return map;
+  }, [profiles, contacts]);
+
+  const [sorting, setSorting] = useState<SortingState>([{ id: "updated_at", desc: true }]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  // created_at is hidden; kept so TanStack Table can sort on it if needed in future
   const [columnVisibility] = useState<VisibilityState>({ created_at: false });
+
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState<TaskStatus | "all">("all");
+  const [filterStatusKey, setFilterStatusKey] = useState<StatusFilterKey>("all");
   const [filterPriority, setFilterPriority] = useState<TaskPriority | "all">("all");
   const [modalOpen, setModalOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
 
-  const filteredTasks = tasks.filter((t) => {
-    if (filterStatus !== "all" && t.status !== filterStatus) return false;
+  const allowedStatuses = STATUS_FILTER_OPTIONS.find((o) => o.key === filterStatusKey)?.statuses ?? [];
+
+  const filteredTasks = useMemo(() => tasks.filter((t) => {
+    if (allowedStatuses.length > 0 && !allowedStatuses.includes(t.status)) return false;
     if (filterPriority !== "all" && t.priority !== filterPriority) return false;
     if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
-  });
+  }), [tasks, allowedStatuses, filterPriority, search]);
 
-  const columns = [
+  // Columns MUST be memoized — recreating the array every render causes TanStack Table
+  // to re-derive its internal model on every keystroke/sort click, which freezes the UI.
+  const columns = useMemo(() => [
     columnHelper.accessor("title", {
+      id: "title",
       header: FIELD_LABELS.title,
       cell: (info) => (
         <div>
@@ -111,9 +171,9 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
             {info.getValue()}
           </Link>
           {(info.row.original.tags?.length ?? 0) > 0 && (
-            <div className="flex gap-1 mt-1">
-              {info.row.original.tags.slice(0, 4).map((tag) => (
-                <span key={tag} className="text-[10px] bg-blue-50 text-blue-500 rounded px-1 py-0.5 leading-none">
+            <div className="flex gap-1 mt-1 flex-wrap">
+              {[...new Set(info.row.original.tags)].slice(0, 3).map((tag, i) => (
+                <span key={`${info.row.original.id}-tag-${i}`} className="text-[10px] bg-blue-50 text-blue-500 rounded px-1 py-0.5 leading-none">
                   {tag}
                 </span>
               ))}
@@ -123,58 +183,99 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
       ),
       enableSorting: false,
     }),
+    // Category column — accessorFn always returns a safe string; never an object or undefined
+    columnHelper.accessor((row) => safeCategory(row), {
+      id: "category",
+      header: "Kategori / Konu",
+      cell: (info) => {
+        const val = info.getValue();
+        return val
+          ? <span className="text-xs bg-indigo-50 text-indigo-600 rounded px-1.5 py-0.5">{val}</span>
+          : <span className="text-xs text-gray-300">—</span>;
+      },
+      sortingFn: (a, b) => {
+        const ca = safeCategory(a.original);
+        const cb = safeCategory(b.original);
+        return ca.localeCompare(cb, "tr", { sensitivity: "base" });
+      },
+    }),
     columnHelper.accessor("status", {
+      id: "status",
       header: FIELD_LABELS.status,
       cell: (info) => <StatusBadge task={info.row.original} />,
-      sortingFn: (a, b) =>
-        TASK_STATUSES.indexOf(a.original.status) - TASK_STATUSES.indexOf(b.original.status),
+      sortingFn: (a, b) => {
+        const order: TaskStatus[] = ["backlog", "ready", "in_progress", "review", "blocked", "done", "archived"];
+        return order.indexOf(a.original.status) - order.indexOf(b.original.status);
+      },
     }),
     columnHelper.accessor("priority", {
+      id: "priority",
       header: FIELD_LABELS.priority,
       cell: (info) => <PriorityBadge priority={info.getValue()} />,
       sortingFn: (a, b) =>
         PRIORITY_ORDER[a.original.priority] - PRIORITY_ORDER[b.original.priority],
     }),
     columnHelper.accessor("due_date", {
+      id: "due_date",
       header: FIELD_LABELS.dueDate,
       cell: (info) => {
         const val = info.getValue();
-        if (!val) return <span className="text-xs text-gray-400">—</span>;
-        const isOverdue = val < new Date().toISOString().slice(0, 10);
+        if (!val) return <span className="text-xs text-gray-300">—</span>;
+        const today = new Date().toISOString().slice(0, 10);
+        const isOverdue = val < today;
         return (
-          <span className={cn("text-xs", isOverdue ? "text-red-500 font-medium" : "text-gray-500")}>
+          <span className={cn("text-xs whitespace-nowrap", isOverdue ? "text-red-500 font-medium" : "text-gray-500")}>
+            {isOverdue ? "⚠ " : ""}
             {new Date(val).toLocaleDateString("tr-TR", { day: "numeric", month: "short" })}
           </span>
         );
       },
-      sortingFn: (a, b) =>
-        (a.original.due_date ?? "9999-12-31") < (b.original.due_date ?? "9999-12-31") ? -1 : 1,
+      sortingFn: (a, b) => {
+        const da = a.original.due_date ?? "9999-12-31";
+        const db = b.original.due_date ?? "9999-12-31";
+        return da < db ? -1 : da > db ? 1 : 0;
+      },
     }),
-    columnHelper.accessor("assignee_id", {
-      header: FIELD_LABELS.assignee,
-      cell: (info) => (
-        <span className="text-xs text-gray-400">{info.getValue() ? "Atandı" : "—"}</span>
-      ),
-      enableSorting: false,
-    }),
+    // Responsible column — reads assignee_id or responsible_contact_id
+    columnHelper.accessor(
+      (row) => responsibleNames[row.assignee_id ?? ""] ?? responsibleNames[(row as { responsible_contact_id?: string | null }).responsible_contact_id ?? ""] ?? "",
+      {
+        id: "responsible",
+        header: FIELD_LABELS.assignee,
+        cell: (info) => <span className="text-xs text-gray-500">{info.getValue() || "—"}</span>,
+        sortingFn: (a, b) => {
+          const na = responsibleNames[a.original.assignee_id ?? ""] ?? responsibleNames[(a.original as { responsible_contact_id?: string | null }).responsible_contact_id ?? ""] ?? "";
+          const nb = responsibleNames[b.original.assignee_id ?? ""] ?? responsibleNames[(b.original as { responsible_contact_id?: string | null }).responsible_contact_id ?? ""] ?? "";
+          return na.localeCompare(nb, "tr", { sensitivity: "base" });
+        },
+      }
+    ),
     columnHelper.accessor("updated_at", {
+      id: "updated_at",
       header: FIELD_LABELS.updatedAt,
       cell: (info) => (
-        <span className="text-xs text-gray-400">
+        <span className="text-xs text-gray-400 whitespace-nowrap">
           {new Date(info.getValue()).toLocaleDateString("tr-TR", { day: "numeric", month: "short" })}
         </span>
       ),
+      sortingFn: (a, b) => {
+        const da = a.original.updated_at;
+        const db = b.original.updated_at;
+        return da < db ? -1 : da > db ? 1 : 0;
+      },
     }),
-    // created_at: hidden column — allows sorting by creation date without showing the column
+    // Hidden: created_at — present so TanStack can sort on it without crashing
     columnHelper.accessor("created_at", {
+      id: "created_at",
       header: "Oluşturuldu",
-      cell: (info) => (
-        <span className="text-xs text-gray-400">
-          {new Date(info.getValue()).toLocaleDateString("tr-TR", { day: "numeric", month: "short" })}
-        </span>
-      ),
+      cell: () => null,
+      sortingFn: (a, b) => {
+        const da = a.original.created_at;
+        const db = b.original.created_at;
+        return da < db ? -1 : da > db ? 1 : 0;
+      },
     }),
-  ];
+  ], [responsibleNames]); // responsibleNames is the only closure dep
 
   const table = useReactTable({
     data: filteredTasks,
@@ -192,6 +293,8 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
     if (isSorted === "desc") return <ArrowDown size={12} className="ml-1 inline" />;
     return <ArrowUpDown size={12} className="ml-1 inline opacity-30" />;
   }
+
+  const totalRows = table.getFilteredRowModel().rows.length;
 
   return (
     <div className="flex flex-col h-full">
@@ -235,13 +338,12 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
           className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm w-52 focus:outline-none focus:ring-1 focus:ring-blue-500"
         />
         <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value as TaskStatus | "all")}
+          value={filterStatusKey}
+          onChange={(e) => setFilterStatusKey(e.target.value as StatusFilterKey)}
           className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
         >
-          <option value="all">Tüm durumlar</option>
-          {TASK_STATUSES.map((s) => (
-            <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+          {STATUS_FILTER_OPTIONS.map((o) => (
+            <option key={o.key} value={o.key}>{o.label}</option>
           ))}
         </select>
         <select
@@ -254,10 +356,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
             <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>
           ))}
         </select>
-        <span className="ml-auto text-xs text-gray-400 self-center">
-          {table.getFilteredRowModel().rows.length} görev
-        </span>
-        <span className="text-xs text-gray-300">· çalışma alanı: {workspaceId.slice(0, 8)}…</span>
+        <span className="ml-auto text-xs text-gray-400 self-center">{totalRows} görev</span>
       </div>
 
       {/* Table */}
@@ -293,11 +392,17 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
               </tr>
             ) : (
               table.getRowModel().rows.map((row) => (
-                <tr key={row.id} className="hover:bg-gray-50 transition-colors">
+                <tr
+                  key={row.id}
+                  className={cn(
+                    "transition-colors",
+                    row.original.status === "done" ? "bg-green-50/50 hover:bg-green-50" : "hover:bg-gray-50"
+                  )}
+                >
                   {row.getVisibleCells().map((cell) => (
                     <td
                       key={cell.id}
-                      className={cn("px-4 py-2.5", cell.column.id === "title" && "w-full")}
+                      className={cn("px-4 py-2.5", cell.column.id === "title" && "w-full min-w-48")}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>

@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import { TaskDetail } from "@/components/task/TaskDetail";
-import type { Task, TaskActivity, TimeEntry, CustomFieldDefinition, Profile } from "@/types";
+import type { Task, TaskActivity, TimeEntry, CustomFieldDefinition, Profile, WorkspaceContact } from "@/types";
 
 export default async function TaskDetailPage({
   params,
@@ -14,9 +14,13 @@ export default async function TaskDetailPage({
 
   const { id } = await params;
 
-  const [taskResult, activityResult, activeTimerResult, customFieldsResult, profilesResult] =
+  // Fetch task first to get workspace_id
+  const taskResult = await supabase.from("tasks").select("*").eq("id", id).single();
+  if (!taskResult.data) notFound();
+  const task: Task = taskResult.data;
+
+  const [activityResult, activeTimerResult, customFieldsResult, profilesResult, contactsResult] =
     await Promise.all([
-      supabase.from("tasks").select("*").eq("id", id).single(),
       supabase
         .from("task_activity")
         .select("*")
@@ -34,16 +38,19 @@ export default async function TaskDetailPage({
         .select("*")
         .order("position"),
       supabase.from("profiles").select("id, full_name, email, avatar_url"),
+      supabase
+        .from("workspace_contacts")
+        .select("*")
+        .eq("workspace_id", task.workspace_id)
+        .order("created_at"),
     ]);
 
-  if (!taskResult.data) notFound();
-
-  const task: Task = taskResult.data;
   const activity: TaskActivity[] = activityResult.data ?? [];
   const activeTimer: TimeEntry | null = activeTimerResult.data ?? null;
   const customFields: CustomFieldDefinition[] = customFieldsResult.data ?? [];
   const profiles: Pick<Profile, "id" | "full_name" | "email" | "avatar_url">[] =
     profilesResult.data ?? [];
+  const contacts: WorkspaceContact[] = (contactsResult.data ?? []) as WorkspaceContact[];
 
   return (
     <TaskDetail
@@ -52,6 +59,7 @@ export default async function TaskDetailPage({
       activeTimer={activeTimer}
       customFields={customFields}
       profiles={profiles}
+      contacts={contacts}
       userId={user.id}
     />
   );

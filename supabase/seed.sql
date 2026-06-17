@@ -1,15 +1,17 @@
 -- =============================================================================
--- SpikOS TaskOS — Development Seed Data
+-- Aslı Filinta Operasyon — Development Seed Data
 -- =============================================================================
 -- Applied automatically by: supabase db reset
 --
 -- Creates:
 --   2 users (alice + bob) with profiles
---   1 workspace (spikos-dev)
+--   1 workspace (Aslı Filinta Çalışma Alanı)
 --   2 workspace_members
 --   3 custom field definitions
---   4 saved views
+--   5 saved views
 --   22 tasks spread across all statuses and priorities
+--   5 workspace contacts (Selen, Kısmet, SRN, AFR, AF)
+--   3 workspace notes
 --
 -- Login credentials (local Supabase):
 --   alice@taskos.local  / password: TaskOS2024!
@@ -27,10 +29,11 @@ declare
   v_cf_select   uuid := '00000000-0000-0000-0000-000000000021';
   v_cf_bool     uuid := '00000000-0000-0000-0000-000000000022';
 
-  v_sv_my_open  uuid := '00000000-0000-0000-0000-000000000030';
-  v_sv_due_week uuid := '00000000-0000-0000-0000-000000000031';
-  v_sv_blocked  uuid := '00000000-0000-0000-0000-000000000032';
-  v_sv_high_pri uuid := '00000000-0000-0000-0000-000000000033';
+  v_sv_tum_isler   uuid := '00000000-0000-0000-0000-000000000030';
+  v_sv_bana_ata    uuid := '00000000-0000-0000-0000-000000000034';
+  v_sv_bu_hafta    uuid := '00000000-0000-0000-0000-000000000031';
+  v_sv_gecikenler  uuid := '00000000-0000-0000-0000-000000000032';
+  v_sv_tamamlanan  uuid := '00000000-0000-0000-0000-000000000033';
 
   v_contact_selen  uuid := '00000000-0000-0000-0000-000000000040';
   v_contact_kismet uuid := '00000000-0000-0000-0000-000000000041';
@@ -158,30 +161,38 @@ begin
   on conflict (workspace_id, field_key) do nothing;
 
   -- -------------------------------------------------------------------------
-  -- Saved views
+  -- Saved views (5 operational tabs)
   -- -------------------------------------------------------------------------
   insert into public.saved_views (id, workspace_id, owner_id, name, config, is_shared, position) values
   (
-    v_sv_my_open, v_ws_id, v_alice_id, 'Açık işlerim',
-    '{"filters": {"assignee": "me", "status": ["backlog","ready","in_progress","blocked","review"]}, "sort": {"field": "due_date", "direction": "asc"}, "view_type": "board"}'::jsonb,
+    v_sv_tum_isler, v_ws_id, v_alice_id, 'Tüm işler',
+    '{"filters": {}, "sort": {"field": "due_date", "direction": "asc"}, "view_type": "board"}'::jsonb,
     true, 0
   ),
   (
-    v_sv_due_week, v_ws_id, v_alice_id, 'Bu hafta teslim edilecekler',
-    '{"filters": {"due_within_days": 7, "status": ["backlog","ready","in_progress","blocked","review"]}, "sort": {"field": "due_date", "direction": "asc"}, "view_type": "list"}'::jsonb,
+    v_sv_bana_ata, v_ws_id, v_alice_id, 'Bana atananlar',
+    '{"filters": {"assignee": "me"}, "sort": {"field": "due_date", "direction": "asc"}, "view_type": "board"}'::jsonb,
     true, 1
   ),
   (
-    v_sv_blocked, v_ws_id, v_alice_id, 'Bloke işler',
-    '{"filters": {"status": ["blocked"]}, "sort": {"field": "priority", "direction": "desc"}, "view_type": "list"}'::jsonb,
+    v_sv_bu_hafta, v_ws_id, v_alice_id, 'Bu hafta',
+    '{"filters": {"due_within_days": 7, "status": ["backlog","ready","in_progress","blocked","review"]}, "sort": {"field": "due_date", "direction": "asc"}, "view_type": "list"}'::jsonb,
     true, 2
   ),
   (
-    v_sv_high_pri, v_ws_id, v_alice_id, 'Yüksek öncelik',
-    '{"filters": {"priority": ["high","urgent"]}, "sort": {"field": "due_date", "direction": "asc"}, "view_type": "board"}'::jsonb,
+    v_sv_gecikenler, v_ws_id, v_alice_id, 'Gecikenler',
+    '{"filters": {"overdue": true}, "sort": {"field": "due_date", "direction": "asc"}, "view_type": "list"}'::jsonb,
     true, 3
+  ),
+  (
+    v_sv_tamamlanan, v_ws_id, v_alice_id, 'Tamamlananlar',
+    '{"filters": {"status": ["done"]}, "sort": {"field": "updated_at", "direction": "desc"}, "view_type": "list"}'::jsonb,
+    true, 4
   )
-  on conflict (id) do nothing;
+  on conflict (id) do update set
+    name     = excluded.name,
+    config   = excluded.config,
+    position = excluded.position;
 
   -- -------------------------------------------------------------------------
   -- Workspace contacts (non-auth collaborators)
@@ -381,5 +392,25 @@ begin
    '{archived,research}',
    '{}'::jsonb,
    'a1', v_bob_id);
+
+  -- -------------------------------------------------------------------------
+  -- Workspace notes (sticky note board lane)
+  -- Individual INSERTs avoid a supabase-cli bug with multi-row ON CONFLICT
+  -- inside DO blocks when bodies contain multi-byte chars near apostrophes.
+  -- -------------------------------------------------------------------------
+  insert into public.workspace_notes (workspace_id, title, body, position, created_by)
+  values (v_ws_id, 'Sprint hedefi',
+          'Bu sprint: Kanban board UX iyileştirmesi + Notlar lane + Avatar bileşeni.',
+          0, v_alice_id);
+
+  insert into public.workspace_notes (workspace_id, title, body, position, created_by)
+  values (v_ws_id, 'Dikkat: Selen onayı bekliyor',
+          'Mobil tasarım için Selen' || chr(39) || 'in onayı bekleniyor. Bloke etmeyin.',
+          1, v_alice_id);
+
+  insert into public.workspace_notes (workspace_id, title, body, position, created_by)
+  values (v_ws_id, 'Önemli bağlantılar',
+          'Figma: figma.com/aslifilinta | Staging: localhost:3000',
+          2, v_bob_id);
 
 end $$;

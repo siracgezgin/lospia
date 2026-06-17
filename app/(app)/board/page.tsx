@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { KanbanBoard } from "@/components/board/KanbanBoard";
-import type { Task, SavedView, Profile, WorkspaceContact } from "@/types";
+import type { Task, SavedView, Profile, WorkspaceContact, WorkspaceNote } from "@/types";
 
 export default async function BoardPage({
   searchParams,
@@ -36,7 +36,7 @@ export default async function BoardPage({
     );
   }
 
-  const [tasksResult, viewsResult, profilesResult, contactsResult] = await Promise.all([
+  const [tasksResult, viewsResult, profilesResult, contactsResult, notesResult] = await Promise.all([
     supabase
       .from("tasks")
       .select("*")
@@ -65,12 +65,19 @@ export default async function BoardPage({
       .select("*")
       .eq("workspace_id", workspaceId)
       .order("created_at"),
+    supabase
+      .from("workspace_notes")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .order("position")
+      .order("created_at"),
   ]);
 
   const tasks: Task[] = tasksResult.data ?? [];
   const savedViews: SavedView[] = viewsResult.data ?? [];
   const profiles: Pick<Profile, "id" | "full_name" | "email">[] = profilesResult.data ?? [];
   const contacts: WorkspaceContact[] = (contactsResult.data ?? []) as WorkspaceContact[];
+  const notes: WorkspaceNote[] = (notesResult.data ?? []) as WorkspaceNote[];
   const activeViewId = params.view ?? null;
 
   return (
@@ -82,6 +89,7 @@ export default async function BoardPage({
       userId={user.id}
       profiles={profiles}
       contacts={contacts}
+      notes={notes}
     />
   );
 }
