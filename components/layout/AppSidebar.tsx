@@ -54,7 +54,7 @@ export function AppSidebar({ workspace, savedViews }: Props) {
         </div>
         {!collapsed && (
           <span className="font-semibold text-sm text-gray-900 truncate">
-            {workspace?.name ?? "Aslı Filinta Operasyon"}
+            {workspace?.name ?? "AF Operasyon"}
           </span>
         )}
       </div>

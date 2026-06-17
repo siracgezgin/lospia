@@ -4,21 +4,20 @@
 -- Applied automatically by: supabase db reset
 --
 -- Creates:
---   2 users (alice + bob) with profiles
---   1 workspace (Aslı Filinta Çalışma Alanı)
+--   2 users (alice=Siraç, bob=Aslı Filinta) with profiles
+--   1 workspace: AF Operasyon
 --   2 workspace_members
 --   3 custom field definitions
 --   5 saved views
---   22 tasks spread across all statuses and priorities
---   5 workspace contacts (Selen, Kısmet, SRN, AFR, AF)
+--   14 real Aslı Filinta project tasks (Lookbook, Erişim, Teknik SEO, GEO/AI)
+--   2 workspace contacts (Nisa Hanım, Ebu Bekir Bey)
 --   3 workspace notes
 --
 -- Login credentials (local Supabase):
---   alice@taskos.local  / password: TaskOS2024!
---   bob@taskos.local    / password: TaskOS2024!
+--   alice@taskos.local  / password: TaskOS2024!  (profile: Siraç)
+--   bob@taskos.local    / password: TaskOS2024!  (profile: Aslı Filinta)
 -- =============================================================================
 
--- Use fixed UUIDs so seed is idempotent
 do $$
 declare
   v_alice_id    uuid := '00000000-0000-0000-0000-000000000001';
@@ -35,25 +34,20 @@ declare
   v_sv_gecikenler  uuid := '00000000-0000-0000-0000-000000000032';
   v_sv_tamamlanan  uuid := '00000000-0000-0000-0000-000000000033';
 
-  v_contact_selen  uuid := '00000000-0000-0000-0000-000000000040';
-  v_contact_kismet uuid := '00000000-0000-0000-0000-000000000041';
-  v_contact_srn    uuid := '00000000-0000-0000-0000-000000000042';
-  v_contact_afr    uuid := '00000000-0000-0000-0000-000000000043';
-  v_contact_af     uuid := '00000000-0000-0000-0000-000000000044';
+  v_contact_nisa uuid := '00000000-0000-0000-0000-000000000040';
+  v_contact_ebu  uuid := '00000000-0000-0000-0000-000000000041';
 
 begin
 
   -- -------------------------------------------------------------------------
-  -- Auth users (Supabase internal — use auth admin API or raw insert for seed)
+  -- Auth users
   -- -------------------------------------------------------------------------
-  -- Insert directly into auth.users for local dev seed
   insert into auth.users (
     id, instance_id, email, encrypted_password,
     email_confirmed_at, created_at, updated_at,
     raw_user_meta_data, raw_app_meta_data,
     role, aud,
     is_super_admin, is_sso_user,
-    -- GoTrue scans these as non-nullable strings; NULL causes a 500 error
     confirmation_token, recovery_token, email_change_token_new, email_change
   ) values
   (
@@ -83,9 +77,7 @@ begin
   on conflict (id) do nothing;
 
   -- -------------------------------------------------------------------------
-  -- Auth identities (REQUIRED for email/password login via GoTrue)
-  -- Each auth.users row needs a matching auth.identities row.
-  -- provider_id = user UUID for the 'email' provider (GoTrue convention).
+  -- Auth identities
   -- -------------------------------------------------------------------------
   insert into auth.identities (
     id, user_id, provider_id, identity_data, provider,
@@ -120,7 +112,7 @@ begin
   on conflict (provider_id, provider) do nothing;
 
   -- -------------------------------------------------------------------------
-  -- Profiles (normally auto-created by trigger; seed explicitly for safety)
+  -- Profiles
   -- -------------------------------------------------------------------------
   insert into public.profiles (id, email, full_name) values
     (v_alice_id, 'alice@taskos.local', 'Siraç'),
@@ -131,8 +123,8 @@ begin
   -- Workspace
   -- -------------------------------------------------------------------------
   insert into public.workspaces (id, name, slug, created_by) values
-    (v_ws_id, 'Aslı Filinta Çalışma Alanı', 'asli-filinta', v_alice_id)
-  on conflict (id) do nothing;
+    (v_ws_id, 'AF Operasyon', 'af-operasyon', v_alice_id)
+  on conflict (id) do update set name = excluded.name, slug = excluded.slug;
 
   -- -------------------------------------------------------------------------
   -- Workspace members
@@ -147,16 +139,16 @@ begin
   -- -------------------------------------------------------------------------
   insert into public.custom_field_definitions (id, workspace_id, name, field_key, field_type, options, position) values
   (
-    v_cf_text, v_ws_id, 'External Link', 'external_link', 'text', null, 0
+    v_cf_text, v_ws_id, 'Bağlantı', 'external_link', 'text', null, 0
   ),
   (
-    v_cf_select, v_ws_id, 'Team', 'team',
+    v_cf_select, v_ws_id, 'Kategori', 'category',
     'select',
-    '["Frontend", "Backend", "Design", "DevOps"]'::jsonb,
+    '["A — Lookbook", "B — Erişim", "B — Teknik SEO", "B — GEO / AI"]'::jsonb,
     1
   ),
   (
-    v_cf_bool, v_ws_id, 'Needs Review', 'needs_review', 'boolean', null, 2
+    v_cf_bool, v_ws_id, 'Acil', 'urgent_flag', 'boolean', null, 2
   )
   on conflict (workspace_id, field_key) do nothing;
 
@@ -176,7 +168,7 @@ begin
   ),
   (
     v_sv_bu_hafta, v_ws_id, v_alice_id, 'Bu hafta',
-    '{"filters": {"due_within_days": 7, "status": ["backlog","ready","in_progress","blocked","review"]}, "sort": {"field": "due_date", "direction": "asc"}, "view_type": "list"}'::jsonb,
+    '{"filters": {"due_within_days": 7}, "sort": {"field": "due_date", "direction": "asc"}, "view_type": "list"}'::jsonb,
     true, 2
   ),
   (
@@ -198,219 +190,224 @@ begin
   -- Workspace contacts (non-auth collaborators)
   -- -------------------------------------------------------------------------
   insert into public.workspace_contacts (id, workspace_id, name, email, role_label) values
-    (v_contact_selen,  v_ws_id, 'Selen',       null, null),
-    (v_contact_kismet, v_ws_id, 'Kısmet',      null, null),
-    (v_contact_srn,    v_ws_id, 'SRN',         null, null),
-    (v_contact_afr,    v_ws_id, 'AFR',         null, null),
-    (v_contact_af,     v_ws_id, 'AF',          null, null)
+    (v_contact_nisa, v_ws_id, 'Nisa Hanım',    null, 'Tasarımcı'),
+    (v_contact_ebu,  v_ws_id, 'Ebu Bekir Bey', null, 'Web Yöneticisi')
   on conflict (id) do nothing;
 
   -- -------------------------------------------------------------------------
-  -- Tasks (22 tasks across all 7 statuses)
+  -- Tasks — real Aslı Filinta project tasks
+  -- Status mapping: Başlamadı→backlog  Devam ediyor→in_progress  Bekliyor→blocked
   -- -------------------------------------------------------------------------
-  insert into public.tasks (workspace_id, title, description, status, priority, assignee_id, due_date, start_date, tags, custom_fields, fractional_index, created_by) values
 
-  -- BACKLOG (4)
-  (v_ws_id, 'Design new onboarding flow',
-   'Create wireframes and user journey for the new onboarding experience.',
-   'backlog', 'high', v_alice_id,
-   current_date + 14, current_date,
-   '{ux,design}',
-   '{"team": "Design", "external_link": "https://figma.com/stub"}'::jsonb,
-   'a0', v_alice_id),
+  -- ── A — Lookbook (5 tasks, Devam ediyor, deadline 11 Haziran 2026) ─────────
 
-  (v_ws_id, 'Set up CI/CD pipeline',
-   'Configure GitHub Actions for lint, test, and build on every PR.',
-   'backlog', 'medium', v_bob_id,
-   current_date + 21, null,
-   '{devops,infra}',
-   '{"team": "DevOps", "needs_review": false}'::jsonb,
-   'a1', v_alice_id),
+  insert into public.tasks (workspace_id, title, description, status, priority,
+    assignee_id, responsible_contact_id, due_date, tags, custom_fields, fractional_index, created_by)
+  values
+  (v_ws_id,
+   'Canva tasarımlarının bitirilmesi',
+   'Lookbook için Canva üzerindeki tüm tasarımları tamamla ve son hale getir.',
+   'in_progress', 'high',
+   v_alice_id, null,
+   '2026-06-11',
+   '{"lookbook"}',
+   '{"category": "A — Lookbook"}'::jsonb,
+   'a0', v_alice_id);
 
-  (v_ws_id, 'Research billing integration',
-   'Evaluate Stripe vs Paddle for subscription management.',
-   'backlog', 'low', null,
-   current_date + 30, null,
-   '{billing,research}',
-   '{}'::jsonb,
-   'a2', v_bob_id),
+  insert into public.tasks (workspace_id, title, description, status, priority,
+    assignee_id, responsible_contact_id, due_date, tags, custom_fields, fractional_index, created_by)
+  values
+  (v_ws_id,
+   'AI ile ürünlerin modele giydirilmesi',
+   'Yapay zeka araçlarıyla ürün görsellerini model üzerinde oluştur.',
+   'in_progress', 'high',
+   null, v_contact_nisa,
+   '2026-06-11',
+   '{"lookbook"}',
+   '{"category": "A — Lookbook"}'::jsonb,
+   'a1', v_alice_id);
 
-  (v_ws_id, 'Write API documentation',
-   'Document all public API endpoints with examples using OpenAPI.',
-   'backlog', 'medium', null,
-   current_date + 45, null,
-   '{docs,api}',
-   '{"team": "Backend"}'::jsonb,
-   'a3', v_alice_id),
+  insert into public.tasks (workspace_id, title, description, status, priority,
+    assignee_id, responsible_contact_id, due_date, tags, custom_fields, fractional_index, created_by)
+  values
+  (v_ws_id,
+   'Tasarım + görseller → Excel line sheet veri dökümü',
+   'Tüm ürün tasarımlarını ve görsellerini alıcı line sheet Excel dosyasına aktar.',
+   'in_progress', 'high',
+   v_alice_id, null,
+   '2026-06-11',
+   '{"lookbook","excel"}',
+   '{"category": "A — Lookbook"}'::jsonb,
+   'a2', v_alice_id);
 
-  -- READY (4)
-  (v_ws_id, 'Implement Kanban drag-and-drop',
-   'Use dnd-kit to enable card reordering within and across status columns.',
-   'ready', 'urgent', v_alice_id,
-   current_date + 3, current_date - 2,
-   '{frontend,feature}',
-   '{"team": "Frontend", "needs_review": true}'::jsonb,
-   'a0', v_alice_id),
+  insert into public.tasks (workspace_id, title, description, status, priority,
+    assignee_id, responsible_contact_id, due_date, tags, custom_fields, fractional_index, created_by)
+  values
+  (v_ws_id,
+   'Internal selection matrix + buyer line sheet finali',
+   'İç seçim matrisini oluştur, alıcı line sheet' || chr(39) || 'ini finalleştir.',
+   'in_progress', 'urgent',
+   v_alice_id, null,
+   '2026-06-11',
+   '{"lookbook","buyer"}',
+   '{"category": "A — Lookbook"}'::jsonb,
+   'a3', v_alice_id);
 
-  (v_ws_id, 'Add dark mode support',
-   'Implement Tailwind dark mode toggle; persist preference in localStorage.',
-   'ready', 'low', v_bob_id,
-   current_date + 10, null,
-   '{frontend,ui}',
-   '{"team": "Frontend"}'::jsonb,
-   'a1', v_bob_id),
+  insert into public.tasks (workspace_id, title, description, status, priority,
+    assignee_id, responsible_contact_id, due_date, tags, custom_fields, fractional_index, created_by)
+  values
+  (v_ws_id,
+   'Aslı Hanım onayı → alıcıya gönderim',
+   'Finalleşen lookbook' || chr(39) || 'u Aslı Hanım' || chr(39) || 'ın onayına sun, ardından alıcıya ilet.',
+   'in_progress', 'urgent',
+   v_bob_id, null,
+   '2026-06-11',
+   '{"lookbook","onay"}',
+   '{"category": "A — Lookbook"}'::jsonb,
+   'a4', v_alice_id);
 
-  (v_ws_id, 'Database backup strategy',
-   'Set up automated nightly backups for production Postgres.',
-   'ready', 'high', v_bob_id,
-   current_date + 7, null,
-   '{devops,database}',
-   '{"team": "DevOps"}'::jsonb,
-   'a2', v_alice_id),
+  -- ── B — Erişim (2 tasks, Bekliyor/blocked, deadline 8 Haziran 2026) ────────
 
-  (v_ws_id, 'User profile settings page',
-   'Allow users to update their name, avatar, and password.',
-   'ready', 'medium', v_alice_id,
-   current_date + 12, null,
-   '{frontend,auth}',
-   '{"team": "Frontend"}'::jsonb,
-   'a3', v_alice_id),
+  insert into public.tasks (workspace_id, title, description, status, priority,
+    assignee_id, responsible_contact_id, due_date, tags, custom_fields, fractional_index, created_by)
+  values
+  (v_ws_id,
+   'WordPress admin erişimi',
+   'Ebu Bekir Bey' || chr(39) || 'den WordPress yönetici erişimi talep edildi; onay bekleniyor.',
+   'blocked', 'urgent',
+   v_alice_id, null,
+   '2026-06-08',
+   '{"erisim","wordpress"}',
+   jsonb_build_object('category', 'B — Erişim', 'collaborators', jsonb_build_array(v_contact_ebu::text)),
+   'b0', v_alice_id);
 
-  -- IN_PROGRESS (4)
-  (v_ws_id, 'RLS policy audit',
-   'Review all Row Level Security policies for correctness and performance.',
-   'in_progress', 'urgent', v_alice_id,
-   current_date + 2, current_date - 1,
-   '{security,database}',
-   '{"team": "Backend", "needs_review": true}'::jsonb,
-   'a0', v_alice_id),
+  insert into public.tasks (workspace_id, title, description, status, priority,
+    assignee_id, responsible_contact_id, due_date, tags, custom_fields, fractional_index, created_by)
+  values
+  (v_ws_id,
+   'Google Search Console + Bing Webmaster erişimi',
+   'GSC ve Bing Webmaster araçlarına erişim sağla.',
+   'blocked', 'high',
+   v_alice_id, null,
+   '2026-06-08',
+   '{"erisim","seo"}',
+   '{"category": "B — Erişim"}'::jsonb,
+   'b1', v_alice_id);
 
-  (v_ws_id, 'Notification bell component',
-   'Build header notification bell with unread badge and popover list.',
-   'in_progress', 'medium', v_bob_id,
-   current_date + 5, current_date,
-   '{frontend,notifications}',
-   '{"team": "Frontend"}'::jsonb,
-   'a1', v_bob_id),
+  -- ── B — Teknik SEO (3 tasks, Başlamadı/backlog, deadline 18 Haziran 2026) ──
 
-  (v_ws_id, 'Time tracking server actions',
-   'Implement startTimer / stopTimer server actions with one-active-timer enforcement.',
-   'in_progress', 'high', v_alice_id,
-   current_date + 4, current_date - 1,
-   '{backend,feature}',
-   '{"team": "Backend"}'::jsonb,
-   'a2', v_alice_id),
+  insert into public.tasks (workspace_id, title, description, status, priority,
+    assignee_id, responsible_contact_id, due_date, tags, custom_fields, fractional_index, created_by)
+  values
+  (v_ws_id,
+   'Baseline audit doldurma (Lighthouse + GSC)',
+   'Lighthouse ve Google Search Console verileriyle SEO baseline raporunu tamamla.',
+   'backlog', 'high',
+   v_alice_id, null,
+   '2026-06-18',
+   '{"seo","audit"}',
+   '{"category": "B — Teknik SEO"}'::jsonb,
+   'c0', v_alice_id);
 
-  (v_ws_id, 'TanStack Table list view',
-   'Implement /list route with sorting and filtering using TanStack Table.',
-   'in_progress', 'high', v_bob_id,
-   current_date + 6, current_date,
-   '{frontend,feature}',
-   '{"team": "Frontend", "needs_review": false}'::jsonb,
-   'a3', v_bob_id),
+  insert into public.tasks (workspace_id, title, description, status, priority,
+    assignee_id, responsible_contact_id, due_date, tags, custom_fields, fractional_index, created_by)
+  values
+  (v_ws_id,
+   'Öncelik-1 teknik düzeltmeler (meta, alt-text EN, sitemap, thumbnail)',
+   'En kritik teknik SEO hatalarını gider: meta etiketleri, İngilizce alt-text, sitemap ve thumbnail.',
+   'backlog', 'high',
+   v_alice_id, null,
+   '2026-06-18',
+   '{"seo","teknik"}',
+   '{"category": "B — Teknik SEO"}'::jsonb,
+   'c1', v_alice_id);
 
-  -- BLOCKED (2)
-  (v_ws_id, 'Email-to-task inbound route',
-   'Blocked on DNS configuration for email routing. Route is written; awaiting MX records.',
-   'blocked', 'medium', v_alice_id,
-   current_date - 2, current_date - 7,
-   '{backend,email,blocked}',
-   '{"team": "Backend"}'::jsonb,
-   'a0', v_alice_id),
+  insert into public.tasks (workspace_id, title, description, status, priority,
+    assignee_id, responsible_contact_id, due_date, tags, custom_fields, fractional_index, created_by)
+  values
+  (v_ws_id,
+   'JSON-LD enjeksiyonu (Organization + Person + Product)',
+   'Siteye Organization, Person ve Product şema işaretlemelerini JSON-LD olarak ekle.',
+   'backlog', 'medium',
+   v_alice_id, null,
+   '2026-06-18',
+   '{"seo","schema"}',
+   '{"category": "B — Teknik SEO"}'::jsonb,
+   'c2', v_alice_id);
 
-  (v_ws_id, 'Mobile responsive layout',
-   'Blocked: waiting for final design specs from the design team.',
-   'blocked', 'high', v_bob_id,
-   current_date + 1, current_date - 3,
-   '{frontend,mobile,blocked}',
-   '{"team": "Design"}'::jsonb,
-   'a1', v_bob_id),
+  -- ── B — GEO / AI (4 tasks, Başlamadı/backlog, deadline 18 Haziran 2026) ────
 
-  -- REVIEW (2)
-  (v_ws_id, 'Dashboard analytics tiles',
-   'Three dashboard tiles using Recharts. Ready for review.',
-   'review', 'high', v_alice_id,
-   current_date + 1, current_date - 4,
-   '{frontend,dashboard}',
-   '{"team": "Frontend", "needs_review": true}'::jsonb,
-   'a0', v_alice_id),
+  insert into public.tasks (workspace_id, title, description, status, priority,
+    assignee_id, responsible_contact_id, due_date, tags, custom_fields, fractional_index, created_by)
+  values
+  (v_ws_id,
+   'LLM visibility baseline testi (10 sorgu × 4 motor)',
+   '4 farklı LLM motorunda (ChatGPT, Claude, Perplexity, Gemini) 10 marka sorgusuyla görünürlük testi yap.',
+   'backlog', 'high',
+   v_alice_id, null,
+   '2026-06-18',
+   '{"geo","llm","ai"}',
+   '{"category": "B — GEO / AI"}'::jsonb,
+   'd0', v_alice_id);
 
-  (v_ws_id, 'Supabase SSR auth middleware',
-   'Session-based middleware protecting /app routes. Review and merge.',
-   'review', 'urgent', v_bob_id,
-   current_date, current_date - 5,
-   '{backend,auth,security}',
-   '{"team": "Backend", "needs_review": true}'::jsonb,
-   'a1', v_bob_id),
+  insert into public.tasks (workspace_id, title, description, status, priority,
+    assignee_id, responsible_contact_id, due_date, tags, custom_fields, fractional_index, created_by)
+  values
+  (v_ws_id,
+   'llms.txt + robots.txt güncelle (GPTBot, ClaudeBot, PerplexityBot, Google-Extended)',
+   'Yapay zeka botlarına uygun crawl izinlerini robots.txt ve llms.txt dosyalarına ekle.',
+   'backlog', 'medium',
+   v_alice_id, null,
+   '2026-06-18',
+   '{"geo","robots","ai"}',
+   '{"category": "B — GEO / AI"}'::jsonb,
+   'd1', v_alice_id);
 
-  -- DONE (4)
-  (v_ws_id, 'Project scaffold (Phase 0)',
-   'Next.js 16 project bootstrapped with all dependencies installed.',
-   'done', 'medium', v_alice_id,
-   current_date - 5, current_date - 7,
-   '{infra,done}',
-   '{"team": "DevOps"}'::jsonb,
-   'a0', v_alice_id),
+  insert into public.tasks (workspace_id, title, description, status, priority,
+    assignee_id, responsible_contact_id, due_date, tags, custom_fields, fractional_index, created_by)
+  values
+  (v_ws_id,
+   'About Aslı Filinta sayfası revize',
+   'Hakkında sayfasını LLM optimizasyonu için yapılandırılmış verilerle güncelle.',
+   'backlog', 'medium',
+   v_alice_id, null,
+   '2026-06-18',
+   '{"geo","icerik"}',
+   '{"category": "B — GEO / AI"}'::jsonb,
+   'd2', v_alice_id);
 
-  (v_ws_id, 'Database schema design',
-   'All 12 tables, indexes, triggers, and RLS policies written.',
-   'done', 'urgent', v_alice_id,
-   current_date - 3, current_date - 6,
-   '{backend,database,done}',
-   '{"team": "Backend"}'::jsonb,
-   'a1', v_alice_id),
-
-  (v_ws_id, 'Rename git branch master → main',
-   'Completed before first commit.',
-   'done', 'low', v_alice_id,
-   current_date - 10, current_date - 10,
-   '{infra,git}',
-   '{"team": "DevOps"}'::jsonb,
-   'a2', v_alice_id),
-
-  (v_ws_id, 'Environment variable setup',
-   '.env.example created with all feature flags. .env.local template ready.',
-   'done', 'medium', v_bob_id,
-   current_date - 8, current_date - 8,
-   '{infra,config}',
-   '{"team": "DevOps"}'::jsonb,
-   'a3', v_bob_id),
-
-  -- ARCHIVED (2)
-  (v_ws_id, '[ARCHIVED] Old Trello board migration plan',
-   'Daha iyi bir sistemle değiştirildi. Arşivlendi.',
-   'archived', 'low', null,
-   null, null,
-   '{archived,planning}',
-   '{}'::jsonb,
-   'a0', v_alice_id),
-
-  (v_ws_id, '[ARCHIVED] Spike: evaluate Linear API',
-   'Decided to build our own instead. Archived for reference.',
-   'archived', 'low', null,
-   null, null,
-   '{archived,research}',
-   '{}'::jsonb,
-   'a1', v_bob_id);
+  insert into public.tasks (workspace_id, title, description, status, priority,
+    assignee_id, responsible_contact_id, due_date, tags, custom_fields, fractional_index, created_by)
+  values
+  (v_ws_id,
+   'Mention.com hesabı + marka izleme başlat',
+   'Mention.com hesabı aç, marka ve rakip anahtar kelimelerle izlemeyi başlat.',
+   'backlog', 'low',
+   v_alice_id, null,
+   '2026-06-18',
+   '{"geo","izleme"}',
+   '{"category": "B — GEO / AI"}'::jsonb,
+   'd3', v_alice_id);
 
   -- -------------------------------------------------------------------------
-  -- Workspace notes (sticky note board lane)
-  -- Individual INSERTs avoid a supabase-cli bug with multi-row ON CONFLICT
-  -- inside DO blocks when bodies contain multi-byte chars near apostrophes.
+  -- Workspace notes
   -- -------------------------------------------------------------------------
   insert into public.workspace_notes (workspace_id, title, body, position, created_by)
-  values (v_ws_id, 'Sprint hedefi',
-          'Bu sprint: Kanban board UX iyileştirmesi + Notlar lane + Avatar bileşeni.',
+  values (v_ws_id,
+          'Lookbook sprint hedefi',
+          'Deadline: 11 Haziran. Canva tasarımları + AI görseller + line sheet finali.',
           0, v_alice_id);
 
   insert into public.workspace_notes (workspace_id, title, body, position, created_by)
-  values (v_ws_id, 'Dikkat: Selen onayı bekliyor',
-          'Mobil tasarım için Selen' || chr(39) || 'in onayı bekleniyor. Bloke etmeyin.',
+  values (v_ws_id,
+          'SEO / GEO sprint',
+          'Deadline: 18 Haziran. Önce erişimler, sonra baseline audit, sonra teknik düzeltmeler.',
           1, v_alice_id);
 
   insert into public.workspace_notes (workspace_id, title, body, position, created_by)
-  values (v_ws_id, 'Önemli bağlantılar',
-          'Figma: figma.com/aslifilinta | Staging: localhost:3000',
+  values (v_ws_id,
+          'Kritik: Ebu Bekir onayı',
+          'WordPress admin erişimi i' || chr(231) || 'in Ebu Bekir Bey' || chr(39) || 'den onay bekleniyor.',
           2, v_bob_id);
 
 end $$;
