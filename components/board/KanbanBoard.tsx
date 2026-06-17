@@ -26,7 +26,7 @@ import {
   useMemo,
 } from "react";
 import Link from "next/link";
-import { GripVertical, Plus, FileSpreadsheet, Users } from "lucide-react";
+import { GripVertical, Plus, FileSpreadsheet, Users, Search } from "lucide-react";
 import {
   BOARD_COLUMNS,
   CARD_STATUS_OPTIONS,
@@ -41,7 +41,7 @@ import { ExcelImportModal } from "@/components/task/ExcelImportModal";
 import { NotesColumn } from "@/components/board/NotesColumn";
 import type { Task, SavedView, TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceNote } from "@/types";
 
-// ---- Priority chip styles ----
+// ── Priority chip styles ──────────────────────────────────────────────────────
 
 const PRIORITY_CHIP: Record<TaskPriority, string> = {
   low:    "bg-gray-100 text-gray-500",
@@ -50,12 +50,124 @@ const PRIORITY_CHIP: Record<TaskPriority, string> = {
   urgent: "bg-red-200 text-red-900 font-semibold",
 };
 
-// ---- Types ----
+// ── Saved-view slug mapping ───────────────────────────────────────────────────
+// Maps human-readable view names to stable URL slugs.
+
+const VIEW_SLUG_MAP: Record<string, string> = {
+  "Tüm işler":     "all",
+  "Bana atananlar": "mine",
+  "Bu hafta":      "this-week",
+  "Gecikenler":    "overdue",
+  "Tamamlananlar": "done",
+};
+
+// ── Filter helpers (pure, outside component) ──────────────────────────────────
+
+function getWeekBounds(): { mondayStr: string; sundayStr: string } {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dow = today.getDay(); // 0=Sun…6=Sat
+  const daysFromMonday = dow === 0 ? 6 : dow - 1;
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - daysFromMonday);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  return {
+    mondayStr: monday.toISOString().slice(0, 10),
+    sundayStr: sunday.toISOString().slice(0, 10),
+  };
+}
+
+function applyViewFilter(tasks: Task[], slug: string, userId: string): Task[] {
+  const today = new Date().toISOString().slice(0, 10);
+  switch (slug) {
+    case "mine":
+      return tasks.filter((t) => t.status !== "archived" && t.assignee_id === userId);
+
+    case "this-week": {
+      const { mondayStr, sundayStr } = getWeekBounds();
+      return tasks.filter(
+        (t) =>
+          t.status !== "archived" &&
+          t.due_date !== null &&
+          t.due_date >= mondayStr &&
+          t.due_date <= sundayStr,
+      );
+    }
+
+    case "overdue":
+      return tasks.filter(
+        (t) =>
+          t.status !== "archived" &&
+          t.status !== "done" &&
+          t.due_date !== null &&
+          t.due_date < today,
+      );
+
+    case "done":
+      return tasks.filter((t) => t.status === "done");
+
+    default: // "all" or unknown slug
+      return tasks.filter((t) => t.status !== "archived");
+  }
+}
+
+function applyPersonFilter(tasks: Task[], personFilter: string): Task[] {
+  if (!personFilter) return tasks;
+  if (personFilter.startsWith("member:")) {
+    const id = personFilter.slice(7);
+    return tasks.filter((t) => {
+      if (t.assignee_id === id) return true;
+      const collabs = (t.custom_fields as Record<string, unknown>)?.collaborators;
+      return Array.isArray(collabs) && collabs.includes(id);
+    });
+  }
+  if (personFilter.startsWith("contact:")) {
+    const id = personFilter.slice(8);
+    return tasks.filter((t) => {
+      if (t.responsible_contact_id === id) return true;
+      const collabs = (t.custom_fields as Record<string, unknown>)?.collaborators;
+      return Array.isArray(collabs) && collabs.includes(id);
+    });
+  }
+  return tasks;
+}
+
+function matchesSearch(
+  task: Task,
+  search: string,
+  responsibleNames: Record<string, string>,
+): boolean {
+  if (!search) return true;
+  const q = search.toLowerCase();
+  const cf = task.custom_fields as Record<string, unknown>;
+  const category = String(cf?.category ?? "").toLowerCase();
+  const konu = String(cf?.konu ?? "").toLowerCase();
+  const collabs = Array.isArray(cf?.collaborators) ? (cf.collaborators as string[]) : [];
+  const collabNames = collabs.map((id) => (responsibleNames[id] ?? "").toLowerCase());
+  const responsibleName = (
+    responsibleNames[task.assignee_id ?? ""] ??
+    responsibleNames[task.responsible_contact_id ?? ""] ??
+    ""
+  ).toLowerCase();
+
+  return (
+    task.title.toLowerCase().includes(q) ||
+    (task.description ?? "").toLowerCase().includes(q) ||
+    category.includes(q) ||
+    konu.includes(q) ||
+    (task.tags ?? []).some((t) => t.toLowerCase().includes(q)) ||
+    responsibleName.includes(q) ||
+    collabNames.some((n) => n.includes(q))
+  );
+}
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface Props {
   tasks: Task[];
   savedViews: SavedView[];
-  activeViewId: string | null;
+  viewSlug: string | null;
   workspaceId: string;
   userId: string;
   profiles: Pick<Profile, "id" | "full_name" | "email">[];
@@ -63,7 +175,7 @@ interface Props {
   notes: WorkspaceNote[];
 }
 
-// ---- Helpers ----
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function encodeResponsible(task: Task) {
   if (task.assignee_id) return `member:${task.assignee_id}`;
@@ -75,7 +187,7 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("tr-TR", { day: "numeric", month: "short" });
 }
 
-// ---- Quick-edit: Status ----
+// ── Quick-edit: Status ────────────────────────────────────────────────────────
 
 function QuickStatusSelect({ task }: { task: Task }) {
   const [_p, startTransition] = useTransition();
@@ -114,7 +226,7 @@ function QuickStatusSelect({ task }: { task: Task }) {
   );
 }
 
-// ---- Quick-edit: Priority ----
+// ── Quick-edit: Priority ──────────────────────────────────────────────────────
 
 function QuickPrioritySelect({ task }: { task: Task }) {
   const [_p, startTransition] = useTransition();
@@ -150,7 +262,7 @@ function QuickPrioritySelect({ task }: { task: Task }) {
   );
 }
 
-// ---- Quick-edit: Responsible ----
+// ── Quick-edit: Responsible ───────────────────────────────────────────────────
 
 function QuickAssigneeSelect({
   task,
@@ -215,7 +327,7 @@ function QuickAssigneeSelect({
   );
 }
 
-// ---- Card body (shared between static + sortable) ----
+// ── Card body (shared between static + sortable) ──────────────────────────────
 
 function CardContent({
   task,
@@ -234,7 +346,11 @@ function CardContent({
   const isDone = task.status === "done";
   const isBlocked = task.status === "blocked";
   const isOverdue = !!task.due_date && task.due_date < today && !isDone;
-  const threeDaysFromNow = (() => { const d = new Date(today + "T00:00:00"); d.setDate(d.getDate() + 3); return d.toISOString().slice(0, 10); })();
+  const threeDaysFromNow = (() => {
+    const d = new Date(today + "T00:00:00");
+    d.setDate(d.getDate() + 3);
+    return d.toISOString().slice(0, 10);
+  })();
   const isDueSoon = !!task.due_date && !isOverdue && task.due_date <= threeDaysFromNow;
 
   const category = (task.custom_fields as Record<string, unknown>)?.category as string | undefined;
@@ -266,7 +382,7 @@ function CardContent({
           "text-sm font-medium line-clamp-2 block leading-snug",
           isDone
             ? "text-green-800 line-through decoration-green-400/60"
-            : "text-gray-900 hover:text-blue-600"
+            : "text-gray-900 hover:text-blue-600",
         )}
         onClick={(e) => e.stopPropagation()}
       >
@@ -305,7 +421,7 @@ function CardContent({
         {task.due_date && (
           <span className={cn(
             "text-[10px]",
-            isOverdue ? "text-red-500 font-medium" : isDueSoon ? "text-amber-600" : "text-gray-400"
+            isOverdue ? "text-red-500 font-medium" : isDueSoon ? "text-amber-600" : "text-gray-400",
           )}>
             {isOverdue ? "⚠ " : ""}
             {formatDate(task.due_date)}
@@ -341,7 +457,7 @@ function CardContent({
   );
 }
 
-// ---- Static card (pre-mount) ----
+// ── Static card (pre-mount) ───────────────────────────────────────────────────
 
 function StaticTaskCard({
   task,
@@ -358,7 +474,7 @@ function StaticTaskCard({
   return (
     <div className={cn(
       "rounded-lg border p-3 shadow-sm transition-all",
-      isDone ? "border-l-4 border-l-green-400 border-green-200 bg-green-50/40" : "bg-white border-gray-200"
+      isDone ? "border-l-4 border-l-green-400 border-green-200 bg-green-50/40" : "bg-white border-gray-200",
     )}>
       <div className="flex items-start gap-1.5">
         <span className="mt-0.5 p-0.5 shrink-0 text-gray-200"><GripVertical size={13} /></span>
@@ -368,7 +484,7 @@ function StaticTaskCard({
   );
 }
 
-// ---- Sortable card (post-mount) ----
+// ── Sortable card (post-mount) ────────────────────────────────────────────────
 
 function TaskCard({
   task,
@@ -423,7 +539,7 @@ function TaskCard({
   );
 }
 
-// ---- Column (post-mount) ----
+// ── Column (post-mount) ───────────────────────────────────────────────────────
 
 function KanbanColumn({
   colDef,
@@ -450,7 +566,7 @@ function KanbanColumn({
         <div className="flex items-center gap-2">
           <h3 className={cn(
             "text-xs font-bold uppercase tracking-wider",
-            isDoneCol ? "text-green-600" : "text-gray-500"
+            isDoneCol ? "text-green-600" : "text-gray-500",
           )}>
             {colDef.label}
           </h3>
@@ -473,7 +589,7 @@ function KanbanColumn({
           className={cn(
             "flex flex-col gap-2 rounded-lg p-1 min-h-20 transition-colors",
             tasks.length === 0 && "border-2 border-dashed border-gray-100",
-            isOver && "bg-blue-50/50 border-blue-200"
+            isOver && "bg-blue-50/50 border-blue-200",
           )}
           data-col={colDef.id}
         >
@@ -492,7 +608,7 @@ function KanbanColumn({
   );
 }
 
-// ---- Static column (pre-mount) ----
+// ── Static column (pre-mount) ─────────────────────────────────────────────────
 
 function StaticKanbanColumn({
   colDef,
@@ -525,18 +641,27 @@ function StaticKanbanColumn({
   );
 }
 
-// ---- Mounted guard ----
+// ── Mounted guard ─────────────────────────────────────────────────────────────
 const subscribeMounted = () => () => {};
 const getMounted = () => true;
 const getServerMounted = () => false;
 
-// ---- Main board ----
+// ── Main board ────────────────────────────────────────────────────────────────
 
-export function KanbanBoard({ tasks: initialTasks, savedViews, activeViewId, workspaceId, profiles, contacts, notes }: Props) {
+export function KanbanBoard({
+  tasks: initialTasks,
+  savedViews,
+  viewSlug,
+  workspaceId,
+  userId,
+  profiles,
+  contacts,
+  notes,
+}: Props) {
   const mounted = useSyncExternalStore(subscribeMounted, getMounted, getServerMounted);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
 
   const [_isPending, startTransition] = useTransition();
@@ -544,6 +669,13 @@ export function KanbanBoard({ tasks: initialTasks, savedViews, activeViewId, wor
   const [modalOpen, setModalOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [modalDefaultStatus, setModalDefaultStatus] = useState<TaskStatus>("ready");
+
+  // Client-side filters (not URL-persisted; reset on refresh)
+  const [personFilter, setPersonFilter] = useState("");
+  const [search, setSearch] = useState("");
+
+  // Effective slug: null or missing → treat as "all"
+  const effectiveSlug = viewSlug ?? "all";
 
   const responsibleNames = useMemo<Record<string, string>>(() => {
     const map: Record<string, string> = {};
@@ -562,7 +694,7 @@ export function KanbanBoard({ tasks: initialTasks, savedViews, activeViewId, wor
     initialTasks,
     (
       state: Task[],
-      action: { type: "reorder"; id: string; status: TaskStatus; afterId: string | null }
+      action: { type: "reorder"; id: string; status: TaskStatus; afterId: string | null },
     ) => {
       if (action.type !== "reorder") return state;
       const moved = state.find((t) => t.id === action.id);
@@ -573,19 +705,26 @@ export function KanbanBoard({ tasks: initialTasks, savedViews, activeViewId, wor
       const idx = rest.findIndex((t) => t.id === action.afterId);
       if (idx === -1) return [...rest, updated];
       return [...rest.slice(0, idx + 1), updated, ...rest.slice(idx + 1)];
-    }
+    },
   );
 
-  // Group tasks into 3 visual columns (archived hidden), sorted by fractional_index
+  // Composed filter: saved-view → person → search
+  const filteredTasks = useMemo(() => {
+    let tasks = applyViewFilter(optimisticTasks, effectiveSlug, userId);
+    tasks = applyPersonFilter(tasks, personFilter);
+    tasks = tasks.filter((t) => matchesSearch(t, search, responsibleNames));
+    return tasks;
+  }, [optimisticTasks, effectiveSlug, userId, personFilter, search, responsibleNames]);
+
+  // Distribute filtered tasks into columns
   const tasksByCol = useMemo(() => {
-    const visible = optimisticTasks.filter((t) => t.status !== "archived");
     return BOARD_COLUMNS.reduce<Record<BoardColId, Task[]>>((acc, col) => {
-      acc[col.id] = visible
+      acc[col.id] = filteredTasks
         .filter((t) => (col.statuses as TaskStatus[]).includes(t.status))
         .sort((a, b) => (a.fractional_index ?? "").localeCompare(b.fractional_index ?? ""));
       return acc;
     }, {} as Record<BoardColId, Task[]>);
-  }, [optimisticTasks]);
+  }, [filteredTasks]);
 
   function findTask(id: string) {
     return optimisticTasks.find((t) => t.id === id);
@@ -608,7 +747,6 @@ export function KanbanBoard({ tasks: initialTasks, savedViews, activeViewId, wor
 
     const srcColId = getTaskColId(srcTask.status);
 
-    // Determine target column
     let tgtColId: BoardColId;
     const overTask = findTask(overId);
     if (overTask) {
@@ -620,11 +758,8 @@ export function KanbanBoard({ tasks: initialTasks, savedViews, activeViewId, wor
     }
 
     const tgtCol = BOARD_COLUMNS.find((c) => c.id === tgtColId)!;
-
-    // Same visual column → keep status; cross-column → use targetStatus
     const newStatus: TaskStatus = srcColId === tgtColId ? srcTask.status : tgtCol.targetStatus;
 
-    // Position within merged target column
     const tgtTasks = tasksByCol[tgtColId] ?? [];
     const overIdx = overTask ? tgtTasks.findIndex((t) => t.id === overId) : tgtTasks.length;
     const withoutActive = tgtTasks.filter((t) => t.id !== activeId);
@@ -642,43 +777,45 @@ export function KanbanBoard({ tasks: initialTasks, savedViews, activeViewId, wor
         afterId: prevTask?.id ?? null,
       });
 
-      const result = await reorderTask({
-        id: activeId,
-        newStatus,
-        prevIndex,
-        nextIndex,
-      });
-
+      const result = await reorderTask({ id: activeId, newStatus, prevIndex, nextIndex });
       if ("error" in result) {
         console.error("Yeniden sıralama hatası:", result.error);
       }
     });
   }, [optimisticTasks, tasksByCol]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const hasActiveFilter = !!personFilter || !!search;
+
   return (
     <div className="flex flex-col h-full">
-      {/* Saved views tab strip */}
+
+      {/* ── Saved-view tab strip ─────────────────────────────────────────── */}
       {savedViews.length > 0 && (
         <div className="flex gap-0 px-4 pt-3 border-b border-gray-200 bg-white overflow-x-auto shrink-0">
-          {savedViews.map((view) => (
-            <a
-              key={view.id}
-              href={`/board?view=${view.id}`}
-              className={cn(
-                "px-3 py-2 text-sm border-b-2 whitespace-nowrap transition-colors",
-                activeViewId === view.id
-                  ? "border-blue-600 text-blue-700 font-medium"
-                  : "border-transparent text-gray-500 hover:text-gray-700"
-              )}
-            >
-              {view.name}
-            </a>
-          ))}
+          {savedViews.map((view) => {
+            const slug = VIEW_SLUG_MAP[view.name] ?? view.id;
+            const isActive = effectiveSlug === slug;
+            return (
+              <a
+                key={view.id}
+                href={`/board?view=${slug}`}
+                className={cn(
+                  "px-3 py-2 text-sm border-b-2 whitespace-nowrap transition-colors",
+                  isActive
+                    ? "border-blue-600 text-blue-700 font-medium"
+                    : "border-transparent text-gray-500 hover:text-gray-700",
+                )}
+              >
+                {view.name}
+              </a>
+            );
+          })}
         </div>
       )}
 
-      {/* Toolbar */}
-      <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-100 bg-white shrink-0">
+      {/* ── Toolbar ──────────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-100 bg-white shrink-0 flex-wrap">
+        {/* Left: action buttons */}
         <button
           onClick={() => { setModalDefaultStatus("ready"); setModalOpen(true); }}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
@@ -693,9 +830,77 @@ export function KanbanBoard({ tasks: initialTasks, savedViews, activeViewId, wor
           <FileSpreadsheet size={14} />
           Excel&apos;den içe aktar
         </button>
+
+        {/* Right: person filter + search */}
+        <div className="flex items-center gap-2 ml-auto">
+          {/* Person filter */}
+          <select
+            value={personFilter}
+            onChange={(e) => setPersonFilter(e.target.value)}
+            className={cn(
+              "text-sm border rounded-lg px-2 py-1.5 bg-white transition-colors cursor-pointer",
+              personFilter
+                ? "border-blue-400 text-blue-700"
+                : "border-gray-200 text-gray-600",
+            )}
+            aria-label="Kişiye göre filtrele"
+          >
+            <option value="">Tüm kişiler</option>
+            {profiles.length > 0 && (
+              <optgroup label="Üyeler">
+                {profiles.map((p) => (
+                  <option key={p.id} value={`member:${p.id}`}>
+                    {p.full_name ?? p.email}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {contacts.length > 0 && (
+              <optgroup label="Kişiler">
+                {contacts.map((c) => (
+                  <option key={c.id} value={`contact:${c.id}`}>
+                    {c.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+
+          {/* Search */}
+          <div className="relative">
+            <Search
+              size={13}
+              className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+            />
+            <input
+              type="search"
+              placeholder="Ara…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className={cn(
+                "text-sm border rounded-lg pl-7 pr-3 py-1.5 bg-white w-44 focus:outline-none focus:ring-1 transition-colors",
+                search
+                  ? "border-blue-400 text-blue-700 focus:ring-blue-400"
+                  : "border-gray-200 text-gray-700 focus:ring-blue-300",
+              )}
+              aria-label="Görev ara"
+            />
+          </div>
+
+          {/* Clear filter pill */}
+          {hasActiveFilter && (
+            <button
+              onClick={() => { setPersonFilter(""); setSearch(""); }}
+              className="text-xs text-gray-400 hover:text-gray-700 px-1.5 py-0.5 rounded hover:bg-gray-100 transition-colors whitespace-nowrap"
+              aria-label="Filtreleri temizle"
+            >
+              ✕ Temizle
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Pre-mount: static (no DnD) */}
+      {/* ── Pre-mount: static (no DnD) ───────────────────────────────────── */}
       {!mounted && (
         <div className="flex gap-4 p-4 overflow-x-auto flex-1 items-start">
           <NotesColumn notes={notes} workspaceId={workspaceId} />
@@ -712,7 +917,7 @@ export function KanbanBoard({ tasks: initialTasks, savedViews, activeViewId, wor
         </div>
       )}
 
-      {/* Post-mount: full DnD board */}
+      {/* ── Post-mount: full DnD board ───────────────────────────────────── */}
       {mounted && (
         <DndContext
           sensors={sensors}
@@ -749,7 +954,7 @@ export function KanbanBoard({ tasks: initialTasks, savedViews, activeViewId, wor
         </DndContext>
       )}
 
-      {/* Modals */}
+      {/* ── Modals ────────────────────────────────────────────────────────── */}
       {modalOpen && (
         <CreateTaskModal
           key={modalDefaultStatus}

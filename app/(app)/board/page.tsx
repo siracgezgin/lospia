@@ -78,13 +78,13 @@ export default async function BoardPage({
   const profiles: Pick<Profile, "id" | "full_name" | "email">[] = profilesResult.data ?? [];
   const contacts: WorkspaceContact[] = (contactsResult.data ?? []) as WorkspaceContact[];
   const notes: WorkspaceNote[] = (notesResult.data ?? []) as WorkspaceNote[];
-  const activeViewId = params.view ?? null;
+  const viewSlug = params.view ?? null;
 
   return (
     <KanbanBoard
       tasks={tasks}
       savedViews={savedViews}
-      activeViewId={activeViewId}
+      viewSlug={viewSlug}
       workspaceId={workspaceId}
       userId={user.id}
       profiles={profiles}
