@@ -189,6 +189,160 @@ export async function deleteTask(
   redirect("/board");
 }
 
+// ---- Lifecycle: soft-delete ----
+
+export async function softDeleteTask(
+  taskId: string
+): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const { error } = await supabase
+    .from("tasks")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", taskId);
+
+  if (error) return { error: error.message };
+  revalidatePath("/board");
+  revalidatePath("/list");
+  revalidatePath("/trash");
+  return { success: true };
+}
+
+// ---- Lifecycle: archive (explicit) ----
+
+export async function archiveTask(
+  taskId: string
+): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const { error } = await supabase
+    .from("tasks")
+    .update({ archived_at: new Date().toISOString() })
+    .eq("id", taskId);
+
+  if (error) return { error: error.message };
+  revalidatePath("/board");
+  revalidatePath("/list");
+  revalidatePath("/archive");
+  return { success: true };
+}
+
+// ---- Lifecycle: unarchive ----
+
+export async function unarchiveTask(
+  taskId: string
+): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const { error } = await supabase
+    .from("tasks")
+    .update({ archived_at: null })
+    .eq("id", taskId);
+
+  if (error) return { error: error.message };
+  revalidatePath("/board");
+  revalidatePath("/archive");
+  return { success: true };
+}
+
+// ---- Lifecycle: restore from trash ----
+
+export async function restoreTask(
+  taskId: string
+): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const { error } = await supabase
+    .from("tasks")
+    .update({ deleted_at: null })
+    .eq("id", taskId);
+
+  if (error) return { error: error.message };
+  revalidatePath("/board");
+  revalidatePath("/trash");
+  return { success: true };
+}
+
+// ---- Lifecycle: permanent delete (from trash) ----
+
+export async function permanentDeleteTask(
+  taskId: string
+): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const { error } = await supabase.from("tasks").delete().eq("id", taskId);
+  if (error) return { error: error.message };
+  revalidatePath("/trash");
+  return { success: true };
+}
+
+// ---- Lifecycle: duplicate ----
+
+export async function duplicateTask(
+  taskId: string
+): Promise<{ id: string } | { error: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const { data: src } = await supabase
+    .from("tasks")
+    .select("*")
+    .eq("id", taskId)
+    .single();
+  if (!src) return { error: "Task not found" };
+
+  const source = src as Record<string, unknown>;
+
+  // Get last fractional_index in the same status column
+  const { data: lastTask } = await supabase
+    .from("tasks")
+    .select("fractional_index")
+    .eq("workspace_id", source.workspace_id as string)
+    .eq("status", source.status as string)
+    .order("fractional_index", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const lastIndex = (lastTask as { fractional_index?: string } | null)?.fractional_index ?? null;
+  const fractional_index = generateKeyBetween(lastIndex, null);
+
+  const { data: newTask, error } = await supabase
+    .from("tasks")
+    .insert({
+      workspace_id:           source.workspace_id,
+      title:                  `${source.title as string} (Kopya)`,
+      description:            source.description,
+      status:                 source.status,
+      priority:               source.priority,
+      assignee_id:            source.assignee_id,
+      responsible_contact_id: source.responsible_contact_id,
+      due_date:               source.due_date,
+      start_date:             source.start_date,
+      tags:                   source.tags,
+      custom_fields:          source.custom_fields,
+      fractional_index,
+      created_by:             user.id,
+    })
+    .select("id")
+    .single();
+
+  if (error) return { error: error.message };
+  revalidatePath("/board");
+  revalidatePath("/list");
+  return { id: (newTask as { id: string }).id };
+}
+
 export async function reorderTask(
   input: z.infer<typeof ReorderTaskSchema>
 ): Promise<{ success: true } | { error: string }> {

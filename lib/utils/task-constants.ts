@@ -60,6 +60,15 @@ export const PRIORITY_LABELS: Record<TaskPriority, string> = {
   urgent: "Acil",
 };
 
+// Stable URL slugs for saved-view names (shared by KanbanBoard + AppSidebar)
+export const SAVED_VIEW_SLUG_MAP: Record<string, string> = {
+  "Tüm işler":      "all",
+  "Bana atananlar": "mine",
+  "Bu hafta":       "this-week",
+  "Gecikenler":     "overdue",
+  "Tamamlananlar":  "done",
+};
+
 export const PRIORITY_ORDER: Record<TaskPriority, number> = {
   urgent: 4,
   high: 3,

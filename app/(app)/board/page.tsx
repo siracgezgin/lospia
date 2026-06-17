@@ -41,6 +41,8 @@ export default async function BoardPage({
       .from("tasks")
       .select("*")
       .eq("workspace_id", workspaceId)
+      .is("archived_at", null)
+      .is("deleted_at", null)
       .order("fractional_index"),
     supabase
       .from("saved_views")

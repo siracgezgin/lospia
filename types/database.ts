@@ -304,10 +304,13 @@ export type Database = {
       }
       tasks: {
         Row: {
+          archived_at: string | null
           assignee_id: string | null
+          completed_at: string | null
           created_at: string
           created_by: string
           custom_fields: Json
+          deleted_at: string | null
           description: string | null
           due_date: string | null
           fractional_index: string
@@ -322,10 +325,13 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          archived_at?: string | null
           assignee_id?: string | null
+          completed_at?: string | null
           created_at?: string
           created_by: string
           custom_fields?: Json
+          deleted_at?: string | null
           description?: string | null
           due_date?: string | null
           fractional_index?: string
@@ -340,10 +346,13 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          archived_at?: string | null
           assignee_id?: string | null
+          completed_at?: string | null
           created_at?: string
           created_by?: string
           custom_fields?: Json
+          deleted_at?: string | null
           description?: string | null
           due_date?: string | null
           fractional_index?: string

@@ -24,17 +24,23 @@ import {
   useCallback,
   useSyncExternalStore,
   useMemo,
+  useRef,
+  useEffect,
 } from "react";
 import Link from "next/link";
-import { GripVertical, Plus, FileSpreadsheet, Users, Search } from "lucide-react";
+import {
+  GripVertical, Plus, FileSpreadsheet, Users, Search,
+  ChevronLeft, ChevronRight, MoreVertical, Pencil, Copy, Archive, Trash2,
+} from "lucide-react";
 import {
   BOARD_COLUMNS,
   CARD_STATUS_OPTIONS,
   getTaskColId,
+  SAVED_VIEW_SLUG_MAP,
   type BoardColId,
 } from "@/lib/utils/task-constants";
 import { PRIORITY_LABELS } from "@/lib/utils/task-constants";
-import { reorderTask, updateTask } from "@/lib/actions/tasks";
+import { reorderTask, updateTask, softDeleteTask, archiveTask, duplicateTask } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils/cn";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
 import { ExcelImportModal } from "@/components/task/ExcelImportModal";
@@ -50,65 +56,68 @@ const PRIORITY_CHIP: Record<TaskPriority, string> = {
   urgent: "bg-red-200 text-red-900 font-semibold",
 };
 
-// ── Saved-view slug mapping ───────────────────────────────────────────────────
-// Maps human-readable view names to stable URL slugs.
+// ── Week helpers ──────────────────────────────────────────────────────────────
 
-const VIEW_SLUG_MAP: Record<string, string> = {
-  "Tüm işler":     "all",
-  "Bana atananlar": "mine",
-  "Bu hafta":      "this-week",
-  "Gecikenler":    "overdue",
-  "Tamamlananlar": "done",
-};
-
-// ── Filter helpers (pure, outside component) ──────────────────────────────────
-
-function getWeekBounds(): { mondayStr: string; sundayStr: string } {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const dow = today.getDay(); // 0=Sun…6=Sat
-  const daysFromMonday = dow === 0 ? 6 : dow - 1;
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - daysFromMonday);
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-  return {
-    mondayStr: monday.toISOString().slice(0, 10),
-    sundayStr: sunday.toISOString().slice(0, 10),
-  };
+function getMondayOf(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const dow = d.getDay();
+  d.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1));
+  return d;
 }
 
-function applyViewFilter(tasks: Task[], slug: string, userId: string): Task[] {
+function formatWeekLabel(monday: Date): string {
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const MONTHS = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
+  const startMonth = MONTHS[monday.getMonth()];
+  const endMonth   = MONTHS[sunday.getMonth()];
+  if (startMonth === endMonth) return `${monday.getDate()}–${sunday.getDate()} ${endMonth}`;
+  return `${monday.getDate()} ${startMonth} – ${sunday.getDate()} ${endMonth}`;
+}
+
+// ── Filter helpers ─────────────────────────────────────────────────────────────
+
+function weekEnd(monday: Date): Date {
+  const d = new Date(monday);
+  d.setDate(d.getDate() + 6);
+  d.setHours(23, 59, 59, 999);
+  return d;
+}
+
+function isInWeek(ts: string | null, monday: Date): boolean {
+  if (!ts) return false;
+  const d = new Date(ts);
+  return d >= monday && d <= weekEnd(monday);
+}
+
+function isActiveForBoard(task: Task, monday: Date): boolean {
+  if (task.status === "archived") return false;
+  if (task.status === "done") return isInWeek(task.completed_at, monday);
+  return true;
+}
+
+function applyViewFilter(tasks: Task[], slug: string, userId: string, monday: Date): Task[] {
   const today = new Date().toISOString().slice(0, 10);
+  const mondayStr = monday.toISOString().slice(0, 10);
+  const sundayStr = (() => { const d = new Date(monday); d.setDate(d.getDate() + 6); return d.toISOString().slice(0, 10); })();
+
   switch (slug) {
     case "mine":
-      return tasks.filter((t) => t.status !== "archived" && t.assignee_id === userId);
-
-    case "this-week": {
-      const { mondayStr, sundayStr } = getWeekBounds();
-      return tasks.filter(
-        (t) =>
-          t.status !== "archived" &&
-          t.due_date !== null &&
-          t.due_date >= mondayStr &&
-          t.due_date <= sundayStr,
+      return tasks.filter((t) => t.assignee_id === userId && isActiveForBoard(t, monday));
+    case "this-week":
+      return tasks.filter((t) =>
+        t.due_date !== null && t.due_date >= mondayStr && t.due_date <= sundayStr,
       );
-    }
-
     case "overdue":
-      return tasks.filter(
-        (t) =>
-          t.status !== "archived" &&
-          t.status !== "done" &&
-          t.due_date !== null &&
-          t.due_date < today,
+      return tasks.filter((t) =>
+        t.status !== "archived" && t.status !== "done" &&
+        t.due_date !== null && t.due_date < today,
       );
-
     case "done":
-      return tasks.filter((t) => t.status === "done");
-
-    default: // "all" or unknown slug
-      return tasks.filter((t) => t.status !== "archived");
+      return tasks.filter((t) => t.status === "done" && isInWeek(t.completed_at, monday));
+    default: // "all"
+      return tasks.filter((t) => isActiveForBoard(t, monday));
   }
 }
 
@@ -185,6 +194,104 @@ function encodeResponsible(task: Task) {
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("tr-TR", { day: "numeric", month: "short" });
+}
+
+// ── Card 3-dot menu ───────────────────────────────────────────────────────────
+
+function CardMenu({
+  onEdit,
+  onDuplicate,
+  onArchive,
+  onDelete,
+}: {
+  onEdit: () => void;
+  onDuplicate: () => void;
+  onArchive: () => void;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleOutsideClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setConfirming(false);
+      }
+    }
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [open]);
+
+  return (
+    <div
+      ref={ref}
+      className="relative"
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      <button
+        onClick={() => { setOpen((o) => !o); setConfirming(false); }}
+        className="p-0.5 rounded text-gray-300 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity"
+        aria-label="Görev seçenekleri"
+        tabIndex={-1}
+      >
+        <MoreVertical size={12} />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-1 w-36 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1">
+          <button
+            onClick={() => { setOpen(false); onEdit(); }}
+            className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-1.5"
+          >
+            <Pencil size={11} /> Düzenle
+          </button>
+          <button
+            onClick={() => { setOpen(false); onDuplicate(); }}
+            className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-1.5"
+          >
+            <Copy size={11} /> Kopyala
+          </button>
+          <button
+            onClick={() => { setOpen(false); onArchive(); }}
+            className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-1.5"
+          >
+            <Archive size={11} /> Arşivle
+          </button>
+          <div className="my-1 border-t border-gray-100" />
+          {confirming ? (
+            <div className="px-2 py-1.5">
+              <p className="text-[10px] text-red-600 mb-1.5 leading-snug">Çöp kutusuna taşınsın mı?</p>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => { setOpen(false); setConfirming(false); onDelete(); }}
+                  className="flex-1 text-[10px] bg-red-600 text-white rounded px-1.5 py-0.5 hover:bg-red-700"
+                >
+                  Evet
+                </button>
+                <button
+                  onClick={() => setConfirming(false)}
+                  className="flex-1 text-[10px] bg-gray-100 text-gray-600 rounded px-1.5 py-0.5 hover:bg-gray-200"
+                >
+                  İptal
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirming(true)}
+              className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 flex items-center gap-1.5"
+            >
+              <Trash2 size={11} /> Sil
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── Quick-edit: Status ────────────────────────────────────────────────────────
@@ -335,12 +442,18 @@ function CardContent({
   contacts,
   responsibleNames,
   interactive,
+  onDelete,
+  onArchive,
+  onDuplicate,
 }: {
   task: Task;
   profiles: Pick<Profile, "id" | "full_name" | "email">[];
   contacts: WorkspaceContact[];
   responsibleNames: Record<string, string>;
   interactive: boolean;
+  onDelete?: (id: string) => void;
+  onArchive?: (id: string) => void;
+  onDuplicate?: (id: string) => void;
 }) {
   const today = new Date().toISOString().slice(0, 10);
   const isDone = task.status === "done";
@@ -359,9 +472,9 @@ function CardContent({
 
   return (
     <div className="flex-1 min-w-0">
-      {/* Chips row */}
-      {(category || isBlocked) && (
-        <div className="flex items-center gap-1 mb-1 flex-wrap">
+      {/* Chips + menu header row */}
+      <div className="flex items-start justify-between gap-1 mb-1">
+        <div className="flex items-center gap-1 flex-wrap flex-1 min-w-0">
           {category && (
             <span className="text-[9px] bg-indigo-50 text-indigo-600 rounded px-1.5 py-0.5 leading-none font-medium truncate max-w-24">
               {category}
@@ -373,7 +486,15 @@ function CardContent({
             </span>
           )}
         </div>
-      )}
+        {interactive && onDelete && onArchive && onDuplicate && (
+          <CardMenu
+            onEdit={() => { window.location.href = `/tasks/${task.id}`; }}
+            onDuplicate={() => onDuplicate(task.id)}
+            onArchive={() => onArchive(task.id)}
+            onDelete={() => onDelete(task.id)}
+          />
+        )}
+      </div>
 
       {/* Title */}
       <Link
@@ -492,12 +613,18 @@ function TaskCard({
   contacts,
   responsibleNames,
   isDragOverlay = false,
+  onDelete,
+  onArchive,
+  onDuplicate,
 }: {
   task: Task;
   profiles: Pick<Profile, "id" | "full_name" | "email">[];
   contacts: WorkspaceContact[];
   responsibleNames: Record<string, string>;
   isDragOverlay?: boolean;
+  onDelete?: (id: string) => void;
+  onArchive?: (id: string) => void;
+  onDuplicate?: (id: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
@@ -533,6 +660,9 @@ function TaskCard({
           contacts={contacts}
           responsibleNames={responsibleNames}
           interactive={!isDragOverlay}
+          onDelete={isDragOverlay ? undefined : onDelete}
+          onArchive={isDragOverlay ? undefined : onArchive}
+          onDuplicate={isDragOverlay ? undefined : onDuplicate}
         />
       </div>
     </div>
@@ -548,6 +678,9 @@ function KanbanColumn({
   contacts,
   responsibleNames,
   onAddTask,
+  onDelete,
+  onArchive,
+  onDuplicate,
 }: {
   colDef: typeof BOARD_COLUMNS[number];
   tasks: Task[];
@@ -555,6 +688,9 @@ function KanbanColumn({
   contacts: WorkspaceContact[];
   responsibleNames: Record<string, string>;
   onAddTask: (_colId: BoardColId) => void;
+  onDelete: (id: string) => void;
+  onArchive: (id: string) => void;
+  onDuplicate: (id: string) => void;
 }) {
   const taskIds = tasks.map((t) => t.id);
   const { setNodeRef, isOver } = useDroppable({ id: colDef.id });
@@ -600,6 +736,9 @@ function KanbanColumn({
               profiles={profiles}
               contacts={contacts}
               responsibleNames={responsibleNames}
+              onDelete={onDelete}
+              onArchive={onArchive}
+              onDuplicate={onDuplicate}
             />
           ))}
         </div>
@@ -674,6 +813,19 @@ export function KanbanBoard({
   const [personFilter, setPersonFilter] = useState("");
   const [search, setSearch] = useState("");
 
+  // Week selector — default to current week's Monday
+  const [weekStart, setWeekStart] = useState<Date>(() => getMondayOf(new Date()));
+  const currentMonday = getMondayOf(new Date());
+  const isCurrentWeek = weekStart.toDateString() === currentMonday.toDateString();
+
+  // Toast notifications
+  const [toasts, setToasts] = useState<Array<{ id: string; msg: string }>>([]);
+  function showToast(msg: string) {
+    const id = Math.random().toString(36).slice(2);
+    setToasts((p) => [...p, { id, msg }]);
+    setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), 3000);
+  }
+
   // Effective slug: null or missing → treat as "all"
   const effectiveSlug = viewSlug ?? "all";
 
@@ -694,9 +846,11 @@ export function KanbanBoard({
     initialTasks,
     (
       state: Task[],
-      action: { type: "reorder"; id: string; status: TaskStatus; afterId: string | null },
+      action:
+        | { type: "reorder"; id: string; status: TaskStatus; afterId: string | null }
+        | { type: "remove"; id: string },
     ) => {
-      if (action.type !== "reorder") return state;
+      if (action.type === "remove") return state.filter((t) => t.id !== action.id);
       const moved = state.find((t) => t.id === action.id);
       if (!moved) return state;
       const updated = { ...moved, status: action.status };
@@ -708,13 +862,38 @@ export function KanbanBoard({
     },
   );
 
+  // ── Card lifecycle handlers ──────────────────────────────────────────────────
+
+  function handleDeleteCard(id: string) {
+    startTransition(async () => {
+      setOptimisticTasks({ type: "remove", id });
+      await softDeleteTask(id);
+      showToast("Görev çöp kutusuna taşındı.");
+    });
+  }
+
+  function handleArchiveCard(id: string) {
+    startTransition(async () => {
+      setOptimisticTasks({ type: "remove", id });
+      await archiveTask(id);
+      showToast("Görev arşivlendi.");
+    });
+  }
+
+  function handleDuplicateCard(id: string) {
+    startTransition(async () => {
+      await duplicateTask(id);
+      showToast("Görev kopyalandı.");
+    });
+  }
+
   // Composed filter: saved-view → person → search
   const filteredTasks = useMemo(() => {
-    let tasks = applyViewFilter(optimisticTasks, effectiveSlug, userId);
+    let tasks = applyViewFilter(optimisticTasks, effectiveSlug, userId, weekStart);
     tasks = applyPersonFilter(tasks, personFilter);
     tasks = tasks.filter((t) => matchesSearch(t, search, responsibleNames));
     return tasks;
-  }, [optimisticTasks, effectiveSlug, userId, personFilter, search, responsibleNames]);
+  }, [optimisticTasks, effectiveSlug, userId, weekStart, personFilter, search, responsibleNames]);
 
   // Distribute filtered tasks into columns
   const tasksByCol = useMemo(() => {
@@ -789,11 +968,43 @@ export function KanbanBoard({
   return (
     <div className="flex flex-col h-full">
 
+      {/* ── Week selector ─────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-1.5 px-4 py-2 bg-white border-b border-gray-100 shrink-0">
+        <button
+          onClick={() => setWeekStart((d) => { const n = new Date(d); n.setDate(n.getDate() - 7); return n; })}
+          className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+          aria-label="Önceki hafta"
+        >
+          <ChevronLeft size={14} />
+        </button>
+        <span className="text-sm font-medium text-gray-700 min-w-32 text-center select-none">
+          {formatWeekLabel(weekStart)}
+        </span>
+        <button
+          onClick={() => setWeekStart((d) => { const n = new Date(d); n.setDate(n.getDate() + 7); return n; })}
+          className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+          aria-label="Sonraki hafta"
+        >
+          <ChevronRight size={14} />
+        </button>
+        {!isCurrentWeek && (
+          <button
+            onClick={() => setWeekStart(getMondayOf(new Date()))}
+            className="ml-1 text-xs text-blue-600 hover:text-blue-700 px-2 py-0.5 rounded hover:bg-blue-50 transition-colors"
+          >
+            Bu hafta
+          </button>
+        )}
+        {isCurrentWeek && (
+          <span className="ml-1 text-xs text-gray-400 select-none">Bu hafta</span>
+        )}
+      </div>
+
       {/* ── Saved-view tab strip ─────────────────────────────────────────── */}
       {savedViews.length > 0 && (
         <div className="flex gap-0 px-4 pt-3 border-b border-gray-200 bg-white overflow-x-auto shrink-0">
           {savedViews.map((view) => {
-            const slug = VIEW_SLUG_MAP[view.name] ?? view.id;
+            const slug = SAVED_VIEW_SLUG_MAP[view.name] ?? view.id;
             const isActive = effectiveSlug === slug;
             return (
               <a
@@ -936,6 +1147,9 @@ export function KanbanBoard({
                 contacts={contacts}
                 responsibleNames={responsibleNames}
                 onAddTask={handleAddTask}
+                onDelete={handleDeleteCard}
+                onArchive={handleArchiveCard}
+                onDuplicate={handleDuplicateCard}
               />
             ))}
           </div>
@@ -952,6 +1166,20 @@ export function KanbanBoard({
             ) : null}
           </DragOverlay>
         </DndContext>
+      )}
+
+      {/* ── Toast overlay ─────────────────────────────────────────────────── */}
+      {toasts.length > 0 && (
+        <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none">
+          {toasts.map((t) => (
+            <div
+              key={t.id}
+              className="bg-gray-900 text-white text-sm px-4 py-2.5 rounded-lg shadow-lg"
+            >
+              {t.msg}
+            </div>
+          ))}
+        </div>
       )}
 
       {/* ── Modals ────────────────────────────────────────────────────────── */}

@@ -12,9 +12,12 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  Archive,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { signOut } from "@/lib/actions/auth";
+import { SAVED_VIEW_SLUG_MAP } from "@/lib/utils/task-constants";
 import type { Workspace, SavedView } from "@/types";
 
 const NAV_ITEMS = [
@@ -22,6 +25,8 @@ const NAV_ITEMS = [
   { href: "/list",      label: "Liste",           icon: List },
   { href: "/dashboard", label: "Gösterge Paneli", icon: LayoutDashboard },
   { href: "/calendar",  label: "Takvim",          icon: Calendar },
+  { href: "/archive",   label: "Arşiv",           icon: Archive },
+  { href: "/trash",     label: "Çöp Kutusu",      icon: Trash2 },
   { href: "/settings",  label: "Ayarlar",         icon: Settings },
 ] as const;
 
@@ -86,7 +91,7 @@ export function AppSidebar({ workspace, savedViews }: Props) {
             {savedViews.map((view) => (
               <Link
                 key={view.id}
-                href={`/board?view=${view.id}`}
+                href={`/board?view=${SAVED_VIEW_SLUG_MAP[view.name] ?? view.id}`}
                 className={cn(
                   "flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors truncate",
                   "text-gray-500 hover:bg-gray-100 hover:text-gray-800"
