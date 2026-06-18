@@ -22,13 +22,21 @@ export function getTaskColId(status: TaskStatus): BoardColId {
   return "yapilacak";
 }
 
-// Status options shown in the card quick-edit dropdown
+// Status options shown in the card quick-edit dropdown (alias for USER_STATUS_OPTIONS, defined after it)
 export const CARD_STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
   { value: "ready",       label: "Yapılacak" },
   { value: "in_progress", label: "Devam ediyor" },
   { value: "blocked",     label: "Bekliyor" },
   { value: "done",        label: "Tamamlandı" },
 ];
+
+// Project options for custom_fields.project
+export const PROJECT_OPTIONS = [
+  "AF Online",
+  "Lookbook",
+  "AFR-AF Operasyon",
+  "Genel",
+] as const;
 
 // ---- Internal status list (all) ----
 export const TASK_STATUSES: TaskStatus[] = [
@@ -41,15 +49,24 @@ export const TASK_STATUSES: TaskStatus[] = [
   "archived",
 ];
 
+// Simplified user-facing labels (4 visible states)
 export const STATUS_LABELS: Record<TaskStatus, string> = {
-  backlog: "Beklemede",
-  ready: "Hazır",
+  backlog:    "Yapılacak",
+  ready:      "Yapılacak",
   in_progress: "Devam ediyor",
-  blocked: "Bloke",
-  review: "İncelemede",
-  done: "Tamamlandı",
-  archived: "Arşivlendi",
+  blocked:    "Bekliyor",
+  review:     "Devam ediyor",
+  done:       "Tamamlandı",
+  archived:   "Arşivlendi",
 };
+
+// User-facing dropdown options (no Bloke/Hazır/İncelemede/Beklemede/Arşivlendi)
+export const USER_STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
+  { value: "ready",       label: "Yapılacak" },
+  { value: "in_progress", label: "Devam ediyor" },
+  { value: "blocked",     label: "Bekliyor" },
+  { value: "done",        label: "Tamamlandı" },
+];
 
 export const TASK_PRIORITIES: TaskPriority[] = ["low", "medium", "high", "urgent"];
 
@@ -62,11 +79,12 @@ export const PRIORITY_LABELS: Record<TaskPriority, string> = {
 
 // Stable URL slugs for saved-view names (shared by KanbanBoard + AppSidebar)
 export const SAVED_VIEW_SLUG_MAP: Record<string, string> = {
-  "Tüm işler":      "all",
-  "Bana atananlar": "mine",
-  "Bu hafta":       "this-week",
-  "Gecikenler":     "overdue",
-  "Tamamlananlar":  "done",
+  "Tüm işler":         "all",
+  "Bana atananlar":    "mine",
+  "Bu hafta":          "this-week",
+  "Gecikenler":        "overdue",
+  "Tamamlananlar":     "done",
+  "Onay bekleyenler":  "waiting-approval",
 };
 
 export const PRIORITY_ORDER: Record<TaskPriority, number> = {

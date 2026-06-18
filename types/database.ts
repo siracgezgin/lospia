@@ -304,6 +304,8 @@ export type Database = {
       }
       tasks: {
         Row: {
+          approval_required: boolean
+          approval_status: string
           archived_at: string | null
           assignee_id: string | null
           completed_at: string | null
@@ -322,9 +324,14 @@ export type Database = {
           tags: string[]
           title: string
           updated_at: string
+          waiting_on_contact_id: string | null
+          waiting_on_member_id: string | null
+          waiting_reason: string | null
           workspace_id: string
         }
         Insert: {
+          approval_required?: boolean
+          approval_status?: string
           archived_at?: string | null
           assignee_id?: string | null
           completed_at?: string | null
@@ -343,9 +350,14 @@ export type Database = {
           tags?: string[]
           title: string
           updated_at?: string
+          waiting_on_contact_id?: string | null
+          waiting_on_member_id?: string | null
+          waiting_reason?: string | null
           workspace_id: string
         }
         Update: {
+          approval_required?: boolean
+          approval_status?: string
           archived_at?: string | null
           assignee_id?: string | null
           completed_at?: string | null
@@ -364,6 +376,9 @@ export type Database = {
           tags?: string[]
           title?: string
           updated_at?: string
+          waiting_on_contact_id?: string | null
+          waiting_on_member_id?: string | null
+          waiting_reason?: string | null
           workspace_id?: string
         }
         Relationships: [
@@ -510,6 +525,7 @@ export type Database = {
         Row: {
           id: string
           joined_at: string
+          last_rules_seen_at: string | null
           role: Database["public"]["Enums"]["workspace_role"]
           user_id: string
           workspace_id: string
@@ -517,6 +533,7 @@ export type Database = {
         Insert: {
           id?: string
           joined_at?: string
+          last_rules_seen_at?: string | null
           role?: Database["public"]["Enums"]["workspace_role"]
           user_id: string
           workspace_id: string
@@ -524,6 +541,7 @@ export type Database = {
         Update: {
           id?: string
           joined_at?: string
+          last_rules_seen_at?: string | null
           role?: Database["public"]["Enums"]["workspace_role"]
           user_id?: string
           workspace_id?: string
@@ -538,6 +556,53 @@ export type Database = {
           },
           {
             foreignKeyName: "workspace_members_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspace_rules: {
+        Row: {
+          body: string | null
+          category: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          position: number
+          title: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          body?: string | null
+          category?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          position?: number
+          title: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          body?: string | null
+          category?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          position?: number
+          title?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_rules_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"

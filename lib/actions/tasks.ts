@@ -35,6 +35,8 @@ const CreateTaskSchema = z.object({
   custom_fields: z.record(z.string(), z.unknown()).default({}),
 });
 
+const ApprovalStatusSchema = z.enum(["none", "pending", "approved", "rejected"]);
+
 const UpdateTaskSchema = z.object({
   id: hexUuid("Geçersiz görev kimliği"),
   title: z.string().min(1, "Başlık gerekli").max(500).optional(),
@@ -47,6 +49,11 @@ const UpdateTaskSchema = z.object({
   start_date: z.string().nullable().optional(),
   tags: z.array(z.string().max(50)).max(20).optional(),
   custom_fields: z.record(z.string(), z.unknown()).optional(),
+  approval_required: z.boolean().optional(),
+  approval_status: ApprovalStatusSchema.optional(),
+  waiting_on_member_id: hexUuid("Geçersiz üye").nullable().optional(),
+  waiting_on_contact_id: hexUuid("Geçersiz kişi").nullable().optional(),
+  waiting_reason: z.string().max(500).nullable().optional(),
 });
 
 const ReorderTaskSchema = z.object({

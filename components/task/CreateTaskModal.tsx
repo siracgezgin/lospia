@@ -9,6 +9,7 @@ import {
   TASK_STATUSES,
   TASK_PRIORITIES,
   CARD_STATUS_OPTIONS,
+  PROJECT_OPTIONS,
 } from "@/lib/utils/task-constants";
 import { cn } from "@/lib/utils/cn";
 import type { TaskStatus, TaskPriority, Profile, WorkspaceContact } from "@/types";
@@ -49,6 +50,7 @@ export function CreateTaskModal({
   // Primary fields
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [project, setProject] = useState("");
   const [category, setCategory] = useState("");
   const [responsibleValue, setResponsibleValue] = useState("");
   const [dueDate, setDueDate] = useState(defaultDueDate);
@@ -89,6 +91,7 @@ export function CreateTaskModal({
 
     const tags = tagsInput.split(",").map((t) => t.trim()).filter(Boolean);
     const customFields: Record<string, unknown> = {};
+    if (project) customFields.project = project;
     if (category.trim()) customFields.category = category.trim();
     if (successCriteria.trim()) customFields.success_criteria = successCriteria.trim();
     if (collaborators.length > 0) customFields.collaborators = collaborators;
@@ -165,16 +168,29 @@ export function CreateTaskModal({
             />
           </div>
 
-          {/* Kategori / Konu */}
-          <div>
-            <label className={labelCls}>Kategori / Konu</label>
-            <input
-              type="text"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              placeholder="Örn: Pazarlama, Operasyon, Finans…"
-              className={inputCls}
-            />
+          {/* Proje / İş Alanı + Kategori */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Proje / İş Alanı</label>
+              <select
+                value={project}
+                onChange={(e) => setProject(e.target.value)}
+                className={selectCls}
+              >
+                <option value="">— Seçin</option>
+                {PROJECT_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Kategori / Konu</label>
+              <input
+                type="text"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                placeholder="Örn: Operasyon…"
+                className={inputCls}
+              />
+            </div>
           </div>
 
           {/* Sorumlu */}

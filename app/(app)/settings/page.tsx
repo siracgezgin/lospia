@@ -97,9 +97,9 @@ export default async function SettingsPage() {
         </div>
       </section>
 
-      {/* Kişiler */}
+      {/* İş birliği kişileri */}
       <section className="space-y-4">
-        <h2 className="text-base font-semibold text-gray-700">Kişiler</h2>
+        <h2 className="text-base font-semibold text-gray-700">İş birliği kişileri</h2>
         <p className="text-xs text-gray-400 -mt-2">
           Görevlerde iş birliği kişisi olarak seçilebilen kişiler. Sisteme giriş yapmalarına gerek yoktur.
         </p>

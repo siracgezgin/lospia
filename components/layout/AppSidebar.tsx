@@ -14,6 +14,7 @@ import {
   Clock,
   Archive,
   Trash2,
+  BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { signOut } from "@/lib/actions/auth";
@@ -25,6 +26,7 @@ const NAV_ITEMS = [
   { href: "/list",      label: "Liste",           icon: List },
   { href: "/dashboard", label: "Gösterge Paneli", icon: LayoutDashboard },
   { href: "/calendar",  label: "Takvim",          icon: Calendar },
+  { href: "/rules",     label: "Kurallar",        icon: BookOpen },
   { href: "/archive",   label: "Arşiv",           icon: Archive },
   { href: "/trash",     label: "Çöp Kutusu",      icon: Trash2 },
   { href: "/settings",  label: "Ayarlar",         icon: Settings },
@@ -47,15 +49,14 @@ export function AppSidebar({ workspace, savedViews }: Props) {
         collapsed ? "w-14" : "w-56"
       )}
     >
-      {/* Workspace header */}
-      <div className={cn("flex items-center gap-2 px-3 py-4 border-b border-gray-100", collapsed && "justify-center px-0")}>
-        <div className="h-7 w-7 rounded-md bg-blue-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
-          {workspace?.name?.[0]?.toUpperCase() ?? "S"}
-        </div>
+      {/* Workspace header — wordmark only */}
+      <div className={cn("flex items-center px-4 py-3.5 border-b border-gray-100", collapsed && "justify-center px-0")}>
         {!collapsed && (
-          <span className="font-semibold text-sm text-gray-900 truncate">
-            {workspace?.name ?? "AF Operasyon"}
-          </span>
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img src="/aslifilinta.png" alt="Aslı Filinta" className="h-4 object-contain object-left" />
+        )}
+        {collapsed && (
+          <div className="h-4 w-8 rounded bg-[#406775]/20" />
         )}
       </div>
 
@@ -70,7 +71,7 @@ export function AppSidebar({ workspace, savedViews }: Props) {
               className={cn(
                 "flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm font-medium transition-colors",
                 active
-                  ? "bg-blue-50 text-blue-700"
+                  ? "bg-[#e8f1f4] text-[#406775]"
                   : "text-gray-600 hover:bg-gray-100 hover:text-gray-900",
                 collapsed && "justify-center px-2"
               )}

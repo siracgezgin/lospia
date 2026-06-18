@@ -10,6 +10,16 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  /* Aslı Filinta brand tokens */
+  --color-brand: #406775;
+  --color-brand-dark: #355a68;
+  --color-brand-muted: #5b8fa0;
+  --color-brand-light: #e8f1f4;
+  --color-accent: #cc4444;
+  --color-accent-light: #f5e0e0;
+  --color-warm: #e5e0b9;
+  --color-warm-dark: #c8c39e;
+  --color-warm-text: #6b6748;
 }
 
 @media (prefers-color-scheme: dark) {

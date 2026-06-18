@@ -47,12 +47,19 @@ export type WorkspaceContact = {
   updated_at: string;
 };
 
+// workspace_rules — daily SOPs / checklists
+export type WorkspaceRule = Database["public"]["Tables"]["workspace_rules"]["Row"];
+export type WorkspaceRuleInsert = Database["public"]["Tables"]["workspace_rules"]["Insert"];
+
 // workspace_notes — sticky note board lane (not tasks)
+export type NoteColor = "yellow" | "blue" | "green" | "purple";
+
 export type WorkspaceNote = {
   id: string;
   workspace_id: string;
   title: string;
   body: string | null;
+  color: NoteColor;
   position: number;
   created_by: string | null;
   created_at: string;

@@ -139,7 +139,11 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
 
   const [sorting, setSorting] = useState<SortingState>([{ id: "updated_at", desc: true }]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [columnVisibility] = useState<VisibilityState>({ created_at: false });
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({
+    created_at: false,
+    updated_at: false,
+    priority: false,
+  });
 
   const [search, setSearch] = useState("");
   const [filterStatusKey, setFilterStatusKey] = useState<StatusFilterKey>("all");
@@ -183,10 +187,22 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
       ),
       enableSorting: false,
     }),
+    // Description column
+    columnHelper.accessor("description", {
+      id: "description",
+      header: "Açıklama",
+      cell: (info) => {
+        const val = info.getValue();
+        return val
+          ? <span className="text-xs text-gray-400 italic line-clamp-1">{val}</span>
+          : <span className="text-xs text-gray-300">—</span>;
+      },
+      enableSorting: false,
+    }),
     // Category column — accessorFn always returns a safe string; never an object or undefined
     columnHelper.accessor((row) => safeCategory(row), {
       id: "category",
-      header: "Kategori / Konu",
+      header: "Kategori",
       cell: (info) => {
         const val = info.getValue();
         return val
@@ -250,6 +266,30 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
         },
       }
     ),
+    // Collaborators — reads custom_fields.collaborators (string[])
+    columnHelper.accessor(
+      (row) => {
+        try {
+          const cf = row.custom_fields;
+          if (!cf || typeof cf !== "object" || Array.isArray(cf)) return "";
+          const c = (cf as Record<string, unknown>).collaborators;
+          if (Array.isArray(c)) return c.join(", ");
+          if (typeof c === "string") return c;
+          return "";
+        } catch { return ""; }
+      },
+      {
+        id: "collaborators",
+        header: "İş birliği",
+        cell: (info) => {
+          const val = info.getValue();
+          return val
+            ? <span className="text-xs text-gray-500">{val}</span>
+            : <span className="text-xs text-gray-300">—</span>;
+        },
+        enableSorting: false,
+      }
+    ),
     columnHelper.accessor("updated_at", {
       id: "updated_at",
       header: FIELD_LABELS.updatedAt,
@@ -283,6 +323,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
     state: { sorting, columnFilters, columnVisibility },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
+    onColumnVisibilityChange: setColumnVisibility,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),

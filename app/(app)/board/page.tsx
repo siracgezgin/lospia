@@ -16,10 +16,12 @@ export default async function BoardPage({
 
   const { data: memberRows } = await supabase
     .from("workspace_members")
-    .select("workspace_id")
+    .select("workspace_id, last_rules_seen_at")
     .eq("user_id", user.id)
     .limit(1);
   const workspaceId = memberRows?.[0]?.workspace_id;
+  const lastRulesSeen = memberRows?.[0]?.last_rules_seen_at ?? null;
+
   if (!workspaceId) {
     return (
       <div className="flex h-full items-center justify-center p-8">
@@ -36,7 +38,7 @@ export default async function BoardPage({
     );
   }
 
-  const [tasksResult, viewsResult, profilesResult, contactsResult, notesResult] = await Promise.all([
+  const [tasksResult, viewsResult, profilesResult, contactsResult, notesResult, rulesResult] = await Promise.all([
     supabase
       .from("tasks")
       .select("*")
@@ -73,6 +75,19 @@ export default async function BoardPage({
       .eq("workspace_id", workspaceId)
       .order("position")
       .order("created_at"),
+    // Count rules updated after member's last seen timestamp
+    lastRulesSeen
+      ? supabase
+          .from("workspace_rules")
+          .select("id", { count: "exact", head: true })
+          .eq("workspace_id", workspaceId)
+          .eq("is_active", true)
+          .gt("updated_at", lastRulesSeen)
+      : supabase
+          .from("workspace_rules")
+          .select("id", { count: "exact", head: true })
+          .eq("workspace_id", workspaceId)
+          .eq("is_active", true),
   ]);
 
   const tasks: Task[] = tasksResult.data ?? [];
@@ -80,6 +95,7 @@ export default async function BoardPage({
   const profiles: Pick<Profile, "id" | "full_name" | "email">[] = profilesResult.data ?? [];
   const contacts: WorkspaceContact[] = (contactsResult.data ?? []) as WorkspaceContact[];
   const notes: WorkspaceNote[] = (notesResult.data ?? []) as WorkspaceNote[];
+  const newRulesCount = rulesResult.count ?? 0;
   const viewSlug = params.view ?? null;
 
   return (
@@ -92,6 +108,7 @@ export default async function BoardPage({
       profiles={profiles}
       contacts={contacts}
       notes={notes}
+      newRulesCount={newRulesCount}
     />
   );
 }

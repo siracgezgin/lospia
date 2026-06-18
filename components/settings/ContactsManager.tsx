@@ -110,13 +110,23 @@ export function ContactsManager({ workspaceId, initialContacts }: Props) {
             placeholder="E-posta"
             className="flex-1 min-w-[140px] rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
-          <input
-            type="text"
+          <select
             value={roleLabel}
             onChange={(e) => setRoleLabel(e.target.value)}
-            placeholder="Rol"
-            className="w-28 rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
+            className="w-36 rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+          >
+            <option value="">Rol seçin</option>
+            <option value="Yönetici">Yönetici</option>
+            <option value="Operasyon">Operasyon</option>
+            <option value="Üretim">Üretim</option>
+            <option value="Tasarım">Tasarım</option>
+            <option value="Satın Alma">Satın Alma</option>
+            <option value="Web / Teknik">Web / Teknik</option>
+            <option value="İçerik">İçerik</option>
+            <option value="Ekip Üyesi">Ekip Üyesi</option>
+            <option value="Dış Paydaş">Dış Paydaş</option>
+            <option value="Diğer">Diğer</option>
+          </select>
           <button
             type="submit"
             disabled={isPending || !name.trim()}

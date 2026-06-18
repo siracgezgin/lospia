@@ -8,10 +8,11 @@
 --   1 workspace: AF Operasyon
 --   2 workspace_members
 --   3 custom field definitions
---   5 saved views
---   14 real Aslı Filinta project tasks (Lookbook, Erişim, Teknik SEO, GEO/AI)
---   2 workspace contacts (Nisa Hanım, Ebu Bekir Bey)
+--   6 saved views (incl. Onay bekleyenler)
+--   14 real Aslı Filinta project tasks
+--   7 workspace contacts (Nisa, Ebu Bekir, Kısmet, Selen, Gül, Esin, Aslı)
 --   3 workspace notes
+--   4 workspace rules (example)
 --
 -- Login credentials (local Supabase):
 --   alice@taskos.local  / password: TaskOS2024!  (profile: Siraç)
@@ -33,9 +34,15 @@ declare
   v_sv_bu_hafta    uuid := '00000000-0000-0000-0000-000000000031';
   v_sv_gecikenler  uuid := '00000000-0000-0000-0000-000000000032';
   v_sv_tamamlanan  uuid := '00000000-0000-0000-0000-000000000033';
+  v_sv_onay        uuid := '00000000-0000-0000-0000-000000000035';
 
-  v_contact_nisa uuid := '00000000-0000-0000-0000-000000000040';
-  v_contact_ebu  uuid := '00000000-0000-0000-0000-000000000041';
+  v_contact_nisa   uuid := '00000000-0000-0000-0000-000000000040';
+  v_contact_ebu    uuid := '00000000-0000-0000-0000-000000000041';
+  v_contact_kismet uuid := '00000000-0000-0000-0000-000000000042';
+  v_contact_selen  uuid := '00000000-0000-0000-0000-000000000043';
+  v_contact_gul    uuid := '00000000-0000-0000-0000-000000000044';
+  v_contact_esin   uuid := '00000000-0000-0000-0000-000000000045';
+  v_contact_asli   uuid := '00000000-0000-0000-0000-000000000046';
 
 begin
 
@@ -144,7 +151,7 @@ begin
   (
     v_cf_select, v_ws_id, 'Kategori', 'category',
     'select',
-    '["A — Lookbook", "B — Erişim", "B — Teknik SEO", "B — GEO / AI"]'::jsonb,
+    '["Lookbook", "Erişim", "Teknik SEO", "GEO / AI", "Kumaş Siparişi", "Üretim", "Operasyon", "Satın Alma", "Pazarlama"]'::jsonb,
     1
   ),
   (
@@ -180,6 +187,11 @@ begin
     v_sv_tamamlanan, v_ws_id, v_alice_id, 'Tamamlananlar',
     '{"filters": {"status": ["done"]}, "sort": {"field": "updated_at", "direction": "desc"}, "view_type": "list"}'::jsonb,
     true, 4
+  ),
+  (
+    v_sv_onay, v_ws_id, v_alice_id, 'Onay bekleyenler',
+    '{"filters": {"approval_required": true}, "sort": {"field": "due_date", "direction": "asc"}, "view_type": "board"}'::jsonb,
+    true, 5
   )
   on conflict (id) do update set
     name     = excluded.name,
@@ -190,8 +202,13 @@ begin
   -- Workspace contacts (non-auth collaborators)
   -- -------------------------------------------------------------------------
   insert into public.workspace_contacts (id, workspace_id, name, email, role_label) values
-    (v_contact_nisa, v_ws_id, 'Nisa Hanım',    null, 'Tasarımcı'),
-    (v_contact_ebu,  v_ws_id, 'Ebu Bekir Bey', null, 'Web Yöneticisi')
+    (v_contact_nisa,   v_ws_id, 'Nisa Hanım',    null, 'Tasarımcı'),
+    (v_contact_ebu,    v_ws_id, 'Ebu Bekir Bey', null, 'Web Yöneticisi'),
+    (v_contact_kismet, v_ws_id, 'Kısmet',         null, 'Ekip Üyesi'),
+    (v_contact_selen,  v_ws_id, 'Selen',          null, 'Ekip Üyesi'),
+    (v_contact_gul,    v_ws_id, 'Gül',            null, 'Ekip Üyesi'),
+    (v_contact_esin,   v_ws_id, 'Esin',           null, 'Ekip Üyesi'),
+    (v_contact_asli,   v_ws_id, 'Aslı Hanım',     null, 'Yönetici')
   on conflict (id) do nothing;
 
   -- -------------------------------------------------------------------------
@@ -199,7 +216,7 @@ begin
   -- Status mapping: Başlamadı→backlog  Devam ediyor→in_progress  Bekliyor→blocked
   -- -------------------------------------------------------------------------
 
-  -- ── A — Lookbook (5 tasks, Devam ediyor, deadline 11 Haziran 2026) ─────────
+  -- ── Lookbook (5 tasks, Devam ediyor, deadline 11 Haziran 2026) ─────────────
 
   insert into public.tasks (workspace_id, title, description, status, priority,
     assignee_id, responsible_contact_id, due_date, tags, custom_fields, fractional_index, created_by)
@@ -211,7 +228,7 @@ begin
    v_alice_id, null,
    '2026-06-11',
    '{"lookbook"}',
-   '{"category": "A — Lookbook"}'::jsonb,
+   '{"category": "Lookbook", "project": "Lookbook"}'::jsonb,
    'a0', v_alice_id);
 
   insert into public.tasks (workspace_id, title, description, status, priority,
@@ -224,7 +241,7 @@ begin
    null, v_contact_nisa,
    '2026-06-11',
    '{"lookbook"}',
-   '{"category": "A — Lookbook"}'::jsonb,
+   '{"category": "Lookbook", "project": "Lookbook"}'::jsonb,
    'a1', v_alice_id);
 
   insert into public.tasks (workspace_id, title, description, status, priority,
@@ -237,7 +254,7 @@ begin
    v_alice_id, null,
    '2026-06-11',
    '{"lookbook","excel"}',
-   '{"category": "A — Lookbook"}'::jsonb,
+   '{"category": "Lookbook", "project": "Lookbook"}'::jsonb,
    'a2', v_alice_id);
 
   insert into public.tasks (workspace_id, title, description, status, priority,
@@ -250,11 +267,12 @@ begin
    v_alice_id, null,
    '2026-06-11',
    '{"lookbook","buyer"}',
-   '{"category": "A — Lookbook"}'::jsonb,
+   '{"category": "Lookbook", "project": "Lookbook"}'::jsonb,
    'a3', v_alice_id);
 
   insert into public.tasks (workspace_id, title, description, status, priority,
-    assignee_id, responsible_contact_id, due_date, tags, custom_fields, fractional_index, created_by)
+    assignee_id, responsible_contact_id, due_date, tags, custom_fields, fractional_index, created_by,
+    approval_required, approval_status, waiting_on_contact_id, waiting_reason)
   values
   (v_ws_id,
    'Aslı Hanım onayı → alıcıya gönderim',
@@ -263,10 +281,11 @@ begin
    v_bob_id, null,
    '2026-06-11',
    '{"lookbook","onay"}',
-   '{"category": "A — Lookbook"}'::jsonb,
-   'a4', v_alice_id);
+   '{"category": "Lookbook", "project": "Lookbook"}'::jsonb,
+   'a4', v_alice_id,
+   true, 'pending', v_contact_asli, 'Lookbook finali için Aslı Hanım onayı bekleniyor');
 
-  -- ── B — Erişim (2 tasks, Bekliyor/blocked, deadline 8 Haziran 2026) ────────
+  -- ── Erişim (2 tasks, Bekliyor/blocked, deadline 8 Haziran 2026) ─────────────
 
   insert into public.tasks (workspace_id, title, description, status, priority,
     assignee_id, responsible_contact_id, due_date, tags, custom_fields, fractional_index, created_by)
@@ -278,7 +297,7 @@ begin
    v_alice_id, null,
    '2026-06-08',
    '{"erisim","wordpress"}',
-   jsonb_build_object('category', 'B — Erişim', 'collaborators', jsonb_build_array(v_contact_ebu::text)),
+   jsonb_build_object('category', 'Erişim', 'project', 'AF Online', 'collaborators', jsonb_build_array(v_contact_ebu::text)),
    'b0', v_alice_id);
 
   insert into public.tasks (workspace_id, title, description, status, priority,
@@ -291,10 +310,10 @@ begin
    v_alice_id, null,
    '2026-06-08',
    '{"erisim","seo"}',
-   '{"category": "B — Erişim"}'::jsonb,
+   '{"category": "Erişim", "project": "AF Online"}'::jsonb,
    'b1', v_alice_id);
 
-  -- ── B — Teknik SEO (3 tasks, Başlamadı/backlog, deadline 18 Haziran 2026) ──
+  -- ── Teknik SEO (3 tasks, Başlamadı/backlog, deadline 18 Haziran 2026) ────────
 
   insert into public.tasks (workspace_id, title, description, status, priority,
     assignee_id, responsible_contact_id, due_date, tags, custom_fields, fractional_index, created_by)
@@ -306,7 +325,7 @@ begin
    v_alice_id, null,
    '2026-06-18',
    '{"seo","audit"}',
-   '{"category": "B — Teknik SEO"}'::jsonb,
+   '{"category": "Teknik SEO", "project": "AF Online"}'::jsonb,
    'c0', v_alice_id);
 
   insert into public.tasks (workspace_id, title, description, status, priority,
@@ -319,7 +338,7 @@ begin
    v_alice_id, null,
    '2026-06-18',
    '{"seo","teknik"}',
-   '{"category": "B — Teknik SEO"}'::jsonb,
+   '{"category": "Teknik SEO", "project": "AF Online"}'::jsonb,
    'c1', v_alice_id);
 
   insert into public.tasks (workspace_id, title, description, status, priority,
@@ -332,10 +351,10 @@ begin
    v_alice_id, null,
    '2026-06-18',
    '{"seo","schema"}',
-   '{"category": "B — Teknik SEO"}'::jsonb,
+   '{"category": "Teknik SEO", "project": "AF Online"}'::jsonb,
    'c2', v_alice_id);
 
-  -- ── B — GEO / AI (4 tasks, Başlamadı/backlog, deadline 18 Haziran 2026) ────
+  -- ── GEO / AI (4 tasks, Başlamadı/backlog, deadline 18 Haziran 2026) ──────────
 
   insert into public.tasks (workspace_id, title, description, status, priority,
     assignee_id, responsible_contact_id, due_date, tags, custom_fields, fractional_index, created_by)
@@ -347,7 +366,7 @@ begin
    v_alice_id, null,
    '2026-06-18',
    '{"geo","llm","ai"}',
-   '{"category": "B — GEO / AI"}'::jsonb,
+   '{"category": "GEO / AI", "project": "AF Online"}'::jsonb,
    'd0', v_alice_id);
 
   insert into public.tasks (workspace_id, title, description, status, priority,
@@ -360,7 +379,7 @@ begin
    v_alice_id, null,
    '2026-06-18',
    '{"geo","robots","ai"}',
-   '{"category": "B — GEO / AI"}'::jsonb,
+   '{"category": "GEO / AI", "project": "AF Online"}'::jsonb,
    'd1', v_alice_id);
 
   insert into public.tasks (workspace_id, title, description, status, priority,
@@ -373,7 +392,7 @@ begin
    v_alice_id, null,
    '2026-06-18',
    '{"geo","icerik"}',
-   '{"category": "B — GEO / AI"}'::jsonb,
+   '{"category": "GEO / AI", "project": "AF Online"}'::jsonb,
    'd2', v_alice_id);
 
   insert into public.tasks (workspace_id, title, description, status, priority,
@@ -386,28 +405,49 @@ begin
    v_alice_id, null,
    '2026-06-18',
    '{"geo","izleme"}',
-   '{"category": "B — GEO / AI"}'::jsonb,
+   '{"category": "GEO / AI", "project": "AF Online"}'::jsonb,
    'd3', v_alice_id);
 
   -- -------------------------------------------------------------------------
   -- Workspace notes
   -- -------------------------------------------------------------------------
-  insert into public.workspace_notes (workspace_id, title, body, position, created_by)
+  insert into public.workspace_notes (workspace_id, title, body, color, position, created_by)
   values (v_ws_id,
           'Lookbook sprint hedefi',
           'Deadline: 11 Haziran. Canva tasarımları + AI görseller + line sheet finali.',
-          0, v_alice_id);
+          'purple', 0, v_alice_id);
 
-  insert into public.workspace_notes (workspace_id, title, body, position, created_by)
+  insert into public.workspace_notes (workspace_id, title, body, color, position, created_by)
   values (v_ws_id,
           'SEO / GEO sprint',
           'Deadline: 18 Haziran. Önce erişimler, sonra baseline audit, sonra teknik düzeltmeler.',
-          1, v_alice_id);
+          'blue', 1, v_alice_id);
 
-  insert into public.workspace_notes (workspace_id, title, body, position, created_by)
+  insert into public.workspace_notes (workspace_id, title, body, color, position, created_by)
   values (v_ws_id,
           'Kritik: Ebu Bekir onayı',
           'WordPress admin erişimi i' || chr(231) || 'in Ebu Bekir Bey' || chr(39) || 'den onay bekleniyor.',
-          2, v_bob_id);
+          'yellow', 2, v_bob_id);
+
+  -- -------------------------------------------------------------------------
+  -- Workspace rules — example SOPs
+  -- -------------------------------------------------------------------------
+  insert into public.workspace_rules (workspace_id, title, body, category, is_active, position, created_by) values
+  (v_ws_id,
+   'Her sabah panoyu kontrol et',
+   'Güne başlamadan önce panodaki görevleri gözden geçir. Geciken veya bloklanan var mı?',
+   'Genel', true, 0, v_alice_id),
+  (v_ws_id,
+   'Kumaş siparişi verilmeden önce onay al',
+   'Her kumaş siparişi verilmeden önce Aslı Hanım' || chr(39) || 'ın yazılı onayı alınmalıdır.',
+   'Kumaş Siparişi', true, 0, v_alice_id),
+  (v_ws_id,
+   'Geciken görevleri aynı gün raporla',
+   'Deadline geçen her görev için aynı gün sebep ve yeni tahmini tarih paylaş.',
+   'Operasyon', true, 0, v_alice_id),
+  (v_ws_id,
+   'Üretim çıktıları haftalık fotoğrafla belgelensin',
+   'Her hafta üretim aşamasından fotoğraf çekilerek dosyalanmalıdır.',
+   'Üretim', true, 0, v_alice_id);
 
 end $$;

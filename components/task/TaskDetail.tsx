@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition, useOptimistic, useActionState } from "react";
+import { useState, useEffect, useTransition, useOptimistic, useActionState, useMemo } from "react";
 import Link from "next/link";
 import { ArrowLeft, Clock, Play, Square, MessageSquare } from "lucide-react";
 import type {
@@ -13,7 +13,7 @@ import type {
   TaskStatus,
   TaskPriority,
 } from "@/types";
-import { STATUS_LABELS, TASK_STATUSES, TASK_PRIORITIES, PRIORITY_LABELS } from "@/lib/utils/task-constants";
+import { USER_STATUS_OPTIONS, TASK_PRIORITIES, PRIORITY_LABELS, PROJECT_OPTIONS } from "@/lib/utils/task-constants";
 import { updateTask, addTaskComment } from "@/lib/actions/tasks";
 import { startTimer, stopTimer } from "@/lib/actions/time";
 import { featureFlags } from "@/lib/utils/feature-flags";
@@ -108,16 +108,18 @@ function EditableDescription({ task }: { task: Task }) {
 function StatusSelect({ task }: { task: Task }) {
   const [_p, startTransition] = useTransition();
   const [opt, setOpt] = useOptimistic<TaskStatus>(task.status);
+  // Map current value to the nearest USER_STATUS_OPTIONS value for display
+  const displayVal = USER_STATUS_OPTIONS.find((o) => o.value === opt)?.value ?? "ready";
   return (
     <select
-      value={opt}
+      value={displayVal}
       onChange={(e) => {
         const s = e.target.value as TaskStatus;
         startTransition(async () => { setOpt(s); await updateTask({ id: task.id, status: s }); });
       }}
-      className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+      className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#406775]"
     >
-      {TASK_STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
+      {USER_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
     </select>
   );
 }
@@ -297,6 +299,180 @@ function CategoryInput({ task }: { task: Task }) {
   );
 }
 
+// ---- Project field ----
+
+function ProjectInput({ task }: { task: Task }) {
+  const currentVal = ((task.custom_fields as Record<string, unknown>)?.project as string) ?? "";
+  const [_p, startTransition] = useTransition();
+
+  function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const val = e.target.value;
+    startTransition(async () => {
+      const fields = { ...(task.custom_fields as Record<string, unknown>) };
+      if (val) fields.project = val;
+      else delete fields.project;
+      await updateTask({ id: task.id, custom_fields: fields });
+    });
+  }
+
+  return (
+    <select
+      defaultValue={currentVal}
+      onChange={handleChange}
+      className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#406775]"
+    >
+      <option value="">— Proje seçin</option>
+      {PROJECT_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+    </select>
+  );
+}
+
+// ---- Collaborators multi-select ----
+
+function CollaboratorsInput({
+  task,
+  profiles,
+  contacts,
+}: {
+  task: Task;
+  profiles: Pick<Profile, "id" | "full_name" | "email" | "avatar_url">[];
+  contacts: WorkspaceContact[];
+}) {
+  const cf = task.custom_fields as Record<string, unknown>;
+  const existing = (Array.isArray(cf?.collaborators) ? cf.collaborators as string[] : []);
+  const [selected, setSelected] = useState<string[]>(existing);
+  const [search, setSearch] = useState("");
+  const [_p, startTransition] = useTransition();
+
+  const allPeople = useMemo(() => [
+    ...profiles.map((p) => ({ key: p.id, name: p.full_name ?? p.email ?? "—" })),
+    ...contacts.map((c) => ({ key: c.id, name: c.name })),
+  ], [profiles, contacts]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return q ? allPeople.filter((p) => p.name.toLowerCase().includes(q)) : allPeople;
+  }, [allPeople, search]);
+
+  function toggle(name: string) {
+    setSelected((prev) => {
+      const next = prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name];
+      startTransition(async () => {
+        const fields = { ...(task.custom_fields as Record<string, unknown>) };
+        if (next.length > 0) fields.collaborators = next;
+        else delete fields.collaborators;
+        await updateTask({ id: task.id, custom_fields: fields });
+      });
+      return next;
+    });
+  }
+
+  return (
+    <div className="border border-gray-200 rounded-lg overflow-hidden">
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Kişi ara…"
+        className="w-full px-3 py-1.5 text-sm border-b border-gray-100 focus:outline-none"
+      />
+      <div className="max-h-28 overflow-y-auto p-2 flex flex-wrap gap-x-4 gap-y-2">
+        {filtered.map((p) => (
+          <label key={p.key} className="flex items-center gap-1.5 cursor-pointer text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={selected.includes(p.name)}
+              onChange={() => toggle(p.name)}
+              className="rounded text-[#406775]"
+            />
+            {p.name}
+          </label>
+        ))}
+        {filtered.length === 0 && <p className="text-xs text-gray-400 px-1">Eşleşen kişi yok</p>}
+      </div>
+      {selected.length > 0 && (
+        <p className="text-xs text-gray-400 px-3 py-1.5 border-t border-gray-100">Seçili: {selected.join(", ")}</p>
+      )}
+    </div>
+  );
+}
+
+// ---- Link / External URL ----
+
+function LinkInput({ task }: { task: Task }) {
+  const currentVal = ((task.custom_fields as Record<string, unknown>)?.external_link as string) ?? "";
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(currentVal);
+  const [_p, startTransition] = useTransition();
+
+  function save() {
+    setEditing(false);
+    startTransition(async () => {
+      const fields = { ...(task.custom_fields as Record<string, unknown>) };
+      if (value.trim()) fields.external_link = value.trim();
+      else delete fields.external_link;
+      await updateTask({ id: task.id, custom_fields: fields });
+    });
+  }
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        type="url"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") { setValue(currentVal); setEditing(false); } }}
+        className="w-full text-sm border border-blue-400 rounded-lg px-2 py-1.5 focus:outline-none"
+        placeholder="https://…"
+      />
+    );
+  }
+
+  return currentVal ? (
+    <div className="flex items-center gap-2">
+      <a href={currentVal} target="_blank" rel="noopener noreferrer" className="text-sm text-[#406775] hover:underline truncate flex-1">
+        {currentVal}
+      </a>
+      <button onClick={() => setEditing(true)} className="text-xs text-gray-400 hover:text-gray-600 shrink-0">✎</button>
+    </div>
+  ) : (
+    <span
+      onClick={() => setEditing(true)}
+      className="text-sm text-gray-400 italic cursor-pointer hover:text-[#406775] transition-colors"
+    >
+      Bağlantı eklemek için tıklayın…
+    </span>
+  );
+}
+
+// ---- Urgent flag ----
+
+function UrgentToggle({ task }: { task: Task }) {
+  const cf = task.custom_fields as Record<string, unknown>;
+  const [isUrgent, setIsUrgent] = useState<boolean>(!!cf?.urgent_flag);
+  const [_p, startTransition] = useTransition();
+
+  function toggle() {
+    const next = !isUrgent;
+    setIsUrgent(next);
+    startTransition(async () => {
+      const fields = { ...(task.custom_fields as Record<string, unknown>), urgent_flag: next };
+      await updateTask({ id: task.id, custom_fields: fields });
+    });
+  }
+
+  return (
+    <label className="flex items-center gap-2 cursor-pointer select-none">
+      <input type="checkbox" checked={isUrgent} onChange={toggle} className="rounded text-red-500" />
+      <span className={cn("text-sm", isUrgent ? "text-red-600 font-medium" : "text-gray-600")}>
+        {isUrgent ? "Acil ✓" : "Acil değil"}
+      </span>
+    </label>
+  );
+}
+
 // ---- Timer panel ----
 
 function TimerPanel({ task, activeTimer, userId }: { task: Task; activeTimer: TimeEntry | null; userId: string }) {
@@ -410,7 +586,7 @@ function CommentForm({ task }: { task: Task }) {
 
 // ---- Main component ----
 
-export function TaskDetail({ task, activity, activeTimer, customFields, profiles, contacts, userId }: Props) {
+export function TaskDetail({ task, activity, activeTimer, customFields: _customFields, profiles, contacts, userId }: Props) {
   return (
     <div className="max-w-3xl mx-auto py-6 px-4 space-y-5">
       {/* Back */}
@@ -433,31 +609,25 @@ export function TaskDetail({ task, activity, activeTimer, customFields, profiles
           <FieldRow label="Sorumlu" className="col-span-2">
             <AssigneeSelect task={task} profiles={profiles} contacts={contacts} />
           </FieldRow>
-          <FieldRow label="Kategori / Konu" className="col-span-2">
-            <CategoryInput task={task} />
+          <FieldRow label="İş birliği kişileri" className="col-span-2">
+            <CollaboratorsInput task={task} profiles={profiles} contacts={contacts} />
           </FieldRow>
+          <FieldRow label="Proje / İş Alanı"><ProjectInput task={task} /></FieldRow>
+          <FieldRow label="Kategori / Konu"><CategoryInput task={task} /></FieldRow>
           <FieldRow label="Teslim tarihi"><DueDateInput task={task} field="due_date" /></FieldRow>
           <FieldRow label="Başlangıç tarihi"><DueDateInput task={task} field="start_date" /></FieldRow>
           <FieldRow label="Etiketler" className="col-span-2"><TagsInput task={task} /></FieldRow>
         </div>
       </div>
 
-      {/* Custom fields */}
-      {customFields.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="text-sm font-semibold text-gray-700 mb-4">Özel alanlar</h3>
-          <div className="grid grid-cols-2 gap-4">
-            {customFields.map((cf) => {
-              const val = (task.custom_fields as Record<string, unknown>)[cf.field_key];
-              return (
-                <FieldRow key={cf.id} label={cf.name}>
-                  <span className="text-sm text-gray-600">{val !== undefined && val !== null ? String(val) : "—"}</span>
-                </FieldRow>
-              );
-            })}
-          </div>
+      {/* Ek bilgiler (editable) */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <h3 className="text-sm font-semibold text-gray-700 mb-4">Ek bilgiler</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <FieldRow label="Bağlantı" className="col-span-2"><LinkInput task={task} /></FieldRow>
+          <FieldRow label="Acil"><UrgentToggle task={task} /></FieldRow>
         </div>
-      )}
+      </div>
 
       {/* Timer */}
       <TimerPanel task={task} activeTimer={activeTimer} userId={userId} />
