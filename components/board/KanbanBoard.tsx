@@ -45,7 +45,8 @@ import { cn } from "@/lib/utils/cn";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
 import { ExcelImportModal } from "@/components/task/ExcelImportModal";
 import { NotesColumn } from "@/components/board/NotesColumn";
-import type { Task, SavedView, TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceNote } from "@/types";
+import { canCreateTask, canDeleteTask, canArchiveTask } from "@/lib/auth/permissions";
+import type { Task, SavedView, TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceNote, WorkspaceRole } from "@/types";
 
 // ── Priority chip styles ──────────────────────────────────────────────────────
 
@@ -227,6 +228,7 @@ interface Props {
   contacts: WorkspaceContact[];
   notes: WorkspaceNote[];
   newRulesCount?: number;
+  userRole?: WorkspaceRole;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -248,11 +250,15 @@ function CardMenu({
   onDuplicate,
   onArchive,
   onDelete,
+  canArchive = true,
+  canDelete = true,
 }: {
   onEdit: () => void;
   onDuplicate: () => void;
   onArchive: () => void;
   onDelete: () => void;
+  canArchive?: boolean;
+  canDelete?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -300,14 +306,16 @@ function CardMenu({
           >
             <Copy size={11} /> Kopyala
           </button>
-          <button
-            onClick={() => { setOpen(false); onArchive(); }}
-            className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-1.5"
-          >
-            <Archive size={11} /> Arşivle
-          </button>
-          <div className="my-1 border-t border-gray-100" />
-          {confirming ? (
+          {canArchive && (
+            <button
+              onClick={() => { setOpen(false); onArchive(); }}
+              className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-1.5"
+            >
+              <Archive size={11} /> Arşivle
+            </button>
+          )}
+          {canDelete && <div className="my-1 border-t border-gray-100" />}
+          {canDelete && confirming ? (
             <div className="px-2 py-1.5">
               <p className="text-[10px] text-red-600 mb-1.5 leading-snug">Çöp kutusuna taşınsın mı?</p>
               <div className="flex gap-1">
@@ -325,14 +333,14 @@ function CardMenu({
                 </button>
               </div>
             </div>
-          ) : (
+          ) : canDelete ? (
             <button
               onClick={() => setConfirming(true)}
               className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 flex items-center gap-1.5"
             >
               <Trash2 size={11} /> Sil
             </button>
-          )}
+          ) : null}
         </div>
       )}
     </div>
@@ -456,6 +464,9 @@ function CardContent({
   onDelete,
   onArchive,
   onDuplicate,
+  canArchiveCard = true,
+  canDeleteCard = true,
+  showMenu = true,
 }: {
   task: Task;
   profiles: Pick<Profile, "id" | "full_name" | "email">[];
@@ -465,6 +476,9 @@ function CardContent({
   onDelete?: (id: string) => void;
   onArchive?: (id: string) => void;
   onDuplicate?: (id: string) => void;
+  canArchiveCard?: boolean;
+  canDeleteCard?: boolean;
+  showMenu?: boolean;
 }) {
   const today = new Date().toISOString().slice(0, 10);
   const isDone = task.status === "done";
@@ -521,12 +535,14 @@ function CardContent({
             </span>
           )}
         </div>
-        {interactive && onDelete && onArchive && onDuplicate && (
+        {interactive && showMenu && onDelete && onArchive && onDuplicate && (
           <CardMenu
             onEdit={() => { window.location.href = `/tasks/${task.id}`; }}
             onDuplicate={() => onDuplicate(task.id)}
             onArchive={() => onArchive(task.id)}
             onDelete={() => onDelete(task.id)}
+            canArchive={canArchiveCard}
+            canDelete={canDeleteCard}
           />
         )}
       </div>
@@ -639,6 +655,10 @@ function TaskCard({
   onDelete,
   onArchive,
   onDuplicate,
+  canArchiveCard = true,
+  canDeleteCard = true,
+  showMenu = true,
+  disableDrag = false,
 }: {
   task: Task;
   profiles: Pick<Profile, "id" | "full_name" | "email">[];
@@ -648,6 +668,10 @@ function TaskCard({
   onDelete?: (id: string) => void;
   onArchive?: (id: string) => void;
   onDuplicate?: (id: string) => void;
+  canArchiveCard?: boolean;
+  canDeleteCard?: boolean;
+  showMenu?: boolean;
+  disableDrag?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
@@ -671,24 +695,31 @@ function TaskCard({
       className={`rounded-lg border border-l-4 p-3 shadow-sm group ${colorCls} ${stateCls}`}
     >
       <div className="flex items-start gap-1.5">
-        <button
-          {...attributes}
-          {...listeners}
-          className="mt-0.5 p-0.5 rounded text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-          aria-label="Sürükle"
-          tabIndex={-1}
-        >
-          <GripVertical size={13} />
-        </button>
+        {!disableDrag ? (
+          <button
+            {...attributes}
+            {...listeners}
+            className="mt-0.5 p-0.5 rounded text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+            aria-label="Sürükle"
+            tabIndex={-1}
+          >
+            <GripVertical size={13} />
+          </button>
+        ) : (
+          <span className="mt-0.5 p-0.5 shrink-0 text-transparent"><GripVertical size={13} /></span>
+        )}
         <CardContent
           task={task}
           profiles={profiles}
           contacts={contacts}
           responsibleNames={responsibleNames}
-          interactive={!isDragOverlay}
+          interactive={!isDragOverlay && !disableDrag}
           onDelete={isDragOverlay ? undefined : onDelete}
           onArchive={isDragOverlay ? undefined : onArchive}
           onDuplicate={isDragOverlay ? undefined : onDuplicate}
+          canArchiveCard={canArchiveCard}
+          canDeleteCard={canDeleteCard}
+          showMenu={showMenu}
         />
       </div>
     </div>
@@ -707,6 +738,10 @@ function KanbanColumn({
   onDelete,
   onArchive,
   onDuplicate,
+  canArchiveCard = true,
+  canDeleteCard = true,
+  showMenu = true,
+  disableDrag = false,
 }: {
   colDef: typeof BOARD_COLUMNS[number];
   tasks: Task[];
@@ -717,6 +752,10 @@ function KanbanColumn({
   onDelete: (id: string) => void;
   onArchive: (id: string) => void;
   onDuplicate: (id: string) => void;
+  canArchiveCard?: boolean;
+  canDeleteCard?: boolean;
+  showMenu?: boolean;
+  disableDrag?: boolean;
 }) {
   const taskIds = tasks.map((t) => t.id);
   const { setNodeRef, isOver } = useDroppable({ id: colDef.id });
@@ -736,13 +775,15 @@ function KanbanColumn({
             {tasks.length}
           </span>
         </div>
-        <button
-          onClick={() => onAddTask(colDef.id)}
-          className="p-0.5 text-gray-300 hover:text-blue-500 rounded transition-colors"
-          aria-label={`${colDef.label} sütununa görev ekle`}
-        >
-          <Plus size={14} />
-        </button>
+        {!disableDrag && (
+          <button
+            onClick={() => onAddTask(colDef.id)}
+            className="p-0.5 text-gray-300 hover:text-blue-500 rounded transition-colors"
+            aria-label={`${colDef.label} sütununa görev ekle`}
+          >
+            <Plus size={14} />
+          </button>
+        )}
       </div>
 
       <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
@@ -765,6 +806,10 @@ function KanbanColumn({
               onDelete={onDelete}
               onArchive={onArchive}
               onDuplicate={onDuplicate}
+              canArchiveCard={canArchiveCard}
+              canDeleteCard={canDeleteCard}
+              showMenu={showMenu}
+              disableDrag={disableDrag}
             />
           ))}
         </div>
@@ -823,7 +868,12 @@ export function KanbanBoard({
   contacts,
   notes,
   newRulesCount = 0,
+  userRole = "member",
 }: Props) {
+  const canCreate  = canCreateTask(userRole);
+  const canDelete  = canDeleteTask(userRole);
+  const canArchive = canArchiveTask(userRole);
+  const isViewer   = userRole === "viewer";
   const mounted = useSyncExternalStore(subscribeMounted, getMounted, getServerMounted);
 
   const sensors = useSensors(
@@ -1125,21 +1175,25 @@ export function KanbanBoard({
 
       {/* ── Toolbar ──────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-100 bg-white shrink-0 flex-wrap">
-        {/* Left: action buttons */}
-        <button
-          onClick={() => { setModalDefaultStatus("ready"); setModalOpen(true); }}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus size={14} />
-          Görev oluştur
-        </button>
-        <button
-          onClick={() => setImportOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors"
-        >
-          <FileSpreadsheet size={14} />
-          Excel&apos;den içe aktar
-        </button>
+        {/* Left: action buttons (hidden for viewer) */}
+        {canCreate && (
+          <button
+            onClick={() => { setModalDefaultStatus("ready"); setModalOpen(true); }}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={14} />
+            Görev oluştur
+          </button>
+        )}
+        {canCreate && (
+          <button
+            onClick={() => setImportOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <FileSpreadsheet size={14} />
+            Excel&apos;den içe aktar
+          </button>
+        )}
 
         {/* Right: Proje + Kategori + Kişi + Arama */}
         <div className="flex items-center gap-2 ml-auto flex-wrap">
@@ -1253,7 +1307,7 @@ export function KanbanBoard({
       {/* ── Pre-mount: static (no DnD) ───────────────────────────────────── */}
       {!mounted && (
         <div className="flex gap-4 p-4 overflow-x-auto flex-1 items-start">
-          <NotesColumn notes={notes} workspaceId={workspaceId} />
+          <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} />
           {BOARD_COLUMNS.map((col) => (
             <StaticKanbanColumn
               key={col.id}
@@ -1276,7 +1330,7 @@ export function KanbanBoard({
           onDragEnd={onDragEnd}
         >
           <div className="flex gap-4 p-4 overflow-x-auto flex-1 items-start">
-            <NotesColumn notes={notes} workspaceId={workspaceId} />
+            <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} />
             {BOARD_COLUMNS.map((col) => (
               <KanbanColumn
                 key={col.id}
@@ -1289,6 +1343,10 @@ export function KanbanBoard({
                 onDelete={handleDeleteCard}
                 onArchive={handleArchiveCard}
                 onDuplicate={handleDuplicateCard}
+                canArchiveCard={canArchive}
+                canDeleteCard={canDelete}
+                showMenu={!isViewer}
+                disableDrag={isViewer}
               />
             ))}
           </div>

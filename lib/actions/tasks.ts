@@ -6,6 +6,26 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { generateKeyBetween } from "fractional-indexing";
 import { normalizeTags } from "@/lib/utils/normalize-tags";
+import {
+  canCreateTask, canArchiveTask, canDeleteTask, canPermanentDeleteTask,
+  canEditTask, canReorderTask, type AppRole,
+} from "@/lib/auth/permissions";
+
+const PERM_DENIED = "Bu işlem için yetkiniz yok.";
+
+async function getUserAndRole(supabase: Awaited<ReturnType<typeof createClient>>) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data: member } = await supabase
+    .from("workspace_members")
+    .select("workspace_id, role")
+    .eq("user_id", user.id)
+    .limit(1)
+    .maybeSingle();
+
+  return member ? { user, role: member.role as AppRole, workspaceId: member.workspace_id } : null;
+}
 
 // ---- Zod schemas ----
 
@@ -68,24 +88,17 @@ const ReorderTaskSchema = z.object({
 export async function createTask(
   input: z.infer<typeof CreateTaskSchema>
 ): Promise<{ id: string } | { error: string }> {
-  if (process.env.NODE_ENV === "development") {
-    console.error("[createTask] RAW INPUT workspace_id:", JSON.stringify(input?.workspace_id), "type:", typeof input?.workspace_id);
-    console.error("[createTask] RAW INPUT assignee_id:", JSON.stringify(input?.assignee_id), "type:", typeof input?.assignee_id);
-    console.error("[createTask] RAW INPUT responsible_contact_id:", JSON.stringify(input?.responsible_contact_id));
-    console.error("[createTask] RAW INPUT title:", JSON.stringify(input?.title));
-    console.error("[createTask] ALL KEYS:", Object.keys(input ?? {}));
-  }
   const parsed = CreateTaskSchema.safeParse(input);
   if (!parsed.success) {
-    if (process.env.NODE_ENV === "development") {
-      console.error("[createTask] validation errors:", JSON.stringify(parsed.error.flatten(), null, 2));
-    }
     return { error: parsed.error.issues[0].message };
   }
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Not authenticated" };
+  const ctx = await getUserAndRole(supabase);
+  if (!ctx) return { error: "Not authenticated" };
+  const { user, role } = ctx;
+
+  if (!canCreateTask(role)) return { error: PERM_DENIED };
 
   const taskData = { ...parsed.data, tags: normalizeTags(parsed.data.tags) };
 
@@ -138,15 +151,16 @@ export async function updateTask(
   }
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Not authenticated" };
+  const ctx = await getUserAndRole(supabase);
+  if (!ctx) return { error: "Not authenticated" };
+  const { user, role } = ctx;
 
   const { id, ...rawUpdates } = parsed.data;
   const updates = rawUpdates.tags !== undefined
     ? { ...rawUpdates, tags: normalizeTags(rawUpdates.tags) }
     : rawUpdates;
 
-  // Fetch current state for activity logging
+  // Fetch current state for both permission check and activity logging
   const { data: currentTask } = await supabase
     .from("tasks")
     .select("*")
@@ -154,6 +168,11 @@ export async function updateTask(
     .single();
 
   if (!currentTask) return { error: "Task not found" };
+
+  const task = currentTask as Record<string, unknown>;
+  if (!canEditTask(role, { assignee_id: task.assignee_id as string | null, created_by: task.created_by as string | null }, user.id)) {
+    return { error: PERM_DENIED };
+  }
 
   const { error } = await supabase
     .from("tasks")
@@ -163,7 +182,7 @@ export async function updateTask(
   if (error) return { error: error.message };
 
   // Log changed fields as activity events
-  const activityInserts = buildActivityEvents(id, (currentTask as Record<string, unknown>).workspace_id as string, user.id, currentTask as Record<string, unknown>, updates as Record<string, unknown>);
+  const activityInserts = buildActivityEvents(id, task.workspace_id as string, user.id, task, updates as Record<string, unknown>);
   if (activityInserts.length > 0) {
     await supabase.from("task_activity").insert(activityInserts);
   }
@@ -202,8 +221,9 @@ export async function softDeleteTask(
   taskId: string
 ): Promise<{ success: true } | { error: string }> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Not authenticated" };
+  const ctx = await getUserAndRole(supabase);
+  if (!ctx) return { error: "Not authenticated" };
+  if (!canDeleteTask(ctx.role)) return { error: PERM_DENIED };
 
   const { error } = await supabase
     .from("tasks")
@@ -223,8 +243,9 @@ export async function archiveTask(
   taskId: string
 ): Promise<{ success: true } | { error: string }> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Not authenticated" };
+  const ctx = await getUserAndRole(supabase);
+  if (!ctx) return { error: "Not authenticated" };
+  if (!canArchiveTask(ctx.role)) return { error: PERM_DENIED };
 
   const { error } = await supabase
     .from("tasks")
@@ -244,8 +265,9 @@ export async function unarchiveTask(
   taskId: string
 ): Promise<{ success: true } | { error: string }> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Not authenticated" };
+  const ctx = await getUserAndRole(supabase);
+  if (!ctx) return { error: "Not authenticated" };
+  if (!canArchiveTask(ctx.role)) return { error: PERM_DENIED };
 
   const { error } = await supabase
     .from("tasks")
@@ -264,8 +286,9 @@ export async function restoreTask(
   taskId: string
 ): Promise<{ success: true } | { error: string }> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Not authenticated" };
+  const ctx = await getUserAndRole(supabase);
+  if (!ctx) return { error: "Not authenticated" };
+  if (!canDeleteTask(ctx.role)) return { error: PERM_DENIED };
 
   const { error } = await supabase
     .from("tasks")
@@ -284,8 +307,9 @@ export async function permanentDeleteTask(
   taskId: string
 ): Promise<{ success: true } | { error: string }> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Not authenticated" };
+  const ctx = await getUserAndRole(supabase);
+  if (!ctx) return { error: "Not authenticated" };
+  if (!canPermanentDeleteTask(ctx.role)) return { error: PERM_DENIED };
 
   const { error } = await supabase.from("tasks").delete().eq("id", taskId);
   if (error) return { error: error.message };
@@ -359,10 +383,25 @@ export async function reorderTask(
   }
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Not authenticated" };
+  const ctx = await getUserAndRole(supabase);
+  if (!ctx) return { error: "Not authenticated" };
+  const { user, role } = ctx;
 
   const { id, newStatus, prevIndex, nextIndex } = parsed.data;
+
+  // Members can only move their own/assigned tasks
+  if (role === "member" || role === "viewer") {
+    const { data: task } = await supabase
+      .from("tasks")
+      .select("assignee_id, created_by")
+      .eq("id", id)
+      .maybeSingle();
+    if (!task) return { error: "Task not found" };
+    if (!canReorderTask(role, task as { assignee_id: string | null; created_by: string | null }, user.id)) {
+      return { error: PERM_DENIED };
+    }
+  }
+
   const fractional_index = generateKeyBetween(prevIndex, nextIndex);
 
   const { error } = await supabase

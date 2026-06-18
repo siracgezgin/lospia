@@ -3,6 +3,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { canManageRules, type AppRole } from "@/lib/auth/permissions";
+
+const PERM_DENIED = "Kuralları düzenlemek için yetkiniz yok.";
 
 function hexUuid() {
   // z.string().uuid() enforces UUID version bits and rejects all-zero seeded IDs.
@@ -17,10 +20,23 @@ const RuleSchema = z.object({
   category: z.string().max(100).nullable().optional(),
 });
 
+async function getRole(supabase: Awaited<ReturnType<typeof createClient>>, userId: string): Promise<AppRole | null> {
+  const { data } = await supabase
+    .from("workspace_members")
+    .select("role")
+    .eq("user_id", userId)
+    .limit(1)
+    .maybeSingle();
+  return data ? (data.role as AppRole) : null;
+}
+
 export async function createRule(input: z.infer<typeof RuleSchema> & { position?: number }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Oturum açılmamış" };
+
+  const role = await getRole(supabase, user.id);
+  if (!role || !canManageRules(role)) return { error: PERM_DENIED };
 
   const parsed = RuleSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
@@ -46,6 +62,9 @@ export async function updateRule(input: {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Oturum açılmamış" };
 
+  const role = await getRole(supabase, user.id);
+  if (!role || !canManageRules(role)) return { error: PERM_DENIED };
+
   const schema = z.object({
     id: hexUuid(),
     title: z.string().min(1).max(500).trim().optional(),
@@ -69,6 +88,9 @@ export async function toggleRule(id: string, is_active: boolean) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Oturum açılmamış" };
 
+  const role = await getRole(supabase, user.id);
+  if (!role || !canManageRules(role)) return { error: PERM_DENIED };
+
   const parsed = hexUuid().safeParse(id);
   if (!parsed.success) return { error: "Geçersiz ID" };
 
@@ -83,6 +105,9 @@ export async function deleteRule(id: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Oturum açılmamış" };
+
+  const role = await getRole(supabase, user.id);
+  if (!role || !canManageRules(role)) return { error: PERM_DENIED };
 
   const parsed = hexUuid().safeParse(id);
   if (!parsed.success) return { error: "Geçersiz ID" };

@@ -3,10 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { canManageContacts, type AppRole } from "@/lib/auth/permissions";
 
 // Zod v4 strict UUID rejects nil-pattern UUIDs from seed data — use hex regex
 const hexUuid = (msg: string) =>
   z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, msg);
+
+const PERM_DENIED = "Bu işlem için yetkiniz yok.";
 
 const CreateContactSchema = z.object({
   workspace_id: hexUuid("Geçersiz çalışma alanı"),
@@ -24,6 +27,14 @@ export async function createContact(
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated" };
+
+  const { data: member } = await supabase
+    .from("workspace_members")
+    .select("role")
+    .eq("user_id", user.id)
+    .limit(1)
+    .maybeSingle();
+  if (!member || !canManageContacts(member.role as AppRole)) return { error: PERM_DENIED };
 
   const { data, error } = await supabase
     .from("workspace_contacts")
@@ -47,6 +58,14 @@ export async function deleteContact(
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated" };
+
+  const { data: member } = await supabase
+    .from("workspace_members")
+    .select("role")
+    .eq("user_id", user.id)
+    .limit(1)
+    .maybeSingle();
+  if (!member || !canManageContacts(member.role as AppRole)) return { error: PERM_DENIED };
 
   const { error } = await supabase
     .from("workspace_contacts")

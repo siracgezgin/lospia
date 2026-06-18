@@ -4,9 +4,10 @@
 -- Applied automatically by: supabase db reset
 --
 -- Creates:
---   2 users (alice=Siraç, bob=Aslı Filinta) with profiles
+--   4 users: alice=Siraç (owner), bob=Aslı Filinta (admin),
+--            nisa@taskos.local (member), viewer@taskos.local (viewer)
 --   1 workspace: AF Operasyon
---   2 workspace_members
+--   4 workspace_members (roles: owner / admin / member / viewer)
 --   3 custom field definitions
 --   6 saved views (incl. Onay bekleyenler)
 --   14 real Aslı Filinta project tasks
@@ -15,14 +16,18 @@
 --   4 workspace rules (example)
 --
 -- Login credentials (local Supabase):
---   alice@taskos.local  / password: TaskOS2024!  (profile: Siraç)
---   bob@taskos.local    / password: TaskOS2024!  (profile: Aslı Filinta)
+--   alice@taskos.local   / password: TaskOS2024!  (profile: Siraç        — owner)
+--   bob@taskos.local     / password: TaskOS2024!  (profile: Aslı Filinta — admin)
+--   nisa@taskos.local    / password: TaskOS2024!  (profile: Nisa          — member)
+--   viewer@taskos.local  / password: TaskOS2024!  (profile: Demo Viewer   — viewer)
 -- =============================================================================
 
 do $$
 declare
   v_alice_id    uuid := '00000000-0000-0000-0000-000000000001';
   v_bob_id      uuid := '00000000-0000-0000-0000-000000000002';
+  v_nisa_id     uuid := '00000000-0000-0000-0000-000000000003';
+  v_viewer_id   uuid := '00000000-0000-0000-0000-000000000004';
   v_ws_id       uuid := '00000000-0000-0000-0000-000000000010';
 
   v_cf_text     uuid := '00000000-0000-0000-0000-000000000020';
@@ -80,6 +85,30 @@ begin
     'authenticated', 'authenticated',
     false, false,
     '', '', '', ''
+  ),
+  (
+    v_nisa_id,
+    '00000000-0000-0000-0000-000000000000',
+    'nisa@taskos.local',
+    crypt('TaskOS2024!', gen_salt('bf')),
+    now(), now(), now(),
+    '{"full_name": "Nisa"}'::jsonb,
+    '{"provider": "email", "providers": ["email"]}'::jsonb,
+    'authenticated', 'authenticated',
+    false, false,
+    '', '', '', ''
+  ),
+  (
+    v_viewer_id,
+    '00000000-0000-0000-0000-000000000000',
+    'viewer@taskos.local',
+    crypt('TaskOS2024!', gen_salt('bf')),
+    now(), now(), now(),
+    '{"full_name": "Demo Viewer"}'::jsonb,
+    '{"provider": "email", "providers": ["email"]}'::jsonb,
+    'authenticated', 'authenticated',
+    false, false,
+    '', '', '', ''
   )
   on conflict (id) do nothing;
 
@@ -115,6 +144,32 @@ begin
     ),
     'email',
     now(), now(), now()
+  ),
+  (
+    gen_random_uuid(),
+    v_nisa_id,
+    v_nisa_id::text,
+    jsonb_build_object(
+      'sub',            v_nisa_id::text,
+      'email',          'nisa@taskos.local',
+      'email_verified', true,
+      'phone_verified', false
+    ),
+    'email',
+    now(), now(), now()
+  ),
+  (
+    gen_random_uuid(),
+    v_viewer_id,
+    v_viewer_id::text,
+    jsonb_build_object(
+      'sub',            v_viewer_id::text,
+      'email',          'viewer@taskos.local',
+      'email_verified', true,
+      'phone_verified', false
+    ),
+    'email',
+    now(), now(), now()
   )
   on conflict (provider_id, provider) do nothing;
 
@@ -122,8 +177,10 @@ begin
   -- Profiles
   -- -------------------------------------------------------------------------
   insert into public.profiles (id, email, full_name) values
-    (v_alice_id, 'alice@taskos.local', 'Siraç'),
-    (v_bob_id,   'bob@taskos.local',   'Aslı Filinta')
+    (v_alice_id,  'alice@taskos.local',  'Siraç'),
+    (v_bob_id,    'bob@taskos.local',    'Aslı Filinta'),
+    (v_nisa_id,   'nisa@taskos.local',   'Nisa'),
+    (v_viewer_id, 'viewer@taskos.local', 'Demo Viewer')
   on conflict (id) do nothing;
 
   -- -------------------------------------------------------------------------
@@ -137,8 +194,10 @@ begin
   -- Workspace members
   -- -------------------------------------------------------------------------
   insert into public.workspace_members (workspace_id, user_id, role) values
-    (v_ws_id, v_alice_id, 'owner'),
-    (v_ws_id, v_bob_id,   'member')
+    (v_ws_id, v_alice_id,  'owner'),
+    (v_ws_id, v_bob_id,    'admin'),
+    (v_ws_id, v_nisa_id,   'member'),
+    (v_ws_id, v_viewer_id, 'viewer')
   on conflict (workspace_id, user_id) do nothing;
 
   -- -------------------------------------------------------------------------

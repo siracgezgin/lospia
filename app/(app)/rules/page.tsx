@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { RulesView } from "@/components/rules/RulesView";
 import { markRulesSeen } from "@/lib/actions/members";
-import type { WorkspaceRule } from "@/types";
+import type { WorkspaceRule, WorkspaceRole } from "@/types";
 
 export const dynamic = "force-dynamic";
 
@@ -13,11 +13,12 @@ export default async function RulesPage() {
 
   const { data: member } = await supabase
     .from("workspace_members")
-    .select("workspace_id")
+    .select("workspace_id, role")
     .eq("user_id", user.id)
     .maybeSingle();
 
   const workspaceId = member?.workspace_id;
+  const userRole = (member?.role ?? "member") as WorkspaceRole;
   if (!workspaceId) redirect("/login");
 
   const [rulesResult] = await Promise.all([
@@ -32,5 +33,5 @@ export default async function RulesPage() {
 
   const rules = (rulesResult.data ?? []) as WorkspaceRule[];
 
-  return <RulesView rules={rules} workspaceId={workspaceId} />;
+  return <RulesView rules={rules} workspaceId={workspaceId} userRole={userRole} />;
 }

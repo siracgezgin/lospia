@@ -726,7 +726,7 @@ export type Database = {
         | "done"
         | "archived"
       webhook_source: "slack" | "email" | "other"
-      workspace_role: "owner" | "admin" | "member"
+      workspace_role: "owner" | "admin" | "member" | "viewer"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -891,7 +891,7 @@ export const Constants = {
         "archived",
       ],
       webhook_source: ["slack", "email", "other"],
-      workspace_role: ["owner", "admin", "member"],
+      workspace_role: ["owner", "admin", "member", "viewer"],
     },
   },
 } as const

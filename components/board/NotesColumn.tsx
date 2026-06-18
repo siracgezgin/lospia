@@ -33,6 +33,7 @@ type NoteHandlers = {
   onDelete: (_id: string) => void;
   onUpdate: (_id: string, _title: string, _body: string, _color: NoteColor) => void;
   onConvertToTask: (_id: string, _title: string, _body: string) => void;
+  readOnly?: boolean;
 };
 
 type DragProps = {
@@ -49,6 +50,7 @@ function NoteCardContent({
   onDelete,
   onUpdate,
   onConvertToTask,
+  readOnly = false,
   containerRef,
   containerStyle,
   dragHandleProps,
@@ -135,19 +137,24 @@ function NoteCardContent({
       )}
     >
       <div className="flex items-start gap-1">
-        <button
-          {...dragHandleProps}
-          className="mt-0.5 p-0.5 rounded text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-          aria-label="Sürükle"
-          tabIndex={-1}
-        >
-          <GripVertical size={11} />
-        </button>
+        {!readOnly ? (
+          <button
+            {...dragHandleProps}
+            className="mt-0.5 p-0.5 rounded text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+            aria-label="Sürükle"
+            tabIndex={-1}
+          >
+            <GripVertical size={11} />
+          </button>
+        ) : (
+          <span className="mt-0.5 p-0.5 shrink-0 text-transparent"><GripVertical size={11} /></span>
+        )}
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-1">
             <p className={cn("text-sm font-semibold leading-snug flex-1 min-w-0 break-words", colors.title)}>
               {note.title}
             </p>
+            {!readOnly && (
             <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
               <button
                 onClick={() => onConvertToTask(note.id, note.title, note.body ?? "")}
@@ -172,6 +179,7 @@ function NoteCardContent({
                 <Trash2 size={11} />
               </button>
             </div>
+            )}
           </div>
           {note.body && (
             <p className="text-[11px] text-gray-500 mt-1 leading-relaxed break-words whitespace-pre-wrap line-clamp-4">
@@ -290,9 +298,11 @@ const _getServerMounted = () => false;
 export function NotesColumn({
   notes: initialNotes,
   workspaceId,
+  readOnly = false,
 }: {
   notes: WorkspaceNote[];
   workspaceId: string;
+  readOnly?: boolean;
 }) {
   // Detects client vs server render without triggering a state update in effect
   const mounted = useSyncExternalStore(_subscribeMounted, _getMounted, _getServerMounted);
@@ -397,6 +407,7 @@ export function NotesColumn({
     onDelete: handleDelete,
     onUpdate: handleUpdate,
     onConvertToTask: handleConvertToTask,
+    readOnly,
   };
 
   return (
@@ -410,13 +421,15 @@ export function NotesColumn({
             {optimisticNotes.length}
           </span>
         </div>
-        <button
-          onClick={() => setAdding(true)}
-          className="p-0.5 text-gray-300 hover:text-[#406775] rounded transition-colors"
-          aria-label="Not ekle"
-        >
-          <Plus size={14} />
-        </button>
+        {!readOnly && (
+          <button
+            onClick={() => setAdding(true)}
+            className="p-0.5 text-gray-300 hover:text-[#406775] rounded transition-colors"
+            aria-label="Not ekle"
+          >
+            <Plus size={14} />
+          </button>
+        )}
       </div>
 
       {/* Pre-mount: static list — no dnd-kit, no aria-describedby generation */}
@@ -441,7 +454,7 @@ export function NotesColumn({
         </DndContext>
       )}
 
-      {adding && (
+      {!readOnly && adding && (
         <AddNoteForm
           workspaceId={workspaceId}
           onAdd={handleAdd}

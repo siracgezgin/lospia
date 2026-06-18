@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { TrashView } from "@/components/task/TrashView";
-import type { Task } from "@/types";
+import { canViewDestructivePages } from "@/lib/auth/permissions";
+import type { Task, WorkspaceRole } from "@/types";
 
 export default async function TrashPage() {
   const supabase = await createClient();
@@ -10,11 +11,13 @@ export default async function TrashPage() {
 
   const { data: memberRows } = await supabase
     .from("workspace_members")
-    .select("workspace_id")
+    .select("workspace_id, role")
     .eq("user_id", user.id)
     .limit(1);
   const workspaceId = memberRows?.[0]?.workspace_id;
+  const userRole = (memberRows?.[0]?.role ?? "member") as WorkspaceRole;
   if (!workspaceId) redirect("/board");
+  if (!canViewDestructivePages(userRole)) redirect("/board");
 
   const { data } = await supabase
     .from("tasks")

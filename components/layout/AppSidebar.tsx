@@ -19,26 +19,29 @@ import {
 import { cn } from "@/lib/utils/cn";
 import { signOut } from "@/lib/actions/auth";
 import { SAVED_VIEW_SLUG_MAP } from "@/lib/utils/task-constants";
-import type { Workspace, SavedView } from "@/types";
+import { canViewDestructivePages, canManageSettings } from "@/lib/auth/permissions";
+import type { Workspace, SavedView, WorkspaceRole } from "@/types";
 
 const NAV_ITEMS = [
-  { href: "/board",     label: "Pano",           icon: Kanban },
-  { href: "/list",      label: "Liste",           icon: List },
-  { href: "/dashboard", label: "Gösterge Paneli", icon: LayoutDashboard },
-  { href: "/calendar",  label: "Takvim",          icon: Calendar },
-  { href: "/rules",     label: "Kurallar",        icon: BookOpen },
-  { href: "/archive",   label: "Arşiv",           icon: Archive },
-  { href: "/trash",     label: "Çöp Kutusu",      icon: Trash2 },
-  { href: "/settings",  label: "Ayarlar",         icon: Settings },
+  { href: "/board",     label: "Pano",           icon: Kanban,          adminOnly: false },
+  { href: "/list",      label: "Liste",           icon: List,            adminOnly: false },
+  { href: "/dashboard", label: "Gösterge Paneli", icon: LayoutDashboard, adminOnly: false },
+  { href: "/calendar",  label: "Takvim",          icon: Calendar,        adminOnly: false },
+  { href: "/rules",     label: "Kurallar",        icon: BookOpen,        adminOnly: false },
+  { href: "/archive",   label: "Arşiv",           icon: Archive,         adminOnly: true  },
+  { href: "/trash",     label: "Çöp Kutusu",      icon: Trash2,          adminOnly: true  },
+  { href: "/settings",  label: "Ayarlar",         icon: Settings,        adminOnly: true  },
 ] as const;
 
 interface Props {
   workspace: Workspace | null;
   savedViews: SavedView[];
   userId: string;
+  userRole?: WorkspaceRole;
 }
 
-export function AppSidebar({ workspace, savedViews }: Props) {
+export function AppSidebar({ workspace, savedViews, userRole = "member" }: Props) {
+  const isAdmin = canViewDestructivePages(userRole) || canManageSettings(userRole);
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
 
@@ -62,7 +65,7 @@ export function AppSidebar({ workspace, savedViews }: Props) {
 
       {/* Nav links */}
       <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
-        {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+        {NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin).map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
           return (
             <Link

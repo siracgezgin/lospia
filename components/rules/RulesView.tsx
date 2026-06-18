@@ -5,8 +5,9 @@ import {
 } from "react";
 import { Plus, Pencil, Trash2, Check, X, CheckCircle2, Circle, BookOpen, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { canManageRules } from "@/lib/auth/permissions";
 import { createRule, updateRule, deleteRule, toggleRule } from "@/lib/actions/rules";
-import type { WorkspaceRule } from "@/types";
+import type { WorkspaceRule, WorkspaceRole } from "@/types";
 
 const CATEGORIES = ["Genel", "Kumaş Siparişi", "Üretim", "Operasyon", "Satın Alma", "Pazarlama", "Web & SEO"];
 
@@ -17,11 +18,13 @@ function RuleCard({
   onToggle,
   onEdit,
   onDelete,
+  canManage = true,
 }: {
   rule: WorkspaceRule;
   onToggle: (_id: string, _val: boolean) => void;
   onEdit: (_rule: WorkspaceRule) => void;
   onDelete: (_id: string) => void;
+  canManage?: boolean;
 }) {
   return (
     <div className={cn(
@@ -29,9 +32,10 @@ function RuleCard({
       rule.is_active ? "bg-white border-gray-200" : "bg-gray-50 border-gray-100 opacity-60",
     )}>
       <button
-        onClick={() => onToggle(rule.id, !rule.is_active)}
-        className="shrink-0 mt-0.5"
+        onClick={() => canManage && onToggle(rule.id, !rule.is_active)}
+        className={cn("shrink-0 mt-0.5", !canManage && "cursor-default")}
         aria-label={rule.is_active ? "Kural devre dışı bırak" : "Kural etkinleştir"}
+        disabled={!canManage}
       >
         {rule.is_active
           ? <CheckCircle2 size={16} className="text-green-500" />
@@ -46,7 +50,7 @@ function RuleCard({
           <p className="text-xs text-gray-500 mt-1 leading-relaxed whitespace-pre-wrap">{rule.body}</p>
         )}
       </div>
-      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+      {canManage && <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
         <button
           onClick={() => onEdit(rule)}
           className="p-1 text-gray-300 hover:text-gray-600 rounded"
@@ -61,7 +65,7 @@ function RuleCard({
         >
           <Trash2 size={12} />
         </button>
-      </div>
+      </div>}
     </div>
   );
 }
@@ -142,12 +146,14 @@ function CategoryGroup({
   onToggle,
   onEdit,
   onDelete,
+  canManage = true,
 }: {
   category: string;
   rules: WorkspaceRule[];
   onToggle: (_id: string, _val: boolean) => void;
   onEdit: (_rule: WorkspaceRule) => void;
   onDelete: (_id: string) => void;
+  canManage?: boolean;
 }) {
   const [open, setOpen] = useState(true);
   const activeCount = rules.filter((r) => r.is_active).length;
@@ -176,6 +182,7 @@ function CategoryGroup({
               onToggle={onToggle}
               onEdit={onEdit}
               onDelete={onDelete}
+              canManage={canManage}
             />
           ))}
         </div>
@@ -189,10 +196,13 @@ function CategoryGroup({
 export function RulesView({
   rules: initialRules,
   workspaceId,
+  userRole = "member",
 }: {
   rules: WorkspaceRule[];
   workspaceId: string;
+  userRole?: WorkspaceRole;
 }) {
+  const isManager = canManageRules(userRole);
   const [_isPending, startTransition] = useTransition();
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<WorkspaceRule | null>(null);
@@ -295,12 +305,14 @@ export function RulesView({
             </p>
           </div>
         </div>
-        <button
-          onClick={() => { setAdding(true); setEditing(null); setActionError(null); }}
-          className="flex items-center gap-1.5 text-sm bg-blue-600 text-white rounded-lg px-3 py-1.5 hover:bg-blue-700 transition-colors"
-        >
-          <Plus size={14} /> Kural ekle
-        </button>
+        {isManager && (
+          <button
+            onClick={() => { setAdding(true); setEditing(null); setActionError(null); }}
+            className="flex items-center gap-1.5 text-sm bg-blue-600 text-white rounded-lg px-3 py-1.5 hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={14} /> Kural ekle
+          </button>
+        )}
       </div>
 
       {/* Content */}
@@ -314,7 +326,7 @@ export function RulesView({
               </button>
             </div>
           )}
-          {adding && (
+          {isManager && adding && (
             <RuleForm
               workspaceId={workspaceId}
               ruleCount={optimisticRules.length}
@@ -323,7 +335,7 @@ export function RulesView({
             />
           )}
 
-          {editing && (
+          {isManager && editing && (
             <RuleForm
               initial={editing}
               workspaceId={workspaceId}
@@ -348,6 +360,7 @@ export function RulesView({
                 onToggle={handleToggle}
                 onEdit={(r) => { setEditing(r); setAdding(false); }}
                 onDelete={handleDelete}
+                canManage={isManager}
               />
             ))
           )}

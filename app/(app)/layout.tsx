@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { AppHeader } from "@/components/layout/AppHeader";
-import type { Workspace, SavedView, Notification } from "@/types";
+import type { Workspace, SavedView, Notification, WorkspaceRole } from "@/types";
 
 export default async function AppLayout({
   children,
@@ -28,6 +28,7 @@ export default async function AppLayout({
     .limit(1);
 
   let workspaceId: string | null = memberRows?.[0]?.workspace_id ?? null;
+  const userRole: WorkspaceRole = (memberRows?.[0]?.role as WorkspaceRole | undefined) ?? "member";
 
   // Provision profile + default workspace for new users who have no membership
   let provisionError: string | null = null;
@@ -87,6 +88,7 @@ export default async function AppLayout({
         workspace={workspace}
         savedViews={savedViews}
         userId={user.id}
+        userRole={userRole}
       />
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <AppHeader

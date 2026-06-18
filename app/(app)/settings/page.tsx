@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { ContactsManager } from "@/components/settings/ContactsManager";
-import type { Workspace, WorkspaceMember, Profile, CustomFieldDefinition, WorkspaceContact } from "@/types";
+import { canManageSettings } from "@/lib/auth/permissions";
+import type { Workspace, WorkspaceMember, Profile, CustomFieldDefinition, WorkspaceContact, WorkspaceRole } from "@/types";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -14,8 +15,19 @@ export default async function SettingsPage() {
     .eq("user_id", user.id)
     .limit(1);
   const workspaceId = memberRows?.[0]?.workspace_id;
-  const userRole = memberRows?.[0]?.role ?? "member";
+  const userRole = (memberRows?.[0]?.role ?? "member") as WorkspaceRole;
   if (!workspaceId) return <div className="p-8 text-gray-500">Çalışma alanı bulunamadı.</div>;
+
+  if (!canManageSettings(userRole)) {
+    return (
+      <div className="max-w-2xl mx-auto py-8 px-4">
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">Ayarlar</h1>
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-sm text-amber-800">
+          Bu sayfayı düzenlemek için yetkiniz yok. Yöneticinize başvurun.
+        </div>
+      </div>
+    );
+  }
 
   const [wsResult, membersResult, profileResult, cfResult, contactsResult] = await Promise.all([
     supabase.from("workspaces").select("*").eq("id", workspaceId).single(),

@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { KanbanBoard } from "@/components/board/KanbanBoard";
-import type { Task, SavedView, Profile, WorkspaceContact, WorkspaceNote } from "@/types";
+import type { Task, SavedView, Profile, WorkspaceContact, WorkspaceNote, WorkspaceRole } from "@/types";
 
 export default async function BoardPage({
   searchParams,
@@ -16,11 +16,12 @@ export default async function BoardPage({
 
   const { data: memberRows } = await supabase
     .from("workspace_members")
-    .select("workspace_id, last_rules_seen_at")
+    .select("workspace_id, role, last_rules_seen_at")
     .eq("user_id", user.id)
     .limit(1);
   const workspaceId = memberRows?.[0]?.workspace_id;
   const lastRulesSeen = memberRows?.[0]?.last_rules_seen_at ?? null;
+  const userRole = (memberRows?.[0]?.role ?? "member") as WorkspaceRole;
 
   if (!workspaceId) {
     return (
@@ -109,6 +110,7 @@ export default async function BoardPage({
       contacts={contacts}
       notes={notes}
       newRulesCount={newRulesCount}
+      userRole={userRole}
     />
   );
 }
