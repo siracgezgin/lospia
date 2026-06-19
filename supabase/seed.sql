@@ -357,7 +357,7 @@ begin
    '2026-06-08',
    '{"erisim","wordpress"}',
    jsonb_build_object('category', 'Erişim', 'project', 'AF Online', 'collaborators', jsonb_build_array(v_contact_ebu::text)),
-   'b0', v_alice_id);
+   'a5', v_alice_id);
 
   insert into public.tasks (workspace_id, title, description, status, priority,
     assignee_id, responsible_contact_id, due_date, tags, custom_fields, fractional_index, created_by)
@@ -370,7 +370,7 @@ begin
    '2026-06-08',
    '{"erisim","seo"}',
    '{"category": "Erişim", "project": "AF Online"}'::jsonb,
-   'b1', v_alice_id);
+   'a6', v_alice_id);
 
   -- ── Teknik SEO (3 tasks, Başlamadı/backlog, deadline 18 Haziran 2026) ────────
 
@@ -385,7 +385,7 @@ begin
    '2026-06-18',
    '{"seo","audit"}',
    '{"category": "Teknik SEO", "project": "AF Online"}'::jsonb,
-   'c0', v_alice_id);
+   'a7', v_alice_id);
 
   insert into public.tasks (workspace_id, title, description, status, priority,
     assignee_id, responsible_contact_id, due_date, tags, custom_fields, fractional_index, created_by)
@@ -398,7 +398,7 @@ begin
    '2026-06-18',
    '{"seo","teknik"}',
    '{"category": "Teknik SEO", "project": "AF Online"}'::jsonb,
-   'c1', v_alice_id);
+   'a8', v_alice_id);
 
   insert into public.tasks (workspace_id, title, description, status, priority,
     assignee_id, responsible_contact_id, due_date, tags, custom_fields, fractional_index, created_by)
@@ -411,7 +411,7 @@ begin
    '2026-06-18',
    '{"seo","schema"}',
    '{"category": "Teknik SEO", "project": "AF Online"}'::jsonb,
-   'c2', v_alice_id);
+   'a9', v_alice_id);
 
   -- ── GEO / AI (4 tasks, Başlamadı/backlog, deadline 18 Haziran 2026) ──────────
 
@@ -426,7 +426,7 @@ begin
    '2026-06-18',
    '{"geo","llm","ai"}',
    '{"category": "GEO / AI", "project": "AF Online"}'::jsonb,
-   'd0', v_alice_id);
+   'aA', v_alice_id);
 
   insert into public.tasks (workspace_id, title, description, status, priority,
     assignee_id, responsible_contact_id, due_date, tags, custom_fields, fractional_index, created_by)
@@ -439,7 +439,7 @@ begin
    '2026-06-18',
    '{"geo","robots","ai"}',
    '{"category": "GEO / AI", "project": "AF Online"}'::jsonb,
-   'd1', v_alice_id);
+   'aB', v_alice_id);
 
   insert into public.tasks (workspace_id, title, description, status, priority,
     assignee_id, responsible_contact_id, due_date, tags, custom_fields, fractional_index, created_by)
@@ -452,7 +452,7 @@ begin
    '2026-06-18',
    '{"geo","icerik"}',
    '{"category": "GEO / AI", "project": "AF Online"}'::jsonb,
-   'd2', v_alice_id);
+   'aC', v_alice_id);
 
   insert into public.tasks (workspace_id, title, description, status, priority,
     assignee_id, responsible_contact_id, due_date, tags, custom_fields, fractional_index, created_by)
@@ -465,7 +465,7 @@ begin
    '2026-06-18',
    '{"geo","izleme"}',
    '{"category": "GEO / AI", "project": "AF Online"}'::jsonb,
-   'd3', v_alice_id);
+   'aD', v_alice_id);
 
   -- -------------------------------------------------------------------------
   -- Workspace notes
