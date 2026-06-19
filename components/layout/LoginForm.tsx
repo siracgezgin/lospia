@@ -121,11 +121,13 @@ export function LoginForm() {
         </button>
       </form>
 
-      <p className="text-xs text-center text-gray-400">
-        Local dev:{" "}
-        <code className="font-mono bg-gray-100 px-1 rounded">alice@taskos.local</code> /{" "}
-        <code className="font-mono bg-gray-100 px-1 rounded">TaskOS2024!</code>
-      </p>
+      {process.env.NODE_ENV === "development" && (
+        <p className="text-xs text-center text-gray-400">
+          Local dev:{" "}
+          <code className="font-mono bg-gray-100 px-1 rounded">alice@taskos.local</code> /{" "}
+          <code className="font-mono bg-gray-100 px-1 rounded">TaskOS2024!</code>
+        </p>
+      )}
     </div>
   );
 }
