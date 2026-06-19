@@ -3,7 +3,7 @@
 -- =============================================================================
 
 create table public.workspace_contacts (
-  id           uuid primary key default uuid_generate_v4(),
+  id           uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references public.workspaces(id) on delete cascade,
   name         text not null check (char_length(name) > 0 and char_length(name) <= 200),
   email        text,

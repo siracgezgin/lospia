@@ -63,7 +63,7 @@ create trigger on_auth_user_created
 -- 2. workspaces
 -- ---------------------------------------------------------------------------
 create table public.workspaces (
-  id          uuid primary key default uuid_generate_v4(),
+  id          uuid primary key default gen_random_uuid(),
   name        text not null,
   slug        text not null unique,
   avatar_url  text,
@@ -86,7 +86,7 @@ create index workspaces_created_by_idx on public.workspaces(created_by);
 create type workspace_role as enum ('owner', 'admin', 'member');
 
 create table public.workspace_members (
-  id            uuid primary key default uuid_generate_v4(),
+  id            uuid primary key default gen_random_uuid(),
   workspace_id  uuid not null references public.workspaces(id) on delete cascade,
   user_id       uuid not null references public.profiles(id) on delete cascade,
   role          workspace_role not null default 'member',
@@ -104,7 +104,7 @@ create type task_status   as enum ('backlog','ready','in_progress','blocked','re
 create type task_priority as enum ('low','medium','high','urgent');
 
 create table public.tasks (
-  id               uuid primary key default uuid_generate_v4(),
+  id               uuid primary key default gen_random_uuid(),
   workspace_id     uuid not null references public.workspaces(id) on delete cascade,
   title            text not null,
   description      text,
@@ -155,7 +155,7 @@ create type task_activity_type as enum (
 );
 
 create table public.task_activity (
-  id           uuid primary key default uuid_generate_v4(),
+  id           uuid primary key default gen_random_uuid(),
   task_id      uuid not null references public.tasks(id) on delete cascade,
   workspace_id uuid not null references public.workspaces(id) on delete cascade,
   user_id      uuid not null references public.profiles(id),
@@ -175,7 +175,7 @@ create index task_activity_user_idx      on public.task_activity(user_id);
 -- 6. time_entries
 -- ---------------------------------------------------------------------------
 create table public.time_entries (
-  id               uuid primary key default uuid_generate_v4(),
+  id               uuid primary key default gen_random_uuid(),
   workspace_id     uuid not null references public.workspaces(id) on delete cascade,
   task_id          uuid references public.tasks(id) on delete set null,
   user_id          uuid not null references public.profiles(id) on delete cascade,
@@ -205,7 +205,7 @@ begin
       select 1 from public.time_entries
       where user_id = new.user_id
         and stopped_at is null
-        and id != coalesce(new.id, uuid_generate_v4())
+        and id != coalesce(new.id, gen_random_uuid())
     ) then
       raise exception 'User already has an active timer running';
     end if;
@@ -222,7 +222,7 @@ create trigger check_one_active_timer
 -- 7. saved_views
 -- ---------------------------------------------------------------------------
 create table public.saved_views (
-  id           uuid primary key default uuid_generate_v4(),
+  id           uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references public.workspaces(id) on delete cascade,
   owner_id     uuid references public.profiles(id) on delete set null,
   name         text not null,
@@ -247,7 +247,7 @@ create index saved_views_owner_idx     on public.saved_views(owner_id);
 create type custom_field_type as enum ('text','number','select','boolean','date');
 
 create table public.custom_field_definitions (
-  id           uuid primary key default uuid_generate_v4(),
+  id           uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references public.workspaces(id) on delete cascade,
   name         text not null,
   field_key    text not null,   -- key used in tasks.custom_fields jsonb
@@ -270,7 +270,7 @@ create index custom_field_defs_workspace_idx on public.custom_field_definitions(
 -- 9. task_attachments  (used only when UPLOADS feature flag is on)
 -- ---------------------------------------------------------------------------
 create table public.task_attachments (
-  id            uuid primary key default uuid_generate_v4(),
+  id            uuid primary key default gen_random_uuid(),
   task_id       uuid not null references public.tasks(id) on delete cascade,
   workspace_id  uuid not null references public.workspaces(id) on delete cascade,
   uploaded_by   uuid not null references public.profiles(id),
@@ -298,7 +298,7 @@ create type notification_type as enum (
 );
 
 create table public.notifications (
-  id           uuid primary key default uuid_generate_v4(),
+  id           uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references public.workspaces(id) on delete cascade,
   user_id      uuid not null references public.profiles(id) on delete cascade,
   type         notification_type not null,
@@ -320,7 +320,7 @@ create index notifications_unread_idx        on public.notifications(user_id) wh
 create type webhook_source as enum ('slack', 'email', 'other');
 
 create table public.webhook_events (
-  id             uuid primary key default uuid_generate_v4(),
+  id             uuid primary key default gen_random_uuid(),
   workspace_id   uuid references public.workspaces(id) on delete set null,
   source         webhook_source not null,
   raw_payload    jsonb not null,
