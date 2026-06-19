@@ -133,41 +133,74 @@ function isInWeek(ts: string | null, monday: Date): boolean {
   return d >= monday && d <= weekEnd(monday);
 }
 
-function isActiveForBoard(task: Task, monday: Date): boolean {
-  if (task.status === "archived") return false;
-  if (task.status === "done") return isInWeek(task.completed_at, monday);
-  return true;
-}
-
 function applyViewFilter(tasks: Task[], slug: string, userId: string, monday: Date): Task[] {
   const today = new Date().toISOString().slice(0, 10);
   const mondayStr = monday.toISOString().slice(0, 10);
   const sundayStr = (() => { const d = new Date(monday); d.setDate(d.getDate() + 6); return d.toISOString().slice(0, 10); })();
 
+  const inWeekByDate = (t: Task) =>
+    t.due_date !== null && t.due_date >= mondayStr && t.due_date <= sundayStr;
+
+  const notArchived = (t: Task) =>
+    !t.archived_at && !t.deleted_at && t.status !== "archived";
+
   switch (slug) {
-    case "mine":
-      return tasks.filter((t) => t.assignee_id === userId && isActiveForBoard(t, monday));
-    case "this-week":
+    case "all": // Tüm işler — scoped to selected week
+      return tasks.filter((t) => {
+        if (!notArchived(t)) return false;
+        if (t.status === "done") return isInWeek(t.completed_at, monday);
+        return inWeekByDate(t); // tasks without due_date are not shown in weekly board
+      });
+
+    case "mine": // Bana atananlar — assigned to me in selected week
+      return tasks.filter((t) => {
+        if (!notArchived(t)) return false;
+        if (t.assignee_id !== userId) return false;
+        if (t.status === "done") return isInWeek(t.completed_at, monday);
+        return inWeekByDate(t);
+      });
+
+    case "this-week": // Bu hafta — same scope as "all" (tab navigates to current week)
+      return tasks.filter((t) => {
+        if (!notArchived(t)) return false;
+        if (t.status === "done") return isInWeek(t.completed_at, monday);
+        return inWeekByDate(t);
+      });
+
+    case "overdue": // Gecikenler — overdue regardless of selected week
       return tasks.filter((t) =>
-        t.due_date !== null && t.due_date >= mondayStr && t.due_date <= sundayStr,
-      );
-    case "overdue":
-      return tasks.filter((t) =>
-        t.status !== "archived" && t.status !== "done" &&
+        notArchived(t) &&
+        t.status !== "done" &&
         t.due_date !== null && t.due_date < today,
       );
-    case "done":
-      return tasks.filter((t) => t.status === "done" && isInWeek(t.completed_at, monday));
-    case "waiting-approval":
+
+    case "done": // Tamamlananlar — completed in selected week
       return tasks.filter((t) =>
-        !t.deleted_at && !t.archived_at && t.status !== "done" && (
+        t.status === "done" &&
+        (t.completed_at
+          ? isInWeek(t.completed_at, monday)
+          : inWeekByDate(t)),
+      );
+
+    case "waiting-approval": // Onay bekleyenler
+      return tasks.filter((t) => {
+        if (!notArchived(t) || t.status === "done") return false;
+        const isWaiting =
           t.approval_required === true ||
           t.waiting_on_member_id != null ||
-          t.waiting_on_contact_id != null
-        ),
-      );
-    default: // "all"
-      return tasks.filter((t) => isActiveForBoard(t, monday));
+          t.waiting_on_contact_id != null;
+        if (!isWaiting) return false;
+        // Week-scope if has due_date; otherwise include (urgent to resolve)
+        if (t.due_date) return inWeekByDate(t);
+        return true;
+      });
+
+    default: // fallback = same as "all"
+      return tasks.filter((t) => {
+        if (!notArchived(t)) return false;
+        if (t.status === "done") return isInWeek(t.completed_at, monday);
+        return inWeekByDate(t);
+      });
   }
 }
 
@@ -227,6 +260,7 @@ interface Props {
   tasks: Task[];
   savedViews: SavedView[];
   viewSlug: string | null;
+  weekIso?: string | null;
   workspaceId: string;
   userId: string;
   profiles: Pick<Profile, "id" | "full_name" | "email">[];
@@ -867,6 +901,7 @@ export function KanbanBoard({
   tasks: initialTasks,
   savedViews,
   viewSlug,
+  weekIso,
   workspaceId,
   userId,
   profiles,
@@ -898,10 +933,15 @@ export function KanbanBoard({
   const [categoryFilter, setCategoryFilter] = useState("");
   const [search, setSearch] = useState("");
 
-  // Week selector — default to current week's Monday
-  const [weekStart, setWeekStart] = useState<Date>(() => getMondayOf(new Date()));
+  // Week selector — initialized from URL param (weekIso) so page reload preserves selection
+  const [weekStart, setWeekStart] = useState<Date>(() =>
+    weekIso ? getMondayOf(new Date(weekIso + "T00:00:00")) : getMondayOf(new Date())
+  );
   const currentMonday = getMondayOf(new Date());
   const isCurrentWeek = weekStart.toDateString() === currentMonday.toDateString();
+
+  // Derive the week ISO string for URL building (always the Monday)
+  const weekParam = weekStart.toISOString().slice(0, 10);
 
   // Rules alert (dismissible per session)
   const [alertDismissed, setAlertDismissed] = useState(false);
@@ -1127,7 +1167,13 @@ export function KanbanBoard({
       {/* ── Week selector ─────────────────────────────────────────────────── */}
       <div className="flex items-center gap-1.5 px-4 py-2 bg-white border-b border-gray-100 shrink-0">
         <button
-          onClick={() => setWeekStart((d) => { const n = new Date(d); n.setDate(n.getDate() - 7); return n; })}
+          onClick={() => {
+            const n = new Date(weekStart);
+            n.setDate(n.getDate() - 7);
+            const monday = getMondayOf(n);
+            setWeekStart(monday);
+            router.push(`/board?view=${effectiveSlug}&week=${monday.toISOString().slice(0, 10)}`);
+          }}
           className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
           aria-label="Önceki hafta"
         >
@@ -1137,7 +1183,13 @@ export function KanbanBoard({
           {formatWeekLabel(weekStart)}
         </span>
         <button
-          onClick={() => setWeekStart((d) => { const n = new Date(d); n.setDate(n.getDate() + 7); return n; })}
+          onClick={() => {
+            const n = new Date(weekStart);
+            n.setDate(n.getDate() + 7);
+            const monday = getMondayOf(n);
+            setWeekStart(monday);
+            router.push(`/board?view=${effectiveSlug}&week=${monday.toISOString().slice(0, 10)}`);
+          }}
           className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
           aria-label="Sonraki hafta"
         >
@@ -1145,7 +1197,11 @@ export function KanbanBoard({
         </button>
         {!isCurrentWeek && (
           <button
-            onClick={() => setWeekStart(getMondayOf(new Date()))}
+            onClick={() => {
+              const monday = getMondayOf(new Date());
+              setWeekStart(monday);
+              router.push(`/board?view=${effectiveSlug}&week=${monday.toISOString().slice(0, 10)}`);
+            }}
             className="ml-1 text-xs text-blue-600 hover:text-blue-700 px-2 py-0.5 rounded hover:bg-blue-50 transition-colors"
           >
             Bu hafta
@@ -1162,10 +1218,14 @@ export function KanbanBoard({
           {savedViews.map((view) => {
             const slug = SAVED_VIEW_SLUG_MAP[view.name] ?? view.id;
             const isActive = effectiveSlug === slug;
+            // "Bu hafta" tab always snaps week back to current week
+            const tabWeek = slug === "this-week"
+              ? currentMonday.toISOString().slice(0, 10)
+              : weekParam;
             return (
               <a
                 key={view.id}
-                href={`/board?view=${slug}`}
+                href={`/board?view=${slug}&week=${tabWeek}`}
                 className={cn(
                   "px-3 py-2 text-sm border-b-2 whitespace-nowrap transition-colors",
                   isActive

@@ -3,16 +3,24 @@ import { redirect } from "next/navigation";
 import { KanbanBoard } from "@/components/board/KanbanBoard";
 import type { Task, SavedView, Profile, WorkspaceContact, WorkspaceNote, WorkspaceRole } from "@/types";
 
+function parseWeekParam(weekStr?: string): string | null {
+  if (!weekStr) return null;
+  const d = new Date(weekStr + "T00:00:00");
+  if (isNaN(d.getTime())) return null;
+  return weekStr.slice(0, 10);
+}
+
 export default async function BoardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; week?: string }>;
 }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
   const params = await searchParams;
+  const weekIso = parseWeekParam(params.week);
 
   const { data: memberRows } = await supabase
     .from("workspace_members")
@@ -104,6 +112,7 @@ export default async function BoardPage({
       tasks={tasks}
       savedViews={savedViews}
       viewSlug={viewSlug}
+      weekIso={weekIso}
       workspaceId={workspaceId}
       userId={user.id}
       profiles={profiles}
