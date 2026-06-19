@@ -30,12 +30,11 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files — commit .env.example, ignore everything else
+# env files — commit .env.example only, ignore all others
+.env
+.env.*
+!.env.example
 .env*.local
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
 
 # vercel
 .vercel
@@ -43,3 +42,19 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# supabase local temp files
+supabase/.temp/
+
+# local import data (never commit customer files)
+data/
+
+# local planning / notes
+plan.md
+
+# local asset files not part of app bundle
+AF_logo.png
+aslifilinta.png
+
+# local utility scripts not for production
+scripts/import-*.ts
