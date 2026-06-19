@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Archive, RotateCcw } from "lucide-react";
 import { unarchiveTask } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils/cn";
+import { formatDateTR } from "@/lib/utils/format-date";
 import type { Task } from "@/types";
 
 interface Props {
@@ -15,7 +16,7 @@ interface Props {
 
 function formatDate(iso: string | null) {
   if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("tr-TR", { day: "numeric", month: "short", year: "numeric" });
+  return formatDateTR(iso, { day: "numeric", month: "short", year: "numeric" });
 }
 
 function TaskRow({ task, onUnarchive }: { task: Task; onUnarchive: (id: string) => void }) {

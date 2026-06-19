@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useTransition, useOptimistic, useActionState, useMemo } from "react";
+import { formatDateTimeTR } from "@/lib/utils/format-date";
 import Link from "next/link";
 import { ArrowLeft, Clock, Play, Square, MessageSquare } from "lucide-react";
 import type {
@@ -355,15 +356,15 @@ function CollaboratorsInput({
   }, [allPeople, search]);
 
   function toggle(name: string) {
-    setSelected((prev) => {
-      const next = prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name];
-      startTransition(async () => {
-        const fields = { ...(task.custom_fields as Record<string, unknown>) };
-        if (next.length > 0) fields.collaborators = next;
-        else delete fields.collaborators;
-        await updateTask({ id: task.id, custom_fields: fields });
-      });
-      return next;
+    const next = selected.includes(name)
+      ? selected.filter((n) => n !== name)
+      : [...selected, name];
+    setSelected(next);
+    startTransition(async () => {
+      const fields = { ...(task.custom_fields as Record<string, unknown>) };
+      if (next.length > 0) fields.collaborators = next;
+      else delete fields.collaborators;
+      await updateTask({ id: task.id, custom_fields: fields });
     });
   }
 
@@ -684,7 +685,7 @@ export function TaskDetail({ task, activity, activeTimer, customFields: _customF
                       )}
                     </div>
                     <p className="text-xs text-gray-400 mt-0.5">
-                      {new Date(entry.created_at).toLocaleString()}
+                      {formatDateTimeTR(entry.created_at)}
                     </p>
                   </div>
                 </li>

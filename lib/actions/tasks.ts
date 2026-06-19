@@ -112,8 +112,13 @@ export async function createTask(
     .limit(1)
     .maybeSingle();
 
-  const lastIndex = (lastTask as { fractional_index?: string } | null)?.fractional_index ?? null;
-  const fractional_index = generateKeyBetween(lastIndex, null);
+  const rawLastIndex = (lastTask as { fractional_index?: string } | null)?.fractional_index ?? null;
+  let fractional_index: string;
+  try {
+    fractional_index = generateKeyBetween(rawLastIndex, null);
+  } catch {
+    fractional_index = generateKeyBetween(null, null);
+  }
 
   const { data, error } = await supabase
     .from("tasks")
@@ -323,8 +328,11 @@ export async function duplicateTask(
   taskId: string
 ): Promise<{ id: string } | { error: string }> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Not authenticated" };
+  const ctx = await getUserAndRole(supabase);
+  if (!ctx) return { error: "Not authenticated" };
+  const { user, role } = ctx;
+
+  if (!canCreateTask(role)) return { error: PERM_DENIED };
 
   const { data: src } = await supabase
     .from("tasks")
@@ -345,14 +353,20 @@ export async function duplicateTask(
     .limit(1)
     .maybeSingle();
 
-  const lastIndex = (lastTask as { fractional_index?: string } | null)?.fractional_index ?? null;
-  const fractional_index = generateKeyBetween(lastIndex, null);
+  const rawLastIndex2 = (lastTask as { fractional_index?: string } | null)?.fractional_index ?? null;
+  let fractional_index2: string;
+  try {
+    fractional_index2 = generateKeyBetween(rawLastIndex2, null);
+  } catch {
+    fractional_index2 = generateKeyBetween(null, null);
+  }
+  const fractional_index = fractional_index2;
 
   const { data: newTask, error } = await supabase
     .from("tasks")
     .insert({
       workspace_id:           source.workspace_id,
-      title:                  `${source.title as string} (Kopya)`,
+      title:                  `${source.title as string} kopyası`,
       description:            source.description,
       status:                 source.status,
       priority:               source.priority,
@@ -402,7 +416,15 @@ export async function reorderTask(
     }
   }
 
-  const fractional_index = generateKeyBetween(prevIndex, nextIndex);
+  let fractional_index: string;
+  try {
+    fractional_index = generateKeyBetween(prevIndex, nextIndex);
+  } catch {
+    // Neighbor key is invalid legacy value; place at column end
+    try { fractional_index = generateKeyBetween(prevIndex, null); } catch {
+      fractional_index = generateKeyBetween(null, null);
+    }
+  }
 
   const { error } = await supabase
     .from("tasks")

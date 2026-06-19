@@ -24,6 +24,7 @@ import {
 import { FIELD_LABELS } from "@/lib/i18n/tr";
 import { updateTaskStatus } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils/cn";
+import { formatDateTR } from "@/lib/utils/format-date";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
 import { ExcelImportModal } from "@/components/task/ExcelImportModal";
 
@@ -242,7 +243,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
         return (
           <span className={cn("text-xs whitespace-nowrap", isOverdue ? "text-red-500 font-medium" : "text-gray-500")}>
             {isOverdue ? "⚠ " : ""}
-            {new Date(val).toLocaleDateString("tr-TR", { day: "numeric", month: "short" })}
+            {formatDateTR(val as string, { day: "numeric", month: "short" })}
           </span>
         );
       },
@@ -295,7 +296,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
       header: FIELD_LABELS.updatedAt,
       cell: (info) => (
         <span className="text-xs text-gray-400 whitespace-nowrap">
-          {new Date(info.getValue()).toLocaleDateString("tr-TR", { day: "numeric", month: "short" })}
+          {formatDateTR(info.getValue() as string, { day: "numeric", month: "short" })}
         </span>
       ),
       sortingFn: (a, b) => {

@@ -12,6 +12,7 @@ import {
 import Link from "next/link";
 import type { TaskStatus, TaskPriority } from "@/types";
 import { STATUS_LABELS } from "@/lib/utils/task-constants";
+import { formatDateTR } from "@/lib/utils/format-date";
 
 interface Props {
   tasksByStatus: { status: TaskStatus; count: number }[];
@@ -145,7 +146,7 @@ export function DashboardView({ tasksByStatus, timeLoggedSeconds, dueSoonTasks }
                     </div>
                   </div>
                   <span className={`text-xs font-medium shrink-0 ${isOverdue ? "text-red-600" : "text-orange-500"}`}>
-                    {new Date(task.due_date).toLocaleDateString("tr-TR", { day: "numeric", month: "short" })}
+                    {formatDateTR(task.due_date, { day: "numeric", month: "short" })}
                     {isOverdue && <span className="ml-1 text-[10px] bg-red-50 text-red-500 rounded px-1 py-0.5">gecikmiş</span>}
                   </span>
                 </div>

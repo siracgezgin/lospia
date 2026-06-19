@@ -28,6 +28,7 @@ import {
   useEffect,
 } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   GripVertical, Plus, FileSpreadsheet, Users, Search, X,
   ChevronLeft, ChevronRight, MoreVertical, Pencil, Copy, Archive, Trash2, AlertTriangle,
@@ -42,6 +43,7 @@ import {
 import { PRIORITY_LABELS, PROJECT_OPTIONS } from "@/lib/utils/task-constants";
 import { reorderTask, updateTask, softDeleteTask, archiveTask, duplicateTask } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils/cn";
+import { formatDateTR } from "@/lib/utils/format-date";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
 import { ExcelImportModal } from "@/components/task/ExcelImportModal";
 import { NotesColumn } from "@/components/board/NotesColumn";
@@ -240,7 +242,7 @@ function encodeResponsible(task: Task) {
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("tr-TR", { day: "numeric", month: "short" });
+  return formatDateTR(iso, { day: "numeric", month: "short" });
 }
 
 // ── Card 3-dot menu ───────────────────────────────────────────────────────────
@@ -304,7 +306,7 @@ function CardMenu({
             onClick={() => { setOpen(false); onDuplicate(); }}
             className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-1.5"
           >
-            <Copy size={11} /> Kopyala
+            <Copy size={11} /> Çoğalt
           </button>
           {canArchive && (
             <button
@@ -875,6 +877,7 @@ export function KanbanBoard({
   const canArchive = canArchiveTask(userRole);
   const isViewer   = userRole === "viewer";
   const mounted = useSyncExternalStore(subscribeMounted, getMounted, getServerMounted);
+  const router = useRouter();
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -965,7 +968,8 @@ export function KanbanBoard({
   function handleDuplicateCard(id: string) {
     startTransition(async () => {
       await duplicateTask(id);
-      showToast("Görev kopyalandı.");
+      router.refresh();
+      showToast("Görev çoğaltıldı.");
     });
   }
 

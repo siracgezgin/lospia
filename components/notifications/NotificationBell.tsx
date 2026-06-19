@@ -6,6 +6,7 @@ import Link from "next/link";
 import { markAllNotificationsRead, markNotificationsRead } from "@/lib/actions/tasks";
 import type { Notification } from "@/types";
 import { cn } from "@/lib/utils/cn";
+import { formatDateTimeTR } from "@/lib/utils/format-date";
 
 interface Props {
   unreadCount: number;
@@ -103,7 +104,7 @@ export function NotificationBell({ unreadCount: initialCount, notifications = []
                         <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{n.body}</p>
                       )}
                       <p className="text-[10px] text-gray-400 mt-1">
-                        {new Date(n.created_at).toLocaleString()}
+                        {formatDateTimeTR(n.created_at)}
                       </p>
                     </div>
                     {!n.is_read && (
