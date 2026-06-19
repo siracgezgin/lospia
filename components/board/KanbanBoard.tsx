@@ -88,10 +88,13 @@ const CATEGORY_STYLES: Record<string, { bg: string; border: string; badge: strin
   "GÖRSEL DÜZENLEME": { bg: "bg-[#f8eff0]",      border: "border-l-[#c07888]",     badge: "bg-[#f5e0e5] text-[#a05060]"        },
   "FİYAT ÇALIŞMA":   { bg: "bg-[#f5f3e8]",      border: "border-l-[#c8c39e]",     badge: "bg-[#eae8d8] text-[#6b6748]"        },
 };
-const CATEGORY_FALLBACK = { bg: "bg-white", border: "border-l-gray-200", badge: "bg-gray-100 text-gray-500" };
+// No category: clean white card, no badge shown
+const CATEGORY_NONE     = { bg: "bg-white",     border: "border-l-gray-100",  badge: "" };
+// Unknown category: subtle slate tint so the card doesn't look broken
+const CATEGORY_FALLBACK = { bg: "bg-slate-50/60", border: "border-l-slate-300", badge: "bg-slate-100 text-slate-600" };
 
-function getCategoryStyle(category?: string) {
-  if (!category) return CATEGORY_FALLBACK;
+function getCategoryStyle(category?: string | null) {
+  if (!category) return CATEGORY_NONE;
   return CATEGORY_STYLES[category] ?? CATEGORY_FALLBACK;
 }
 

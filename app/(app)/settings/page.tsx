@@ -1,8 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { ContactsManager } from "@/components/settings/ContactsManager";
-import { canManageSettings } from "@/lib/auth/permissions";
-import type { Workspace, WorkspaceMember, Profile, CustomFieldDefinition, WorkspaceContact, WorkspaceRole } from "@/types";
+import { WorkspaceNameEditor } from "@/components/settings/WorkspaceNameEditor";
+import { MembersManager } from "@/components/settings/MembersManager";
+import { canManageSettings, canRenameWorkspace, canManageMembers } from "@/lib/auth/permissions";
+import type {
+  Workspace, WorkspaceMember, Profile, CustomFieldDefinition,
+  WorkspaceContact, WorkspaceRole, WorkspaceInvite,
+} from "@/types";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -11,7 +16,7 @@ export default async function SettingsPage() {
 
   const { data: memberRows } = await supabase
     .from("workspace_members")
-    .select("workspace_id, role")
+    .select("workspace_id, role, id")
     .eq("user_id", user.id)
     .limit(1);
   const workspaceId = memberRows?.[0]?.workspace_id;
@@ -29,29 +34,46 @@ export default async function SettingsPage() {
     );
   }
 
-  const [wsResult, membersResult, profileResult, cfResult, contactsResult] = await Promise.all([
-    supabase.from("workspaces").select("*").eq("id", workspaceId).single(),
-    supabase
-      .from("workspace_members")
-      .select("*, profiles(id, full_name, email, avatar_url)")
-      .eq("workspace_id", workspaceId),
-    supabase.from("profiles").select("*").eq("id", user.id).single(),
-    supabase
-      .from("custom_field_definitions")
-      .select("*")
-      .eq("workspace_id", workspaceId)
-      .order("position"),
-    supabase
-      .from("workspace_contacts")
-      .select("*")
-      .eq("workspace_id", workspaceId)
-      .order("created_at"),
-  ]);
+  const isOwner = canRenameWorkspace(userRole);
+  const canManage = canManageMembers(userRole);
+
+  const [wsResult, membersResult, profileResult, cfResult, contactsResult, invitesResult] =
+    await Promise.all([
+      supabase.from("workspaces").select("*").eq("id", workspaceId).single(),
+      supabase
+        .from("workspace_members")
+        .select("*, profiles(id, full_name, email, avatar_url)")
+        .eq("workspace_id", workspaceId),
+      supabase.from("profiles").select("*").eq("id", user.id).single(),
+      supabase
+        .from("custom_field_definitions")
+        .select("*")
+        .eq("workspace_id", workspaceId)
+        .order("position"),
+      supabase
+        .from("workspace_contacts")
+        .select("*")
+        .eq("workspace_id", workspaceId)
+        .order("created_at"),
+      isOwner
+        ? supabase
+            .from("workspace_invites")
+            .select("*")
+            .eq("workspace_id", workspaceId)
+            .is("accepted_at", null)
+            .order("created_at", { ascending: false })
+        : Promise.resolve({ data: [] as WorkspaceInvite[] }),
+    ]);
 
   const workspace: Workspace | null = wsResult.data;
   const profile: Profile | null = profileResult.data;
   const customFields: CustomFieldDefinition[] = cfResult.data ?? [];
   const contacts: WorkspaceContact[] = (contactsResult.data ?? []) as WorkspaceContact[];
+  const invites: WorkspaceInvite[] = (invitesResult.data ?? []) as WorkspaceInvite[];
+
+  const ROLE_DISPLAY: Record<string, string> = {
+    owner: "Sahip", admin: "Yönetici", member: "Üye", viewer: "İzleyici",
+  };
 
   return (
     <div className="max-w-2xl mx-auto py-8 px-4 space-y-10">
@@ -77,8 +99,12 @@ export default async function SettingsPage() {
         <h2 className="text-base font-semibold text-gray-700">Çalışma alanı</h2>
         <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
           <div>
-            <p className="text-xs text-gray-500">İsim</p>
-            <p className="text-sm font-medium">{workspace?.name}</p>
+            <p className="text-xs text-gray-500 mb-1">İsim</p>
+            {isOwner && workspace ? (
+              <WorkspaceNameEditor workspaceId={workspaceId} currentName={workspace.name} />
+            ) : (
+              <p className="text-sm font-medium">{workspace?.name}</p>
+            )}
           </div>
           <div>
             <p className="text-xs text-gray-500">Kısa ad</p>
@@ -86,7 +112,7 @@ export default async function SettingsPage() {
           </div>
           <div>
             <p className="text-xs text-gray-500">Rolünüz</p>
-            <p className="text-sm font-medium capitalize">{userRole}</p>
+            <p className="text-sm font-medium">{ROLE_DISPLAY[userRole] ?? userRole}</p>
           </div>
         </div>
       </section>
@@ -94,19 +120,35 @@ export default async function SettingsPage() {
       {/* Members */}
       <section className="space-y-4">
         <h2 className="text-base font-semibold text-gray-700">Üyeler</h2>
-        <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
-          {(membersResult.data ?? []).map((m: WorkspaceMember & { profiles?: Partial<Profile> | null }) => (
-            <div key={m.id} className="flex items-center justify-between px-5 py-3">
-              <div>
-                <p className="text-sm font-medium">{m.profiles?.full_name ?? m.profiles?.email ?? "Unknown"}</p>
-                <p className="text-xs text-gray-400">{m.profiles?.email}</p>
-              </div>
-              <span className="text-xs capitalize text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
-                {m.role}
-              </span>
-            </div>
-          ))}
-        </div>
+        {canManage ? (
+          <MembersManager
+            workspaceId={workspaceId}
+            currentUserId={user.id}
+            userRole={userRole}
+            initialMembers={
+              (membersResult.data ?? []) as (WorkspaceMember & { profiles?: Partial<Profile> | null })[]
+            }
+            initialInvites={invites}
+          />
+        ) : (
+          <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+            {(membersResult.data ?? []).map(
+              (m: WorkspaceMember & { profiles?: Partial<Profile> | null }) => (
+                <div key={m.id} className="flex items-center justify-between px-5 py-3">
+                  <div>
+                    <p className="text-sm font-medium">
+                      {m.profiles?.full_name ?? m.profiles?.email ?? "—"}
+                    </p>
+                    <p className="text-xs text-gray-400">{m.profiles?.email}</p>
+                  </div>
+                  <span className="text-xs text-gray-500 bg-gray-100 px-2.5 py-0.5 rounded-full">
+                    {ROLE_DISPLAY[m.role] ?? m.role}
+                  </span>
+                </div>
+              )
+            )}
+          </div>
+        )}
       </section>
 
       {/* İş birliği kişileri */}

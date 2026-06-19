@@ -63,3 +63,11 @@ export function canReorderTask(
 export function canViewDestructivePages(role: AppRole): boolean {
   return ADMIN_ROLES.includes(role);
 }
+
+export function canManageMembers(role: AppRole): boolean {
+  return role === "owner";
+}
+
+export function canRenameWorkspace(role: AppRole): boolean {
+  return role === "owner";
+}

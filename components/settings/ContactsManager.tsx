@@ -115,7 +115,7 @@ export function ContactsManager({ workspaceId, initialContacts }: Props) {
             onChange={(e) => setRoleLabel(e.target.value)}
             className="w-36 rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
           >
-            <option value="">Rol seçin</option>
+            <option value="">Pozisyon seçin</option>
             <option value="Yönetici">Yönetici</option>
             <option value="Operasyon">Operasyon</option>
             <option value="Üretim">Üretim</option>

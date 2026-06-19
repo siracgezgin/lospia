@@ -66,6 +66,17 @@ export type WorkspaceNote = {
   updated_at: string;
 };
 
+// workspace_invites — pending email-based membership invites
+export type WorkspaceInvite = {
+  id: string;
+  workspace_id: string;
+  email: string;
+  role: "admin" | "member" | "viewer";
+  invited_by: string | null;
+  accepted_at: string | null;
+  created_at: string;
+};
+
 // Enum aliases
 export type TaskStatus = Database["public"]["Enums"]["task_status"];
 export type TaskPriority = Database["public"]["Enums"]["task_priority"];
