@@ -41,6 +41,14 @@ import {
   type BoardColId,
 } from "@/lib/utils/task-constants";
 import { PRIORITY_LABELS, PROJECT_OPTIONS } from "@/lib/utils/task-constants";
+import {
+  getCardStyle,
+  getCategoryCardStyle,
+  getTaskStateMarkers,
+  PRIORITY_CHIP,
+  PRIORITY_SHOW_ON_BOARD,
+} from "@/lib/design/semantics";
+import { Badge } from "@/components/ui/Badge";
 import { reorderTask, updateTask, softDeleteTask, archiveTask, duplicateTask } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils/cn";
 import { formatDateTR } from "@/lib/utils/format-date";
@@ -49,54 +57,6 @@ import { ExcelImportModal } from "@/components/task/ExcelImportModal";
 import { NotesColumn } from "@/components/board/NotesColumn";
 import { canCreateTask, canDeleteTask, canArchiveTask } from "@/lib/auth/permissions";
 import type { Task, SavedView, TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceNote, WorkspaceRole } from "@/types";
-
-// ── Priority chip styles ──────────────────────────────────────────────────────
-
-const PRIORITY_CHIP: Record<TaskPriority, string> = {
-  low:    "bg-gray-100 text-gray-400",
-  medium: "bg-amber-100 text-amber-700",
-  high:   "bg-red-100 text-red-700",
-  urgent: "bg-red-700 text-white font-semibold",
-};
-
-// ── Category card styles ──────────────────────────────────────────────────────
-
-const CATEGORY_STYLES: Record<string, { bg: string; border: string; badge: string }> = {
-  // Clean category names (no A/B prefixes)
-  "Lookbook":       { bg: "bg-purple-50/40",    border: "border-l-purple-400",    badge: "bg-purple-100 text-purple-700"      },
-  "Erişim":         { bg: "bg-[#e8f1f4]",       border: "border-l-[#406775]",     badge: "bg-[#deedf4] text-[#406775]"        },
-  "Teknik SEO":     { bg: "bg-teal-50/40",       border: "border-l-teal-400",      badge: "bg-teal-100 text-teal-700"          },
-  "GEO / AI":       { bg: "bg-emerald-50/40",    border: "border-l-emerald-400",   badge: "bg-emerald-100 text-emerald-700"    },
-  // Legacy aliases for tasks created before rename
-  "A — Lookbook":   { bg: "bg-purple-50/40",    border: "border-l-purple-400",    badge: "bg-purple-100 text-purple-700"      },
-  "B — Erişim":     { bg: "bg-[#e8f1f4]",       border: "border-l-[#406775]",     badge: "bg-[#deedf4] text-[#406775]"        },
-  "B — Teknik SEO": { bg: "bg-teal-50/40",       border: "border-l-teal-400",      badge: "bg-teal-100 text-teal-700"          },
-  "B — GEO / AI":   { bg: "bg-emerald-50/40",    border: "border-l-emerald-400",   badge: "bg-emerald-100 text-emerald-700"    },
-  // Department categories (title-case)
-  "Kumaş Siparişi": { bg: "bg-amber-50/40",      border: "border-l-amber-400",     badge: "bg-amber-100 text-amber-700"        },
-  "Üretim":         { bg: "bg-[#e8f1f4]",        border: "border-l-[#406775]",     badge: "bg-[#deedf4] text-[#406775]"        },
-  "Operasyon":      { bg: "bg-[#f0f4f5]",        border: "border-l-[#5b8fa0]",     badge: "bg-[#e0eff5] text-[#406775]"        },
-  "Satın Alma":     { bg: "bg-orange-50/40",      border: "border-l-orange-400",    badge: "bg-orange-100 text-orange-700"      },
-  "Pazarlama":      { bg: "bg-rose-50/40",        border: "border-l-rose-400",      badge: "bg-rose-100 text-rose-700"          },
-  // AFR-AF import categories (uppercase)
-  "ÜRETİM":           { bg: "bg-[#e8f1f4]",      border: "border-l-[#406775]",     badge: "bg-[#deedf4] text-[#406775]"        },
-  "SİSTEM":           { bg: "bg-[#e8f3f6]",      border: "border-l-[#5ba5bb]",     badge: "bg-[#daeef5] text-[#3a7a90]"        },
-  "OPERASYON":        { bg: "bg-[#f0f4f5]",      border: "border-l-[#5b8fa0]",     badge: "bg-[#e0eff5] text-[#406775]"        },
-  "SİPARİŞ":          { bg: "bg-amber-50/40",    border: "border-l-amber-400",     badge: "bg-amber-100 text-amber-700"        },
-  "SATIN ALMA":       { bg: "bg-orange-50/40",   border: "border-l-orange-400",    badge: "bg-orange-100 text-orange-700"      },
-  "TASARIM":          { bg: "bg-pink-50/40",     border: "border-l-pink-400",      badge: "bg-pink-100 text-pink-700"          },
-  "GÖRSEL DÜZENLEME": { bg: "bg-[#f8eff0]",      border: "border-l-[#c07888]",     badge: "bg-[#f5e0e5] text-[#a05060]"        },
-  "FİYAT ÇALIŞMA":   { bg: "bg-[#f5f3e8]",      border: "border-l-[#c8c39e]",     badge: "bg-[#eae8d8] text-[#6b6748]"        },
-};
-// No category: clean white card, no badge shown
-const CATEGORY_NONE     = { bg: "bg-white",     border: "border-l-gray-100",  badge: "" };
-// Unknown category: subtle slate tint so the card doesn't look broken
-const CATEGORY_FALLBACK = { bg: "bg-slate-50/60", border: "border-l-slate-300", badge: "bg-slate-100 text-slate-600" };
-
-function getCategoryStyle(category?: string | null) {
-  if (!category) return CATEGORY_NONE;
-  return CATEGORY_STYLES[category] ?? CATEGORY_FALLBACK;
-}
 
 // ── Week helpers ──────────────────────────────────────────────────────────────
 
@@ -148,7 +108,9 @@ function applyViewFilter(tasks: Task[], slug: string, userId: string, monday: Da
     case "all": // Tüm işler — scoped to selected week
       return tasks.filter((t) => {
         if (!notArchived(t)) return false;
-        if (t.status === "done") return isInWeek(t.completed_at, monday);
+        // A done task belongs to the week if it was DUE that week or COMPLETED
+        // that week — so completing a task due this week keeps it on this board.
+        if (t.status === "done") return inWeekByDate(t) || isInWeek(t.completed_at, monday);
         return inWeekByDate(t); // tasks without due_date are not shown in weekly board
       });
 
@@ -156,14 +118,18 @@ function applyViewFilter(tasks: Task[], slug: string, userId: string, monday: Da
       return tasks.filter((t) => {
         if (!notArchived(t)) return false;
         if (t.assignee_id !== userId) return false;
-        if (t.status === "done") return isInWeek(t.completed_at, monday);
+        // A done task belongs to the week if it was DUE that week or COMPLETED
+        // that week — so completing a task due this week keeps it on this board.
+        if (t.status === "done") return inWeekByDate(t) || isInWeek(t.completed_at, monday);
         return inWeekByDate(t);
       });
 
     case "this-week": // Bu hafta — same scope as "all" (tab navigates to current week)
       return tasks.filter((t) => {
         if (!notArchived(t)) return false;
-        if (t.status === "done") return isInWeek(t.completed_at, monday);
+        // A done task belongs to the week if it was DUE that week or COMPLETED
+        // that week — so completing a task due this week keeps it on this board.
+        if (t.status === "done") return inWeekByDate(t) || isInWeek(t.completed_at, monday);
         return inWeekByDate(t);
       });
 
@@ -198,7 +164,9 @@ function applyViewFilter(tasks: Task[], slug: string, userId: string, monday: Da
     default: // fallback = same as "all"
       return tasks.filter((t) => {
         if (!notArchived(t)) return false;
-        if (t.status === "done") return isInWeek(t.completed_at, monday);
+        // A done task belongs to the week if it was DUE that week or COMPLETED
+        // that week — so completing a task due this week keeps it on this board.
+        if (t.status === "done") return inWeekByDate(t) || isInWeek(t.completed_at, monday);
         return inWeekByDate(t);
       });
   }
@@ -519,22 +487,12 @@ function CardContent({
   canDeleteCard?: boolean;
   showMenu?: boolean;
 }) {
-  const today = new Date().toISOString().slice(0, 10);
-  const isDone = task.status === "done";
-  const isBlocked = task.status === "blocked";
-  const isOverdue = !!task.due_date && task.due_date < today && !isDone;
-  const threeDaysFromNow = (() => {
-    const d = new Date(today + "T00:00:00");
-    d.setDate(d.getDate() + 3);
-    return d.toISOString().slice(0, 10);
-  })();
-  const isDueSoon = !!task.due_date && !isOverdue && task.due_date <= threeDaysFromNow;
-
   const cf = task.custom_fields as Record<string, unknown>;
   const category = cf?.category as string | undefined;
   const collaborators = cf?.collaborators;
   const collabIds = Array.isArray(collaborators) ? collaborators as string[] : [];
-  const categoryStyle = getCategoryStyle(category);
+  // Category chip/dot ALWAYS reflect the work-area (even on a done card).
+  const categoryStyle = getCategoryCardStyle(category);
   const responsibleName =
     responsibleNames[task.assignee_id ?? ""] ??
     responsibleNames[task.responsible_contact_id ?? ""];
@@ -543,35 +501,25 @@ function CardContent({
     responsibleNames[task.waiting_on_member_id ?? ""] ??
     responsibleNames[task.waiting_on_contact_id ?? ""] ??
     null;
-  const needsApproval = task.approval_required && task.approval_status !== "approved";
+
+  // State is an OVERLAY only: a chip + due-date color. Never the card color.
+  const markers = getTaskStateMarkers(task);
+  const showPriority = PRIORITY_SHOW_ON_BOARD[task.priority];
 
   return (
     <div className="flex-1 min-w-0">
-      {/* Top row: category badge + blocked chip + 3-dot menu */}
-      <div className="flex items-start justify-between gap-1 mb-1">
-        <div className="flex items-center gap-1 flex-wrap flex-1 min-w-0">
+      {/* Top row: category chip (identity) + state chip (overlay) + menu */}
+      <div className="flex items-start justify-between gap-1 mb-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
           {category && (
-            <span className={cn(
-              "text-[9px] rounded px-1.5 py-0.5 leading-none font-medium truncate max-w-28",
-              categoryStyle.badge,
-            )}>
+            <Badge size="xs" dot={categoryStyle.dot} className={cn("max-w-32 truncate", categoryStyle.chip)}>
               {category}
-            </span>
+            </Badge>
           )}
-          {isBlocked && !waitingOnName && !needsApproval && (
-            <span className="text-[9px] bg-orange-100 text-orange-700 rounded px-1.5 py-0.5 leading-none font-medium">
-              Bekliyor
-            </span>
-          )}
-          {waitingOnName && (
-            <span className="text-[9px] bg-orange-100 text-orange-700 rounded px-1.5 py-0.5 leading-none font-medium truncate max-w-28">
-              ⏳ {waitingOnName}
-            </span>
-          )}
-          {needsApproval && !waitingOnName && (
-            <span className="text-[9px] bg-red-50 text-red-600 border border-red-200 rounded px-1.5 py-0.5 leading-none font-medium">
-              Onay bekleniyor
-            </span>
+          {markers.chip && (
+            <Badge size="xs" className={cn("max-w-32 truncate", markers.chip.className)}>
+              {markers.chip.label === "Bekliyor" && waitingOnName ? `Bekliyor · ${waitingOnName}` : markers.chip.label}
+            </Badge>
           )}
         </div>
         {interactive && showMenu && onDelete && onArchive && onDuplicate && (
@@ -590,10 +538,10 @@ function CardContent({
       <Link
         href={`/tasks/${task.id}`}
         className={cn(
-          "text-sm font-medium line-clamp-2 block leading-snug",
-          isDone
-            ? "text-green-800 line-through decoration-green-400/60"
-            : "text-gray-900 hover:text-blue-600",
+          "text-[13px] font-medium line-clamp-2 block leading-snug tracking-[-0.005em]",
+          markers.shouldStrike
+            ? "text-success/90 line-through decoration-success/40"
+            : "text-ink hover:text-brand",
         )}
         onClick={(e) => e.stopPropagation()}
       >
@@ -602,27 +550,26 @@ function CardContent({
 
       {/* Description (one line) */}
       {task.description && (
-        <p className="text-[11px] text-gray-400 mt-0.5 line-clamp-1 leading-snug">
+        <p className="text-[11px] text-subtle mt-1 line-clamp-1 leading-snug">
           {task.description}
         </p>
       )}
 
       {/* Bottom row: priority + due date + collabs + person */}
-      <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+      <div className="flex items-center gap-1.5 mt-2.5 flex-wrap">
         {interactive ? (
           <QuickPrioritySelect task={task} />
         ) : (
-          <span className={cn("text-[10px] rounded px-1.5 py-0.5 leading-none", PRIORITY_CHIP[task.priority])}>
-            {PRIORITY_LABELS[task.priority]}
-          </span>
+          showPriority && (
+            <span className={cn("text-[10px] rounded px-1.5 py-0.5 leading-none", PRIORITY_CHIP[task.priority])}>
+              {PRIORITY_LABELS[task.priority]}
+            </span>
+          )
         )}
 
         {task.due_date && (
-          <span className={cn(
-            "text-[10px] flex items-center gap-0.5",
-            isOverdue ? "text-red-500 font-medium" : isDueSoon ? "text-amber-600" : "text-gray-400",
-          )}>
-            {isOverdue && <AlertTriangle size={9} />}
+          <span className={cn("text-[10px] flex items-center gap-0.5", markers.dueDateClass)}>
+            {markers.overdue && <AlertTriangle size={9} />}
             {formatDate(task.due_date)}
           </span>
         )}
@@ -667,12 +614,10 @@ function StaticTaskCard({
   contacts: WorkspaceContact[];
   responsibleNames: Record<string, string>;
 }) {
-  const isDone = task.status === "done";
-  const catStyle = getCategoryStyle((task.custom_fields as Record<string, unknown>)?.category as string | undefined);
-  // Do NOT use cn() here — tailwind-merge strips border-l-{color} when border-l-4 is present
-  const cardCls = isDone
-    ? "rounded-lg border border-l-4 p-3 shadow-sm transition-all border-l-green-400 border-green-200 bg-green-50/40"
-    : `rounded-lg border border-l-4 p-3 shadow-sm transition-all ${catStyle.border} border-gray-200 ${catStyle.bg}`;
+  // Category drives the card color; done overrides to the reserved green.
+  // border (all sides) then border-l accent last so it wins. No cn() — tailwind-merge strips border-l-*.
+  const style = getCardStyle(task);
+  const cardCls = `rounded-lg border border-l-[3px] p-3 shadow-card transition-all ${style.surface} ${style.border} ${style.accent}`;
   return (
     <div className={cardCls}>
       <div className="flex items-start gap-1.5">
@@ -716,22 +661,19 @@ function TaskCard({
     id: task.id,
     data: { task },
   });
-  const isDone = task.status === "done";
-  const catStyle = getCategoryStyle((task.custom_fields as Record<string, unknown>)?.category as string | undefined);
-  // Do NOT use cn() for the outer div — tailwind-merge strips border-l-{color} when border-l-4 is present
-  const colorCls = isDone
-    ? "border-l-green-400 border-green-200 bg-green-50/40"
-    : `${catStyle.border} border-gray-200 ${catStyle.bg}`;
+  // Category drives the card color; done overrides to the reserved green. No cn() — tailwind-merge strips border-l-*.
+  const style = getCardStyle(task);
+  const colorCls = `${style.surface} ${style.border} ${style.accent}`;
   const stateCls = [
     isDragging ? "opacity-40" : "",
-    isDragOverlay ? "shadow-xl rotate-1" : "hover:shadow-md transition-all",
+    isDragOverlay ? "shadow-pop rotate-1" : "hover:shadow-pop transition-shadow",
   ].filter(Boolean).join(" ");
 
   return (
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`rounded-lg border border-l-4 p-3 shadow-sm group ${colorCls} ${stateCls}`}
+      className={`rounded-lg border border-l-[3px] p-3 shadow-card group ${colorCls} ${stateCls}`}
     >
       <div className="flex items-start gap-1.5">
         {!disableDrag ? (
@@ -946,12 +888,16 @@ export function KanbanBoard({
   // Rules alert (dismissible per session)
   const [alertDismissed, setAlertDismissed] = useState(false);
 
-  // Toast notifications
-  const [toasts, setToasts] = useState<Array<{ id: string; msg: string }>>([]);
-  function showToast(msg: string) {
+  // Toast notifications (optionally with an action link, e.g. "open in Tüm işler")
+  type Toast = { id: string; msg: string; action?: { label: string; href: string } };
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  function showToast(msg: string, action?: Toast["action"]) {
     const id = Math.random().toString(36).slice(2);
-    setToasts((p) => [...p, { id, msg }]);
-    setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), 3000);
+    setToasts((p) => [...p, { id, msg, action }]);
+    setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), action ? 7000 : 3000);
+  }
+  function dismissToast(id: string) {
+    setToasts((p) => p.filter((t) => t.id !== id));
   }
 
   // Effective slug: null or missing → treat as "all"
@@ -981,7 +927,13 @@ export function KanbanBoard({
       if (action.type === "remove") return state.filter((t) => t.id !== action.id);
       const moved = state.find((t) => t.id === action.id);
       if (!moved) return state;
-      const updated = { ...moved, status: action.status };
+      // Mirror the DB trigger: completing sets completed_at (so the task stays
+      // visible in week-scoped views like "Tüm işler"); un-completing clears it.
+      const completed_at =
+        action.status === "done"
+          ? moved.completed_at ?? new Date().toISOString()
+          : null;
+      const updated = { ...moved, status: action.status, completed_at };
       const rest = state.filter((t) => t.id !== action.id);
       if (!action.afterId) return [...rest, updated];
       const idx = rest.findIndex((t) => t.id === action.afterId);
@@ -1089,6 +1041,28 @@ export function KanbanBoard({
 
     const tgtCol = BOARD_COLUMNS.find((c) => c.id === tgtColId)!;
     const newStatus: TaskStatus = srcColId === tgtColId ? srcTask.status : tgtCol.targetStatus;
+
+    // Explain disappearance: if this status change pushes the task out of the
+    // current saved-view filter, never let it silently vanish — tell the user
+    // why and give a one-click way to find it in "Tüm işler".
+    if (newStatus !== srcTask.status) {
+      const updatedForFilter: Task = {
+        ...srcTask,
+        status: newStatus,
+        completed_at: newStatus === "done" ? srcTask.completed_at ?? new Date().toISOString() : null,
+      };
+      const stillInView = applyViewFilter([updatedForFilter], effectiveSlug, userId, weekStart).length > 0;
+      if (!stillInView) {
+        const week = weekStart.toISOString().slice(0, 10);
+        const msg =
+          effectiveSlug === "overdue"
+            ? "Görev tamamlandı ve Gecikenler görünümünden çıkarıldı."
+            : effectiveSlug === "done"
+            ? "Görev aktif duruma alındı ve Tamamlananlar görünümünden çıkarıldı."
+            : "Görev güncellendi ve bu görünümün filtresi dışına çıktı.";
+        showToast(msg, { label: "Tüm işlerde aç", href: `/board?view=all&week=${week}` });
+      }
+    }
 
     const tgtTasks = tasksByCol[tgtColId] ?? [];
     const overIdx = overTask ? tgtTasks.findIndex((t) => t.id === overId) : tgtTasks.length;
@@ -1438,9 +1412,25 @@ export function KanbanBoard({
           {toasts.map((t) => (
             <div
               key={t.id}
-              className="bg-gray-900 text-white text-sm px-4 py-2.5 rounded-lg shadow-lg"
+              className="pointer-events-auto bg-[#1d2127] text-white text-sm px-4 py-2.5 rounded-lg shadow-pop flex items-center gap-3 max-w-sm"
             >
-              {t.msg}
+              <span className="flex-1">{t.msg}</span>
+              {t.action && (
+                <Link
+                  href={t.action.href}
+                  onClick={() => dismissToast(t.id)}
+                  className="shrink-0 font-medium text-[#8fc7d6] hover:text-white underline underline-offset-2"
+                >
+                  {t.action.label}
+                </Link>
+              )}
+              <button
+                onClick={() => dismissToast(t.id)}
+                className="shrink-0 text-white/50 hover:text-white"
+                aria-label="Kapat"
+              >
+                <X size={14} />
+              </button>
             </div>
           ))}
         </div>

@@ -96,6 +96,7 @@ export default async function AppLayout({
           unreadCount={unreadCount}
           userId={user.id}
           notifications={notifications}
+          userRole={userRole}
         />
         <main className="flex-1 overflow-auto">
           {provisionError ? (
@@ -115,15 +116,6 @@ export default async function AppLayout({
           )}
         </main>
       </div>
-      {/* AF logo watermark — fixed bottom-right, non-interactive */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/AF_logo.png"
-        alt=""
-        aria-hidden="true"
-        className="fixed bottom-4 right-4 h-12 w-12 object-contain pointer-events-none select-none z-0"
-        style={{ opacity: 0.10 }}
-      />
     </div>
   );
 }

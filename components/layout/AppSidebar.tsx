@@ -11,27 +11,40 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  Clock,
   Archive,
   Trash2,
   BookOpen,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { signOut } from "@/lib/actions/auth";
+import { Wordmark } from "@/components/ui/Wordmark";
 import { SAVED_VIEW_SLUG_MAP } from "@/lib/utils/task-constants";
 import { canViewDestructivePages, canManageSettings } from "@/lib/auth/permissions";
 import type { Workspace, SavedView, WorkspaceRole } from "@/types";
 
-const NAV_ITEMS = [
-  { href: "/board",     label: "Pano",           icon: Kanban,          adminOnly: false },
-  { href: "/list",      label: "Liste",           icon: List,            adminOnly: false },
-  { href: "/dashboard", label: "Gösterge Paneli", icon: LayoutDashboard, adminOnly: false },
-  { href: "/calendar",  label: "Takvim",          icon: Calendar,        adminOnly: false },
-  { href: "/rules",     label: "Kurallar",        icon: BookOpen,        adminOnly: false },
-  { href: "/archive",   label: "Arşiv",           icon: Archive,         adminOnly: true  },
-  { href: "/trash",     label: "Çöp Kutusu",      icon: Trash2,          adminOnly: true  },
-  { href: "/settings",  label: "Ayarlar",         icon: Settings,        adminOnly: true  },
-] as const;
+type NavItem = { href: string; label: string; icon: typeof Kanban; adminOnly: boolean };
+
+const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
+  {
+    title: "Çalışma alanı",
+    items: [
+      { href: "/board",     label: "Pano",            icon: Kanban,          adminOnly: false },
+      { href: "/list",      label: "Liste",           icon: List,            adminOnly: false },
+      { href: "/dashboard", label: "Gösterge Paneli", icon: LayoutDashboard, adminOnly: false },
+      { href: "/calendar",  label: "Takvim",          icon: Calendar,        adminOnly: false },
+    ],
+  },
+  {
+    title: "Yönetim",
+    items: [
+      { href: "/rules",    label: "Kurallar",   icon: BookOpen, adminOnly: false },
+      { href: "/archive",  label: "Arşiv",      icon: Archive,  adminOnly: true  },
+      { href: "/trash",    label: "Çöp Kutusu", icon: Trash2,   adminOnly: true  },
+      { href: "/settings", label: "Ayarlar",    icon: Settings, adminOnly: true  },
+    ],
+  },
+];
 
 interface Props {
   workspace: Workspace | null;
@@ -44,64 +57,73 @@ export function AppSidebar({ workspace, savedViews, userRole = "member" }: Props
   const isAdmin = canViewDestructivePages(userRole) || canManageSettings(userRole);
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const wsName = workspace?.name ?? "Operasyon";
 
   return (
     <aside
       className={cn(
-        "relative flex flex-col bg-white border-r border-gray-200 transition-all duration-200 shrink-0",
-        collapsed ? "w-14" : "w-56"
+        "relative flex flex-col bg-surface border-r border-line transition-all duration-200 shrink-0",
+        collapsed ? "w-14" : "w-60",
       )}
     >
-      {/* Workspace header — wordmark only */}
-      <div className={cn("flex items-center px-4 py-3.5 border-b border-gray-100", collapsed && "justify-center px-0")}>
-        {!collapsed && (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img src="/aslifilinta.png" alt="Aslı Filinta" className="h-4 object-contain object-left" />
-        )}
-        {collapsed && (
-          <div className="h-4 w-8 rounded bg-[#406775]/20" />
-        )}
+      {/* Brand row — text-based workspace identity, and only here. */}
+      <div className={cn("flex items-center h-14 border-b border-line", collapsed ? "justify-center px-0" : "px-4")}>
+        <Wordmark name={wsName} compact={collapsed} />
       </div>
 
-      {/* Nav links */}
-      <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
-        {NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin).map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || pathname.startsWith(href + "/");
+      {/* Nav groups */}
+      <nav className="flex-1 px-2 py-3 space-y-4 overflow-y-auto">
+        {NAV_GROUPS.map((group) => {
+          const items = group.items.filter((i) => !i.adminOnly || isAdmin);
+          if (items.length === 0) return null;
           return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                "flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm font-medium transition-colors",
-                active
-                  ? "bg-[#e8f1f4] text-[#406775]"
-                  : "text-gray-600 hover:bg-gray-100 hover:text-gray-900",
-                collapsed && "justify-center px-2"
+            <div key={group.title} className="space-y-0.5">
+              {!collapsed && (
+                <p className="px-2 mb-1 text-[10px] font-semibold uppercase tracking-wider text-subtle">
+                  {group.title}
+                </p>
               )}
-              title={collapsed ? label : undefined}
-            >
-              <Icon size={16} className="shrink-0" />
-              {!collapsed && <span>{label}</span>}
-            </Link>
+              {items.map(({ href, label, icon: Icon }) => {
+                const active = pathname === href || pathname.startsWith(href + "/");
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    aria-current={active ? "page" : undefined}
+                    className={cn(
+                      "group relative flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm font-medium transition-colors",
+                      active
+                        ? "bg-brand-soft text-brand-strong"
+                        : "text-muted hover:bg-surface-muted hover:text-ink",
+                      collapsed && "justify-center px-2",
+                    )}
+                    title={collapsed ? label : undefined}
+                  >
+                    {active && !collapsed && (
+                      <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r bg-brand" />
+                    )}
+                    <Icon size={16} className="shrink-0" />
+                    {!collapsed && <span>{label}</span>}
+                  </Link>
+                );
+              })}
+            </div>
           );
         })}
 
-        {/* Saved views — only in expanded mode */}
+        {/* Saved views */}
         {!collapsed && savedViews.length > 0 && (
-          <div className="pt-3 pb-1">
-            <p className="px-2 mb-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+          <div className="space-y-0.5">
+            <p className="px-2 mb-1 text-[10px] font-semibold uppercase tracking-wider text-subtle">
               Kaydedilen görünümler
             </p>
             {savedViews.map((view) => (
               <Link
                 key={view.id}
                 href={`/board?view=${SAVED_VIEW_SLUG_MAP[view.name] ?? view.id}`}
-                className={cn(
-                  "flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors truncate",
-                  "text-gray-500 hover:bg-gray-100 hover:text-gray-800"
-                )}
+                className="flex items-center gap-2.5 rounded-lg pl-3 pr-2 py-1.5 text-sm text-muted hover:bg-surface-muted hover:text-ink transition-colors truncate"
               >
-                <span className="text-gray-400">⊙</span>
+                <span className="h-1.5 w-1.5 rounded-full bg-line-strong shrink-0" />
                 <span className="truncate">{view.name}</span>
               </Link>
             ))}
@@ -109,36 +131,33 @@ export function AppSidebar({ workspace, savedViews, userRole = "member" }: Props
         )}
       </nav>
 
-      {/* Footer: timer indicator + sign out */}
-      <div className={cn("border-t border-gray-100 p-2 space-y-0.5", collapsed && "px-1")}>
-        {!collapsed && (
-          <div className="flex items-center gap-2 px-2 py-1.5 text-xs text-gray-400">
-            <Clock size={12} />
-            <span>Zamanlayıcı: —</span>
-          </div>
-        )}
+      {/* Footer: sign out */}
+      <div className={cn("border-t border-line p-2", collapsed && "px-1")}>
         <form action={signOut}>
           <button
             type="submit"
             className={cn(
-              "w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-gray-500 hover:bg-red-50 hover:text-red-600 transition-colors",
-              collapsed && "justify-center"
+              "w-full flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm text-muted hover:bg-[#fbeae7] hover:text-[#a83a2c] transition-colors",
+              collapsed && "justify-center",
             )}
             title={collapsed ? "Çıkış yap" : undefined}
           >
-            <span className="text-base leading-none">↩</span>
+            <LogOut size={16} className="shrink-0" />
             {!collapsed && <span>Çıkış yap</span>}
           </button>
         </form>
       </div>
 
-      {/* Collapse toggle */}
+      {/* Floating edge control — vertically centered on the sidebar/content
+          boundary. Subtle by default, fully visible on hover. Anchored to the
+          sidebar's right edge so it tracks the width transition with no jump. */}
       <button
         onClick={() => setCollapsed((c) => !c)}
-        className="absolute -right-3 top-1/2 -translate-y-1/2 z-10 h-6 w-6 rounded-full border border-gray-200 bg-white shadow-sm flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors"
+        className="absolute top-1/2 -right-3 -translate-y-1/2 z-20 grid h-6 w-6 place-items-center rounded-full bg-surface border border-line shadow-card text-subtle opacity-60 hover:opacity-100 hover:text-muted hover:border-line-strong transition-all"
         aria-label={collapsed ? "Kenar çubuğunu genişlet" : "Kenar çubuğunu daralt"}
+        title={collapsed ? "Genişlet" : "Daralt"}
       >
-        {collapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
+        {collapsed ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
       </button>
     </aside>
   );

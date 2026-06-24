@@ -1,36 +1,117 @@
 @import "tailwindcss";
 
+/* ──────────────────────────────────────────────────────────────────────────
+   Design tokens — single source of truth for the product's visual language.
+   Reference via Tailwind utilities (bg-surface, text-muted, border-line, …)
+   or lib/design/semantics.ts for badge / state class maps.
+   ────────────────────────────────────────────────────────────────────────── */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Surfaces — layered neutrals (app → panel → raised) */
+  --app-bg:        #f7f8fa;   /* page canvas */
+  --surface:       #ffffff;   /* cards, panels */
+  --surface-muted: #f9fafb;   /* subtle fills, hover rows */
+  --surface-sunken:#f2f4f6;   /* wells, inputs at rest */
+
+  /* Lines — soft. hairline is for internal dividers, line for panel edges */
+  --hairline:      #eef0f3;
+  --border:        #e6e9ee;
+  --border-strong: #d6dae1;
+
+  /* Text */
+  --text:          #1d2127;   /* primary */
+  --text-muted:    #5f6772;   /* secondary */
+  --text-subtle:   #9aa2ac;   /* tertiary / placeholder */
+
+  /* Brand — calm teal, signals trust without shouting */
+  --brand:         #2f5d6b;
+  --brand-strong:  #264c58;
+  --brand-soft:    #eaf2f4;
+  --brand-ring:    #7faab8;
+
+  /* Semantic state hues (kept here for non-Tailwind use) */
+  --danger:        #c8503d;
+  --warning:       #bd7a2c;
+  --hold:          #b08019;
+  --approval:      #7257b5;
+  --success:       #2c8a61;
+
+  --radius:        0.625rem;  /* 10px — default card radius */
+  --background:    var(--app-bg);
+  --foreground:    var(--text);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  /* Aslı Filinta brand tokens */
-  --color-brand: #406775;
-  --color-brand-dark: #355a68;
-  --color-brand-muted: #5b8fa0;
-  --color-brand-light: #e8f1f4;
-  --color-accent: #cc4444;
-  --color-accent-light: #f5e0e0;
-  --color-warm: #e5e0b9;
-  --color-warm-dark: #c8c39e;
-  --color-warm-text: #6b6748;
+  --color-background: var(--app-bg);
+  --color-foreground: var(--text);
+
+  --color-app:           var(--app-bg);
+  --color-surface:       var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-surface-sunken:var(--surface-sunken);
+
+  --color-hairline:      var(--hairline);
+  --color-line:          var(--border);
+  --color-line-strong:   var(--border-strong);
+
+  --color-ink:           var(--text);
+  --color-muted:         var(--text-muted);
+  --color-subtle:        var(--text-subtle);
+
+  --color-brand:         var(--brand);
+  --color-brand-strong:  var(--brand-strong);
+  --color-brand-soft:    var(--brand-soft);
+  --color-brand-ring:    var(--brand-ring);
+
+  --color-danger:   var(--danger);
+  --color-warning:  var(--warning);
+  --color-hold:     var(--hold);
+  --color-approval: var(--approval);
+  --color-success:  var(--success);
+
+  --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+
+  --radius-card: var(--radius);
+
+  /* Soft, premium elevation — never harsh */
+  --shadow-card: 0 1px 2px rgba(20, 28, 40, 0.04), 0 1px 3px rgba(20, 28, 40, 0.03);
+  --shadow-pop: 0 4px 16px rgba(20, 28, 40, 0.10), 0 1px 3px rgba(20, 28, 40, 0.06);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* Tailwind v4 dropped the v3 default border color. Restore a SOFT default in
+   the base layer so bare `border` is gentle, while utilities (border-red-200,
+   border-l-[#…] accents) still override it. Do NOT make this unlayered — that
+   would clobber every colored border in the app. */
+@layer base {
+  *,
+  ::before,
+  ::after {
+    border-color: var(--color-line);
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--app-bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Calm, accessible focus ring */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--brand-ring);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+
+::selection {
+  background: var(--brand-soft);
+  color: var(--brand-strong);
+}
+
+/* Hairline divider helper for lists/rows */
+.divide-hairline > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--hairline);
 }
