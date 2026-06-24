@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useOptimistic } from "react";
+import { useTransition, useOptimistic } from "react";
 import Link from "next/link";
 import { Archive, RotateCcw } from "lucide-react";
 import { unarchiveTask } from "@/lib/actions/tasks";

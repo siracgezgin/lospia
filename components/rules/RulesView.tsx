@@ -3,7 +3,7 @@
 import {
   useState, useOptimistic, useTransition, useRef, useEffect,
 } from "react";
-import { Plus, Pencil, Trash2, Check, X, CheckCircle2, Circle, BookOpen, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Pencil, Trash2, X, CheckCircle2, Circle, BookOpen, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { canManageRules } from "@/lib/auth/permissions";
 import { createRule, updateRule, deleteRule, toggleRule } from "@/lib/actions/rules";
