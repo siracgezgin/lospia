@@ -1,8 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { randomInt } from "crypto";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { canRenameWorkspace, canManageMembers, type AppRole } from "@/lib/auth/permissions";
 
 const hexUuid = (msg: string) =>
@@ -159,6 +161,50 @@ export async function changeWorkspaceMemberRole(
   if (error) return { error: error.message };
   revalidatePath("/settings");
   return { ok: true };
+}
+
+// ── 4b. Reset a member's password to a one-time temporary password ────────────
+// Security: we NEVER read or store plaintext passwords. This generates a fresh
+// random temporary password, sets it via the service-role admin API (which only
+// stores a hash), and returns it to the owner ONCE so they can hand it over
+// securely. It is never persisted in our tables or logged.
+function generateTempPassword(): string {
+  // Unambiguous charset (no O/0/I/l) for easy verbal/written hand-off.
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+  let out = "";
+  for (let i = 0; i < 12; i++) out += chars[randomInt(chars.length)];
+  // Guarantee a digit + symbol so it satisfies any password policy.
+  return `${out}9!`;
+}
+
+export async function resetMemberPassword(
+  memberId: string
+): Promise<{ password: string } | { error: string }> {
+  const supabase = await createClient();
+  const ctx = await getCallerRole(supabase);
+  if (!ctx) return { error: "Kimlik doğrulama gerekli." };
+  if (!canManageMembers(ctx.role)) return { error: PERM_DENIED };
+
+  const { data: target } = await supabase
+    .from("workspace_members")
+    .select("user_id, role")
+    .eq("id", memberId)
+    .eq("workspace_id", ctx.workspaceId)
+    .maybeSingle();
+
+  if (!target) return { error: "Üye bulunamadı." };
+  if (target.user_id === ctx.user.id) return { error: "Kendi şifrenizi buradan sıfırlayamazsınız." };
+  if (target.role === "owner") return { error: "Sistem admini şifresi buradan sıfırlanamaz." };
+
+  const admin = getAdminClient();
+  if (!admin) return { error: "Bu işlem şu anda yapılandırılmamış." };
+
+  const password = generateTempPassword();
+  const { error } = await admin.auth.admin.updateUserById(target.user_id, { password });
+  if (error) return { error: "Şifre sıfırlanamadı. Lütfen tekrar deneyin." };
+
+  // Intentionally NOT logged or stored — returned once to the caller only.
+  return { password };
 }
 
 // ── 5. Remove workspace member (owner only) ───────────────────────────────────

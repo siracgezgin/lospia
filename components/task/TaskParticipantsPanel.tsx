@@ -100,16 +100,23 @@ export function TaskParticipantsPanel({
         </ul>
       )}
 
-      {/* "Benim işim tamam" quick action for the current user */}
-      {!isViewer && currentMemberId && (
+      {/* "Benim işim tamam" — only the responsible participant can mark their own
+          work done. Non-participants see a clear notice instead (admins manage
+          others via the per-person toggles above). */}
+      {!isViewer && currentMemberId && mine && (
         <button
           disabled={pending}
           onClick={() => startTransition(() => { void toggleMyCompletion(taskId); })}
           className="w-full mt-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-green-600 text-white text-sm font-medium py-2 hover:bg-green-700 disabled:opacity-50"
         >
           {pending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-          {mine?.completed ? "İşimi geri al" : "Benim işim tamam"}
+          {mine.completed ? "İşimi geri al" : "Benim işim tamam"}
         </button>
+      )}
+      {!isViewer && currentMemberId && !mine && !isAdmin && (
+        <p className="text-xs text-gray-400 text-center pt-1">
+          Bu görevde sorumlu kişi değilsiniz.
+        </p>
       )}
 
       {/* Participant editor: pick workspace members */}

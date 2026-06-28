@@ -80,22 +80,20 @@ export async function toggleMyCompletion(taskId: string): Promise<{ ok: true } |
   if (!c) return { error: "Kimlik doğrulama gerekli." };
   if (c.role === "viewer") return { error: PERM };
 
+  // Only a responsible participant may mark their own work done. A participant
+  // row always exists (created when someone is added as responsible), so its
+  // absence means this user is NOT on the task — never create one here.
   const { data: existing } = await sb
     .from("task_member_completions")
     .select("id, completed_at")
     .eq("task_id", taskId)
     .eq("member_id", c.memberId)
     .maybeSingle();
-  const nowDone = !existing?.completed_at;
-  const stamp = nowDone ? new Date().toISOString() : null;
+  if (!existing) return { error: "Bu görevde sorumlu kişi değilsiniz." };
 
-  if (existing) {
-    await sb.from("task_member_completions").update({ completed_at: stamp }).eq("id", existing.id);
-  } else {
-    await sb.from("task_member_completions").insert({
-      workspace_id: c.workspaceId, task_id: taskId, member_id: c.memberId, completed_at: stamp,
-    });
-  }
+  const nowDone = !existing.completed_at;
+  const stamp = nowDone ? new Date().toISOString() : null;
+  await sb.from("task_member_completions").update({ completed_at: stamp }).eq("id", existing.id);
   await logTaskActivity(sb, {
     workspaceId: c.workspaceId, taskId, actorId: c.user.id,
     action: nowDone ? ACTIVITY_ACTIONS.PARTICIPANT_COMPLETED : ACTIVITY_ACTIONS.PARTICIPANT_UNCOMPLETED,

@@ -33,7 +33,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   GripVertical, Plus, FileSpreadsheet, Search, X, Check,
-  ChevronLeft, ChevronRight, MoreVertical, Pencil, Copy, Archive, Trash2, AlertTriangle,
+  ChevronLeft, ChevronRight, ChevronDown, MoreVertical, Pencil, Copy, Archive, Trash2, AlertTriangle,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import {
@@ -86,6 +86,106 @@ const STATUS_CHIP_TONE: Record<string, string> = {
 const ParticipantsContext = createContext<Record<string, TaskParticipant[]>>({});
 function useTaskParticipants(taskId: string): TaskParticipant[] {
   return useContext(ParticipantsContext)[taskId] ?? [];
+}
+
+// Board-wide permission + toast surface, so deep card components can enforce the
+// same rules used by drag/drop and report blocks with a clear toast.
+type BoardCtxValue = {
+  canComplete: boolean;                       // owner/admin may finalize Tamamlandı
+  isResponsible: (task: Task) => boolean;     // admin → always; member → own/participant
+  showToast: (msg: string) => void;
+};
+const BoardContext = createContext<BoardCtxValue | null>(null);
+
+// The 4 user-facing statuses offered by the card status chip dropdown.
+const CARD_STATUS_CHOICES: { value: TaskStatus; label: string }[] = [
+  { value: "ready",       label: "Yapılacak" },
+  { value: "in_progress", label: "Devam ediyor" },
+  { value: "review",      label: "Kontrol / Onay" },
+  { value: "done",        label: "Tamamlandı" },
+];
+
+/** Clickable status chip with a small dropdown — an alternative to drag/drop.
+ *  Enforces the same permissions: non-responsible members get a static chip;
+ *  members can't pick Tamamlandı. */
+function CardStatusChip({ task }: { task: Task }) {
+  const ctx = useContext(BoardContext);
+  const [open, setOpen] = useState(false);
+  const [optStatus, setOptStatus] = useOptimistic<TaskStatus>(task.status);
+  const [, startT] = useTransition();
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  const tone = STATUS_CHIP_TONE[optStatus] ?? "bg-gray-100 text-gray-600";
+  const chipCls = cn("text-[10px] rounded px-1.5 py-0.5 leading-none font-medium", tone);
+  const canChange = ctx?.isResponsible(task) ?? false;
+  const canDone = ctx?.canComplete ?? false;
+
+  // No permission to change → plain, non-interactive chip.
+  if (!ctx || !canChange) {
+    return <span className={chipCls}>{STATUS_LABELS[optStatus]}</span>;
+  }
+
+  function choose(s: TaskStatus) {
+    setOpen(false);
+    if (s === optStatus) return;
+    if (s === "done" && !canDone) {
+      ctx!.showToast("Tamamlandı aşamasına yalnızca yöneticiler taşıyabilir.");
+      return;
+    }
+    startT(async () => {
+      setOptStatus(s);
+      const res = await updateTask({ id: task.id, status: s });
+      if (res && "error" in res) ctx!.showToast(res.error || "Durum değiştirilemedi.");
+    });
+  }
+
+  return (
+    <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={cn(chipCls, "inline-flex items-center gap-0.5 hover:brightness-95 transition")}
+        title="Durumu değiştir"
+      >
+        {STATUS_LABELS[optStatus]}
+        <ChevronDown size={9} className="opacity-60" />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-1 w-32 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1">
+          {CARD_STATUS_CHOICES.map((o) => {
+            const disabled = o.value === "done" && !canDone;
+            const active = o.value === optStatus;
+            return (
+              <button
+                key={o.value}
+                type="button"
+                disabled={disabled}
+                onClick={() => choose(o.value)}
+                className={cn(
+                  "w-full text-left px-2.5 py-1 text-[11px] flex items-center gap-1.5 hover:bg-gray-50",
+                  active && "font-semibold text-blue-700",
+                  disabled && "opacity-40 cursor-not-allowed hover:bg-transparent",
+                )}
+                title={disabled ? "Yalnızca yöneticiler tamamlayabilir" : undefined}
+              >
+                {o.label}
+                {active && <Check size={10} className="ml-auto" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /** Bottom-right initials chips for member participants, with completion ring. */
@@ -559,6 +659,12 @@ function CardContent({
               {markers.chip.label === "Bekliyor" && waitingOnName ? `Bekliyor · ${waitingOnName}` : markers.chip.label}
             </Badge>
           )}
+          {/* Priority lives up here (secondary) so the bottom row stays for people */}
+          {showPriority && (
+            <Badge size="xs" className={cn("shrink-0", PRIORITY_CHIP[task.priority])}>
+              {PRIORITY_LABELS[task.priority]}
+            </Badge>
+          )}
         </div>
         {interactive && showMenu && onDelete && onArchive && onDuplicate && (
           <CardMenu
@@ -599,17 +705,14 @@ function CardContent({
         </p>
       )}
 
-      {/* Bottom row: status (primary) + priority (only high/urgent) + due + people */}
+      {/* Bottom row: status (clickable) + due + people chips (bottom-right) */}
       <div className="flex items-center gap-1.5 mt-2.5 flex-wrap">
-        {/* Status chip — clear for users who don't drag */}
-        <span className={cn("text-[10px] rounded px-1.5 py-0.5 leading-none font-medium", STATUS_CHIP_TONE[task.status] ?? "bg-gray-100 text-gray-600")}>
-          {STATUS_LABELS[task.status]}
-        </span>
-
-        {/* Priority only emphasized when high/urgent; "Orta" is no longer shown */}
-        {showPriority && (
-          <span className={cn("text-[10px] rounded px-1.5 py-0.5 leading-none", PRIORITY_CHIP[task.priority])}>
-            {PRIORITY_LABELS[task.priority]}
+        {/* Status chip — clickable dropdown for users who don't drag */}
+        {interactive ? (
+          <CardStatusChip task={task} />
+        ) : (
+          <span className={cn("text-[10px] rounded px-1.5 py-0.5 leading-none font-medium", STATUS_CHIP_TONE[task.status] ?? "bg-gray-100 text-gray-600")}>
+            {STATUS_LABELS[task.status]}
           </span>
         )}
 
@@ -787,7 +890,7 @@ function KanbanColumn({
 
   return (
     <div className="flex flex-col gap-2 w-72 shrink-0">
-      <div className="flex items-center justify-between px-0.5">
+      <div className="flex items-center justify-between px-0.5 sticky top-0 z-20 bg-app pb-1.5 -mt-1 pt-1">
         <div className="flex items-center gap-2">
           <h3 className={cn("text-xs font-bold uppercase tracking-wider", headerTone)}>
             {colDef.label}
@@ -860,7 +963,7 @@ function StaticKanbanColumn({
     : "text-gray-500";
   return (
     <div className="flex flex-col gap-2 w-72 shrink-0">
-      <div className="flex items-center gap-2 px-0.5">
+      <div className="flex items-center gap-2 px-0.5 sticky top-0 z-20 bg-app pb-1.5 -mt-1 pt-1">
         <h3 className={cn("text-xs font-bold uppercase tracking-wider", headerTone)}>
           {colDef.label}
         </h3>
@@ -920,6 +1023,14 @@ export function KanbanBoard({
   const canArchive = canArchiveTask(userRole);
   const canComplete = canCompleteTask(userRole);
   const isViewer   = userRole === "viewer";
+
+  // Responsibility check mirrors the server (reorderTask): admins may move any
+  // task; members only tasks they own, created, or are a participant of.
+  const isResponsible = useCallback((task: Task) => {
+    if (userRole === "owner" || userRole === "admin") return true;
+    if (task.assignee_id === userId || task.created_by === userId) return true;
+    return (participantsByTask[task.id] ?? []).some((p) => p.userId === userId);
+  }, [userRole, userId, participantsByTask]);
   const mounted = useSyncExternalStore(subscribeMounted, getMounted, getServerMounted);
   const router = useRouter();
 
@@ -1085,10 +1196,16 @@ export function KanbanBoard({
     const tgtCol = BOARD_COLUMNS.find((c) => c.id === tgtColId)!;
     const newStatus: TaskStatus = srcColId === tgtColId ? srcTask.status : tgtCol.targetStatus;
 
+    // Members may only move tasks they are responsible for (own / participant).
+    if (!isResponsible(srcTask)) {
+      showToast("Bu görevi yalnızca sorumlu kişiler veya yöneticiler taşıyabilir.");
+      return;
+    }
+
     // Approval gate: only owner/admin may move a task into final "Tamamlandı".
     // Members should route through "Kontrol / Onay" instead.
     if (newStatus === "done" && srcTask.status !== "done" && !canComplete) {
-      showToast("Görevi yalnızca yönetici tamamlayabilir. 'Kontrol / Onay'a taşıyın.");
+      showToast("Tamamlandı aşamasına yalnızca yöneticiler taşıyabilir.");
       return;
     }
 
@@ -1162,9 +1279,15 @@ export function KanbanBoard({
     };
   }, [personFilter, optimisticTasks, responsibleNames]);
 
+  const boardCtx = useMemo<BoardCtxValue>(
+    () => ({ canComplete, isResponsible, showToast }),
+    [canComplete, isResponsible], // eslint-disable-line react-hooks/exhaustive-deps -- showToast uses stable setToasts
+  );
+
   return (
     <DeptMetaContext.Provider value={deptMeta}>
     <ParticipantsContext.Provider value={participantsByTask}>
+    <BoardContext.Provider value={boardCtx}>
     <div className="flex flex-col h-full">
 
       {/* ── Rules panel (compact, collapsible) ────────────────────────────── */}
@@ -1366,7 +1489,7 @@ export function KanbanBoard({
 
       {/* ── Pre-mount: static (no DnD) ───────────────────────────────────── */}
       {!mounted && (
-        <div className="flex gap-4 p-4 overflow-x-auto flex-1 items-start">
+        <div className="flex gap-4 p-4 overflow-auto flex-1 min-h-0 items-start">
           <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} />
           {BOARD_COLUMNS.map((col) => (
             <StaticKanbanColumn
@@ -1389,7 +1512,7 @@ export function KanbanBoard({
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
         >
-          <div className="flex gap-4 p-4 overflow-x-auto flex-1 items-start">
+          <div className="flex gap-4 p-4 overflow-auto flex-1 min-h-0 items-start">
             <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} />
             {BOARD_COLUMNS.map((col) => (
               <KanbanColumn
@@ -1475,6 +1598,7 @@ export function KanbanBoard({
         />
       )}
     </div>
+    </BoardContext.Provider>
     </ParticipantsContext.Provider>
     </DeptMetaContext.Provider>
   );

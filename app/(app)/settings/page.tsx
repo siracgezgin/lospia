@@ -5,6 +5,7 @@ import { WorkspaceNameEditor } from "@/components/settings/WorkspaceNameEditor";
 import { MembersManager } from "@/components/settings/MembersManager";
 import { DepartmentsManager } from "@/components/settings/DepartmentsManager";
 import { canManageSettings, canRenameWorkspace, canManageMembers, canManageWorkspace } from "@/lib/auth/permissions";
+import { roleLabel } from "@/lib/utils/roles";
 import type {
   Workspace, WorkspaceMember, Profile, CustomFieldDefinition,
   WorkspaceContact, WorkspaceRole, WorkspaceInvite,
@@ -98,10 +99,6 @@ export default async function SettingsPage() {
     return { ...r, profiles: prof ?? null } as DepartmentMember & { profiles?: Partial<Profile> | null };
   });
 
-  const ROLE_DISPLAY: Record<string, string> = {
-    owner: "Sahip", admin: "Yönetici", member: "Üye", viewer: "İzleyici",
-  };
-
   return (
     <div className="max-w-2xl mx-auto py-8 px-4 space-y-10">
       <h1 className="text-2xl font-bold text-gray-900">Ayarlar</h1>
@@ -139,7 +136,7 @@ export default async function SettingsPage() {
           </div>
           <div>
             <p className="text-xs text-gray-500">Rolünüz</p>
-            <p className="text-sm font-medium">{ROLE_DISPLAY[userRole] ?? userRole}</p>
+            <p className="text-sm font-medium">{roleLabel(userRole)}</p>
           </div>
         </div>
       </section>
@@ -187,7 +184,7 @@ export default async function SettingsPage() {
                     <p className="text-xs text-gray-400">{m.profiles?.email}</p>
                   </div>
                   <span className="text-xs text-gray-500 bg-gray-100 px-2.5 py-0.5 rounded-full">
-                    {ROLE_DISPLAY[m.role] ?? m.role}
+                    {roleLabel(m.role)}
                   </span>
                 </div>
               )

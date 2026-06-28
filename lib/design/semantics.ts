@@ -231,7 +231,7 @@ export const PRIORITY_CHIP: Record<TaskPriority, string> = {
 
 export const PRIORITY_SHOW_ON_BOARD: Record<TaskPriority, boolean> = {
   low: false,
-  medium: true,
+  medium: false, // "Orta" is the default — no chip, keeps cards uncluttered
   high: true,
   urgent: true,
 };

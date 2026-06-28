@@ -91,7 +91,7 @@ export async function signUp(
     .maybeSingle();
 
   if (!invite) {
-    return { error: "Bu e-posta için bir davet bulunamadı. Erişim için yöneticinizden davet isteyin." };
+    return { error: "Bu e-posta için aktif davet bulunamadı. Erişim için yöneticinizden davet bağlantısı isteyin." };
   }
 
   // 2. Create the auth user with NO confirmation email.

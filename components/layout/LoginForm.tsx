@@ -70,7 +70,7 @@ export function LoginForm({
 
       {effectiveMode === "signup" && (
         <p className="text-xs text-gray-500 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
-          Bu sistem davet ile çalışır. Davet edildiğiniz e-posta adresi ile hesap oluşturabilirsiniz.
+          Hesap oluşturmak için size iletilen davet bağlantısını kullanın.
         </p>
       )}
 
@@ -85,7 +85,7 @@ export function LoginForm({
               name="full_name"
               type="text"
               autoComplete="name"
-              placeholder="Aslı Filinta"
+              placeholder="Ad Soyad"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>

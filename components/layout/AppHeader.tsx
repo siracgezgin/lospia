@@ -5,6 +5,7 @@ import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
+import { ROLE_LABELS } from "@/lib/utils/roles";
 import type { Workspace, Notification, WorkspaceRole } from "@/types";
 
 interface Props {
@@ -16,13 +17,6 @@ interface Props {
   notifications?: Notification[];
   userRole?: WorkspaceRole;
 }
-
-const ROLE_LABELS: Record<WorkspaceRole, string> = {
-  owner: "Sahip",
-  admin: "Yönetici",
-  member: "Üye",
-  viewer: "İzleyici",
-};
 
 // Page-context titles. Header shows WHERE you are; the sidebar owns brand/workspace.
 const PAGE_TITLES: { match: (p: string) => boolean; title: string }[] = [

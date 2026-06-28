@@ -603,7 +603,7 @@ export async function reorderTask(
         .maybeSingle();
       isParticipant = !!comp;
     }
-    if (!isParticipant) return { error: "Bu görevi yalnızca sorumluları taşıyabilir." };
+    if (!isParticipant) return { error: "Bu görevi yalnızca sorumlu kişiler veya yöneticiler taşıyabilir." };
   }
 
   // Only owner/admin can mark a task finally done; members use Kontrol / Onay.

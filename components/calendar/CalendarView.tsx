@@ -11,12 +11,13 @@ import {
   format,
   isSameMonth,
   isSameDay,
+  isToday as dfnsIsToday,
   addMonths,
   subMonths,
   parseISO,
 } from "date-fns";
 import { tr } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, X, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Plus, CalendarDays } from "lucide-react";
 import type { TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceDepartment } from "@/types";
 import { cn } from "@/lib/utils/cn";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
@@ -41,7 +42,7 @@ interface Props {
   departments?: WorkspaceDepartment[];
 }
 
-const STATUS_DONE_CLS = "line-through text-gray-400";
+const DONE_CLS = "line-through text-gray-400";
 
 export function CalendarView({ tasks, workspaceId, profiles, contacts, departments = [] }: Props) {
   const deptMeta = buildDeptMeta(departments);
@@ -50,8 +51,11 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
     const color = t.department_id ? deptMeta[t.department_id]?.color : null;
     return getDepartmentCardStyle(color).dot;
   };
+
   const [current, setCurrent] = useState(new Date());
-  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  // Default the agenda to today so the side panel is never empty on load.
+  const [selectedDay, setSelectedDay] = useState<Date>(new Date());
+  const [showMobilePanel, setShowMobilePanel] = useState(false);
   const [createModalDate, setCreateModalDate] = useState<string | null>(null);
 
   const monthStart = startOfMonth(current);
@@ -68,128 +72,194 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
     });
   }
 
-  const selectedDayTasks = selectedDay ? getTasksForDay(selectedDay) : [];
+  function selectDay(day: Date) {
+    setSelectedDay(day);
+    setShowMobilePanel(true);
+  }
+
+  const selectedDayTasks = getTasksForDay(selectedDay);
 
   return (
-    <div className="p-4 sm:p-6 max-w-6xl mx-auto h-full flex flex-col">
+    <div className="p-4 sm:p-6 h-full flex flex-col gap-4">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4 sm:mb-6 shrink-0">
-        <h1 className="text-2xl font-bold text-gray-900">Takvim</h1>
+      <div className="flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => setCurrent((d) => subMonths(d, 1))}
-            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"
-            aria-label="Önceki ay"
-          >
-            <ChevronLeft size={18} />
-          </button>
-          <span className="text-sm font-semibold text-gray-700 w-36 text-center">
+          <h1 className="text-2xl font-bold text-gray-900">Takvim</h1>
+          <span className="text-sm font-semibold text-gray-500 capitalize hidden sm:inline">
             {format(current, "MMMM yyyy", { locale: tr })}
           </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center rounded-lg border border-gray-200 overflow-hidden">
+            <button
+              onClick={() => setCurrent((d) => subMonths(d, 1))}
+              className="p-1.5 hover:bg-gray-50 text-gray-500"
+              aria-label="Önceki ay"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <span className="text-sm font-medium text-gray-700 w-28 text-center border-x border-gray-200 py-1.5 capitalize sm:hidden">
+              {format(current, "MMM yyyy", { locale: tr })}
+            </span>
+            <button
+              onClick={() => setCurrent((d) => addMonths(d, 1))}
+              className="p-1.5 hover:bg-gray-50 text-gray-500"
+              aria-label="Sonraki ay"
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
           <button
-            onClick={() => setCurrent((d) => addMonths(d, 1))}
-            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"
-            aria-label="Sonraki ay"
-          >
-            <ChevronRight size={18} />
-          </button>
-          <button
-            onClick={() => setCurrent(new Date())}
-            className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+            onClick={() => { setCurrent(new Date()); setSelectedDay(new Date()); }}
+            className="text-sm px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 font-medium"
           >
             Bugün
           </button>
         </div>
       </div>
 
-      {/* Day-of-week headers */}
-      <div className="grid grid-cols-7 mb-1 shrink-0">
-        {["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"].map((d) => (
-          <div key={d} className="text-center text-xs font-semibold text-gray-400 py-1.5">{d}</div>
-        ))}
-      </div>
+      {/* Body: calendar grid + agenda side panel */}
+      <div className="flex gap-4 flex-1 min-h-0">
+        {/* Calendar */}
+        <div className="flex-1 min-w-0 flex flex-col bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          {/* Day-of-week headers */}
+          <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50/60 shrink-0">
+            {["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"].map((d) => (
+              <div key={d} className="text-center text-[11px] font-semibold text-gray-400 py-2 uppercase tracking-wide">{d}</div>
+            ))}
+          </div>
 
-      {/* Grid — fills available height; taller, more readable day cells */}
-      <div className="grid grid-cols-7 grid-rows-6 flex-1 min-h-[28rem] border-l border-t border-gray-200 bg-white rounded-xl overflow-hidden shadow-sm">
-        {days.map((day) => {
-          const dayTasks = getTasksForDay(day);
-          const isToday = isSameDay(day, new Date());
-          const inMonth = isSameMonth(day, current);
-          const isSelected = selectedDay ? isSameDay(day, selectedDay) : false;
-          const MAX_SHOWN = 4;
+          {/* Grid — fills remaining height evenly */}
+          <div className="grid grid-cols-7 grid-rows-6 flex-1 min-h-0">
+            {days.map((day) => {
+              const dayTasks = getTasksForDay(day);
+              const isToday = dfnsIsToday(day);
+              const inMonth = isSameMonth(day, current);
+              const isSelected = isSameDay(day, selectedDay);
+              const MAX_SHOWN = 3;
 
-          return (
-            <button
-              key={day.toISOString()}
-              onClick={() => setSelectedDay(isSelected ? null : day)}
-              className={cn(
-                "border-r border-b border-gray-200 min-h-24 p-2 text-left transition-colors flex flex-col",
-                !inMonth && "bg-gray-50",
-                isSelected && "bg-blue-50",
-                !isSelected && inMonth && "hover:bg-gray-50/70"
-              )}
-            >
-              <p className={cn(
-                "text-xs font-medium mb-1 h-6 w-6 flex items-center justify-center rounded-full shrink-0",
-                isToday && "bg-blue-600 text-white",
-                !isToday && inMonth && "text-gray-700",
-                !isToday && !inMonth && "text-gray-300"
-              )}>
-                {format(day, "d")}
-              </p>
-              <div className="space-y-1 overflow-hidden">
-                {dayTasks.slice(0, MAX_SHOWN).map((task) => (
-                  <div
-                    key={task.id}
-                    className={cn(
-                      "flex items-center gap-1.5 text-[11px] truncate text-gray-700",
-                      task.status === "done" && STATUS_DONE_CLS
+              return (
+                <button
+                  key={day.toISOString()}
+                  onClick={() => selectDay(day)}
+                  className={cn(
+                    "border-r border-b border-gray-100 p-1.5 text-left transition-colors flex flex-col gap-1 min-h-0 overflow-hidden",
+                    !inMonth && "bg-gray-50/60",
+                    isSelected ? "ring-2 ring-inset ring-blue-400 bg-blue-50/40" : inMonth && "hover:bg-gray-50",
+                  )}
+                >
+                  <span className={cn(
+                    "text-xs font-medium h-6 w-6 flex items-center justify-center rounded-full shrink-0",
+                    isToday && "bg-blue-600 text-white font-semibold",
+                    !isToday && inMonth && "text-gray-700",
+                    !isToday && !inMonth && "text-gray-300",
+                  )}>
+                    {format(day, "d")}
+                  </span>
+                  <div className="flex flex-col gap-0.5 overflow-hidden">
+                    {dayTasks.slice(0, MAX_SHOWN).map((task) => (
+                      <span
+                        key={task.id}
+                        className={cn(
+                          "flex items-center gap-1 text-[11px] leading-tight rounded px-1 py-0.5 bg-gray-50 border border-gray-100",
+                          task.status === "done" && DONE_CLS,
+                        )}
+                      >
+                        <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", dotFor(task))} />
+                        <span className="truncate text-gray-700">{task.title}</span>
+                      </span>
+                    ))}
+                    {dayTasks.length > MAX_SHOWN && (
+                      <span className="text-[10px] text-gray-500 font-medium pl-1">
+                        +{dayTasks.length - MAX_SHOWN} daha
+                      </span>
                     )}
-                  >
-                    <span className={cn("h-2 w-2 rounded-full shrink-0", dotFor(task))} />
-                    <span className="truncate">{task.title}</span>
                   </div>
-                ))}
-                {dayTasks.length > MAX_SHOWN && (
-                  <p className="text-[10px] text-blue-500 font-medium">+{dayTasks.length - MAX_SHOWN} daha</p>
-                )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Agenda side panel (lg+) */}
+        <aside className="w-80 shrink-0 hidden lg:flex flex-col bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 shrink-0">
+            <CalendarDays size={15} className="text-blue-600" />
+            <h2 className="text-sm font-semibold text-gray-900 capitalize">
+              {format(selectedDay, "d MMMM EEEE", { locale: tr })}
+            </h2>
+            {dfnsIsToday(selectedDay) && (
+              <span className="text-[10px] bg-blue-50 text-blue-600 rounded-full px-2 py-0.5 font-medium">Bugün</span>
+            )}
+          </div>
+          <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1.5">
+            {selectedDayTasks.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center gap-1 py-10">
+                <CalendarDays size={28} className="text-gray-200" />
+                <p className="text-sm text-gray-400">Bu tarihte iş yok.</p>
               </div>
+            ) : (
+              selectedDayTasks.map((task) => (
+                <Link
+                  key={task.id}
+                  prefetch={false}
+                  href={`/tasks/${task.id}`}
+                  className={cn(
+                    "flex items-center gap-2.5 p-2.5 rounded-lg border border-gray-100 hover:border-gray-200 hover:bg-gray-50 transition-colors group",
+                    task.status === "done" && "opacity-60",
+                  )}
+                >
+                  <span className={cn("h-2.5 w-2.5 rounded-full shrink-0", dotFor(task))} />
+                  <span className={cn(
+                    "text-sm text-gray-800 group-hover:text-blue-600 flex-1 truncate",
+                    task.status === "done" && "line-through text-gray-400",
+                  )}>
+                    {task.title}
+                  </span>
+                </Link>
+              ))
+            )}
+          </div>
+          <div className="px-3 py-3 border-t border-gray-100 shrink-0">
+            <button
+              onClick={() => setCreateModalDate(format(selectedDay, "yyyy-MM-dd"))}
+              className="flex items-center justify-center gap-2 w-full px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus size={14} />
+              Bu güne görev ekle
             </button>
-          );
-        })}
+          </div>
+        </aside>
       </div>
 
-      {/* Day panel */}
-      {selectedDay && (
-        <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center p-4 bg-black/30" onClick={() => setSelectedDay(null)}>
+      {/* Mobile day panel (modal) — only below lg, where there is no side panel */}
+      {showMobilePanel && (
+        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/30 lg:hidden" onClick={() => setShowMobilePanel(false)}>
           <div
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-[80vh] flex flex-col"
+            className="bg-white rounded-t-2xl shadow-2xl w-full max-h-[80vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Panel header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <h2 className="text-sm font-semibold text-gray-900">
-                {format(selectedDay, "d MMMM", { locale: tr })} görevleri
+              <h2 className="text-sm font-semibold text-gray-900 capitalize">
+                {format(selectedDay, "d MMMM EEEE", { locale: tr })}
               </h2>
-              <button onClick={() => setSelectedDay(null)} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg">
+              <button onClick={() => setShowMobilePanel(false)} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg">
                 <X size={16} />
               </button>
             </div>
-
-            {/* Task list */}
             <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2">
               {selectedDayTasks.length === 0 ? (
-                <p className="text-sm text-gray-400 py-4 text-center">Bu tarihte görev yok.</p>
+                <p className="text-sm text-gray-400 py-4 text-center">Bu tarihte iş yok.</p>
               ) : (
                 selectedDayTasks.map((task) => (
                   <Link
                     key={task.id}
                     prefetch={false}
                     href={`/tasks/${task.id}`}
-                    onClick={() => setSelectedDay(null)}
+                    onClick={() => setShowMobilePanel(false)}
                     className={cn(
                       "flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 transition-colors group",
-                      task.status === "done" && "opacity-60"
+                      task.status === "done" && "opacity-60",
                     )}
                   >
                     <span className={cn("h-2.5 w-2.5 rounded-full shrink-0", dotFor(task))} />
@@ -200,13 +270,11 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
                 ))
               )}
             </div>
-
-            {/* Add task button */}
             <div className="px-5 py-4 border-t border-gray-100">
               <button
                 onClick={() => {
                   setCreateModalDate(format(selectedDay, "yyyy-MM-dd"));
-                  setSelectedDay(null);
+                  setShowMobilePanel(false);
                 }}
                 className="flex items-center justify-center gap-2 w-full px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
               >

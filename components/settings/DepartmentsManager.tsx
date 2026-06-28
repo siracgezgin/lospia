@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Plus, Trash2, UserPlus, UserMinus, Crown } from "lucide-react";
+import { ChevronRight, Plus, Trash2, UserPlus, UserMinus } from "lucide-react";
 import type { WorkspaceDepartment, DepartmentMember, WorkspaceMember, Profile } from "@/types";
 import { Avatar, AvatarGroup } from "@/components/ui/Avatar";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
@@ -50,9 +50,7 @@ function DeptMemberRow({
     <div className="flex items-center justify-between py-1">
       <div className="flex items-center gap-1.5 text-sm text-gray-700">
         <Avatar name={name} size="xs" />
-        {dm.role === "lead" && <Crown size={12} className="text-amber-500 shrink-0" />}
         <span title={name}>{name}</span>
-        {dm.role === "lead" && <span className="text-xs text-amber-600">(sorumlu)</span>}
       </div>
       {canManage && (
         <button
@@ -79,7 +77,6 @@ function AddMemberForm({
   onDone: () => void;
 }) {
   const [selectedId, setSelectedId] = useState("");
-  const [role, setRole] = useState<"lead" | "member">("member");
   const [pending, startTransition] = useTransition();
   const [err, setErr] = useState<string | null>(null);
   const router = useRouter();
@@ -90,7 +87,8 @@ function AddMemberForm({
     if (!selectedId) return;
     setErr(null);
     startTransition(async () => {
-      const res = await addDepartmentMember(departmentId, selectedId, role);
+      // Department membership is not a hierarchy — everyone is simply "member".
+      const res = await addDepartmentMember(departmentId, selectedId);
       if ("error" in res) { setErr(res.error); return; }
       router.refresh(); // surface the new assignment immediately
       onDone();
@@ -112,14 +110,6 @@ function AddMemberForm({
         {available.map((m) => (
           <option key={m.id} value={m.id}>{memberName(m)}</option>
         ))}
-      </select>
-      <select
-        value={role}
-        onChange={(e) => setRole(e.target.value as "lead" | "member")}
-        className="text-xs border border-gray-200 rounded px-2 py-1 text-gray-700"
-      >
-        <option value="member">Üye</option>
-        <option value="lead">Sorumlu</option>
       </select>
       <button
         onClick={handleAdd}
