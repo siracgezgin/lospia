@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { logTaskActivity, ACTIVITY_ACTIONS } from "@/lib/activity/log-task-activity";
 
 function hexUuid() {
   return z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, "Geçersiz UUID");
@@ -156,6 +157,14 @@ export async function addTaskNote(
     .select("assignee_id, title, workspace_id, waiting_on_member_id")
     .eq("id", taskId)
     .maybeSingle();
+
+  // Audit trail: record the note add for the admin activity log.
+  if (task) {
+    await logTaskActivity(supabase, {
+      workspaceId: ctx.workspaceId, taskId, actorId: ctx.user.id,
+      action: ACTIVITY_ACTIONS.NOTE_ADDED,
+    });
+  }
 
   if (task) {
     const recipients = new Set<string>();

@@ -42,7 +42,7 @@ import {
   SAVED_VIEW_SLUG_MAP,
   type BoardColId,
 } from "@/lib/utils/task-constants";
-import { PRIORITY_LABELS, PROJECT_OPTIONS } from "@/lib/utils/task-constants";
+import { PRIORITY_LABELS, STATUS_LABELS } from "@/lib/utils/task-constants";
 import {
   getTaskCardStyle,
   getDepartmentCardStyle,
@@ -70,6 +70,17 @@ function useTaskDept(task: Task): DeptMeta | undefined {
   const meta = useContext(DeptMetaContext);
   return task.department_id ? meta[task.department_id] : undefined;
 }
+
+// Workflow-status chip tones (status is the primary lower chip; priority is secondary).
+const STATUS_CHIP_TONE: Record<string, string> = {
+  backlog: "bg-gray-100 text-gray-600",
+  ready: "bg-gray-100 text-gray-600",
+  blocked: "bg-amber-100 text-amber-700",
+  in_progress: "bg-blue-100 text-blue-700",
+  review: "bg-teal-100 text-teal-700",
+  done: "bg-green-100 text-green-700",
+  archived: "bg-gray-100 text-gray-500",
+};
 
 // Participant completions (taskId → [{name, completed}]) for card chips.
 const ParticipantsContext = createContext<Record<string, TaskParticipant[]>>({});
@@ -418,40 +429,6 @@ function CardMenu({
 
 // ── Quick-edit: Priority ──────────────────────────────────────────────────────
 
-function QuickPrioritySelect({ task }: { task: Task }) {
-  const [_p, startTransition] = useTransition();
-  const [opt, setOpt] = useOptimistic<TaskPriority>(task.priority);
-
-  function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const p = e.target.value as TaskPriority;
-    startTransition(async () => {
-      setOpt(p);
-      await updateTask({ id: task.id, priority: p });
-    });
-  }
-
-  return (
-    <div className="relative inline-flex items-center">
-      <span className={cn("text-[10px] rounded px-1.5 py-0.5 leading-none pr-3 pointer-events-none", PRIORITY_CHIP[opt])}>
-        {PRIORITY_LABELS[opt]}
-      </span>
-      <select
-        value={opt}
-        onChange={handleChange}
-        onClick={(e) => e.stopPropagation()}
-        onMouseDown={(e) => e.stopPropagation()}
-        className="absolute inset-0 opacity-0 cursor-pointer w-full text-[10px]"
-        aria-label="Öncelik değiştir"
-      >
-        <option value="low">Düşük</option>
-        <option value="medium">Orta</option>
-        <option value="high">Yüksek</option>
-        <option value="urgent">Acil</option>
-      </select>
-    </div>
-  );
-}
-
 // ── Quick-edit: Responsible ───────────────────────────────────────────────────
 
 function QuickAssigneeSelect({
@@ -622,16 +599,18 @@ function CardContent({
         </p>
       )}
 
-      {/* Bottom row: priority + due date + collabs + person */}
+      {/* Bottom row: status (primary) + priority (only high/urgent) + due + people */}
       <div className="flex items-center gap-1.5 mt-2.5 flex-wrap">
-        {interactive ? (
-          <QuickPrioritySelect task={task} />
-        ) : (
-          showPriority && (
-            <span className={cn("text-[10px] rounded px-1.5 py-0.5 leading-none", PRIORITY_CHIP[task.priority])}>
-              {PRIORITY_LABELS[task.priority]}
-            </span>
-          )
+        {/* Status chip — clear for users who don't drag */}
+        <span className={cn("text-[10px] rounded px-1.5 py-0.5 leading-none font-medium", STATUS_CHIP_TONE[task.status] ?? "bg-gray-100 text-gray-600")}>
+          {STATUS_LABELS[task.status]}
+        </span>
+
+        {/* Priority only emphasized when high/urgent; "Orta" is no longer shown */}
+        {showPriority && (
+          <span className={cn("text-[10px] rounded px-1.5 py-0.5 leading-none", PRIORITY_CHIP[task.priority])}>
+            {PRIORITY_LABELS[task.priority]}
+          </span>
         )}
 
         {task.due_date && (
@@ -956,7 +935,6 @@ export function KanbanBoard({
 
   // Client-side filters (not URL-persisted; reset on refresh)
   const [personFilter, setPersonFilter] = useState("");
-  const [projectFilter, setProjectFilter] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [search, setSearch] = useState("");
 
@@ -1051,15 +1029,9 @@ export function KanbanBoard({
     });
   }
 
-  // Composed filter: saved-view → project → department → person → search
+  // Composed filter: saved-view → department → person → search
   const filteredTasks = useMemo(() => {
     let tasks = applyViewFilter(optimisticTasks, effectiveSlug, userId, weekStart);
-    if (projectFilter) {
-      tasks = tasks.filter((t) => {
-        const cf = t.custom_fields as Record<string, unknown>;
-        return (cf?.project as string | undefined) === projectFilter;
-      });
-    }
     if (departmentFilter) {
       const allowed = deptMatchIds[departmentFilter] ?? new Set([departmentFilter]);
       tasks = tasks.filter((t) => t.department_id != null && allowed.has(t.department_id));
@@ -1067,7 +1039,7 @@ export function KanbanBoard({
     tasks = applyPersonFilter(tasks, personFilter);
     tasks = tasks.filter((t) => matchesSearch(t, search, responsibleNames));
     return tasks;
-  }, [optimisticTasks, effectiveSlug, userId, weekStart, projectFilter, departmentFilter, deptMatchIds, personFilter, search, responsibleNames]);
+  }, [optimisticTasks, effectiveSlug, userId, weekStart, departmentFilter, deptMatchIds, personFilter, search, responsibleNames]);
 
   // Distribute filtered tasks into columns
   const tasksByCol = useMemo(() => {
@@ -1161,12 +1133,14 @@ export function KanbanBoard({
 
       const result = await reorderTask({ id: activeId, newStatus, prevIndex, nextIndex });
       if ("error" in result) {
-        console.error("Yeniden sıralama hatası:", result.error);
+        // Never fail silently — explain and resync so the card snaps back cleanly.
+        showToast(result.error || "Görev taşınamadı.");
+        router.refresh();
       }
     });
   }, [optimisticTasks, tasksByCol]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const hasActiveFilter = !!personFilter || !!search || !!projectFilter || !!departmentFilter;
+  const hasActiveFilter = !!personFilter || !!search || !!departmentFilter;
 
   // Person workload summary (computed from raw tasks, not view-filtered)
   const personStats = useMemo(() => {
@@ -1294,21 +1268,8 @@ export function KanbanBoard({
           </button>
         )}
 
-        {/* Right: Proje + Departman + Kişi + Arama */}
+        {/* Right: Departman + Kişi + Arama */}
         <div className="flex items-center gap-2 ml-auto flex-wrap">
-          {/* Proje filter */}
-          <select
-            value={projectFilter}
-            onChange={(e) => setProjectFilter(e.target.value)}
-            className={cn(
-              "text-sm border rounded-lg px-2 py-1.5 bg-white transition-colors cursor-pointer",
-              projectFilter ? "border-[#406775] text-[#406775]" : "border-gray-200 text-gray-600",
-            )}
-            aria-label="Projeye göre filtrele"
-          >
-            <option value="">Proje</option>
-            {PROJECT_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
-          </select>
 
           {/* Departman filter */}
           <select
@@ -1370,7 +1331,7 @@ export function KanbanBoard({
           {/* Clear all */}
           {hasActiveFilter && (
             <button
-              onClick={() => { setPersonFilter(""); setProjectFilter(""); setDepartmentFilter(""); setSearch(""); }}
+              onClick={() => { setPersonFilter(""); setDepartmentFilter(""); setSearch(""); }}
               className="text-xs text-gray-400 hover:text-gray-700 px-1.5 py-0.5 rounded hover:bg-gray-100 transition-colors whitespace-nowrap"
               aria-label="Filtreleri temizle"
             >

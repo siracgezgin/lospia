@@ -20,13 +20,20 @@ interface Props {
   currentMemberId: string | null;
   isAdmin: boolean;
   isViewer: boolean;
+  // Member ids eligible for this task's department; null = no department → all.
+  eligibleMemberIds?: string[] | null;
 }
 
 export function TaskParticipantsPanel({
-  taskId, members, participants, currentMemberId, isAdmin, isViewer,
+  taskId, members, participants, currentMemberId, isAdmin, isViewer, eligibleMemberIds = null,
 }: Props) {
   const [pending, startTransition] = useTransition();
   const [editing, setEditing] = useState(false);
+
+  // Department-filtered picker: when a department is selected, only its members
+  // are offered. Already-selected participants stay editable regardless.
+  const eligibleSet = eligibleMemberIds ? new Set(eligibleMemberIds) : null;
+  const pickerMembers = eligibleSet ? members.filter((m) => eligibleSet.has(m.memberId)) : members;
 
   const nameOf = (memberId: string) =>
     getPersonDisplayName(members.find((m) => m.memberId === memberId)?.name ?? null);
@@ -110,7 +117,7 @@ export function TaskParticipantsPanel({
         <div className="border-t border-gray-100 pt-3 space-y-1.5">
           <p className="text-xs text-gray-500">Bu görevin sorumlularını seçin:</p>
           <div className="flex flex-wrap gap-2">
-            {members.map((m) => {
+            {pickerMembers.map((m) => {
               const on = participantIds.has(m.memberId);
               return (
                 <button
@@ -127,7 +134,13 @@ export function TaskParticipantsPanel({
                 </button>
               );
             })}
-            {members.length === 0 && <p className="text-xs text-gray-400">Çalışma alanında üye yok.</p>}
+            {pickerMembers.length === 0 && (
+              <p className="text-xs text-gray-400">
+                {eligibleSet
+                  ? "Bu departmana atanmış üye yok. Ayarlar > Departmanlar'dan üye ekleyin."
+                  : "Çalışma alanında üye yok."}
+              </p>
+            )}
           </div>
         </div>
       )}

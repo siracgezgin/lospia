@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { canManageMembers, type AppRole } from "@/lib/auth/permissions";
+import { canManageWorkspace, type AppRole } from "@/lib/auth/permissions";
 
 const PERM_DENIED = "Bu işlem için yetkiniz yok.";
 
@@ -25,7 +25,7 @@ export async function provisionAfDepartments(): Promise<{ ok: true } | { error: 
   const supabase = await createClient();
   const ctx = await getCallerCtx(supabase);
   if (!ctx) return { error: "Kimlik doğrulama gerekli." };
-  if (!canManageMembers(ctx.role)) return { error: PERM_DENIED };
+  if (!canManageWorkspace(ctx.role)) return { error: PERM_DENIED };
 
   const { error } = await supabase.rpc("provision_af_departments", {
     p_workspace_id: ctx.workspaceId,
@@ -52,7 +52,7 @@ export async function createDepartment(
   const supabase = await createClient();
   const ctx = await getCallerCtx(supabase);
   if (!ctx) return { error: "Kimlik doğrulama gerekli." };
-  if (!canManageMembers(ctx.role)) return { error: PERM_DENIED };
+  if (!canManageWorkspace(ctx.role)) return { error: PERM_DENIED };
 
   // Resolve max position among siblings
   const { data: siblings } = await supabase
@@ -91,7 +91,7 @@ export async function updateDepartment(
   const supabase = await createClient();
   const ctx = await getCallerCtx(supabase);
   if (!ctx) return { error: "Kimlik doğrulama gerekli." };
-  if (!canManageMembers(ctx.role)) return { error: PERM_DENIED };
+  if (!canManageWorkspace(ctx.role)) return { error: PERM_DENIED };
 
   const updates: Record<string, unknown> = {};
   if (data.name !== undefined) updates.name = data.name.trim();
@@ -116,7 +116,7 @@ export async function deleteDepartment(
   const supabase = await createClient();
   const ctx = await getCallerCtx(supabase);
   if (!ctx) return { error: "Kimlik doğrulama gerekli." };
-  if (!canManageMembers(ctx.role)) return { error: PERM_DENIED };
+  if (!canManageWorkspace(ctx.role)) return { error: PERM_DENIED };
 
   const { error } = await supabase
     .from("workspace_departments")
@@ -138,7 +138,7 @@ export async function addDepartmentMember(
   const supabase = await createClient();
   const ctx = await getCallerCtx(supabase);
   if (!ctx) return { error: "Kimlik doğrulama gerekli." };
-  if (!canManageMembers(ctx.role)) return { error: PERM_DENIED };
+  if (!canManageWorkspace(ctx.role)) return { error: PERM_DENIED };
 
   const { error } = await supabase
     .from("department_members")
@@ -164,7 +164,7 @@ export async function removeDepartmentMember(
   const supabase = await createClient();
   const ctx = await getCallerCtx(supabase);
   if (!ctx) return { error: "Kimlik doğrulama gerekli." };
-  if (!canManageMembers(ctx.role)) return { error: PERM_DENIED };
+  if (!canManageWorkspace(ctx.role)) return { error: PERM_DENIED };
 
   const { error } = await supabase
     .from("department_members")

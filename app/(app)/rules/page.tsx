@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { RulesView } from "@/components/rules/RulesView";
 import { markRulesSeen } from "@/lib/actions/members";
-import type { WorkspaceRule, WorkspaceRole } from "@/types";
+import type { WorkspaceRule, WorkspaceRole, WorkspaceDepartment } from "@/types";
 
 export const dynamic = "force-dynamic";
 
@@ -21,17 +21,24 @@ export default async function RulesPage() {
   const userRole = (member?.role ?? "member") as WorkspaceRole;
   if (!workspaceId) redirect("/login");
 
-  const [rulesResult] = await Promise.all([
+  const [rulesResult, deptsResult] = await Promise.all([
     supabase
       .from("workspace_rules")
       .select("*")
       .eq("workspace_id", workspaceId)
       .order("position")
       .order("created_at"),
+    supabase
+      .from("workspace_departments")
+      .select("id, parent_id, name")
+      .eq("workspace_id", workspaceId)
+      .is("parent_id", null)
+      .order("position"),
     markRulesSeen(),
   ]);
 
   const rules = (rulesResult.data ?? []) as WorkspaceRule[];
+  const departmentNames = ((deptsResult.data ?? []) as Pick<WorkspaceDepartment, "name">[]).map((d) => d.name);
 
-  return <RulesView rules={rules} workspaceId={workspaceId} userRole={userRole} />;
+  return <RulesView rules={rules} workspaceId={workspaceId} userRole={userRole} departmentNames={departmentNames} />;
 }

@@ -9,7 +9,8 @@ import { canManageRules } from "@/lib/auth/permissions";
 import { createRule, updateRule, deleteRule, toggleRule } from "@/lib/actions/rules";
 import type { WorkspaceRule, WorkspaceRole } from "@/types";
 
-const CATEGORIES = ["Genel", "Kumaş Siparişi", "Üretim", "Operasyon", "Satın Alma", "Pazarlama", "Web & SEO"];
+// Rules are department-based. "Tüm çalışma alanı" = applies to everyone.
+const ALL_WORKSPACE = "Tüm çalışma alanı";
 
 // ── Rule card ──────────────────────────────────────────────────────────────────
 
@@ -76,18 +77,21 @@ function RuleForm({
   initial,
   workspaceId,
   ruleCount,
+  departmentNames,
   onSave,
   onCancel,
 }: {
   initial?: WorkspaceRule;
   workspaceId: string;
   ruleCount: number;
+  departmentNames: string[];
   onSave: (_data: { title: string; body: string; category: string }) => void;
   onCancel: () => void;
 }) {
   const [title, setTitle] = useState(initial?.title ?? "");
   const [body, setBody] = useState(initial?.body ?? "");
-  const [category, setCategory] = useState(initial?.category ?? "Genel");
+  const [category, setCategory] = useState(initial?.category ?? ALL_WORKSPACE);
+  const options = [ALL_WORKSPACE, ...departmentNames];
   const inputRef = useRef<HTMLInputElement>(null);
 
   void workspaceId;
@@ -109,7 +113,7 @@ function RuleForm({
           onChange={(e) => setCategory(e.target.value)}
           className="text-xs border border-gray-200 rounded px-1.5 py-1 bg-white text-gray-700"
         >
-          {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          {options.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
       </div>
       <input
@@ -197,10 +201,12 @@ export function RulesView({
   rules: initialRules,
   workspaceId,
   userRole = "member",
+  departmentNames = [],
 }: {
   rules: WorkspaceRule[];
   workspaceId: string;
   userRole?: WorkspaceRole;
+  departmentNames?: string[];
 }) {
   const isManager = canManageRules(userRole);
   const [_isPending, startTransition] = useTransition();
@@ -284,7 +290,7 @@ export function RulesView({
 
   // Group rules by category
   const grouped = optimisticRules.reduce<Record<string, WorkspaceRule[]>>((acc, rule) => {
-    const cat = rule.category ?? "Genel";
+    const cat = rule.category ?? ALL_WORKSPACE;
     if (!acc[cat]) acc[cat] = [];
     acc[cat].push(rule);
     return acc;
@@ -330,6 +336,7 @@ export function RulesView({
             <RuleForm
               workspaceId={workspaceId}
               ruleCount={optimisticRules.length}
+              departmentNames={departmentNames}
               onSave={handleAdd}
               onCancel={() => setAdding(false)}
             />
@@ -340,6 +347,7 @@ export function RulesView({
               initial={editing}
               workspaceId={workspaceId}
               ruleCount={optimisticRules.length}
+              departmentNames={departmentNames}
               onSave={handleUpdate}
               onCancel={() => setEditing(null)}
             />

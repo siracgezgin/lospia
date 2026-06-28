@@ -581,11 +581,29 @@ export async function reorderTask(
     title: string;
   };
 
-  // Members can only move their own/assigned tasks
-  if (role === "member" || role === "viewer") {
-    if (!canReorderTask(role, prevTask, user.id)) {
-      return { error: PERM_DENIED };
+  // Members can move tasks they own, created, OR are a responsible participant of.
+  if (role === "viewer") {
+    return { error: PERM_DENIED };
+  }
+  if (role === "member" && !canReorderTask(role, prevTask, user.id)) {
+    // Participant check: is this member a responsible person on the task?
+    const { data: myMember } = await supabase
+      .from("workspace_members")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("workspace_id", prevTask.workspace_id)
+      .maybeSingle();
+    let isParticipant = false;
+    if (myMember?.id) {
+      const { data: comp } = await supabase
+        .from("task_member_completions")
+        .select("id")
+        .eq("task_id", id)
+        .eq("member_id", myMember.id)
+        .maybeSingle();
+      isParticipant = !!comp;
     }
+    if (!isParticipant) return { error: "Bu görevi yalnızca sorumluları taşıyabilir." };
   }
 
   // Only owner/admin can mark a task finally done; members use Kontrol / Onay.

@@ -5,6 +5,7 @@ import { Pin, Trash2, PencilLine, StickyNote } from "lucide-react";
 import type { TaskNoteWithAuthor } from "@/types";
 import { addTaskNote, toggleNotePin, deleteTaskNote, updateTaskNote } from "@/lib/actions/notes";
 import { formatDateTimeTR } from "@/lib/utils/format-date";
+import { Avatar } from "@/components/ui/Avatar";
 
 interface Props {
   taskId: string;
@@ -28,7 +29,7 @@ function NoteItem({
   const [editValue, setEditValue] = useState(note.content);
   const [, startTransition] = useTransition();
 
-  const authorName = note.author?.full_name ?? note.author?.email ?? "Bilinmeyen";
+  const authorName = note.author?.full_name ?? note.author?.email ?? "Bilinmeyen kullanıcı";
   const canEdit = !isViewer && (note.author_id === currentUserId);
   const canDelete = !isViewer && (note.author_id === currentUserId);
 
@@ -76,7 +77,8 @@ function NoteItem({
         </div>
       </div>
       <div className="flex items-center justify-between text-xs text-gray-400">
-        <span>
+        <span className="flex items-center gap-1.5" title={authorName}>
+          <Avatar name={authorName} size="xs" />
           <span className="font-medium text-gray-600">{authorName}</span>
           {" · "}
           {formatDateTimeTR(note.created_at)}

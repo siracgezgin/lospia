@@ -226,60 +226,6 @@ function TagsInput({ task }: { task: Task }) {
   );
 }
 
-// ---- Responsible person select ----
-
-function AssigneeSelect({
-  task,
-  profiles,
-  contacts,
-}: {
-  task: Task;
-  profiles: Pick<Profile, "id" | "full_name" | "email" | "avatar_url">[];
-  contacts: WorkspaceContact[];
-}) {
-  const [_p, startTransition] = useTransition();
-  const currentValue = task.assignee_id
-    ? `member:${task.assignee_id}`
-    : (task as { responsible_contact_id?: string | null }).responsible_contact_id
-    ? `contact:${(task as { responsible_contact_id: string }).responsible_contact_id}`
-    : "";
-  const [opt, setOpt] = useOptimistic<string>(currentValue);
-
-  function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const val = e.target.value;
-    const assignee_id = val.startsWith("member:") ? val.slice(7) : null;
-    const responsible_contact_id = val.startsWith("contact:") ? val.slice(8) : null;
-    startTransition(async () => {
-      setOpt(val);
-      await updateTask({ id: task.id, assignee_id, responsible_contact_id });
-    });
-  }
-
-  return (
-    <select
-      value={opt}
-      onChange={handleChange}
-      className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
-    >
-      <option value="">— Atanmamış</option>
-      {profiles.length > 0 && (
-        <optgroup label="Üyeler">
-          {profiles.map((p) => (
-            <option key={p.id} value={`member:${p.id}`}>{p.full_name ?? p.email}</option>
-          ))}
-        </optgroup>
-      )}
-      {contacts.length > 0 && (
-        <optgroup label="Kişiler">
-          {contacts.map((c) => (
-            <option key={c.id} value={`contact:${c.id}`}>{c.name}</option>
-          ))}
-        </optgroup>
-      )}
-    </select>
-  );
-}
-
 // ---- Category / Konu ----
 
 function CategoryInput({ task }: { task: Task }) {
@@ -318,91 +264,6 @@ function CategoryInput({ task }: { task: Task }) {
     >
       {currentVal || <span className="text-gray-400 italic">Eklemek için tıklayın…</span>}
     </span>
-  );
-}
-
-// ---- Project field ----
-
-// ---- Collaborators multi-select ----
-
-function CollaboratorsInput({
-  task,
-  profiles,
-  contacts,
-}: {
-  task: Task;
-  profiles: Pick<Profile, "id" | "full_name" | "email" | "avatar_url">[];
-  contacts: WorkspaceContact[];
-}) {
-  const cf = task.custom_fields as Record<string, unknown>;
-  const existing = (Array.isArray(cf?.collaborators) ? cf.collaborators as string[] : []);
-  const [selected, setSelected] = useState<string[]>(existing);
-  const [search, setSearch] = useState("");
-  const [_p, startTransition] = useTransition();
-
-  const allPeople = useMemo(() => [
-    ...profiles.map((p) => ({ key: p.id, name: p.full_name ?? p.email ?? "—" })),
-    ...contacts.map((c) => ({ key: c.id, name: c.name })),
-  ], [profiles, contacts]);
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return q ? allPeople.filter((p) => p.name.toLowerCase().includes(q)) : allPeople;
-  }, [allPeople, search]);
-
-  function toggle(name: string) {
-    const next = selected.includes(name)
-      ? selected.filter((n) => n !== name)
-      : [...selected, name];
-    setSelected(next);
-    startTransition(async () => {
-      const fields = { ...(task.custom_fields as Record<string, unknown>) };
-      if (next.length > 0) fields.collaborators = next;
-      else delete fields.collaborators;
-      await updateTask({ id: task.id, custom_fields: fields });
-    });
-  }
-
-  return (
-    <div className="border border-gray-200 rounded-lg overflow-hidden">
-      <input
-        type="text"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Kişi ara…"
-        className="w-full px-3 py-1.5 text-sm border-b border-gray-100 focus:outline-none"
-      />
-      <div className="max-h-28 overflow-y-auto p-2 flex flex-wrap gap-x-4 gap-y-2">
-        {filtered.map((p) => (
-          <label key={p.key} className="flex items-center gap-1.5 cursor-pointer text-sm text-gray-700">
-            <input
-              type="checkbox"
-              checked={selected.includes(p.name)}
-              onChange={() => toggle(p.name)}
-              className="rounded text-[#406775]"
-            />
-            {p.name}
-          </label>
-        ))}
-        {filtered.length === 0 && <p className="text-xs text-gray-400 px-1">Eşleşen kişi yok</p>}
-      </div>
-      {selected.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 px-3 py-2 border-t border-gray-100">
-          {selected.map((name) => (
-            <span
-              key={name}
-              title={name}
-              className="inline-flex items-center gap-1 bg-gray-100 rounded-full pl-0.5 pr-2 py-0.5 text-xs text-gray-700"
-            >
-              <span className="inline-flex items-center justify-center h-4 w-4 rounded-full bg-[#406775] text-white text-[8px] font-semibold">
-                {getPersonInitials(name)}
-              </span>
-              {name}
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -774,12 +635,6 @@ export function TaskDetail({ task, activity: _activity, activityLogs, activeTime
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FieldRow label="Durum"><StatusSelect task={task} canComplete={canComplete} /></FieldRow>
           <FieldRow label="Öncelik"><PrioritySelect task={task} /></FieldRow>
-          <FieldRow label="Sorumlu" className="sm:col-span-2">
-            <AssigneeSelect task={task} profiles={profiles} contacts={contacts} />
-          </FieldRow>
-          <FieldRow label="İş birliği kişileri" className="sm:col-span-2">
-            <CollaboratorsInput task={task} profiles={profiles} contacts={contacts} />
-          </FieldRow>
           <FieldRow label="Departman" className="sm:col-span-2">
             <DepartmentSelect task={task} departments={departments} />
           </FieldRow>

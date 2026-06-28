@@ -67,31 +67,11 @@ export function CreateTaskModal({
   const [status, setStatus] = useState<TaskStatus>(defaultStatus);
   const [priority, setPriority] = useState<TaskPriority>("medium");
 
-  // İş birliği
-  const [collaborators, setCollaborators] = useState<string[]>([]);
-  const [collabSearch, setCollabSearch] = useState("");
-
   // Secondary (Ek bilgiler)
   // Entry/start date defaults to today (AF works weekly); user rarely edits it.
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [tagsInput, setTagsInput] = useState("");
   const [successCriteria, setSuccessCriteria] = useState("");
-
-  const allPeople = useMemo(() => [
-    ...profiles.map((p) => ({ key: p.id, name: p.full_name ?? p.email ?? "—" })),
-    ...contacts.map((c) => ({ key: c.id, name: c.name })),
-  ], [profiles, contacts]);
-
-  const filteredPeople = useMemo(() => {
-    const q = collabSearch.trim().toLowerCase();
-    return q ? allPeople.filter((p) => p.name.toLowerCase().includes(q)) : allPeople;
-  }, [allPeople, collabSearch]);
-
-  function toggleCollaborator(name: string) {
-    setCollaborators((prev) =>
-      prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]
-    );
-  }
 
   const workspaceIdMissing = !workspaceId || workspaceId.length < 10;
 
@@ -104,7 +84,6 @@ export function CreateTaskModal({
     const customFields: Record<string, unknown> = {};
     if (konu.trim()) customFields.category = konu.trim(); // stored under legacy key, shown as "Konu"
     if (successCriteria.trim()) customFields.success_criteria = successCriteria.trim();
-    if (collaborators.length > 0) customFields.collaborators = collaborators;
 
     const { assignee_id, responsible_contact_id } = decodeResponsible(responsibleValue);
 
@@ -242,38 +221,10 @@ export function CreateTaskModal({
             </select>
           </div>
 
-          {/* İş birliği kişileri */}
-          {allPeople.length > 0 && (
-            <div>
-              <label className={labelCls}>İş birliği kişileri</label>
-              <div className="border border-gray-200 rounded-lg overflow-hidden">
-                <input
-                  type="text"
-                  value={collabSearch}
-                  onChange={(e) => setCollabSearch(e.target.value)}
-                  placeholder="Kişi ara…"
-                  className="w-full px-3 py-1.5 text-sm border-b border-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-                <div className="max-h-24 overflow-y-auto p-2 flex flex-wrap gap-x-4 gap-y-2">
-                  {filteredPeople.map((person) => (
-                    <label key={person.key} className="flex items-center gap-1.5 cursor-pointer text-sm text-gray-700">
-                      <input
-                        type="checkbox"
-                        checked={collaborators.includes(person.name)}
-                        onChange={() => toggleCollaborator(person.name)}
-                        className="rounded text-blue-500 focus:ring-blue-500"
-                      />
-                      {person.name}
-                    </label>
-                  ))}
-                  {filteredPeople.length === 0 && <p className="text-xs text-gray-400 px-1">Eşleşen kişi yok</p>}
-                </div>
-              </div>
-              {collaborators.length > 0 && (
-                <p className="text-xs text-gray-400 mt-1">Seçili: {collaborators.join(", ")}</p>
-              )}
-            </div>
-          )}
+          {/* Sorumlu kişiler — assigned after creation in task detail (dept-filtered) */}
+          <p className="text-xs text-gray-400">
+            Sorumlu kişileri, görev oluşturulduktan sonra görev detayından (departmana göre filtreli) ekleyebilirsiniz.
+          </p>
 
           {/* Başlangıç tarihi + Teslim tarihi (start before due) */}
           <div className="grid grid-cols-2 gap-3">

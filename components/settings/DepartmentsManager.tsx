@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { ChevronRight, Plus, Trash2, UserPlus, UserMinus, Crown } from "lucide-react";
 import type { WorkspaceDepartment, DepartmentMember, WorkspaceMember, Profile } from "@/types";
 import { Avatar, AvatarGroup } from "@/components/ui/Avatar";
@@ -81,6 +82,7 @@ function AddMemberForm({
   const [role, setRole] = useState<"lead" | "member">("member");
   const [pending, startTransition] = useTransition();
   const [err, setErr] = useState<string | null>(null);
+  const router = useRouter();
 
   const available = workspaceMembers.filter((m) => !existingMemberIds.has(m.id));
 
@@ -89,8 +91,9 @@ function AddMemberForm({
     setErr(null);
     startTransition(async () => {
       const res = await addDepartmentMember(departmentId, selectedId, role);
-      if ("error" in res) setErr(res.error);
-      else onDone();
+      if ("error" in res) { setErr(res.error); return; }
+      router.refresh(); // surface the new assignment immediately
+      onDone();
     });
   }
 
@@ -149,6 +152,7 @@ function DeptCard({
   const [open, setOpen] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
   const [, startTransition] = useTransition();
+  const router = useRouter();
 
   const colorClass = dept.color_key ? (COLOR_CLASSES[dept.color_key] ?? "bg-gray-100 text-gray-700") : "bg-gray-100 text-gray-700";
   const myMembers = deptMembers.filter((dm) => dm.department_id === dept.id);
@@ -157,6 +161,7 @@ function DeptCard({
   function handleRemoveMember(dmId: string) {
     startTransition(async () => {
       await removeDepartmentMember(dmId);
+      router.refresh();
     });
   }
 

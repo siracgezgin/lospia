@@ -4,7 +4,7 @@ import { ContactsManager } from "@/components/settings/ContactsManager";
 import { WorkspaceNameEditor } from "@/components/settings/WorkspaceNameEditor";
 import { MembersManager } from "@/components/settings/MembersManager";
 import { DepartmentsManager } from "@/components/settings/DepartmentsManager";
-import { canManageSettings, canRenameWorkspace, canManageMembers } from "@/lib/auth/permissions";
+import { canManageSettings, canRenameWorkspace, canManageMembers, canManageWorkspace } from "@/lib/auth/permissions";
 import type {
   Workspace, WorkspaceMember, Profile, CustomFieldDefinition,
   WorkspaceContact, WorkspaceRole, WorkspaceInvite,
@@ -37,7 +37,8 @@ export default async function SettingsPage() {
   }
 
   const isOwner = canRenameWorkspace(userRole);
-  const canManage = canManageMembers(userRole);
+  const canManage = canManageMembers(userRole);          // owner-only (invites)
+  const canManageDepts = canManageWorkspace(userRole);   // owner + admin (departments)
 
   const [wsResult, membersResult, profileResult, cfResult, contactsResult, invitesResult,
          deptsResult, deptMembersResult] =
@@ -73,7 +74,7 @@ export default async function SettingsPage() {
         .order("position"),
       supabase
         .from("department_members")
-        .select("*, profiles(id, full_name, email)")
+        .select("*, workspace_members(profiles(id, full_name, email))")
         .eq("workspace_id", workspaceId),
     ]);
 
@@ -83,7 +84,19 @@ export default async function SettingsPage() {
   const contacts: WorkspaceContact[] = (contactsResult.data ?? []) as WorkspaceContact[];
   const invites: WorkspaceInvite[] = (invitesResult.data ?? []) as WorkspaceInvite[];
   const departments: WorkspaceDepartment[] = (deptsResult.data ?? []) as WorkspaceDepartment[];
-  const deptMembers = ((deptMembersResult.data ?? []) as unknown) as (DepartmentMember & { profiles?: Partial<Profile> | null })[];
+  // department_members.member_id → workspace_members → profiles. Flatten the
+  // embed so each row carries a `profiles` shape the manager already expects.
+  type DeptMemberRowRaw = DepartmentMember & {
+    workspace_members?:
+      | { profiles?: Partial<Profile> | Partial<Profile>[] | null }
+      | { profiles?: Partial<Profile> | Partial<Profile>[] | null }[]
+      | null;
+  };
+  const deptMembers = ((deptMembersResult.data ?? []) as unknown as DeptMemberRowRaw[]).map((r) => {
+    const wm = Array.isArray(r.workspace_members) ? r.workspace_members[0] : r.workspace_members;
+    const prof = wm && (Array.isArray(wm.profiles) ? wm.profiles[0] : wm.profiles);
+    return { ...r, profiles: prof ?? null } as DepartmentMember & { profiles?: Partial<Profile> | null };
+  });
 
   const ROLE_DISPLAY: Record<string, string> = {
     owner: "Sahip", admin: "Yönetici", member: "Üye", viewer: "İzleyici",
@@ -143,7 +156,7 @@ export default async function SettingsPage() {
           workspaceMembers={
             (membersResult.data ?? []) as (WorkspaceMember & { profiles?: Partial<Profile> | null })[]
           }
-          canManage={canManage}
+          canManage={canManageDepts}
         />
       </section>
 
