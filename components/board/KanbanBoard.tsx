@@ -55,8 +55,10 @@ import { formatDateTR } from "@/lib/utils/format-date";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
 import { ExcelImportModal } from "@/components/task/ExcelImportModal";
 import { NotesColumn } from "@/components/board/NotesColumn";
+import { BoardRulesPanel } from "@/components/board/BoardRulesPanel";
 import { canCreateTask, canDeleteTask, canArchiveTask } from "@/lib/auth/permissions";
 import type { Task, SavedView, TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceNote, WorkspaceRole } from "@/types";
+import type { BoardRule } from "@/app/(app)/board/page";
 
 // ── Week helpers ──────────────────────────────────────────────────────────────
 
@@ -234,6 +236,7 @@ interface Props {
   profiles: Pick<Profile, "id" | "full_name" | "email">[];
   contacts: WorkspaceContact[];
   notes: WorkspaceNote[];
+  rules?: BoardRule[];
   newRulesCount?: number;
   userRole?: WorkspaceRole;
 }
@@ -536,6 +539,7 @@ function CardContent({
 
       {/* Title */}
       <Link
+        prefetch={false}
         href={`/tasks/${task.id}`}
         className={cn(
           "text-[13px] font-medium line-clamp-2 block leading-snug tracking-[-0.005em]",
@@ -849,6 +853,7 @@ export function KanbanBoard({
   profiles,
   contacts,
   notes,
+  rules = [],
   newRulesCount = 0,
   userRole = "member",
 }: Props) {
@@ -885,8 +890,6 @@ export function KanbanBoard({
   // Derive the week ISO string for URL building (always the Monday)
   const weekParam = weekStart.toISOString().slice(0, 10);
 
-  // Rules alert (dismissible per session)
-  const [alertDismissed, setAlertDismissed] = useState(false);
 
   // Toast notifications (optionally with an action link, e.g. "open in Tüm işler")
   type Toast = { id: string; msg: string; action?: { label: string; href: string } };
@@ -1113,30 +1116,8 @@ export function KanbanBoard({
   return (
     <div className="flex flex-col h-full">
 
-      {/* ── Rules alert ───────────────────────────────────────────────────── */}
-      {newRulesCount > 0 && !alertDismissed && (
-        <div className="flex items-center justify-between px-4 py-2 bg-[#fdf8e8] border-b border-[#d4cf9e] shrink-0">
-          <span className="text-sm text-[#6b6748]">
-            <span className="font-semibold">{newRulesCount > 1 ? `${newRulesCount} kural` : "1 kural"}</span>
-            {" "}güncellendi veya eklendi.
-          </span>
-          <div className="flex items-center gap-3">
-            <Link
-              href="/rules"
-              className="text-sm font-medium text-[#406775] hover:underline"
-            >
-              Kuralları görüntüle →
-            </Link>
-            <button
-              onClick={() => setAlertDismissed(true)}
-              className="text-gray-400 hover:text-gray-600 p-0.5"
-              aria-label="Bildirimi kapat"
-            >
-              <X size={14} />
-            </button>
-          </div>
-        </div>
-      )}
+      {/* ── Rules panel (compact, collapsible) ────────────────────────────── */}
+      <BoardRulesPanel rules={rules} newCount={newRulesCount} />
 
       {/* ── Week selector ─────────────────────────────────────────────────── */}
       <div className="flex items-center gap-1.5 px-4 py-2 bg-white border-b border-gray-100 shrink-0">

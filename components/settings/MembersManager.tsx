@@ -1,14 +1,17 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Plus, X, UserMinus, ChevronDown } from "lucide-react";
+import { Plus, X, UserMinus, ChevronDown, Copy, Check } from "lucide-react";
 import {
   createWorkspaceInvite,
   cancelWorkspaceInvite,
   changeWorkspaceMemberRole,
   removeWorkspaceMember,
 } from "@/lib/actions/workspace";
-import type { WorkspaceMember, Profile, WorkspaceInvite, WorkspaceRole } from "@/types";
+import type {
+  WorkspaceMember, Profile, WorkspaceInvite, WorkspaceRole,
+  WorkspaceDepartment, DepartmentMember,
+} from "@/types";
 
 const ROLE_LABELS: Record<string, string> = {
   owner:  "Sahip",
@@ -29,6 +32,35 @@ interface Props {
   userRole: WorkspaceRole;
   initialMembers: MemberRow[];
   initialInvites: WorkspaceInvite[];
+  departments?: WorkspaceDepartment[];
+  deptMembers?: DepartmentMember[];
+}
+
+/** Build an invite link the owner can hand to a person directly. */
+function inviteLink(email: string): string {
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  return `${origin}/login?mode=signup&email=${encodeURIComponent(email)}`;
+}
+
+function CopyLinkButton({ email }: { email: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(inviteLink(email));
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1800);
+        } catch { /* clipboard unavailable — link is still shown below */ }
+      }}
+      className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 shrink-0"
+      title="Davet bağlantısını kopyala"
+    >
+      {copied ? <Check size={12} /> : <Copy size={12} />}
+      {copied ? "Kopyalandı" : "Bağlantıyı kopyala"}
+    </button>
+  );
 }
 
 export function MembersManager({
@@ -37,6 +69,8 @@ export function MembersManager({
   userRole,
   initialMembers,
   initialInvites,
+  departments = [],
+  deptMembers = [],
 }: Props) {
   const [members, setMembers] = useState(initialMembers);
   const [invites, setInvites] = useState(initialInvites);
@@ -49,6 +83,17 @@ export function MembersManager({
   const [inviteRole, setInviteRole] = useState<"admin" | "member" | "viewer">("member");
 
   const isOwner = userRole === "owner";
+
+  // member_id (workspace_members.id) → department names
+  const deptNameById = new Map(departments.map((d) => [d.id, d.name]));
+  const deptsByMember = new Map<string, string[]>();
+  for (const dm of deptMembers) {
+    const name = deptNameById.get(dm.department_id);
+    if (!name) continue;
+    const arr = deptsByMember.get(dm.member_id) ?? [];
+    arr.push(name);
+    deptsByMember.set(dm.member_id, arr);
+  }
 
   function handleInvite(e: React.FormEvent) {
     e.preventDefault();
@@ -121,6 +166,15 @@ export function MembersManager({
                   {isSelf && <span className="ml-1.5 text-[10px] text-gray-400">(siz)</span>}
                 </p>
                 <p className="text-xs text-gray-400 truncate">{m.profiles?.email}</p>
+                {(deptsByMember.get(m.id) ?? []).length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {(deptsByMember.get(m.id) ?? []).map((name) => (
+                      <span key={name} className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-full">
+                        {name}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {canManage ? (
@@ -169,18 +223,25 @@ export function MembersManager({
                   <p className="text-xs text-gray-400">{ROLE_LABELS[inv.role] ?? inv.role} · Bekliyor</p>
                 </div>
                 {isOwner && (
-                  <button
-                    onClick={() => handleCancelInvite(inv.id)}
-                    disabled={isPending}
-                    className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-50 transition-colors"
-                    aria-label="Daveti iptal et"
-                  >
-                    <X size={14} />
-                  </button>
+                  <>
+                    <CopyLinkButton email={inv.email} />
+                    <button
+                      onClick={() => handleCancelInvite(inv.id)}
+                      disabled={isPending}
+                      className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-50 transition-colors"
+                      aria-label="Daveti iptal et"
+                    >
+                      <X size={14} />
+                    </button>
+                  </>
                 )}
               </div>
             ))}
           </div>
+          <p className="text-xs text-gray-400 mt-2">
+            Davet kaydedildi. E-posta gönderimi aktif değilse bu bağlantıyı kişiye iletin; kişi davet edilen
+            e-posta ile kayıt olmalı.
+          </p>
         </div>
       )}
 
@@ -193,7 +254,7 @@ export function MembersManager({
               className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium"
             >
               <Plus size={14} />
-              Kullanıcı davet et
+              Üye davet et
             </button>
           ) : (
             <form onSubmit={handleInvite} className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
@@ -226,7 +287,7 @@ export function MembersManager({
                   disabled={isPending || !inviteEmail.trim()}
                   className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
                 >
-                  {isPending ? "Gönderiliyor…" : "Davet gönder"}
+                  {isPending ? "Oluşturuluyor…" : "Davet oluştur"}
                 </button>
                 <button
                   type="button"

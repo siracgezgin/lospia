@@ -4,11 +4,18 @@ import { useActionState } from "react";
 import { signIn, signUp, type AuthFormState } from "@/lib/actions/auth";
 import { useState } from "react";
 
-export function LoginForm() {
-  // Pilot is invite-only: sign-up is only shown in dev where there is no
-  // real AF workspace restriction. In production, only the sign-in tab is shown.
-  const isPilot = process.env.NODE_ENV === "production";
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+export function LoginForm({
+  initialMode = "signin",
+  initialEmail = "",
+}: {
+  initialMode?: "signin" | "signup";
+  initialEmail?: string;
+}) {
+  // Invite-only is enforced server-side: after sign-up, AppLayout calls
+  // provision_workspace() which returns {error:"no_invite"} and shows the gate
+  // for anyone without a pending invite. So it is safe to expose sign-up here —
+  // invited users (who arrive via the invite link) can create their account.
+  const [mode, setMode] = useState<"signin" | "signup">(initialMode);
   const [signInState, signInAction, signInPending] = useActionState<AuthFormState, FormData>(
     signIn,
     null
@@ -24,36 +31,40 @@ export function LoginForm() {
 
   return (
     <div className="space-y-4">
-      {/* Tab switcher — hidden in production pilot */}
-      {!isPilot && (
-        <div className="flex rounded-lg bg-gray-100 p-1 text-sm font-medium">
-          <button
-            type="button"
-            onClick={() => setMode("signin")}
-            className={`flex-1 rounded-md py-1.5 transition-colors ${
-              mode === "signin"
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            Giriş yap
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("signup")}
-            className={`flex-1 rounded-md py-1.5 transition-colors ${
-              mode === "signup"
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            Kayıt ol
-          </button>
-        </div>
+      {/* Tab switcher */}
+      <div className="flex rounded-lg bg-gray-100 p-1 text-sm font-medium">
+        <button
+          type="button"
+          onClick={() => setMode("signin")}
+          className={`flex-1 rounded-md py-1.5 transition-colors ${
+            mode === "signin"
+              ? "bg-white text-gray-900 shadow-sm"
+              : "text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          Giriş yap
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode("signup")}
+          className={`flex-1 rounded-md py-1.5 transition-colors ${
+            mode === "signup"
+              ? "bg-white text-gray-900 shadow-sm"
+              : "text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          Kayıt ol
+        </button>
+      </div>
+
+      {mode === "signup" && (
+        <p className="text-xs text-gray-500 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
+          Bu sistem davet ile çalışır. Lütfen davet edildiğiniz e-posta adresi ile kayıt olun.
+        </p>
       )}
 
       <form action={action} className="space-y-3">
-        {mode === "signup" && !isPilot && (
+        {mode === "signup" && (
           <div>
             <label htmlFor="full_name" className="block text-sm font-medium text-gray-700 mb-1">
               Ad soyad
@@ -79,6 +90,7 @@ export function LoginForm() {
             type="email"
             autoComplete="email"
             required
+            defaultValue={initialEmail}
             placeholder="you@example.com"
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />

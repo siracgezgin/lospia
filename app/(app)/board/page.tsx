@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { KanbanBoard } from "@/components/board/KanbanBoard";
 import type { Task, SavedView, Profile, WorkspaceContact, WorkspaceNote, WorkspaceRole } from "@/types";
 
+export type BoardRule = { id: string; title: string; category: string | null; updated_at: string };
+
 function parseWeekParam(weekStr?: string): string | null {
   if (!weekStr) return null;
   const d = new Date(weekStr + "T00:00:00");
@@ -61,18 +63,11 @@ export default async function BoardPage({
       .eq("workspace_id", workspaceId)
       .or(`is_shared.eq.true,owner_id.eq.${user.id}`)
       .order("position"),
+    // Member profiles via a single join (no sequential sub-query)
     supabase
-      .from("profiles")
-      .select("id, full_name, email")
-      .in(
-        "id",
-        (
-          await supabase
-            .from("workspace_members")
-            .select("user_id")
-            .eq("workspace_id", workspaceId)
-        ).data?.map((m: { user_id: string }) => m.user_id) ?? []
-      ),
+      .from("workspace_members")
+      .select("profiles(id, full_name, email)")
+      .eq("workspace_id", workspaceId),
     supabase
       .from("workspace_contacts")
       .select("*")
@@ -84,27 +79,28 @@ export default async function BoardPage({
       .eq("workspace_id", workspaceId)
       .order("position")
       .order("created_at"),
-    // Count rules updated after member's last seen timestamp
-    lastRulesSeen
-      ? supabase
-          .from("workspace_rules")
-          .select("id", { count: "exact", head: true })
-          .eq("workspace_id", workspaceId)
-          .eq("is_active", true)
-          .gt("updated_at", lastRulesSeen)
-      : supabase
-          .from("workspace_rules")
-          .select("id", { count: "exact", head: true })
-          .eq("workspace_id", workspaceId)
-          .eq("is_active", true),
+    // Active rules (compact list for the board panel + "new since last seen" count)
+    supabase
+      .from("workspace_rules")
+      .select("id, title, category, updated_at")
+      .eq("workspace_id", workspaceId)
+      .eq("is_active", true)
+      .order("position"),
   ]);
 
   const tasks: Task[] = tasksResult.data ?? [];
   const savedViews: SavedView[] = viewsResult.data ?? [];
-  const profiles: Pick<Profile, "id" | "full_name" | "email">[] = profilesResult.data ?? [];
+  type ProfileLite = Pick<Profile, "id" | "full_name" | "email">;
+  const profiles: ProfileLite[] = (
+    (profilesResult.data ?? []) as unknown as { profiles: ProfileLite | ProfileLite[] | null }[]
+  )
+    .flatMap((m) => (Array.isArray(m.profiles) ? m.profiles : m.profiles ? [m.profiles] : []));
   const contacts: WorkspaceContact[] = (contactsResult.data ?? []) as WorkspaceContact[];
   const notes: WorkspaceNote[] = (notesResult.data ?? []) as WorkspaceNote[];
-  const newRulesCount = rulesResult.count ?? 0;
+  const activeRules = (rulesResult.data ?? []) as BoardRule[];
+  const newRulesCount = lastRulesSeen
+    ? activeRules.filter((r) => r.updated_at > lastRulesSeen).length
+    : activeRules.length;
   const viewSlug = params.view ?? null;
 
   return (
@@ -118,6 +114,7 @@ export default async function BoardPage({
       profiles={profiles}
       contacts={contacts}
       notes={notes}
+      rules={activeRules}
       newRulesCount={newRulesCount}
       userRole={userRole}
     />

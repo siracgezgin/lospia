@@ -163,6 +163,18 @@ export async function createTask(
     },
   });
 
+  // Notification: task created already assigned to someone else
+  if (taskData.assignee_id && taskData.assignee_id !== user.id) {
+    await supabase.from("notifications").insert({
+      workspace_id: taskData.workspace_id,
+      user_id: taskData.assignee_id,
+      type: "task_assigned" as TaskStatusType,
+      title: "Size bir görev atandı",
+      body: taskData.title,
+      task_id: (data as { id: string }).id,
+    } as Record<string, unknown>);
+  }
+
   revalidatePath("/board");
   revalidatePath("/list");
   return { id: (data as { id: string }).id };

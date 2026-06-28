@@ -159,6 +159,8 @@ export default async function SettingsPage() {
               (membersResult.data ?? []) as (WorkspaceMember & { profiles?: Partial<Profile> | null })[]
             }
             initialInvites={invites}
+            departments={departments}
+            deptMembers={deptMembers}
           />
         ) : (
           <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">

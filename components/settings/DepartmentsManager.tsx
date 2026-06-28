@@ -386,17 +386,28 @@ export function DepartmentsManager({ departments, deptMembers, workspaceMembers,
         </div>
       )}
 
+      {/* Maintenance — tucked away so normal users don't think they must run it */}
       {departments.length > 0 && canManage && (
-        <button
-          onClick={handleProvision}
-          disabled={provisioning}
-          className="text-xs text-gray-400 hover:text-gray-600 underline"
-        >
-          {provisioning ? "Eşitleniyor…" : "AF departman yapısını eşitle"}
-        </button>
+        <details className="mt-4 border-t border-gray-100 pt-3">
+          <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-600 select-none">
+            Bakım / Sistem işlemleri
+          </summary>
+          <div className="mt-2 space-y-2">
+            <p className="text-xs text-gray-500">
+              Eksik AF departmanlarını yeniden oluşturur; mevcut görevleri veya üye atamalarını silmez.
+            </p>
+            <button
+              onClick={handleProvision}
+              disabled={provisioning}
+              className="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded hover:bg-gray-200 disabled:opacity-50"
+            >
+              {provisioning ? "Eşitleniyor…" : "AF departman yapısını eşitle"}
+            </button>
+            {provisionErr && <p className="text-xs text-red-600">{provisionErr}</p>}
+            {provisionOk && <p className="text-xs text-green-700">Departman yapısı eşitlendi.</p>}
+          </div>
+        </details>
       )}
-      {provisionErr && <p className="text-xs text-red-600">{provisionErr}</p>}
-      {provisionOk && <p className="text-xs text-green-700">Departman yapısı eşitlendi.</p>}
     </div>
   );
 }

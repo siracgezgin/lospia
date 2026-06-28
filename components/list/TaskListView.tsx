@@ -170,6 +170,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
       cell: (info) => (
         <div>
           <Link
+            prefetch={false}
             href={`/tasks/${info.row.original.id}`}
             className="font-medium text-gray-900 hover:text-blue-600 text-sm line-clamp-1 block"
           >

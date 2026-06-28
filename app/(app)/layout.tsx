@@ -5,6 +5,12 @@ import { AppHeader } from "@/components/layout/AppHeader";
 import { MobileNav } from "@/components/layout/MobileNav";
 import type { Workspace, SavedView, Notification, WorkspaceRole } from "@/types";
 
+// Co-locate serverless functions with the Supabase project (eu-north-1, Stockholm).
+// Vercel's "arn1" is Stockholm; this removes the cross-region (fra1↔eu-north-1)
+// latency that was being added to every Supabase round-trip. Falls back
+// gracefully if the region is unavailable on the current plan.
+export const preferredRegion = "arn1";
+
 export default async function AppLayout({
   children,
 }: {

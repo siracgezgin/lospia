@@ -1,7 +1,14 @@
 import { LoginForm } from "@/components/layout/LoginForm";
 import { Wordmark } from "@/components/ui/Wordmark";
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ mode?: string; email?: string }>;
+}) {
+  const params = await searchParams;
+  const initialMode = params.mode === "signup" ? "signup" : "signin";
+  const initialEmail = params.email ?? "";
   return (
     <main className="min-h-screen flex items-center justify-center bg-app px-4">
       <div className="w-full max-w-sm space-y-6 p-8 bg-surface rounded-2xl shadow-sm border border-line">
@@ -12,7 +19,7 @@ export default function LoginPage() {
             <p className="text-sm text-muted">Devam etmek için hesabınıza giriş yapın.</p>
           </div>
         </div>
-        <LoginForm />
+        <LoginForm initialMode={initialMode} initialEmail={initialEmail} />
       </div>
     </main>
   );

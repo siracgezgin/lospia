@@ -150,21 +150,39 @@ export async function addTaskNote(
 
   if (error) return { error: error.message };
 
-  // Notify task owner/assignee that a note was added (skip if same user)
+  // Notify the assignee and the person being waited on (deduped, skip self).
   const { data: task } = await supabase
     .from("tasks")
-    .select("assignee_id, title, workspace_id")
+    .select("assignee_id, title, workspace_id, waiting_on_member_id")
     .eq("id", taskId)
     .maybeSingle();
-  if (task?.assignee_id && task.assignee_id !== ctx.user.id) {
-    await supabase.from("notifications").insert({
-      workspace_id: ctx.workspaceId,
-      user_id: task.assignee_id,
-      type: "task_note_added",
-      title: "Bir göreve not eklendi",
-      body: task.title,
-      task_id: taskId,
-    } as Record<string, unknown>);
+
+  if (task) {
+    const recipients = new Set<string>();
+    if (task.assignee_id) recipients.add(task.assignee_id);
+    // waiting_on_member_id references workspace_members.id → resolve to user_id
+    if (task.waiting_on_member_id) {
+      const { data: wm } = await supabase
+        .from("workspace_members")
+        .select("user_id")
+        .eq("id", task.waiting_on_member_id)
+        .maybeSingle();
+      if (wm?.user_id) recipients.add(wm.user_id);
+    }
+    recipients.delete(ctx.user.id); // never notify the note author
+
+    if (recipients.size > 0) {
+      await supabase.from("notifications").insert(
+        [...recipients].map((uid) => ({
+          workspace_id: ctx.workspaceId,
+          user_id: uid,
+          type: "task_note_added",
+          title: "Bir göreve not eklendi",
+          body: task.title,
+          task_id: taskId,
+        })) as Record<string, unknown>[]
+      );
+    }
   }
 
   revalidatePath(`/tasks/${taskId}`);

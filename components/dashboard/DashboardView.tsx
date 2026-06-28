@@ -204,7 +204,7 @@ function RiskGroup({
             <div key={task.id} className="py-2.5 flex items-center justify-between gap-4">
               <div className="flex items-center gap-2 min-w-0">
                 <span className={`h-2 w-2 rounded-full shrink-0 ${PRIORITY_DOT[task.priority]}`} title={task.priority} />
-                <Link href={`/tasks/${task.id}`} className="text-sm font-medium text-ink hover:text-brand truncate">
+                <Link prefetch={false} href={`/tasks/${task.id}`} className="text-sm font-medium text-ink hover:text-brand truncate">
                   {task.title}
                 </Link>
                 <span className="text-[11px] text-subtle shrink-0">{STATUS_LABELS[task.status]}</span>

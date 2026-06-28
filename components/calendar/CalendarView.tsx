@@ -181,6 +181,7 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts }: Props) 
                 selectedDayTasks.map((task) => (
                   <Link
                     key={task.id}
+                    prefetch={false}
                     href={`/tasks/${task.id}`}
                     onClick={() => setSelectedDay(null)}
                     className={cn(
