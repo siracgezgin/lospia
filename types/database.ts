@@ -1102,6 +1102,11 @@ export type Database = {
         Returns: undefined
       }
       provision_workspace: { Args: { p_full_name?: string }; Returns: Json }
+      repair_pending_workspace_invites: { Args: never; Returns: number }
+      to_workspace_role: {
+        Args: { p_role: string }
+        Returns: Database["public"]["Enums"]["workspace_role"]
+      }
     }
     Enums: {
       custom_field_type: "text" | "number" | "select" | "boolean" | "date"
