@@ -109,6 +109,42 @@ export function getCardStyle(t: { status: TaskStatus; custom_fields?: unknown })
 // Back-compat alias (older imports). Returns the active category style.
 export const getCategoryStyle = getCategoryCardStyle;
 
+// ── Department-driven card colour (AF Operasyon model) ────────────────────────
+// AF Operasyon is organised by department, not by the (changing) topic/konu.
+// A department's color_key maps to a pastel family. 'green' is remapped to teal
+// because green is reserved exclusively for completed tasks (DONE_STYLE).
+const DEPT_COLOR_TO_FAMILY: Record<string, keyof typeof FAMILY> = {
+  purple: "lavender",
+  lavender: "lavender",
+  orange: "orange",
+  blue: "blue",
+  pink: "pink",
+  rose: "rose",
+  green: "teal",   // reserved → use teal instead
+  teal: "teal",
+  amber: "amber",
+  sand: "sand",
+  slate: "slate",
+  brown: "brown",
+};
+
+/** Department card style from a department color_key. Neutral when absent. */
+export function getDepartmentCardStyle(colorKey?: string | null): CardStyle {
+  if (!colorKey) return CATEGORY_NONE;
+  const fam = DEPT_COLOR_TO_FAMILY[colorKey] ?? FALLBACK[hashIndex(colorKey, FALLBACK.length)];
+  return FAMILY[fam];
+}
+
+/**
+ * Resolved card style for a task in the department model. DONE overrides to the
+ * reserved green; otherwise the department owns the colour. Tasks with no
+ * department render neutral (never a faked identity).
+ */
+export function getTaskCardStyle(status: TaskStatus, deptColorKey?: string | null): CardStyle {
+  if (status === "done") return DONE_STYLE;
+  return getDepartmentCardStyle(deptColorKey);
+}
+
 // ── Task state (SECONDARY — chips / due-date color only, never card color) ────
 
 export type CardState = "overdue" | "blocked" | "approval" | "due_soon" | "done" | "normal";

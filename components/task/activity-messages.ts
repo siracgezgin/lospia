@@ -28,6 +28,15 @@ function transition(a: string, b: string): string {
   return `${a} → ${b}`;
 }
 
+// Sanitize a raw stored value for display: unwrap accidental surrounding quotes
+// (e.g. a JSON-encoded string like "Test") and trim whitespace.
+function cleanStr(v: unknown): string {
+  if (v == null) return "—";
+  let s = String(v).trim();
+  if (s.length >= 2 && s.startsWith('"') && s.endsWith('"')) s = s.slice(1, -1);
+  return s || "—";
+}
+
 /**
  * Build the human-readable Turkish message body for a single audit log row.
  * The actor name is rendered separately by the UI, so this returns just the
@@ -72,7 +81,7 @@ export function activityMessage(
     case "due_date_changed":
       return `teslim tarihini ${transition(dateLabel(oldV), dateLabel(newV))} olarak değiştirdi.`;
     case "category_changed":
-      return `kategoriyi ${transition(String(oldV ?? "—"), String(newV ?? "—"))} olarak değiştirdi.`;
+      return `konuyu ${transition(cleanStr(oldV), cleanStr(newV))} olarak değiştirdi.`;
     case "assignee_changed": {
       const name = resolveName(typeof newV === "string" ? newV : null);
       return name

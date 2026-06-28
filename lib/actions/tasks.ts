@@ -56,6 +56,7 @@ const CreateTaskSchema = z.object({
   responsible_contact_id: hexUuid("Geçersiz kişi seçimi").nullable().optional(),
   due_date: z.string().nullable().optional(),
   start_date: z.string().nullable().optional(),
+  department_id: hexUuid("Geçersiz departman").nullable().optional(),
   tags: z.array(z.string().max(50)).max(20).default([]),
   custom_fields: z.record(z.string(), z.unknown()).default({}),
 });

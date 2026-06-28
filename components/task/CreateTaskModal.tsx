@@ -12,7 +12,7 @@ import {
   PROJECT_OPTIONS,
 } from "@/lib/utils/task-constants";
 import { cn } from "@/lib/utils/cn";
-import type { TaskStatus, TaskPriority, Profile, WorkspaceContact } from "@/types";
+import type { TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceDepartment } from "@/types";
 
 interface Props {
   onClose: () => void;
@@ -21,6 +21,7 @@ interface Props {
   defaultDueDate?: string;
   profiles: Pick<Profile, "id" | "full_name" | "email">[];
   contacts: WorkspaceContact[];
+  departments?: WorkspaceDepartment[];
 }
 
 function encodeResponsible(type: "member" | "contact", id: string) {
@@ -42,6 +43,7 @@ export function CreateTaskModal({
   defaultDueDate = "",
   profiles,
   contacts,
+  departments = [],
 }: Props) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -50,8 +52,16 @@ export function CreateTaskModal({
   // Primary fields
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [departmentId, setDepartmentId] = useState("");
   const [project, setProject] = useState("");
-  const [category, setCategory] = useState("");
+  const [konu, setKonu] = useState("");
+
+  const topDepts = useMemo(() => departments.filter((d) => d.parent_id === null), [departments]);
+  const childDepts = useMemo(() => {
+    const m: Record<string, WorkspaceDepartment[]> = {};
+    for (const d of departments) if (d.parent_id) (m[d.parent_id] ??= []).push(d);
+    return m;
+  }, [departments]);
   const [responsibleValue, setResponsibleValue] = useState("");
   const [dueDate, setDueDate] = useState(defaultDueDate);
   const [status, setStatus] = useState<TaskStatus>(defaultStatus);
@@ -92,7 +102,7 @@ export function CreateTaskModal({
     const tags = tagsInput.split(",").map((t) => t.trim()).filter(Boolean);
     const customFields: Record<string, unknown> = {};
     if (project) customFields.project = project;
-    if (category.trim()) customFields.category = category.trim();
+    if (konu.trim()) customFields.category = konu.trim(); // stored under legacy key, shown as "Konu"
     if (successCriteria.trim()) customFields.success_criteria = successCriteria.trim();
     if (collaborators.length > 0) customFields.collaborators = collaborators;
 
@@ -107,6 +117,7 @@ export function CreateTaskModal({
         priority,
         assignee_id,
         responsible_contact_id,
+        department_id: departmentId || null,
         due_date: dueDate || null,
         start_date: startDate || null,
         tags,
@@ -168,8 +179,38 @@ export function CreateTaskModal({
             />
           </div>
 
-          {/* Proje / İş Alanı + Kategori */}
+          {/* Departman */}
+          <div>
+            <label className={labelCls}>Departman</label>
+            <select
+              value={departmentId}
+              onChange={(e) => setDepartmentId(e.target.value)}
+              className={selectCls}
+            >
+              <option value="">— Departman seçin</option>
+              {topDepts.map((d) => (
+                <optgroup key={d.id} label={d.name}>
+                  <option value={d.id}>{d.name} (genel)</option>
+                  {(childDepts[d.id] ?? []).map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+
+          {/* Konu + Proje */}
           <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Konu</label>
+              <input
+                type="text"
+                value={konu}
+                onChange={(e) => setKonu(e.target.value)}
+                placeholder="Bu işin konusu / bağlamı…"
+                className={inputCls}
+              />
+            </div>
             <div>
               <label className={labelCls}>Proje / İş Alanı</label>
               <select
@@ -180,16 +221,6 @@ export function CreateTaskModal({
                 <option value="">— Seçin</option>
                 {PROJECT_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
-            </div>
-            <div>
-              <label className={labelCls}>Kategori / Konu</label>
-              <input
-                type="text"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                placeholder="Örn: Operasyon…"
-                className={inputCls}
-              />
             </div>
           </div>
 

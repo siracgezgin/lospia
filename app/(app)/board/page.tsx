@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { KanbanBoard } from "@/components/board/KanbanBoard";
-import type { Task, SavedView, Profile, WorkspaceContact, WorkspaceNote, WorkspaceRole } from "@/types";
+import type { Task, SavedView, Profile, WorkspaceContact, WorkspaceNote, WorkspaceRole, WorkspaceDepartment } from "@/types";
 
 export type BoardRule = { id: string; title: string; category: string | null; updated_at: string };
 
@@ -49,7 +49,7 @@ export default async function BoardPage({
     );
   }
 
-  const [tasksResult, viewsResult, profilesResult, contactsResult, notesResult, rulesResult] = await Promise.all([
+  const [tasksResult, viewsResult, profilesResult, contactsResult, notesResult, rulesResult, deptsResult] = await Promise.all([
     supabase
       .from("tasks")
       .select("*")
@@ -86,6 +86,12 @@ export default async function BoardPage({
       .eq("workspace_id", workspaceId)
       .eq("is_active", true)
       .order("position"),
+    // Departments — drive card colours and the Departman filter
+    supabase
+      .from("workspace_departments")
+      .select("id, parent_id, name, color_key")
+      .eq("workspace_id", workspaceId)
+      .order("position"),
   ]);
 
   const tasks: Task[] = tasksResult.data ?? [];
@@ -101,6 +107,7 @@ export default async function BoardPage({
   const newRulesCount = lastRulesSeen
     ? activeRules.filter((r) => r.updated_at > lastRulesSeen).length
     : activeRules.length;
+  const departments = (deptsResult.data ?? []) as WorkspaceDepartment[];
   const viewSlug = params.view ?? null;
 
   return (
@@ -116,6 +123,7 @@ export default async function BoardPage({
       notes={notes}
       rules={activeRules}
       newRulesCount={newRulesCount}
+      departments={departments}
       userRole={userRole}
     />
   );

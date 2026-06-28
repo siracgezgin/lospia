@@ -2,13 +2,17 @@
 
 import { usePathname } from "next/navigation";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
+import { getPersonDisplayName } from "@/lib/utils/person-display";
 import type { Workspace, Notification, WorkspaceRole } from "@/types";
 
 interface Props {
   workspace: Workspace | null;
   unreadCount: number;
   userId: string;
+  userName?: string | null;
+  userEmail?: string | null;
   notifications?: Notification[];
   userRole?: WorkspaceRole;
 }
@@ -33,9 +37,12 @@ const PAGE_TITLES: { match: (p: string) => boolean; title: string }[] = [
   { match: (p) => p.startsWith("/tasks/"), title: "Görev" },
 ];
 
-export function AppHeader({ unreadCount, userId, notifications = [], userRole = "member" }: Props) {
+export function AppHeader({
+  unreadCount, userId, userName, userEmail, notifications = [], userRole = "member",
+}: Props) {
   const pathname = usePathname();
   const title = PAGE_TITLES.find((t) => t.match(pathname))?.title ?? "";
+  const displayName = getPersonDisplayName(userName ?? userEmail ?? null);
 
   return (
     <header className="h-14 bg-surface border-b border-line flex items-center justify-between px-5 shrink-0">
@@ -44,10 +51,15 @@ export function AppHeader({ unreadCount, userId, notifications = [], userRole = 
       </div>
 
       <div className="flex items-center gap-3">
-        <Badge size="xs" className="bg-surface-sunken text-subtle font-medium">
-          {ROLE_LABELS[userRole]}
-        </Badge>
         <NotificationBell unreadCount={unreadCount} userId={userId} notifications={notifications} />
+        {/* Current user identity — initials avatar, name on sm+, role badge */}
+        <div className="flex items-center gap-2 pl-3 border-l border-line" title={`${displayName} · ${ROLE_LABELS[userRole]}`}>
+          <Avatar name={displayName} size="sm" />
+          <div className="hidden sm:flex flex-col leading-tight">
+            <span className="text-xs font-medium text-ink truncate max-w-[140px]">{displayName}</span>
+            <span className="text-[10px] text-subtle">{ROLE_LABELS[userRole]}</span>
+          </div>
+        </div>
       </div>
     </header>
   );

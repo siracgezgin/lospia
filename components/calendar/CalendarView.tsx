@@ -17,9 +17,11 @@ import {
 } from "date-fns";
 import { tr } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, X, Plus } from "lucide-react";
-import type { TaskStatus, TaskPriority, Profile, WorkspaceContact } from "@/types";
+import type { TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceDepartment } from "@/types";
 import { cn } from "@/lib/utils/cn";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
+import { buildDeptMeta } from "@/lib/utils/departments";
+import { getDepartmentCardStyle } from "@/lib/design/semantics";
 
 type CalTask = {
   id: string;
@@ -28,6 +30,7 @@ type CalTask = {
   priority: TaskPriority;
   due_date: string | null;
   start_date: string | null;
+  department_id: string | null;
 };
 
 interface Props {
@@ -35,18 +38,18 @@ interface Props {
   workspaceId: string;
   profiles: Pick<Profile, "id" | "full_name" | "email">[];
   contacts: WorkspaceContact[];
+  departments?: WorkspaceDepartment[];
 }
-
-const PRIORITY_DOT: Record<TaskPriority, string> = {
-  urgent: "bg-red-500",
-  high:   "bg-orange-400",
-  medium: "bg-yellow-400",
-  low:    "bg-gray-300",
-};
 
 const STATUS_DONE_CLS = "line-through text-gray-400";
 
-export function CalendarView({ tasks, workspaceId, profiles, contacts }: Props) {
+export function CalendarView({ tasks, workspaceId, profiles, contacts, departments = [] }: Props) {
+  const deptMeta = buildDeptMeta(departments);
+  const dotFor = (t: CalTask) => {
+    if (t.status === "done") return "bg-[#2e9367]";
+    const color = t.department_id ? deptMeta[t.department_id]?.color : null;
+    return getDepartmentCardStyle(color).dot;
+  };
   const [current, setCurrent] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const [createModalDate, setCreateModalDate] = useState<string | null>(null);
@@ -68,9 +71,9 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts }: Props) 
   const selectedDayTasks = selectedDay ? getTasksForDay(selectedDay) : [];
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-6xl mx-auto h-full flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4 sm:mb-6 shrink-0">
         <h1 className="text-2xl font-bold text-gray-900">Takvim</h1>
         <div className="flex items-center gap-3">
           <button
@@ -100,50 +103,50 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts }: Props) 
       </div>
 
       {/* Day-of-week headers */}
-      <div className="grid grid-cols-7 mb-1">
+      <div className="grid grid-cols-7 mb-1 shrink-0">
         {["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"].map((d) => (
-          <div key={d} className="text-center text-xs font-semibold text-gray-400 py-1">{d}</div>
+          <div key={d} className="text-center text-xs font-semibold text-gray-400 py-1.5">{d}</div>
         ))}
       </div>
 
-      {/* Grid */}
-      <div className="grid grid-cols-7 border-l border-t border-gray-200 bg-white rounded-xl overflow-hidden shadow-sm">
+      {/* Grid — fills available height; taller, more readable day cells */}
+      <div className="grid grid-cols-7 grid-rows-6 flex-1 min-h-[28rem] border-l border-t border-gray-200 bg-white rounded-xl overflow-hidden shadow-sm">
         {days.map((day) => {
           const dayTasks = getTasksForDay(day);
           const isToday = isSameDay(day, new Date());
           const inMonth = isSameMonth(day, current);
           const isSelected = selectedDay ? isSameDay(day, selectedDay) : false;
-          const MAX_SHOWN = 3;
+          const MAX_SHOWN = 4;
 
           return (
             <button
               key={day.toISOString()}
               onClick={() => setSelectedDay(isSelected ? null : day)}
               className={cn(
-                "border-r border-b border-gray-200 min-h-20 p-1.5 text-left transition-colors",
+                "border-r border-b border-gray-200 min-h-24 p-2 text-left transition-colors flex flex-col",
                 !inMonth && "bg-gray-50",
                 isSelected && "bg-blue-50",
                 !isSelected && inMonth && "hover:bg-gray-50/70"
               )}
             >
               <p className={cn(
-                "text-xs font-medium mb-1 h-5 w-5 flex items-center justify-center rounded-full",
+                "text-xs font-medium mb-1 h-6 w-6 flex items-center justify-center rounded-full shrink-0",
                 isToday && "bg-blue-600 text-white",
                 !isToday && inMonth && "text-gray-700",
                 !isToday && !inMonth && "text-gray-300"
               )}>
                 {format(day, "d")}
               </p>
-              <div className="space-y-0.5">
+              <div className="space-y-1 overflow-hidden">
                 {dayTasks.slice(0, MAX_SHOWN).map((task) => (
                   <div
                     key={task.id}
                     className={cn(
-                      "flex items-center gap-1 text-[10px] truncate text-gray-600",
+                      "flex items-center gap-1.5 text-[11px] truncate text-gray-700",
                       task.status === "done" && STATUS_DONE_CLS
                     )}
                   >
-                    <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", PRIORITY_DOT[task.priority])} />
+                    <span className={cn("h-2 w-2 rounded-full shrink-0", dotFor(task))} />
                     <span className="truncate">{task.title}</span>
                   </div>
                 ))}
@@ -189,7 +192,7 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts }: Props) 
                       task.status === "done" && "opacity-60"
                     )}
                   >
-                    <span className={cn("h-2 w-2 rounded-full shrink-0", PRIORITY_DOT[task.priority])} />
+                    <span className={cn("h-2.5 w-2.5 rounded-full shrink-0", dotFor(task))} />
                     <span className={cn("text-sm text-gray-800 group-hover:text-blue-600 flex-1 truncate", task.status === "done" && "line-through")}>
                       {task.title}
                     </span>
@@ -223,6 +226,7 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts }: Props) 
           workspaceId={workspaceId}
           profiles={profiles}
           contacts={contacts}
+          departments={departments}
           defaultDueDate={createModalDate}
         />
       )}

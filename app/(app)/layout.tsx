@@ -73,8 +73,11 @@ export default async function AppLayout({
   let unreadCount = 0;
   let notifications: Notification[] = [];
 
+  let userName: string | null =
+    (user.user_metadata?.full_name as string | undefined) ?? null;
+
   if (workspaceId) {
-    const [wsResult, viewsResult, notifResult] = await Promise.all([
+    const [wsResult, viewsResult, notifResult, profileResult] = await Promise.all([
       supabase
         .from("workspaces")
         .select("*")
@@ -92,12 +95,18 @@ export default async function AppLayout({
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
         .limit(30),
+      supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", user.id)
+        .maybeSingle(),
     ]);
 
     workspace = wsResult.data;
     savedViews = viewsResult.data ?? [];
     notifications = notifResult.data ?? [];
     unreadCount = notifications.filter((n: Notification) => !n.is_read).length;
+    userName = profileResult.data?.full_name ?? userName;
   }
 
   return (
@@ -113,6 +122,8 @@ export default async function AppLayout({
           workspace={workspace}
           unreadCount={unreadCount}
           userId={user.id}
+          userName={userName}
+          userEmail={user.email ?? null}
           notifications={notifications}
           userRole={userRole}
         />

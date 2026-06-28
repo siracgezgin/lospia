@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils/cn";
 import { signOut } from "@/lib/actions/auth";
 import { Wordmark } from "@/components/ui/Wordmark";
 import { SAVED_VIEW_SLUG_MAP } from "@/lib/utils/task-constants";
+import { quoteForWeek } from "@/lib/utils/weekly-quotes";
 import { canViewDestructivePages, canManageSettings } from "@/lib/auth/permissions";
 import type { Workspace, SavedView, WorkspaceRole } from "@/types";
 
@@ -58,6 +59,7 @@ export function AppSidebar({ workspace, savedViews, userRole = "member" }: Props
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const wsName = workspace?.name ?? "Operasyon";
+  const weeklyQuote = quoteForWeek().text;
 
   return (
     <aside
@@ -111,9 +113,9 @@ export function AppSidebar({ workspace, savedViews, userRole = "member" }: Props
           );
         })}
 
-        {/* Saved views */}
+        {/* Saved views — compact so they don't dominate the sidebar */}
         {!collapsed && savedViews.length > 0 && (
-          <div className="space-y-0.5">
+          <div className="space-y-px">
             <p className="px-2 mb-1 text-[10px] font-semibold uppercase tracking-wider text-subtle">
               Kaydedilen görünümler
             </p>
@@ -121,15 +123,29 @@ export function AppSidebar({ workspace, savedViews, userRole = "member" }: Props
               <Link
                 key={view.id}
                 href={`/board?view=${SAVED_VIEW_SLUG_MAP[view.name] ?? view.id}`}
-                className="flex items-center gap-2.5 rounded-lg pl-3 pr-2 py-1.5 text-sm text-muted hover:bg-surface-muted hover:text-ink transition-colors truncate"
+                className="flex items-center gap-2 rounded-md pl-3 pr-2 py-1 text-[13px] text-muted hover:bg-surface-muted hover:text-ink transition-colors truncate"
               >
-                <span className="h-1.5 w-1.5 rounded-full bg-line-strong shrink-0" />
+                <span className="h-1 w-1 rounded-full bg-line-strong shrink-0" />
                 <span className="truncate">{view.name}</span>
               </Link>
             ))}
           </div>
         )}
       </nav>
+
+      {/* Haftanın sözü — weekly rotating brand line, above logout */}
+      {!collapsed && (
+        <div className="px-2 pb-1">
+          <div className="rounded-lg border border-line bg-surface-muted/60 px-3 py-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-subtle mb-0.5">
+              Haftanın sözü
+            </p>
+            <p className="text-[11px] leading-snug text-muted line-clamp-3">
+              {weeklyQuote}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Footer: sign out */}
       <div className={cn("border-t border-line p-2", collapsed && "px-1")}>

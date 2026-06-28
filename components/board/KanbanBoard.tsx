@@ -26,6 +26,8 @@ import {
   useMemo,
   useRef,
   useEffect,
+  createContext,
+  useContext,
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -42,8 +44,8 @@ import {
 } from "@/lib/utils/task-constants";
 import { PRIORITY_LABELS, PROJECT_OPTIONS } from "@/lib/utils/task-constants";
 import {
-  getCardStyle,
-  getCategoryCardStyle,
+  getTaskCardStyle,
+  getDepartmentCardStyle,
   getTaskStateMarkers,
   PRIORITY_CHIP,
   PRIORITY_SHOW_ON_BOARD,
@@ -52,13 +54,21 @@ import { Badge } from "@/components/ui/Badge";
 import { reorderTask, updateTask, softDeleteTask, archiveTask, duplicateTask } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils/cn";
 import { formatDateTR } from "@/lib/utils/format-date";
+import { buildDeptMeta, type DeptMeta } from "@/lib/utils/departments";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
 import { ExcelImportModal } from "@/components/task/ExcelImportModal";
 import { NotesColumn } from "@/components/board/NotesColumn";
 import { BoardRulesPanel } from "@/components/board/BoardRulesPanel";
 import { canCreateTask, canDeleteTask, canArchiveTask } from "@/lib/auth/permissions";
-import type { Task, SavedView, TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceNote, WorkspaceRole } from "@/types";
+import type { Task, SavedView, TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceNote, WorkspaceRole, WorkspaceDepartment } from "@/types";
 import type { BoardRule } from "@/app/(app)/board/page";
+
+// Department metadata (id → {name, color}) shared with all card renderers.
+const DeptMetaContext = createContext<Record<string, DeptMeta>>({});
+function useTaskDept(task: Task): DeptMeta | undefined {
+  const meta = useContext(DeptMetaContext);
+  return task.department_id ? meta[task.department_id] : undefined;
+}
 
 // ── Week helpers ──────────────────────────────────────────────────────────────
 
@@ -238,6 +248,7 @@ interface Props {
   notes: WorkspaceNote[];
   rules?: BoardRule[];
   newRulesCount?: number;
+  departments?: WorkspaceDepartment[];
   userRole?: WorkspaceRole;
 }
 
@@ -491,11 +502,12 @@ function CardContent({
   showMenu?: boolean;
 }) {
   const cf = task.custom_fields as Record<string, unknown>;
-  const category = cf?.category as string | undefined;
+  const konu = cf?.category as string | undefined; // legacy key, shown as "Konu"
   const collaborators = cf?.collaborators;
   const collabIds = Array.isArray(collaborators) ? collaborators as string[] : [];
-  // Category chip/dot ALWAYS reflect the work-area (even on a done card).
-  const categoryStyle = getCategoryCardStyle(category);
+  // Department drives the card identity chip (even on a done card).
+  const dept = useTaskDept(task);
+  const deptStyle = getDepartmentCardStyle(dept?.color);
   const responsibleName =
     responsibleNames[task.assignee_id ?? ""] ??
     responsibleNames[task.responsible_contact_id ?? ""];
@@ -511,12 +523,12 @@ function CardContent({
 
   return (
     <div className="flex-1 min-w-0">
-      {/* Top row: category chip (identity) + state chip (overlay) + menu */}
+      {/* Top row: department chip (identity) + state chip (overlay) + menu */}
       <div className="flex items-start justify-between gap-1 mb-1.5">
         <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
-          {category && (
-            <Badge size="xs" dot={categoryStyle.dot} className={cn("max-w-32 truncate", categoryStyle.chip)}>
-              {category}
+          {dept && (
+            <Badge size="xs" dot={deptStyle.dot} className={cn("max-w-36 truncate", deptStyle.chip)}>
+              {dept.name}
             </Badge>
           )}
           {markers.chip && (
@@ -551,6 +563,11 @@ function CardContent({
       >
         {task.title}
       </Link>
+
+      {/* Konu (changing topic) — subtle, only when present */}
+      {konu && (
+        <p className="text-[10px] text-subtle/90 mt-0.5 truncate">Konu: {konu}</p>
+      )}
 
       {/* Description (one line) */}
       {task.description && (
@@ -618,9 +635,10 @@ function StaticTaskCard({
   contacts: WorkspaceContact[];
   responsibleNames: Record<string, string>;
 }) {
-  // Category drives the card color; done overrides to the reserved green.
+  // Department drives the card color; done overrides to the reserved green.
   // border (all sides) then border-l accent last so it wins. No cn() — tailwind-merge strips border-l-*.
-  const style = getCardStyle(task);
+  const dept = useTaskDept(task);
+  const style = getTaskCardStyle(task.status, dept?.color);
   const cardCls = `rounded-lg border border-l-[3px] p-3 shadow-card transition-all ${style.surface} ${style.border} ${style.accent}`;
   return (
     <div className={cardCls}>
@@ -665,8 +683,9 @@ function TaskCard({
     id: task.id,
     data: { task },
   });
-  // Category drives the card color; done overrides to the reserved green. No cn() — tailwind-merge strips border-l-*.
-  const style = getCardStyle(task);
+  // Department drives the card color; done overrides to the reserved green. No cn() — tailwind-merge strips border-l-*.
+  const dept = useTaskDept(task);
+  const style = getTaskCardStyle(task.status, dept?.color);
   const colorCls = `${style.surface} ${style.border} ${style.accent}`;
   const stateCls = [
     isDragging ? "opacity-40" : "",
@@ -855,8 +874,26 @@ export function KanbanBoard({
   notes,
   rules = [],
   newRulesCount = 0,
+  departments = [],
   userRole = "member",
 }: Props) {
+  const deptMeta = useMemo(() => buildDeptMeta(departments), [departments]);
+  // Top-level departments for the Departman filter dropdown
+  const deptFilterOptions = useMemo(
+    () => departments.filter((d) => d.parent_id === null).map((d) => ({ id: d.id, name: d.name })),
+    [departments],
+  );
+  // A task matches a top-level department filter if its department is that
+  // department or one of its children.
+  const deptMatchIds = useMemo(() => {
+    const m: Record<string, Set<string>> = {};
+    for (const d of departments.filter((x) => x.parent_id === null)) {
+      const set = new Set<string>([d.id]);
+      for (const c of departments.filter((x) => x.parent_id === d.id)) set.add(c.id);
+      m[d.id] = set;
+    }
+    return m;
+  }, [departments]);
   const canCreate  = canCreateTask(userRole);
   const canDelete  = canDeleteTask(userRole);
   const canArchive = canArchiveTask(userRole);
@@ -877,7 +914,7 @@ export function KanbanBoard({
   // Client-side filters (not URL-persisted; reset on refresh)
   const [personFilter, setPersonFilter] = useState("");
   const [projectFilter, setProjectFilter] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("");
+  const [departmentFilter, setDepartmentFilter] = useState("");
   const [search, setSearch] = useState("");
 
   // Week selector — initialized from URL param (weekIso) so page reload preserves selection
@@ -971,17 +1008,7 @@ export function KanbanBoard({
     });
   }
 
-  // Unique category values from all (unfiltered) tasks
-  const categoryOptions = useMemo(() => {
-    const seen = new Set<string>();
-    optimisticTasks.forEach((t) => {
-      const cat = (t.custom_fields as Record<string, unknown>)?.category as string | undefined;
-      if (cat) seen.add(cat);
-    });
-    return Array.from(seen).sort();
-  }, [optimisticTasks]);
-
-  // Composed filter: saved-view → project → category → person → search
+  // Composed filter: saved-view → project → department → person → search
   const filteredTasks = useMemo(() => {
     let tasks = applyViewFilter(optimisticTasks, effectiveSlug, userId, weekStart);
     if (projectFilter) {
@@ -990,16 +1017,14 @@ export function KanbanBoard({
         return (cf?.project as string | undefined) === projectFilter;
       });
     }
-    if (categoryFilter) {
-      tasks = tasks.filter((t) => {
-        const cf = t.custom_fields as Record<string, unknown>;
-        return (cf?.category as string | undefined) === categoryFilter;
-      });
+    if (departmentFilter) {
+      const allowed = deptMatchIds[departmentFilter] ?? new Set([departmentFilter]);
+      tasks = tasks.filter((t) => t.department_id != null && allowed.has(t.department_id));
     }
     tasks = applyPersonFilter(tasks, personFilter);
     tasks = tasks.filter((t) => matchesSearch(t, search, responsibleNames));
     return tasks;
-  }, [optimisticTasks, effectiveSlug, userId, weekStart, projectFilter, categoryFilter, personFilter, search, responsibleNames]);
+  }, [optimisticTasks, effectiveSlug, userId, weekStart, projectFilter, departmentFilter, deptMatchIds, personFilter, search, responsibleNames]);
 
   // Distribute filtered tasks into columns
   const tasksByCol = useMemo(() => {
@@ -1091,7 +1116,7 @@ export function KanbanBoard({
     });
   }, [optimisticTasks, tasksByCol]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const hasActiveFilter = !!personFilter || !!search || !!projectFilter || !!categoryFilter;
+  const hasActiveFilter = !!personFilter || !!search || !!projectFilter || !!departmentFilter;
 
   // Person workload summary (computed from raw tasks, not view-filtered)
   const personStats = useMemo(() => {
@@ -1114,6 +1139,7 @@ export function KanbanBoard({
   }, [personFilter, optimisticTasks, responsibleNames]);
 
   return (
+    <DeptMetaContext.Provider value={deptMeta}>
     <div className="flex flex-col h-full">
 
       {/* ── Rules panel (compact, collapsible) ────────────────────────────── */}
@@ -1217,7 +1243,7 @@ export function KanbanBoard({
           </button>
         )}
 
-        {/* Right: Proje + Kategori + Kişi + Arama */}
+        {/* Right: Proje + Departman + Kişi + Arama */}
         <div className="flex items-center gap-2 ml-auto flex-wrap">
           {/* Proje filter */}
           <select
@@ -1233,18 +1259,18 @@ export function KanbanBoard({
             {PROJECT_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
 
-          {/* Kategori filter */}
+          {/* Departman filter */}
           <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
+            value={departmentFilter}
+            onChange={(e) => setDepartmentFilter(e.target.value)}
             className={cn(
               "text-sm border rounded-lg px-2 py-1.5 bg-white transition-colors cursor-pointer",
-              categoryFilter ? "border-[#406775] text-[#406775]" : "border-gray-200 text-gray-600",
+              departmentFilter ? "border-[#406775] text-[#406775]" : "border-gray-200 text-gray-600",
             )}
-            aria-label="Kategoriye göre filtrele"
+            aria-label="Departmana göre filtrele"
           >
-            <option value="">Kategori</option>
-            {categoryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+            <option value="">Departman</option>
+            {deptFilterOptions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
 
           {/* Person filter */}
@@ -1293,7 +1319,7 @@ export function KanbanBoard({
           {/* Clear all */}
           {hasActiveFilter && (
             <button
-              onClick={() => { setPersonFilter(""); setProjectFilter(""); setCategoryFilter(""); setSearch(""); }}
+              onClick={() => { setPersonFilter(""); setProjectFilter(""); setDepartmentFilter(""); setSearch(""); }}
               className="text-xs text-gray-400 hover:text-gray-700 px-1.5 py-0.5 rounded hover:bg-gray-100 transition-colors whitespace-nowrap"
               aria-label="Filtreleri temizle"
             >
@@ -1426,6 +1452,7 @@ export function KanbanBoard({
           defaultStatus={modalDefaultStatus}
           profiles={profiles}
           contacts={contacts}
+          departments={departments}
         />
       )}
       {importOpen && (
@@ -1436,5 +1463,6 @@ export function KanbanBoard({
         />
       )}
     </div>
+    </DeptMetaContext.Provider>
   );
 }

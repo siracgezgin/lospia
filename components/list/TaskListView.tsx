@@ -14,7 +14,7 @@ import {
 import { useState, useOptimistic, useTransition, useMemo } from "react";
 import Link from "next/link";
 import { ArrowUp, ArrowDown, ArrowUpDown, Plus, FileSpreadsheet } from "lucide-react";
-import type { Task, SavedView, TaskStatus, TaskPriority, Profile, WorkspaceContact } from "@/types";
+import type { Task, SavedView, TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceDepartment } from "@/types";
 import {
   TASK_PRIORITIES,
   PRIORITY_LABELS,
@@ -25,6 +25,8 @@ import { FIELD_LABELS } from "@/lib/i18n/tr";
 import { updateTaskStatus } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils/cn";
 import { formatDateTR } from "@/lib/utils/format-date";
+import { buildDeptMeta } from "@/lib/utils/departments";
+import { getDepartmentCardStyle } from "@/lib/design/semantics";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
 import { ExcelImportModal } from "@/components/task/ExcelImportModal";
 
@@ -35,6 +37,7 @@ interface Props {
   userId: string;
   profiles: Pick<Profile, "id" | "full_name" | "email">[];
   contacts: WorkspaceContact[];
+  departments?: WorkspaceDepartment[];
 }
 
 // ---- Status display — simplified user-facing labels ----
@@ -130,7 +133,8 @@ function PriorityBadge({ priority }: { priority: TaskPriority }) {
 
 // ---- Main component ----
 
-export function TaskListView({ tasks, savedViews, workspaceId, profiles, contacts }: Props) {
+export function TaskListView({ tasks, savedViews, workspaceId, profiles, contacts, departments = [] }: Props) {
+  const deptMeta = useMemo(() => buildDeptMeta(departments), [departments]);
   const responsibleNames = useMemo<Record<string, string>>(() => {
     const map: Record<string, string> = {};
     profiles.forEach((p) => { map[p.id] = p.full_name ?? p.email ?? "?"; });
@@ -201,10 +205,27 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
       },
       enableSorting: false,
     }),
-    // Category column — accessorFn always returns a safe string; never an object or undefined
+    // Departman column — colored chip from the task's department
+    columnHelper.accessor((row) => (row.department_id ? deptMeta[row.department_id]?.name ?? "" : ""), {
+      id: "department",
+      header: "Departman",
+      cell: (info) => {
+        const row = info.row.original;
+        const meta = row.department_id ? deptMeta[row.department_id] : undefined;
+        if (!meta) return <span className="text-xs text-gray-300">—</span>;
+        const style = getDepartmentCardStyle(meta.color);
+        return <span className={cn("text-xs rounded-full px-2 py-0.5", style.chip)}>{meta.name}</span>;
+      },
+      sortingFn: (a, b) => {
+        const na = a.original.department_id ? deptMeta[a.original.department_id]?.name ?? "" : "";
+        const nb = b.original.department_id ? deptMeta[b.original.department_id]?.name ?? "" : "";
+        return na.localeCompare(nb, "tr", { sensitivity: "base" });
+      },
+    }),
+    // Konu column (changing topic; stored under legacy custom_fields.category)
     columnHelper.accessor((row) => safeCategory(row), {
-      id: "category",
-      header: "Kategori",
+      id: "konu",
+      header: "Konu",
       cell: (info) => {
         const val = info.getValue();
         return val
@@ -317,7 +338,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
         return da < db ? -1 : da > db ? 1 : 0;
       },
     }),
-  ], [responsibleNames]); // responsibleNames is the only closure dep
+  ], [responsibleNames, deptMeta]); // closure deps
 
   const table = useReactTable({
     data: filteredTasks,
@@ -463,6 +484,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
           workspaceId={workspaceId}
           profiles={profiles}
           contacts={contacts}
+          departments={departments}
         />
       )}
       {importOpen && (

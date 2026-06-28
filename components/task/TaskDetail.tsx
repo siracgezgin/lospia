@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useTransition, useOptimistic, useActionState, useMemo } from "react";
+import { useState, useEffect, useTransition, useOptimistic, useMemo } from "react";
 import { formatDateTimeTR } from "@/lib/utils/format-date";
 import Link from "next/link";
-import { ArrowLeft, Clock, Play, Square, MessageSquare } from "lucide-react";
+import { ArrowLeft, Clock, Play, Square } from "lucide-react";
 import type {
   Task,
   TaskActivity,
@@ -17,7 +17,7 @@ import type {
   TaskPriority,
 } from "@/types";
 import { USER_STATUS_OPTIONS, TASK_PRIORITIES, PRIORITY_LABELS, PROJECT_OPTIONS } from "@/lib/utils/task-constants";
-import { updateTask, addTaskComment } from "@/lib/actions/tasks";
+import { updateTask } from "@/lib/actions/tasks";
 import { activityMessage } from "@/components/task/activity-messages";
 import { History } from "lucide-react";
 import { startTimer, stopTimer } from "@/lib/actions/time";
@@ -290,7 +290,7 @@ function CategoryInput({ task }: { task: Task }) {
         onBlur={save}
         onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") { setValue(currentVal); setEditing(false); } }}
         className="w-full text-sm border border-blue-400 rounded-lg px-2 py-1.5 focus:outline-none"
-        placeholder="Örn: Pazarlama, Operasyon…"
+        placeholder="Bu işin konusu / bağlamı…"
       />
     );
   }
@@ -691,38 +691,6 @@ function WaitingReasonInput({ task }: { task: Task }) {
   );
 }
 
-// ---- Comment form ----
-
-function CommentForm({ task }: { task: Task }) {
-  const [_s, action, pending] = useActionState(
-    async (_: null | { error?: string }, formData: FormData) => {
-      const content = formData.get("content") as string;
-      const result = await addTaskComment(task.id, task.workspace_id, content);
-      if ("error" in result) return { error: result.error };
-      return null;
-    },
-    null
-  );
-
-  return (
-    <form action={action} className="flex gap-2">
-      <input
-        name="content"
-        type="text"
-        placeholder="Yorum ekle…"
-        required
-        className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-      />
-      <button
-        type="submit"
-        disabled={pending}
-        className="text-sm bg-blue-600 text-white rounded-lg px-3 py-2 hover:bg-blue-700 disabled:opacity-50 transition-colors font-medium"
-      >
-        {pending ? "…" : "Gönder"}
-      </button>
-    </form>
-  );
-}
 
 // ---- Main component ----
 
@@ -784,9 +752,7 @@ function ActivityLogSection({
   );
 }
 
-export function TaskDetail({ task, activity, activityLogs, activeTimer, customFields: _customFields, profiles, contacts, departments, userId }: Props) {
-  // The crude system-event lines moved to the audit trail; this feed is comments only.
-  const comments = activity.filter((e) => e.type === "comment");
+export function TaskDetail({ task, activity: _activity, activityLogs, activeTimer, customFields: _customFields, profiles, contacts, departments, userId }: Props) {
   return (
     <div className="max-w-3xl mx-auto py-6 px-4 space-y-5">
       {/* Back */}
@@ -815,8 +781,8 @@ export function TaskDetail({ task, activity, activityLogs, activeTimer, customFi
           <FieldRow label="Departman" className="sm:col-span-2">
             <DepartmentSelect task={task} departments={departments} />
           </FieldRow>
+          <FieldRow label="Konu"><CategoryInput task={task} /></FieldRow>
           <FieldRow label="Proje / İş Alanı"><ProjectInput task={task} /></FieldRow>
-          <FieldRow label="Kategori / Konu"><CategoryInput task={task} /></FieldRow>
           <FieldRow label="Teslim tarihi"><DueDateInput task={task} field="due_date" /></FieldRow>
           <FieldRow label="Başlangıç tarihi"><DueDateInput task={task} field="start_date" /></FieldRow>
           <FieldRow label="Etiketler" className="sm:col-span-2"><TagsInput task={task} /></FieldRow>
@@ -856,41 +822,7 @@ export function TaskDetail({ task, activity, activityLogs, activeTimer, customFi
       {/* Audit trail — who changed what, when (Phase 2A) */}
       <ActivityLogSection logs={activityLogs} profiles={profiles} contacts={contacts} />
 
-      {/* Comments (system events now live in the audit trail above) */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
-        <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
-          <MessageSquare size={14} /> Yorumlar
-        </h3>
-
-        <CommentForm task={task} />
-
-        {comments.length === 0 ? (
-          <p className="text-sm text-gray-400">Henüz yorum yok.</p>
-        ) : (
-          <ol className="space-y-4 mt-2">
-            {[...comments].reverse().map((entry) => {
-              const actor = profiles.find((p) => p.id === entry.user_id);
-              return (
-                <li key={entry.id} className="flex gap-3 text-sm">
-                  <div className="h-7 w-7 rounded-full bg-gray-200 text-gray-600 text-xs font-medium flex items-center justify-center shrink-0 mt-0.5">
-                    {actor?.full_name?.[0]?.toUpperCase() ?? actor?.email?.[0]?.toUpperCase() ?? "?"}
-                  </div>
-                  <div className="flex-1">
-                    <div>
-                      <span className="font-medium">{actor?.full_name ?? actor?.email ?? "Bilinmeyen kullanıcı"}</span>
-                      {" "}
-                      <span className="text-gray-700">{entry.content}</span>
-                    </div>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {formatDateTimeTR(entry.created_at)}
-                    </p>
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
-        )}
-      </div>
+      {/* Communication lives in a single place: "Notlar" (rendered by the page). */}
     </div>
   );
 }
