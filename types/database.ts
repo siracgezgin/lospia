@@ -269,6 +269,67 @@ export type Database = {
           },
         ]
       }
+      task_activity_logs: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          field_name: string | null
+          id: string
+          metadata: Json
+          new_value: Json | null
+          old_value: Json | null
+          task_id: string
+          workspace_id: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          field_name?: string | null
+          id?: string
+          metadata?: Json
+          new_value?: Json | null
+          old_value?: Json | null
+          task_id: string
+          workspace_id: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          field_name?: string | null
+          id?: string
+          metadata?: Json
+          new_value?: Json | null
+          old_value?: Json | null
+          task_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_activity_logs_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_activity_logs_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_activity_logs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       task_attachments: {
         Row: {
           created_at: string

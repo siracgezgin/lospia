@@ -62,7 +62,7 @@ export function AppSidebar({ workspace, savedViews, userRole = "member" }: Props
   return (
     <aside
       className={cn(
-        "relative flex flex-col bg-surface border-r border-line transition-all duration-200 shrink-0",
+        "relative hidden md:flex flex-col bg-surface border-r border-line transition-all duration-200 shrink-0",
         collapsed ? "w-14" : "w-60",
       )}
     >

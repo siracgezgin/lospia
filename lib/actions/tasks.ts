@@ -10,6 +10,11 @@ import {
   canCreateTask, canArchiveTask, canDeleteTask, canPermanentDeleteTask,
   canEditTask, canReorderTask, type AppRole,
 } from "@/lib/auth/permissions";
+import {
+  logTaskActivity, logTaskActivities, ACTIVITY_ACTIONS,
+  type TaskActivityEntry,
+} from "@/lib/activity/log-task-activity";
+import type { Json, TaskStatus as TaskStatusType } from "@/types";
 
 const PERM_DENIED = "Bu işlem için yetkiniz yok.";
 
@@ -74,6 +79,7 @@ const UpdateTaskSchema = z.object({
   waiting_on_member_id: hexUuid("Geçersiz üye").nullable().optional(),
   waiting_on_contact_id: hexUuid("Geçersiz kişi").nullable().optional(),
   waiting_reason: z.string().max(500).nullable().optional(),
+  department_id: hexUuid("Geçersiz departman").nullable().optional(),
 });
 
 const ReorderTaskSchema = z.object({
@@ -132,7 +138,7 @@ export async function createTask(
 
   if (error) return { error: error.message };
 
-  // Log creation activity
+  // Log creation activity (legacy task_activity — drives notifications)
   await supabase.from("task_activity").insert({
     task_id: (data as { id: string }).id,
     workspace_id: taskData.workspace_id,
@@ -140,6 +146,21 @@ export async function createTask(
     type: "created",
     content: null,
     metadata: null,
+  });
+
+  // Audit trail
+  await logTaskActivity(supabase, {
+    workspaceId: taskData.workspace_id,
+    taskId: (data as { id: string }).id,
+    actorId: user.id,
+    action: ACTIVITY_ACTIONS.TASK_CREATED,
+    metadata: {
+      status: taskData.status,
+      priority: taskData.priority,
+      due_date: taskData.due_date ?? null,
+      assignee_id: taskData.assignee_id ?? null,
+      responsible_contact_id: taskData.responsible_contact_id ?? null,
+    },
   });
 
   revalidatePath("/board");
@@ -186,10 +207,50 @@ export async function updateTask(
 
   if (error) return { error: error.message };
 
-  // Log changed fields as activity events
+  // Log changed fields as activity events (legacy task_activity)
   const activityInserts = buildActivityEvents(id, task.workspace_id as string, user.id, task, updates as Record<string, unknown>);
   if (activityInserts.length > 0) {
     await supabase.from("task_activity").insert(activityInserts);
+  }
+
+  // Audit trail — one entry per meaningful field change
+  const logEntries = buildActivityLogEntries(
+    id, task.workspace_id as string, user.id, task, updates as Record<string, unknown>,
+  );
+  await logTaskActivities(supabase, logEntries);
+
+  // Notification: task assigned to a new person
+  const newAssignee = "assignee_id" in updates ? updates.assignee_id : undefined;
+  if (newAssignee && newAssignee !== task.assignee_id && newAssignee !== user.id) {
+    await supabase.from("notifications").insert({
+      workspace_id: task.workspace_id as string,
+      user_id: newAssignee as string,
+      type: "task_assigned" as TaskStatusType,
+      title: "Size bir görev atandı",
+      body: task.title as string,
+      task_id: id,
+    } as Record<string, unknown>);
+  }
+
+  // Notification: waiting_on changed — notify the person being waited on
+  const newWaitingMember = "waiting_on_member_id" in updates ? updates.waiting_on_member_id : undefined;
+  if (newWaitingMember && newWaitingMember !== (task.waiting_on_member_id ?? null) && newWaitingMember !== user.id) {
+    // Resolve waiting member's profile user_id via workspace_members
+    const { data: wm } = await supabase
+      .from("workspace_members")
+      .select("user_id")
+      .eq("id", newWaitingMember as string)
+      .maybeSingle();
+    if (wm?.user_id) {
+      await supabase.from("notifications").insert({
+        workspace_id: task.workspace_id as string,
+        user_id: wm.user_id,
+        type: "task_waiting_on" as TaskStatusType,
+        title: "Bir görev sizi bekliyor",
+        body: task.title as string,
+        task_id: id,
+      } as Record<string, unknown>);
+    }
   }
 
   revalidatePath(`/tasks/${id}`);
@@ -236,6 +297,12 @@ export async function softDeleteTask(
     .eq("id", taskId);
 
   if (error) return { error: error.message };
+  await logTaskActivity(supabase, {
+    workspaceId: ctx.workspaceId,
+    taskId,
+    actorId: ctx.user.id,
+    action: ACTIVITY_ACTIONS.TASK_TRASHED,
+  });
   revalidatePath("/board");
   revalidatePath("/list");
   revalidatePath("/trash");
@@ -258,6 +325,12 @@ export async function archiveTask(
     .eq("id", taskId);
 
   if (error) return { error: error.message };
+  await logTaskActivity(supabase, {
+    workspaceId: ctx.workspaceId,
+    taskId,
+    actorId: ctx.user.id,
+    action: ACTIVITY_ACTIONS.TASK_ARCHIVED,
+  });
   revalidatePath("/board");
   revalidatePath("/list");
   revalidatePath("/archive");
@@ -280,6 +353,12 @@ export async function unarchiveTask(
     .eq("id", taskId);
 
   if (error) return { error: error.message };
+  await logTaskActivity(supabase, {
+    workspaceId: ctx.workspaceId,
+    taskId,
+    actorId: ctx.user.id,
+    action: ACTIVITY_ACTIONS.TASK_UNARCHIVED,
+  });
   revalidatePath("/board");
   revalidatePath("/archive");
   return { success: true };
@@ -301,6 +380,12 @@ export async function restoreTask(
     .eq("id", taskId);
 
   if (error) return { error: error.message };
+  await logTaskActivity(supabase, {
+    workspaceId: ctx.workspaceId,
+    taskId,
+    actorId: ctx.user.id,
+    action: ACTIVITY_ACTIONS.TASK_RESTORED,
+  });
   revalidatePath("/board");
   revalidatePath("/trash");
   return { success: true };
@@ -383,6 +468,13 @@ export async function duplicateTask(
     .single();
 
   if (error) return { error: error.message };
+  await logTaskActivity(supabase, {
+    workspaceId: source.workspace_id as string,
+    taskId: (newTask as { id: string }).id,
+    actorId: user.id,
+    action: ACTIVITY_ACTIONS.TASK_DUPLICATED,
+    metadata: { source_task_id: taskId },
+  });
   revalidatePath("/board");
   revalidatePath("/list");
   return { id: (newTask as { id: string }).id };
@@ -403,15 +495,24 @@ export async function reorderTask(
 
   const { id, newStatus, prevIndex, nextIndex } = parsed.data;
 
+  // Fetch current row once: used for the permission check and for logging the
+  // status transition (old → new) to the audit trail.
+  const { data: currentTask } = await supabase
+    .from("tasks")
+    .select("status, assignee_id, created_by, workspace_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!currentTask) return { error: "Task not found" };
+  const prevTask = currentTask as {
+    status: TaskStatusType;
+    assignee_id: string | null;
+    created_by: string | null;
+    workspace_id: string;
+  };
+
   // Members can only move their own/assigned tasks
   if (role === "member" || role === "viewer") {
-    const { data: task } = await supabase
-      .from("tasks")
-      .select("assignee_id, created_by")
-      .eq("id", id)
-      .maybeSingle();
-    if (!task) return { error: "Task not found" };
-    if (!canReorderTask(role, task as { assignee_id: string | null; created_by: string | null }, user.id)) {
+    if (!canReorderTask(role, prevTask, user.id)) {
       return { error: PERM_DENIED };
     }
   }
@@ -432,6 +533,13 @@ export async function reorderTask(
     .eq("id", id);
 
   if (error) return { error: error.message };
+
+  // Audit trail — log the status transition caused by the drag (if any)
+  if (newStatus !== prevTask.status) {
+    await logTaskActivity(supabase, statusTransitionEntry(
+      id, prevTask.workspace_id, user.id, prevTask.status, newStatus,
+    ));
+  }
 
   revalidatePath("/board");
   return { success: true };
@@ -509,6 +617,134 @@ function buildActivityEvents(
   }
 
   return events;
+}
+
+// ---- Activity log (audit trail) builders ----
+
+// Build the right entry for a status transition: completed / reopened / changed.
+function statusTransitionEntry(
+  taskId: string,
+  workspaceId: string,
+  actorId: string,
+  oldStatus: TaskStatusType,
+  newStatus: TaskStatusType,
+): TaskActivityEntry {
+  let action: string = ACTIVITY_ACTIONS.STATUS_CHANGED;
+  if (oldStatus !== "done" && newStatus === "done") {
+    action = ACTIVITY_ACTIONS.TASK_COMPLETED;
+  } else if (oldStatus === "done" && newStatus !== "done") {
+    action = ACTIVITY_ACTIONS.TASK_REOPENED;
+  }
+  return {
+    workspaceId,
+    taskId,
+    actorId,
+    action,
+    fieldName: "status",
+    oldValue: oldStatus,
+    newValue: newStatus,
+  };
+}
+
+// Compare current task vs updates and produce one audit entry per meaningful change.
+function buildActivityLogEntries(
+  taskId: string,
+  workspaceId: string,
+  actorId: string,
+  current: Record<string, unknown>,
+  updates: Record<string, unknown>,
+): TaskActivityEntry[] {
+  const entries: TaskActivityEntry[] = [];
+  const base = { workspaceId, taskId, actorId };
+
+  // Status — special-cased (completed / reopened / changed)
+  if ("status" in updates && updates.status !== current.status) {
+    entries.push(statusTransitionEntry(
+      taskId, workspaceId, actorId,
+      current.status as TaskStatusType, updates.status as TaskStatusType,
+    ));
+  }
+
+  // Simple scalar fields
+  const scalarFields: { field: string; action: string }[] = [
+    { field: "title", action: ACTIVITY_ACTIONS.TITLE_CHANGED },
+    { field: "description", action: ACTIVITY_ACTIONS.DESCRIPTION_CHANGED },
+    { field: "priority", action: ACTIVITY_ACTIONS.PRIORITY_CHANGED },
+    { field: "assignee_id", action: ACTIVITY_ACTIONS.ASSIGNEE_CHANGED },
+    { field: "responsible_contact_id", action: ACTIVITY_ACTIONS.RESPONSIBLE_CONTACT_CHANGED },
+    { field: "due_date", action: ACTIVITY_ACTIONS.DUE_DATE_CHANGED },
+  ];
+  for (const { field, action } of scalarFields) {
+    if (field in updates && (updates[field] ?? null) !== (current[field] ?? null)) {
+      entries.push({
+        ...base, action, fieldName: field,
+        oldValue: (current[field] ?? null) as Json,
+        newValue: (updates[field] ?? null) as Json,
+      });
+    }
+  }
+
+  // Tags — array comparison
+  if ("tags" in updates) {
+    const oldTags = (current.tags ?? []) as string[];
+    const newTags = (updates.tags ?? []) as string[];
+    if (JSON.stringify(oldTags) !== JSON.stringify(newTags)) {
+      entries.push({
+        ...base, action: ACTIVITY_ACTIONS.TAGS_CHANGED, fieldName: "tags",
+        oldValue: oldTags as Json, newValue: newTags as Json,
+      });
+    }
+  }
+
+  // custom_fields.category — nested comparison
+  if ("custom_fields" in updates) {
+    const oldCat = (current.custom_fields as Record<string, unknown> | null)?.category ?? null;
+    const newCat = (updates.custom_fields as Record<string, unknown> | null)?.category ?? null;
+    if (oldCat !== newCat) {
+      entries.push({
+        ...base, action: ACTIVITY_ACTIONS.CATEGORY_CHANGED, fieldName: "category",
+        oldValue: oldCat as Json, newValue: newCat as Json,
+      });
+    }
+  }
+
+  // Approval — collapse approval_required + approval_status into one entry
+  const approvalChanged =
+    ("approval_required" in updates && updates.approval_required !== current.approval_required) ||
+    ("approval_status" in updates && updates.approval_status !== current.approval_status);
+  if (approvalChanged) {
+    entries.push({
+      ...base, action: ACTIVITY_ACTIONS.APPROVAL_CHANGED, fieldName: "approval",
+      oldValue: {
+        approval_required: (current.approval_required ?? null) as Json,
+        approval_status: (current.approval_status ?? null) as Json,
+      },
+      newValue: {
+        approval_required: ("approval_required" in updates ? updates.approval_required : current.approval_required) as Json,
+        approval_status: ("approval_status" in updates ? updates.approval_status : current.approval_status) as Json,
+      },
+    });
+  }
+
+  // Waiting person — collapse waiting_on_member_id + waiting_on_contact_id
+  const waitingChanged =
+    ("waiting_on_member_id" in updates && updates.waiting_on_member_id !== current.waiting_on_member_id) ||
+    ("waiting_on_contact_id" in updates && updates.waiting_on_contact_id !== current.waiting_on_contact_id);
+  if (waitingChanged) {
+    entries.push({
+      ...base, action: ACTIVITY_ACTIONS.WAITING_PERSON_CHANGED, fieldName: "waiting_on",
+      oldValue: {
+        member_id: (current.waiting_on_member_id ?? null) as Json,
+        contact_id: (current.waiting_on_contact_id ?? null) as Json,
+      },
+      newValue: {
+        member_id: ("waiting_on_member_id" in updates ? updates.waiting_on_member_id : current.waiting_on_member_id) as Json,
+        contact_id: ("waiting_on_contact_id" in updates ? updates.waiting_on_contact_id : current.waiting_on_contact_id) as Json,
+      },
+    });
+  }
+
+  return entries;
 }
 
 // Saved view actions

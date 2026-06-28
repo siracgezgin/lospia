@@ -48,6 +48,9 @@ supabase/.temp/
 
 # local import data (never commit customer files)
 data/
+*.xlsx
+*.xls
+*.csv
 
 # local planning / notes
 plan.md

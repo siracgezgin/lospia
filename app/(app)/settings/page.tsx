@@ -3,10 +3,12 @@ import { redirect } from "next/navigation";
 import { ContactsManager } from "@/components/settings/ContactsManager";
 import { WorkspaceNameEditor } from "@/components/settings/WorkspaceNameEditor";
 import { MembersManager } from "@/components/settings/MembersManager";
+import { DepartmentsManager } from "@/components/settings/DepartmentsManager";
 import { canManageSettings, canRenameWorkspace, canManageMembers } from "@/lib/auth/permissions";
 import type {
   Workspace, WorkspaceMember, Profile, CustomFieldDefinition,
   WorkspaceContact, WorkspaceRole, WorkspaceInvite,
+  WorkspaceDepartment, DepartmentMember,
 } from "@/types";
 
 export default async function SettingsPage() {
@@ -37,7 +39,8 @@ export default async function SettingsPage() {
   const isOwner = canRenameWorkspace(userRole);
   const canManage = canManageMembers(userRole);
 
-  const [wsResult, membersResult, profileResult, cfResult, contactsResult, invitesResult] =
+  const [wsResult, membersResult, profileResult, cfResult, contactsResult, invitesResult,
+         deptsResult, deptMembersResult] =
     await Promise.all([
       supabase.from("workspaces").select("*").eq("id", workspaceId).single(),
       supabase
@@ -63,6 +66,15 @@ export default async function SettingsPage() {
             .is("accepted_at", null)
             .order("created_at", { ascending: false })
         : Promise.resolve({ data: [] as WorkspaceInvite[] }),
+      supabase
+        .from("workspace_departments")
+        .select("*")
+        .eq("workspace_id", workspaceId)
+        .order("position"),
+      supabase
+        .from("department_members")
+        .select("*, profiles(id, full_name, email)")
+        .eq("workspace_id", workspaceId),
     ]);
 
   const workspace: Workspace | null = wsResult.data;
@@ -70,6 +82,8 @@ export default async function SettingsPage() {
   const customFields: CustomFieldDefinition[] = cfResult.data ?? [];
   const contacts: WorkspaceContact[] = (contactsResult.data ?? []) as WorkspaceContact[];
   const invites: WorkspaceInvite[] = (invitesResult.data ?? []) as WorkspaceInvite[];
+  const departments: WorkspaceDepartment[] = (deptsResult.data ?? []) as WorkspaceDepartment[];
+  const deptMembers = ((deptMembersResult.data ?? []) as unknown) as (DepartmentMember & { profiles?: Partial<Profile> | null })[];
 
   const ROLE_DISPLAY: Record<string, string> = {
     owner: "Sahip", admin: "Yönetici", member: "Üye", viewer: "İzleyici",
@@ -115,6 +129,22 @@ export default async function SettingsPage() {
             <p className="text-sm font-medium">{ROLE_DISPLAY[userRole] ?? userRole}</p>
           </div>
         </div>
+      </section>
+
+      {/* Departmanlar */}
+      <section className="space-y-4">
+        <h2 className="text-base font-semibold text-gray-700">Departmanlar</h2>
+        <p className="text-xs text-gray-400 -mt-2">
+          Görevleri departmanlara atayın. Üyeler birden fazla departmanda yer alabilir.
+        </p>
+        <DepartmentsManager
+          departments={departments}
+          deptMembers={deptMembers}
+          workspaceMembers={
+            (membersResult.data ?? []) as (WorkspaceMember & { profiles?: Partial<Profile> | null })[]
+          }
+          canManage={canManage}
+        />
       </section>
 
       {/* Members */}

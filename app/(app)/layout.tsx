@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { AppHeader } from "@/components/layout/AppHeader";
+import { MobileNav } from "@/components/layout/MobileNav";
 import type { Workspace, SavedView, Notification, WorkspaceRole } from "@/types";
 
 export default async function AppLayout({
@@ -30,8 +31,12 @@ export default async function AppLayout({
   let workspaceId: string | null = memberRows?.[0]?.workspace_id ?? null;
   const userRole: WorkspaceRole = (memberRows?.[0]?.role as WorkspaceRole | undefined) ?? "member";
 
-  // Provision profile + default workspace for new users who have no membership
+  // Provision profile + workspace for new users who have no membership.
+  // If the user has a pending invite, provision_workspace() joins them to the
+  // invited workspace. If there is no invite, it returns {"error":"no_invite"}
+  // and we show the pilot gate message instead of creating a personal workspace.
   let provisionError: string | null = null;
+  let noInvite = false;
   if (!workspaceId) {
     const fullName =
       (user.user_metadata?.full_name as string | undefined) ?? null;
@@ -43,6 +48,13 @@ export default async function AppLayout({
 
     if (rpcError) {
       provisionError = rpcError.message;
+    } else if (
+      provisionedWs &&
+      typeof provisionedWs === "object" &&
+      "error" in (provisionedWs as Record<string, unknown>) &&
+      (provisionedWs as Record<string, unknown>).error === "no_invite"
+    ) {
+      noInvite = true;
     } else if (provisionedWs && typeof provisionedWs === "object") {
       workspaceId = (provisionedWs as { id: string }).id;
     } else {
@@ -98,8 +110,32 @@ export default async function AppLayout({
           notifications={notifications}
           userRole={userRole}
         />
-        <main className="flex-1 overflow-auto">
-          {provisionError ? (
+        {/* pb-14 ensures content isn't hidden behind the mobile bottom nav */}
+        <main className="flex-1 overflow-auto pb-14 md:pb-0">
+          {noInvite ? (
+            <div className="min-h-full flex items-center justify-center p-8">
+              <div className="max-w-md w-full bg-amber-50 border border-amber-200 rounded-xl p-8 text-center space-y-4">
+                <div className="text-4xl">🔒</div>
+                <h2 className="text-lg font-semibold text-amber-900">
+                  Davet gerekli
+                </h2>
+                <p className="text-sm text-amber-800">
+                  Bu sistem şu anda davet ile kullanılmaktadır. Erişim için yöneticinizden davet isteyin.
+                </p>
+                <p className="text-xs text-amber-600">
+                  Giriş yaptığınız hesap: {user.email}
+                </p>
+                <form action="/api/auth/signout" method="post">
+                  <button
+                    type="submit"
+                    className="mt-2 text-sm text-amber-700 underline hover:text-amber-900"
+                  >
+                    Çıkış yap
+                  </button>
+                </form>
+              </div>
+            </div>
+          ) : provisionError ? (
             <div className="p-8">
               <div className="max-w-md mx-auto bg-red-50 border border-red-200 rounded-xl p-6">
                 <h2 className="text-lg font-semibold text-red-800 mb-2">
@@ -116,6 +152,7 @@ export default async function AppLayout({
           )}
         </main>
       </div>
+      <MobileNav />
     </div>
   );
 }

@@ -18,6 +18,14 @@ export type TaskUpdate = Database["public"]["Tables"]["tasks"]["Update"];
 export type TaskActivity = Database["public"]["Tables"]["task_activity"]["Row"];
 export type TaskActivityInsert = Database["public"]["Tables"]["task_activity"]["Insert"];
 
+// Phase 2A — dedicated audit trail (separate from task_activity)
+export type TaskActivityLog = Database["public"]["Tables"]["task_activity_logs"]["Row"];
+export type TaskActivityLogInsert = Database["public"]["Tables"]["task_activity_logs"]["Insert"];
+// Activity log row joined with the actor's profile (for UI rendering)
+export type TaskActivityLogWithActor = TaskActivityLog & {
+  actor: Pick<Profile, "id" | "full_name" | "email"> | null;
+};
+
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
 export type Workspace = Database["public"]["Tables"]["workspaces"]["Row"];
@@ -75,6 +83,45 @@ export type WorkspaceInvite = {
   invited_by: string | null;
   accepted_at: string | null;
   created_at: string;
+};
+
+// workspace_departments — department tree (top-level + sub-areas)
+export type WorkspaceDepartment = {
+  id: string;
+  workspace_id: string;
+  parent_id: string | null;
+  name: string;
+  description: string | null;
+  color_key: string | null;
+  position: number;
+  created_at: string;
+  updated_at: string;
+};
+
+// department_members — person ↔ department (many-to-many)
+export type DepartmentMember = {
+  id: string;
+  workspace_id: string;
+  department_id: string;
+  member_id: string;
+  role: "lead" | "member";
+  created_at: string;
+};
+
+// task_notes — user-authored notes on tasks ("Notlar")
+export type TaskNote = {
+  id: string;
+  workspace_id: string;
+  task_id: string;
+  author_id: string | null;
+  content: string;
+  is_pinned: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TaskNoteWithAuthor = TaskNote & {
+  author: Pick<Profile, "id" | "full_name" | "email"> | null;
 };
 
 // Enum aliases

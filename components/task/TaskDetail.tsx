@@ -7,15 +7,19 @@ import { ArrowLeft, Clock, Play, Square, MessageSquare } from "lucide-react";
 import type {
   Task,
   TaskActivity,
+  TaskActivityLogWithActor,
   TimeEntry,
   CustomFieldDefinition,
   Profile,
   WorkspaceContact,
+  WorkspaceDepartment,
   TaskStatus,
   TaskPriority,
 } from "@/types";
 import { USER_STATUS_OPTIONS, TASK_PRIORITIES, PRIORITY_LABELS, PROJECT_OPTIONS } from "@/lib/utils/task-constants";
 import { updateTask, addTaskComment } from "@/lib/actions/tasks";
+import { activityMessage } from "@/components/task/activity-messages";
+import { History } from "lucide-react";
 import { startTimer, stopTimer } from "@/lib/actions/time";
 import { featureFlags } from "@/lib/utils/feature-flags";
 import { cn } from "@/lib/utils/cn";
@@ -23,10 +27,12 @@ import { cn } from "@/lib/utils/cn";
 interface Props {
   task: Task;
   activity: TaskActivity[];
+  activityLogs: TaskActivityLogWithActor[];
   activeTimer: TimeEntry | null;
   customFields: CustomFieldDefinition[];
   profiles: Pick<Profile, "id" | "full_name" | "email" | "avatar_url">[];
   contacts: WorkspaceContact[];
+  departments: WorkspaceDepartment[];
   userId: string;
 }
 
@@ -552,6 +558,139 @@ function TimerPanel({ task, activeTimer, userId }: { task: Task; activeTimer: Ti
   );
 }
 
+// ---- Department select ----
+
+function DepartmentSelect({ task, departments }: { task: Task; departments: WorkspaceDepartment[] }) {
+  const [_p, startTransition] = useTransition();
+  const topLevel = departments.filter((d) => d.parent_id === null);
+  const children = (pid: string) => departments.filter((d) => d.parent_id === pid);
+
+  return (
+    <select
+      value={(task as unknown as Record<string, string | null>).department_id ?? ""}
+      onChange={(e) => {
+        const val = e.target.value || null;
+        startTransition(async () => {
+          await updateTask({ id: task.id, department_id: val } as Parameters<typeof updateTask>[0]);
+        });
+      }}
+      className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+    >
+      <option value="">— Departman yok —</option>
+      {topLevel.map((dept) => (
+        <optgroup key={dept.id} label={dept.name}>
+          {children(dept.id).map((child) => (
+            <option key={child.id} value={child.id}>{child.name}</option>
+          ))}
+          <option value={dept.id}>{dept.name} (genel)</option>
+        </optgroup>
+      ))}
+    </select>
+  );
+}
+
+// ---- Waiting-on select ----
+
+function WaitingOnSelect({
+  task,
+  profiles,
+  contacts,
+}: {
+  task: Task;
+  profiles: Pick<Profile, "id" | "full_name" | "email">[];
+  contacts: WorkspaceContact[];
+}) {
+  const [_p, startTransition] = useTransition();
+
+  const taskAny = task as unknown as Record<string, string | null>;
+  const currentMemberId = taskAny.waiting_on_member_id ?? null;
+  const currentContactId = taskAny.waiting_on_contact_id ?? null;
+  const currentValue = currentMemberId
+    ? `member:${currentMemberId}`
+    : currentContactId
+    ? `contact:${currentContactId}`
+    : "";
+
+  return (
+    <select
+      value={currentValue}
+      onChange={(e) => {
+        const val = e.target.value;
+        let memberId: string | null = null;
+        let contactId: string | null = null;
+        if (val.startsWith("member:")) memberId = val.slice(7);
+        else if (val.startsWith("contact:")) contactId = val.slice(8);
+        startTransition(async () => {
+          await updateTask({
+            id: task.id,
+            waiting_on_member_id: memberId,
+            waiting_on_contact_id: contactId,
+          } as Parameters<typeof updateTask>[0]);
+        });
+      }}
+      className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+    >
+      <option value="">— Kimse —</option>
+      {profiles.length > 0 && (
+        <optgroup label="Ekip üyeleri">
+          {profiles.map((p) => (
+            <option key={p.id} value={`member:${p.id}`}>{p.full_name ?? p.email}</option>
+          ))}
+        </optgroup>
+      )}
+      {contacts.length > 0 && (
+        <optgroup label="Dış kişiler">
+          {contacts.map((c) => (
+            <option key={c.id} value={`contact:${c.id}`}>{c.name}</option>
+          ))}
+        </optgroup>
+      )}
+    </select>
+  );
+}
+
+// ---- Waiting reason input ----
+
+function WaitingReasonInput({ task }: { task: Task }) {
+  const taskAny = task as unknown as Record<string, string | null>;
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(taskAny.waiting_reason ?? "");
+  const [_p, startTransition] = useTransition();
+
+  function save() {
+    setEditing(false);
+    startTransition(async () => {
+      await updateTask({
+        id: task.id,
+        waiting_reason: value.trim() || null,
+      } as Parameters<typeof updateTask>[0]);
+    });
+  }
+
+  if (editing) {
+    return (
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") { setEditing(false); setValue(taskAny.waiting_reason ?? ""); } }}
+        autoFocus
+        placeholder="Bekleme nedeni…"
+        className="w-full text-sm border border-blue-400 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+      />
+    );
+  }
+  return (
+    <button
+      onClick={() => setEditing(true)}
+      className="text-sm text-left w-full text-gray-600 hover:text-gray-900 py-1"
+    >
+      {value || <span className="text-gray-400 italic">Bekleme nedeni ekle…</span>}
+    </button>
+  );
+}
+
 // ---- Comment form ----
 
 function CommentForm({ task }: { task: Task }) {
@@ -587,7 +726,67 @@ function CommentForm({ task }: { task: Task }) {
 
 // ---- Main component ----
 
-export function TaskDetail({ task, activity, activeTimer, customFields: _customFields, profiles, contacts, userId }: Props) {
+// ---- Audit trail (Phase 2A) ----
+
+function ActivityLogSection({
+  logs,
+  profiles,
+  contacts,
+}: {
+  logs: TaskActivityLogWithActor[];
+  profiles: Pick<Profile, "id" | "full_name" | "email" | "avatar_url">[];
+  contacts: WorkspaceContact[];
+}) {
+  // Resolve member/contact ids to display names for the message builder
+  const resolveName = (id: string | null | undefined): string | null => {
+    if (!id) return null;
+    const p = profiles.find((x) => x.id === id);
+    if (p) return p.full_name ?? p.email ?? null;
+    const c = contacts.find((x) => x.id === id);
+    return c?.name ?? null;
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+      <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+        <History size={14} /> Aktivite
+      </h3>
+
+      {logs.length === 0 ? (
+        <p className="text-sm text-gray-400">
+          Henüz kayıtlı aktivite yok. Bundan sonraki değişiklikler burada görünecek.
+        </p>
+      ) : (
+        <ol className="space-y-3">
+          {logs.map((log) => {
+            const actorName = log.actor?.full_name ?? log.actor?.email
+              ?? (log.actor_id ? "Bilinmeyen kullanıcı" : "Sistem");
+            return (
+              <li key={log.id} className="flex gap-3 text-sm">
+                <div className="h-6 w-6 rounded-full bg-gray-100 text-gray-500 text-[11px] font-medium flex items-center justify-center shrink-0 mt-0.5">
+                  {actorName[0]?.toUpperCase() ?? "?"}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-gray-700 leading-snug">
+                    <span className="font-medium text-gray-900">{actorName}</span>{" "}
+                    {activityMessage(log, resolveName)}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {formatDateTimeTR(log.created_at)}
+                  </p>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </div>
+  );
+}
+
+export function TaskDetail({ task, activity, activityLogs, activeTimer, customFields: _customFields, profiles, contacts, departments, userId }: Props) {
+  // The crude system-event lines moved to the audit trail; this feed is comments only.
+  const comments = activity.filter((e) => e.type === "comment");
   return (
     <div className="max-w-3xl mx-auto py-6 px-4 space-y-5">
       {/* Back */}
@@ -604,28 +803,37 @@ export function TaskDetail({ task, activity, activeTimer, customFields: _customF
       {/* Fields grid */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <h3 className="text-sm font-semibold text-gray-700 mb-4">Detaylar</h3>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FieldRow label="Durum"><StatusSelect task={task} /></FieldRow>
           <FieldRow label="Öncelik"><PrioritySelect task={task} /></FieldRow>
-          <FieldRow label="Sorumlu" className="col-span-2">
+          <FieldRow label="Sorumlu" className="sm:col-span-2">
             <AssigneeSelect task={task} profiles={profiles} contacts={contacts} />
           </FieldRow>
-          <FieldRow label="İş birliği kişileri" className="col-span-2">
+          <FieldRow label="İş birliği kişileri" className="sm:col-span-2">
             <CollaboratorsInput task={task} profiles={profiles} contacts={contacts} />
+          </FieldRow>
+          <FieldRow label="Departman" className="sm:col-span-2">
+            <DepartmentSelect task={task} departments={departments} />
           </FieldRow>
           <FieldRow label="Proje / İş Alanı"><ProjectInput task={task} /></FieldRow>
           <FieldRow label="Kategori / Konu"><CategoryInput task={task} /></FieldRow>
           <FieldRow label="Teslim tarihi"><DueDateInput task={task} field="due_date" /></FieldRow>
           <FieldRow label="Başlangıç tarihi"><DueDateInput task={task} field="start_date" /></FieldRow>
-          <FieldRow label="Etiketler" className="col-span-2"><TagsInput task={task} /></FieldRow>
+          <FieldRow label="Etiketler" className="sm:col-span-2"><TagsInput task={task} /></FieldRow>
         </div>
       </div>
 
       {/* Ek bilgiler (editable) */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <h3 className="text-sm font-semibold text-gray-700 mb-4">Ek bilgiler</h3>
-        <div className="grid grid-cols-2 gap-4">
-          <FieldRow label="Bağlantı" className="col-span-2"><LinkInput task={task} /></FieldRow>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <FieldRow label="Beklenen kişi" className="sm:col-span-2">
+            <WaitingOnSelect task={task} profiles={profiles} contacts={contacts} />
+          </FieldRow>
+          <FieldRow label="Bekleme nedeni" className="sm:col-span-2">
+            <WaitingReasonInput task={task} />
+          </FieldRow>
+          <FieldRow label="Bağlantı" className="sm:col-span-2"><LinkInput task={task} /></FieldRow>
           <FieldRow label="Acil"><UrgentToggle task={task} /></FieldRow>
         </div>
       </div>
@@ -645,19 +853,22 @@ export function TaskDetail({ task, activity, activeTimer, customFields: _customF
         </div>
       )}
 
-      {/* Activity log + comments */}
+      {/* Audit trail — who changed what, when (Phase 2A) */}
+      <ActivityLogSection logs={activityLogs} profiles={profiles} contacts={contacts} />
+
+      {/* Comments (system events now live in the audit trail above) */}
       <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
         <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
-          <MessageSquare size={14} /> Aktivite
+          <MessageSquare size={14} /> Yorumlar
         </h3>
 
         <CommentForm task={task} />
 
-        {activity.length === 0 ? (
-          <p className="text-sm text-gray-400">Henüz aktivite yok.</p>
+        {comments.length === 0 ? (
+          <p className="text-sm text-gray-400">Henüz yorum yok.</p>
         ) : (
           <ol className="space-y-4 mt-2">
-            {[...activity].reverse().map((entry) => {
+            {[...comments].reverse().map((entry) => {
               const actor = profiles.find((p) => p.id === entry.user_id);
               return (
                 <li key={entry.id} className="flex gap-3 text-sm">
@@ -666,23 +877,9 @@ export function TaskDetail({ task, activity, activeTimer, customFields: _customF
                   </div>
                   <div className="flex-1">
                     <div>
-                      <span className="font-medium">{actor?.full_name ?? actor?.email ?? "Unknown"}</span>
+                      <span className="font-medium">{actor?.full_name ?? actor?.email ?? "Bilinmeyen kullanıcı"}</span>
                       {" "}
-                      {entry.type === "comment" ? (
-                        <span className="text-gray-700">{entry.content}</span>
-                      ) : entry.type === "created" ? (
-                        <span className="text-gray-400">bu görevi oluşturdu</span>
-                      ) : (
-                        <span className="text-gray-400">
-                          {entry.type.replace(/_/g, " ")}
-                          {entry.metadata && " → "}
-                          {(entry.metadata as Record<string, unknown> | null)?.to != null && (
-                            <span className="font-medium text-gray-600">
-                              {String((entry.metadata as Record<string, unknown>).to)}
-                            </span>
-                          )}
-                        </span>
-                      )}
+                      <span className="text-gray-700">{entry.content}</span>
                     </div>
                     <p className="text-xs text-gray-400 mt-0.5">
                       {formatDateTimeTR(entry.created_at)}

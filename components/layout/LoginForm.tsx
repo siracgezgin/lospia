@@ -5,6 +5,9 @@ import { signIn, signUp, type AuthFormState } from "@/lib/actions/auth";
 import { useState } from "react";
 
 export function LoginForm() {
+  // Pilot is invite-only: sign-up is only shown in dev where there is no
+  // real AF workspace restriction. In production, only the sign-in tab is shown.
+  const isPilot = process.env.NODE_ENV === "production";
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [signInState, signInAction, signInPending] = useActionState<AuthFormState, FormData>(
     signIn,
@@ -21,34 +24,36 @@ export function LoginForm() {
 
   return (
     <div className="space-y-4">
-      {/* Tab switcher */}
-      <div className="flex rounded-lg bg-gray-100 p-1 text-sm font-medium">
-        <button
-          type="button"
-          onClick={() => setMode("signin")}
-          className={`flex-1 rounded-md py-1.5 transition-colors ${
-            mode === "signin"
-              ? "bg-white text-gray-900 shadow-sm"
-              : "text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          Giriş yap
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode("signup")}
-          className={`flex-1 rounded-md py-1.5 transition-colors ${
-            mode === "signup"
-              ? "bg-white text-gray-900 shadow-sm"
-              : "text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          Kayıt ol
-        </button>
-      </div>
+      {/* Tab switcher — hidden in production pilot */}
+      {!isPilot && (
+        <div className="flex rounded-lg bg-gray-100 p-1 text-sm font-medium">
+          <button
+            type="button"
+            onClick={() => setMode("signin")}
+            className={`flex-1 rounded-md py-1.5 transition-colors ${
+              mode === "signin"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Giriş yap
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("signup")}
+            className={`flex-1 rounded-md py-1.5 transition-colors ${
+              mode === "signup"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Kayıt ol
+          </button>
+        </div>
+      )}
 
       <form action={action} className="space-y-3">
-        {mode === "signup" && (
+        {mode === "signup" && !isPilot && (
           <div>
             <label htmlFor="full_name" className="block text-sm font-medium text-gray-700 mb-1">
               Ad soyad

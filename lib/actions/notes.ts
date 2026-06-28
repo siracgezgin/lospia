@@ -109,3 +109,126 @@ export async function reorderNotes(updates: { id: string; position: number }[]) 
   revalidatePath("/board");
   return { success: true };
 }
+
+// ── Task notes (görev notları / "Notlar" panel) ───────────────────────────────
+
+async function getTaskCallerCtx(supabase: Awaited<ReturnType<typeof createClient>>) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data: member } = await supabase
+    .from("workspace_members")
+    .select("workspace_id, role")
+    .eq("user_id", user.id)
+    .limit(1)
+    .maybeSingle();
+  if (!member) return null;
+  return { user, workspaceId: member.workspace_id, role: member.role };
+}
+
+export async function addTaskNote(
+  taskId: string,
+  content: string
+): Promise<{ id: string } | { error: string }> {
+  const trimmed = content.trim();
+  if (!trimmed) return { error: "Not boş olamaz." };
+
+  const supabase = await createClient();
+  const ctx = await getTaskCallerCtx(supabase);
+  if (!ctx) return { error: "Kimlik doğrulama gerekli." };
+  if (ctx.role === "viewer") return { error: "İzleyiciler not ekleyemez." };
+
+  const { data, error } = await supabase
+    .from("task_notes")
+    .insert({
+      workspace_id: ctx.workspaceId,
+      task_id: taskId,
+      author_id: ctx.user.id,
+      content: trimmed,
+    })
+    .select("id")
+    .single();
+
+  if (error) return { error: error.message };
+
+  // Notify task owner/assignee that a note was added (skip if same user)
+  const { data: task } = await supabase
+    .from("tasks")
+    .select("assignee_id, title, workspace_id")
+    .eq("id", taskId)
+    .maybeSingle();
+  if (task?.assignee_id && task.assignee_id !== ctx.user.id) {
+    await supabase.from("notifications").insert({
+      workspace_id: ctx.workspaceId,
+      user_id: task.assignee_id,
+      type: "task_note_added",
+      title: "Bir göreve not eklendi",
+      body: task.title,
+      task_id: taskId,
+    } as Record<string, unknown>);
+  }
+
+  revalidatePath(`/tasks/${taskId}`);
+  return { id: data.id };
+}
+
+export async function toggleNotePin(
+  noteId: string,
+  taskId: string,
+  isPinned: boolean
+): Promise<{ ok: true } | { error: string }> {
+  const supabase = await createClient();
+  const ctx = await getTaskCallerCtx(supabase);
+  if (!ctx) return { error: "Kimlik doğrulama gerekli." };
+
+  const { error } = await supabase
+    .from("task_notes")
+    .update({ is_pinned: isPinned })
+    .eq("id", noteId)
+    .eq("workspace_id", ctx.workspaceId);
+
+  if (error) return { error: error.message };
+  revalidatePath(`/tasks/${taskId}`);
+  return { ok: true };
+}
+
+export async function deleteTaskNote(
+  noteId: string,
+  taskId: string
+): Promise<{ ok: true } | { error: string }> {
+  const supabase = await createClient();
+  const ctx = await getTaskCallerCtx(supabase);
+  if (!ctx) return { error: "Kimlik doğrulama gerekli." };
+
+  const { error } = await supabase
+    .from("task_notes")
+    .delete()
+    .eq("id", noteId)
+    .eq("workspace_id", ctx.workspaceId);
+
+  if (error) return { error: error.message };
+  revalidatePath(`/tasks/${taskId}`);
+  return { ok: true };
+}
+
+export async function updateTaskNote(
+  noteId: string,
+  taskId: string,
+  content: string
+): Promise<{ ok: true } | { error: string }> {
+  const trimmed = content.trim();
+  if (!trimmed) return { error: "Not boş olamaz." };
+
+  const supabase = await createClient();
+  const ctx = await getTaskCallerCtx(supabase);
+  if (!ctx) return { error: "Kimlik doğrulama gerekli." };
+
+  const { error } = await supabase
+    .from("task_notes")
+    .update({ content: trimmed })
+    .eq("id", noteId)
+    .eq("workspace_id", ctx.workspaceId);
+
+  if (error) return { error: error.message };
+  revalidatePath(`/tasks/${taskId}`);
+  return { ok: true };
+}
