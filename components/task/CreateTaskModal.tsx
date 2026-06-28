@@ -2,17 +2,22 @@
 
 import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { X, ChevronDown } from "lucide-react";
+import { X, Check } from "lucide-react";
 import { createTask } from "@/lib/actions/tasks";
+import { setTaskParticipants } from "@/lib/actions/completions";
 import {
   STATUS_LABELS,
   PRIORITY_LABELS,
   TASK_STATUSES,
   TASK_PRIORITIES,
-  CARD_STATUS_OPTIONS
+  CARD_STATUS_OPTIONS,
 } from "@/lib/utils/task-constants";
+import { Avatar } from "@/components/ui/Avatar";
+import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { cn } from "@/lib/utils/cn";
 import type { TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceDepartment } from "@/types";
+
+type BoardMember = { memberId: string; userId: string; name: string };
 
 interface Props {
   onClose: () => void;
@@ -22,18 +27,10 @@ interface Props {
   profiles: Pick<Profile, "id" | "full_name" | "email">[];
   contacts: WorkspaceContact[];
   departments?: WorkspaceDepartment[];
+  members?: BoardMember[];
+  deptMembers?: { department_id: string; member_id: string }[];
 }
 
-function encodeResponsible(type: "member" | "contact", id: string) {
-  return `${type}:${id}`;
-}
-function decodeResponsible(value: string): { assignee_id: string | null; responsible_contact_id: string | null } {
-  if (value.startsWith("member:")) return { assignee_id: value.slice(7), responsible_contact_id: null };
-  if (value.startsWith("contact:")) return { assignee_id: null, responsible_contact_id: value.slice(8) };
-  return { assignee_id: null, responsible_contact_id: null };
-}
-
-// Map the 3-column targetStatuses to display labels for the modal
 const SIMPLE_STATUS_OPTIONS = CARD_STATUS_OPTIONS;
 
 export function CreateTaskModal({
@@ -41,20 +38,24 @@ export function CreateTaskModal({
   workspaceId,
   defaultStatus = "ready",
   defaultDueDate = "",
-  profiles,
-  contacts,
   departments = [],
+  members = [],
+  deptMembers = [],
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [showDetails, setShowDetails] = useState(false);
 
   // Primary fields
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [departmentId, setDepartmentId] = useState("");
   const [konu, setKonu] = useState("");
+  const [responsibleIds, setResponsibleIds] = useState<string[]>([]);
+  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [dueDate, setDueDate] = useState(defaultDueDate);
+  const [status, setStatus] = useState<TaskStatus>(defaultStatus);
+  const [priority, setPriority] = useState<TaskPriority>("medium");
 
   const topDepts = useMemo(() => departments.filter((d) => d.parent_id === null), [departments]);
   const childDepts = useMemo(() => {
@@ -62,16 +63,42 @@ export function CreateTaskModal({
     for (const d of departments) if (d.parent_id) (m[d.parent_id] ??= []).push(d);
     return m;
   }, [departments]);
-  const [responsibleValue, setResponsibleValue] = useState("");
-  const [dueDate, setDueDate] = useState(defaultDueDate);
-  const [status, setStatus] = useState<TaskStatus>(defaultStatus);
-  const [priority, setPriority] = useState<TaskPriority>("medium");
 
-  // Secondary (Ek bilgiler)
-  // Entry/start date defaults to today (AF works weekly); user rarely edits it.
-  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [tagsInput, setTagsInput] = useState("");
-  const [successCriteria, setSuccessCriteria] = useState("");
+  // Members eligible as responsible people for the selected department: those
+  // assigned to the department, its parent, or its direct children. With no
+  // department chosen we offer every workspace member.
+  const eligibleMembers = useMemo<BoardMember[]>(() => {
+    if (!departmentId) return members;
+    const self = departments.find((d) => d.id === departmentId);
+    const related = new Set<string>([departmentId]);
+    if (self?.parent_id) related.add(self.parent_id);
+    for (const d of departments) if (d.parent_id === departmentId) related.add(d.id);
+    const eligibleIds = new Set(
+      deptMembers.filter((dm) => related.has(dm.department_id)).map((dm) => dm.member_id),
+    );
+    return members.filter((m) => eligibleIds.has(m.memberId));
+  }, [departmentId, departments, deptMembers, members]);
+
+  function toggleResponsible(memberId: string) {
+    setResponsibleIds((prev) =>
+      prev.includes(memberId) ? prev.filter((id) => id !== memberId) : [...prev, memberId],
+    );
+  }
+
+  // Drop any previously-selected people who fall outside a newly chosen department.
+  function handleDepartmentChange(value: string) {
+    setDepartmentId(value);
+    if (value) {
+      const self = departments.find((d) => d.id === value);
+      const related = new Set<string>([value]);
+      if (self?.parent_id) related.add(self.parent_id);
+      for (const d of departments) if (d.parent_id === value) related.add(d.id);
+      const eligibleIds = new Set(
+        deptMembers.filter((dm) => related.has(dm.department_id)).map((dm) => dm.member_id),
+      );
+      setResponsibleIds((prev) => prev.filter((id) => eligibleIds.has(id)));
+    }
+  }
 
   const workspaceIdMissing = !workspaceId || workspaceId.length < 10;
 
@@ -80,12 +107,8 @@ export function CreateTaskModal({
     if (!title.trim() || workspaceIdMissing) return;
     setError(null);
 
-    const tags = tagsInput.split(",").map((t) => t.trim()).filter(Boolean);
     const customFields: Record<string, unknown> = {};
     if (konu.trim()) customFields.category = konu.trim(); // stored under legacy key, shown as "Konu"
-    if (successCriteria.trim()) customFields.success_criteria = successCriteria.trim();
-
-    const { assignee_id, responsible_contact_id } = decodeResponsible(responsibleValue);
 
     startTransition(async () => {
       const result = await createTask({
@@ -94,18 +117,22 @@ export function CreateTaskModal({
         description: description.trim() || undefined,
         status,
         priority,
-        assignee_id,
-        responsible_contact_id,
+        assignee_id: null,
+        responsible_contact_id: null,
         department_id: departmentId || null,
         due_date: dueDate || null,
         start_date: startDate || null,
-        tags,
+        tags: [],
         custom_fields: customFields,
       });
 
       if ("error" in result) {
         setError(result.error);
         return;
+      }
+      // Responsible people become tracked participants (completion rows).
+      if (responsibleIds.length > 0) {
+        await setTaskParticipants(result.id, responsibleIds);
       }
       router.refresh(); // pull the newly created task into the board immediately
       onClose();
@@ -133,7 +160,7 @@ export function CreateTaskModal({
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-          {/* İş başlığı */}
+          {/* 1. İş başlığı */}
           <div>
             <label className={labelCls}>İş başlığı <span className="text-red-500">*</span></label>
             <input
@@ -147,7 +174,7 @@ export function CreateTaskModal({
             />
           </div>
 
-          {/* Açıklama / Stratejik adım */}
+          {/* 2. Açıklama / Stratejik adım */}
           <div>
             <label className={labelCls}>Açıklama / Stratejik adım</label>
             <textarea
@@ -159,12 +186,12 @@ export function CreateTaskModal({
             />
           </div>
 
-          {/* Departman */}
+          {/* 3. Departman */}
           <div>
             <label className={labelCls}>Departman</label>
             <select
               value={departmentId}
-              onChange={(e) => setDepartmentId(e.target.value)}
+              onChange={(e) => handleDepartmentChange(e.target.value)}
               className={selectCls}
             >
               <option value="">— Departman seçin</option>
@@ -179,7 +206,7 @@ export function CreateTaskModal({
             </select>
           </div>
 
-          {/* Konu */}
+          {/* 4. Konu */}
           <div>
             <label className={labelCls}>Konu</label>
             <input
@@ -191,42 +218,49 @@ export function CreateTaskModal({
             />
           </div>
 
-          {/* Sorumlu */}
+          {/* 5. Sorumlu kişiler — multi-select, filtered by department */}
           <div>
-            <label className={labelCls}>Sorumlu</label>
-            <select
-              value={responsibleValue}
-              onChange={(e) => setResponsibleValue(e.target.value)}
-              className={selectCls}
-            >
-              <option value="">— Atanmamış</option>
-              {profiles.length > 0 && (
-                <optgroup label="Üyeler">
-                  {profiles.map((p) => (
-                    <option key={p.id} value={encodeResponsible("member", p.id)}>
-                      {p.full_name ?? p.email}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-              {contacts.length > 0 && (
-                <optgroup label="Kişiler">
-                  {contacts.map((c) => (
-                    <option key={c.id} value={encodeResponsible("contact", c.id)}>
-                      {c.name}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
+            <label className={labelCls}>Sorumlu kişiler</label>
+            {eligibleMembers.length === 0 ? (
+              <p className="text-xs text-gray-500 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
+                {departmentId
+                  ? "Bu departmana atanmış üye yok. Ayarlar > Departmanlar'dan üye ekleyin."
+                  : "Çalışma alanında üye yok."}
+              </p>
+            ) : (
+              <>
+                {!departmentId && (
+                  <p className="text-[11px] text-gray-400 mb-1.5">
+                    İpucu: Önce departman seçerseniz liste o departmanın üyeleriyle daralır.
+                  </p>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  {eligibleMembers.map((m) => {
+                    const on = responsibleIds.includes(m.memberId);
+                    return (
+                      <button
+                        key={m.memberId}
+                        type="button"
+                        onClick={() => toggleResponsible(m.memberId)}
+                        className={cn(
+                          "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs border transition-colors",
+                          on
+                            ? "bg-blue-50 border-blue-300 text-blue-700"
+                            : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50",
+                        )}
+                      >
+                        <Avatar name={m.name} size="xs" />
+                        {getPersonDisplayName(m.name)}
+                        {on && <Check size={12} />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
 
-          {/* Sorumlu kişiler — assigned after creation in task detail (dept-filtered) */}
-          <p className="text-xs text-gray-400">
-            Sorumlu kişileri, görev oluşturulduktan sonra görev detayından (departmana göre filtreli) ekleyebilirsiniz.
-          </p>
-
-          {/* Başlangıç tarihi + Teslim tarihi (start before due) */}
+          {/* 6 + 7. Başlangıç tarihi + Teslim tarihi */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>Başlangıç tarihi</label>
@@ -249,7 +283,7 @@ export function CreateTaskModal({
             </div>
           </div>
 
-          {/* Durum + Öncelik */}
+          {/* 8 + 9. Durum + Öncelik */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>Durum</label>
@@ -277,42 +311,6 @@ export function CreateTaskModal({
             </div>
           </div>
 
-          {/* Ek bilgiler (collapsible) */}
-          <div className="border border-gray-100 rounded-lg overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setShowDetails((v) => !v)}
-              className="flex items-center justify-between w-full px-3 py-2 text-xs font-medium text-gray-500 hover:bg-gray-50 transition-colors"
-            >
-              Ek bilgiler
-              <ChevronDown size={14} className={cn("transition-transform", showDetails && "rotate-180")} />
-            </button>
-            {showDetails && (
-              <div className="px-3 pb-3 space-y-3 border-t border-gray-100">
-                <div className="pt-3">
-                  <label className={labelCls}>Etiketler</label>
-                  <input
-                    type="text"
-                    value={tagsInput}
-                    onChange={(e) => setTagsInput(e.target.value)}
-                    placeholder="etiket1, etiket2, etiket3"
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label className={labelCls}>Başarı kriteri / KPI</label>
-                  <textarea
-                    value={successCriteria}
-                    onChange={(e) => setSuccessCriteria(e.target.value)}
-                    rows={2}
-                    placeholder="Başarı nasıl ölçülecek?"
-                    className={cn(inputCls, "resize-none")}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
           {workspaceIdMissing && (
             <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
               Çalışma alanı bilgisi yüklenemedi. Sayfayı yenileyin.
@@ -338,7 +336,7 @@ export function CreateTaskModal({
                 "px-4 py-2 text-sm font-medium rounded-lg transition-colors",
                 isPending || !title.trim() || workspaceIdMissing
                   ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                  : "bg-blue-600 text-white hover:bg-blue-700"
+                  : "bg-blue-600 text-white hover:bg-blue-700",
               )}
             >
               {isPending ? "Oluşturuluyor…" : "Görev oluştur"}

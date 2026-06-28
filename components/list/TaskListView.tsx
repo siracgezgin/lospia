@@ -38,6 +38,8 @@ interface Props {
   profiles: Pick<Profile, "id" | "full_name" | "email">[];
   contacts: WorkspaceContact[];
   departments?: WorkspaceDepartment[];
+  members?: { memberId: string; userId: string; name: string }[];
+  deptMembers?: { department_id: string; member_id: string }[];
 }
 
 // ---- Status display — simplified user-facing labels ----
@@ -133,7 +135,7 @@ function PriorityBadge({ priority }: { priority: TaskPriority }) {
 
 // ---- Main component ----
 
-export function TaskListView({ tasks, savedViews, workspaceId, profiles, contacts, departments = [] }: Props) {
+export function TaskListView({ tasks, savedViews, workspaceId, profiles, contacts, departments = [], members = [], deptMembers = [] }: Props) {
   const deptMeta = useMemo(() => buildDeptMeta(departments), [departments]);
   const responsibleNames = useMemo<Record<string, string>>(() => {
     const map: Record<string, string> = {};
@@ -485,6 +487,8 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
           profiles={profiles}
           contacts={contacts}
           departments={departments}
+          members={members}
+          deptMembers={deptMembers}
         />
       )}
       {importOpen && (

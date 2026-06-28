@@ -115,7 +115,7 @@ export default async function TaskDetailPage({
       return { memberId: m.id, userId: m.user_id, name: prof?.full_name ?? prof?.email ?? "—" };
     });
   const panelParticipants: PanelParticipant[] = ((completionsResult.data ?? []) as { member_id: string; completed_at: string | null }[])
-    .map((c) => ({ memberId: c.member_id, completed: c.completed_at != null }));
+    .map((c) => ({ memberId: c.member_id, completed: c.completed_at != null, completedAt: c.completed_at }));
 
   // Eligible members for the responsible picker = members assigned to the task's
   // department, plus its parent and direct children. null when no department.

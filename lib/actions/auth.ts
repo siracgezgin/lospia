@@ -77,7 +77,7 @@ export async function signUp(
 
   const admin = getAdminClient();
   if (!admin) {
-    return { error: "Kayıt şu anda yapılandırılmamış. Lütfen yöneticinize başvurun." };
+    return { error: "Kayıt sistemi henüz yapılandırılmamış. Lütfen sistem yöneticisine başvurun." };
   }
 
   // 1. Require a pending invite for this email (invite-only).

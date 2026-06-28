@@ -4,6 +4,7 @@ import { KanbanBoard } from "@/components/board/KanbanBoard";
 import type { Task, SavedView, Profile, WorkspaceContact, WorkspaceNote, WorkspaceRole, WorkspaceDepartment, TaskParticipant } from "@/types";
 
 export type BoardRule = { id: string; title: string; category: string | null; updated_at: string };
+export type BoardMember = { memberId: string; userId: string; name: string };
 
 function parseWeekParam(weekStr?: string): string | null {
   if (!weekStr) return null;
@@ -49,7 +50,7 @@ export default async function BoardPage({
     );
   }
 
-  const [tasksResult, viewsResult, profilesResult, contactsResult, notesResult, rulesResult, deptsResult, completionsResult] = await Promise.all([
+  const [tasksResult, viewsResult, profilesResult, contactsResult, notesResult, rulesResult, deptsResult, completionsResult, deptMembersResult] = await Promise.all([
     supabase
       .from("tasks")
       .select("*")
@@ -63,10 +64,11 @@ export default async function BoardPage({
       .eq("workspace_id", workspaceId)
       .or(`is_shared.eq.true,owner_id.eq.${user.id}`)
       .order("position"),
-    // Member profiles via a single join (no sequential sub-query)
+    // Member profiles via a single join (no sequential sub-query). Includes the
+    // workspace_members row id so we can build the dept-filtered responsible picker.
     supabase
       .from("workspace_members")
-      .select("profiles(id, full_name, email)")
+      .select("id, user_id, profiles(id, full_name, email)")
       .eq("workspace_id", workspaceId),
     supabase
       .from("workspace_contacts")
@@ -97,15 +99,26 @@ export default async function BoardPage({
       .from("task_member_completions")
       .select("task_id, member_id, completed_at, workspace_members(id, profiles(id, full_name, email))")
       .eq("workspace_id", workspaceId),
+    // Department assignments → drive the create-task responsible picker filter
+    supabase
+      .from("department_members")
+      .select("department_id, member_id")
+      .eq("workspace_id", workspaceId),
   ]);
 
   const tasks: Task[] = tasksResult.data ?? [];
   const savedViews: SavedView[] = viewsResult.data ?? [];
   type ProfileLite = Pick<Profile, "id" | "full_name" | "email">;
-  const profiles: ProfileLite[] = (
-    (profilesResult.data ?? []) as unknown as { profiles: ProfileLite | ProfileLite[] | null }[]
-  )
+  type MemberRow = { id: string; user_id: string; profiles: ProfileLite | ProfileLite[] | null };
+  const memberRowsData = (profilesResult.data ?? []) as unknown as MemberRow[];
+  const profiles: ProfileLite[] = memberRowsData
     .flatMap((m) => (Array.isArray(m.profiles) ? m.profiles : m.profiles ? [m.profiles] : []));
+  // Workspace members keyed by workspace_members.id — the unit task participants use.
+  const members: BoardMember[] = memberRowsData.map((m) => {
+    const prof = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
+    return { memberId: m.id, userId: m.user_id, name: prof?.full_name ?? prof?.email ?? "—" };
+  });
+  const deptMembers = (deptMembersResult.data ?? []) as { department_id: string; member_id: string }[];
   const contacts: WorkspaceContact[] = (contactsResult.data ?? []) as WorkspaceContact[];
   const notes: WorkspaceNote[] = (notesResult.data ?? []) as WorkspaceNote[];
   const activeRules = (rulesResult.data ?? []) as BoardRule[];
@@ -154,6 +167,8 @@ export default async function BoardPage({
       newRulesCount={newRulesCount}
       departments={departments}
       participantsByTask={participantsByTask}
+      members={members}
+      deptMembers={deptMembers}
       userRole={userRole}
     />
   );

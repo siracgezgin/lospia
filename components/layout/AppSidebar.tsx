@@ -15,11 +15,9 @@ import {
   Trash2,
   BookOpen,
   ScrollText,
-  LogOut,
   Quote,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import { signOut } from "@/lib/actions/auth";
 import { Wordmark } from "@/components/ui/Wordmark";
 import { SAVED_VIEW_SLUG_MAP } from "@/lib/utils/task-constants";
 import { quoteForWeek } from "@/lib/utils/weekly-quotes";
@@ -136,37 +134,25 @@ export function AppSidebar({ workspace, savedViews, userRole = "member" }: Props
         )}
       </nav>
 
-      {/* Haftanın sözü — weekly rotating brand line, above logout */}
+      {/* Haftanın sözü — weekly rotating editorial brand card, anchored bottom-left.
+          (Logout now lives in the top-right profile menu.) */}
       {!collapsed && (
-        <div className="px-2 pb-1.5">
-          <div className="relative rounded-xl border border-brand-soft bg-gradient-to-br from-brand-soft/50 to-surface px-3 py-2.5 overflow-hidden">
-            <Quote size={28} className="absolute -top-1 right-1 text-brand/15" />
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-brand-strong/80 mb-1">
-              Haftanın sözü
+        <div className="px-3 pt-2 pb-3 mt-auto">
+          <div className="relative rounded-2xl border border-brand-soft bg-gradient-to-br from-[#f7ede9] via-brand-soft/40 to-surface px-4 pt-3.5 pb-4 overflow-hidden shadow-card">
+            <Quote
+              size={40}
+              strokeWidth={1.5}
+              className="absolute -top-1.5 -right-1 text-brand/15 rotate-180"
+            />
+            <p className="text-[9.5px] font-semibold uppercase tracking-[0.14em] text-brand-strong mb-1.5">
+              Haftanın Sözü
             </p>
-            <p className="relative text-[11.5px] leading-snug text-ink/80 italic line-clamp-3">
-              {weeklyQuote}
+            <p className="relative text-[12px] leading-relaxed text-ink/85 italic font-medium">
+              “{weeklyQuote}”
             </p>
           </div>
         </div>
       )}
-
-      {/* Footer: sign out */}
-      <div className={cn("border-t border-line p-2", collapsed && "px-1")}>
-        <form action={signOut}>
-          <button
-            type="submit"
-            className={cn(
-              "w-full flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm text-muted hover:bg-[#fbeae7] hover:text-[#a83a2c] transition-colors",
-              collapsed && "justify-center",
-            )}
-            title={collapsed ? "Çıkış yap" : undefined}
-          >
-            <LogOut size={16} className="shrink-0" />
-            {!collapsed && <span>Çıkış yap</span>}
-          </button>
-        </form>
-      </div>
 
       {/* Floating edge control — vertically centered on the sidebar/content
           boundary. Subtle by default, fully visible on hover. Anchored to the

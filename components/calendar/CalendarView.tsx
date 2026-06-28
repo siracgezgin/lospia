@@ -40,11 +40,13 @@ interface Props {
   profiles: Pick<Profile, "id" | "full_name" | "email">[];
   contacts: WorkspaceContact[];
   departments?: WorkspaceDepartment[];
+  members?: { memberId: string; userId: string; name: string }[];
+  deptMembers?: { department_id: string; member_id: string }[];
 }
 
 const DONE_CLS = "line-through text-gray-400";
 
-export function CalendarView({ tasks, workspaceId, profiles, contacts, departments = [] }: Props) {
+export function CalendarView({ tasks, workspaceId, profiles, contacts, departments = [], members = [], deptMembers = [] }: Props) {
   const deptMeta = buildDeptMeta(departments);
   const dotFor = (t: CalTask) => {
     if (t.status === "done") return "bg-[#2e9367]";
@@ -63,6 +65,9 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
   const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
   const gridEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
   const days = eachDayOfInterval({ start: gridStart, end: gridEnd });
+  // Months span 5 or 6 weeks — size rows to the real week count so a 5-week
+  // month never leaves an empty 6th row (the old "blank area below the grid").
+  const weekCount = days.length / 7;
 
   function getTasksForDay(day: Date) {
     return tasks.filter((t) => {
@@ -129,14 +134,17 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
             ))}
           </div>
 
-          {/* Grid — fills remaining height evenly */}
-          <div className="grid grid-cols-7 grid-rows-6 flex-1 min-h-0">
+          {/* Grid — fills remaining height evenly across the real week count */}
+          <div
+            className="grid grid-cols-7 flex-1 min-h-0"
+            style={{ gridTemplateRows: `repeat(${weekCount}, minmax(0, 1fr))` }}
+          >
             {days.map((day) => {
               const dayTasks = getTasksForDay(day);
               const isToday = dfnsIsToday(day);
               const inMonth = isSameMonth(day, current);
               const isSelected = isSameDay(day, selectedDay);
-              const MAX_SHOWN = 3;
+              const MAX_SHOWN = 4;
 
               return (
                 <button
@@ -161,7 +169,7 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
                       <span
                         key={task.id}
                         className={cn(
-                          "flex items-center gap-1 text-[11px] leading-tight rounded px-1 py-0.5 bg-gray-50 border border-gray-100",
+                          "flex items-center gap-1 text-[11px] leading-tight rounded px-1.5 py-0.5 bg-gray-50 border border-gray-100",
                           task.status === "done" && DONE_CLS,
                         )}
                       >
@@ -170,7 +178,7 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
                       </span>
                     ))}
                     {dayTasks.length > MAX_SHOWN && (
-                      <span className="text-[10px] text-gray-500 font-medium pl-1">
+                      <span className="self-start text-[10px] text-blue-700 font-semibold bg-blue-50 rounded px-1.5 py-0.5 leading-none">
                         +{dayTasks.length - MAX_SHOWN} daha
                       </span>
                     )}
@@ -295,6 +303,8 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
           profiles={profiles}
           contacts={contacts}
           departments={departments}
+          members={members}
+          deptMembers={deptMembers}
           defaultDueDate={createModalDate}
         />
       )}

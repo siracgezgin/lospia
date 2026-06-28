@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Check, UserPlus, Loader2 } from "lucide-react";
+import { Check, UserPlus, Loader2, Users } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
+import { cn } from "@/lib/utils/cn";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
+import { formatDateTimeTR } from "@/lib/utils/format-date";
 import {
   toggleMyCompletion,
   setParticipantCompletion,
@@ -11,7 +13,7 @@ import {
 } from "@/lib/actions/completions";
 
 export type PanelMember = { memberId: string; userId: string; name: string };
-export type PanelParticipant = { memberId: string; completed: boolean };
+export type PanelParticipant = { memberId: string; completed: boolean; completedAt?: string | null };
 
 interface Props {
   taskId: string;
@@ -51,7 +53,14 @@ export function TaskParticipantsPanel({
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-gray-700">Sorumlu kişiler</h3>
+        <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+          <Users size={14} /> Sorumlu kişiler
+          {participants.length > 0 && (
+            <span className="text-[11px] font-normal text-gray-400">
+              · {participants.filter((p) => p.completed).length}/{participants.length} tamamlandı
+            </span>
+          )}
+        </h3>
         {!isViewer && (
           <button
             onClick={() => setEditing((v) => !v)}
@@ -66,20 +75,36 @@ export function TaskParticipantsPanel({
       {participants.length === 0 ? (
         <p className="text-sm text-gray-400">Henüz sorumlu kişi atanmadı.</p>
       ) : (
-        <ul className="space-y-1.5">
+        <ul className="divide-y divide-gray-50 rounded-lg border border-gray-100 overflow-hidden">
           {participants.map((p) => {
             const name = nameOf(p.memberId);
             const isMe = p.memberId === currentMemberId;
             return (
-              <li key={p.memberId} className="flex items-center gap-2 text-sm">
-                <Avatar name={name} size="xs" className={p.completed ? "ring-2 ring-green-500" : ""} />
-                <span className="text-gray-700">{name}</span>
+              <li
+                key={p.memberId}
+                className={cn(
+                  "flex items-center gap-2.5 px-3 py-2.5 text-sm",
+                  p.completed ? "bg-green-50/40" : "bg-white",
+                )}
+              >
+                <Avatar name={name} size="sm" className={p.completed ? "ring-2 ring-green-500" : ""} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-gray-800 truncate">
+                    {name}
+                    {isMe && <span className="ml-1 text-[10px] text-gray-400">(siz)</span>}
+                  </p>
+                  {p.completed && p.completedAt && (
+                    <p className="text-[10px] text-gray-400">{formatDateTimeTR(p.completedAt)}</p>
+                  )}
+                </div>
                 {p.completed ? (
-                  <span className="inline-flex items-center gap-0.5 text-xs text-green-700">
-                    <Check size={12} /> tamamladı
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-green-700 bg-green-100 rounded-full px-2 py-0.5">
+                    <Check size={11} /> Tamamladı
                   </span>
                 ) : (
-                  <span className="text-xs text-gray-400">bekleniyor</span>
+                  <span className="text-[11px] font-medium text-gray-500 bg-gray-100 rounded-full px-2 py-0.5">
+                    Bekliyor
+                  </span>
                 )}
                 {/* Admin can toggle anyone; a member can toggle their own */}
                 {!isViewer && (isAdmin || isMe) && (
@@ -89,9 +114,9 @@ export function TaskParticipantsPanel({
                       if (isMe) void toggleMyCompletion(taskId);
                       else void setParticipantCompletion(taskId, p.memberId, !p.completed);
                     })}
-                    className="ml-auto text-xs text-blue-600 hover:text-blue-700 disabled:opacity-50"
+                    className="text-xs text-blue-600 hover:text-blue-700 disabled:opacity-50 shrink-0"
                   >
-                    {p.completed ? "Geri al" : "Tamamlandı işaretle"}
+                    {p.completed ? "Geri al" : "İşaretle"}
                   </button>
                 )}
               </li>

@@ -16,7 +16,7 @@ export default async function CalendarPage() {
   const workspaceId = memberRows?.[0]?.workspace_id;
   if (!workspaceId) return <div className="p-8 text-gray-500">Çalışma alanı bulunamadı.</div>;
 
-  const [tasksResult, membersResult, contactsResult, deptsResult] = await Promise.all([
+  const [tasksResult, membersResult, contactsResult, deptsResult, deptMembersResult] = await Promise.all([
     supabase
       .from("tasks")
       .select("id, title, status, priority, due_date, start_date, department_id")
@@ -25,7 +25,7 @@ export default async function CalendarPage() {
       .or("due_date.not.is.null,start_date.not.is.null"),
     supabase
       .from("workspace_members")
-      .select("profiles(id, full_name, email)")
+      .select("id, user_id, profiles(id, full_name, email)")
       .eq("workspace_id", workspaceId),
     supabase
       .from("workspace_contacts")
@@ -37,13 +37,23 @@ export default async function CalendarPage() {
       .select("id, parent_id, name, color_key")
       .eq("workspace_id", workspaceId)
       .order("position"),
+    supabase
+      .from("department_members")
+      .select("department_id, member_id")
+      .eq("workspace_id", workspaceId),
   ]);
 
   const tasks = (tasksResult.data ?? []) as Pick<Task, "id" | "title" | "status" | "priority" | "due_date" | "start_date" | "department_id">[];
   type ProfileLite = Pick<Profile, "id" | "full_name" | "email">;
-  const profiles: ProfileLite[] = (
-    (membersResult.data ?? []) as unknown as { profiles: ProfileLite | ProfileLite[] | null }[]
-  ).flatMap((m) => (Array.isArray(m.profiles) ? m.profiles : m.profiles ? [m.profiles] : []));
+  type MemberRow = { id: string; user_id: string; profiles: ProfileLite | ProfileLite[] | null };
+  const memberRowsData = (membersResult.data ?? []) as unknown as MemberRow[];
+  const profiles: ProfileLite[] = memberRowsData
+    .flatMap((m) => (Array.isArray(m.profiles) ? m.profiles : m.profiles ? [m.profiles] : []));
+  const members = memberRowsData.map((m) => {
+    const prof = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
+    return { memberId: m.id, userId: m.user_id, name: prof?.full_name ?? prof?.email ?? "—" };
+  });
+  const deptMembers = (deptMembersResult.data ?? []) as { department_id: string; member_id: string }[];
   const contacts: WorkspaceContact[] = (contactsResult.data ?? []) as WorkspaceContact[];
   const departments = (deptsResult.data ?? []) as WorkspaceDepartment[];
 
@@ -54,6 +64,8 @@ export default async function CalendarPage() {
       profiles={profiles}
       contacts={contacts}
       departments={departments}
+      members={members}
+      deptMembers={deptMembers}
     />
   );
 }

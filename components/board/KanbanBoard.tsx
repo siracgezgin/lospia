@@ -61,7 +61,7 @@ import { NotesColumn } from "@/components/board/NotesColumn";
 import { BoardRulesPanel } from "@/components/board/BoardRulesPanel";
 import { canCreateTask, canDeleteTask, canArchiveTask, canCompleteTask } from "@/lib/auth/permissions";
 import type { Task, SavedView, TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceNote, WorkspaceRole, WorkspaceDepartment } from "@/types";
-import type { BoardRule } from "@/app/(app)/board/page";
+import type { BoardRule, BoardMember } from "@/app/(app)/board/page";
 import type { TaskParticipant } from "@/types";
 
 // Department metadata (id → {name, color}) shared with all card renderers.
@@ -408,6 +408,8 @@ interface Props {
   newRulesCount?: number;
   departments?: WorkspaceDepartment[];
   participantsByTask?: Record<string, TaskParticipant[]>;
+  members?: BoardMember[];
+  deptMembers?: { department_id: string; member_id: string }[];
   userRole?: WorkspaceRole;
 }
 
@@ -890,24 +892,26 @@ function KanbanColumn({
 
   return (
     <div className="flex flex-col gap-2 w-72 shrink-0">
-      <div className="flex items-center justify-between px-0.5 sticky top-0 z-20 bg-app pb-1.5 -mt-1 pt-1">
-        <div className="flex items-center gap-2">
-          <h3 className={cn("text-xs font-bold uppercase tracking-wider", headerTone)}>
-            {colDef.label}
-          </h3>
-          <span className="text-[10px] text-gray-400 bg-gray-100 rounded-full px-1.5 py-0.5 leading-none">
-            {tasks.length}
-          </span>
+      <div className="sticky top-0 z-20 bg-app/95 backdrop-blur-sm -mx-1 px-1 pt-1.5 pb-2 border-b border-line shadow-[0_6px_8px_-6px_rgba(16,24,40,0.12)]">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <h3 className={cn("text-xs font-bold uppercase tracking-wider truncate", headerTone)}>
+              {colDef.label}
+            </h3>
+            <span className="text-[10px] font-semibold text-gray-500 bg-gray-200/70 rounded-full px-1.5 py-0.5 leading-none shrink-0">
+              {tasks.length}
+            </span>
+          </div>
+          {!disableDrag && (
+            <button
+              onClick={() => onAddTask(colDef.id)}
+              className="p-0.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors shrink-0"
+              aria-label={`${colDef.label} sütununa görev ekle`}
+            >
+              <Plus size={14} />
+            </button>
+          )}
         </div>
-        {!disableDrag && (
-          <button
-            onClick={() => onAddTask(colDef.id)}
-            className="p-0.5 text-gray-300 hover:text-blue-500 rounded transition-colors"
-            aria-label={`${colDef.label} sütununa görev ekle`}
-          >
-            <Plus size={14} />
-          </button>
-        )}
       </div>
 
       <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
@@ -963,11 +967,13 @@ function StaticKanbanColumn({
     : "text-gray-500";
   return (
     <div className="flex flex-col gap-2 w-72 shrink-0">
-      <div className="flex items-center gap-2 px-0.5 sticky top-0 z-20 bg-app pb-1.5 -mt-1 pt-1">
-        <h3 className={cn("text-xs font-bold uppercase tracking-wider", headerTone)}>
-          {colDef.label}
-        </h3>
-        <span className="text-[10px] text-gray-400 bg-gray-100 rounded-full px-1.5 py-0.5 leading-none">{tasks.length}</span>
+      <div className="sticky top-0 z-20 bg-app/95 backdrop-blur-sm -mx-1 px-1 pt-1.5 pb-2 border-b border-line shadow-[0_6px_8px_-6px_rgba(16,24,40,0.12)]">
+        <div className="flex items-center gap-2">
+          <h3 className={cn("text-xs font-bold uppercase tracking-wider truncate", headerTone)}>
+            {colDef.label}
+          </h3>
+          <span className="text-[10px] font-semibold text-gray-500 bg-gray-200/70 rounded-full px-1.5 py-0.5 leading-none shrink-0">{tasks.length}</span>
+        </div>
       </div>
       <div className={cn("flex flex-col gap-2 rounded-lg p-1 min-h-20", tasks.length === 0 && "border-2 border-dashed border-gray-100")}>
         {tasks.map((task) => (
@@ -999,6 +1005,8 @@ export function KanbanBoard({
   newRulesCount = 0,
   departments = [],
   participantsByTask = {},
+  members = [],
+  deptMembers = [],
   userRole = "member",
 }: Props) {
   const deptMeta = useMemo(() => buildDeptMeta(departments), [departments]);
@@ -1588,6 +1596,8 @@ export function KanbanBoard({
           profiles={profiles}
           contacts={contacts}
           departments={departments}
+          members={members}
+          deptMembers={deptMembers}
         />
       )}
       {importOpen && (

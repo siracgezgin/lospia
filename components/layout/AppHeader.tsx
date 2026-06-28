@@ -1,11 +1,13 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { useState, useRef, useEffect } from "react";
+import { ChevronDown, LogOut, Mail, Shield } from "lucide-react";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { Avatar } from "@/components/ui/Avatar";
-import { Badge } from "@/components/ui/Badge";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { ROLE_LABELS } from "@/lib/utils/roles";
+import { signOut } from "@/lib/actions/auth";
 import type { Workspace, Notification, WorkspaceRole } from "@/types";
 
 interface Props {
@@ -31,6 +33,83 @@ const PAGE_TITLES: { match: (p: string) => boolean; title: string }[] = [
   { match: (p) => p.startsWith("/tasks/"), title: "Görev" },
 ];
 
+function ProfileMenu({
+  displayName,
+  email,
+  role,
+}: {
+  displayName: string;
+  email: string | null;
+  role: WorkspaceRole;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-2 pl-3 border-l border-line rounded-lg py-1 pr-1 hover:bg-surface-muted transition-colors"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={`${displayName} · ${ROLE_LABELS[role]}`}
+      >
+        <Avatar name={displayName} size="sm" />
+        <div className="hidden sm:flex flex-col leading-tight text-left">
+          <span className="text-xs font-medium text-ink truncate max-w-[140px]">{displayName}</span>
+          <span className="text-[10px] text-subtle">{ROLE_LABELS[role]}</span>
+        </div>
+        <ChevronDown size={13} className={`text-subtle transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-64 bg-surface border border-line rounded-xl shadow-pop z-50 overflow-hidden">
+          {/* Identity card */}
+          <div className="flex items-center gap-3 px-4 py-3.5 bg-surface-muted/60 border-b border-line">
+            <Avatar name={displayName} size="md" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-ink truncate">{displayName}</p>
+              <p className="text-[11px] text-subtle truncate">{ROLE_LABELS[role]}</p>
+            </div>
+          </div>
+
+          {/* Details */}
+          <div className="px-4 py-3 space-y-2 border-b border-line">
+            <div className="flex items-center gap-2 text-[12px] text-muted">
+              <Mail size={13} className="text-subtle shrink-0" />
+              <span className="truncate">{email ?? "—"}</span>
+            </div>
+            <div className="flex items-center gap-2 text-[12px] text-muted">
+              <Shield size={13} className="text-subtle shrink-0" />
+              <span>{ROLE_LABELS[role]}</span>
+            </div>
+          </div>
+
+          {/* Sign out */}
+          <form action={signOut}>
+            <button
+              type="submit"
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-muted hover:bg-[#fbeae7] hover:text-[#a83a2c] transition-colors"
+            >
+              <LogOut size={15} className="shrink-0" />
+              Çıkış yap
+            </button>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AppHeader({
   unreadCount, userId, userName, userEmail, notifications = [], userRole = "member",
 }: Props) {
@@ -46,14 +125,7 @@ export function AppHeader({
 
       <div className="flex items-center gap-3">
         <NotificationBell unreadCount={unreadCount} userId={userId} notifications={notifications} />
-        {/* Current user identity — initials avatar, name on sm+, role badge */}
-        <div className="flex items-center gap-2 pl-3 border-l border-line" title={`${displayName} · ${ROLE_LABELS[userRole]}`}>
-          <Avatar name={displayName} size="sm" />
-          <div className="hidden sm:flex flex-col leading-tight">
-            <span className="text-xs font-medium text-ink truncate max-w-[140px]">{displayName}</span>
-            <span className="text-[10px] text-subtle">{ROLE_LABELS[userRole]}</span>
-          </div>
-        </div>
+        <ProfileMenu displayName={displayName} email={userEmail ?? null} role={userRole} />
       </div>
     </header>
   );

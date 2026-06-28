@@ -1,13 +1,12 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Plus, X, UserMinus, ChevronDown, Copy, Check, KeyRound } from "lucide-react";
+import { Plus, X, UserMinus, ChevronDown, Copy, Check } from "lucide-react";
 import {
   createWorkspaceInvite,
   cancelWorkspaceInvite,
   changeWorkspaceMemberRole,
   removeWorkspaceMember,
-  resetMemberPassword,
 } from "@/lib/actions/workspace";
 import type {
   WorkspaceMember, Profile, WorkspaceInvite, WorkspaceRole,
@@ -69,9 +68,6 @@ export function MembersManager({
   const [invites, setInvites] = useState(initialInvites);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  // One-time temporary password reveal (never stored — shown once after reset).
-  const [resetFor, setResetFor] = useState<{ memberId: string; password: string } | null>(null);
-  const [copiedPw, setCopiedPw] = useState(false);
 
   // Invite form state
   const [showInviteForm, setShowInviteForm] = useState(false);
@@ -136,17 +132,6 @@ export function MembersManager({
     });
   }
 
-  function handleResetPassword(memberId: string) {
-    setError(null);
-    setResetFor(null);
-    setCopiedPw(false);
-    startTransition(async () => {
-      const result = await resetMemberPassword(memberId);
-      if ("error" in result) { setError(result.error); return; }
-      setResetFor({ memberId, password: result.password });
-    });
-  }
-
   function handleRemoveMember(memberId: string) {
     setError(null);
     startTransition(async () => {
@@ -201,15 +186,6 @@ export function MembersManager({
                     <ChevronDown size={10} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                   </div>
                   <button
-                    onClick={() => handleResetPassword(m.id)}
-                    disabled={isPending}
-                    className="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 disabled:opacity-50 transition-colors"
-                    aria-label="Geçici şifre oluştur"
-                    title="Geçici şifre oluştur"
-                  >
-                    <KeyRound size={13} />
-                  </button>
-                  <button
                     onClick={() => handleRemoveMember(m.id)}
                     disabled={isPending}
                     className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-50 transition-colors"
@@ -224,44 +200,6 @@ export function MembersManager({
                 </span>
               )}
             </div>
-
-            {/* One-time temporary password reveal — shown only right after reset.
-                Never stored; the owner must share it securely with the member. */}
-            {resetFor?.memberId === m.id && (
-              <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 space-y-1.5">
-                <p className="text-xs text-amber-800">
-                  Geçici şifre oluşturuldu. Bu şifre yalnızca bir kez gösterilir — kişiye güvenli bir
-                  şekilde iletin ve ilk girişten sonra değiştirmesini söyleyin.
-                </p>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 font-mono text-sm bg-white border border-amber-200 rounded px-2 py-1 text-gray-900 select-all">
-                    {resetFor.password}
-                  </code>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        await navigator.clipboard.writeText(resetFor.password);
-                        setCopiedPw(true);
-                        setTimeout(() => setCopiedPw(false), 1800);
-                      } catch { /* clipboard unavailable — password is shown above */ }
-                    }}
-                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 shrink-0"
-                  >
-                    {copiedPw ? <Check size={12} /> : <Copy size={12} />}
-                    {copiedPw ? "Kopyalandı" : "Kopyala"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setResetFor(null)}
-                    className="p-1 rounded text-amber-700 hover:bg-amber-100 shrink-0"
-                    aria-label="Kapat"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              </div>
-            )}
             </div>
           );
         })}
