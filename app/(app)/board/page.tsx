@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { KanbanBoard } from "@/components/board/KanbanBoard";
-import type { Task, SavedView, Profile, WorkspaceContact, WorkspaceNote, WorkspaceRole, WorkspaceDepartment } from "@/types";
+import type { Task, SavedView, Profile, WorkspaceContact, WorkspaceNote, WorkspaceRole, WorkspaceDepartment, TaskParticipant } from "@/types";
 
 export type BoardRule = { id: string; title: string; category: string | null; updated_at: string };
 
@@ -49,7 +49,7 @@ export default async function BoardPage({
     );
   }
 
-  const [tasksResult, viewsResult, profilesResult, contactsResult, notesResult, rulesResult, deptsResult] = await Promise.all([
+  const [tasksResult, viewsResult, profilesResult, contactsResult, notesResult, rulesResult, deptsResult, completionsResult] = await Promise.all([
     supabase
       .from("tasks")
       .select("*")
@@ -92,6 +92,11 @@ export default async function BoardPage({
       .select("id, parent_id, name, color_key")
       .eq("workspace_id", workspaceId)
       .order("position"),
+    // Per-person completions → participant chips on cards
+    supabase
+      .from("task_member_completions")
+      .select("task_id, member_id, completed_at, workspace_members(id, profiles(id, full_name, email))")
+      .eq("workspace_id", workspaceId),
   ]);
 
   const tasks: Task[] = tasksResult.data ?? [];
@@ -108,6 +113,30 @@ export default async function BoardPage({
     ? activeRules.filter((r) => r.updated_at > lastRulesSeen).length
     : activeRules.length;
   const departments = (deptsResult.data ?? []) as WorkspaceDepartment[];
+
+  // Build participants-by-task map for card chips.
+  type CompRow = {
+    task_id: string;
+    member_id: string;
+    completed_at: string | null;
+    workspace_members:
+      | { id: string; profiles: ProfileLite | ProfileLite[] | null }
+      | { id: string; profiles: ProfileLite | ProfileLite[] | null }[]
+      | null;
+  };
+  const participantsByTask: Record<string, TaskParticipant[]> = {};
+  for (const row of (completionsResult.data ?? []) as unknown as CompRow[]) {
+    const wm = Array.isArray(row.workspace_members) ? row.workspace_members[0] : row.workspace_members;
+    const prof = wm && (Array.isArray(wm.profiles) ? wm.profiles[0] : wm.profiles);
+    if (!prof) continue;
+    (participantsByTask[row.task_id] ??= []).push({
+      memberId: row.member_id,
+      userId: prof.id,
+      name: prof.full_name ?? prof.email ?? "—",
+      completed: row.completed_at != null,
+    });
+  }
+
   const viewSlug = params.view ?? null;
 
   return (
@@ -124,6 +153,7 @@ export default async function BoardPage({
       rules={activeRules}
       newRulesCount={newRulesCount}
       departments={departments}
+      participantsByTask={participantsByTask}
       userRole={userRole}
     />
   );

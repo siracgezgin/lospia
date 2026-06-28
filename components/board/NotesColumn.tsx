@@ -411,7 +411,7 @@ export function NotesColumn({
   };
 
   return (
-    <div className="flex flex-col gap-2 w-72 shrink-0">
+    <div className="flex flex-col gap-2 w-64 shrink-0">
       {/* Header */}
       <div className="flex items-center justify-between px-0.5">
         <div className="flex items-center gap-2">

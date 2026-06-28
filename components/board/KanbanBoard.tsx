@@ -32,10 +32,10 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  GripVertical, Plus, FileSpreadsheet, Search, X,
+  GripVertical, Plus, FileSpreadsheet, Search, X, Check,
   ChevronLeft, ChevronRight, MoreVertical, Pencil, Copy, Archive, Trash2, AlertTriangle,
 } from "lucide-react";
-import { Avatar, AvatarGroup } from "@/components/ui/Avatar";
+import { Avatar } from "@/components/ui/Avatar";
 import {
   BOARD_COLUMNS,
   getTaskColId,
@@ -62,12 +62,43 @@ import { BoardRulesPanel } from "@/components/board/BoardRulesPanel";
 import { canCreateTask, canDeleteTask, canArchiveTask, canCompleteTask } from "@/lib/auth/permissions";
 import type { Task, SavedView, TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceNote, WorkspaceRole, WorkspaceDepartment } from "@/types";
 import type { BoardRule } from "@/app/(app)/board/page";
+import type { TaskParticipant } from "@/types";
 
 // Department metadata (id → {name, color}) shared with all card renderers.
 const DeptMetaContext = createContext<Record<string, DeptMeta>>({});
 function useTaskDept(task: Task): DeptMeta | undefined {
   const meta = useContext(DeptMetaContext);
   return task.department_id ? meta[task.department_id] : undefined;
+}
+
+// Participant completions (taskId → [{name, completed}]) for card chips.
+const ParticipantsContext = createContext<Record<string, TaskParticipant[]>>({});
+function useTaskParticipants(taskId: string): TaskParticipant[] {
+  return useContext(ParticipantsContext)[taskId] ?? [];
+}
+
+/** Bottom-right initials chips for member participants, with completion ring. */
+function ParticipantChips({ participants }: { participants: TaskParticipant[] }) {
+  if (participants.length === 0) return null;
+  const shown = participants.slice(0, 4);
+  const overflow = participants.length - shown.length;
+  return (
+    <span className="ml-auto flex items-center -space-x-1 shrink-0">
+      {shown.map((p) => (
+        <span key={p.memberId} className="relative" title={`${p.name}${p.completed ? " — tamamladı" : " — bekleniyor"}`}>
+          <Avatar name={p.name} size="xs" className={cn("ring-1 ring-white", p.completed && "ring-2 ring-green-500")} />
+          {p.completed && (
+            <Check size={8} className="absolute -bottom-0.5 -right-0.5 text-green-600 bg-white rounded-full" strokeWidth={3} />
+          )}
+        </span>
+      ))}
+      {overflow > 0 && (
+        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-600 text-[8px] font-semibold ring-1 ring-white">
+          +{overflow}
+        </span>
+      )}
+    </span>
+  );
 }
 
 // ── Week helpers ──────────────────────────────────────────────────────────────
@@ -78,6 +109,15 @@ function getMondayOf(date: Date): Date {
   const dow = d.getDay();
   d.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1));
   return d;
+}
+
+// Local YYYY-MM-DD (NOT toISOString, which shifts to UTC and breaks week
+// boundaries for UTC+3 — a Monday-local midnight became the previous day).
+function localISO(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function formatWeekLabel(monday: Date): string {
@@ -106,9 +146,9 @@ function isInWeek(ts: string | null, monday: Date): boolean {
 }
 
 function applyViewFilter(tasks: Task[], slug: string, userId: string, monday: Date): Task[] {
-  const today = new Date().toISOString().slice(0, 10);
-  const mondayStr = monday.toISOString().slice(0, 10);
-  const sundayStr = (() => { const d = new Date(monday); d.setDate(d.getDate() + 6); return d.toISOString().slice(0, 10); })();
+  const today = localISO(new Date());
+  const mondayStr = localISO(monday);
+  const sundayStr = (() => { const d = new Date(monday); d.setDate(d.getDate() + 6); return localISO(d); })();
 
   // A task belongs to the week if its due date OR its entry/start date falls in
   // the week. New tasks default start_date to today, so they always appear in
@@ -120,7 +160,10 @@ function applyViewFilter(tasks: Task[], slug: string, userId: string, monday: Da
     !t.archived_at && !t.deleted_at && t.status !== "archived";
 
   switch (slug) {
-    case "all": // Tüm işler — scoped to selected week
+    case "all": // Tüm işler — ALL active tasks, not scoped to the selected week
+      return tasks.filter((t) => notArchived(t));
+
+    case "_week_scoped_all_DEPRECATED":
       return tasks.filter((t) => {
         if (!notArchived(t)) return false;
         // A done task belongs to the week if it was DUE that week or COMPLETED
@@ -253,6 +296,7 @@ interface Props {
   rules?: BoardRule[];
   newRulesCount?: number;
   departments?: WorkspaceDepartment[];
+  participantsByTask?: Record<string, TaskParticipant[]>;
   userRole?: WorkspaceRole;
 }
 
@@ -505,11 +549,11 @@ function CardContent({
 }) {
   const cf = task.custom_fields as Record<string, unknown>;
   const konu = cf?.category as string | undefined; // legacy key, shown as "Konu"
-  const collaborators = cf?.collaborators;
-  const collabIds = Array.isArray(collaborators) ? collaborators as string[] : [];
   // Department drives the card identity chip (even on a done card).
   const dept = useTaskDept(task);
   const deptStyle = getDepartmentCardStyle(dept?.color);
+  // Active member participants (with per-person completion) drive the people chips.
+  const participants = useTaskParticipants(task.id);
   const responsibleName =
     responsibleNames[task.assignee_id ?? ""] ??
     responsibleNames[task.responsible_contact_id ?? ""];
@@ -597,26 +641,20 @@ function CardContent({
           </span>
         )}
 
-        {/* Collaborators as initials chips (names live in custom_fields.collaborators) */}
-        {collabIds.length > 0 && (
-          <span className="ml-auto shrink-0">
-            <AvatarGroup names={collabIds} max={3} />
-          </span>
-        )}
-
-        {interactive ? (
+        {/* People: member participant chips (with completion) grouped bottom-right.
+            Falls back to the assignee editor/avatar when there are no participants. */}
+        {participants.length > 0 ? (
+          <ParticipantChips participants={participants} />
+        ) : interactive ? (
           <QuickAssigneeSelect
             task={task}
             profiles={profiles}
             contacts={contacts}
             responsibleNames={responsibleNames}
           />
-        ) : (
-          responsibleName ? (
-            // Initials only; full name shown via the Avatar's title tooltip
-            <Avatar name={responsibleName} size="xs" className={cn("shrink-0", collabIds.length === 0 && "ml-auto")} />
-          ) : null
-        )}
+        ) : responsibleName ? (
+          <Avatar name={responsibleName} size="xs" className="shrink-0 ml-auto" />
+        ) : null}
       </div>
     </div>
   );
@@ -769,7 +807,7 @@ function KanbanColumn({
     : "text-gray-500";
 
   return (
-    <div className="flex flex-col gap-2 w-80 shrink-0">
+    <div className="flex flex-col gap-2 w-72 shrink-0">
       <div className="flex items-center justify-between px-0.5">
         <div className="flex items-center gap-2">
           <h3 className={cn("text-xs font-bold uppercase tracking-wider", headerTone)}>
@@ -842,7 +880,7 @@ function StaticKanbanColumn({
     : colDef.id === "kontrol_onay" ? "text-teal-600"
     : "text-gray-500";
   return (
-    <div className="flex flex-col gap-2 w-80 shrink-0">
+    <div className="flex flex-col gap-2 w-72 shrink-0">
       <div className="flex items-center gap-2 px-0.5">
         <h3 className={cn("text-xs font-bold uppercase tracking-wider", headerTone)}>
           {colDef.label}
@@ -878,6 +916,7 @@ export function KanbanBoard({
   rules = [],
   newRulesCount = 0,
   departments = [],
+  participantsByTask = {},
   userRole = "member",
 }: Props) {
   const deptMeta = useMemo(() => buildDeptMeta(departments), [departments]);
@@ -929,7 +968,7 @@ export function KanbanBoard({
   const isCurrentWeek = weekStart.toDateString() === currentMonday.toDateString();
 
   // Derive the week ISO string for URL building (always the Monday)
-  const weekParam = weekStart.toISOString().slice(0, 10);
+  const weekParam = localISO(weekStart);
 
 
   // Toast notifications (optionally with an action link, e.g. "open in Tüm işler")
@@ -1092,7 +1131,7 @@ export function KanbanBoard({
       };
       const stillInView = applyViewFilter([updatedForFilter], effectiveSlug, userId, weekStart).length > 0;
       if (!stillInView) {
-        const week = weekStart.toISOString().slice(0, 10);
+        const week = localISO(weekStart);
         const msg =
           effectiveSlug === "overdue"
             ? "Görev tamamlandı ve Gecikenler görünümünden çıkarıldı."
@@ -1132,7 +1171,7 @@ export function KanbanBoard({
   // Person workload summary (computed from raw tasks, not view-filtered)
   const personStats = useMemo(() => {
     if (!personFilter) return null;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localISO(new Date());
     const thisMonday = getMondayOf(new Date());
     const personName = personFilter.startsWith("member:")
       ? responsibleNames[personFilter.slice(7)] ?? ""
@@ -1151,6 +1190,7 @@ export function KanbanBoard({
 
   return (
     <DeptMetaContext.Provider value={deptMeta}>
+    <ParticipantsContext.Provider value={participantsByTask}>
     <div className="flex flex-col h-full">
 
       {/* ── Rules panel (compact, collapsible) ────────────────────────────── */}
@@ -1164,7 +1204,7 @@ export function KanbanBoard({
             n.setDate(n.getDate() - 7);
             const monday = getMondayOf(n);
             setWeekStart(monday);
-            router.push(`/board?view=${effectiveSlug}&week=${monday.toISOString().slice(0, 10)}`);
+            router.push(`/board?view=${effectiveSlug}&week=${localISO(monday)}`);
           }}
           className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
           aria-label="Önceki hafta"
@@ -1180,7 +1220,7 @@ export function KanbanBoard({
             n.setDate(n.getDate() + 7);
             const monday = getMondayOf(n);
             setWeekStart(monday);
-            router.push(`/board?view=${effectiveSlug}&week=${monday.toISOString().slice(0, 10)}`);
+            router.push(`/board?view=${effectiveSlug}&week=${localISO(monday)}`);
           }}
           className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
           aria-label="Sonraki hafta"
@@ -1192,7 +1232,7 @@ export function KanbanBoard({
             onClick={() => {
               const monday = getMondayOf(new Date());
               setWeekStart(monday);
-              router.push(`/board?view=${effectiveSlug}&week=${monday.toISOString().slice(0, 10)}`);
+              router.push(`/board?view=${effectiveSlug}&week=${localISO(monday)}`);
             }}
             className="ml-1 text-xs text-blue-600 hover:text-blue-700 px-2 py-0.5 rounded hover:bg-blue-50 transition-colors"
           >
@@ -1212,7 +1252,7 @@ export function KanbanBoard({
             const isActive = effectiveSlug === slug;
             // "Bu hafta" tab always snaps week back to current week
             const tabWeek = slug === "this-week"
-              ? currentMonday.toISOString().slice(0, 10)
+              ? localISO(currentMonday)
               : weekParam;
             return (
               <a
@@ -1474,6 +1514,7 @@ export function KanbanBoard({
         />
       )}
     </div>
+    </ParticipantsContext.Provider>
     </DeptMetaContext.Provider>
   );
 }

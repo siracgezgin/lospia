@@ -14,6 +14,7 @@ import {
   Archive,
   Trash2,
   BookOpen,
+  ScrollText,
   LogOut,
   Quote,
 } from "lucide-react";
@@ -40,10 +41,11 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   {
     title: "Yönetim",
     items: [
-      { href: "/rules",    label: "Kurallar",   icon: BookOpen, adminOnly: false },
-      { href: "/archive",  label: "Arşiv",      icon: Archive,  adminOnly: true  },
-      { href: "/trash",    label: "Çöp Kutusu", icon: Trash2,   adminOnly: true  },
-      { href: "/settings", label: "Ayarlar",    icon: Settings, adminOnly: true  },
+      { href: "/rules",    label: "Kurallar",         icon: BookOpen,   adminOnly: false },
+      { href: "/activity", label: "Aktivite Günlüğü", icon: ScrollText, adminOnly: true  },
+      { href: "/archive",  label: "Arşiv",            icon: Archive,    adminOnly: true  },
+      { href: "/trash",    label: "Çöp Kutusu",       icon: Trash2,     adminOnly: true  },
+      { href: "/settings", label: "Ayarlar",          icon: Settings,   adminOnly: true  },
     ],
   },
 ];

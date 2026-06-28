@@ -9,8 +9,7 @@ import {
   PRIORITY_LABELS,
   TASK_STATUSES,
   TASK_PRIORITIES,
-  CARD_STATUS_OPTIONS,
-  PROJECT_OPTIONS,
+  CARD_STATUS_OPTIONS
 } from "@/lib/utils/task-constants";
 import { cn } from "@/lib/utils/cn";
 import type { TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceDepartment } from "@/types";
@@ -55,7 +54,6 @@ export function CreateTaskModal({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [departmentId, setDepartmentId] = useState("");
-  const [project, setProject] = useState("");
   const [konu, setKonu] = useState("");
 
   const topDepts = useMemo(() => departments.filter((d) => d.parent_id === null), [departments]);
@@ -104,7 +102,6 @@ export function CreateTaskModal({
 
     const tags = tagsInput.split(",").map((t) => t.trim()).filter(Boolean);
     const customFields: Record<string, unknown> = {};
-    if (project) customFields.project = project;
     if (konu.trim()) customFields.category = konu.trim(); // stored under legacy key, shown as "Konu"
     if (successCriteria.trim()) customFields.success_criteria = successCriteria.trim();
     if (collaborators.length > 0) customFields.collaborators = collaborators;
@@ -203,29 +200,16 @@ export function CreateTaskModal({
             </select>
           </div>
 
-          {/* Konu + Proje */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Konu</label>
-              <input
-                type="text"
-                value={konu}
-                onChange={(e) => setKonu(e.target.value)}
-                placeholder="Bu işin konusu / bağlamı…"
-                className={inputCls}
-              />
-            </div>
-            <div>
-              <label className={labelCls}>Proje / İş Alanı</label>
-              <select
-                value={project}
-                onChange={(e) => setProject(e.target.value)}
-                className={selectCls}
-              >
-                <option value="">— Seçin</option>
-                {PROJECT_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </div>
+          {/* Konu */}
+          <div>
+            <label className={labelCls}>Konu</label>
+            <input
+              type="text"
+              value={konu}
+              onChange={(e) => setKonu(e.target.value)}
+              placeholder="Bu işin konusu / bağlamı…"
+              className={inputCls}
+            />
           </div>
 
           {/* Sorumlu */}
@@ -291,15 +275,27 @@ export function CreateTaskModal({
             </div>
           )}
 
-          {/* Teslim tarihi */}
-          <div>
-            <label className={labelCls}>Teslim tarihi</label>
-            <input
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              className={selectCls}
-            />
+          {/* Başlangıç tarihi + Teslim tarihi (start before due) */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Başlangıç tarihi</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className={selectCls}
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Teslim tarihi</label>
+              <input
+                type="date"
+                value={dueDate}
+                min={startDate || undefined}
+                onChange={(e) => setDueDate(e.target.value)}
+                className={selectCls}
+              />
+            </div>
           </div>
 
           {/* Durum + Öncelik */}
@@ -343,10 +339,6 @@ export function CreateTaskModal({
             {showDetails && (
               <div className="px-3 pb-3 space-y-3 border-t border-gray-100">
                 <div className="pt-3">
-                  <label className={labelCls}>Giriş tarihi (otomatik — bugün)</label>
-                  <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={selectCls} />
-                </div>
-                <div>
                   <label className={labelCls}>Etiketler</label>
                   <input
                     type="text"

@@ -28,6 +28,10 @@ export const ACTIVITY_ACTIONS = {
   TASK_TRASHED: "task_trashed",
   TASK_RESTORED: "task_restored",
   TASK_DUPLICATED: "task_duplicated",
+  PARTICIPANT_COMPLETED: "participant_completed",
+  PARTICIPANT_UNCOMPLETED: "participant_uncompleted",
+  AUTO_MOVED_TO_REVIEW: "auto_moved_to_review",
+  NOTE_ADDED: "note_added",
 } as const;
 
 export type ActivityAction =

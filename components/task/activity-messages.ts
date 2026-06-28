@@ -66,6 +66,14 @@ export function activityMessage(
       return "görevi geri yükledi.";
     case "task_duplicated":
       return "görevi çoğalttı.";
+    case "participant_completed":
+      return "kendi işini tamamladı.";
+    case "participant_uncompleted":
+      return "tamamlamayı geri aldı.";
+    case "auto_moved_to_review":
+      return "tüm sorumlular tamamladı; görev Kontrol / Onay aşamasına taşındı.";
+    case "note_added":
+      return "not ekledi.";
     case "title_changed":
       return "başlığı değiştirdi.";
     case "description_changed":

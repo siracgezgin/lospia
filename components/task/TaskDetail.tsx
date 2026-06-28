@@ -16,7 +16,7 @@ import type {
   TaskStatus,
   TaskPriority,
 } from "@/types";
-import { USER_STATUS_OPTIONS, TASK_PRIORITIES, PRIORITY_LABELS, PROJECT_OPTIONS } from "@/lib/utils/task-constants";
+import { USER_STATUS_OPTIONS, TASK_PRIORITIES, PRIORITY_LABELS } from "@/lib/utils/task-constants";
 import { updateTask } from "@/lib/actions/tasks";
 import { getPersonInitials } from "@/lib/utils/person-display";
 import { activityMessage } from "@/components/task/activity-messages";
@@ -322,32 +322,6 @@ function CategoryInput({ task }: { task: Task }) {
 }
 
 // ---- Project field ----
-
-function ProjectInput({ task }: { task: Task }) {
-  const currentVal = ((task.custom_fields as Record<string, unknown>)?.project as string) ?? "";
-  const [_p, startTransition] = useTransition();
-
-  function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const val = e.target.value;
-    startTransition(async () => {
-      const fields = { ...(task.custom_fields as Record<string, unknown>) };
-      if (val) fields.project = val;
-      else delete fields.project;
-      await updateTask({ id: task.id, custom_fields: fields });
-    });
-  }
-
-  return (
-    <select
-      defaultValue={currentVal}
-      onChange={handleChange}
-      className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#406775]"
-    >
-      <option value="">— Proje seçin</option>
-      {PROJECT_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
-    </select>
-  );
-}
 
 // ---- Collaborators multi-select ----
 
@@ -810,9 +784,11 @@ export function TaskDetail({ task, activity: _activity, activityLogs, activeTime
             <DepartmentSelect task={task} departments={departments} />
           </FieldRow>
           <FieldRow label="Konu"><CategoryInput task={task} /></FieldRow>
-          <FieldRow label="Proje / İş Alanı"><ProjectInput task={task} /></FieldRow>
-          <FieldRow label="Teslim tarihi"><DueDateInput task={task} field="due_date" /></FieldRow>
+          <FieldRow label="Giriş tarihi">
+            <span className="text-sm text-gray-500">{formatDateTimeTR(task.created_at)}</span>
+          </FieldRow>
           <FieldRow label="Başlangıç tarihi"><DueDateInput task={task} field="start_date" /></FieldRow>
+          <FieldRow label="Teslim tarihi"><DueDateInput task={task} field="due_date" /></FieldRow>
           <FieldRow label="Etiketler" className="sm:col-span-2"><TagsInput task={task} /></FieldRow>
         </div>
       </div>

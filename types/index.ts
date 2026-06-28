@@ -124,6 +124,26 @@ export type TaskNoteWithAuthor = TaskNote & {
   author: Pick<Profile, "id" | "full_name" | "email"> | null;
 };
 
+// Per-person task completion (multi-participant workflow)
+export type TaskMemberCompletion = {
+  id: string;
+  workspace_id: string;
+  task_id: string;
+  member_id: string;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+// A task participant resolved for display: which workspace member, their name,
+// and whether they have completed their part.
+export type TaskParticipant = {
+  memberId: string;     // workspace_members.id
+  userId: string;       // profiles.id
+  name: string;
+  completed: boolean;
+};
+
 // Enum aliases
 export type TaskStatus = Database["public"]["Enums"]["task_status"];
 export type TaskPriority = Database["public"]["Enums"]["task_priority"];
