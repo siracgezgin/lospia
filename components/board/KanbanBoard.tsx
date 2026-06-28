@@ -32,10 +32,10 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  GripVertical, Plus, FileSpreadsheet, Users, Search, X,
+  GripVertical, Plus, FileSpreadsheet, Search, X,
   ChevronLeft, ChevronRight, MoreVertical, Pencil, Copy, Archive, Trash2, AlertTriangle,
 } from "lucide-react";
-import { Avatar } from "@/components/ui/Avatar";
+import { Avatar, AvatarGroup } from "@/components/ui/Avatar";
 import {
   BOARD_COLUMNS,
   getTaskColId,
@@ -59,7 +59,7 @@ import { CreateTaskModal } from "@/components/task/CreateTaskModal";
 import { ExcelImportModal } from "@/components/task/ExcelImportModal";
 import { NotesColumn } from "@/components/board/NotesColumn";
 import { BoardRulesPanel } from "@/components/board/BoardRulesPanel";
-import { canCreateTask, canDeleteTask, canArchiveTask } from "@/lib/auth/permissions";
+import { canCreateTask, canDeleteTask, canArchiveTask, canCompleteTask } from "@/lib/auth/permissions";
 import type { Task, SavedView, TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceNote, WorkspaceRole, WorkspaceDepartment } from "@/types";
 import type { BoardRule } from "@/app/(app)/board/page";
 
@@ -110,8 +110,11 @@ function applyViewFilter(tasks: Task[], slug: string, userId: string, monday: Da
   const mondayStr = monday.toISOString().slice(0, 10);
   const sundayStr = (() => { const d = new Date(monday); d.setDate(d.getDate() + 6); return d.toISOString().slice(0, 10); })();
 
-  const inWeekByDate = (t: Task) =>
-    t.due_date !== null && t.due_date >= mondayStr && t.due_date <= sundayStr;
+  // A task belongs to the week if its due date OR its entry/start date falls in
+  // the week. New tasks default start_date to today, so they always appear in
+  // the current week even before a due date is chosen.
+  const inRange = (d: string | null) => d !== null && d >= mondayStr && d <= sundayStr;
+  const inWeekByDate = (t: Task) => inRange(t.due_date) || inRange(t.start_date);
 
   const notArchived = (t: Task) =>
     !t.archived_at && !t.deleted_at && t.status !== "archived";
@@ -164,6 +167,7 @@ function applyViewFilter(tasks: Task[], slug: string, userId: string, monday: Da
       return tasks.filter((t) => {
         if (!notArchived(t) || t.status === "done") return false;
         const isWaiting =
+          t.status === "review" ||
           t.approval_required === true ||
           t.waiting_on_member_id != null ||
           t.waiting_on_contact_id != null;
@@ -439,10 +443,8 @@ function QuickAssigneeSelect({
   return (
     <div className="relative inline-flex items-center gap-1 ml-auto shrink-0">
       {currentName ? (
-        <>
-          <Avatar name={currentName} size="xs" />
-          <span className="text-[10px] text-gray-500 truncate max-w-14 pointer-events-none">{currentName}</span>
-        </>
+        // Initials only; full name via Avatar title tooltip
+        <Avatar name={currentName} size="xs" />
       ) : (
         <span className="text-[10px] text-gray-300 pointer-events-none">—</span>
       )}
@@ -595,10 +597,10 @@ function CardContent({
           </span>
         )}
 
+        {/* Collaborators as initials chips (names live in custom_fields.collaborators) */}
         {collabIds.length > 0 && (
-          <span className="text-[10px] text-gray-400 flex items-center gap-0.5">
-            <Users size={9} />
-            {collabIds.length}
+          <span className="ml-auto shrink-0">
+            <AvatarGroup names={collabIds} max={3} />
           </span>
         )}
 
@@ -611,10 +613,8 @@ function CardContent({
           />
         ) : (
           responsibleName ? (
-            <div className="flex items-center gap-1 ml-auto shrink-0">
-              <Avatar name={responsibleName} size="xs" />
-              <span className="text-[10px] text-gray-400 truncate max-w-16">{responsibleName}</span>
-            </div>
+            // Initials only; full name shown via the Avatar's title tooltip
+            <Avatar name={responsibleName} size="xs" className={cn("shrink-0", collabIds.length === 0 && "ml-auto")} />
           ) : null
         )}
       </div>
@@ -763,16 +763,16 @@ function KanbanColumn({
 }) {
   const taskIds = tasks.map((t) => t.id);
   const { setNodeRef, isOver } = useDroppable({ id: colDef.id });
-  const isDoneCol = colDef.id === "tamamlandi";
+  const headerTone =
+    colDef.id === "tamamlandi" ? "text-green-600"
+    : colDef.id === "kontrol_onay" ? "text-teal-600"
+    : "text-gray-500";
 
   return (
     <div className="flex flex-col gap-2 w-80 shrink-0">
       <div className="flex items-center justify-between px-0.5">
         <div className="flex items-center gap-2">
-          <h3 className={cn(
-            "text-xs font-bold uppercase tracking-wider",
-            isDoneCol ? "text-green-600" : "text-gray-500",
-          )}>
+          <h3 className={cn("text-xs font-bold uppercase tracking-wider", headerTone)}>
             {colDef.label}
           </h3>
           <span className="text-[10px] text-gray-400 bg-gray-100 rounded-full px-1.5 py-0.5 leading-none">
@@ -837,11 +837,14 @@ function StaticKanbanColumn({
   contacts: WorkspaceContact[];
   responsibleNames: Record<string, string>;
 }) {
-  const isDoneCol = colDef.id === "tamamlandi";
+  const headerTone =
+    colDef.id === "tamamlandi" ? "text-green-600"
+    : colDef.id === "kontrol_onay" ? "text-teal-600"
+    : "text-gray-500";
   return (
     <div className="flex flex-col gap-2 w-80 shrink-0">
       <div className="flex items-center gap-2 px-0.5">
-        <h3 className={cn("text-xs font-bold uppercase tracking-wider", isDoneCol ? "text-green-600" : "text-gray-500")}>
+        <h3 className={cn("text-xs font-bold uppercase tracking-wider", headerTone)}>
           {colDef.label}
         </h3>
         <span className="text-[10px] text-gray-400 bg-gray-100 rounded-full px-1.5 py-0.5 leading-none">{tasks.length}</span>
@@ -897,6 +900,7 @@ export function KanbanBoard({
   const canCreate  = canCreateTask(userRole);
   const canDelete  = canDeleteTask(userRole);
   const canArchive = canArchiveTask(userRole);
+  const canComplete = canCompleteTask(userRole);
   const isViewer   = userRole === "viewer";
   const mounted = useSyncExternalStore(subscribeMounted, getMounted, getServerMounted);
   const router = useRouter();
@@ -1069,6 +1073,13 @@ export function KanbanBoard({
 
     const tgtCol = BOARD_COLUMNS.find((c) => c.id === tgtColId)!;
     const newStatus: TaskStatus = srcColId === tgtColId ? srcTask.status : tgtCol.targetStatus;
+
+    // Approval gate: only owner/admin may move a task into final "Tamamlandı".
+    // Members should route through "Kontrol / Onay" instead.
+    if (newStatus === "done" && srcTask.status !== "done" && !canComplete) {
+      showToast("Görevi yalnızca yönetici tamamlayabilir. 'Kontrol / Onay'a taşıyın.");
+      return;
+    }
 
     // Explain disappearance: if this status change pushes the task out of the
     // current saved-view filter, never let it silently vanish — tell the user

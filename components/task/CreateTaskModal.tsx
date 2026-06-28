@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { X, ChevronDown } from "lucide-react";
 import { createTask } from "@/lib/actions/tasks";
 import {
@@ -45,6 +46,7 @@ export function CreateTaskModal({
   contacts,
   departments = [],
 }: Props) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [showDetails, setShowDetails] = useState(false);
@@ -72,7 +74,8 @@ export function CreateTaskModal({
   const [collabSearch, setCollabSearch] = useState("");
 
   // Secondary (Ek bilgiler)
-  const [startDate, setStartDate] = useState("");
+  // Entry/start date defaults to today (AF works weekly); user rarely edits it.
+  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [tagsInput, setTagsInput] = useState("");
   const [successCriteria, setSuccessCriteria] = useState("");
 
@@ -128,6 +131,7 @@ export function CreateTaskModal({
         setError(result.error);
         return;
       }
+      router.refresh(); // pull the newly created task into the board immediately
       onClose();
     });
   }
@@ -339,7 +343,7 @@ export function CreateTaskModal({
             {showDetails && (
               <div className="px-3 pb-3 space-y-3 border-t border-gray-100">
                 <div className="pt-3">
-                  <label className={labelCls}>Başlangıç tarihi</label>
+                  <label className={labelCls}>Giriş tarihi (otomatik — bugün)</label>
                   <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={selectCls} />
                 </div>
                 <div>

@@ -2,7 +2,7 @@ import type { TaskStatus, TaskPriority } from "@/types";
 
 // ---- 3-column visual board ----
 
-export type BoardColId = "yapilacak" | "devam_ediyor" | "tamamlandi";
+export type BoardColId = "yapilacak" | "devam_ediyor" | "kontrol_onay" | "tamamlandi";
 
 export const BOARD_COLUMNS: {
   id: BoardColId;
@@ -10,9 +10,10 @@ export const BOARD_COLUMNS: {
   statuses: TaskStatus[];
   targetStatus: TaskStatus;
 }[] = [
-  { id: "yapilacak",    label: "Yapılacak",    statuses: ["backlog", "ready", "blocked"], targetStatus: "ready" },
-  { id: "devam_ediyor", label: "Devam ediyor", statuses: ["in_progress", "review"],       targetStatus: "in_progress" },
-  { id: "tamamlandi",   label: "Tamamlandı",   statuses: ["done"],                        targetStatus: "done" },
+  { id: "yapilacak",    label: "Yapılacak",     statuses: ["backlog", "ready", "blocked"], targetStatus: "ready" },
+  { id: "devam_ediyor", label: "Devam ediyor",  statuses: ["in_progress"],                 targetStatus: "in_progress" },
+  { id: "kontrol_onay", label: "Kontrol / Onay", statuses: ["review"],                      targetStatus: "review" },
+  { id: "tamamlandi",   label: "Tamamlandı",    statuses: ["done"],                        targetStatus: "done" },
 ];
 
 export function getTaskColId(status: TaskStatus): BoardColId {
@@ -27,6 +28,7 @@ export const CARD_STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
   { value: "ready",       label: "Yapılacak" },
   { value: "in_progress", label: "Devam ediyor" },
   { value: "blocked",     label: "Bekliyor" },
+  { value: "review",      label: "Kontrol / Onay" },
   { value: "done",        label: "Tamamlandı" },
 ];
 
@@ -55,16 +57,17 @@ export const STATUS_LABELS: Record<TaskStatus, string> = {
   ready:      "Yapılacak",
   in_progress: "Devam ediyor",
   blocked:    "Bekliyor",
-  review:     "Devam ediyor",
+  review:     "Kontrol / Onay",
   done:       "Tamamlandı",
   archived:   "Arşivlendi",
 };
 
-// User-facing dropdown options (no Bloke/Hazır/İncelemede/Beklemede/Arşivlendi)
+// User-facing dropdown options
 export const USER_STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
   { value: "ready",       label: "Yapılacak" },
   { value: "in_progress", label: "Devam ediyor" },
   { value: "blocked",     label: "Bekliyor" },
+  { value: "review",      label: "Kontrol / Onay" },
   { value: "done",        label: "Tamamlandı" },
 ];
 

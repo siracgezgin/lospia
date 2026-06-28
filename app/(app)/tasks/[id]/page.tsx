@@ -83,6 +83,7 @@ export default async function TaskDetailPage({
     .eq("user_id", user.id)
     .maybeSingle();
   const isViewer = myMember?.role === "viewer";
+  const canComplete = myMember?.role === "owner" || myMember?.role === "admin";
 
   return (
     <>
@@ -96,6 +97,7 @@ export default async function TaskDetailPage({
         contacts={contacts}
         departments={departments}
         userId={user.id}
+        canComplete={canComplete}
       />
       <div className="max-w-3xl mx-auto px-4 pb-6">
         <TaskNotesPanel

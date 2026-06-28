@@ -29,6 +29,12 @@ export function canArchiveTask(role: AppRole): boolean {
   return ADMIN_ROLES.includes(role);
 }
 
+// Only owner/admin can mark a task as finally completed (done). Members send
+// tasks to "Kontrol / Onay" (review); an admin approves them into done.
+export function canCompleteTask(role: AppRole): boolean {
+  return ADMIN_ROLES.includes(role);
+}
+
 export function canDeleteTask(role: AppRole): boolean {
   return ADMIN_ROLES.includes(role);
 }

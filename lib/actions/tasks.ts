@@ -8,7 +8,7 @@ import { generateKeyBetween } from "fractional-indexing";
 import { normalizeTags } from "@/lib/utils/normalize-tags";
 import {
   canCreateTask, canArchiveTask, canDeleteTask, canPermanentDeleteTask,
-  canEditTask, canReorderTask, type AppRole,
+  canEditTask, canReorderTask, canCompleteTask, type AppRole,
 } from "@/lib/auth/permissions";
 import {
   logTaskActivity, logTaskActivities, ACTIVITY_ACTIONS,
@@ -17,6 +17,41 @@ import {
 import type { Json, TaskStatus as TaskStatusType } from "@/types";
 
 const PERM_DENIED = "Bu işlem için yetkiniz yok.";
+const FINAL_DONE_DENIED = "Görevi yalnızca yönetici tamamlanmış olarak işaretleyebilir. Lütfen 'Kontrol / Onay'a taşıyın.";
+
+// Notify on meaningful status transitions:
+//  • → review : tell workspace owners/admins a task is awaiting approval
+//  • → done   : tell the assignee their task was marked complete
+async function notifyStatusTransition(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  opts: {
+    taskId: string; workspaceId: string; title: string; actorId: string;
+    from: TaskStatusType; to: TaskStatusType; assigneeId: string | null;
+  },
+) {
+  const { taskId, workspaceId, title, actorId, from, to, assigneeId } = opts;
+  if (to === from) return;
+  if (to === "review") {
+    const { data: admins } = await supabase
+      .from("workspace_members")
+      .select("user_id")
+      .eq("workspace_id", workspaceId)
+      .in("role", ["owner", "admin"]);
+    const rows = (admins ?? [])
+      .map((a) => a.user_id as string)
+      .filter((uid) => uid && uid !== actorId)
+      .map((uid) => ({
+        workspace_id: workspaceId, user_id: uid, type: "task_status_changed",
+        title: "Görev kontrol bekliyor", body: title, task_id: taskId,
+      }));
+    if (rows.length) await supabase.from("notifications").insert(rows as Record<string, unknown>[]);
+  } else if (to === "done" && assigneeId && assigneeId !== actorId) {
+    await supabase.from("notifications").insert({
+      workspace_id: workspaceId, user_id: assigneeId, type: "task_status_changed",
+      title: "Göreviniz tamamlandı olarak işaretlendi", body: title, task_id: taskId,
+    } as Record<string, unknown>);
+  }
+}
 
 async function getUserAndRole(supabase: Awaited<ReturnType<typeof createClient>>) {
   const { data: { user } } = await supabase.auth.getUser();
@@ -107,7 +142,14 @@ export async function createTask(
 
   if (!canCreateTask(role)) return { error: PERM_DENIED };
 
-  const taskData = { ...parsed.data, tags: normalizeTags(parsed.data.tags) };
+  // AF works weekly: a new task's entry date (start_date) defaults to today so
+  // it always lands in the current week's board even if no due date is set yet.
+  const today = new Date().toISOString().slice(0, 10);
+  const taskData = {
+    ...parsed.data,
+    tags: normalizeTags(parsed.data.tags),
+    start_date: parsed.data.start_date ?? today,
+  };
 
   // Get the last fractional_index for this status column
   const { data: lastTask } = await supabase
@@ -213,6 +255,12 @@ export async function updateTask(
     return { error: PERM_DENIED };
   }
 
+  // Only owner/admin can mark a task finally done; members use Kontrol / Onay.
+  const nextStatus = "status" in updates ? (updates.status as TaskStatusType | undefined) : undefined;
+  if (nextStatus === "done" && task.status !== "done" && !canCompleteTask(role)) {
+    return { error: FINAL_DONE_DENIED };
+  }
+
   const { error } = await supabase
     .from("tasks")
     .update(updates)
@@ -264,6 +312,15 @@ export async function updateTask(
         task_id: id,
       } as Record<string, unknown>);
     }
+  }
+
+  // Notification: status moved to review (→ admins) or done (→ assignee)
+  if (nextStatus && nextStatus !== task.status) {
+    await notifyStatusTransition(supabase, {
+      taskId: id, workspaceId: task.workspace_id as string, title: task.title as string,
+      actorId: user.id, from: task.status as TaskStatusType, to: nextStatus,
+      assigneeId: (task.assignee_id as string | null) ?? null,
+    });
   }
 
   revalidatePath(`/tasks/${id}`);
@@ -512,7 +569,7 @@ export async function reorderTask(
   // status transition (old → new) to the audit trail.
   const { data: currentTask } = await supabase
     .from("tasks")
-    .select("status, assignee_id, created_by, workspace_id")
+    .select("status, assignee_id, created_by, workspace_id, title")
     .eq("id", id)
     .maybeSingle();
   if (!currentTask) return { error: "Task not found" };
@@ -521,6 +578,7 @@ export async function reorderTask(
     assignee_id: string | null;
     created_by: string | null;
     workspace_id: string;
+    title: string;
   };
 
   // Members can only move their own/assigned tasks
@@ -528,6 +586,11 @@ export async function reorderTask(
     if (!canReorderTask(role, prevTask, user.id)) {
       return { error: PERM_DENIED };
     }
+  }
+
+  // Only owner/admin can mark a task finally done; members use Kontrol / Onay.
+  if (newStatus === "done" && prevTask.status !== "done" && !canCompleteTask(role)) {
+    return { error: FINAL_DONE_DENIED };
   }
 
   let fractional_index: string;
@@ -552,6 +615,10 @@ export async function reorderTask(
     await logTaskActivity(supabase, statusTransitionEntry(
       id, prevTask.workspace_id, user.id, prevTask.status, newStatus,
     ));
+    await notifyStatusTransition(supabase, {
+      taskId: id, workspaceId: prevTask.workspace_id, title: prevTask.title,
+      actorId: user.id, from: prevTask.status, to: newStatus, assigneeId: prevTask.assignee_id,
+    });
   }
 
   revalidatePath("/board");

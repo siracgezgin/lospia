@@ -18,6 +18,7 @@ import type {
 } from "@/types";
 import { USER_STATUS_OPTIONS, TASK_PRIORITIES, PRIORITY_LABELS, PROJECT_OPTIONS } from "@/lib/utils/task-constants";
 import { updateTask } from "@/lib/actions/tasks";
+import { getPersonInitials } from "@/lib/utils/person-display";
 import { activityMessage } from "@/components/task/activity-messages";
 import { History } from "lucide-react";
 import { startTimer, stopTimer } from "@/lib/actions/time";
@@ -34,6 +35,7 @@ interface Props {
   contacts: WorkspaceContact[];
   departments: WorkspaceDepartment[];
   userId: string;
+  canComplete?: boolean;
 }
 
 // ---- Editable field components ----
@@ -112,22 +114,35 @@ function EditableDescription({ task }: { task: Task }) {
 
 // ---- Field select row ----
 
-function StatusSelect({ task }: { task: Task }) {
+function StatusSelect({ task, canComplete = false }: { task: Task; canComplete?: boolean }) {
   const [_p, startTransition] = useTransition();
   const [opt, setOpt] = useOptimistic<TaskStatus>(task.status);
+  const [err, setErr] = useState<string | null>(null);
   // Map current value to the nearest USER_STATUS_OPTIONS value for display
   const displayVal = USER_STATUS_OPTIONS.find((o) => o.value === opt)?.value ?? "ready";
+  // Non-admins cannot set final "done"; they route through Kontrol / Onay.
+  const options = canComplete || task.status === "done"
+    ? USER_STATUS_OPTIONS
+    : USER_STATUS_OPTIONS.filter((o) => o.value !== "done");
   return (
-    <select
-      value={displayVal}
-      onChange={(e) => {
-        const s = e.target.value as TaskStatus;
-        startTransition(async () => { setOpt(s); await updateTask({ id: task.id, status: s }); });
-      }}
-      className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#406775]"
-    >
-      {USER_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-    </select>
+    <div>
+      <select
+        value={displayVal}
+        onChange={(e) => {
+          const s = e.target.value as TaskStatus;
+          setErr(null);
+          startTransition(async () => {
+            setOpt(s);
+            const res = await updateTask({ id: task.id, status: s });
+            if (res && "error" in res) setErr(res.error);
+          });
+        }}
+        className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#406775]"
+      >
+        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+      {err && <p className="text-xs text-red-600 mt-1">{err}</p>}
+    </div>
   );
 }
 
@@ -398,7 +413,20 @@ function CollaboratorsInput({
         {filtered.length === 0 && <p className="text-xs text-gray-400 px-1">Eşleşen kişi yok</p>}
       </div>
       {selected.length > 0 && (
-        <p className="text-xs text-gray-400 px-3 py-1.5 border-t border-gray-100">Seçili: {selected.join(", ")}</p>
+        <div className="flex flex-wrap gap-1.5 px-3 py-2 border-t border-gray-100">
+          {selected.map((name) => (
+            <span
+              key={name}
+              title={name}
+              className="inline-flex items-center gap-1 bg-gray-100 rounded-full pl-0.5 pr-2 py-0.5 text-xs text-gray-700"
+            >
+              <span className="inline-flex items-center justify-center h-4 w-4 rounded-full bg-[#406775] text-white text-[8px] font-semibold">
+                {getPersonInitials(name)}
+              </span>
+              {name}
+            </span>
+          ))}
+        </div>
       )}
     </div>
   );
@@ -752,7 +780,7 @@ function ActivityLogSection({
   );
 }
 
-export function TaskDetail({ task, activity: _activity, activityLogs, activeTimer, customFields: _customFields, profiles, contacts, departments, userId }: Props) {
+export function TaskDetail({ task, activity: _activity, activityLogs, activeTimer, customFields: _customFields, profiles, contacts, departments, userId, canComplete = false }: Props) {
   return (
     <div className="max-w-3xl mx-auto py-6 px-4 space-y-5">
       {/* Back */}
@@ -770,7 +798,7 @@ export function TaskDetail({ task, activity: _activity, activityLogs, activeTime
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <h3 className="text-sm font-semibold text-gray-700 mb-4">Detaylar</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <FieldRow label="Durum"><StatusSelect task={task} /></FieldRow>
+          <FieldRow label="Durum"><StatusSelect task={task} canComplete={canComplete} /></FieldRow>
           <FieldRow label="Öncelik"><PrioritySelect task={task} /></FieldRow>
           <FieldRow label="Sorumlu" className="sm:col-span-2">
             <AssigneeSelect task={task} profiles={profiles} contacts={contacts} />

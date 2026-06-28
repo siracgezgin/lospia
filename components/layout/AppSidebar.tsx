@@ -15,6 +15,7 @@ import {
   Trash2,
   BookOpen,
   LogOut,
+  Quote,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { signOut } from "@/lib/actions/auth";
@@ -135,12 +136,13 @@ export function AppSidebar({ workspace, savedViews, userRole = "member" }: Props
 
       {/* Haftanın sözü — weekly rotating brand line, above logout */}
       {!collapsed && (
-        <div className="px-2 pb-1">
-          <div className="rounded-lg border border-line bg-surface-muted/60 px-3 py-2">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-subtle mb-0.5">
+        <div className="px-2 pb-1.5">
+          <div className="relative rounded-xl border border-brand-soft bg-gradient-to-br from-brand-soft/50 to-surface px-3 py-2.5 overflow-hidden">
+            <Quote size={28} className="absolute -top-1 right-1 text-brand/15" />
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-brand-strong/80 mb-1">
               Haftanın sözü
             </p>
-            <p className="text-[11px] leading-snug text-muted line-clamp-3">
+            <p className="relative text-[11.5px] leading-snug text-ink/80 italic line-clamp-3">
               {weeklyQuote}
             </p>
           </div>
