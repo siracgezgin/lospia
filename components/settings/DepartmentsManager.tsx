@@ -3,6 +3,8 @@
 import { useState, useTransition } from "react";
 import { ChevronRight, Plus, Trash2, UserPlus, UserMinus, Crown } from "lucide-react";
 import type { WorkspaceDepartment, DepartmentMember, WorkspaceMember, Profile } from "@/types";
+import { Avatar, AvatarGroup } from "@/components/ui/Avatar";
+import { getPersonDisplayName } from "@/lib/utils/person-display";
 import {
   provisionAfDepartments,
   createDepartment,
@@ -42,12 +44,13 @@ function DeptMemberRow({
   canManage: boolean;
   onRemove: (id: string) => void;
 }) {
-  const name = dm.profiles?.full_name ?? dm.profiles?.email ?? dm.member_id.slice(0, 8);
+  const name = getPersonDisplayName(dm.profiles ?? dm.member_id.slice(0, 8));
   return (
     <div className="flex items-center justify-between py-1">
       <div className="flex items-center gap-1.5 text-sm text-gray-700">
+        <Avatar name={name} size="xs" />
         {dm.role === "lead" && <Crown size={12} className="text-amber-500 shrink-0" />}
-        <span>{name}</span>
+        <span title={name}>{name}</span>
         {dm.role === "lead" && <span className="text-xs text-amber-600">(sorumlu)</span>}
       </div>
       {canManage && (
@@ -173,9 +176,10 @@ function DeptCard({
           {dept.name}
         </span>
         {myMembers.length > 0 && (
-          <span className="text-xs text-gray-400 ml-auto">
-            {myMembers.length} kişi
-          </span>
+          <div className="flex items-center gap-1.5 ml-auto">
+            <AvatarGroup names={myMembers.map((dm) => getPersonDisplayName(dm.profiles ?? dm.member_id.slice(0, 8)))} max={4} />
+            <span className="text-xs text-gray-400">{myMembers.length} kişi</span>
+          </div>
         )}
         {canManage && (
           <button
@@ -280,6 +284,7 @@ export function DepartmentsManager({ departments, deptMembers, workspaceMembers,
   const [provisioning, startProvisioning] = useTransition();
   const [, startDelete] = useTransition();
   const [provisionErr, setProvisionErr] = useState<string | null>(null);
+  const [provisionOk, setProvisionOk] = useState(false);
 
   const topLevel = departments.filter((d) => d.parent_id === null).sort((a, b) => a.position - b.position);
   const children = (parentId: string) =>
@@ -294,9 +299,11 @@ export function DepartmentsManager({ departments, deptMembers, workspaceMembers,
 
   function handleProvision() {
     setProvisionErr(null);
+    setProvisionOk(false);
     startProvisioning(async () => {
       const res = await provisionAfDepartments();
       if ("error" in res) setProvisionErr(res.error);
+      else setProvisionOk(true);
     });
   }
 
@@ -313,9 +320,10 @@ export function DepartmentsManager({ departments, deptMembers, workspaceMembers,
             disabled={provisioning}
             className="text-sm bg-amber-700 text-white px-4 py-1.5 rounded-lg hover:bg-amber-800 disabled:opacity-50"
           >
-            {provisioning ? "Yükleniyor…" : "AF departmanlarını yükle"}
+            {provisioning ? "Eşitleniyor…" : "AF departman yapısını eşitle"}
           </button>
           {provisionErr && <p className="text-xs text-red-600">{provisionErr}</p>}
+          {provisionOk && <p className="text-xs text-green-700">Departman yapısı eşitlendi.</p>}
         </div>
       )}
 
@@ -384,10 +392,11 @@ export function DepartmentsManager({ departments, deptMembers, workspaceMembers,
           disabled={provisioning}
           className="text-xs text-gray-400 hover:text-gray-600 underline"
         >
-          {provisioning ? "Güncelleniyor…" : "AF departmanlarını yeniden yükle (idempotent)"}
+          {provisioning ? "Eşitleniyor…" : "AF departman yapısını eşitle"}
         </button>
       )}
       {provisionErr && <p className="text-xs text-red-600">{provisionErr}</p>}
+      {provisionOk && <p className="text-xs text-green-700">Departman yapısı eşitlendi.</p>}
     </div>
   );
 }

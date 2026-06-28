@@ -1059,6 +1059,10 @@ export type Database = {
         Args: { p_owner_id: string; p_workspace_id: string }
         Returns: undefined
       }
+      dedupe_workspace_departments: {
+        Args: { p_workspace_id?: string }
+        Returns: undefined
+      }
       get_due_soon_tasks: {
         Args: { p_workspace_id: string }
         Returns: {

@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils/cn";
+import { getPersonInitials } from "@/lib/utils/person-display";
 
 const COLORS = [
   "bg-blue-500",
@@ -11,14 +12,8 @@ const COLORS = [
   "bg-rose-500",
 ];
 
-function getInitials(name: string): string {
-  return name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((s) => s[0] ?? "")
-    .join("")
-    .toUpperCase();
-}
+// Initials follow the shared person-display rule (first + last word, Turkish-aware).
+const getInitials = (name: string): string => getPersonInitials(name);
 
 function colorFor(name: string): string {
   let hash = 0;
