@@ -24,10 +24,15 @@ export function LoginForm({
     signUp,
     null
   );
+  // If sign-up reports the account already exists, present the sign-in form with
+  // a hint (derived during render — no effect, no cascading setState).
+  const existingAccount = !!(signUpState && "existing" in signUpState && signUpState.existing);
+  const effectiveMode: "signin" | "signup" = existingAccount && mode === "signup" ? "signin" : mode;
+  const notice = existingAccount ? "Bu e-posta ile hesap zaten var. Lütfen giriş yapın." : null;
 
-  const state = mode === "signin" ? signInState : signUpState;
-  const action = mode === "signin" ? signInAction : signUpAction;
-  const pending = mode === "signin" ? signInPending : signUpPending;
+  const state = effectiveMode === "signin" ? signInState : signUpState;
+  const action = effectiveMode === "signin" ? signInAction : signUpAction;
+  const pending = effectiveMode === "signin" ? signInPending : signUpPending;
 
   return (
     <div className="space-y-4">
@@ -37,7 +42,7 @@ export function LoginForm({
           type="button"
           onClick={() => setMode("signin")}
           className={`flex-1 rounded-md py-1.5 transition-colors ${
-            mode === "signin"
+            effectiveMode === "signin"
               ? "bg-white text-gray-900 shadow-sm"
               : "text-gray-500 hover:text-gray-700"
           }`}
@@ -48,7 +53,7 @@ export function LoginForm({
           type="button"
           onClick={() => setMode("signup")}
           className={`flex-1 rounded-md py-1.5 transition-colors ${
-            mode === "signup"
+            effectiveMode === "signup"
               ? "bg-white text-gray-900 shadow-sm"
               : "text-gray-500 hover:text-gray-700"
           }`}
@@ -57,14 +62,20 @@ export function LoginForm({
         </button>
       </div>
 
-      {mode === "signup" && (
+      {notice && (
+        <p className="text-sm text-blue-700 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+          {notice}
+        </p>
+      )}
+
+      {effectiveMode === "signup" && (
         <p className="text-xs text-gray-500 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
-          Bu sistem davet ile çalışır. Lütfen davet edildiğiniz e-posta adresi ile kayıt olun.
+          Bu sistem davet ile çalışır. Davet edildiğiniz e-posta adresi ile hesap oluşturabilirsiniz.
         </p>
       )}
 
       <form action={action} className="space-y-3">
-        {mode === "signup" && (
+        {effectiveMode === "signup" && (
           <div>
             <label htmlFor="full_name" className="block text-sm font-medium text-gray-700 mb-1">
               Ad soyad
@@ -104,7 +115,7 @@ export function LoginForm({
             id="password"
             name="password"
             type="password"
-            autoComplete={mode === "signin" ? "current-password" : "new-password"}
+            autoComplete={effectiveMode === "signin" ? "current-password" : "new-password"}
             required
             placeholder="••••••••"
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -113,11 +124,11 @@ export function LoginForm({
 
         {state?.error != null && (
           <p className="text-sm bg-red-50 border border-red-200 px-3 py-2 rounded-lg" style={{ color: '#b91c1c' }}>
-            {state.error || "Authentication failed. Please try again."}
+            {state.error || "İşlem tamamlanamadı. Lütfen tekrar deneyin."}
           </p>
         )}
 
-        {state?.success && mode === "signup" && (
+        {state?.success && effectiveMode === "signup" && (
           <p className="text-sm text-green-700 bg-green-50 px-3 py-2 rounded-lg">
             Hesap oluşturuldu! Lütfen giriş yapın.
           </p>
@@ -129,10 +140,10 @@ export function LoginForm({
           className="w-full rounded-lg bg-blue-600 py-2 text-sm font-semibold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {pending
-            ? mode === "signin"
+            ? effectiveMode === "signin"
               ? "Giriş yapılıyor…"
               : "Hesap oluşturuluyor…"
-            : mode === "signin"
+            : effectiveMode === "signin"
               ? "Giriş yap"
               : "Hesap oluştur"}
         </button>
