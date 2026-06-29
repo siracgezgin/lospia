@@ -83,6 +83,7 @@ export type WorkspaceInvite = {
   invited_by: string | null;
   accepted_at: string | null;
   created_at: string;
+  full_name: string | null;
 };
 
 // workspace_departments — department tree (top-level + sub-areas)

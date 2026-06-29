@@ -73,17 +73,17 @@ export async function signUp(
   }
   const email = parsed.data.email.trim().toLowerCase();
   const password = parsed.data.password;
-  const fullName = (formData.get("full_name") as string | null)?.trim() || null;
+  const formName = (formData.get("full_name") as string | null)?.trim() || null;
 
   const admin = getAdminClient();
   if (!admin) {
-    return { error: "Kayıt sistemi henüz yapılandırılmamış. Lütfen sistem yöneticisine başvurun." };
+    return { error: "Hesap kurulumu henüz yapılandırılmamış. Lütfen sistem yöneticisine başvurun." };
   }
 
-  // 1. Require a pending invite for this email (invite-only).
+  // 1. Require a prepared account (allowlist row) for this email.
   const { data: invite } = await admin
     .from("workspace_invites")
-    .select("id, workspace_id, role")
+    .select("id, workspace_id, role, full_name")
     .eq("email", email)
     .is("accepted_at", null)
     .order("created_at", { ascending: false })
@@ -91,8 +91,11 @@ export async function signUp(
     .maybeSingle();
 
   if (!invite) {
-    return { error: "Bu e-posta için kayıt izni bulunamadı. Erişim için yöneticinizle iletişime geçin." };
+    return { error: "Bu e-posta için hazırlanmış bir hesap bulunamadı. Erişim için yöneticinizle iletişime geçin." };
   }
+
+  // Prefer the name the person typed; otherwise the one the admin prepared.
+  const fullName = formName || ((invite as { full_name?: string | null }).full_name ?? null);
 
   // 2. Create the auth user with NO confirmation email.
   const { data: created, error: createErr } = await admin.auth.admin.createUser({

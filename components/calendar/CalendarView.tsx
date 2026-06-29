@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   startOfMonth,
@@ -12,12 +12,13 @@ import {
   isSameMonth,
   isSameDay,
   isToday as dfnsIsToday,
+  isValid,
   addMonths,
   subMonths,
   parseISO,
 } from "date-fns";
 import { tr } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, X, Plus, CalendarDays } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Plus, CalendarDays, ChevronDown } from "lucide-react";
 import type { TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceDepartment } from "@/types";
 import { cn } from "@/lib/utils/cn";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
@@ -46,6 +47,103 @@ interface Props {
 
 const DONE_CLS = "line-through text-gray-400";
 
+const TR_MONTHS_SHORT = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
+
+/** Parse a stored date string defensively. Malformed/empty values never throw —
+ *  they simply don't match any day, instead of crashing the whole calendar. */
+function safeParseISO(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  try {
+    const d = parseISO(value);
+    return isValid(d) ? d : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Compact month/year picker — integrated into the month label, Safari-safe
+ *  (no native <input type="month">). Lets the user jump straight to 2028+. */
+function MonthYearPicker({ value, onChange }: { value: Date; onChange: (d: Date) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const year = value.getFullYear();
+  const month = value.getMonth();
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  // Range wide enough to plan years ahead (e.g. 2028) without endless clicking.
+  const thisYear = new Date().getFullYear();
+  const years: number[] = [];
+  for (let y = thisYear - 2; y <= thisYear + 6; y++) years.push(y);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-1 text-sm font-semibold text-gray-700 w-36 justify-center border-x border-gray-200 py-1.5 capitalize select-none hover:bg-gray-50"
+        aria-label="Ay ve yıl seç"
+        aria-expanded={open}
+      >
+        {format(value, "MMMM yyyy", { locale: tr })}
+        <ChevronDown size={13} className="text-gray-400 shrink-0" />
+      </button>
+      {open && (
+        <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 z-30 w-60 rounded-xl border border-gray-200 bg-white shadow-lg p-3">
+          <div className="flex items-center justify-between mb-2.5">
+            <button
+              type="button"
+              onClick={() => onChange(new Date(year - 1, month, 1))}
+              className="p-1 rounded text-gray-500 hover:bg-gray-100"
+              aria-label="Önceki yıl"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <select
+              value={year}
+              onChange={(e) => onChange(new Date(Number(e.target.value), month, 1))}
+              className="text-sm font-semibold text-gray-800 bg-transparent outline-none cursor-pointer rounded px-2 py-0.5 hover:bg-gray-50"
+              aria-label="Yıl"
+            >
+              {years.map((y) => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <button
+              type="button"
+              onClick={() => onChange(new Date(year + 1, month, 1))}
+              className="p-1 rounded text-gray-500 hover:bg-gray-100"
+              aria-label="Sonraki yıl"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+          <div className="grid grid-cols-3 gap-1">
+            {TR_MONTHS_SHORT.map((m, i) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => { onChange(new Date(year, i, 1)); setOpen(false); }}
+                className={cn(
+                  "text-xs py-1.5 rounded-lg transition-colors",
+                  i === month ? "bg-blue-600 text-white font-semibold" : "text-gray-600 hover:bg-gray-100",
+                )}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function CalendarView({ tasks, workspaceId, profiles, contacts, departments = [], members = [], deptMembers = [] }: Props) {
   const deptMeta = buildDeptMeta(departments);
   const dotFor = (t: CalTask) => {
@@ -71,9 +169,9 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
 
   function getTasksForDay(day: Date) {
     return tasks.filter((t) => {
-      const due = t.due_date ? isSameDay(parseISO(t.due_date), day) : false;
-      const start = t.start_date ? isSameDay(parseISO(t.start_date), day) : false;
-      return due || start;
+      const due = safeParseISO(t.due_date);
+      const start = safeParseISO(t.start_date);
+      return (!!due && isSameDay(due, day)) || (!!start && isSameDay(start, day));
     });
   }
 
@@ -86,11 +184,12 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
 
   return (
     <div className="p-4 sm:p-6 h-full flex flex-col gap-4">
-      {/* Header — all navigation grouped on the left, next to the title */}
+      {/* Header — a single month/year control next to the title (no duplicates).
+          The month label itself opens the month/year picker for jumping ahead. */}
       <div className="flex items-center gap-3 flex-wrap shrink-0">
         <h1 className="text-2xl font-bold text-gray-900">Takvim</h1>
 
-        {/* Prev · month label · next */}
+        {/* Prev · clickable month/year picker · next */}
         <div className="flex items-center rounded-lg border border-gray-200 overflow-hidden">
           <button
             onClick={() => setCurrent((d) => subMonths(d, 1))}
@@ -99,9 +198,7 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
           >
             <ChevronLeft size={18} />
           </button>
-          <span className="text-sm font-semibold text-gray-700 w-32 text-center border-x border-gray-200 py-1.5 capitalize select-none">
-            {format(current, "MMMM yyyy", { locale: tr })}
-          </span>
+          <MonthYearPicker value={current} onChange={(d) => setCurrent(isValid(d) ? d : new Date())} />
           <button
             onClick={() => setCurrent((d) => addMonths(d, 1))}
             className="p-1.5 hover:bg-gray-50 text-gray-500"
@@ -117,20 +214,6 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
         >
           Bugün
         </button>
-
-        {/* Direct month/year jump — plan ahead to 2027/2028 in one step */}
-        <div className="flex items-center gap-1.5 text-sm px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50">
-          <CalendarDays size={15} className="text-gray-400 shrink-0" />
-          <input
-            type="month"
-            value={format(current, "yyyy-MM")}
-            onChange={(e) => {
-              if (e.target.value) setCurrent(parseISO(`${e.target.value}-01`));
-            }}
-            className="bg-transparent text-gray-700 text-sm outline-none cursor-pointer"
-            aria-label="Ay ve yıl seç"
-          />
-        </div>
       </div>
 
       {/* Body: calendar grid + agenda side panel */}

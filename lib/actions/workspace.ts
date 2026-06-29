@@ -54,19 +54,23 @@ export async function updateWorkspaceName(
   return { ok: true };
 }
 
-// ── 2. Create pending invite (owner only) ────────────────────────────────────
+// ── 2. Prepare a pending team member (owner only) ─────────────────────────────
+// Internally still an allowlist row in workspace_invites; the UI presents it as
+// "Ekip üyesi ekle" / "Hesap oluşturma bağlantısı" (no invite/email-sending).
 const InviteSchema = z.object({
   workspaceId: hexUuid("Geçersiz çalışma alanı"),
   email: z.string().email("Geçersiz e-posta adresi").toLowerCase(),
   role: z.enum(["admin", "member", "viewer"], { error: "Geçersiz rol" }),
+  fullName: z.string().trim().max(100, "İsim en fazla 100 karakter olabilir").optional(),
 });
 
 export async function createWorkspaceInvite(
   workspaceId: string,
   email: string,
-  role: "admin" | "member" | "viewer"
+  role: "admin" | "member" | "viewer",
+  fullName?: string
 ): Promise<{ id: string } | { error: string }> {
-  const parsed = InviteSchema.safeParse({ workspaceId, email, role });
+  const parsed = InviteSchema.safeParse({ workspaceId, email, role, fullName });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   const supabase = await createClient();
@@ -94,12 +98,13 @@ export async function createWorkspaceInvite(
       email: parsed.data.email,
       role: parsed.data.role,
       invited_by: ctx.user.id,
+      full_name: parsed.data.fullName || null,
     })
     .select("id")
     .single();
 
   if (error) {
-    if (error.code === "23505") return { error: "Bu e-posta için zaten bekleyen bir davet var." };
+    if (error.code === "23505") return { error: "Bu e-posta için zaten bekleyen bir hesap kurulumu var." };
     return { error: error.message };
   }
 

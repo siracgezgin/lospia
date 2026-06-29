@@ -29,22 +29,31 @@ export interface CardStyle {
   dot: string;     // bg-* for the leading dot
 }
 
-// Curated pastel families. None of these is the success-green — that hue is
-// reserved exclusively for completed tasks (DONE_STYLE).
+// Curated families. None of these is the success-green — that hue is reserved
+// exclusively for completed tasks (DONE_STYLE). The six families used by the AF
+// departments (red, lavender, blue, orange, pink, brown) are intentionally far
+// apart on the colour wheel — crimson, violet, royal blue, burnt orange,
+// fuchsia, olive — and carry a strong left accent so a card's colour alone
+// identifies its department at a glance.
 const FAMILY: Record<string, CardStyle> = {
-  // Strong red — reserved for the critical Marka Yönetimi / CEO Katmanı family.
-  // Distinct from the solid urgent-priority red and from the "rose" pastel.
-  red:      { surface: "bg-[#fdeeec]", border: "border-[#f5d3cd]", accent: "border-l-[#d4503c]", chip: "bg-[#fadbd4] text-[#9e2f20]", dot: "bg-[#cf4a38]" },
-  lavender: { surface: "bg-[#f4f1fb]", border: "border-[#e4ddf3]", accent: "border-l-[#9b80d6]", chip: "bg-[#ece5fa] text-[#5b46a0]", dot: "bg-[#7c5cbf]" },
-  blue:     { surface: "bg-[#eef4fc]", border: "border-[#d9e6f5]", accent: "border-l-[#5b93d6]", chip: "bg-[#e3edfa] text-[#285a8c]", dot: "bg-[#3b7bb5]" },
-  teal:     { surface: "bg-[#e8f6f8]", border: "border-[#cfe8eb]", accent: "border-l-[#2f9aa6]", chip: "bg-[#dbf0f3] text-[#1d6d76]", dot: "bg-[#1f97a3]" }, // cyan-teal, NOT green
-  brown:    { surface: "bg-[#f6f0e8]", border: "border-[#e8dccb]", accent: "border-l-[#bb8d5e]", chip: "bg-[#f0e6d6] text-[#7a4e24]", dot: "bg-[#a3673a]" },
-  orange:   { surface: "bg-[#fcf1e9]", border: "border-[#f4e1cf]", accent: "border-l-[#e2894a]", chip: "bg-[#fbe7d7] text-[#9c531c]", dot: "bg-[#dd7a2e]" },
+  // Crimson — the critical Marka Yönetimi / CEO Katmanı family. Distinct from the
+  // solid urgent-priority red and from the "rose" pastel.
+  red:      { surface: "bg-[#fdeae7]", border: "border-[#f1c3bb]", accent: "border-l-[#d23320]", chip: "bg-[#f8d2cb] text-[#971f12]", dot: "bg-[#d23320]" },
+  // Violet — Tasarım & Yaratıcı Yön.
+  lavender: { surface: "bg-[#f1ecfc]", border: "border-[#d7c8f3]", accent: "border-l-[#7c3aed]", chip: "bg-[#e6daf9] text-[#5325a3]", dot: "bg-[#7c3aed]" },
+  // Royal blue — Satış & Ticaret.
+  blue:     { surface: "bg-[#e8f1fd]", border: "border-[#c4daf6]", accent: "border-l-[#2563c9]", chip: "bg-[#d7e6fb] text-[#1a4889]", dot: "bg-[#2563c9]" },
+  teal:     { surface: "bg-[#e6f6f7]", border: "border-[#c2e6ea]", accent: "border-l-[#1796a4]", chip: "bg-[#d4eff2] text-[#11707a]", dot: "bg-[#1796a4]" }, // cyan-teal, NOT green
+  // Olive — Finans & Operasyon (warm neutral; never the reserved completed-green).
+  brown:    { surface: "bg-[#f4f1e2]", border: "border-[#ded5b1]", accent: "border-l-[#998a2e]", chip: "bg-[#eae2c2] text-[#675c16]", dot: "bg-[#998a2e]" },
+  // Burnt orange — Üretim & Tedarik Zinciri.
+  orange:   { surface: "bg-[#fdf0e3]", border: "border-[#f6d3b2]", accent: "border-l-[#df7314]", chip: "bg-[#fbdfc4] text-[#964b0c]", dot: "bg-[#df7314]" },
   sand:     { surface: "bg-[#faf6e4]", border: "border-[#ede3c1]", accent: "border-l-[#cca73c]", chip: "bg-[#f5ecc6] text-[#7d6010]", dot: "bg-[#bf9a2e]" },
   amber:    { surface: "bg-[#fbf2e2]", border: "border-[#eedfc0]", accent: "border-l-[#d29a3e]", chip: "bg-[#f7ead0] text-[#8a5e14]", dot: "bg-[#c98e20]" },
   slate:    { surface: "bg-[#eff2f6]", border: "border-[#dee4ec]", accent: "border-l-[#7184a0]", chip: "bg-[#e6ebf2] text-[#43526b]", dot: "bg-[#5b6e8a]" },
   rose:     { surface: "bg-[#f9eef1]", border: "border-[#eed9e0]", accent: "border-l-[#cd7c91]", chip: "bg-[#f6e5ec] text-[#9c3a55]", dot: "bg-[#c0566f]" },
-  pink:     { surface: "bg-[#f8eef4]", border: "border-[#ecd7e6]", accent: "border-l-[#c069a0]", chip: "bg-[#f5e3f0] text-[#933a78]", dot: "bg-[#b85aa0]" },
+  // Fuchsia / magenta — Pazarlama & İletişim. Clearly warmer/pinker than violet.
+  pink:     { surface: "bg-[#fce9f3]", border: "border-[#f3c4e0]", accent: "border-l-[#cc2e93]", chip: "bg-[#f8d4ea] text-[#9a216c]", dot: "bg-[#cc2e93]" },
 };
 
 // The ONLY green treatment in the system — reserved for completed tasks.

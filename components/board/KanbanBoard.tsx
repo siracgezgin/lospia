@@ -892,26 +892,24 @@ function KanbanColumn({
 
   return (
     <div className="flex flex-col gap-2 w-72 shrink-0">
-      <div className="sticky top-0 z-20 bg-app -mt-4 pt-4 -mx-1 px-1 pb-2 border-b border-line shadow-[0_6px_8px_-6px_rgba(16,24,40,0.12)]">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <h3 className={cn("text-xs font-bold uppercase tracking-wider truncate", headerTone)}>
-              {colDef.label}
-            </h3>
-            <span className="text-[10px] font-semibold text-gray-500 bg-gray-200/70 rounded-full px-1.5 py-0.5 leading-none shrink-0">
-              {tasks.length}
-            </span>
-          </div>
-          {!disableDrag && (
-            <button
-              onClick={() => onAddTask(colDef.id)}
-              className="p-0.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors shrink-0"
-              aria-label={`${colDef.label} sütununa görev ekle`}
-            >
-              <Plus size={14} />
-            </button>
-          )}
+      <div className="sticky top-0 z-20 h-11 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <h3 className={cn("text-xs font-bold uppercase tracking-wider truncate", headerTone)}>
+            {colDef.label}
+          </h3>
+          <span className="text-[10px] font-semibold text-gray-500 bg-gray-200/70 rounded-full px-1.5 py-0.5 leading-none shrink-0">
+            {tasks.length}
+          </span>
         </div>
+        {!disableDrag && (
+          <button
+            onClick={() => onAddTask(colDef.id)}
+            className="p-0.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors shrink-0"
+            aria-label={`${colDef.label} sütununa görev ekle`}
+          >
+            <Plus size={14} />
+          </button>
+        )}
       </div>
 
       <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
@@ -967,13 +965,11 @@ function StaticKanbanColumn({
     : "text-gray-500";
   return (
     <div className="flex flex-col gap-2 w-72 shrink-0">
-      <div className="sticky top-0 z-20 bg-app -mt-4 pt-4 -mx-1 px-1 pb-2 border-b border-line shadow-[0_6px_8px_-6px_rgba(16,24,40,0.12)]">
-        <div className="flex items-center gap-2">
-          <h3 className={cn("text-xs font-bold uppercase tracking-wider truncate", headerTone)}>
-            {colDef.label}
-          </h3>
-          <span className="text-[10px] font-semibold text-gray-500 bg-gray-200/70 rounded-full px-1.5 py-0.5 leading-none shrink-0">{tasks.length}</span>
-        </div>
+      <div className="sticky top-0 z-20 h-11 flex items-center gap-2">
+        <h3 className={cn("text-xs font-bold uppercase tracking-wider truncate", headerTone)}>
+          {colDef.label}
+        </h3>
+        <span className="text-[10px] font-semibold text-gray-500 bg-gray-200/70 rounded-full px-1.5 py-0.5 leading-none shrink-0">{tasks.length}</span>
       </div>
       <div className={cn("flex flex-col gap-2 rounded-lg p-1 min-h-20", tasks.length === 0 && "border-2 border-dashed border-gray-100")}>
         {tasks.map((task) => (
@@ -1497,18 +1493,24 @@ export function KanbanBoard({
 
       {/* ── Pre-mount: static (no DnD) ───────────────────────────────────── */}
       {!mounted && (
-        <div className="flex gap-4 p-4 overflow-auto flex-1 min-h-0 items-start">
-          <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} />
-          {BOARD_COLUMNS.map((col) => (
-            <StaticKanbanColumn
-              key={col.id}
-              colDef={col}
-              tasks={tasksByCol[col.id] ?? []}
-              profiles={profiles}
-              contacts={contacts}
-              responsibleNames={responsibleNames}
-            />
-          ))}
+        <div className="overflow-auto flex-1 min-h-0">
+          <div className="relative min-w-max">
+            {/* Continuous sticky band behind every column header (no gaps/peek). */}
+            <div aria-hidden className="sticky top-0 z-10 h-11 bg-app border-b border-line shadow-[0_4px_10px_-6px_rgba(16,24,40,0.18)]" />
+            <div className="flex gap-4 px-4 pb-4 items-start -mt-11">
+              <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} />
+              {BOARD_COLUMNS.map((col) => (
+                <StaticKanbanColumn
+                  key={col.id}
+                  colDef={col}
+                  tasks={tasksByCol[col.id] ?? []}
+                  profiles={profiles}
+                  contacts={contacts}
+                  responsibleNames={responsibleNames}
+                />
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
@@ -1520,26 +1522,32 @@ export function KanbanBoard({
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
         >
-          <div className="flex gap-4 p-4 overflow-auto flex-1 min-h-0 items-start">
-            <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} />
-            {BOARD_COLUMNS.map((col) => (
-              <KanbanColumn
-                key={col.id}
-                colDef={col}
-                tasks={tasksByCol[col.id] ?? []}
-                profiles={profiles}
-                contacts={contacts}
-                responsibleNames={responsibleNames}
-                onAddTask={handleAddTask}
-                onDelete={handleDeleteCard}
-                onArchive={handleArchiveCard}
-                onDuplicate={handleDuplicateCard}
-                canArchiveCard={canArchive}
-                canDeleteCard={canDelete}
-                showMenu={!isViewer}
-                disableDrag={isViewer}
-              />
-            ))}
+          <div className="overflow-auto flex-1 min-h-0">
+            <div className="relative min-w-max">
+              {/* Continuous sticky band behind every column header (no gaps/peek). */}
+              <div aria-hidden className="sticky top-0 z-10 h-11 bg-app border-b border-line shadow-[0_4px_10px_-6px_rgba(16,24,40,0.18)]" />
+              <div className="flex gap-4 px-4 pb-4 items-start -mt-11">
+                <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} />
+                {BOARD_COLUMNS.map((col) => (
+                  <KanbanColumn
+                    key={col.id}
+                    colDef={col}
+                    tasks={tasksByCol[col.id] ?? []}
+                    profiles={profiles}
+                    contacts={contacts}
+                    responsibleNames={responsibleNames}
+                    onAddTask={handleAddTask}
+                    onDelete={handleDeleteCard}
+                    onArchive={handleArchiveCard}
+                    onDuplicate={handleDuplicateCard}
+                    canArchiveCard={canArchive}
+                    canDeleteCard={canDelete}
+                    showMenu={!isViewer}
+                    disableDrag={isViewer}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
 
           <DragOverlay>

@@ -137,7 +137,7 @@ export default async function AppLayout({
                   Erişim izni gerekli
                 </h2>
                 <p className="text-sm text-amber-800">
-                  Bu çalışma alanına yalnızca kayıt izni verilen e-posta adresleri giriş yapabilir.
+                  Bu çalışma alanına yalnızca yöneticinin hazırladığı hesaplar giriş yapabilir.
                   Erişim için yöneticinizle iletişime geçin.
                 </p>
                 <p className="text-xs text-amber-600">
