@@ -93,6 +93,7 @@ function MonthYearPicker({ value, onChange }: { value: Date; onChange: (d: Date)
     <div ref={ref} className="relative">
       <button
         type="button"
+        data-testid="calendar-month-picker-button"
         onClick={() => setOpen((o) => !o)}
         className="flex items-center gap-1 text-sm font-semibold text-gray-700 w-36 justify-center border-x border-gray-200 py-1.5 capitalize select-none hover:bg-gray-50"
         aria-label="Ay ve yıl seç"
@@ -102,7 +103,7 @@ function MonthYearPicker({ value, onChange }: { value: Date; onChange: (d: Date)
         <ChevronDown size={13} className="text-gray-400 shrink-0" />
       </button>
       {open && (
-        <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 z-30 w-60 rounded-xl border border-gray-200 bg-white shadow-lg p-3">
+        <div data-testid="calendar-month-picker-popover" className="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 z-30 w-60 rounded-xl border border-gray-200 bg-white shadow-lg p-3">
           <div className="flex items-center justify-between mb-2.5">
             <button
               type="button"

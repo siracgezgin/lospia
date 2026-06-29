@@ -37,34 +37,34 @@ export default async function AppLayout({
   let workspaceId: string | null = memberRows?.[0]?.workspace_id ?? null;
   const userRole: WorkspaceRole = (memberRows?.[0]?.role as WorkspaceRole | undefined) ?? "member";
 
-  // Provision profile + workspace for new users who have no membership.
-  // If the user has a pending invite, provision_workspace() joins them to the
-  // invited workspace. If there is no invite, it returns {"error":"no_invite"}
-  // and we show the pilot gate message instead of creating a personal workspace.
+  // Attach the user to AF Operasyon when they have no membership yet. This is the
+  // team-access model: accept_workspace_access_grant() consumes a pending
+  // allowed-email grant (added by an admin in Settings) and joins the user with
+  // the granted role. It never creates a personal/random workspace. If the e-mail
+  // has no grant and the user is not already a member it returns {"error":"no_access"}
+  // and we show a clean "no access" screen instead of the old confusing message.
   let provisionError: string | null = null;
-  let noInvite = false;
+  let noAccess = false;
   if (!workspaceId) {
     const fullName =
       (user.user_metadata?.full_name as string | undefined) ?? null;
 
-    const { data: provisionedWs, error: rpcError } = await supabase.rpc(
-      "provision_workspace",
+    const { data: grant, error: rpcError } = await supabase.rpc(
+      "accept_workspace_access_grant",
       { p_full_name: fullName }
     );
 
+    const grantObj =
+      grant && typeof grant === "object" ? (grant as Record<string, unknown>) : null;
+
     if (rpcError) {
       provisionError = rpcError.message;
-    } else if (
-      provisionedWs &&
-      typeof provisionedWs === "object" &&
-      "error" in (provisionedWs as Record<string, unknown>) &&
-      (provisionedWs as Record<string, unknown>).error === "no_invite"
-    ) {
-      noInvite = true;
-    } else if (provisionedWs && typeof provisionedWs === "object") {
-      workspaceId = (provisionedWs as { id: string }).id;
+    } else if (grantObj?.error === "no_access") {
+      noAccess = true;
+    } else if (grantObj?.workspace_id) {
+      workspaceId = grantObj.workspace_id as string;
     } else {
-      provisionError = "Workspace provisioning returned no data. Try refreshing.";
+      provisionError = "Çalışma alanına bağlanılamadı. Sayfayı yenileyin.";
     }
   }
 
@@ -129,15 +129,15 @@ export default async function AppLayout({
         />
         {/* pb-14 ensures content isn't hidden behind the mobile bottom nav */}
         <main className="flex-1 overflow-auto pb-14 md:pb-0">
-          {noInvite ? (
+          {noAccess ? (
             <div className="min-h-full flex items-center justify-center p-8">
               <div className="max-w-md w-full bg-amber-50 border border-amber-200 rounded-xl p-8 text-center space-y-4">
                 <div className="text-4xl">🔒</div>
                 <h2 className="text-lg font-semibold text-amber-900">
-                  Erişim izni gerekli
+                  AF Operasyon erişimi yok
                 </h2>
                 <p className="text-sm text-amber-800">
-                  Bu çalışma alanına yalnızca yöneticinin hazırladığı hesaplar giriş yapabilir.
+                  Bu e-posta adresi için AF Operasyon erişimi tanımlı değil.
                   Erişim için yöneticinizle iletişime geçin.
                 </p>
                 <p className="text-xs text-amber-600">

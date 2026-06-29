@@ -5,10 +5,37 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 
-const authSchema = z.object({
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
+// Sign-in only needs a well-formed e-mail and a non-empty password — the stored
+// password may predate any length rule, so we must NOT reject short ones here or
+// existing users could be locked out.
+const signInSchema = z.object({
+  email: z.string().trim().toLowerCase().email("Geçerli bir e-posta adresi girin."),
+  password: z.string().min(1, "Şifre gerekli."),
 });
+
+// Sign-up is strict: a real name, a valid e-mail and a password that satisfies
+// the Supabase minimum (config.toml minimum_password_length = 6).
+const signUpSchema = z.object({
+  fullName: z
+    .string()
+    .trim()
+    .min(1, "Ad soyad alanı zorunludur.")
+    .min(3, "Lütfen geçerli bir ad soyad girin.")
+    .max(100, "Ad soyad en fazla 100 karakter olabilir."),
+  email: z.string().trim().toLowerCase().email("Geçerli bir e-posta adresi girin."),
+  password: z.string().min(6, "Şifre en az 6 karakter olmalıdır."),
+});
+
+/** Normalize a display name: collapse internal whitespace and drop stray leading
+ *  or trailing quote characters (the source of placeholder names like `Test"`). */
+function sanitizeName(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const cleaned = raw
+    .replace(/\s+/g, " ")
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .trim();
+  return cleaned.length > 0 ? cleaned : null;
+}
 
 export type AuthFormState =
   | { error: string; success?: never; existing?: never }
@@ -20,7 +47,7 @@ export async function signIn(
   _prevState: AuthFormState,
   formData: FormData
 ): Promise<AuthFormState> {
-  const parsed = authSchema.safeParse({
+  const parsed = signInSchema.safeParse({
     email: formData.get("email"),
     password: formData.get("password"),
   });
@@ -75,25 +102,33 @@ export async function signUp(
   _prevState: AuthFormState,
   formData: FormData
 ): Promise<AuthFormState> {
-  const parsed = authSchema.safeParse({
+  // 0. Validate name + e-mail + password BEFORE any Supabase auth call, so an
+  //    invalid/empty submission never reaches the auth server (and never burns
+  //    the auth rate limit).
+  const parsed = signUpSchema.safeParse({
+    fullName: formData.get("full_name"),
     email: formData.get("email"),
     password: formData.get("password"),
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
   }
-  const email = parsed.data.email.trim().toLowerCase();
+  const email = parsed.data.email;
   const password = parsed.data.password;
-  const formName = (formData.get("full_name") as string | null)?.trim() || null;
+  const formName = sanitizeName(parsed.data.fullName);
+  if (!formName) {
+    return { error: "Ad soyad alanı zorunludur." };
+  }
 
   const supabase = await createClient();
 
   // 1. Require an active team-access grant (allowlist row) for this email.
+  //    Gate BEFORE auth.signUp so non-allowed e-mails create nothing.
   const { data: allowed, error: gateError } = await supabase.rpc("check_email_access_grant", {
     p_email: email,
   });
   if (gateError) {
-    return { error: "Hesap oluşturulamadı. Lütfen tekrar deneyin." };
+    return { error: "Bu işlem şu anda tamamlanamadı. Lütfen tekrar deneyin." };
   }
   if (!allowed) {
     return { error: "Bu e-posta adresi için AF Operasyon erişimi tanımlı değil." };

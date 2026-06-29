@@ -91,6 +91,26 @@ export async function addTeamAccess(
     return { error: "Bu e-posta adresi zaten ekip üyesi." };
   }
 
+  // If a pending grant already exists for this e-mail, update its role instead of
+  // creating a duplicate (the partial unique index would reject a second one).
+  const { data: existingGrant } = await supabase
+    .from("workspace_invites")
+    .select("id")
+    .eq("workspace_id", workspaceId)
+    .ilike("email", parsed.data.email)
+    .is("accepted_at", null)
+    .maybeSingle();
+
+  if (existingGrant) {
+    const { error: updErr } = await supabase
+      .from("workspace_invites")
+      .update({ role: parsed.data.role })
+      .eq("id", existingGrant.id);
+    if (updErr) return { error: "Erişim güncellenemedi. Lütfen tekrar deneyin." };
+    revalidatePath("/settings");
+    return { id: existingGrant.id };
+  }
+
   const { data, error } = await supabase
     .from("workspace_invites")
     .insert({
@@ -213,7 +233,7 @@ export async function removeWorkspaceMember(
 
   const { data: targetMember } = await supabase
     .from("workspace_members")
-    .select("user_id, role")
+    .select("user_id, role, profiles!inner(email)")
     .eq("id", memberId)
     .eq("workspace_id", ctx.workspaceId)
     .maybeSingle();
@@ -229,6 +249,23 @@ export async function removeWorkspaceMember(
     .eq("workspace_id", ctx.workspaceId);
 
   if (error) return { error: error.message };
+
+  // Invalidate any team-access grants for this e-mail so the removed person
+  // cannot silently re-attach on their next login. Their Supabase auth account
+  // still exists (we don't touch it), but with no membership and no open grant
+  // they hit the clean "AF Operasyon erişimi yok" screen. Re-adding the e-mail
+  // in Settings creates a fresh grant that lets them back in. Task history is
+  // preserved — we only delete grant rows, never tasks.
+  const removedEmail =
+    (targetMember as { profiles?: { email?: string | null } | null }).profiles?.email ?? null;
+  if (removedEmail) {
+    await supabase
+      .from("workspace_invites")
+      .delete()
+      .eq("workspace_id", ctx.workspaceId)
+      .ilike("email", removedEmail);
+  }
+
   revalidatePath("/settings");
   return { ok: true };
 }
