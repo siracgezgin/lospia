@@ -74,7 +74,9 @@ export type WorkspaceNote = {
   updated_at: string;
 };
 
-// workspace_invites — pending email-based membership invites
+// workspace_invites — team-access allowlist. An admin adds allowed e-mails here;
+// when a person signs up with an allowed e-mail they join the workspace. Not an
+// e-mail invite — no link or message is sent.
 export type WorkspaceInvite = {
   id: string;
   workspace_id: string;
@@ -82,6 +84,7 @@ export type WorkspaceInvite = {
   role: "admin" | "member" | "viewer";
   invited_by: string | null;
   accepted_at: string | null;
+  accepted_user_id: string | null;
   created_at: string;
   full_name: string | null;
 };

@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Plus, X, UserMinus, ChevronDown, Copy, Check } from "lucide-react";
+import { Plus, X, UserMinus, ChevronDown } from "lucide-react";
 import {
-  createWorkspaceInvite,
-  cancelWorkspaceInvite,
+  addTeamAccess,
+  revokeTeamAccess,
   changeWorkspaceMemberRole,
   removeWorkspaceMember,
 } from "@/lib/actions/workspace";
@@ -23,39 +23,10 @@ interface Props {
   currentUserId: string;
   userRole: WorkspaceRole;
   initialMembers: MemberRow[];
-  initialInvites: WorkspaceInvite[];
+  /** Allowed e-mails that have not joined yet (team-access grants). */
+  pendingGrants: WorkspaceInvite[];
   departments?: WorkspaceDepartment[];
   deptMembers?: DepartmentMember[];
-}
-
-/** Build the account-creation link an admin hands to a new team member. The
- *  person opens it, sets their own password, and joins AF Operasyon — no e-mail
- *  is sent by the system, so there is no rate limit to hit. */
-function onboardingLink(email: string, fullName?: string | null): string {
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const name = fullName ? `&name=${encodeURIComponent(fullName)}` : "";
-  return `${origin}/login?mode=signup&email=${encodeURIComponent(email)}${name}`;
-}
-
-function CopyLinkButton({ email, fullName }: { email: string; fullName?: string | null }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <button
-      type="button"
-      onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(onboardingLink(email, fullName));
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1800);
-        } catch { /* clipboard unavailable — link is still shown below */ }
-      }}
-      className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 shrink-0"
-      title="Hesap oluşturma bağlantısını kopyala"
-    >
-      {copied ? <Check size={12} /> : <Copy size={12} />}
-      {copied ? "Kopyalandı" : "Bağlantıyı kopyala"}
-    </button>
-  );
 }
 
 export function MembersManager({
@@ -63,20 +34,20 @@ export function MembersManager({
   currentUserId,
   userRole,
   initialMembers,
-  initialInvites,
+  pendingGrants,
   departments = [],
   deptMembers = [],
 }: Props) {
   const [members, setMembers] = useState(initialMembers);
-  const [invites, setInvites] = useState(initialInvites);
+  const [grants, setGrants] = useState(pendingGrants);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  // Add-member form state
-  const [showInviteForm, setShowInviteForm] = useState(false);
-  const [inviteName, setInviteName] = useState("");
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<"admin" | "member" | "viewer">("member");
+  // Add-access form state
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [grantName, setGrantName] = useState("");
+  const [grantEmail, setGrantEmail] = useState("");
+  const [grantRole, setGrantRole] = useState<"admin" | "member">("member");
 
   const isOwner = userRole === "owner";
 
@@ -91,40 +62,41 @@ export function MembersManager({
     deptsByMember.set(dm.member_id, arr);
   }
 
-  function handleInvite(e: React.FormEvent) {
+  function handleAddAccess(e: React.FormEvent) {
     e.preventDefault();
-    if (!inviteEmail.trim()) return;
+    if (!grantEmail.trim()) return;
     setError(null);
-    const name = inviteName.trim();
+    const name = grantName.trim();
     startTransition(async () => {
-      const result = await createWorkspaceInvite(workspaceId, inviteEmail.trim(), inviteRole, name || undefined);
+      const result = await addTeamAccess(workspaceId, grantEmail.trim(), grantRole, name || undefined);
       if ("error" in result) { setError(result.error); return; }
-      setInvites((prev) => [
+      setGrants((prev) => [
         ...prev,
         {
           id: result.id,
           workspace_id: workspaceId,
-          email: inviteEmail.trim().toLowerCase(),
-          role: inviteRole,
+          email: grantEmail.trim().toLowerCase(),
+          role: grantRole,
           invited_by: currentUserId,
           accepted_at: null,
+          accepted_user_id: null,
           created_at: new Date().toISOString(),
           full_name: name || null,
         },
       ]);
-      setInviteName("");
-      setInviteEmail("");
-      setInviteRole("member");
-      setShowInviteForm(false);
+      setGrantName("");
+      setGrantEmail("");
+      setGrantRole("member");
+      setShowAddForm(false);
     });
   }
 
-  function handleCancelInvite(id: string) {
+  function handleRevokeAccess(id: string) {
     setError(null);
     startTransition(async () => {
-      const result = await cancelWorkspaceInvite(id);
+      const result = await revokeTeamAccess(id);
       if ("error" in result) { setError(result.error); return; }
-      setInvites((prev) => prev.filter((inv) => inv.id !== id));
+      setGrants((prev) => prev.filter((g) => g.id !== id));
     });
   }
 
@@ -212,78 +184,71 @@ export function MembersManager({
         })}
       </div>
 
-      {/* Prepared accounts awaiting first sign-in */}
-      {invites.length > 0 && (
-        <div>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Bekleyen hesap kurulumu</p>
-          <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
-            {invites.map((inv) => (
-              <div key={inv.id} className="flex items-center justify-between px-5 py-3 gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-700 truncate">{inv.full_name || inv.email}</p>
-                  <p className="text-xs text-gray-400">
-                    {inv.full_name ? `${inv.email} · ` : ""}{roleLabel(inv.role)} · Kurulum bekleniyor
-                  </p>
-                </div>
-                {isOwner && (
-                  <>
-                    <CopyLinkButton email={inv.email} fullName={inv.full_name} />
-                    <button
-                      onClick={() => handleCancelInvite(inv.id)}
-                      disabled={isPending}
-                      className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-50 transition-colors"
-                      aria-label="Hesap kurulumunu kaldır"
-                    >
-                      <X size={14} />
-                    </button>
-                  </>
-                )}
-              </div>
-            ))}
-          </div>
-          <p className="text-xs text-gray-400 mt-2">
-            Hesap oluşturma bağlantısını ilgili kişiye iletin. Kişi bağlantıyı açıp kendi şifresini
-            belirleyerek AF Operasyon’a katılır. Sistem e-posta göndermez.
-          </p>
-        </div>
-      )}
-
-      {/* Invite form — owner only */}
+      {/* Team access — allowed e-mails awaiting first sign-in */}
       {isOwner && (
         <div>
-          {!showInviteForm ? (
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Ekip erişimi</p>
+          <p className="text-xs text-gray-400 mt-1 mb-2">
+            Bu listeye eklenen e-posta adresleri hesap oluşturduğunda AF Operasyon’a katılır.
+          </p>
+
+          {grants.length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+              {grants.map((g) => (
+                <div key={g.id} className="flex items-center justify-between px-5 py-3 gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-gray-700 truncate">{g.full_name || g.email}</p>
+                    <p className="text-xs text-gray-400">
+                      {g.full_name ? `${g.email} · ` : ""}{roleLabel(g.role)} · Hesap bekleniyor
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleRevokeAccess(g.id)}
+                    disabled={isPending}
+                    className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-50 transition-colors"
+                    aria-label="Erişimi kaldır"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add-access form */}
+          {!showAddForm ? (
             <button
-              onClick={() => setShowInviteForm(true)}
-              className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium"
+              onClick={() => setShowAddForm(true)}
+              className="mt-3 flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium"
             >
               <Plus size={14} />
-              Ekip üyesi ekle
+              Erişim ekle
             </button>
           ) : (
-            <form onSubmit={handleInvite} className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Yeni ekip üyesi</p>
+            <form onSubmit={handleAddAccess} className="mt-3 bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Yeni erişim</p>
               <div className="flex flex-wrap gap-2">
                 <input
                   type="text"
-                  value={inviteName}
-                  onChange={(e) => setInviteName(e.target.value)}
-                  placeholder="Ad Soyad"
+                  value={grantName}
+                  onChange={(e) => setGrantName(e.target.value)}
+                  placeholder="Ad Soyad (opsiyonel)"
                   autoFocus
                   className="flex-1 min-w-[160px] rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
                   disabled={isPending}
                 />
                 <input
                   type="email"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  placeholder="E-posta adresi"
+                  value={grantEmail}
+                  onChange={(e) => setGrantEmail(e.target.value)}
+                  placeholder="E-posta"
                   required
                   className="flex-1 min-w-[200px] rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
                   disabled={isPending}
                 />
                 <select
-                  value={inviteRole}
-                  onChange={(e) => setInviteRole(e.target.value as "admin" | "member" | "viewer")}
+                  value={grantRole}
+                  onChange={(e) => setGrantRole(e.target.value as "admin" | "member")}
                   className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                   disabled={isPending}
                 >
@@ -293,20 +258,20 @@ export function MembersManager({
                 </select>
               </div>
               <p className="text-xs text-gray-400">
-                Kaydettikten sonra oluşturulan hesap oluşturma bağlantısını kişiye iletin. Departman
-                ataması, kişi katıldıktan sonra yukarıdaki Departmanlar bölümünden yapılır.
+                Kişi /login üzerinden bu e-posta ile hesap oluşturduğunda AF Operasyon’a katılır.
+                Departman ataması, kişi katıldıktan sonra yukarıdaki Departmanlar bölümünden yapılır.
               </p>
               <div className="flex items-center gap-2">
                 <button
                   type="submit"
-                  disabled={isPending || !inviteEmail.trim()}
+                  disabled={isPending || !grantEmail.trim()}
                   className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
                 >
-                  {isPending ? "Hazırlanıyor…" : "Ekip üyesi ekle"}
+                  {isPending ? "Ekleniyor…" : "Erişim ekle"}
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setShowInviteForm(false); setInviteName(""); setInviteEmail(""); setError(null); }}
+                  onClick={() => { setShowAddForm(false); setGrantName(""); setGrantEmail(""); setError(null); }}
                   className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
                 >
                   İptal
@@ -318,7 +283,7 @@ export function MembersManager({
         </div>
       )}
 
-      {error && !showInviteForm && <p className="text-xs text-red-600">{error}</p>}
+      {error && !showAddForm && <p className="text-xs text-red-600">{error}</p>}
     </div>
   );
 }

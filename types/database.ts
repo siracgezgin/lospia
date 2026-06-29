@@ -872,6 +872,7 @@ export type Database = {
       workspace_invites: {
         Row: {
           accepted_at: string | null
+          accepted_user_id: string | null
           created_at: string
           email: string
           full_name: string | null
@@ -882,6 +883,7 @@ export type Database = {
         }
         Insert: {
           accepted_at?: string | null
+          accepted_user_id?: string | null
           created_at?: string
           email: string
           full_name?: string | null
@@ -892,6 +894,7 @@ export type Database = {
         }
         Update: {
           accepted_at?: string | null
+          accepted_user_id?: string | null
           created_at?: string
           email?: string
           full_name?: string | null
@@ -901,6 +904,13 @@ export type Database = {
           workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "workspace_invites_accepted_user_id_fkey"
+            columns: ["accepted_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "workspace_invites_invited_by_fkey"
             columns: ["invited_by"]

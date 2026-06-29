@@ -51,14 +51,15 @@ export async function signIn(
 }
 
 /**
- * Invited-user signup that does NOT depend on Supabase's outbound email.
+ * Self-service signup gated by the team-access allowlist (no outbound email).
  *
- * The previous flow called supabase.auth.signUp(), which queues a confirmation
- * email and is throttled by Supabase's low project-wide email rate limit
- * ("email rate limit exceeded"). For the invite-only pilot we instead create the
- * account server-side with the service_role admin API (email_confirm: true, no
- * email sent), attach it to the invited workspace, mark the invite accepted, and
- * sign the user in with their password.
+ * The person enters Ad Soyad / E-posta / Şifre. We first confirm the e-mail is
+ * on the AF Operasyon team-access list (workspace_access_grants, stored in the
+ * workspace_invites table). Only then do we create the account server-side with
+ * the service_role admin API (email_confirm: true, so NO confirmation e-mail is
+ * sent and there is no project-wide email rate limit to hit), attach it to the
+ * AF Operasyon workspace with the configured role, mark the grant accepted, and
+ * sign the user in. Non-allowed e-mails never create an account or a workspace.
  */
 export async function signUp(
   _prevState: AuthFormState,
@@ -80,8 +81,8 @@ export async function signUp(
     return { error: "Hesap kurulumu henüz yapılandırılmamış. Lütfen sistem yöneticisine başvurun." };
   }
 
-  // 1. Require a prepared account (allowlist row) for this email.
-  const { data: invite } = await admin
+  // 1. Require an active team-access grant (allowlist row) for this email.
+  const { data: grant } = await admin
     .from("workspace_invites")
     .select("id, workspace_id, role, full_name")
     .eq("email", email)
@@ -90,12 +91,12 @@ export async function signUp(
     .limit(1)
     .maybeSingle();
 
-  if (!invite) {
-    return { error: "Bu e-posta için hazırlanmış bir hesap bulunamadı. Erişim için yöneticinizle iletişime geçin." };
+  if (!grant) {
+    return { error: "Bu e-posta adresi için AF Operasyon erişimi tanımlı değil." };
   }
 
-  // Prefer the name the person typed; otherwise the one the admin prepared.
-  const fullName = formName || ((invite as { full_name?: string | null }).full_name ?? null);
+  // Prefer the name the person typed; otherwise the one the admin configured.
+  const fullName = formName || ((grant as { full_name?: string | null }).full_name ?? null);
 
   // 2. Create the auth user with NO confirmation email.
   const { data: created, error: createErr } = await admin.auth.admin.createUser({
@@ -124,18 +125,19 @@ export async function signUp(
     { onConflict: "id" },
   );
 
-  // 4. Attach to the invited workspace (validated role; duplicate-safe).
-  const role = VALID_ROLES.includes(invite.role) ? invite.role : "member";
+  // 4. Attach to the AF Operasyon workspace (validated role; duplicate-safe).
+  //    Role mapping comes from the grant: Yönetici → admin, Üye → member.
+  const role = VALID_ROLES.includes(grant.role) ? grant.role : "member";
   await admin.from("workspace_members").upsert(
-    { workspace_id: invite.workspace_id, user_id: userId, role },
+    { workspace_id: grant.workspace_id, user_id: userId, role },
     { onConflict: "workspace_id,user_id", ignoreDuplicates: true },
   );
 
-  // 5. Mark the invite accepted.
+  // 5. Mark the team-access grant accepted (so it leaves the pending list).
   await admin
     .from("workspace_invites")
-    .update({ accepted_at: new Date().toISOString() })
-    .eq("id", invite.id);
+    .update({ accepted_at: new Date().toISOString(), accepted_user_id: userId })
+    .eq("id", grant.id);
 
   // 6. Sign the user in (sets the session cookie); no email involved.
   const supabase = await createClient();

@@ -54,23 +54,23 @@ export async function updateWorkspaceName(
   return { ok: true };
 }
 
-// ── 2. Prepare a pending team member (owner only) ─────────────────────────────
-// Internally still an allowlist row in workspace_invites; the UI presents it as
-// "Ekip üyesi ekle" / "Hesap oluşturma bağlantısı" (no invite/email-sending).
-const InviteSchema = z.object({
+// ── 2. Add an allowed e-mail to the team-access list (owner only) ─────────────
+// The allowlist is stored in workspace_invites (reused). No e-mail is sent and
+// no link is generated — the person signs up themselves with the allowed e-mail.
+const AccessGrantSchema = z.object({
   workspaceId: hexUuid("Geçersiz çalışma alanı"),
   email: z.string().email("Geçersiz e-posta adresi").toLowerCase(),
   role: z.enum(["admin", "member", "viewer"], { error: "Geçersiz rol" }),
   fullName: z.string().trim().max(100, "İsim en fazla 100 karakter olabilir").optional(),
 });
 
-export async function createWorkspaceInvite(
+export async function addTeamAccess(
   workspaceId: string,
   email: string,
   role: "admin" | "member" | "viewer",
   fullName?: string
 ): Promise<{ id: string } | { error: string }> {
-  const parsed = InviteSchema.safeParse({ workspaceId, email, role, fullName });
+  const parsed = AccessGrantSchema.safeParse({ workspaceId, email, role, fullName });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   const supabase = await createClient();
@@ -88,7 +88,7 @@ export async function createWorkspaceInvite(
     .maybeSingle();
 
   if (memberByEmail) {
-    return { error: "Bu e-posta adresi zaten çalışma alanının üyesi." };
+    return { error: "Bu e-posta adresi zaten ekip üyesi." };
   }
 
   const { data, error } = await supabase
@@ -104,7 +104,7 @@ export async function createWorkspaceInvite(
     .single();
 
   if (error) {
-    if (error.code === "23505") return { error: "Bu e-posta için zaten bekleyen bir hesap kurulumu var." };
+    if (error.code === "23505") return { error: "Bu e-posta zaten erişim listesinde." };
     return { error: error.message };
   }
 
@@ -112,9 +112,9 @@ export async function createWorkspaceInvite(
   return { id: data.id };
 }
 
-// ── 3. Cancel (delete) pending invite (owner only) ───────────────────────────
-export async function cancelWorkspaceInvite(
-  inviteId: string
+// ── 3. Remove a pending team-access grant (owner only) ────────────────────────
+export async function revokeTeamAccess(
+  grantId: string
 ): Promise<{ ok: true } | { error: string }> {
   const supabase = await createClient();
   const ctx = await getCallerRole(supabase);
@@ -124,7 +124,7 @@ export async function cancelWorkspaceInvite(
   const { error } = await supabase
     .from("workspace_invites")
     .delete()
-    .eq("id", inviteId)
+    .eq("id", grantId)
     .eq("workspace_id", ctx.workspaceId)
     .is("accepted_at", null);
 

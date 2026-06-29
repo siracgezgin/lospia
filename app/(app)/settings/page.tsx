@@ -155,7 +155,7 @@ export default async function SettingsPage() {
             initialMembers={
               (membersResult.data ?? []) as (WorkspaceMember & { profiles?: Partial<Profile> | null })[]
             }
-            initialInvites={invites}
+            pendingGrants={invites}
             departments={departments}
             deptMembers={deptMembers}
           />
