@@ -65,7 +65,9 @@ function MemberPanel({ member }: { member: MemberPointsSummary }) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       <Tile icon={<Sparkles size={15} />} label="Bu ay kazandığım" value={`${member.monthPoints} puan`} tone="brand" />
-      <Tile icon={<Clock3 size={15} />} label="Bekleyen puanım" value={`${member.pending} puan`} tone="warning" />
+      <div title="Görev yönetici tarafından tamamlandığında kesinleşir.">
+        <Tile icon={<Clock3 size={15} />} label="Onay bekleyen puanım" value={`${member.pending} puan`} tone="warning" />
+      </div>
       <Tile icon={<CheckCircle2 size={15} />} label="Tamamladığım işler" value={member.doneCount} tone="success" />
       <Tile icon={<ClipboardCheck size={15} />} label="Kontrol bekleyen işlerim" value={member.reviewCount} />
     </div>

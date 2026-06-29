@@ -158,10 +158,10 @@ export function DashboardView({
   const maxDeptActive = Math.max(1, ...departmentStats.map((d) => d.active));
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-5">
+    <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-5">
       <div>
         <h1 className="text-xl font-semibold text-ink">Gösterge Paneli</h1>
-        <p className="text-sm text-muted mt-0.5">Operasyonun anlık durumu, riskler ve haftanın odağı</p>
+        <p className="text-sm text-muted mt-0.5">Ekip operasyonunun anlık durumu, riskler ve haftanın odağı</p>
       </div>
 
       {/* Headline KPIs — decision-support, not vanity */}

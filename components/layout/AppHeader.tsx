@@ -110,10 +110,13 @@ function ProfileMenu({
                 {pointsThisMonth} puan
               </span>
             </div>
-            <div className="flex items-center justify-between">
+            <div
+              className="flex items-center justify-between"
+              title="Görev yönetici tarafından tamamlandığında kesinleşir."
+            >
               <span className="flex items-center gap-2 text-[12px] text-muted">
                 <Clock3 size={13} className="text-subtle shrink-0" />
-                Bekleyen
+                Onay bekleyen
               </span>
               <span className="text-[12px] font-medium text-muted tabular-nums">
                 {pendingPoints} puan

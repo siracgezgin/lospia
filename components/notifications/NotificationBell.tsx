@@ -6,7 +6,7 @@ import Link from "next/link";
 import { markAllNotificationsRead, markNotificationsRead } from "@/lib/actions/tasks";
 import type { Notification } from "@/types";
 import { cn } from "@/lib/utils/cn";
-import { formatDateTimeTR } from "@/lib/utils/format-date";
+import { formatNotificationTimeTR } from "@/lib/utils/format-date";
 
 interface Props {
   unreadCount: number;
@@ -52,7 +52,7 @@ export function NotificationBell({ unreadCount: initialCount, notifications = []
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-9 z-50 w-80 rounded-xl bg-white shadow-pop border border-gray-200 overflow-hidden">
+          <div className="absolute right-0 top-9 z-50 w-[min(100vw-1.5rem,22rem)] rounded-xl bg-white shadow-pop border border-gray-200 overflow-hidden">
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
               <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
@@ -87,13 +87,13 @@ export function NotificationBell({ unreadCount: initialCount, notifications = []
                     className={cn(
                       "px-4 py-3 border-b border-gray-50 last:border-0 flex gap-3 items-start transition-colors",
                       !n.is_read
-                        ? "bg-blue-50/70 border-l-2 border-l-blue-500"
+                        ? "bg-blue-50/40 border-l-2 border-l-blue-400"
                         : "bg-white border-l-2 border-l-transparent hover:bg-gray-50",
                     )}
                   >
                     <div className={cn(
                       "h-2 w-2 rounded-full mt-1.5 shrink-0",
-                      !n.is_read ? "bg-blue-500" : "bg-transparent",
+                      !n.is_read ? "bg-blue-400" : "bg-transparent",
                     )} />
                     <div className="flex-1 min-w-0">
                       {n.task_id ? (
@@ -101,7 +101,7 @@ export function NotificationBell({ unreadCount: initialCount, notifications = []
                           href={`/tasks/${n.task_id}`}
                           onClick={() => { setOpen(false); if (!n.is_read) handleMarkOneRead(n.id); }}
                           className={cn(
-                            "text-sm text-gray-800 hover:text-blue-600 block truncate",
+                            "text-sm text-gray-800 hover:text-blue-600 block line-clamp-2 break-words",
                             !n.is_read ? "font-semibold" : "font-normal",
                           )}
                         >
@@ -109,17 +109,17 @@ export function NotificationBell({ unreadCount: initialCount, notifications = []
                         </Link>
                       ) : (
                         <p className={cn(
-                          "text-sm text-gray-800 truncate",
+                          "text-sm text-gray-800 line-clamp-2 break-words",
                           !n.is_read ? "font-semibold" : "font-normal",
                         )}>
                           {n.title}
                         </p>
                       )}
                       {n.body && (
-                        <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{n.body}</p>
+                        <p className="text-xs text-gray-500 mt-0.5 line-clamp-2 break-words">{n.body}</p>
                       )}
                       <p className="text-[10px] text-gray-400 mt-1">
-                        {formatDateTimeTR(n.created_at)}
+                        {formatNotificationTimeTR(n.created_at)}
                       </p>
                     </div>
                     {!n.is_read && (

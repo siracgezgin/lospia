@@ -1,8 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { DashboardView } from "@/components/dashboard/DashboardView";
+import { MemberDashboardView } from "@/components/dashboard/MemberDashboardView";
 import { buildDeptMeta } from "@/lib/utils/departments";
-import { getAdminPointsData, getMemberPointsSummary, type AdminPointsData } from "@/lib/points/queries";
+import {
+  getAdminPointsData, getMemberPointsSummary, getMemberDashboardData,
+} from "@/lib/points/queries";
 import type { TaskStatus, WorkspaceDepartment } from "@/types";
 
 export default async function DashboardPage() {
@@ -19,14 +22,19 @@ export default async function DashboardPage() {
   if (!workspaceId) return <div className="p-8 text-gray-500">No workspace found.</div>;
   const isAdmin = memberRows?.[0]?.role === "owner" || memberRows?.[0]?.role === "admin";
 
-  // Puan & Motivasyon — admins get the full workspace breakdown; everyone gets
-  // their own personal summary (members never see others' points).
-  const [memberPoints, adminPoints] = await Promise.all([
-    getMemberPointsSummary(supabase, workspaceId, user.id),
-    isAdmin
-      ? getAdminPointsData(supabase, workspaceId)
-      : Promise.resolve(null as AdminPointsData | null),
-  ]);
+  // Everyone gets their own personal points summary (members never see others').
+  const memberPoints = await getMemberPointsSummary(supabase, workspaceId, user.id);
+
+  // ── Member dashboard = strictly personal. We never fetch workspace-wide task
+  //    counts, department rollups, contributors or the ledger for a member, so
+  //    no global operations data is ever sent to a non-admin client. ──────────
+  if (!isAdmin) {
+    const personal = await getMemberDashboardData(supabase, workspaceId, user.id);
+    return <MemberDashboardView data={personal} points={memberPoints} />;
+  }
+
+  // ── Admin / Sistem Admini dashboard = the team / operations view. ───────────
+  const adminPoints = await getAdminPointsData(supabase, workspaceId);
 
   // Aggregations via RPC (status counts, time, due-soon) plus two light reads we
   // fold down server-side — the department breakdown and a short activity feed.

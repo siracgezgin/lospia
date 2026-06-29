@@ -24,6 +24,33 @@ const isAdminRole = (r: AppRole) => ADMIN_ROLES.includes(r);
 const PERM_DENIED = "Bu işlem için yetkiniz yok.";
 const FINAL_DONE_DENIED = "Görevi yalnızca yönetici tamamlanmış olarak işaretleyebilir. Lütfen 'Kontrol / Onay'a taşıyın.";
 
+// Drop recipients that already received the SAME (task, type, title) notification
+// within the last few minutes. A status can be toggled back and forth (or the
+// same transition retried), which used to spam several identical "Görev kontrol
+// bekliyor" rows — this collapses those into one.
+const NOTIFICATION_DEDUPE_WINDOW_MS = 5 * 60 * 1000;
+
+async function filterRecentlyNotified(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  taskId: string,
+  type: string,
+  title: string,
+  candidateUserIds: string[],
+): Promise<string[]> {
+  if (candidateUserIds.length === 0) return [];
+  const since = new Date(Date.now() - NOTIFICATION_DEDUPE_WINDOW_MS).toISOString();
+  const { data: recent } = await supabase
+    .from("notifications")
+    .select("user_id")
+    .eq("task_id", taskId)
+    .eq("type", type)
+    .eq("title", title)
+    .in("user_id", candidateUserIds)
+    .gte("created_at", since);
+  const seen = new Set(((recent ?? []) as { user_id: string }[]).map((r) => r.user_id));
+  return candidateUserIds.filter((uid) => !seen.has(uid));
+}
+
 // Notify on meaningful status transitions:
 //  • → review : tell workspace owners/admins a task is awaiting approval
 //  • → done   : tell the assignee their task was marked complete
@@ -37,24 +64,34 @@ async function notifyStatusTransition(
   const { taskId, workspaceId, title, actorId, from, to, assigneeId } = opts;
   if (to === from) return;
   if (to === "review") {
+    const NTITLE = "Görev kontrol bekliyor";
     const { data: admins } = await supabase
       .from("workspace_members")
       .select("user_id")
       .eq("workspace_id", workspaceId)
       .in("role", ["owner", "admin"]);
-    const rows = (admins ?? [])
+    const candidates = (admins ?? [])
       .map((a) => a.user_id as string)
-      .filter((uid) => uid && uid !== actorId)
-      .map((uid) => ({
-        workspace_id: workspaceId, user_id: uid, type: "task_status_changed",
-        title: "Görev kontrol bekliyor", body: title, task_id: taskId,
-      }));
+      .filter((uid) => uid && uid !== actorId);
+    const recipients = await filterRecentlyNotified(
+      supabase, taskId, "task_status_changed", NTITLE, candidates,
+    );
+    const rows = recipients.map((uid) => ({
+      workspace_id: workspaceId, user_id: uid, type: "task_status_changed",
+      title: NTITLE, body: title, task_id: taskId,
+    }));
     if (rows.length) await supabase.from("notifications").insert(rows as Record<string, unknown>[]);
   } else if (to === "done" && assigneeId && assigneeId !== actorId) {
-    await supabase.from("notifications").insert({
-      workspace_id: workspaceId, user_id: assigneeId, type: "task_status_changed",
-      title: "Göreviniz tamamlandı olarak işaretlendi", body: title, task_id: taskId,
-    } as Record<string, unknown>);
+    const NTITLE = "Göreviniz tamamlandı olarak işaretlendi";
+    const recipients = await filterRecentlyNotified(
+      supabase, taskId, "task_status_changed", NTITLE, [assigneeId],
+    );
+    if (recipients.length) {
+      await supabase.from("notifications").insert({
+        workspace_id: workspaceId, user_id: assigneeId, type: "task_status_changed",
+        title: NTITLE, body: title, task_id: taskId,
+      } as Record<string, unknown>);
+    }
   }
 }
 

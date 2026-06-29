@@ -55,13 +55,19 @@ interface Props {
   savedViews: SavedView[];
   userId: string;
   userRole?: WorkspaceRole;
+  // Team totals (admin card)
   teamDoneThisMonth?: number;
   teamReviewCount?: number;
+  // Personal totals (member card)
+  myDoneThisMonth?: number;
+  myReviewCount?: number;
+  myPoints?: number;
 }
 
 export function AppSidebar({
   workspace, savedViews, userRole = "member",
   teamDoneThisMonth = 0, teamReviewCount = 0,
+  myDoneThisMonth = 0, myReviewCount = 0, myPoints = 0,
 }: Props) {
   const isAdmin = canViewDestructivePages(userRole) || canManageSettings(userRole);
   const pathname = usePathname();
@@ -145,34 +151,57 @@ export function AppSidebar({
           (Logout now lives in the top-right profile menu.) */}
       {!collapsed && (
         <div className="px-3 pt-2 pb-3 mt-auto space-y-2.5">
-          {/* Bu Ayın İlerlemesi — shared team motivation, no ranking/leaderboard. */}
+          {/* İlerleme kartı — admin sees the team total; a member sees ONLY their
+              own progress (no team figures, so there's no competitive framing). */}
           <div className="rounded-2xl border border-line bg-surface px-4 pt-3 pb-3.5 shadow-card">
             <p className="text-[9.5px] font-semibold uppercase tracking-[0.14em] text-subtle mb-2 flex items-center gap-1.5">
               <TrendingUp size={12} className="text-brand" />
-              Bu Ayın İlerlemesi
+              {isAdmin ? "Bu Ayın İlerlemesi" : "Bu Ayki İlerlemem"}
             </p>
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-[12px]">
-                <span className="text-muted">Ekipçe tamamlanan</span>
-                <span className="font-semibold text-ink tabular-nums">{teamDoneThisMonth}</span>
-              </div>
-              <div className="flex items-center justify-between text-[12px]">
-                <span className="text-muted">Kontrol bekleyen</span>
-                <span className="font-semibold text-ink tabular-nums">{teamReviewCount}</span>
-              </div>
-            </div>
-            <p className="text-[10.5px] leading-relaxed text-subtle mt-2.5">
-              Katkılar görünür oldukça ekip güçlenir.
-            </p>
-            {isAdmin && (
-              <Link
-                href="/dashboard#puan-motivasyon"
-                className="mt-2.5 inline-flex items-center gap-1 text-[11px] font-medium text-brand hover:text-brand-strong transition-colors"
-              >
-                Puan özetini gör
-                <ArrowRight size={11} />
-              </Link>
+            {isAdmin ? (
+              <>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[12px]">
+                    <span className="text-muted">Ekipçe tamamlanan</span>
+                    <span className="font-semibold text-ink tabular-nums">{teamDoneThisMonth}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[12px]">
+                    <span className="text-muted">Kontrol bekleyen</span>
+                    <span className="font-semibold text-ink tabular-nums">{teamReviewCount}</span>
+                  </div>
+                </div>
+                <p className="text-[10.5px] leading-relaxed text-subtle mt-2.5">
+                  Katkılar görünür oldukça ekip güçlenir.
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[12px]">
+                    <span className="text-muted">Tamamladığım işler</span>
+                    <span className="font-semibold text-ink tabular-nums">{myDoneThisMonth}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[12px]">
+                    <span className="text-muted">Kontrol bekleyen işlerim</span>
+                    <span className="font-semibold text-ink tabular-nums">{myReviewCount}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[12px]">
+                    <span className="text-muted">Puanım</span>
+                    <span className="font-semibold text-ink tabular-nums">{myPoints}</span>
+                  </div>
+                </div>
+                <p className="text-[10.5px] leading-relaxed text-subtle mt-2.5">
+                  Katkın görünür oldukça süreç güçlenir.
+                </p>
+              </>
             )}
+            <Link
+              href="/dashboard#puan-motivasyon"
+              className="mt-2.5 inline-flex items-center gap-1 text-[11px] font-medium text-brand hover:text-brand-strong transition-colors"
+            >
+              Puan özetini gör
+              <ArrowRight size={11} />
+            </Link>
           </div>
 
           {/* Haftanın sözü — weekly rotating editorial brand card. */}

@@ -56,13 +56,25 @@ const FAMILY: Record<string, CardStyle> = {
   pink:     { surface: "bg-[#fce9f3]", border: "border-[#f3c4e0]", accent: "border-l-[#cc2e93]", chip: "bg-[#f8d4ea] text-[#9a216c]", dot: "bg-[#cc2e93]" },
 };
 
-// The ONLY green treatment in the system — reserved for completed tasks.
+// The ONLY strong green treatment in the system — reserved for completed tasks.
 export const DONE_STYLE: CardStyle = {
   surface: "bg-[#edf7f1]",
   border: "border-[#d4ebdf]",
   accent: "border-l-[#36a06d]",
   chip: "bg-[#d9f0e4] text-[#1f6e4d]",
   dot: "bg-[#2e9367]",
+};
+
+// Kontrol / Onay (review) — a SOFT mint tint: clearly "almost done, awaiting
+// sign-off", one step before the strong DONE green. Deliberately lighter and
+// cooler than DONE_STYLE so the two are related but never confused. This is the
+// only other green-family card treatment, and it is reserved for review.
+export const REVIEW_STYLE: CardStyle = {
+  surface: "bg-[#ecfdf3]",
+  border: "border-[#bbf7d0]",
+  accent: "border-l-[#5fbd8c]",
+  chip: "bg-[#e4f5ea] text-[#16834a]",
+  dot: "bg-[#5fbd8c]",
 };
 
 // Uncategorized → neutral white card (no faked identity).
@@ -155,6 +167,9 @@ export function getDepartmentCardStyle(colorKey?: string | null): CardStyle {
  */
 export function getTaskCardStyle(status: TaskStatus, deptColorKey?: string | null): CardStyle {
   if (status === "done") return DONE_STYLE;
+  // Review is the only other state that recolors the card: a soft mint tint so
+  // "Kontrol / Onay" reads as the pre-completion stage everywhere it appears.
+  if (status === "review") return REVIEW_STYLE;
   return getDepartmentCardStyle(deptColorKey);
 }
 
@@ -261,7 +276,7 @@ export const STATUS_CHIP_TONE: Record<TaskStatus, string> = {
   ready:       "bg-[#eef0f2] text-[#5c636b]",
   in_progress: "bg-[#e3effb] text-[#1f5fa8]",
   blocked:     "bg-[#f6ecd4] text-[#8a6516]",
-  review:      "bg-[#e4f5ea] text-[#3a8f63]", // soft light green — one step before done
+  review:      "bg-[#ecfdf3] text-[#16834a]", // soft mint — one step before done
   done:        "bg-[#d4eede] text-[#1f6e4d]", // strong reserved green
   archived:    "bg-[#eef0f2] text-[#7a828b]",
 };
@@ -272,9 +287,19 @@ export const STATUS_TEXT_TONE: Record<TaskStatus, string> = {
   ready:       "text-[#5c636b]",
   in_progress: "text-[#1f5fa8]",
   blocked:     "text-[#8a6516]",
-  review:      "text-[#3a8f63]", // soft light green
+  review:      "text-[#2f9e63]", // soft mint-green (lighter than done)
   done:        "text-[#1c7a52]", // strong green
   archived:    "text-[#7a828b]",
+};
+
+// Board column header tone, keyed by BoardColId. Single source of truth so the
+// "Kontrol / Onay" (mint) vs "Tamamlandı" (strong green) distinction is defined
+// once and reused by both the live and static Kanban columns.
+export const BOARD_COL_HEADER_TONE: Record<string, string> = {
+  yapilacak:    "text-gray-500",
+  devam_ediyor: "text-gray-500",
+  kontrol_onay: "text-[#2f9e63]", // mint — pre-completion
+  tamamlandi:   "text-[#1c7a52]", // strong green — finished
 };
 
 // Recharts fills for the status-distribution chart. Review is the soft light
@@ -324,7 +349,7 @@ export const STATUS_DOT: Record<TaskStatus, string> = {
   ready:       "bg-[#3b7bb5]",
   in_progress: "bg-[#7c5cbf]",
   blocked:     "bg-[#b8851f]",
-  review:      "bg-[#c77d2e]",
+  review:      "bg-[#5fbd8c]", // soft mint (matches REVIEW_STYLE)
   done:        "bg-[#2e9367]",
   archived:    "bg-[#cdd2d8]",
 };

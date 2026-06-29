@@ -4,7 +4,7 @@ import { useState, useTransition, useActionState } from "react";
 import { Pin, Trash2, PencilLine, StickyNote } from "lucide-react";
 import type { TaskNoteWithAuthor } from "@/types";
 import { addTaskNote, toggleNotePin, deleteTaskNote, updateTaskNote } from "@/lib/actions/notes";
-import { formatDateTimeTR } from "@/lib/utils/format-date";
+import { formatNoteTimeTR } from "@/lib/utils/format-date";
 import { Avatar } from "@/components/ui/Avatar";
 
 interface Props {
@@ -76,14 +76,14 @@ function NoteItem({
           )}
         </div>
       </div>
-      <div className="flex items-center justify-between text-xs text-gray-400">
-        <span className="flex items-center gap-1.5" title={authorName}>
+      <div className="flex items-center justify-between gap-2 text-xs text-gray-400">
+        <span className="flex items-center gap-1.5 min-w-0" title={authorName}>
           <Avatar name={authorName} size="xs" />
-          <span className="font-medium text-gray-600">{authorName}</span>
-          {" · "}
-          {formatDateTimeTR(note.created_at)}
+          <span className="font-medium text-gray-600 truncate max-w-[10rem]">{authorName}</span>
+          <span className="text-gray-300 shrink-0">·</span>
+          <span className="shrink-0 whitespace-nowrap">{formatNoteTimeTR(note.created_at)}</span>
         </span>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 shrink-0">
           {editing ? (
             <>
               <button onClick={handleSaveEdit} className="text-blue-600 hover:text-blue-700 font-medium">Kaydet</button>

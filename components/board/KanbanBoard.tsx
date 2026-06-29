@@ -50,6 +50,7 @@ import {
   PRIORITY_CHIP,
   PRIORITY_SHOW_ON_BOARD,
   STATUS_CHIP_TONE,
+  BOARD_COL_HEADER_TONE,
 } from "@/lib/design/semantics";
 import { Badge } from "@/components/ui/Badge";
 import { reorderTask, updateTask, softDeleteTask, archiveTask, duplicateTask } from "@/lib/actions/tasks";
@@ -875,13 +876,10 @@ function KanbanColumn({
 }) {
   const taskIds = tasks.map((t) => t.id);
   const { setNodeRef, isOver } = useDroppable({ id: colDef.id });
-  const headerTone =
-    colDef.id === "tamamlandi" ? "text-[#1c7a52]"
-    : colDef.id === "kontrol_onay" ? "text-[#3a8f63]"
-    : "text-gray-500";
+  const headerTone = BOARD_COL_HEADER_TONE[colDef.id] ?? "text-gray-500";
 
   return (
-    <div className="flex flex-col gap-2 w-72 shrink-0">
+    <div className="flex flex-col gap-2 w-[80vw] max-w-72 sm:w-72 shrink-0">
       <div className="sticky top-0 z-20 h-11 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <h3 className={cn("text-xs font-bold uppercase tracking-wider truncate", headerTone)}>
@@ -949,12 +947,9 @@ function StaticKanbanColumn({
   contacts: WorkspaceContact[];
   responsibleNames: Record<string, string>;
 }) {
-  const headerTone =
-    colDef.id === "tamamlandi" ? "text-[#1c7a52]"
-    : colDef.id === "kontrol_onay" ? "text-[#3a8f63]"
-    : "text-gray-500";
+  const headerTone = BOARD_COL_HEADER_TONE[colDef.id] ?? "text-gray-500";
   return (
-    <div className="flex flex-col gap-2 w-72 shrink-0">
+    <div className="flex flex-col gap-2 w-[80vw] max-w-72 sm:w-72 shrink-0">
       <div className="sticky top-0 z-20 h-11 flex items-center gap-2">
         <h3 className={cn("text-xs font-bold uppercase tracking-wider truncate", headerTone)}>
           {colDef.label}
@@ -1487,7 +1482,7 @@ export function KanbanBoard({
           <div className="relative min-w-max">
             {/* Continuous sticky band behind every column header (no gaps/peek). */}
             <div aria-hidden className="sticky top-0 z-10 h-11 bg-app border-b border-line shadow-[0_4px_10px_-6px_rgba(16,24,40,0.18)]" />
-            <div className="flex gap-4 px-4 pb-4 items-start -mt-11">
+            <div className="flex gap-3 sm:gap-4 px-3 sm:px-4 pb-4 items-start -mt-11">
               <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} />
               {BOARD_COLUMNS.map((col) => (
                 <StaticKanbanColumn
@@ -1516,7 +1511,7 @@ export function KanbanBoard({
             <div className="relative min-w-max">
               {/* Continuous sticky band behind every column header (no gaps/peek). */}
               <div aria-hidden className="sticky top-0 z-10 h-11 bg-app border-b border-line shadow-[0_4px_10px_-6px_rgba(16,24,40,0.18)]" />
-              <div className="flex gap-4 px-4 pb-4 items-start -mt-11">
+              <div className="flex gap-3 sm:gap-4 px-3 sm:px-4 pb-4 items-start -mt-11">
                 <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} />
                 {BOARD_COLUMNS.map((col) => (
                   <KanbanColumn

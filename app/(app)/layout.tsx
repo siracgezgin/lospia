@@ -37,6 +37,7 @@ export default async function AppLayout({
 
   let workspaceId: string | null = memberRows?.[0]?.workspace_id ?? null;
   const userRole: WorkspaceRole = (memberRows?.[0]?.role as WorkspaceRole | undefined) ?? "member";
+  const isAdmin = userRole === "owner" || userRole === "admin";
 
   // Attach the user to AF Operasyon when they have no membership yet. This is the
   // team-access model: accept_workspace_access_grant() consumes a pending
@@ -76,6 +77,8 @@ export default async function AppLayout({
   // Puan & Motivasyon — personal summary (profile menu) + team progress (sidebar)
   let pointsThisMonth = 0;
   let pendingPoints = 0;
+  let myDoneCount = 0;
+  let myReviewCount = 0;
   let teamDoneThisMonth = 0;
   let teamReviewCount = 0;
 
@@ -114,26 +117,32 @@ export default async function AppLayout({
     unreadCount = notifications.filter((n: Notification) => !n.is_read).length;
     userName = profileResult.data?.full_name ?? userName;
 
-    // Personal points summary + workspace-wide (non-competitive) progress counts.
+    // Personal points summary for everyone. Workspace-wide progress counts are
+    // fetched ONLY for admins — a member never receives team totals.
     const monthStart = startOfMonthISO();
-    const [summary, doneRes, reviewRes] = await Promise.all([
-      getMemberPointsSummary(supabase, workspaceId, user.id),
-      supabase
-        .from("tasks")
-        .select("id", { count: "exact", head: true })
-        .eq("workspace_id", workspaceId)
-        .eq("status", "done")
-        .gte("updated_at", monthStart),
-      supabase
-        .from("tasks")
-        .select("id", { count: "exact", head: true })
-        .eq("workspace_id", workspaceId)
-        .eq("status", "review"),
-    ]);
+    const summary = await getMemberPointsSummary(supabase, workspaceId, user.id);
     pointsThisMonth = summary.monthPoints;
     pendingPoints = summary.pending;
-    teamDoneThisMonth = doneRes.count ?? 0;
-    teamReviewCount = reviewRes.count ?? 0;
+    myDoneCount = summary.doneCount;
+    myReviewCount = summary.reviewCount;
+
+    if (isAdmin) {
+      const [doneRes, reviewRes] = await Promise.all([
+        supabase
+          .from("tasks")
+          .select("id", { count: "exact", head: true })
+          .eq("workspace_id", workspaceId)
+          .eq("status", "done")
+          .gte("updated_at", monthStart),
+        supabase
+          .from("tasks")
+          .select("id", { count: "exact", head: true })
+          .eq("workspace_id", workspaceId)
+          .eq("status", "review"),
+      ]);
+      teamDoneThisMonth = doneRes.count ?? 0;
+      teamReviewCount = reviewRes.count ?? 0;
+    }
   }
 
   return (
@@ -145,6 +154,9 @@ export default async function AppLayout({
         userRole={userRole}
         teamDoneThisMonth={teamDoneThisMonth}
         teamReviewCount={teamReviewCount}
+        myDoneThisMonth={myDoneCount}
+        myReviewCount={myReviewCount}
+        myPoints={pointsThisMonth}
       />
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <AppHeader

@@ -69,6 +69,99 @@ export async function getMemberPointsSummary(
 }
 
 // ---------------------------------------------------------------------------
+// Member dashboard — strictly the user's OWN work. A member never receives
+// workspace-wide task counts, other people's points, or department rollups.
+// "Responsible" = the user is the assignee OR a participant of the task.
+// All filtering happens server-side so global data never crosses to the client.
+// ---------------------------------------------------------------------------
+export interface MemberDashboardTask {
+  id: string;
+  title: string;
+  status: string;
+  priority: string;
+  due_date: string;
+}
+
+export interface MemberDashboardData {
+  active: number;       // responsible, not done/archived
+  overdue: number;      // responsible, due_date < today, not done/archived
+  dueThisWeek: number;  // responsible, due_date today…end-of-week, not done/archived
+  review: number;       // responsible, status = review
+  done: number;         // responsible, status = done
+  dueSoon: MemberDashboardTask[]; // responsible risk list (overdue + upcoming)
+}
+
+// End of the current week (Sunday) as YYYY-MM-DD.
+function endOfWeekISO(now = new Date()): string {
+  const d = new Date(now);
+  const dow = d.getDay(); // 0 = Sunday
+  d.setDate(d.getDate() + (dow === 0 ? 0 : 7 - dow));
+  return d.toISOString().slice(0, 10);
+}
+
+export async function getMemberDashboardData(
+  sb: SB,
+  workspaceId: string,
+  userId: string,
+): Promise<MemberDashboardData> {
+  const today = new Date().toISOString().slice(0, 10);
+  const weekEnd = endOfWeekISO();
+
+  // The user's responsible task ids = tasks assigned to them ∪ tasks they
+  // participate in (task_member_completions resolved via their membership row).
+  const { data: member } = await sb
+    .from("workspace_members")
+    .select("id")
+    .eq("workspace_id", workspaceId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  const { data: comps } = member?.id
+    ? await sb.from("task_member_completions").select("task_id").eq("member_id", member.id)
+    : { data: [] as { task_id: string }[] };
+  const participantIds = new Set(((comps ?? []) as { task_id: string }[]).map((c) => c.task_id));
+
+  // Pull just the responsible tasks (assignee OR participant), only the columns
+  // we aggregate. `.or` with an `in (...)` list keeps this to one round-trip.
+  const idList = [...participantIds];
+  const orFilter = idList.length > 0
+    ? `assignee_id.eq.${userId},id.in.(${idList.join(",")})`
+    : `assignee_id.eq.${userId}`;
+
+  const { data: rows } = await sb
+    .from("tasks")
+    .select("id, title, status, priority, due_date")
+    .eq("workspace_id", workspaceId)
+    .neq("status", "archived")
+    .or(orFilter);
+
+  const tasks = (rows ?? []) as MemberDashboardTask[];
+
+  let active = 0, overdue = 0, dueThisWeek = 0, review = 0, done = 0;
+  const dueSoon: MemberDashboardTask[] = [];
+  for (const t of tasks) {
+    if (t.status === "done") { done += 1; continue; }
+    // everything below is non-done, non-archived → "active"
+    active += 1;
+    if (t.status === "review") review += 1;
+    if (t.due_date) {
+      if (t.due_date < today) { overdue += 1; dueSoon.push(t); }
+      else if (t.due_date <= weekEnd) { dueThisWeek += 1; dueSoon.push(t); }
+      else if (t.due_date <= addDaysISO(today, 14)) { dueSoon.push(t); }
+    }
+  }
+  dueSoon.sort((a, b) => a.due_date.localeCompare(b.due_date));
+
+  return { active, overdue, dueThisWeek, review, done, dueSoon };
+}
+
+function addDaysISO(iso: string, days: number): string {
+  const d = new Date(iso + "T00:00:00");
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+// ---------------------------------------------------------------------------
 // Admin summary — full workspace visibility (owner/admin only).
 // ---------------------------------------------------------------------------
 export interface AdminContributor {
