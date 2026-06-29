@@ -8,6 +8,8 @@ import { Avatar, AvatarGroup } from "@/components/ui/Avatar";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { resolveDeptColorKey } from "@/lib/utils/departments";
+import { getDepartmentBadge } from "@/lib/design/semantics";
+import { cn } from "@/lib/utils/cn";
 import {
   provisionAfDepartments,
   createDepartment,
@@ -24,19 +26,6 @@ interface Props {
   workspaceMembers: MemberRow[];
   canManage: boolean;
 }
-
-const COLOR_CLASSES: Record<string, string> = {
-  red:    "bg-red-100 text-red-700",
-  purple: "bg-purple-100 text-purple-700",
-  orange: "bg-orange-100 text-orange-700",
-  blue:   "bg-blue-100 text-blue-700",
-  pink:   "bg-pink-100 text-pink-700",
-  green:  "bg-green-100 text-green-700",
-  teal:   "bg-teal-100 text-teal-700",
-  amber:  "bg-amber-100 text-amber-700",
-  brown:  "bg-amber-100 text-amber-800",
-  slate:  "bg-slate-100 text-slate-700",
-};
 
 function memberName(m: MemberRow) {
   return m.profiles?.full_name ?? m.profiles?.email ?? "—";
@@ -158,7 +147,7 @@ function DeptCard({
   const [pendingRemove, startTransition] = useTransition();
   const router = useRouter();
 
-  const colorClass = colorKey ? (COLOR_CLASSES[colorKey] ?? "bg-gray-100 text-gray-700") : "bg-gray-100 text-gray-700";
+  const badge = getDepartmentBadge(colorKey);
   const myMembers = deptMembers.filter((dm) => dm.department_id === dept.id);
   const existingMemberIds = new Set(myMembers.map((dm) => dm.member_id));
 
@@ -189,7 +178,8 @@ function DeptCard({
           size={14}
           className={`text-gray-400 transition-transform shrink-0 ${open ? "rotate-90" : ""}`}
         />
-        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${colorClass}`}>
+        <span className={cn("inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-full ring-1", badge.chip, badge.ring)}>
+          <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", badge.dot)} />
           {dept.name}
         </span>
         {aggregateMembers.length > 0 && (
@@ -446,29 +436,6 @@ export function DepartmentsManager({ departments, deptMembers, workspaceMembers,
             </button>
           )}
         </div>
-      )}
-
-      {/* Maintenance — tucked away so normal users don't think they must run it */}
-      {departments.length > 0 && canManage && (
-        <details className="mt-4 border-t border-gray-100 pt-3">
-          <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-600 select-none">
-            Bakım / Sistem işlemleri
-          </summary>
-          <div className="mt-2 space-y-2">
-            <p className="text-xs text-gray-500">
-              Eksik AF departmanlarını yeniden oluşturur; mevcut görevleri veya üye atamalarını silmez.
-            </p>
-            <button
-              onClick={handleProvision}
-              disabled={provisioning}
-              className="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded hover:bg-gray-200 disabled:opacity-50"
-            >
-              {provisioning ? "Eşitleniyor…" : "AF departman yapısını eşitle"}
-            </button>
-            {provisionErr && <p className="text-xs text-red-600">{provisionErr}</p>}
-            {provisionOk && <p className="text-xs text-green-700">Departman yapısı eşitlendi.</p>}
-          </div>
-        </details>
       )}
 
       <ConfirmDialog

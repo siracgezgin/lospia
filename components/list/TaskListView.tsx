@@ -26,7 +26,7 @@ import { updateTaskStatus } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils/cn";
 import { formatDateTR } from "@/lib/utils/format-date";
 import { buildDeptMeta } from "@/lib/utils/departments";
-import { getDepartmentCardStyle } from "@/lib/design/semantics";
+import { getDepartmentBadge, STATUS_CHIP_TONE } from "@/lib/design/semantics";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
 import { ExcelImportModal } from "@/components/task/ExcelImportModal";
 
@@ -48,21 +48,23 @@ const SIMPLIFIED_STATUS_LABEL: Record<TaskStatus, string> = {
   backlog:     "Yapılacak",
   ready:       "Yapılacak",
   in_progress: "Devam ediyor",
-  review:      "Devam ediyor",
+  review:      "Kontrol / Onay",
   blocked:     "Bekliyor",
   done:        "Tamamlandı",
   archived:    "Arşivlendi",
 };
 
-// Status filter options (user-facing groups → internal status arrays)
-type StatusFilterKey = "all" | "yapilacak" | "devam_ediyor" | "bekliyor" | "tamamlandi";
+// Status filter options (user-facing groups → internal status arrays).
+// Mirrors the board's columns so Kontrol / Onay is its own filterable stage.
+type StatusFilterKey = "all" | "yapilacak" | "devam_ediyor" | "kontrol_onay" | "bekliyor" | "tamamlandi";
 
 const STATUS_FILTER_OPTIONS: { key: StatusFilterKey; label: string; statuses: TaskStatus[] }[] = [
-  { key: "all",          label: "Tüm durumlar",  statuses: [] },
-  { key: "yapilacak",    label: "Yapılacak",      statuses: ["backlog", "ready"] },
-  { key: "devam_ediyor", label: "Devam ediyor",   statuses: ["in_progress", "review"] },
-  { key: "bekliyor",     label: "Bekliyor",       statuses: ["blocked"] },
-  { key: "tamamlandi",   label: "Tamamlandı",     statuses: ["done"] },
+  { key: "all",          label: "Tüm durumlar",   statuses: [] },
+  { key: "yapilacak",    label: "Yapılacak",       statuses: ["backlog", "ready"] },
+  { key: "devam_ediyor", label: "Devam ediyor",    statuses: ["in_progress"] },
+  { key: "kontrol_onay", label: "Kontrol / Onay",  statuses: ["review"] },
+  { key: "bekliyor",     label: "Bekliyor",        statuses: ["blocked"] },
+  { key: "tamamlandi",   label: "Tamamlandı",      statuses: ["done"] },
 ];
 
 // ---- Safe category extractor ----
@@ -98,7 +100,10 @@ function StatusBadge({ task }: { task: Task }) {
 
   return (
     <div className="relative inline-flex items-center">
-      <span className="text-[11px] bg-gray-100 text-gray-600 rounded-full px-2 py-0.5 pr-5 whitespace-nowrap pointer-events-none">
+      <span className={cn(
+        "text-[11px] font-medium rounded-full px-2 py-0.5 pr-5 whitespace-nowrap pointer-events-none",
+        STATUS_CHIP_TONE[optimisticStatus],
+      )}>
         {SIMPLIFIED_STATUS_LABEL[optimisticStatus]}
       </span>
       <select
@@ -215,8 +220,22 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
         const row = info.row.original;
         const meta = row.department_id ? deptMeta[row.department_id] : undefined;
         if (!meta) return <span className="text-xs text-gray-300">—</span>;
-        const style = getDepartmentCardStyle(meta.color);
-        return <span className={cn("text-xs rounded-full px-2 py-0.5", style.chip)}>{meta.name}</span>;
+        const badge = getDepartmentBadge(meta.color);
+        // Soft, ringed pill in the department colour. Long names wrap to a
+        // controlled 2 lines instead of clipping mid-word.
+        return (
+          <span
+            className={cn(
+              "inline-flex items-start gap-1.5 max-w-[15rem] rounded-xl py-1 pl-2 pr-2.5 text-[11px] font-medium ring-1",
+              badge.chip,
+              badge.ring,
+            )}
+            title={meta.name}
+          >
+            <span className={cn("mt-1 h-1.5 w-1.5 rounded-full shrink-0", badge.dot)} />
+            <span className="line-clamp-2 leading-snug text-left">{meta.name}</span>
+          </span>
+        );
       },
       sortingFn: (a, b) => {
         const na = a.original.department_id ? deptMeta[a.original.department_id]?.name ?? "" : "";
@@ -231,7 +250,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
       cell: (info) => {
         const val = info.getValue();
         return val
-          ? <span className="text-xs bg-indigo-50 text-indigo-600 rounded px-1.5 py-0.5">{val}</span>
+          ? <span className="inline-block text-[11px] bg-[#eef0fb] text-[#4a4d9c] rounded-md px-2 py-0.5 max-w-[12rem] truncate align-middle" title={val}>{val}</span>
           : <span className="text-xs text-gray-300">—</span>;
       },
       sortingFn: (a, b) => {
@@ -426,16 +445,16 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
       </div>
 
       {/* Table */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto bg-gray-50/40">
         <table className="w-full text-sm border-collapse">
-          <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
+          <thead className="bg-gray-50/80 border-b border-gray-200 sticky top-0 z-10 backdrop-blur-sm">
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id}>
                 {hg.headers.map((header) => (
                   <th
                     key={header.id}
                     className={cn(
-                      "text-left px-4 py-2.5 text-xs font-semibold text-gray-500 whitespace-nowrap select-none",
+                      "text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-500 whitespace-nowrap select-none",
                       header.column.getCanSort() && "cursor-pointer hover:text-gray-700"
                     )}
                     onClick={header.column.getToggleSortingHandler()}
@@ -468,7 +487,11 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
                   {row.getVisibleCells().map((cell) => (
                     <td
                       key={cell.id}
-                      className={cn("px-4 py-2.5", cell.column.id === "title" && "w-full min-w-48")}
+                      className={cn(
+                        "px-4 py-3 align-middle",
+                        cell.column.id === "title" && "w-full min-w-[14rem]",
+                        cell.column.id === "department" && "min-w-[11rem]",
+                      )}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>

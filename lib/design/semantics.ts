@@ -249,6 +249,74 @@ export const PRIORITY_SHOW_ON_BOARD: Record<TaskPriority, boolean> = {
   urgent: true,
 };
 
+// ── Workflow-status chip tones (shared by Board + List) ───────────────────────
+// Status is the primary lower chip. The green family is sequenced so the
+// workflow reads left-to-right toward completion:
+//   review (Kontrol / Onay) → a SOFT, light green: "almost done, awaiting sign-off"
+//   done   (Tamamlandı)     → the STRONG reserved green: "finished"
+// The two greens are deliberately one tone apart — clearly related, never
+// confused. No other status uses green.
+export const STATUS_CHIP_TONE: Record<TaskStatus, string> = {
+  backlog:     "bg-[#eef0f2] text-[#5c636b]",
+  ready:       "bg-[#eef0f2] text-[#5c636b]",
+  in_progress: "bg-[#e3effb] text-[#1f5fa8]",
+  blocked:     "bg-[#f6ecd4] text-[#8a6516]",
+  review:      "bg-[#e4f5ea] text-[#3a8f63]", // soft light green — one step before done
+  done:        "bg-[#d4eede] text-[#1f6e4d]", // strong reserved green
+  archived:    "bg-[#eef0f2] text-[#7a828b]",
+};
+
+// Header / label text tone per status (for column titles, legends).
+export const STATUS_TEXT_TONE: Record<TaskStatus, string> = {
+  backlog:     "text-[#5c636b]",
+  ready:       "text-[#5c636b]",
+  in_progress: "text-[#1f5fa8]",
+  blocked:     "text-[#8a6516]",
+  review:      "text-[#3a8f63]", // soft light green
+  done:        "text-[#1c7a52]", // strong green
+  archived:    "text-[#7a828b]",
+};
+
+// Recharts fills for the status-distribution chart. Review is the soft light
+// green; done is the strong green (mirrors STATUS_CHIP_TONE above).
+export const STATUS_CHART_FILL: Record<TaskStatus, string> = {
+  backlog:     "#98a0a8",
+  ready:       "#3b7bb5",
+  in_progress: "#7c5cbf",
+  blocked:     "#b8851f",
+  review:      "#76c79e", // soft light green
+  done:        "#2e9367", // strong green
+  archived:    "#cdd2d8",
+};
+
+// ── Department badge (members list, table chips) ──────────────────────────────
+// A soft, controlled badge in the department's own colour family: tinted fill,
+// department-toned text, plus a hairline ring for a crisp, corporate edge.
+// Reuses the same FAMILY palette as cards so a department reads identically
+// everywhere. Neutral grey when the department has no colour.
+const DEPT_BADGE_RING: Record<string, string> = {
+  red: "ring-[#e6b8af]", lavender: "ring-[#cdbcf0]", blue: "ring-[#bcd4f3]",
+  teal: "ring-[#b6e0e5]", brown: "ring-[#d6cba8]", orange: "ring-[#f0c79f]",
+  sand: "ring-[#e6d9ad]", amber: "ring-[#e9d4ab]", slate: "ring-[#d4dbe6]",
+  rose: "ring-[#e6cdd6]", pink: "ring-[#eeb9d8]",
+};
+
+export interface DeptBadge {
+  chip: string; // bg + text
+  ring: string; // ring-* hairline
+  dot: string;  // leading dot bg-*
+}
+
+/** Soft, ringed department badge from a colour key. Neutral when absent. */
+export function getDepartmentBadge(colorKey?: string | null): DeptBadge {
+  if (!colorKey) {
+    return { chip: CATEGORY_NONE.chip, ring: "ring-[#e4e7ec]", dot: CATEGORY_NONE.dot };
+  }
+  const fam = DEPT_COLOR_TO_FAMILY[colorKey] ?? FALLBACK[hashIndex(colorKey, FALLBACK.length)];
+  const style = FAMILY[fam];
+  return { chip: style.chip, ring: DEPT_BADGE_RING[fam] ?? "ring-[#e4e7ec]", dot: style.dot };
+}
+
 // ── Status dot (lists / minimal contexts) ─────────────────────────────────────
 
 export const STATUS_DOT: Record<TaskStatus, string> = {

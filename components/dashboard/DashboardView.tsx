@@ -10,11 +10,34 @@ import {
   Cell,
 } from "recharts";
 import Link from "next/link";
-import { AlertTriangle, Clock, CalendarClock, CheckCircle2, ListTodo } from "lucide-react";
+import {
+  AlertTriangle, Clock, CalendarClock, CheckCircle2, ListTodo,
+  ClipboardCheck, ArrowRight, History, Building2, CalendarDays, Sparkles,
+} from "lucide-react";
 import type { TaskStatus, TaskPriority } from "@/types";
 import { STATUS_LABELS } from "@/lib/utils/task-constants";
 import { formatDateTR } from "@/lib/utils/format-date";
+import {
+  STATUS_CHART_FILL, STATUS_CHIP_TONE, getDepartmentBadge,
+} from "@/lib/design/semantics";
+import { cn } from "@/lib/utils/cn";
 import { Badge } from "@/components/ui/Badge";
+
+interface DepartmentStat {
+  name: string;
+  color: string | null;
+  active: number;
+  overdue: number;
+}
+
+interface RecentTask {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  deptName: string | null;
+  deptColor: string | null;
+  updated_at: string;
+}
 
 interface Props {
   tasksByStatus: { status: TaskStatus; count: number }[];
@@ -27,6 +50,8 @@ interface Props {
     due_date: string;
     assignee_id: string | null;
   }[];
+  departmentStats: DepartmentStat[];
+  recentTasks: RecentTask[];
 }
 
 function formatDuration(seconds: number) {
@@ -37,17 +62,6 @@ function formatDuration(seconds: number) {
   return `${h}sa ${m}dk`;
 }
 
-// Token-aligned status colors (match lib/design/semantics.ts hues).
-const STATUS_COLORS: Record<TaskStatus, string> = {
-  backlog: "#98a0a8",
-  ready: "#3b7bb5",
-  in_progress: "#7c5cbf",
-  blocked: "#b8851f",
-  review: "#c77d2e",
-  done: "#2e9367",
-  archived: "#cdd2d8",
-};
-
 const PRIORITY_DOT: Record<TaskPriority, string> = {
   urgent: "bg-[#c0392b]",
   high: "bg-[#d4513f]",
@@ -55,43 +69,70 @@ const PRIORITY_DOT: Record<TaskPriority, string> = {
   low: "bg-[#98a0a8]",
 };
 
+// End of the current week (Sunday) as YYYY-MM-DD, for the "this week" focus.
+function endOfThisWeekISO(): string {
+  const d = new Date();
+  const dow = d.getDay(); // 0 = Sunday
+  const add = dow === 0 ? 0 : 7 - dow;
+  d.setDate(d.getDate() + add);
+  return d.toISOString().slice(0, 10);
+}
+
 function StatCard({
   icon,
   label,
   value,
   tone = "neutral",
+  href,
 }: {
   icon: React.ReactNode;
   label: string;
   value: number | string;
-  tone?: "neutral" | "danger" | "warning" | "success";
+  tone?: "neutral" | "danger" | "warning" | "success" | "review";
+  href?: string;
 }) {
   const toneCls = {
     neutral: "text-ink",
     danger: "text-danger",
     warning: "text-warning",
-    success: "text-success",
+    success: "text-[#1c7a52]",
+    review: "text-[#3a8f63]",
   }[tone];
-  return (
-    <div className="bg-surface rounded-xl border border-line shadow-card p-4">
+  const inner = (
+    <>
       <div className="flex items-center gap-2 text-subtle">
         {icon}
         <span className="text-xs font-medium text-muted">{label}</span>
       </div>
       <p className={`mt-2 text-3xl font-semibold tabular-nums ${toneCls}`}>{value}</p>
-    </div>
+    </>
+  );
+  const base = "bg-surface rounded-xl border border-line shadow-card p-4 transition-colors";
+  return href ? (
+    <Link href={href} className={cn(base, "hover:border-gray-300 hover:bg-gray-50/60")}>
+      {inner}
+    </Link>
+  ) : (
+    <div className={base}>{inner}</div>
   );
 }
 
-export function DashboardView({ tasksByStatus, timeLoggedSeconds, dueSoonTasks }: Props) {
+export function DashboardView({
+  tasksByStatus,
+  timeLoggedSeconds,
+  dueSoonTasks,
+  departmentStats,
+  recentTasks,
+}: Props) {
   const today = new Date().toISOString().slice(0, 10);
+  const weekEnd = endOfThisWeekISO();
 
   const chartData = tasksByStatus
     .filter((r) => r.status !== "archived")
     .map((row) => ({
       status: STATUS_LABELS[row.status],
       count: row.count,
-      color: STATUS_COLORS[row.status],
+      color: STATUS_CHART_FILL[row.status],
     }));
 
   const countOf = (s: TaskStatus) => tasksByStatus.find((r) => r.status === s)?.count ?? 0;
@@ -99,23 +140,50 @@ export function DashboardView({ tasksByStatus, timeLoggedSeconds, dueSoonTasks }
     .filter((r) => r.status !== "done" && r.status !== "archived")
     .reduce((sum, r) => sum + r.count, 0);
   const doneTotal = countOf("done");
+  const reviewTotal = countOf("review");
 
   const overdue = dueSoonTasks.filter((t) => t.due_date < today);
   const upcoming = dueSoonTasks.filter((t) => t.due_date >= today);
+  const dueToday = dueSoonTasks.filter((t) => t.due_date === today);
+  const dueThisWeek = dueSoonTasks.filter((t) => t.due_date >= today && t.due_date <= weekEnd);
+
+  const maxDeptActive = Math.max(1, ...departmentStats.map((d) => d.active));
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-5">
       <div>
         <h1 className="text-xl font-semibold text-ink">Gösterge Paneli</h1>
-        <p className="text-sm text-muted mt-0.5">Operasyonun anlık durumu ve risk göstergeleri</p>
+        <p className="text-sm text-muted mt-0.5">Operasyonun anlık durumu, riskler ve haftanın odağı</p>
       </div>
 
       {/* Headline KPIs — decision-support, not vanity */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <StatCard icon={<ListTodo size={15} />} label="Aktif görev" value={activeTotal} />
-        <StatCard icon={<AlertTriangle size={15} />} label="Geciken" value={overdue.length} tone={overdue.length > 0 ? "danger" : "neutral"} />
-        <StatCard icon={<CalendarClock size={15} />} label="7 gün içinde" value={upcoming.length} tone={upcoming.length > 0 ? "warning" : "neutral"} />
+        <StatCard icon={<AlertTriangle size={15} />} label="Geciken" value={overdue.length} tone={overdue.length > 0 ? "danger" : "neutral"} href="/board?view=overdue" />
+        <StatCard icon={<CalendarClock size={15} />} label="Bu hafta teslim" value={dueThisWeek.length} tone={dueThisWeek.length > 0 ? "warning" : "neutral"} />
+        <StatCard icon={<ClipboardCheck size={15} />} label="Kontrol / Onay" value={reviewTotal} tone={reviewTotal > 0 ? "review" : "neutral"} href="/board?view=waiting-approval" />
         <StatCard icon={<CheckCircle2 size={15} />} label="Tamamlanan" value={doneTotal} tone="success" />
+      </div>
+
+      {/* Focus + quick actions strip */}
+      <div className="bg-surface rounded-xl border border-line shadow-card p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-ink flex items-center gap-2">
+            <CalendarDays size={15} className="text-brand" />
+            Bugün &amp; bu hafta odağı
+          </h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <QuickAction href="/calendar" label="Takvim" />
+            <QuickAction href="/board?view=overdue" label="Gecikenleri gör" tone="danger" />
+            <QuickAction href="/board?view=waiting-approval" label="Onay bekleyenler" tone="review" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
+          <FocusTile label="Bugün teslim" value={dueToday.length} tone="warning" />
+          <FocusTile label="Bu hafta teslim" value={dueThisWeek.length} tone="warning" />
+          <FocusTile label="Onay kuyruğu" value={reviewTotal} tone="review" />
+          <FocusTile label="Geciken kritik" value={overdue.length} tone="danger" />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -156,6 +224,86 @@ export function DashboardView({ tasksByStatus, timeLoggedSeconds, dueSoonTasks }
         </div>
       </div>
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Department breakdown */}
+        <div className="bg-surface rounded-xl border border-line shadow-card p-5">
+          <h2 className="text-sm font-semibold text-ink mb-4 flex items-center gap-2">
+            <Building2 size={15} className="text-subtle" />
+            Departman dağılımı
+          </h2>
+          {departmentStats.length === 0 ? (
+            <p className="text-sm text-subtle py-6 text-center">Departmana atanmış aktif görev yok</p>
+          ) : (
+            <div className="space-y-3">
+              {departmentStats.map((d) => {
+                const badge = getDepartmentBadge(d.color);
+                return (
+                  <div key={d.name}>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <span className="flex items-center gap-1.5 min-w-0">
+                        <span className={cn("h-2 w-2 rounded-full shrink-0", badge.dot)} />
+                        <span className="text-xs text-ink truncate" title={d.name}>{d.name}</span>
+                      </span>
+                      <span className="flex items-center gap-1.5 shrink-0">
+                        {d.overdue > 0 && (
+                          <span className="text-[10px] font-medium text-danger bg-[#fbe6e2] rounded-full px-1.5 py-0.5">
+                            {d.overdue} geciken
+                          </span>
+                        )}
+                        <span className="text-xs font-semibold text-muted tabular-nums">{d.active}</span>
+                      </span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                      <div
+                        className={cn("h-full rounded-full", badge.dot)}
+                        style={{ width: `${Math.max(6, (d.active / maxDeptActive) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Recent activity */}
+        <div className="bg-surface rounded-xl border border-line shadow-card p-5">
+          <h2 className="text-sm font-semibold text-ink mb-4 flex items-center gap-2">
+            <History size={15} className="text-subtle" />
+            Son hareketler
+          </h2>
+          {recentTasks.length === 0 ? (
+            <p className="text-sm text-subtle py-6 text-center">Henüz hareket yok</p>
+          ) : (
+            <div className="divide-y divide-hairline">
+              {recentTasks.map((t) => (
+                <Link
+                  key={t.id}
+                  prefetch={false}
+                  href={`/tasks/${t.id}`}
+                  className="flex items-center justify-between gap-3 py-2.5 group"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-sm text-ink group-hover:text-brand truncate">{t.title}</span>
+                    {t.deptName && (
+                      <span className="text-[10px] text-subtle shrink-0 truncate max-w-28">{t.deptName}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={cn("text-[10px] font-medium rounded-full px-1.5 py-0.5 whitespace-nowrap", STATUS_CHIP_TONE[t.status])}>
+                      {STATUS_LABELS[t.status]}
+                    </span>
+                    <span className="text-[11px] text-subtle tabular-nums">
+                      {formatDateTR(t.updated_at, { day: "numeric", month: "short" })}
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Risk list — overdue first, then upcoming */}
       <div className="bg-surface rounded-xl border border-line shadow-card p-5">
         <h2 className="text-sm font-semibold text-ink mb-4 flex items-center gap-2">
@@ -165,7 +313,10 @@ export function DashboardView({ tasksByStatus, timeLoggedSeconds, dueSoonTasks }
           )}
         </h2>
         {dueSoonTasks.length === 0 ? (
-          <p className="text-sm text-subtle py-6 text-center">Geciken veya yaklaşan görev yok 🎉</p>
+          <p className="text-sm text-subtle py-6 text-center flex items-center justify-center gap-2">
+            <Sparkles size={15} className="text-[#3a8f63]" />
+            Geciken veya yaklaşan görev yok
+          </p>
         ) : (
           <div className="space-y-4">
             {overdue.length > 0 && (
@@ -177,6 +328,36 @@ export function DashboardView({ tasksByStatus, timeLoggedSeconds, dueSoonTasks }
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function QuickAction({ href, label, tone = "neutral" }: { href: string; label: string; tone?: "neutral" | "danger" | "review" }) {
+  const toneCls = {
+    neutral: "border-line text-muted hover:bg-gray-50 hover:text-ink",
+    danger: "border-[#f0c5bd] text-danger hover:bg-[#fbe6e2]",
+    review: "border-[#bfe3cd] text-[#3a8f63] hover:bg-[#e4f5ea]",
+  }[tone];
+  return (
+    <Link
+      href={href}
+      className={cn("inline-flex items-center gap-1 text-xs font-medium rounded-lg border px-2.5 py-1.5 transition-colors", toneCls)}
+    >
+      {label}
+      <ArrowRight size={12} />
+    </Link>
+  );
+}
+
+function FocusTile({ label, value, tone }: { label: string; value: number; tone: "warning" | "review" | "danger" }) {
+  const active = value > 0;
+  const valueCls = active
+    ? { warning: "text-warning", review: "text-[#3a8f63]", danger: "text-danger" }[tone]
+    : "text-muted";
+  return (
+    <div className="rounded-lg border border-line bg-gray-50/50 px-3 py-2.5">
+      <p className="text-[11px] font-medium text-muted">{label}</p>
+      <p className={cn("mt-1 text-2xl font-semibold tabular-nums", valueCls)}>{value}</p>
     </div>
   );
 }

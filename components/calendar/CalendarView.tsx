@@ -228,6 +228,9 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
   }
 
   const selectedDayTasks = getTasksForDay(selectedDay);
+  // The view is "on today" when today is the selected day AND we're looking at
+  // today's month — drives the filled/active state of the Bugün button.
+  const viewingToday = dfnsIsToday(selectedDay) && isSameMonth(selectedDay, current);
 
   // Server / pre-hydration skeleton — same outer shape so layout doesn't jump.
   if (!mounted) {
@@ -272,7 +275,13 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
 
         <button
           onClick={() => { setCurrent(new Date()); setSelectedDay(new Date()); }}
-          className="text-sm px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 font-medium"
+          aria-pressed={viewingToday}
+          className={cn(
+            "text-sm px-3 py-1.5 rounded-lg font-medium border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1",
+            viewingToday
+              ? "bg-blue-600 border-blue-600 text-white shadow-sm hover:bg-blue-700"
+              : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50 active:bg-gray-100",
+          )}
         >
           Bugün
         </button>
@@ -305,17 +314,28 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
                 <button
                   key={day.toISOString()}
                   onClick={() => selectDay(day)}
+                  aria-current={isToday ? "date" : undefined}
+                  aria-pressed={isSelected}
                   className={cn(
-                    "border-r border-b border-gray-100 p-1.5 text-left transition-colors flex flex-col gap-1 min-h-0 overflow-hidden",
+                    "relative border-r border-b border-gray-100 p-1.5 text-left transition-colors flex flex-col gap-1 min-h-0 overflow-hidden",
                     !inMonth && "bg-gray-50/60",
-                    isSelected ? "ring-2 ring-inset ring-blue-400 bg-blue-50/40" : inMonth && "hover:bg-gray-50",
+                    // Selected wins; today (unselected) keeps a soft persistent tint;
+                    // everything else gets a clear hover affordance.
+                    isToday && isSelected
+                      ? "bg-blue-100/70 ring-2 ring-inset ring-blue-500"
+                      : isSelected
+                        ? "ring-2 ring-inset ring-blue-400 bg-blue-50/50"
+                        : isToday
+                          ? "bg-blue-50/70 ring-1 ring-inset ring-blue-200 hover:bg-blue-100/60"
+                          : inMonth && "hover:bg-blue-50/50",
                   )}
                 >
                   <span className={cn(
-                    "text-xs font-medium h-6 w-6 flex items-center justify-center rounded-full shrink-0",
-                    isToday && "bg-blue-600 text-white font-semibold",
-                    !isToday && inMonth && "text-gray-700",
-                    !isToday && !inMonth && "text-gray-300",
+                    "text-xs font-medium h-6 w-6 flex items-center justify-center rounded-full shrink-0 transition-colors",
+                    isToday && "bg-blue-600 text-white font-semibold shadow-sm",
+                    !isToday && isSelected && "bg-blue-600/10 text-blue-700 font-semibold ring-1 ring-blue-300",
+                    !isToday && !isSelected && inMonth && "text-gray-700",
+                    !isToday && !isSelected && !inMonth && "text-gray-300",
                   )}>
                     {format(day, "d")}
                   </span>

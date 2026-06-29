@@ -49,6 +49,7 @@ import {
   getTaskStateMarkers,
   PRIORITY_CHIP,
   PRIORITY_SHOW_ON_BOARD,
+  STATUS_CHIP_TONE,
 } from "@/lib/design/semantics";
 import { Badge } from "@/components/ui/Badge";
 import { reorderTask, updateTask, softDeleteTask, archiveTask, duplicateTask } from "@/lib/actions/tasks";
@@ -70,17 +71,6 @@ function useTaskDept(task: Task): DeptMeta | undefined {
   const meta = useContext(DeptMetaContext);
   return task.department_id ? meta[task.department_id] : undefined;
 }
-
-// Workflow-status chip tones (status is the primary lower chip; priority is secondary).
-const STATUS_CHIP_TONE: Record<string, string> = {
-  backlog: "bg-gray-100 text-gray-600",
-  ready: "bg-gray-100 text-gray-600",
-  blocked: "bg-amber-100 text-amber-700",
-  in_progress: "bg-blue-100 text-blue-700",
-  review: "bg-teal-100 text-teal-700",
-  done: "bg-green-100 text-green-700",
-  archived: "bg-gray-100 text-gray-500",
-};
 
 // Participant completions (taskId → [{name, completed}]) for card chips.
 const ParticipantsContext = createContext<Record<string, TaskParticipant[]>>({});
@@ -886,8 +876,8 @@ function KanbanColumn({
   const taskIds = tasks.map((t) => t.id);
   const { setNodeRef, isOver } = useDroppable({ id: colDef.id });
   const headerTone =
-    colDef.id === "tamamlandi" ? "text-green-600"
-    : colDef.id === "kontrol_onay" ? "text-teal-600"
+    colDef.id === "tamamlandi" ? "text-[#1c7a52]"
+    : colDef.id === "kontrol_onay" ? "text-[#3a8f63]"
     : "text-gray-500";
 
   return (
@@ -960,8 +950,8 @@ function StaticKanbanColumn({
   responsibleNames: Record<string, string>;
 }) {
   const headerTone =
-    colDef.id === "tamamlandi" ? "text-green-600"
-    : colDef.id === "kontrol_onay" ? "text-teal-600"
+    colDef.id === "tamamlandi" ? "text-[#1c7a52]"
+    : colDef.id === "kontrol_onay" ? "text-[#3a8f63]"
     : "text-gray-500";
   return (
     <div className="flex flex-col gap-2 w-72 shrink-0">

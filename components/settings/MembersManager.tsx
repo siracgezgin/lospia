@@ -16,6 +16,9 @@ import type {
 } from "@/types";
 import { roleLabel, ASSIGNABLE_ROLE_OPTIONS } from "@/lib/utils/roles";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { buildDeptMeta } from "@/lib/utils/departments";
+import { getDepartmentBadge } from "@/lib/design/semantics";
+import { cn } from "@/lib/utils/cn";
 
 interface MemberRow extends WorkspaceMember {
   profiles?: Partial<Profile> | null;
@@ -70,14 +73,14 @@ export function MembersManager({
 
   const isOwner = userRole === "owner";
 
-  // member_id (workspace_members.id) → department names
-  const deptNameById = new Map(departments.map((d) => [d.id, d.name]));
-  const deptsByMember = new Map<string, string[]>();
+  // member_id (workspace_members.id) → department badges (name + effective colour)
+  const deptMeta = buildDeptMeta(departments);
+  const deptsByMember = new Map<string, { name: string; color: string | null }[]>();
   for (const dm of deptMembers) {
-    const name = deptNameById.get(dm.department_id);
-    if (!name) continue;
+    const meta = deptMeta[dm.department_id];
+    if (!meta) continue;
     const arr = deptsByMember.get(dm.member_id) ?? [];
-    arr.push(name);
+    arr.push({ name: meta.name, color: meta.color });
     deptsByMember.set(dm.member_id, arr);
   }
 
@@ -286,12 +289,23 @@ export function MembersManager({
                 )}
                 <p className="text-xs text-gray-400 truncate">{m.profiles?.email}</p>
                 {(deptsByMember.get(m.id) ?? []).length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {(deptsByMember.get(m.id) ?? []).map((name) => (
-                      <span key={name} className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-full">
-                        {name}
-                      </span>
-                    ))}
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {(deptsByMember.get(m.id) ?? []).map((d) => {
+                      const badge = getDepartmentBadge(d.color);
+                      return (
+                        <span
+                          key={d.name}
+                          className={cn(
+                            "inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full ring-1",
+                            badge.chip,
+                            badge.ring,
+                          )}
+                        >
+                          <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", badge.dot)} />
+                          {d.name}
+                        </span>
+                      );
+                    })}
                   </div>
                 )}
               </div>
