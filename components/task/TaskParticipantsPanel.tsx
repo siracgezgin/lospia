@@ -13,7 +13,14 @@ import {
 } from "@/lib/actions/completions";
 
 export type PanelMember = { memberId: string; userId: string; name: string };
-export type PanelParticipant = { memberId: string; completed: boolean; completedAt?: string | null };
+export type PanelParticipant = {
+  memberId: string;
+  completed: boolean;
+  completedAt?: string | null;
+  // True when this row is the legacy assignee surfaced as a responsible person
+  // (no real completion row yet). Toggling completion materialises a real row.
+  isAssigneeFallback?: boolean;
+};
 
 interface Props {
   taskId: string;
@@ -92,6 +99,7 @@ export function TaskParticipantsPanel({
                   <p className="text-gray-800 truncate">
                     {name}
                     {isMe && <span className="ml-1 text-[10px] text-gray-400">(siz)</span>}
+                    {p.isAssigneeFallback && <span className="ml-1 text-[10px] text-gray-400">(atanan)</span>}
                   </p>
                   {p.completed && p.completedAt && (
                     <p className="text-[10px] text-gray-400">{formatDateTimeTR(p.completedAt)}</p>

@@ -23,6 +23,17 @@ const isAdminRole = (r: AppRole) => ADMIN_ROLES.includes(r);
 
 const PERM_DENIED = "Bu işlem için yetkiniz yok.";
 const FINAL_DONE_DENIED = "Görevi yalnızca yönetici tamamlanmış olarak işaretleyebilir. Lütfen 'Kontrol / Onay'a taşıyın.";
+const DONE_LOCKED_DENIED = "Tamamlanmış görevleri yalnızca yönetici değiştirebilir.";
+
+// A non-admin may never push a task INTO "done" nor pull one OUT of "done".
+// Both directions are owner/admin-only; members route through "Kontrol / Onay".
+function isForbiddenDoneTransition(
+  from: TaskStatusType, to: TaskStatusType, role: AppRole,
+): boolean {
+  if (from === to) return false;
+  const touchesDone = to === "done" || from === "done";
+  return touchesDone && !canCompleteTask(role);
+}
 
 // Drop recipients that already received the SAME (task, type, title) notification
 // within the last few minutes. A status can be toggled back and forth (or the
@@ -316,10 +327,11 @@ export async function updateTask(
     return { error: PERM_DENIED };
   }
 
-  // Only owner/admin can mark a task finally done; members use Kontrol / Onay.
+  // Only owner/admin can mark a task finally done OR reopen a done task; members
+  // use Kontrol / Onay and can never touch the done boundary in either direction.
   const nextStatus = "status" in updates ? (updates.status as TaskStatusType | undefined) : undefined;
-  if (nextStatus === "done" && task.status !== "done" && !canCompleteTask(role)) {
-    return { error: FINAL_DONE_DENIED };
+  if (nextStatus && isForbiddenDoneTransition(task.status as TaskStatusType, nextStatus, role)) {
+    return { error: task.status === "done" ? DONE_LOCKED_DENIED : FINAL_DONE_DENIED };
   }
 
   const { error } = await supabase
@@ -672,9 +684,10 @@ export async function reorderTask(
     if (!isParticipant) return { error: "Bu görevi yalnızca sorumlu kişiler veya yöneticiler taşıyabilir." };
   }
 
-  // Only owner/admin can mark a task finally done; members use Kontrol / Onay.
-  if (newStatus === "done" && prevTask.status !== "done" && !canCompleteTask(role)) {
-    return { error: FINAL_DONE_DENIED };
+  // Only owner/admin can mark a task finally done OR reopen one; members never
+  // cross the done boundary in either direction (drag included).
+  if (isForbiddenDoneTransition(prevTask.status, newStatus, role)) {
+    return { error: prevTask.status === "done" ? DONE_LOCKED_DENIED : FINAL_DONE_DENIED };
   }
 
   let fractional_index: string;

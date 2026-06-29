@@ -80,20 +80,46 @@ export async function toggleMyCompletion(taskId: string): Promise<{ ok: true } |
   if (!c) return { error: "Kimlik doğrulama gerekli." };
   if (c.role === "viewer") return { error: PERM };
 
-  // Only a responsible participant may mark their own work done. A participant
-  // row always exists (created when someone is added as responsible), so its
-  // absence means this user is NOT on the task — never create one here.
+  // Only a responsible person may mark their own work done. A participant row
+  // normally exists (created when someone is added as responsible). If it does
+  // not, the only legitimate case is the legacy assignee: a task that was
+  // assigned via tasks.assignee_id before the multi-participant model. We
+  // materialise their completion row on first interaction so the assignee and
+  // participant models converge. Anyone else is genuinely not on the task.
   const { data: existing } = await sb
     .from("task_member_completions")
     .select("id, completed_at")
     .eq("task_id", taskId)
     .eq("member_id", c.memberId)
     .maybeSingle();
-  if (!existing) return { error: "Bu görevde sorumlu kişi değilsiniz." };
 
-  const nowDone = !existing.completed_at;
+  let rowId: string;
+  let wasDone: boolean;
+  if (existing) {
+    rowId = existing.id as string;
+    wasDone = existing.completed_at != null;
+  } else {
+    const { data: task } = await sb
+      .from("tasks")
+      .select("assignee_id")
+      .eq("id", taskId)
+      .maybeSingle();
+    if (!task || task.assignee_id !== c.user.id) {
+      return { error: "Bu görevde sorumlu kişi değilsiniz." };
+    }
+    const { data: created, error: createErr } = await sb
+      .from("task_member_completions")
+      .insert({ workspace_id: c.workspaceId, task_id: taskId, member_id: c.memberId })
+      .select("id")
+      .single();
+    if (createErr || !created) return { error: "Sorumlu kaydı oluşturulamadı." };
+    rowId = created.id as string;
+    wasDone = false;
+  }
+
+  const nowDone = !wasDone;
   const stamp = nowDone ? new Date().toISOString() : null;
-  await sb.from("task_member_completions").update({ completed_at: stamp }).eq("id", existing.id);
+  await sb.from("task_member_completions").update({ completed_at: stamp }).eq("id", rowId);
   await logTaskActivity(sb, {
     workspaceId: c.workspaceId, taskId, actorId: c.user.id,
     action: nowDone ? ACTIVITY_ACTIONS.PARTICIPANT_COMPLETED : ACTIVITY_ACTIONS.PARTICIPANT_UNCOMPLETED,

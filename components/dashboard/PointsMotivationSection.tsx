@@ -1,6 +1,7 @@
 import { Sparkles, Clock3, RotateCcw, Trophy, Building2, ListTree, CheckCircle2, ClipboardCheck } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { formatDateTimeTR } from "@/lib/utils/format-date";
+import { RepairPointsButton } from "@/components/dashboard/RepairPointsButton";
 import type { AdminPointsData, MemberPointsSummary } from "@/lib/points/queries";
 
 interface Props {
@@ -39,16 +40,19 @@ const TYPE_LABEL: Record<string, string> = {
 export function PointsMotivationSection({ isAdmin, admin, member }: Props) {
   return (
     <section id="puan-motivasyon" className="space-y-4 scroll-mt-6">
-      <div>
-        <h2 className="text-base font-semibold text-ink flex items-center gap-2">
-          <Sparkles size={16} className="text-brand" />
-          Puan &amp; Motivasyon
-        </h2>
-        <p className="text-sm text-muted mt-0.5">
-          {isAdmin
-            ? "Ekip katkısı ve puan hareketleri. Puan yalnızca yönetici onayından sonra kesinleşir."
-            : "Kişisel katkı özetiniz. Puan yalnızca yönetici onayından sonra kesinleşir."}
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold text-ink flex items-center gap-2">
+            <Sparkles size={16} className="text-brand" />
+            Puan &amp; Motivasyon
+          </h2>
+          <p className="text-sm text-muted mt-0.5">
+            {isAdmin
+              ? "Ekip katkısı ve puan hareketleri. Puan yalnızca yönetici onayından sonra kesinleşir."
+              : "Kişisel katkı özetiniz. Puan yalnızca yönetici onayından sonra kesinleşir."}
+          </p>
+        </div>
+        {isAdmin && <RepairPointsButton />}
       </div>
 
       {isAdmin && admin ? (

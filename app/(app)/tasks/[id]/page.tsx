@@ -147,6 +147,23 @@ export default async function TaskDetailPage({
   const panelParticipants: PanelParticipant[] = ((completionsResult.data ?? []) as { member_id: string; completed_at: string | null }[])
     .map((c) => ({ memberId: c.member_id, completed: c.completed_at != null, completedAt: c.completed_at }));
 
+  // Canonical responsibility = participants, with the legacy assignee as a
+  // fallback when there are no participant rows. Surfacing the assignee here
+  // keeps "Sorumlu kişiler" consistent with the board card (which shows the
+  // assignee avatar in the same situation). The fallback is flagged so the panel
+  // can convert it into a real completion row on first interaction.
+  if (panelParticipants.length === 0 && task.assignee_id) {
+    const assigneeMember = panelMembers.find((m) => m.userId === task.assignee_id);
+    if (assigneeMember) {
+      panelParticipants.push({
+        memberId: assigneeMember.memberId,
+        completed: false,
+        completedAt: null,
+        isAssigneeFallback: true,
+      });
+    }
+  }
+
   // Eligible members for the responsible picker = members assigned to the task's
   // department, plus its parent and direct children. null when no department.
   let eligibleMemberIds: string[] | null = null;

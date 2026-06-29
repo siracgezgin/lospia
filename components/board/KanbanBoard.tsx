@@ -117,8 +117,10 @@ function CardStatusChip({ task }: { task: Task }) {
 
   const tone = STATUS_CHIP_TONE[optStatus] ?? "bg-gray-100 text-gray-600";
   const chipCls = cn("text-[10px] rounded px-1.5 py-0.5 leading-none font-medium", tone);
-  const canChange = ctx?.isResponsible(task) ?? false;
   const canDone = ctx?.canComplete ?? false;
+  // A done task is locked for non-admins — they can neither change nor reopen it.
+  const doneLocked = optStatus === "done" && !canDone;
+  const canChange = (ctx?.isResponsible(task) ?? false) && !doneLocked;
 
   // No permission to change → plain, non-interactive chip.
   if (!ctx || !canChange) {
@@ -859,6 +861,7 @@ function KanbanColumn({
   canDeleteCard = true,
   showMenu = true,
   disableDrag = false,
+  lockDoneDrag = false,
 }: {
   colDef: typeof BOARD_COLUMNS[number];
   tasks: Task[];
@@ -873,6 +876,8 @@ function KanbanColumn({
   canDeleteCard?: boolean;
   showMenu?: boolean;
   disableDrag?: boolean;
+  // Non-admins can't drag done cards (mirrors the server reopen lock).
+  lockDoneDrag?: boolean;
 }) {
   const taskIds = tasks.map((t) => t.id);
   const { setNodeRef, isOver } = useDroppable({ id: colDef.id });
@@ -923,7 +928,7 @@ function KanbanColumn({
               canArchiveCard={canArchiveCard}
               canDeleteCard={canDeleteCard}
               showMenu={showMenu}
-              disableDrag={disableDrag}
+              disableDrag={disableDrag || (lockDoneDrag && task.status === "done")}
             />
           ))}
         </div>
@@ -1191,10 +1196,14 @@ export function KanbanBoard({
       return;
     }
 
-    // Approval gate: only owner/admin may move a task into final "Tamamlandı".
-    // Members should route through "Kontrol / Onay" instead.
-    if (newStatus === "done" && srcTask.status !== "done" && !canComplete) {
-      showToast("Tamamlandı aşamasına yalnızca yöneticiler taşıyabilir.");
+    // Approval gate: only owner/admin may cross the "Tamamlandı" boundary — both
+    // INTO done and OUT of done. Members route through "Kontrol / Onay".
+    if (newStatus !== srcTask.status && (newStatus === "done" || srcTask.status === "done") && !canComplete) {
+      showToast(
+        srcTask.status === "done"
+          ? "Tamamlanmış görevleri yalnızca yöneticiler değiştirebilir."
+          : "Tamamlandı aşamasına yalnızca yöneticiler taşıyabilir.",
+      );
       return;
     }
 
@@ -1483,7 +1492,7 @@ export function KanbanBoard({
             {/* Continuous sticky band behind every column header (no gaps/peek). */}
             <div aria-hidden className="sticky top-0 z-10 h-11 bg-app border-b border-line shadow-[0_4px_10px_-6px_rgba(16,24,40,0.18)]" />
             <div className="flex gap-3 sm:gap-4 px-3 sm:px-4 pb-4 items-start -mt-11">
-              <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} />
+              <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} />
               {BOARD_COLUMNS.map((col) => (
                 <StaticKanbanColumn
                   key={col.id}
@@ -1512,7 +1521,7 @@ export function KanbanBoard({
               {/* Continuous sticky band behind every column header (no gaps/peek). */}
               <div aria-hidden className="sticky top-0 z-10 h-11 bg-app border-b border-line shadow-[0_4px_10px_-6px_rgba(16,24,40,0.18)]" />
               <div className="flex gap-3 sm:gap-4 px-3 sm:px-4 pb-4 items-start -mt-11">
-                <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} />
+                <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} />
                 {BOARD_COLUMNS.map((col) => (
                   <KanbanColumn
                     key={col.id}
@@ -1529,6 +1538,7 @@ export function KanbanBoard({
                     canDeleteCard={canDelete}
                     showMenu={!isViewer}
                     disableDrag={isViewer}
+                    lockDoneDrag={!canComplete}
                   />
                 ))}
               </div>

@@ -52,17 +52,24 @@ export async function getMemberPointsSummary(
     (sum, r) => sum + (r.points_amount as number), 0,
   );
 
-  const taskIds = ((compsRes.data ?? []) as { task_id: string }[]).map((c) => c.task_id);
+  // Responsible tasks = the user's participations ∪ tasks assigned to them
+  // (legacy assignee fallback), so the summary matches the "Bana atananlar"
+  // board filter and the canonical points ownership rule.
+  const participantIds = ((compsRes.data ?? []) as { task_id: string }[]).map((c) => c.task_id);
+  const orFilter = participantIds.length > 0
+    ? `assignee_id.eq.${userId},id.in.(${participantIds.join(",")})`
+    : `assignee_id.eq.${userId}`;
+  const { data: tasks } = await sb
+    .from("tasks")
+    .select("status, points_value")
+    .eq("workspace_id", workspaceId)
+    .neq("status", "archived")
+    .or(orFilter);
+
   let pending = 0, doneCount = 0, reviewCount = 0;
-  if (taskIds.length > 0) {
-    const { data: tasks } = await sb
-      .from("tasks")
-      .select("status, points_value")
-      .in("id", taskIds);
-    for (const t of (tasks ?? []) as { status: string; points_value: number }[]) {
-      if (t.status === "review") { pending += t.points_value; reviewCount += 1; }
-      else if (t.status === "done") { doneCount += 1; }
-    }
+  for (const t of (tasks ?? []) as { status: string; points_value: number }[]) {
+    if (t.status === "review") { pending += t.points_value; reviewCount += 1; }
+    else if (t.status === "done") { doneCount += 1; }
   }
 
   return { monthPoints, pending, doneCount, reviewCount };
@@ -242,22 +249,32 @@ export async function getAdminPointsData(
     }
   }
 
-  // Pending — points of review tasks per responsible participant.
+  // Pending — points of review tasks per responsible person (participants, with
+  // a legacy assignee fallback for review tasks that have no participant rows).
   const reviewTaskMap = new Map(reviewTasks.map((t) => [t.id, t.points_value]));
   const memberToUser = new Map(members.map((m) => [m.id, m.user_id]));
   const pendingByUser = new Map<string, number>();
   let pendingTotal = 0;
   if (reviewTasks.length > 0) {
-    const { data: comps } = await sb
-      .from("task_member_completions")
-      .select("task_id, member_id")
-      .in("task_id", reviewTasks.map((t) => t.id));
+    const reviewIds = reviewTasks.map((t) => t.id);
+    const [{ data: comps }, { data: reviewAssignees }] = await Promise.all([
+      sb.from("task_member_completions").select("task_id, member_id").in("task_id", reviewIds),
+      sb.from("tasks").select("id, assignee_id").in("id", reviewIds),
+    ]);
+    const tasksWithParticipants = new Set<string>();
     for (const c of (comps ?? []) as { task_id: string; member_id: string }[]) {
       const pts = reviewTaskMap.get(c.task_id) ?? 0;
       const uid = memberToUser.get(c.member_id);
       if (!uid) continue;
+      tasksWithParticipants.add(c.task_id);
       pendingTotal += pts;
       pendingByUser.set(uid, (pendingByUser.get(uid) ?? 0) + pts);
+    }
+    for (const t of (reviewAssignees ?? []) as { id: string; assignee_id: string | null }[]) {
+      if (!t.assignee_id || tasksWithParticipants.has(t.id)) continue;
+      const pts = reviewTaskMap.get(t.id) ?? 0;
+      pendingTotal += pts;
+      pendingByUser.set(t.assignee_id, (pendingByUser.get(t.assignee_id) ?? 0) + pts);
     }
   }
 

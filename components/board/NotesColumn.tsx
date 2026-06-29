@@ -2,6 +2,7 @@
 
 import {
   useState, useOptimistic, useTransition, useRef, useEffect, useSyncExternalStore,
+  createContext, useContext,
 } from "react";
 import {
   DndContext, type DragEndEvent, PointerSensor, useSensor, useSensors, closestCenter,
@@ -26,6 +27,21 @@ const NOTE_COLORS: Record<NoteColor, { bg: string; border: string; title: string
 };
 
 const ALL_COLORS: NoteColor[] = ["yellow", "blue", "green", "purple"];
+
+// ── Note author resolution (created_by → display name) ────────────────────────
+const NoteAuthorsContext = createContext<Record<string, string>>({});
+
+// "Bugün 14:32" / "Dün 18:10" / "5 Oca 09:00" — compact, professional metadata.
+function formatNoteMeta(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const time = d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
+  const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate());
+  const dayDiff = Math.round((startOfDay(new Date()).getTime() - startOfDay(d).getTime()) / 86400000);
+  if (dayDiff === 0) return `Bugün ${time}`;
+  if (dayDiff === 1) return `Dün ${time}`;
+  return `${d.toLocaleDateString("tr-TR", { day: "numeric", month: "short" })} ${time}`;
+}
 
 // ── Shared types ───────────────────────────────────────────────────────────────
 
@@ -186,9 +202,23 @@ function NoteCardContent({
               {note.body}
             </p>
           )}
+          <NoteMeta note={note} />
         </div>
       </div>
     </div>
+  );
+}
+
+// ── Author + timestamp metadata row ───────────────────────────────────────────
+function NoteMeta({ note }: { note: WorkspaceNote }) {
+  const authors = useContext(NoteAuthorsContext);
+  const author = note.created_by ? authors[note.created_by] ?? "Bilinmeyen kullanıcı" : "Bilinmeyen kullanıcı";
+  const when = note.created_at ? formatNoteMeta(note.created_at) : "";
+  return (
+    <p className="mt-1.5 text-[10px] text-gray-400 truncate">
+      <span className="font-medium text-gray-500">{author}</span>
+      {when && <span> · {when}</span>}
+    </p>
   );
 }
 
@@ -299,10 +329,12 @@ export function NotesColumn({
   notes: initialNotes,
   workspaceId,
   readOnly = false,
+  authorsById = {},
 }: {
   notes: WorkspaceNote[];
   workspaceId: string;
   readOnly?: boolean;
+  authorsById?: Record<string, string>;
 }) {
   // Detects client vs server render without triggering a state update in effect
   const mounted = useSyncExternalStore(_subscribeMounted, _getMounted, _getServerMounted);
@@ -411,6 +443,7 @@ export function NotesColumn({
   };
 
   return (
+    <NoteAuthorsContext.Provider value={authorsById}>
     <div className="flex flex-col gap-2 w-[80vw] max-w-64 sm:w-64 shrink-0">
       {/* Header */}
       <div className="flex items-center justify-between sticky top-0 z-20 h-11">
@@ -462,5 +495,6 @@ export function NotesColumn({
         />
       )}
     </div>
+    </NoteAuthorsContext.Provider>
   );
 }
