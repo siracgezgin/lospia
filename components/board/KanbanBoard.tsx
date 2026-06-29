@@ -1348,7 +1348,10 @@ export function KanbanBoard({
     <DeptMetaContext.Provider value={deptMeta}>
     <ParticipantsContext.Provider value={participantsByTask}>
     <BoardContext.Provider value={boardCtx}>
-    <div className="flex flex-col h-full">
+    {/* Desktop: fixed-height shell with internal column scroll. Mobile (max-md):
+        natural height so the rules/week/tabs/filters chrome scrolls away with the
+        page and only the compact status tabs stay sticky. */}
+    <div className="flex flex-col h-full max-md:h-auto max-md:min-h-full">
 
       {/* ── Rules panel (compact, collapsible) ────────────────────────────── */}
       <BoardRulesPanel rules={rules} newCount={newRulesCount} />
@@ -1403,7 +1406,7 @@ export function KanbanBoard({
 
       {/* ── Saved-view tab strip ─────────────────────────────────────────── */}
       {savedViews.length > 0 && (
-        <div className="flex gap-0 px-4 pt-3 border-b border-gray-200 bg-white overflow-x-auto shrink-0">
+        <div className="flex gap-0 px-4 pt-3 border-b border-gray-200 bg-white overflow-x-auto no-scrollbar shrink-0">
           {savedViews.map((view) => {
             const slug = SAVED_VIEW_SLUG_MAP[view.name] ?? view.id;
             const isActive = effectiveSlug === slug;
@@ -1622,9 +1625,10 @@ export function KanbanBoard({
       )}
 
       {/* ── Mobile board: segmented status control + single full-width column ── */}
-      <div className="md:hidden flex flex-col flex-1 min-h-0">
-        {/* Segmented status tabs (horizontal scroll, counts inline) */}
-        <div className="flex gap-1.5 px-3 py-2.5 overflow-x-auto bg-white border-b border-gray-100 shrink-0">
+      <div className="md:hidden flex flex-col">
+        {/* Segmented status tabs — the one sticky element on mobile (compact, single
+            row, horizontal scroll with the scrollbar hidden). */}
+        <div className="flex gap-1.5 px-3 py-2 overflow-x-auto no-scrollbar bg-white/95 backdrop-blur border-b border-gray-100 sticky top-0 z-10">
           {MOBILE_SEGMENTS.map((seg) => {
             const count = seg.id === "notes" ? notes.length : (tasksByCol[seg.id as BoardColId]?.length ?? 0);
             const active = mobileSeg === seg.id;
@@ -1652,8 +1656,8 @@ export function KanbanBoard({
           })}
         </div>
 
-        {/* Single column content */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-3">
+        {/* Single column content — flows into the page scroll (no inner scroll) */}
+        <div className="px-3 py-3">
           {mobileSeg === "notes" ? (
             <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} mobile />
           ) : (

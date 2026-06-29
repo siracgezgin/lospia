@@ -148,6 +148,14 @@ export function AppHeader({
   const title = PAGE_TITLES.find((t) => t.match(pathname))?.title ?? "";
   const displayName = getPersonDisplayName(userName ?? userEmail ?? null);
 
+  // Mobile profile access lives in the bottom nav (members get a Profil tab),
+  // so the top-right avatar is redundant on phones for members — and on the
+  // /profile page itself for everyone. Admins keep it on mobile (their bottom
+  // nav shows Ayarlar, not Profil). Desktop always shows it.
+  const isAdmin = userRole === "owner" || userRole === "admin";
+  const onProfile = pathname.startsWith("/profile");
+  const showProfileOnMobile = isAdmin && !onProfile;
+
   return (
     <header className="relative z-30 h-14 bg-surface border-b border-line flex items-center justify-between px-5 shrink-0">
       <div className="flex items-center gap-2.5 min-w-0">
@@ -156,13 +164,15 @@ export function AppHeader({
 
       <div className="flex items-center gap-3">
         <NotificationBell unreadCount={unreadCount} userId={userId} notifications={notifications} />
-        <ProfileMenu
-          displayName={displayName}
-          email={userEmail ?? null}
-          role={userRole}
-          pointsThisMonth={pointsThisMonth}
-          pendingPoints={pendingPoints}
-        />
+        <div className={showProfileOnMobile ? "block" : "hidden md:block"}>
+          <ProfileMenu
+            displayName={displayName}
+            email={userEmail ?? null}
+            role={userRole}
+            pointsThisMonth={pointsThisMonth}
+            pendingPoints={pendingPoints}
+          />
+        </div>
       </div>
     </header>
   );

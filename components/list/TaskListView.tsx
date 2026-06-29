@@ -449,10 +449,12 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
   const totalRows = table.getFilteredRowModel().rows.length;
 
   return (
-    <div className="flex flex-col h-full">
+    // Desktop: fixed-height shell, table scrolls internally. Mobile (max-md):
+    // natural height so tabs + filters scroll away and the card list flows.
+    <div className="flex flex-col h-full max-md:h-auto max-md:min-h-full">
       {/* Saved views tab strip */}
       {savedViews.length > 0 && (
-        <div className="flex gap-0 px-4 pt-3 border-b border-gray-200 bg-white overflow-x-auto shrink-0">
+        <div className="flex gap-0 px-4 pt-3 border-b border-gray-200 bg-white overflow-x-auto no-scrollbar shrink-0">
           {savedViews.map((view) => (
             <a
               key={view.id}
@@ -511,8 +513,8 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
         <span className="ml-auto text-xs text-gray-400 self-center">{totalRows} görev</span>
       </div>
 
-      {/* Mobile: card list (no horizontal table) */}
-      <div className="md:hidden flex-1 overflow-y-auto overflow-x-hidden bg-gray-50/40 px-3 py-3">
+      {/* Mobile: card list (no horizontal table) — flows into the page scroll */}
+      <div className="md:hidden bg-gray-50/40 px-3 py-3">
         {table.getRowModel().rows.length === 0 ? (
           <div className="text-center py-16 text-gray-400 text-sm">
             Geçerli filtrelerle eşleşen görev yok

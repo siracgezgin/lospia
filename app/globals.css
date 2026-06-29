@@ -121,13 +121,23 @@ body {
   .safe-top {
     padding-top: env(safe-area-inset-top, 0px);
   }
-  /* Clears the fixed bottom nav (3.5rem) plus the home-indicator inset. */
+  /* Clears the fixed bottom nav (3.5rem) plus the home-indicator inset, with a
+     ~1rem of breathing room so the last card never sits flush against the nav. */
   .pb-bottom-nav {
-    padding-bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
   }
   /* Sticky sheet footer that floats above the bottom nav + safe inset. */
   .mb-bottom-nav {
     margin-bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px));
+  }
+  /* Hide the scrollbar on horizontal tab strips (status/segmented controls)
+     while keeping them scrollable — removes the heavy grey bar on mobile. */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
   }
 }
 
