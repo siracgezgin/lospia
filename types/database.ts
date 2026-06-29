@@ -271,7 +271,7 @@ export type Database = {
           metadata: Json | null
           task_id: string
           type: Database["public"]["Enums"]["task_activity_type"]
-          user_id: string
+          user_id: string | null
           workspace_id: string
         }
         Insert: {
@@ -281,7 +281,7 @@ export type Database = {
           metadata?: Json | null
           task_id: string
           type: Database["public"]["Enums"]["task_activity_type"]
-          user_id: string
+          user_id?: string | null
           workspace_id: string
         }
         Update: {
@@ -291,7 +291,7 @@ export type Database = {
           metadata?: Json | null
           task_id?: string
           type?: Database["public"]["Enums"]["task_activity_type"]
-          user_id?: string
+          user_id?: string | null
           workspace_id?: string
         }
         Relationships: [
@@ -388,7 +388,7 @@ export type Database = {
           mime_type: string
           storage_path: string
           task_id: string
-          uploaded_by: string
+          uploaded_by: string | null
           workspace_id: string
         }
         Insert: {
@@ -399,7 +399,7 @@ export type Database = {
           mime_type: string
           storage_path: string
           task_id: string
-          uploaded_by: string
+          uploaded_by?: string | null
           workspace_id: string
         }
         Update: {
@@ -410,7 +410,7 @@ export type Database = {
           mime_type?: string
           storage_path?: string
           task_id?: string
-          uploaded_by?: string
+          uploaded_by?: string | null
           workspace_id?: string
         }
         Relationships: [
@@ -552,7 +552,7 @@ export type Database = {
           assignee_id: string | null
           completed_at: string | null
           created_at: string
-          created_by: string
+          created_by: string | null
           custom_fields: Json
           deleted_at: string | null
           department_id: string | null
@@ -579,7 +579,7 @@ export type Database = {
           assignee_id?: string | null
           completed_at?: string | null
           created_at?: string
-          created_by: string
+          created_by?: string | null
           custom_fields?: Json
           deleted_at?: string | null
           department_id?: string | null
@@ -606,7 +606,7 @@ export type Database = {
           assignee_id?: string | null
           completed_at?: string | null
           created_at?: string
-          created_by?: string
+          created_by?: string | null
           custom_fields?: Json
           deleted_at?: string | null
           department_id?: string | null
@@ -1078,7 +1078,7 @@ export type Database = {
         Row: {
           avatar_url: string | null
           created_at: string
-          created_by: string
+          created_by: string | null
           id: string
           name: string
           slack_webhook_url: string | null
@@ -1088,7 +1088,7 @@ export type Database = {
         Insert: {
           avatar_url?: string | null
           created_at?: string
-          created_by: string
+          created_by?: string | null
           id?: string
           name: string
           slack_webhook_url?: string | null
@@ -1098,7 +1098,7 @@ export type Database = {
         Update: {
           avatar_url?: string | null
           created_at?: string
-          created_by?: string
+          created_by?: string | null
           id?: string
           name?: string
           slack_webhook_url?: string | null
@@ -1120,6 +1120,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_workspace_access_grant: {
+        Args: { p_full_name?: string }
+        Returns: Json
+      }
+      admin_set_member_name: {
+        Args: { p_full_name: string; p_member_id: string }
+        Returns: undefined
+      }
+      check_email_access_grant: { Args: { p_email: string }; Returns: boolean }
       create_default_saved_views: {
         Args: { p_owner_id: string; p_workspace_id: string }
         Returns: undefined
