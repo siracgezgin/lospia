@@ -4,7 +4,7 @@ import { useState, useMemo, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { formatDateTimeTR } from "@/lib/utils/format-date";
 import Link from "next/link";
-import { ArrowLeft, History, Save, X, Check, AlertCircle, Lock } from "lucide-react";
+import { ArrowLeft, History, Save, X, Check, AlertCircle, Lock, Pencil } from "lucide-react";
 import type {
   Task,
   TaskActivity,
@@ -45,7 +45,6 @@ interface Props {
 interface Draft {
   title: string;
   description: string;
-  category: string; // shown as "Konu"; stored under custom_fields.category
   department_id: string;
   status: TaskStatus;
   priority: TaskPriority;
@@ -54,47 +53,15 @@ interface Draft {
 }
 
 function draftFromTask(task: Task): Draft {
-  const cf = (task.custom_fields as Record<string, unknown> | null) ?? {};
   return {
     title: task.title ?? "",
     description: task.description ?? "",
-    category: (cf.category as string) ?? "",
     department_id: (task as unknown as Record<string, string | null>).department_id ?? "",
     status: task.status,
     priority: task.priority,
     start_date: task.start_date ?? "",
     due_date: task.due_date ?? "",
   };
-}
-
-// ---- Save / cancel sticky bar ----
-
-function SaveBar({
-  dirty, saving, onSave, onCancel,
-}: { dirty: boolean; saving: boolean; onSave: () => void; onCancel: () => void }) {
-  if (!dirty) return null;
-  return (
-    <div className="sticky bottom-3 z-30 mx-auto max-w-3xl">
-      <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50/95 backdrop-blur px-4 py-2.5 shadow-pop">
-        <AlertCircle size={16} className="text-amber-600 shrink-0" />
-        <span className="text-sm text-amber-800 flex-1 min-w-0">Kaydedilmemiş değişiklikler var</span>
-        <button
-          onClick={onCancel}
-          disabled={saving}
-          className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900 px-2.5 py-1.5 rounded-lg hover:bg-white/60 disabled:opacity-50 transition-colors"
-        >
-          <X size={14} /> Vazgeç
-        </button>
-        <button
-          onClick={onSave}
-          disabled={saving}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-white bg-[#15803d] hover:bg-[#13703a] px-3.5 py-1.5 rounded-lg disabled:opacity-60 transition-colors"
-        >
-          <Save size={14} /> {saving ? "Kaydediliyor…" : "Değişiklikleri Kaydet"}
-        </button>
-      </div>
-    </div>
-  );
 }
 
 // ---- Field wrapper ----
@@ -129,6 +96,7 @@ function TaskEditor({
   // A done task is locked for non-admins: they can neither edit fields nor reopen.
   const doneLocked = task.status === "done" && !canComplete;
   const fieldsDisabled = !canEdit || doneLocked;
+  const canSave = dirty && !fieldsDisabled;
 
   // Non-admins can't set final "done"; a done task keeps "done" selectable so an
   // admin can see/keep it. Others never see "done" in the dropdown.
@@ -147,7 +115,7 @@ function TaskEditor({
   }
 
   function save() {
-    if (!dirty) return;
+    if (!canSave) return;
     const updates: Parameters<typeof updateTask>[0] = { id: task.id };
     if (draft.title.trim() !== initial.title) updates.title = draft.title.trim() || initial.title;
     if (draft.description !== initial.description) updates.description = draft.description || null;
@@ -157,12 +125,6 @@ function TaskEditor({
     if (draft.due_date !== initial.due_date) updates.due_date = draft.due_date || null;
     if (draft.department_id !== initial.department_id) {
       (updates as Record<string, unknown>).department_id = draft.department_id || null;
-    }
-    if (draft.category !== initial.category) {
-      const cf = { ...((task.custom_fields as Record<string, unknown> | null) ?? {}) };
-      if (draft.category.trim()) cf.category = draft.category.trim();
-      else delete cf.category;
-      updates.custom_fields = cf;
     }
 
     startSaving(async () => {
@@ -182,15 +144,72 @@ function TaskEditor({
 
   return (
     <>
-      {/* Header: title + live status / priority / due chips */}
+      {/* ── Top action bar: back link + explicit Save / Cancel ─────────────── */}
+      <div className="sticky top-0 z-30 -mx-4 px-4 py-2 bg-app/90 backdrop-blur border-b border-line/60 flex items-center justify-between gap-3 flex-wrap">
+        <Link href="/board" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
+          <ArrowLeft size={14} /> Panoya dön
+        </Link>
+        <div className="flex items-center gap-2 ml-auto">
+          {feedback && (
+            <span className={cn(
+              "hidden sm:inline-flex items-center gap-1 text-xs mr-1",
+              feedback.kind === "ok" ? "text-[#15803d]" : "text-red-600",
+            )}>
+              {feedback.kind === "ok" ? <Check size={13} /> : <AlertCircle size={13} />}
+              {feedback.msg}
+            </span>
+          )}
+          {canSave && (
+            <button
+              onClick={cancel}
+              disabled={saving}
+              className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+            >
+              <X size={14} /> Vazgeç
+            </button>
+          )}
+          <button
+            onClick={save}
+            disabled={!canSave || saving}
+            title={!canEdit ? "Düzenleme yetkiniz yok" : doneLocked ? "Tamamlanmış görevi yalnızca yönetici değiştirebilir" : undefined}
+            className={cn(
+              "inline-flex items-center gap-1.5 text-sm font-medium px-3.5 py-1.5 rounded-lg transition-colors",
+              canSave && !saving
+                ? "text-white bg-[#15803d] hover:bg-[#13703a]"
+                : "text-gray-400 bg-gray-100 cursor-not-allowed",
+            )}
+          >
+            <Save size={14} /> {saving ? "Kaydediliyor…" : "Değişiklikleri Kaydet"}
+          </button>
+        </div>
+      </div>
+
+      {/* Header: editable title + live status / priority / due chips */}
       <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
-        <input
-          value={draft.title}
-          onChange={(e) => set("title", e.target.value)}
-          disabled={fieldsDisabled}
-          placeholder="Görev başlığı"
-          className="w-full text-2xl font-bold text-gray-900 bg-transparent outline-none border-b border-transparent focus:border-[#406775] disabled:text-gray-500 transition-colors"
-        />
+        <div className="group relative">
+          <input
+            value={draft.title}
+            onChange={(e) => set("title", e.target.value)}
+            disabled={fieldsDisabled}
+            placeholder="Görev başlığı"
+            aria-label="Görev başlığı"
+            className={cn(
+              "w-full text-2xl font-bold text-gray-900 bg-transparent outline-none pr-8 pb-1 transition-colors",
+              fieldsDisabled
+                ? "border-b border-transparent text-gray-600"
+                : "border-b border-dashed border-gray-300 hover:border-gray-400 focus:border-solid focus:border-[#406775]",
+            )}
+          />
+          {!fieldsDisabled && (
+            <Pencil
+              size={15}
+              className="absolute right-0 top-2 text-gray-300 group-hover:text-gray-400 group-focus-within:text-[#406775] transition-colors pointer-events-none"
+            />
+          )}
+        </div>
+        {!fieldsDisabled && (
+          <p className="text-[11px] text-gray-400 -mt-1">Düzenlemek için başlığa tıklayın.</p>
+        )}
         <div className="flex items-center gap-2 flex-wrap">
           <span className={cn("text-[11px] rounded-full px-2 py-0.5 font-medium", STATUS_CHIP_TONE[draft.status])}>
             {STATUS_LABELS[draft.status]}
@@ -245,16 +264,6 @@ function TaskEditor({
             </select>
           </FieldRow>
 
-          <FieldRow label="Konu" className="sm:col-span-2">
-            <input
-              value={draft.category}
-              onChange={(e) => set("category", e.target.value)}
-              disabled={fieldsDisabled}
-              placeholder="Bu işin konusu / bağlamı…"
-              className={inputCls}
-            />
-          </FieldRow>
-
           <FieldRow label="Durum">
             <select
               value={USER_STATUS_OPTIONS.find((o) => o.value === draft.status)?.value ?? "ready"}
@@ -301,9 +310,10 @@ function TaskEditor({
           </FieldRow>
         </div>
 
+        {/* Inline feedback (also visible on mobile, where the top bar hides it). */}
         {feedback && (
           <p className={cn(
-            "mt-4 inline-flex items-center gap-1.5 text-sm",
+            "mt-4 inline-flex items-center gap-1.5 text-sm sm:hidden",
             feedback.kind === "ok" ? "text-[#15803d]" : "text-red-600",
           )}>
             {feedback.kind === "ok" ? <Check size={14} /> : <AlertCircle size={14} />}
@@ -314,8 +324,6 @@ function TaskEditor({
           <p className="mt-4 text-xs text-gray-400">Bu görevi düzenleme yetkiniz yok.</p>
         )}
       </div>
-
-      <SaveBar dirty={dirty && !fieldsDisabled} saving={saving} onSave={save} onCancel={cancel} />
     </>
   );
 }
@@ -395,10 +403,6 @@ export function TaskDetail({
 
   return (
     <div className="max-w-3xl mx-auto py-6 px-4 space-y-5">
-      <Link href="/board" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
-        <ArrowLeft size={14} /> Panoya dön
-      </Link>
-
       <TaskEditor key={version} task={task} departments={departments} canEdit={canEdit} canComplete={canComplete} />
 
       <ActivityLogSection logs={activityLogs} profiles={profiles} contacts={contacts} />
