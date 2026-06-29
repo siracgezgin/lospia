@@ -275,12 +275,12 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
 
         <button
           onClick={() => { setCurrent(new Date()); setSelectedDay(new Date()); }}
-          aria-pressed={viewingToday}
+          aria-pressed={!viewingToday}
           className={cn(
             "text-sm px-3 py-1.5 rounded-lg font-medium border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1",
             viewingToday
-              ? "bg-blue-600 border-blue-600 text-white shadow-sm hover:bg-blue-700"
-              : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50 active:bg-gray-100",
+              ? "bg-white border-gray-200 text-gray-400 hover:bg-gray-50 active:bg-gray-100"
+              : "bg-blue-600 border-blue-600 text-white shadow-sm hover:bg-blue-700",
           )}
         >
           Bugün
