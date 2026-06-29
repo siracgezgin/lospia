@@ -53,7 +53,7 @@ const _subscribeMounted = () => () => {};
 const _getMounted = () => true;
 const _getServerMounted = () => false;
 
-const TR_MONTHS_SHORT = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
+const TR_MONTHS = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
 
 /** Parse a stored date string defensively. Malformed/empty values never throw —
  *  they simply don't match any day, instead of crashing the whole calendar. */
@@ -71,79 +71,113 @@ function safeParseISO(value: string | null | undefined): Date | null {
  *  (no native <input type="month">). Lets the user jump straight to 2028+. */
 function MonthYearPicker({ value, onChange }: { value: Date; onChange: (d: Date) => void }) {
   const [open, setOpen] = useState(false);
+  // The popover browses a year independently of the calendar so the user can
+  // page to 2028 and pick a month there in one go — no month-by-month clicking.
+  const [viewYear, setViewYear] = useState(value.getFullYear());
   const ref = useRef<HTMLDivElement>(null);
-  const year = value.getFullYear();
-  const month = value.getMonth();
 
+  const month = value.getMonth();
+  const selectedYear = value.getFullYear();
+  const now = new Date();
+  const todayMonth = now.getMonth();
+  const todayYear = now.getFullYear();
+
+  // Toggle the popover, re-syncing the browsing year to the calendar on open.
+  // (Done here rather than in an effect — setState-in-effect is lint-rejected.)
+  function toggle() {
+    if (!open) setViewYear(value.getFullYear());
+    setOpen((o) => !o);
+  }
+
+  // Close on outside click and on Escape — only while open.
   useEffect(() => {
     if (!open) return;
     function onDoc(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
     document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [open]);
 
-  // Range wide enough to plan years ahead (e.g. 2028) without endless clicking.
-  const thisYear = new Date().getFullYear();
-  const years: number[] = [];
-  for (let y = thisYear - 2; y <= thisYear + 6; y++) years.push(y);
+  function pick(monthIndex: number) {
+    onChange(new Date(viewYear, monthIndex, 1));
+    setOpen(false);
+  }
 
   return (
     <div ref={ref} className="relative">
       <button
         type="button"
         data-testid="calendar-month-picker-button"
-        onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1 text-sm font-semibold text-gray-700 w-36 justify-center border-x border-gray-200 py-1.5 capitalize select-none hover:bg-gray-50"
+        onClick={toggle}
+        className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 w-40 justify-center border-x border-gray-200 py-1.5 capitalize select-none cursor-pointer transition-colors hover:bg-gray-100 active:bg-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
         aria-label="Ay ve yıl seç"
+        aria-haspopup="dialog"
         aria-expanded={open}
       >
         {format(value, "MMMM yyyy", { locale: tr })}
-        <ChevronDown size={13} className="text-gray-400 shrink-0" />
+        <ChevronDown
+          size={14}
+          className={cn("text-gray-400 shrink-0 transition-transform duration-200", open && "rotate-180 text-gray-600")}
+        />
       </button>
       {open && (
-        <div data-testid="calendar-month-picker-popover" className="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 z-30 w-60 rounded-xl border border-gray-200 bg-white shadow-lg p-3">
-          <div className="flex items-center justify-between mb-2.5">
+        <div
+          role="dialog"
+          aria-label="Ay ve yıl seçici"
+          data-testid="calendar-month-picker-popover"
+          className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-50 w-80 rounded-xl border border-gray-200 bg-white shadow-xl p-4"
+        >
+          {/* Year navigation */}
+          <div className="flex items-center justify-between mb-3">
             <button
               type="button"
-              onClick={() => onChange(new Date(year - 1, month, 1))}
-              className="p-1 rounded text-gray-500 hover:bg-gray-100"
+              onClick={() => setViewYear((y) => y - 1)}
+              className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 active:bg-gray-200 transition-colors"
               aria-label="Önceki yıl"
             >
-              <ChevronLeft size={16} />
+              <ChevronLeft size={18} />
             </button>
-            <select
-              value={year}
-              onChange={(e) => onChange(new Date(Number(e.target.value), month, 1))}
-              className="text-sm font-semibold text-gray-800 bg-transparent outline-none cursor-pointer rounded px-2 py-0.5 hover:bg-gray-50"
-              aria-label="Yıl"
-            >
-              {years.map((y) => <option key={y} value={y}>{y}</option>)}
-            </select>
+            <span className="text-base font-bold text-gray-900 tabular-nums" aria-live="polite">{viewYear}</span>
             <button
               type="button"
-              onClick={() => onChange(new Date(year + 1, month, 1))}
-              className="p-1 rounded text-gray-500 hover:bg-gray-100"
+              onClick={() => setViewYear((y) => y + 1)}
+              className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 active:bg-gray-200 transition-colors"
               aria-label="Sonraki yıl"
             >
-              <ChevronRight size={16} />
+              <ChevronRight size={18} />
             </button>
           </div>
-          <div className="grid grid-cols-3 gap-1">
-            {TR_MONTHS_SHORT.map((m, i) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => { onChange(new Date(year, i, 1)); setOpen(false); }}
-                className={cn(
-                  "text-xs py-1.5 rounded-lg transition-colors",
-                  i === month ? "bg-blue-600 text-white font-semibold" : "text-gray-600 hover:bg-gray-100",
-                )}
-              >
-                {m}
-              </button>
-            ))}
+          {/* Month grid */}
+          <div className="grid grid-cols-3 gap-1.5">
+            {TR_MONTHS.map((m, i) => {
+              const isSelected = i === month && viewYear === selectedYear;
+              const isCurrent = i === todayMonth && viewYear === todayYear;
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => pick(i)}
+                  className={cn(
+                    "text-sm py-2 rounded-lg transition-colors font-medium",
+                    isSelected
+                      ? "bg-blue-600 text-white"
+                      : isCurrent
+                        ? "bg-blue-50 text-blue-700 ring-1 ring-blue-200 hover:bg-blue-100"
+                        : "text-gray-600 hover:bg-gray-100 active:bg-gray-200",
+                  )}
+                >
+                  {m}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -214,11 +248,14 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
       <div className="flex items-center gap-3 flex-wrap shrink-0">
         <h1 className="text-2xl font-bold text-gray-900">Takvim</h1>
 
-        {/* Prev · clickable month/year picker · next */}
-        <div className="flex items-center rounded-lg border border-gray-200 overflow-hidden">
+        {/* Prev · clickable month/year picker · next.
+            NOTE: no `overflow-hidden` here — it would clip the picker popover
+            (rendered at top-full, outside this box) and the picker would appear
+            to "do nothing" on click. End buttons are rounded individually. */}
+        <div className="flex items-center rounded-lg border border-gray-200 bg-white">
           <button
             onClick={() => setCurrent((d) => subMonths(d, 1))}
-            className="p-1.5 hover:bg-gray-50 text-gray-500"
+            className="p-1.5 rounded-l-lg hover:bg-gray-100 active:bg-gray-200 text-gray-500 transition-colors"
             aria-label="Önceki ay"
           >
             <ChevronLeft size={18} />
@@ -226,7 +263,7 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
           <MonthYearPicker value={current} onChange={(d) => setCurrent(isValid(d) ? d : new Date())} />
           <button
             onClick={() => setCurrent((d) => addMonths(d, 1))}
-            className="p-1.5 hover:bg-gray-50 text-gray-500"
+            className="p-1.5 rounded-r-lg hover:bg-gray-100 active:bg-gray-200 text-gray-500 transition-colors"
             aria-label="Sonraki ay"
           >
             <ChevronRight size={18} />
