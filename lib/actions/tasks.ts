@@ -15,6 +15,7 @@ import {
   type TaskActivityEntry,
 } from "@/lib/activity/log-task-activity";
 import { applyPointsForStatusTransition } from "@/lib/points/award";
+import { notifyTaskEvent } from "@/lib/notifications/notify";
 import { pointsForEffort, type EffortSize } from "@/lib/points/effort";
 import type { Json, TaskStatus as TaskStatusType } from "@/types";
 
@@ -35,36 +36,11 @@ function isForbiddenDoneTransition(
   return touchesDone && !canCompleteTask(role);
 }
 
-// Drop recipients that already received the SAME (task, type, title) notification
-// within the last few minutes. A status can be toggled back and forth (or the
-// same transition retried), which used to spam several identical "Görev kontrol
-// bekliyor" rows — this collapses those into one.
-const NOTIFICATION_DEDUPE_WINDOW_MS = 5 * 60 * 1000;
-
-async function filterRecentlyNotified(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  taskId: string,
-  type: string,
-  title: string,
-  candidateUserIds: string[],
-): Promise<string[]> {
-  if (candidateUserIds.length === 0) return [];
-  const since = new Date(Date.now() - NOTIFICATION_DEDUPE_WINDOW_MS).toISOString();
-  const { data: recent } = await supabase
-    .from("notifications")
-    .select("user_id")
-    .eq("task_id", taskId)
-    .eq("type", type)
-    .eq("title", title)
-    .in("user_id", candidateUserIds)
-    .gte("created_at", since);
-  const seen = new Set(((recent ?? []) as { user_id: string }[]).map((r) => r.user_id));
-  return candidateUserIds.filter((uid) => !seen.has(uid));
-}
-
 // Notify on meaningful status transitions:
 //  • → review : tell workspace owners/admins a task is awaiting approval
 //  • → done   : tell the assignee their task was marked complete
+// Reopen + points fan-out live in lib/points/award.ts. The central producer
+// (notifyTaskEvent → create_task_notifications RPC) owns Turkish copy + dedupe.
 async function notifyStatusTransition(
   supabase: Awaited<ReturnType<typeof createClient>>,
   opts: {
@@ -75,34 +51,22 @@ async function notifyStatusTransition(
   const { taskId, workspaceId, title, actorId, from, to, assigneeId } = opts;
   if (to === from) return;
   if (to === "review") {
-    const NTITLE = "Görev kontrol bekliyor";
     const { data: admins } = await supabase
       .from("workspace_members")
       .select("user_id")
       .eq("workspace_id", workspaceId)
       .in("role", ["owner", "admin"]);
-    const candidates = (admins ?? [])
-      .map((a) => a.user_id as string)
-      .filter((uid) => uid && uid !== actorId);
-    const recipients = await filterRecentlyNotified(
-      supabase, taskId, "task_status_changed", NTITLE, candidates,
-    );
-    const rows = recipients.map((uid) => ({
-      workspace_id: workspaceId, user_id: uid, type: "task_status_changed",
-      title: NTITLE, body: title, task_id: taskId,
-    }));
-    if (rows.length) await supabase.from("notifications").insert(rows as Record<string, unknown>[]);
-  } else if (to === "done" && assigneeId && assigneeId !== actorId) {
-    const NTITLE = "Göreviniz tamamlandı olarak işaretlendi";
-    const recipients = await filterRecentlyNotified(
-      supabase, taskId, "task_status_changed", NTITLE, [assigneeId],
-    );
-    if (recipients.length) {
-      await supabase.from("notifications").insert({
-        workspace_id: workspaceId, user_id: assigneeId, type: "task_status_changed",
-        title: NTITLE, body: title, task_id: taskId,
-      } as Record<string, unknown>);
-    }
+    await notifyTaskEvent(supabase, {
+      workspaceId, taskId, taskTitle: title, actorId,
+      event: "task_review_requested",
+      recipientUserIds: (admins ?? []).map((a) => a.user_id as string),
+    });
+  } else if (to === "done") {
+    await notifyTaskEvent(supabase, {
+      workspaceId, taskId, taskTitle: title, actorId,
+      event: "task_completed",
+      recipientUserIds: [assigneeId],
+    });
   }
 }
 
@@ -270,14 +234,14 @@ export async function createTask(
 
   // Notification: task created already assigned to someone else
   if (taskData.assignee_id && taskData.assignee_id !== user.id) {
-    await supabase.from("notifications").insert({
-      workspace_id: taskData.workspace_id,
-      user_id: taskData.assignee_id,
-      type: "task_assigned" as TaskStatusType,
-      title: "Size bir görev atandı",
-      body: taskData.title,
-      task_id: (data as { id: string }).id,
-    } as Record<string, unknown>);
+    await notifyTaskEvent(supabase, {
+      workspaceId: taskData.workspace_id,
+      taskId: (data as { id: string }).id,
+      taskTitle: taskData.title,
+      actorId: user.id,
+      event: "task_assigned",
+      recipientUserIds: [taskData.assignee_id],
+    });
   }
 
   revalidatePath("/board");
@@ -356,14 +320,14 @@ export async function updateTask(
   // Notification: task assigned to a new person
   const newAssignee = "assignee_id" in updates ? updates.assignee_id : undefined;
   if (newAssignee && newAssignee !== task.assignee_id && newAssignee !== user.id) {
-    await supabase.from("notifications").insert({
-      workspace_id: task.workspace_id as string,
-      user_id: newAssignee as string,
-      type: "task_assigned" as TaskStatusType,
-      title: "Size bir görev atandı",
-      body: task.title as string,
-      task_id: id,
-    } as Record<string, unknown>);
+    await notifyTaskEvent(supabase, {
+      workspaceId: task.workspace_id as string,
+      taskId: id,
+      taskTitle: task.title as string,
+      actorId: user.id,
+      event: "task_assigned",
+      recipientUserIds: [newAssignee as string],
+    });
   }
 
   // Notification: waiting_on changed — notify the person being waited on
@@ -376,14 +340,14 @@ export async function updateTask(
       .eq("id", newWaitingMember as string)
       .maybeSingle();
     if (wm?.user_id) {
-      await supabase.from("notifications").insert({
-        workspace_id: task.workspace_id as string,
-        user_id: wm.user_id,
-        type: "task_waiting_on" as TaskStatusType,
-        title: "Bir görev sizi bekliyor",
-        body: task.title as string,
-        task_id: id,
-      } as Record<string, unknown>);
+      await notifyTaskEvent(supabase, {
+        workspaceId: task.workspace_id as string,
+        taskId: id,
+        taskTitle: task.title as string,
+        actorId: user.id,
+        event: "task_waiting_on",
+        recipientUserIds: [wm.user_id],
+      });
     }
   }
 

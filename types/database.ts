@@ -1212,6 +1212,18 @@ export type Database = {
         Args: { p_owner_id: string; p_workspace_id: string }
         Returns: undefined
       }
+      create_task_notifications: {
+        Args: {
+          p_workspace_id: string
+          p_task_id: string | null
+          p_type: Database["public"]["Enums"]["notification_type"]
+          p_title: string
+          p_body: string | null
+          p_user_ids: string[]
+          p_dedupe_seconds?: number
+        }
+        Returns: number
+      }
       dedupe_workspace_departments: {
         Args: { p_workspace_id?: string }
         Returns: undefined

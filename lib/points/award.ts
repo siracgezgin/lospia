@@ -1,5 +1,6 @@
 import type { createClient } from "@/lib/supabase/server";
 import { logTaskActivity, ACTIVITY_ACTIONS } from "@/lib/activity/log-task-activity";
+import { notifyTaskEvent } from "@/lib/notifications/notify";
 import type { TaskStatus } from "@/types";
 
 type SB = Awaited<ReturnType<typeof createClient>>;
@@ -55,11 +56,12 @@ export async function applyPointsForStatusTransition(
         metadata: { user_id: a.user_id, points: a.points },
       });
       // Only the recipient is told — and only about their OWN points.
-      await sb.from("notifications").insert({
-        workspace_id: workspaceId, user_id: a.user_id, type: "task_status_changed",
-        title: "Bir göreviniz onaylandı. Puanınız güncellendi.",
-        body: `${title} · +${a.points} puan`, task_id: taskId,
-      } as Record<string, unknown>);
+      await notifyTaskEvent(sb, {
+        workspaceId, taskId, taskTitle: title, actorId,
+        event: "points_updated",
+        bodySuffix: ` · +${a.points} puan`,
+        recipientUserIds: [a.user_id],
+      });
     }
 
     if (res.skipped_self) {
@@ -80,11 +82,11 @@ export async function applyPointsForStatusTransition(
         action: ACTIVITY_ACTIONS.POINTS_REVOKED,
         metadata: { user_id: a.user_id, points: a.points },
       });
-      await sb.from("notifications").insert({
-        workspace_id: workspaceId, user_id: a.user_id, type: "task_status_changed",
-        title: "Bir göreviniz yeniden açıldı. Puanınız güncellendi.",
-        body: title, task_id: taskId,
-      } as Record<string, unknown>);
+      await notifyTaskEvent(sb, {
+        workspaceId, taskId, taskTitle: title, actorId,
+        event: "task_reopened",
+        recipientUserIds: [a.user_id],
+      });
     }
   }
 }

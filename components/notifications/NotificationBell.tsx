@@ -1,12 +1,13 @@
 "use client";
 
-import { Bell, X } from "lucide-react";
+import { Bell, X, Check } from "lucide-react";
 import { useState, useTransition, useOptimistic } from "react";
 import Link from "next/link";
 import { markAllNotificationsRead, markNotificationsRead } from "@/lib/actions/tasks";
 import type { Notification } from "@/types";
 import { cn } from "@/lib/utils/cn";
 import { formatNotificationTimeTR } from "@/lib/utils/format-date";
+import { normalizeNotificationDisplay } from "@/lib/notifications/normalize";
 
 interface Props {
   unreadCount: number;
@@ -64,58 +65,70 @@ export function NotificationBell({ unreadCount: initialCount, notifications = []
         <p className="text-sm text-gray-400">Yeni bildiriminiz yok.</p>
       </div>
     ) : (
-      notifications.slice(0, 20).map((n) => (
-        <div
-          key={n.id}
-          className={cn(
-            "px-4 py-3 border-b border-gray-50 last:border-0 flex gap-3 items-start transition-colors",
-            !n.is_read
-              ? "bg-blue-50/40 border-l-2 border-l-blue-400"
-              : "bg-white border-l-2 border-l-transparent hover:bg-gray-50",
-          )}
-        >
-          <div className={cn(
-            "h-2 w-2 rounded-full mt-1.5 shrink-0",
-            !n.is_read ? "bg-blue-400" : "bg-transparent",
-          )} />
-          <div className="flex-1 min-w-0">
-            {n.task_id ? (
-              <Link
-                href={`/tasks/${n.task_id}`}
-                onClick={() => { setOpen(false); if (!n.is_read) handleMarkOneRead(n.id); }}
-                className={cn(
-                  "text-sm text-gray-800 hover:text-blue-600 block line-clamp-2 break-words",
-                  !n.is_read ? "font-semibold" : "font-normal",
-                )}
-              >
-                {n.title}
-              </Link>
-            ) : (
-              <p className={cn(
-                "text-sm text-gray-800 line-clamp-2 break-words",
-                !n.is_read ? "font-semibold" : "font-normal",
-              )}>
-                {n.title}
-              </p>
-            )}
-            {n.body && (
-              <p className="text-xs text-gray-500 mt-0.5 line-clamp-2 break-words">{n.body}</p>
+      notifications.slice(0, 20).map((n) => {
+        const { title, body } = normalizeNotificationDisplay(n);
+        // The title/body/date column is the click target → go to the task and
+        // mark this row read. The check button is a separate read-only action.
+        const inner = (
+          <>
+            <p className={cn(
+              "text-sm text-gray-900 line-clamp-1 break-words",
+              !n.is_read ? "font-medium" : "font-normal",
+            )}>
+              {title}
+            </p>
+            {body && (
+              <p className="text-xs text-gray-500 mt-0.5 line-clamp-2 break-words">{body}</p>
             )}
             <p className="text-[10px] text-gray-400 mt-1">
               {formatNotificationTimeTR(n.created_at)}
             </p>
+          </>
+        );
+        return (
+          <div
+            key={n.id}
+            className={cn(
+              "px-4 py-2.5 border-b border-gray-50 last:border-0 flex gap-2.5 items-start transition-colors",
+              !n.is_read
+                ? "bg-blue-50/40 border-l-2 border-l-blue-400"
+                : "bg-white border-l-2 border-l-transparent hover:bg-gray-50",
+            )}
+          >
+            <div className={cn(
+              "h-2 w-2 rounded-full mt-1.5 shrink-0",
+              !n.is_read ? "bg-blue-400" : "bg-transparent",
+            )} />
+            {n.task_id ? (
+              <Link
+                href={`/tasks/${n.task_id}`}
+                onClick={() => { setOpen(false); if (!n.is_read) handleMarkOneRead(n.id); }}
+                className="flex-1 min-w-0 group"
+              >
+                {inner}
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={() => { if (!n.is_read) handleMarkOneRead(n.id); }}
+                className="flex-1 min-w-0 text-left"
+              >
+                {inner}
+              </button>
+            )}
+            {!n.is_read && (
+              <button
+                onClick={() => handleMarkOneRead(n.id)}
+                className="text-gray-300 hover:text-blue-500 shrink-0 mt-0.5 p-0.5"
+                title="Okundu işaretle"
+                aria-label="Okundu işaretle"
+              >
+                <Check size={14} />
+              </button>
+            )}
           </div>
-          {!n.is_read && (
-            <button
-              onClick={() => handleMarkOneRead(n.id)}
-              className="text-[10px] text-gray-400 hover:text-blue-500 shrink-0 mt-0.5"
-              title="Okundu işaretle"
-            >
-              ✓
-            </button>
-          )}
-        </div>
-      ))
+        );
+      })
     )
   );
 
@@ -128,8 +141,8 @@ export function NotificationBell({ unreadCount: initialCount, notifications = []
       >
         <Bell size={18} />
         {optimisticCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">
-            {optimisticCount > 9 ? "9+" : optimisticCount}
+          <span className="absolute -top-1 -right-1 h-4 min-w-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">
+            {optimisticCount > 99 ? "99+" : optimisticCount}
           </span>
         )}
       </button>

@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { logTaskActivity, ACTIVITY_ACTIONS } from "@/lib/activity/log-task-activity";
+import { notifyTaskEvent } from "@/lib/notifications/notify";
 
 function hexUuid() {
   return z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, "Geçersiz UUID");
@@ -181,16 +182,14 @@ export async function addTaskNote(
     recipients.delete(ctx.user.id); // never notify the note author
 
     if (recipients.size > 0) {
-      await supabase.from("notifications").insert(
-        [...recipients].map((uid) => ({
-          workspace_id: ctx.workspaceId,
-          user_id: uid,
-          type: "task_note_added",
-          title: "Bir göreve not eklendi",
-          body: task.title,
-          task_id: taskId,
-        })) as Record<string, unknown>[]
-      );
+      await notifyTaskEvent(supabase, {
+        workspaceId: ctx.workspaceId,
+        taskId,
+        taskTitle: task.title,
+        actorId: ctx.user.id,
+        event: "task_note_added",
+        recipientUserIds: [...recipients],
+      });
     }
   }
 

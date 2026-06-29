@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { logTaskActivity, ACTIVITY_ACTIONS } from "@/lib/activity/log-task-activity";
+import { notifyTaskEvent } from "@/lib/notifications/notify";
 import type { AppRole } from "@/lib/auth/permissions";
 
 const PERM = "Bu işlem için yetkiniz yok.";
@@ -56,14 +57,11 @@ async function recomputeReview(sb: SB, taskId: string, workspaceId: string, acto
       .select("user_id")
       .eq("workspace_id", workspaceId)
       .in("role", ["owner", "admin"]);
-    const rows = (admins ?? [])
-      .map((a) => a.user_id as string)
-      .filter((u) => u && u !== actorId)
-      .map((u) => ({
-        workspace_id: workspaceId, user_id: u, type: "task_status_changed",
-        title: "Görev kontrol bekliyor", body: task.title as string, task_id: taskId,
-      }));
-    if (rows.length) await sb.from("notifications").insert(rows as Record<string, unknown>[]);
+    await notifyTaskEvent(sb, {
+      workspaceId, taskId, taskTitle: task.title as string, actorId,
+      event: "task_review_requested",
+      recipientUserIds: (admins ?? []).map((a) => a.user_id as string),
+    });
   } else if (task.status === "review" && (total === 0 || done < total)) {
     await sb.from("tasks").update({ status: "in_progress" }).eq("id", taskId);
     await logTaskActivity(sb, {
@@ -150,24 +148,31 @@ export async function setTaskParticipants(
   const toAdd = addedIds.map((id) => ({ workspace_id: c.workspaceId, task_id: taskId, member_id: id }));
   if (toAdd.length) await sb.from("task_member_completions").insert(toAdd);
 
-  const toRemove = (existing ?? []).filter((r) => !want.has(r.member_id as string)).map((r) => r.id as string);
+  const removedRows = (existing ?? []).filter((r) => !want.has(r.member_id as string));
+  const removedMemberIds = removedRows.map((r) => r.member_id as string);
+  const toRemove = removedRows.map((r) => r.id as string);
   if (toRemove.length) await sb.from("task_member_completions").delete().in("id", toRemove);
 
-  // Notify newly-added participants (resolve member_id → user_id).
-  if (addedIds.length) {
+  // Notify added / removed participants (resolve member_id → user_id).
+  if (addedIds.length || removedMemberIds.length) {
     const { data: task } = await sb.from("tasks").select("title").eq("id", taskId).maybeSingle();
+    const taskTitle = task?.title ?? null;
     const { data: wm } = await sb
       .from("workspace_members")
       .select("id, user_id")
-      .in("id", addedIds);
-    const rows = (wm ?? [])
-      .map((m) => m.user_id as string)
-      .filter((uid) => uid && uid !== c.user.id)
-      .map((uid) => ({
-        workspace_id: c.workspaceId, user_id: uid, type: "task_assigned",
-        title: "Bir göreve dahil edildiniz", body: task?.title ?? null, task_id: taskId,
-      }));
-    if (rows.length) await sb.from("notifications").insert(rows as Record<string, unknown>[]);
+      .in("id", [...addedIds, ...removedMemberIds]);
+    const userIdOf = new Map((wm ?? []).map((m) => [m.id as string, m.user_id as string]));
+
+    await notifyTaskEvent(sb, {
+      workspaceId: c.workspaceId, taskId, taskTitle, actorId: c.user.id,
+      event: "task_responsibility_added",
+      recipientUserIds: addedIds.map((id) => userIdOf.get(id)),
+    });
+    await notifyTaskEvent(sb, {
+      workspaceId: c.workspaceId, taskId, taskTitle, actorId: c.user.id,
+      event: "task_responsibility_removed",
+      recipientUserIds: removedMemberIds.map((id) => userIdOf.get(id)),
+    });
   }
 
   await recomputeReview(sb, taskId, c.workspaceId, c.user.id);
