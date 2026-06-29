@@ -1,0 +1,34 @@
+// Effort → points mapping for the Puan & Motivasyon system.
+// Points are intentionally fixed and non-divisible: a "large" task is always
+// worth 5 points to EACH responsible person, never split between them.
+
+export type EffortSize = "small" | "medium" | "large";
+
+export const EFFORT_OPTIONS: EffortSize[] = ["small", "medium", "large"];
+
+export const EFFORT_POINTS: Record<EffortSize, number> = {
+  small: 1,
+  medium: 3,
+  large: 5,
+};
+
+export const EFFORT_LABELS: Record<EffortSize, string> = {
+  small: "Küçük",
+  medium: "Orta",
+  large: "Büyük",
+};
+
+export const DEFAULT_EFFORT: EffortSize = "medium";
+
+export function isEffortSize(v: unknown): v is EffortSize {
+  return v === "small" || v === "medium" || v === "large";
+}
+
+export function pointsForEffort(effort: EffortSize): number {
+  return EFFORT_POINTS[effort] ?? EFFORT_POINTS[DEFAULT_EFFORT];
+}
+
+// "Efor: Orta · 3 puan" — the canonical admin-facing label.
+export function effortPointsLabel(effort: EffortSize): string {
+  return `${EFFORT_LABELS[effort]} · ${pointsForEffort(effort)} puan`;
+}

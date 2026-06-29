@@ -40,6 +40,7 @@ interface Props {
   departments?: WorkspaceDepartment[];
   members?: { memberId: string; userId: string; name: string }[];
   deptMembers?: { department_id: string; member_id: string }[];
+  isAdmin?: boolean;
 }
 
 // ---- Status display — simplified user-facing labels ----
@@ -140,7 +141,7 @@ function PriorityBadge({ priority }: { priority: TaskPriority }) {
 
 // ---- Main component ----
 
-export function TaskListView({ tasks, savedViews, workspaceId, profiles, contacts, departments = [], members = [], deptMembers = [] }: Props) {
+export function TaskListView({ tasks, savedViews, workspaceId, profiles, contacts, departments = [], members = [], deptMembers = [], isAdmin = false }: Props) {
   const deptMeta = useMemo(() => buildDeptMeta(departments), [departments]);
   const responsibleNames = useMemo<Record<string, string>>(() => {
     const map: Record<string, string> = {};
@@ -512,6 +513,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
           departments={departments}
           members={members}
           deptMembers={deptMembers}
+          isAdmin={isAdmin}
         />
       )}
       {importOpen && (

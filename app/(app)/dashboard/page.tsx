@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { DashboardView } from "@/components/dashboard/DashboardView";
 import { buildDeptMeta } from "@/lib/utils/departments";
+import { getAdminPointsData, getMemberPointsSummary, type AdminPointsData } from "@/lib/points/queries";
 import type { TaskStatus, WorkspaceDepartment } from "@/types";
 
 export default async function DashboardPage() {
@@ -11,11 +12,21 @@ export default async function DashboardPage() {
 
   const { data: memberRows } = await supabase
     .from("workspace_members")
-    .select("workspace_id")
+    .select("workspace_id, role")
     .eq("user_id", user.id)
     .limit(1);
   const workspaceId = memberRows?.[0]?.workspace_id;
   if (!workspaceId) return <div className="p-8 text-gray-500">No workspace found.</div>;
+  const isAdmin = memberRows?.[0]?.role === "owner" || memberRows?.[0]?.role === "admin";
+
+  // Puan & Motivasyon — admins get the full workspace breakdown; everyone gets
+  // their own personal summary (members never see others' points).
+  const [memberPoints, adminPoints] = await Promise.all([
+    getMemberPointsSummary(supabase, workspaceId, user.id),
+    isAdmin
+      ? getAdminPointsData(supabase, workspaceId)
+      : Promise.resolve(null as AdminPointsData | null),
+  ]);
 
   // Aggregations via RPC (status counts, time, due-soon) plus two light reads we
   // fold down server-side — the department breakdown and a short activity feed.
@@ -104,6 +115,9 @@ export default async function DashboardPage() {
       dueSoonTasks={dueSoonResult.data ?? []}
       departmentStats={departmentStats}
       recentTasks={recentTasks}
+      isAdmin={isAdmin}
+      adminPoints={adminPoints}
+      memberPoints={memberPoints}
     />
   );
 }

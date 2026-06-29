@@ -1,5 +1,6 @@
 import { STATUS_LABELS, PRIORITY_LABELS } from "@/lib/utils/task-constants";
 import { formatDateTR } from "@/lib/utils/format-date";
+import { EFFORT_LABELS, isEffortSize } from "@/lib/points/effort";
 import type { TaskStatus, TaskPriority, TaskActivityLog } from "@/types";
 
 // Resolve a member/contact id to a display name. Returns null for unknown ids.
@@ -42,14 +43,37 @@ function cleanStr(v: unknown): string {
  * The actor name is rendered separately by the UI, so this returns just the
  * verb phrase (e.g. "görevi oluşturdu.").
  */
+function effortLabel(v: unknown): string {
+  return isEffortSize(v) ? EFFORT_LABELS[v] : String(v ?? "—");
+}
+
 export function activityMessage(
-  log: Pick<TaskActivityLog, "action" | "old_value" | "new_value">,
+  log: Pick<TaskActivityLog, "action" | "old_value" | "new_value"> & { metadata?: unknown },
   resolveName: NameResolver,
 ): string {
   const oldV = log.old_value;
   const newV = log.new_value;
+  const meta = (log.metadata ?? {}) as { user_id?: string | null; points?: number };
 
   switch (log.action) {
+    case "effort_changed":
+      return `eforu ${transition(effortLabel(oldV), effortLabel(newV))} olarak değiştirdi.`;
+    case "points_finalized": {
+      const name = resolveName(meta.user_id);
+      const pts = meta.points ?? 0;
+      return name
+        ? `${name} ${pts} puan kazandı; puan kesinleşti.`
+        : "puanı kesinleştirdi.";
+    }
+    case "points_revoked": {
+      const name = resolveName(meta.user_id);
+      const pts = meta.points ?? 0;
+      return name
+        ? `${name} için ${pts} puan geri alındı.`
+        : "kazanılan puanı geri aldı.";
+    }
+    case "points_self_approval_skipped":
+      return "kendi onayı nedeniyle puan otomatik kesinleştirilmedi.";
     case "task_created":
       return "görevi oluşturdu.";
     case "task_completed":

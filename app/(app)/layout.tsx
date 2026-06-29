@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { MobileNav } from "@/components/layout/MobileNav";
+import { getMemberPointsSummary, startOfMonthISO } from "@/lib/points/queries";
 import type { Workspace, SavedView, Notification, WorkspaceRole } from "@/types";
 
 // Co-locate serverless functions with the Supabase project (eu-north-1, Stockholm).
@@ -72,6 +73,11 @@ export default async function AppLayout({
   let savedViews: SavedView[] = [];
   let unreadCount = 0;
   let notifications: Notification[] = [];
+  // Puan & Motivasyon — personal summary (profile menu) + team progress (sidebar)
+  let pointsThisMonth = 0;
+  let pendingPoints = 0;
+  let teamDoneThisMonth = 0;
+  let teamReviewCount = 0;
 
   let userName: string | null =
     (user.user_metadata?.full_name as string | undefined) ?? null;
@@ -107,6 +113,27 @@ export default async function AppLayout({
     notifications = notifResult.data ?? [];
     unreadCount = notifications.filter((n: Notification) => !n.is_read).length;
     userName = profileResult.data?.full_name ?? userName;
+
+    // Personal points summary + workspace-wide (non-competitive) progress counts.
+    const monthStart = startOfMonthISO();
+    const [summary, doneRes, reviewRes] = await Promise.all([
+      getMemberPointsSummary(supabase, workspaceId, user.id),
+      supabase
+        .from("tasks")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", workspaceId)
+        .eq("status", "done")
+        .gte("updated_at", monthStart),
+      supabase
+        .from("tasks")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", workspaceId)
+        .eq("status", "review"),
+    ]);
+    pointsThisMonth = summary.monthPoints;
+    pendingPoints = summary.pending;
+    teamDoneThisMonth = doneRes.count ?? 0;
+    teamReviewCount = reviewRes.count ?? 0;
   }
 
   return (
@@ -116,6 +143,8 @@ export default async function AppLayout({
         savedViews={savedViews}
         userId={user.id}
         userRole={userRole}
+        teamDoneThisMonth={teamDoneThisMonth}
+        teamReviewCount={teamReviewCount}
       />
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <AppHeader
@@ -126,6 +155,8 @@ export default async function AppLayout({
           userEmail={user.email ?? null}
           notifications={notifications}
           userRole={userRole}
+          pointsThisMonth={pointsThisMonth}
+          pendingPoints={pendingPoints}
         />
         {/* pb-14 ensures content isn't hidden behind the mobile bottom nav */}
         <main className="flex-1 overflow-auto pb-14 md:pb-0">

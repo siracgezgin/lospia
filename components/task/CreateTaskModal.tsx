@@ -15,6 +15,7 @@ import {
 import { Avatar } from "@/components/ui/Avatar";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { cn } from "@/lib/utils/cn";
+import { EFFORT_OPTIONS, EFFORT_LABELS, type EffortSize } from "@/lib/points/effort";
 import type { TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceDepartment } from "@/types";
 
 type BoardMember = { memberId: string; userId: string; name: string };
@@ -29,6 +30,8 @@ interface Props {
   departments?: WorkspaceDepartment[];
   members?: BoardMember[];
   deptMembers?: { department_id: string; member_id: string }[];
+  // Effort is an admin-only lever; members never see or set it.
+  isAdmin?: boolean;
 }
 
 const SIMPLE_STATUS_OPTIONS = CARD_STATUS_OPTIONS;
@@ -41,6 +44,7 @@ export function CreateTaskModal({
   departments = [],
   members = [],
   deptMembers = [],
+  isAdmin = false,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -56,6 +60,7 @@ export function CreateTaskModal({
   const [dueDate, setDueDate] = useState(defaultDueDate);
   const [status, setStatus] = useState<TaskStatus>(defaultStatus);
   const [priority, setPriority] = useState<TaskPriority>("medium");
+  const [effort, setEffort] = useState<EffortSize>("medium");
 
   const topDepts = useMemo(() => departments.filter((d) => d.parent_id === null), [departments]);
   const childDepts = useMemo(() => {
@@ -122,6 +127,7 @@ export function CreateTaskModal({
         department_id: departmentId || null,
         due_date: dueDate || null,
         start_date: startDate || null,
+        effort_size: isAdmin ? effort : undefined,
         tags: [],
         custom_fields: customFields,
       });
@@ -310,6 +316,33 @@ export function CreateTaskModal({
               </select>
             </div>
           </div>
+
+          {/* Efor — admin-only. Members never see point values. */}
+          {isAdmin && (
+            <div>
+              <label className={labelCls}>Efor</label>
+              <div className="flex gap-2">
+                {EFFORT_OPTIONS.map((e) => (
+                  <button
+                    key={e}
+                    type="button"
+                    onClick={() => setEffort(e)}
+                    className={cn(
+                      "flex-1 rounded-lg border px-3 py-2 text-sm transition-colors",
+                      effort === e
+                        ? "bg-blue-50 border-blue-300 text-blue-700 font-medium"
+                        : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50",
+                    )}
+                  >
+                    {EFFORT_LABELS[e]}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-gray-400 mt-1.5">
+                Puan yalnızca yönetici onayından sonra kesinleşir.
+              </p>
+            </div>
+          )}
 
           {workspaceIdMissing && (
             <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">

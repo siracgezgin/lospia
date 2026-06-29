@@ -32,6 +32,11 @@ export const ACTIVITY_ACTIONS = {
   PARTICIPANT_UNCOMPLETED: "participant_uncompleted",
   AUTO_MOVED_TO_REVIEW: "auto_moved_to_review",
   NOTE_ADDED: "note_added",
+  // Puan & Motivasyon
+  POINTS_FINALIZED: "points_finalized",
+  POINTS_REVOKED: "points_revoked",
+  POINTS_SELF_APPROVAL_SKIPPED: "points_self_approval_skipped",
+  EFFORT_CHANGED: "effort_changed",
 } as const;
 
 export type ActivityAction =

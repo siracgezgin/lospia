@@ -16,6 +16,8 @@ import {
   BookOpen,
   ScrollText,
   Quote,
+  TrendingUp,
+  ArrowRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Wordmark } from "@/components/ui/Wordmark";
@@ -53,9 +55,14 @@ interface Props {
   savedViews: SavedView[];
   userId: string;
   userRole?: WorkspaceRole;
+  teamDoneThisMonth?: number;
+  teamReviewCount?: number;
 }
 
-export function AppSidebar({ workspace, savedViews, userRole = "member" }: Props) {
+export function AppSidebar({
+  workspace, savedViews, userRole = "member",
+  teamDoneThisMonth = 0, teamReviewCount = 0,
+}: Props) {
   const isAdmin = canViewDestructivePages(userRole) || canManageSettings(userRole);
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
@@ -134,10 +141,41 @@ export function AppSidebar({ workspace, savedViews, userRole = "member" }: Props
         )}
       </nav>
 
-      {/* Haftanın sözü — weekly rotating editorial brand card, anchored bottom-left.
+      {/* Bottom stack: team progress (non-competitive) + weekly quote.
           (Logout now lives in the top-right profile menu.) */}
       {!collapsed && (
-        <div className="px-3 pt-2 pb-3 mt-auto">
+        <div className="px-3 pt-2 pb-3 mt-auto space-y-2.5">
+          {/* Bu Ayın İlerlemesi — shared team motivation, no ranking/leaderboard. */}
+          <div className="rounded-2xl border border-line bg-surface px-4 pt-3 pb-3.5 shadow-card">
+            <p className="text-[9.5px] font-semibold uppercase tracking-[0.14em] text-subtle mb-2 flex items-center gap-1.5">
+              <TrendingUp size={12} className="text-brand" />
+              Bu Ayın İlerlemesi
+            </p>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-[12px]">
+                <span className="text-muted">Ekipçe tamamlanan</span>
+                <span className="font-semibold text-ink tabular-nums">{teamDoneThisMonth}</span>
+              </div>
+              <div className="flex items-center justify-between text-[12px]">
+                <span className="text-muted">Kontrol bekleyen</span>
+                <span className="font-semibold text-ink tabular-nums">{teamReviewCount}</span>
+              </div>
+            </div>
+            <p className="text-[10.5px] leading-relaxed text-subtle mt-2.5">
+              Katkılar görünür oldukça ekip güçlenir.
+            </p>
+            {isAdmin && (
+              <Link
+                href="/dashboard#puan-motivasyon"
+                className="mt-2.5 inline-flex items-center gap-1 text-[11px] font-medium text-brand hover:text-brand-strong transition-colors"
+              >
+                Puan özetini gör
+                <ArrowRight size={11} />
+              </Link>
+            )}
+          </div>
+
+          {/* Haftanın sözü — weekly rotating editorial brand card. */}
           <div className="relative rounded-2xl border border-brand-soft bg-gradient-to-br from-[#f7ede9] via-brand-soft/40 to-surface px-4 pt-3.5 pb-4 overflow-hidden shadow-card">
             <Quote
               size={40}

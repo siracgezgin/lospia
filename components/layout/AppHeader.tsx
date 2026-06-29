@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
-import { ChevronDown, LogOut, Mail, Shield } from "lucide-react";
+import { ChevronDown, LogOut, Mail, Shield, Sparkles, Clock3 } from "lucide-react";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { Avatar } from "@/components/ui/Avatar";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
@@ -18,6 +18,8 @@ interface Props {
   userEmail?: string | null;
   notifications?: Notification[];
   userRole?: WorkspaceRole;
+  pointsThisMonth?: number;
+  pendingPoints?: number;
 }
 
 // Page-context titles. Header shows WHERE you are; the sidebar owns brand/workspace.
@@ -37,10 +39,14 @@ function ProfileMenu({
   displayName,
   email,
   role,
+  pointsThisMonth,
+  pendingPoints,
 }: {
   displayName: string;
   email: string | null;
   role: WorkspaceRole;
+  pointsThisMonth: number;
+  pendingPoints: number;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -93,6 +99,28 @@ function ProfileMenu({
             </div>
           </div>
 
+          {/* Kişisel puan özeti — yalnızca kendi puanınız. Başka kimsenin puanı görünmez. */}
+          <div className="px-4 py-3 border-b border-line space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-2 text-[12px] text-muted">
+                <Sparkles size={13} className="text-brand shrink-0" />
+                Bu ay
+              </span>
+              <span className="text-[12px] font-semibold text-ink tabular-nums">
+                {pointsThisMonth} puan
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-2 text-[12px] text-muted">
+                <Clock3 size={13} className="text-subtle shrink-0" />
+                Bekleyen
+              </span>
+              <span className="text-[12px] font-medium text-muted tabular-nums">
+                {pendingPoints} puan
+              </span>
+            </div>
+          </div>
+
           {/* Sign out */}
           <form action={signOut}>
             <button
@@ -111,6 +139,7 @@ function ProfileMenu({
 
 export function AppHeader({
   unreadCount, userId, userName, userEmail, notifications = [], userRole = "member",
+  pointsThisMonth = 0, pendingPoints = 0,
 }: Props) {
   const pathname = usePathname();
   const title = PAGE_TITLES.find((t) => t.match(pathname))?.title ?? "";
@@ -124,7 +153,13 @@ export function AppHeader({
 
       <div className="flex items-center gap-3">
         <NotificationBell unreadCount={unreadCount} userId={userId} notifications={notifications} />
-        <ProfileMenu displayName={displayName} email={userEmail ?? null} role={userRole} />
+        <ProfileMenu
+          displayName={displayName}
+          email={userEmail ?? null}
+          role={userRole}
+          pointsThisMonth={pointsThisMonth}
+          pendingPoints={pendingPoints}
+        />
       </div>
     </header>
   );

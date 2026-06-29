@@ -4,6 +4,8 @@ import { TaskDetail } from "@/components/task/TaskDetail";
 import type { Task, TaskActivity, TaskActivityLogWithActor, TimeEntry, CustomFieldDefinition, Profile, WorkspaceContact, WorkspaceDepartment, TaskNoteWithAuthor } from "@/types";
 import { TaskNotesPanel } from "@/components/task/TaskNotesPanel";
 import { TaskParticipantsPanel, type PanelMember, type PanelParticipant } from "@/components/task/TaskParticipantsPanel";
+import { TaskEffortPanel } from "@/components/task/TaskEffortPanel";
+import { isEffortSize } from "@/lib/points/effort";
 
 export default async function TaskDetailPage({
   params,
@@ -107,6 +109,34 @@ export default async function TaskDetailPage({
   const canComplete = myMember?.role === "owner" || myMember?.role === "admin";
   const currentMemberId = (myMember?.id as string | undefined) ?? null;
 
+  // Puan & Motivasyon is admin-only: members never see point values, pending
+  // points, effort changes or who earned what — so we strip those audit rows
+  // for non-admins and only fetch the task's earned ledger for admins.
+  const POINTS_PRIVATE_ACTIONS = new Set([
+    "points_finalized", "points_revoked", "points_self_approval_skipped", "effort_changed",
+  ]);
+  const visibleActivityLogs = canComplete
+    ? activityLogs
+    : activityLogs.filter((l) => !POINTS_PRIVATE_ACTIONS.has(l.action));
+
+  let earnedRows: { name: string; points: number }[] = [];
+  if (canComplete) {
+    const { data: ledger } = await supabase
+      .from("points_ledger")
+      .select("user_id, points_amount")
+      .eq("task_id", id)
+      .eq("transaction_type", "earned");
+    const nameOf = (uid: string) => {
+      const p = profiles.find((x) => x.id === uid);
+      return p?.full_name ?? p?.email ?? "—";
+    };
+    earnedRows = ((ledger ?? []) as { user_id: string; points_amount: number }[])
+      .map((r) => ({ name: nameOf(r.user_id), points: r.points_amount }));
+  }
+  const effortSize = isEffortSize((task as unknown as Record<string, unknown>).effort_size)
+    ? ((task as unknown as Record<string, unknown>).effort_size as "small" | "medium" | "large")
+    : "medium";
+
   // Participant panel data
   type MemberRow = { id: string; user_id: string; profiles: Pick<Profile, "id" | "full_name" | "email"> | Pick<Profile, "id" | "full_name" | "email">[] | null };
   const panelMembers: PanelMember[] = ((membersResult.data ?? []) as unknown as MemberRow[])
@@ -135,7 +165,7 @@ export default async function TaskDetailPage({
       <TaskDetail
         task={task}
         activity={activity}
-        activityLogs={activityLogs}
+        activityLogs={visibleActivityLogs}
         activeTimer={activeTimer}
         customFields={customFields}
         profiles={profiles}
@@ -145,6 +175,15 @@ export default async function TaskDetailPage({
         canComplete={canComplete}
       />
       <div className="max-w-3xl mx-auto px-4 pb-6 space-y-5">
+        {canComplete && (
+          <TaskEffortPanel
+            taskId={task.id}
+            effortSize={effortSize}
+            status={task.status}
+            participantCount={panelParticipants.length}
+            earned={earnedRows}
+          />
+        )}
         <TaskParticipantsPanel
           taskId={task.id}
           members={panelMembers}

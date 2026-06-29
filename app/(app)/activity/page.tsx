@@ -30,6 +30,10 @@ const ACTION_LABELS: Record<string, string> = {
   participant_uncompleted: "tamamlamayı geri aldı",
   auto_moved_to_review: "görevi Kontrol / Onay'a taşıdı (tüm sorumlular tamam)",
   note_added: "not ekledi",
+  effort_changed: "eforu değiştirdi",
+  points_finalized: "puanı kesinleştirdi",
+  points_revoked: "kazanılan puanı geri aldı",
+  points_self_approval_skipped: "kendi onayı nedeniyle puan verilmedi",
 };
 
 type LogRow = {

@@ -14,7 +14,12 @@ import {
   logTaskActivity, logTaskActivities, ACTIVITY_ACTIONS,
   type TaskActivityEntry,
 } from "@/lib/activity/log-task-activity";
+import { applyPointsForStatusTransition } from "@/lib/points/award";
+import { pointsForEffort, type EffortSize } from "@/lib/points/effort";
 import type { Json, TaskStatus as TaskStatusType } from "@/types";
+
+const ADMIN_ROLES: AppRole[] = ["owner", "admin"];
+const isAdminRole = (r: AppRole) => ADMIN_ROLES.includes(r);
 
 const PERM_DENIED = "Bu işlem için yetkiniz yok.";
 const FINAL_DONE_DENIED = "Görevi yalnızca yönetici tamamlanmış olarak işaretleyebilir. Lütfen 'Kontrol / Onay'a taşıyın.";
@@ -92,6 +97,7 @@ const CreateTaskSchema = z.object({
   due_date: z.string().nullable().optional(),
   start_date: z.string().nullable().optional(),
   department_id: hexUuid("Geçersiz departman").nullable().optional(),
+  effort_size: z.enum(["small", "medium", "large"]).optional(),
   tags: z.array(z.string().max(50)).max(20).default([]),
   custom_fields: z.record(z.string(), z.unknown()).default({}),
 });
@@ -116,6 +122,7 @@ const UpdateTaskSchema = z.object({
   waiting_on_contact_id: hexUuid("Geçersiz kişi").nullable().optional(),
   waiting_reason: z.string().max(500).nullable().optional(),
   department_id: hexUuid("Geçersiz departman").nullable().optional(),
+  effort_size: z.enum(["small", "medium", "large"]).optional(),
 });
 
 const ReorderTaskSchema = z.object({
@@ -145,10 +152,17 @@ export async function createTask(
   // AF works weekly: a new task's entry date (start_date) defaults to today so
   // it always lands in the current week's board even if no due date is set yet.
   const today = new Date().toISOString().slice(0, 10);
+  // Effort is an admin-only lever; members always create at the default (medium
+  // / 3 points). points_value is always derived from effort server-side.
+  const effort_size: EffortSize = isAdminRole(role) && parsed.data.effort_size
+    ? parsed.data.effort_size
+    : "medium";
   const taskData = {
     ...parsed.data,
     tags: normalizeTags(parsed.data.tags),
     start_date: parsed.data.start_date ?? today,
+    effort_size,
+    points_value: pointsForEffort(effort_size),
   };
 
   // Get the last fractional_index for this status column
@@ -237,9 +251,19 @@ export async function updateTask(
   const { user, role } = ctx;
 
   const { id, ...rawUpdates } = parsed.data;
-  const updates = rawUpdates.tags !== undefined
+  const updates: Record<string, unknown> = rawUpdates.tags !== undefined
     ? { ...rawUpdates, tags: normalizeTags(rawUpdates.tags) }
-    : rawUpdates;
+    : { ...rawUpdates };
+
+  // Effort is admin-only. Strip it for non-admins; for admins, derive the
+  // matching points_value so the two columns can never drift apart.
+  if ("effort_size" in updates) {
+    if (isAdminRole(role) && updates.effort_size) {
+      updates.points_value = pointsForEffort(updates.effort_size as EffortSize);
+    } else {
+      delete updates.effort_size;
+    }
+  }
 
   // Fetch current state for both permission check and activity logging
   const { data: currentTask } = await supabase
@@ -320,6 +344,11 @@ export async function updateTask(
       taskId: id, workspaceId: task.workspace_id as string, title: task.title as string,
       actorId: user.id, from: task.status as TaskStatusType, to: nextStatus,
       assigneeId: (task.assignee_id as string | null) ?? null,
+    });
+    // Puan & Motivasyon: finalise on → done, revoke on done → …
+    await applyPointsForStatusTransition(supabase, {
+      taskId: id, workspaceId: task.workspace_id as string, title: task.title as string,
+      actorId: user.id, from: task.status as TaskStatusType, to: nextStatus,
     });
   }
 
@@ -637,6 +666,11 @@ export async function reorderTask(
       taskId: id, workspaceId: prevTask.workspace_id, title: prevTask.title,
       actorId: user.id, from: prevTask.status, to: newStatus, assigneeId: prevTask.assignee_id,
     });
+    // Puan & Motivasyon: finalise on → done, revoke on done → …
+    await applyPointsForStatusTransition(supabase, {
+      taskId: id, workspaceId: prevTask.workspace_id, title: prevTask.title,
+      actorId: user.id, from: prevTask.status, to: newStatus,
+    });
   }
 
   revalidatePath("/board");
@@ -771,6 +805,7 @@ function buildActivityLogEntries(
     { field: "assignee_id", action: ACTIVITY_ACTIONS.ASSIGNEE_CHANGED },
     { field: "responsible_contact_id", action: ACTIVITY_ACTIONS.RESPONSIBLE_CONTACT_CHANGED },
     { field: "due_date", action: ACTIVITY_ACTIONS.DUE_DATE_CHANGED },
+    { field: "effort_size", action: ACTIVITY_ACTIONS.EFFORT_CHANGED },
   ];
   for (const { field, action } of scalarFields) {
     if (field in updates && (updates[field] ?? null) !== (current[field] ?? null)) {

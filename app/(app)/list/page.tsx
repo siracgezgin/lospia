@@ -10,11 +10,12 @@ export default async function ListPage() {
 
   const { data: memberRows } = await supabase
     .from("workspace_members")
-    .select("workspace_id")
+    .select("workspace_id, role")
     .eq("user_id", user.id)
     .limit(1);
   const workspaceId = memberRows?.[0]?.workspace_id;
   if (!workspaceId) return <div className="p-8 text-gray-500">Çalışma alanı bulunamadı.</div>;
+  const isAdmin = memberRows?.[0]?.role === "owner" || memberRows?.[0]?.role === "admin";
 
   const [tasksResult, viewsResult, membersResult, contactsResult, deptsResult, deptMembersResult] = await Promise.all([
     supabase
@@ -75,6 +76,7 @@ export default async function ListPage() {
       departments={departments}
       members={members}
       deptMembers={deptMembers}
+      isAdmin={isAdmin}
     />
   );
 }

@@ -1596,6 +1596,7 @@ export function KanbanBoard({
           departments={departments}
           members={members}
           deptMembers={deptMembers}
+          isAdmin={canComplete}
         />
       )}
       {importOpen && (

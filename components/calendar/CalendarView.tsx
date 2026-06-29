@@ -43,6 +43,7 @@ interface Props {
   departments?: WorkspaceDepartment[];
   members?: { memberId: string; userId: string; name: string }[];
   deptMembers?: { department_id: string; member_id: string }[];
+  isAdmin?: boolean;
 }
 
 const DONE_CLS = "line-through text-gray-400";
@@ -185,7 +186,7 @@ function MonthYearPicker({ value, onChange }: { value: Date; onChange: (d: Date)
   );
 }
 
-export function CalendarView({ tasks, workspaceId, profiles, contacts, departments = [], members = [], deptMembers = [] }: Props) {
+export function CalendarView({ tasks, workspaceId, profiles, contacts, departments = [], members = [], deptMembers = [], isAdmin = false }: Props) {
   const deptMeta = buildDeptMeta(departments);
   const dotFor = (t: CalTask) => {
     if (t.status === "done") return "bg-[#2e9367]";
@@ -481,6 +482,7 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
           members={members}
           deptMembers={deptMembers}
           defaultDueDate={createModalDate}
+          isAdmin={isAdmin}
         />
       )}
     </div>

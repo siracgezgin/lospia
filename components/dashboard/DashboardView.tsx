@@ -22,6 +22,8 @@ import {
 } from "@/lib/design/semantics";
 import { cn } from "@/lib/utils/cn";
 import { Badge } from "@/components/ui/Badge";
+import { PointsMotivationSection } from "@/components/dashboard/PointsMotivationSection";
+import type { AdminPointsData, MemberPointsSummary } from "@/lib/points/queries";
 
 interface DepartmentStat {
   name: string;
@@ -52,6 +54,9 @@ interface Props {
   }[];
   departmentStats: DepartmentStat[];
   recentTasks: RecentTask[];
+  isAdmin: boolean;
+  adminPoints: AdminPointsData | null;
+  memberPoints: MemberPointsSummary;
 }
 
 function formatDuration(seconds: number) {
@@ -123,6 +128,9 @@ export function DashboardView({
   dueSoonTasks,
   departmentStats,
   recentTasks,
+  isAdmin,
+  adminPoints,
+  memberPoints,
 }: Props) {
   const today = new Date().toISOString().slice(0, 10);
   const weekEnd = endOfThisWeekISO();
@@ -185,6 +193,10 @@ export function DashboardView({
           <FocusTile label="Geciken kritik" value={overdue.length} tone="danger" />
         </div>
       </div>
+
+      {/* Puan & Motivasyon — admin sees the whole workspace, members see only
+          their own personal summary (no ranking, no other members' points). */}
+      <PointsMotivationSection isAdmin={isAdmin} admin={adminPoints} member={memberPoints} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Status distribution */}

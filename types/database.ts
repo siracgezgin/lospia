@@ -185,6 +185,63 @@ export type Database = {
           },
         ]
       }
+      points_ledger: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          cycle: number
+          id: string
+          metadata: Json
+          points_amount: number
+          source_type: string
+          task_id: string | null
+          transaction_type: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          cycle?: number
+          id?: string
+          metadata?: Json
+          points_amount: number
+          source_type?: string
+          task_id?: string | null
+          transaction_type: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          cycle?: number
+          id?: string
+          metadata?: Json
+          points_amount?: number
+          source_type?: string
+          task_id?: string | null
+          transaction_type?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "points_ledger_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "points_ledger_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -561,8 +618,11 @@ export type Database = {
           department_id: string | null
           description: string | null
           due_date: string | null
+          effort_size: string
           fractional_index: string
           id: string
+          points_cycle: number
+          points_value: number
           priority: Database["public"]["Enums"]["task_priority"]
           responsible_contact_id: string | null
           start_date: string | null
@@ -588,8 +648,11 @@ export type Database = {
           department_id?: string | null
           description?: string | null
           due_date?: string | null
+          effort_size?: string
           fractional_index?: string
           id?: string
+          points_cycle?: number
+          points_value?: number
           priority?: Database["public"]["Enums"]["task_priority"]
           responsible_contact_id?: string | null
           start_date?: string | null
@@ -615,8 +678,11 @@ export type Database = {
           department_id?: string | null
           description?: string | null
           due_date?: string | null
+          effort_size?: string
           fractional_index?: string
           id?: string
+          points_cycle?: number
+          points_value?: number
           priority?: Database["public"]["Enums"]["task_priority"]
           responsible_contact_id?: string | null
           start_date?: string | null
@@ -1150,6 +1216,7 @@ export type Database = {
         Args: { p_workspace_id?: string }
         Returns: undefined
       }
+      finalize_task_points: { Args: { p_task_id: string }; Returns: Json }
       get_due_soon_tasks: {
         Args: { p_workspace_id: string }
         Returns: {
@@ -1194,6 +1261,7 @@ export type Database = {
         Args: { p_username: string }
         Returns: string
       }
+      revoke_task_points: { Args: { p_task_id: string }; Returns: Json }
       to_workspace_role: {
         Args: { p_role: string }
         Returns: Database["public"]["Enums"]["workspace_role"]
