@@ -330,11 +330,14 @@ export function NotesColumn({
   workspaceId,
   readOnly = false,
   authorsById = {},
+  mobile = false,
 }: {
   notes: WorkspaceNote[];
   workspaceId: string;
   readOnly?: boolean;
   authorsById?: Record<string, string>;
+  // Mobile single-column view: drop the fixed kanban width and fill the screen.
+  mobile?: boolean;
 }) {
   // Detects client vs server render without triggering a state update in effect
   const mounted = useSyncExternalStore(_subscribeMounted, _getMounted, _getServerMounted);
@@ -444,7 +447,7 @@ export function NotesColumn({
 
   return (
     <NoteAuthorsContext.Provider value={authorsById}>
-    <div className="flex flex-col gap-2 w-[80vw] max-w-64 sm:w-64 shrink-0">
+    <div className={cn("flex flex-col gap-2 shrink-0", mobile ? "w-full" : "w-[80vw] max-w-64 sm:w-64")}>
       {/* Header */}
       <div className="flex items-center justify-between sticky top-0 z-20 h-11">
         <div className="flex items-center gap-2">

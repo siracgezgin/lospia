@@ -139,6 +139,72 @@ function PriorityBadge({ priority }: { priority: TaskPriority }) {
   );
 }
 
+// ---- Mobile task card (replaces the wide table below md) ----
+function MobileTaskCard({
+  task,
+  deptMeta,
+  responsibleNames,
+}: {
+  task: Task;
+  deptMeta: ReturnType<typeof buildDeptMeta>;
+  responsibleNames: Record<string, string>;
+}) {
+  const meta = task.department_id ? deptMeta[task.department_id] : undefined;
+  const badge = meta ? getDepartmentBadge(meta.color) : null;
+  const responsible =
+    responsibleNames[task.assignee_id ?? ""] ??
+    responsibleNames[(task as { responsible_contact_id?: string | null }).responsible_contact_id ?? ""] ??
+    "";
+  const today = new Date().toISOString().slice(0, 10);
+  const isOverdue = !!task.due_date && task.due_date < today && task.status !== "done";
+
+  return (
+    <Link
+      prefetch={false}
+      href={`/tasks/${task.id}`}
+      className="block rounded-xl border border-gray-200 bg-white p-3.5 shadow-card active:bg-gray-50 transition-colors"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm font-semibold text-gray-900 line-clamp-2 leading-snug flex-1 min-w-0">
+          {task.title}
+        </p>
+        <span className={cn(
+          "text-[10px] font-medium rounded-full px-2 py-0.5 whitespace-nowrap shrink-0",
+          STATUS_CHIP_TONE[task.status],
+        )}>
+          {SIMPLIFIED_STATUS_LABEL[task.status]}
+        </span>
+      </div>
+
+      {task.description && (
+        <p className="text-xs text-gray-400 mt-1 line-clamp-1">{task.description}</p>
+      )}
+
+      <div className="flex items-center gap-2 mt-2.5 flex-wrap">
+        {meta && badge && (
+          <span className={cn(
+            "inline-flex items-center gap-1 max-w-[60%] rounded-lg py-0.5 px-2 text-[11px] font-medium ring-1",
+            badge.chip, badge.ring,
+          )}>
+            <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", badge.dot)} />
+            <span className="truncate">{meta.name}</span>
+          </span>
+        )}
+        <PriorityBadge priority={task.priority} />
+        {task.due_date && (
+          <span className={cn("text-[11px] font-medium whitespace-nowrap", isOverdue ? "text-red-500" : "text-gray-500")}>
+            {isOverdue ? "⚠ " : ""}
+            {formatDateTR(task.due_date, { day: "numeric", month: "short" })}
+          </span>
+        )}
+        {responsible && (
+          <span className="ml-auto text-[11px] text-gray-500 truncate max-w-[40%]">{responsible}</span>
+        )}
+      </div>
+    </Link>
+  );
+}
+
 // ---- Main component ----
 
 export function TaskListView({ tasks, savedViews, workspaceId, profiles, contacts, departments = [], members = [], deptMembers = [], isAdmin = false }: Props) {
@@ -445,8 +511,28 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
         <span className="ml-auto text-xs text-gray-400 self-center">{totalRows} görev</span>
       </div>
 
-      {/* Table */}
-      <div className="flex-1 overflow-auto bg-gray-50/40">
+      {/* Mobile: card list (no horizontal table) */}
+      <div className="md:hidden flex-1 overflow-y-auto overflow-x-hidden bg-gray-50/40 px-3 py-3">
+        {table.getRowModel().rows.length === 0 ? (
+          <div className="text-center py-16 text-gray-400 text-sm">
+            Geçerli filtrelerle eşleşen görev yok
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2.5">
+            {table.getRowModel().rows.map((row) => (
+              <MobileTaskCard
+                key={row.id}
+                task={row.original}
+                deptMeta={deptMeta}
+                responsibleNames={responsibleNames}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Table — desktop / tablet */}
+      <div className="hidden md:block flex-1 overflow-auto bg-gray-50/40">
         <table className="w-full text-sm border-collapse">
           <thead className="bg-gray-50/80 border-b border-gray-200 sticky top-0 z-10 backdrop-blur-sm">
             {table.getHeaderGroups().map((hg) => (

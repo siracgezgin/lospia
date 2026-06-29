@@ -416,11 +416,15 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
         </aside>
       </div>
 
-      {/* Mobile day panel (modal) — only below lg, where there is no side panel */}
+      {/* Mobile day panel (bottom sheet) — only below lg, where there is no side
+          panel. z-50 so it sits ABOVE the fixed bottom nav (z-40); otherwise the
+          sticky footer "Bu güne görev ekle" button is painted over by the nav and
+          only peeks through when the sheet is dragged. dvh (not vh) keeps the
+          height correct against the mobile browser's dynamic toolbar. */}
       {showMobilePanel && (
-        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/30 lg:hidden" onClick={() => setShowMobilePanel(false)}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 lg:hidden" onClick={() => setShowMobilePanel(false)}>
           <div
-            className="bg-white rounded-t-2xl shadow-2xl w-full max-h-[80vh] flex flex-col"
+            className="bg-white rounded-t-2xl shadow-2xl w-full max-h-[85dvh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
@@ -431,9 +435,10 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
                 <X size={16} />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2">
+            {/* Scrollable list — min-h-0 lets it shrink so the footer stays put */}
+            <div className="flex-1 min-h-0 overflow-y-auto px-5 py-3 space-y-2">
               {selectedDayTasks.length === 0 ? (
-                <p className="text-sm text-gray-400 py-4 text-center">Bu tarihte iş yok.</p>
+                <p className="text-sm text-gray-400 py-6 text-center">Bu tarihte iş yok.</p>
               ) : (
                 selectedDayTasks.map((task) => (
                   <Link
@@ -442,7 +447,7 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
                     href={`/tasks/${task.id}`}
                     onClick={() => setShowMobilePanel(false)}
                     className={cn(
-                      "flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 transition-colors group",
+                      "flex items-center gap-2 p-2.5 rounded-lg hover:bg-gray-50 transition-colors group",
                       task.status === "done" && "opacity-60",
                     )}
                   >
@@ -454,13 +459,15 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
                 ))
               )}
             </div>
-            <div className="px-5 py-4 border-t border-gray-100">
+            {/* Sticky footer — always visible the moment the sheet opens. Extra
+                bottom padding clears the iOS home-indicator safe area. */}
+            <div className="shrink-0 px-5 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] border-t border-gray-100">
               <button
                 onClick={() => {
                   setCreateModalDate(format(selectedDay, "yyyy-MM-dd"));
                   setShowMobilePanel(false);
                 }}
-                className="flex items-center justify-center gap-2 w-full px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                className="flex items-center justify-center gap-2 w-full px-3 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 active:bg-blue-800 transition-colors"
               >
                 <Plus size={14} />
                 Bu güne görev ekle

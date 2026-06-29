@@ -91,12 +91,44 @@
   }
 }
 
+html,
+body {
+  /* The app shell owns its own scroll containers; the document itself must never
+     scroll sideways. This is the single guard that stops a stray wide child
+     (a kanban row, a table) from producing a horizontal page scroll on mobile. */
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
 body {
   background: var(--app-bg);
   color: var(--text);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Mobile safe-area + bottom-nav helpers
+   The bottom navigation is 3.5rem tall plus the iOS home-indicator inset.
+   Content panes pad past it with .pb-bottom-nav; the nav itself pads its own
+   inset with .safe-bottom; full-height sheets use .h-dvh-safe.
+   ────────────────────────────────────────────────────────────────────────── */
+@layer utilities {
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  /* Clears the fixed bottom nav (3.5rem) plus the home-indicator inset. */
+  .pb-bottom-nav {
+    padding-bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px));
+  }
+  /* Sticky sheet footer that floats above the bottom nav + safe inset. */
+  .mb-bottom-nav {
+    margin-bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px));
+  }
 }
 
 /* Calm, accessible focus ring */

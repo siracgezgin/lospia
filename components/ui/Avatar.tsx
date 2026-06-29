@@ -27,10 +27,14 @@ export function Avatar({
   className,
 }: {
   name: string;
-  size?: "xs" | "sm" | "md";
+  size?: "xs" | "sm" | "md" | "lg";
   className?: string;
 }) {
-  const sizeClass = size === "xs" ? "w-4 h-4 text-[8px]" : size === "sm" ? "w-5 h-5 text-[9px]" : "w-7 h-7 text-xs";
+  const sizeClass =
+    size === "xs" ? "w-4 h-4 text-[8px]"
+    : size === "sm" ? "w-5 h-5 text-[9px]"
+    : size === "lg" ? "w-14 h-14 text-lg"
+    : "w-7 h-7 text-xs";
   return (
     <span
       className={cn(

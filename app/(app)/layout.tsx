@@ -170,8 +170,10 @@ export default async function AppLayout({
           pointsThisMonth={pointsThisMonth}
           pendingPoints={pendingPoints}
         />
-        {/* pb-14 ensures content isn't hidden behind the mobile bottom nav */}
-        <main className="flex-1 overflow-auto pb-14 md:pb-0">
+        {/* pb-bottom-nav keeps content clear of the fixed mobile bottom nav (incl.
+            iOS safe-area inset); overflow-x-hidden stops stray wide children from
+            producing a horizontal page scroll on phones. */}
+        <main className="flex-1 overflow-y-auto overflow-x-hidden pb-bottom-nav md:pb-0">
           {noAccess ? (
             <div className="min-h-full flex items-center justify-center p-8">
               <div className="max-w-md w-full bg-amber-50 border border-amber-200 rounded-xl p-8 text-center space-y-4">
@@ -213,7 +215,7 @@ export default async function AppLayout({
           )}
         </main>
       </div>
-      <MobileNav />
+      <MobileNav isAdmin={isAdmin} />
     </div>
   );
 }

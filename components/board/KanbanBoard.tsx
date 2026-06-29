@@ -88,6 +88,17 @@ type BoardCtxValue = {
 };
 const BoardContext = createContext<BoardCtxValue | null>(null);
 
+// Mobile board segments — a single full-width column at a time. "notes" is the
+// special first segment; the rest mirror the desktop kanban columns.
+type MobileSegId = "notes" | BoardColId;
+const MOBILE_SEGMENTS: { id: MobileSegId; label: string }[] = [
+  { id: "notes",         label: "Notlar" },
+  { id: "yapilacak",     label: "Yapılacak" },
+  { id: "devam_ediyor",  label: "Devam" },
+  { id: "kontrol_onay",  label: "Kontrol" },
+  { id: "tamamlandi",    label: "Tamamlandı" },
+];
+
 // The 4 user-facing statuses offered by the card status chip dropdown.
 const CARD_STATUS_CHOICES: { value: TaskStatus; label: string }[] = [
   { value: "ready",       label: "Yapılacak" },
@@ -845,6 +856,54 @@ function TaskCard({
   );
 }
 
+// ── Mobile card (no DnD — status changes via the card chip / task detail) ─────
+
+function MobileTaskCard({
+  task,
+  profiles,
+  contacts,
+  responsibleNames,
+  onDelete,
+  onArchive,
+  onDuplicate,
+  canArchiveCard = true,
+  canDeleteCard = true,
+  showMenu = true,
+}: {
+  task: Task;
+  profiles: Pick<Profile, "id" | "full_name" | "email">[];
+  contacts: WorkspaceContact[];
+  responsibleNames: Record<string, string>;
+  onDelete?: (id: string) => void;
+  onArchive?: (id: string) => void;
+  onDuplicate?: (id: string) => void;
+  canArchiveCard?: boolean;
+  canDeleteCard?: boolean;
+  showMenu?: boolean;
+}) {
+  // Same colour language as the desktop card; no cn() — tailwind-merge strips border-l-*.
+  const dept = useTaskDept(task);
+  const style = getTaskCardStyle(task.status, dept?.color);
+  const colorCls = `${style.surface} ${style.border} ${style.accent}`;
+  return (
+    <div className={`rounded-xl border border-l-[3px] p-3.5 shadow-card ${colorCls}`}>
+      <CardContent
+        task={task}
+        profiles={profiles}
+        contacts={contacts}
+        responsibleNames={responsibleNames}
+        interactive
+        onDelete={onDelete}
+        onArchive={onArchive}
+        onDuplicate={onDuplicate}
+        canArchiveCard={canArchiveCard}
+        canDeleteCard={canDeleteCard}
+        showMenu={showMenu}
+      />
+    </div>
+  );
+}
+
 // ── Column (post-mount) ───────────────────────────────────────────────────────
 
 function KanbanColumn({
@@ -1037,6 +1096,9 @@ export function KanbanBoard({
   const [modalOpen, setModalOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [modalDefaultStatus, setModalDefaultStatus] = useState<TaskStatus>("ready");
+
+  // Mobile board: which single column is shown (segmented control).
+  const [mobileSeg, setMobileSeg] = useState<MobileSegId>("yapilacak");
 
   // Client-side filters (not URL-persisted; reset on refresh)
   const [personFilter, setPersonFilter] = useState("");
@@ -1485,9 +1547,9 @@ export function KanbanBoard({
         </div>
       )}
 
-      {/* ── Pre-mount: static (no DnD) ───────────────────────────────────── */}
+      {/* ── Pre-mount: static (no DnD) — desktop/tablet only ─────────────── */}
       {!mounted && (
-        <div className="overflow-auto flex-1 min-h-0">
+        <div className="hidden md:block overflow-auto flex-1 min-h-0">
           <div className="relative min-w-max">
             {/* Continuous sticky band behind every column header (no gaps/peek). */}
             <div aria-hidden className="sticky top-0 z-10 h-11 bg-app border-b border-line shadow-[0_4px_10px_-6px_rgba(16,24,40,0.18)]" />
@@ -1516,7 +1578,7 @@ export function KanbanBoard({
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
         >
-          <div className="overflow-auto flex-1 min-h-0">
+          <div className="hidden md:block overflow-auto flex-1 min-h-0">
             <div className="relative min-w-max">
               {/* Continuous sticky band behind every column header (no gaps/peek). */}
               <div aria-hidden className="sticky top-0 z-10 h-11 bg-app border-b border-line shadow-[0_4px_10px_-6px_rgba(16,24,40,0.18)]" />
@@ -1558,6 +1620,83 @@ export function KanbanBoard({
           </DragOverlay>
         </DndContext>
       )}
+
+      {/* ── Mobile board: segmented status control + single full-width column ── */}
+      <div className="md:hidden flex flex-col flex-1 min-h-0">
+        {/* Segmented status tabs (horizontal scroll, counts inline) */}
+        <div className="flex gap-1.5 px-3 py-2.5 overflow-x-auto bg-white border-b border-gray-100 shrink-0">
+          {MOBILE_SEGMENTS.map((seg) => {
+            const count = seg.id === "notes" ? notes.length : (tasksByCol[seg.id as BoardColId]?.length ?? 0);
+            const active = mobileSeg === seg.id;
+            return (
+              <button
+                key={seg.id}
+                onClick={() => setMobileSeg(seg.id)}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-medium whitespace-nowrap border transition-colors shrink-0",
+                  active
+                    ? "bg-[#2f5d6b] text-white border-[#2f5d6b]"
+                    : "bg-white text-gray-600 border-gray-200 active:bg-gray-50",
+                )}
+                aria-pressed={active}
+              >
+                {seg.label}
+                <span className={cn(
+                  "rounded-full px-1.5 py-0.5 text-[10px] leading-none font-semibold tabular-nums",
+                  active ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500",
+                )}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Single column content */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-3">
+          {mobileSeg === "notes" ? (
+            <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} mobile />
+          ) : (
+            (() => {
+              const colTasks = tasksByCol[mobileSeg as BoardColId] ?? [];
+              if (colTasks.length === 0) {
+                return (
+                  <div className="flex flex-col items-center justify-center text-center gap-2 py-16 text-gray-400">
+                    <p className="text-sm">Bu sütunda görev yok.</p>
+                    {canCreate && (
+                      <button
+                        onClick={() => { setModalDefaultStatus("ready"); setModalOpen(true); }}
+                        className="text-sm text-[#2f5d6b] font-medium"
+                      >
+                        + Görev oluştur
+                      </button>
+                    )}
+                  </div>
+                );
+              }
+              return (
+                <div className="flex flex-col gap-2.5">
+                  {colTasks.map((task) => (
+                    <MobileTaskCard
+                      key={task.id}
+                      task={task}
+                      profiles={profiles}
+                      contacts={contacts}
+                      responsibleNames={responsibleNames}
+                      onDelete={handleDeleteCard}
+                      onArchive={handleArchiveCard}
+                      onDuplicate={handleDuplicateCard}
+                      canArchiveCard={canArchive}
+                      canDeleteCard={canDelete}
+                      showMenu={!isViewer}
+                    />
+                  ))}
+                </div>
+              );
+            })()
+          )}
+        </div>
+      </div>
 
       {/* ── Toast overlay ─────────────────────────────────────────────────── */}
       {toasts.length > 0 && (
