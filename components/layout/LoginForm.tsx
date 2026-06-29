@@ -71,8 +71,8 @@ export function LoginForm({
 
       {effectiveMode === "signup" && (
         <p className="text-xs text-gray-500 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 leading-relaxed">
-          Hesabınızı oluşturun. E-posta adresiniz ekip erişim listesinde varsa AF Operasyon’a
-          katılırsınız.
+          Hesabınızı oluşturun. E-posta adresiniz ve kullanıcı adınız ekip erişim listesinde varsa
+          AF Operasyon’a katılırsınız.
         </p>
       )}
 
@@ -94,21 +94,56 @@ export function LoginForm({
           </div>
         )}
 
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-            E-posta
-          </label>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            required
-            defaultValue={initialEmail}
-            placeholder="E-posta"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
-        </div>
+        {effectiveMode === "signup" ? (
+          <>
+            <div>
+              <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
+                Kullanıcı adı
+              </label>
+              <input
+                id="username"
+                name="username"
+                type="text"
+                autoComplete="username"
+                required
+                placeholder="Kullanıcı adı"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                E-posta
+              </label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                defaultValue={initialEmail}
+                placeholder="E-posta"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+          </>
+        ) : (
+          <div>
+            <label htmlFor="identifier" className="block text-sm font-medium text-gray-700 mb-1">
+              Kullanıcı adı veya e-posta
+            </label>
+            <input
+              id="identifier"
+              name="identifier"
+              type="text"
+              autoComplete="username"
+              required
+              defaultValue={initialEmail}
+              placeholder="Kullanıcı adı veya e-posta"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+        )}
 
         <div>
           <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">

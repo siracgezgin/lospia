@@ -3,18 +3,19 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { validateUsername } from "@/lib/utils/username";
 import { z } from "zod";
 
-// Sign-in only needs a well-formed e-mail and a non-empty password — the stored
-// password may predate any length rule, so we must NOT reject short ones here or
-// existing users could be locked out.
+// Sign-in takes an identifier that is EITHER a username OR an e-mail, plus a
+// non-empty password — the stored password may predate any length rule, so we
+// must NOT reject short ones here or existing users could be locked out.
 const signInSchema = z.object({
-  email: z.string().trim().toLowerCase().email("Geçerli bir e-posta adresi girin."),
+  identifier: z.string().trim().min(1, "Kullanıcı adı veya e-posta gerekli."),
   password: z.string().min(1, "Şifre gerekli."),
 });
 
-// Sign-up is strict: a real name, a valid e-mail and a password that satisfies
-// the Supabase minimum (config.toml minimum_password_length = 6).
+// Sign-up is strict: a real name, a username, a valid e-mail and a password that
+// satisfies the Supabase minimum (config.toml minimum_password_length = 6).
 const signUpSchema = z.object({
   fullName: z
     .string()
@@ -48,7 +49,7 @@ export async function signIn(
   formData: FormData
 ): Promise<AuthFormState> {
   const parsed = signInSchema.safeParse({
-    email: formData.get("email"),
+    identifier: formData.get("identifier"),
     password: formData.get("password"),
   });
 
@@ -57,15 +58,36 @@ export async function signIn(
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword(parsed.data);
+
+  // The identifier is a username when it has no "@", otherwise an e-mail. A
+  // username is resolved to its e-mail server-side (no public mapping exposed),
+  // then we sign in with that e-mail. Keep the failure message generic so a bad
+  // username and a bad password look the same — no enumeration.
+  const identifier = parsed.data.identifier;
+  let email = identifier.toLowerCase();
+  if (!identifier.includes("@")) {
+    const { data: resolved, error: resolveError } = await supabase.rpc(
+      "resolve_username_to_email",
+      { p_username: identifier }
+    );
+    if (resolveError || !resolved) {
+      return { error: "Kullanıcı adı/e-posta veya şifre hatalı." };
+    }
+    email = (resolved as string).toLowerCase();
+  }
+
+  const { error } = await supabase.auth.signInWithPassword({
+    email,
+    password: parsed.data.password,
+  });
 
   if (error) {
     const msg = error.message?.toLowerCase() ?? "";
     if (msg.includes("invalid login") || msg.includes("credentials")) {
-      return { error: "E-posta veya şifre hatalı." };
+      return { error: "Kullanıcı adı/e-posta veya şifre hatalı." };
     }
     if (msg.includes("rate limit")) {
-      return { error: "Çok fazla deneme yapıldı. Lütfen biraz sonra tekrar deneyin." };
+      return { error: "Çok fazla deneme yapıldı. Birkaç dakika sonra tekrar deneyin." };
     }
     return { error: "Giriş yapılamadı. Lütfen tekrar deneyin." };
   }
@@ -84,15 +106,15 @@ export async function signIn(
  * Self-service signup gated by the team-access allowlist (no outbound email,
  * no service_role).
  *
- * The person enters Ad Soyad / E-posta / Şifre. Flow:
- *   1. check_email_access_grant(email) — block non-allowed e-mails before we
- *      create anything.
+ * The person enters Ad Soyad / Kullanıcı adı / E-posta / Şifre. Flow:
+ *   1. check_signup_access(email, username) — the e-mail AND username must both
+ *      match an open team-access grant before we create anything.
  *   2. supabase.auth.signUp() — Confirm Email is OFF in the dashboard, so this
  *      returns an authenticated session immediately, with NO e-mail sent and no
  *      project-wide email rate limit to hit.
- *   3. accept_workspace_access_grant(full_name) — runs as the new user, upserts
- *      the profile with the latest display name, attaches the user to AF
- *      Operasyon with the granted role, and marks the grant accepted.
+ *   3. accept_workspace_access_grant(full_name, username) — runs as the new user,
+ *      upserts the profile with the latest display name + username, attaches the
+ *      user to AF Operasyon with the granted role, and marks the grant accepted.
  *
  * If the account already exists we try to sign in with the supplied password;
  * a correct password logs the person in (and updates their display name), a
@@ -102,9 +124,9 @@ export async function signUp(
   _prevState: AuthFormState,
   formData: FormData
 ): Promise<AuthFormState> {
-  // 0. Validate name + e-mail + password BEFORE any Supabase auth call, so an
-  //    invalid/empty submission never reaches the auth server (and never burns
-  //    the auth rate limit).
+  // 0. Validate name + username + e-mail + password BEFORE any Supabase auth
+  //    call, so an invalid/empty submission never reaches the auth server (and
+  //    never burns the auth rate limit).
   const parsed = signUpSchema.safeParse({
     fullName: formData.get("full_name"),
     email: formData.get("email"),
@@ -113,6 +135,11 @@ export async function signUp(
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
   }
+  const usernameResult = validateUsername(formData.get("username") as string | null);
+  if (!usernameResult.ok) {
+    return { error: usernameResult.error };
+  }
+  const username = usernameResult.value;
   const email = parsed.data.email;
   const password = parsed.data.password;
   const formName = sanitizeName(parsed.data.fullName);
@@ -122,16 +149,26 @@ export async function signUp(
 
   const supabase = await createClient();
 
-  // 1. Require an active team-access grant (allowlist row) for this email.
-  //    Gate BEFORE auth.signUp so non-allowed e-mails create nothing.
-  const { data: allowed, error: gateError } = await supabase.rpc("check_email_access_grant", {
+  // 1. The e-mail AND username must both match an active team-access grant.
+  //    Gate BEFORE auth.signUp so a non-allowed pair creates nothing.
+  const { data: gate, error: gateError } = await supabase.rpc("check_signup_access", {
     p_email: email,
+    p_username: username,
   });
   if (gateError) {
     return { error: "Bu işlem şu anda tamamlanamadı. Lütfen tekrar deneyin." };
   }
-  if (!allowed) {
+  if (gate === "email_not_allowed") {
     return { error: "Bu e-posta adresi için AF Operasyon erişimi tanımlı değil." };
+  }
+  if (gate === "username_mismatch") {
+    return { error: "Bu kullanıcı adı bu e-posta adresi için tanımlı değil." };
+  }
+  if (gate === "username_taken") {
+    return { error: "Bu kullanıcı adı zaten kullanılıyor." };
+  }
+  if (gate !== "ok") {
+    return { error: "Bu işlem şu anda tamamlanamadı. Lütfen tekrar deneyin." };
   }
 
   // 2. Create the account. Confirm Email is OFF → an active session is returned
@@ -140,7 +177,7 @@ export async function signUp(
   const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: formName ? { full_name: formName } : undefined },
+    options: { data: { full_name: formName, username } },
   });
 
   let hasSession = !!signUpData?.session;
@@ -166,8 +203,16 @@ export async function signUp(
     hasSession = true;
   }
 
-  // 4. Attach to AF Operasyon and persist the latest display name.
-  await supabase.rpc("accept_workspace_access_grant", { p_full_name: formName });
+  // 4. Attach to AF Operasyon and persist the latest display name + username.
+  const { data: accept } = await supabase.rpc("accept_workspace_access_grant", {
+    p_full_name: formName,
+    p_username: username,
+  });
+  const acceptObj =
+    accept && typeof accept === "object" ? (accept as Record<string, unknown>) : null;
+  if (acceptObj?.error === "username_taken") {
+    return { error: "Bu kullanıcı adı zaten kullanılıyor." };
+  }
 
   revalidatePath("/", "layout");
   redirect("/board");

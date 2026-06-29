@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { canRenameWorkspace, canManageMembers, type AppRole } from "@/lib/auth/permissions";
+import { validateUsername } from "@/lib/utils/username";
 
 const hexUuid = (msg: string) =>
   z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, msg);
@@ -61,17 +62,47 @@ const AccessGrantSchema = z.object({
   workspaceId: hexUuid("Geçersiz çalışma alanı"),
   email: z.string().email("Geçersiz e-posta adresi").toLowerCase(),
   role: z.enum(["admin", "member", "viewer"], { error: "Geçersiz rol" }),
-  fullName: z.string().trim().max(100, "İsim en fazla 100 karakter olabilir").optional(),
 });
+
+// A username is unavailable if any profile already claims it, or any OTHER
+// pending grant in this workspace does. Returns true when the username is free
+// for `email` (the same e-mail's own pending grant is ignored so re-adds work).
+async function isUsernameTaken(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  workspaceId: string,
+  username: string,
+  email: string
+): Promise<boolean> {
+  const { data: profileMatch } = await supabase
+    .from("profiles")
+    .select("id")
+    .ilike("username", username)
+    .maybeSingle();
+  if (profileMatch) return true;
+
+  const { data: grantMatch } = await supabase
+    .from("workspace_invites")
+    .select("id, email")
+    .eq("workspace_id", workspaceId)
+    .ilike("username", username)
+    .is("accepted_at", null)
+    .maybeSingle();
+  if (grantMatch && grantMatch.email.toLowerCase() !== email.toLowerCase()) return true;
+
+  return false;
+}
 
 export async function addTeamAccess(
   workspaceId: string,
   email: string,
-  role: "admin" | "member" | "viewer",
-  fullName?: string
+  username: string,
+  role: "admin" | "member" | "viewer"
 ): Promise<{ id: string } | { error: string }> {
-  const parsed = AccessGrantSchema.safeParse({ workspaceId, email, role, fullName });
+  const parsed = AccessGrantSchema.safeParse({ workspaceId, email, role });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const usernameResult = validateUsername(username);
+  if (!usernameResult.ok) return { error: usernameResult.error };
+  const cleanUsername = usernameResult.value;
 
   const supabase = await createClient();
   const ctx = await getCallerRole(supabase);
@@ -91,8 +122,13 @@ export async function addTeamAccess(
     return { error: "Bu e-posta adresi zaten ekip üyesi." };
   }
 
-  // If a pending grant already exists for this e-mail, update its role instead of
-  // creating a duplicate (the partial unique index would reject a second one).
+  if (await isUsernameTaken(supabase, workspaceId, cleanUsername, parsed.data.email)) {
+    return { error: "Bu kullanıcı adı zaten kullanılıyor." };
+  }
+
+  // If a pending grant already exists for this e-mail, update its role + username
+  // instead of creating a duplicate (the partial unique index would reject a
+  // second one).
   const { data: existingGrant } = await supabase
     .from("workspace_invites")
     .select("id")
@@ -104,9 +140,12 @@ export async function addTeamAccess(
   if (existingGrant) {
     const { error: updErr } = await supabase
       .from("workspace_invites")
-      .update({ role: parsed.data.role })
+      .update({ role: parsed.data.role, username: cleanUsername })
       .eq("id", existingGrant.id);
-    if (updErr) return { error: "Erişim güncellenemedi. Lütfen tekrar deneyin." };
+    if (updErr) {
+      if (updErr.code === "23505") return { error: "Bu kullanıcı adı zaten kullanılıyor." };
+      return { error: "Erişim güncellenemedi. Lütfen tekrar deneyin." };
+    }
     revalidatePath("/settings");
     return { id: existingGrant.id };
   }
@@ -118,13 +157,16 @@ export async function addTeamAccess(
       email: parsed.data.email,
       role: parsed.data.role,
       invited_by: ctx.user.id,
-      full_name: parsed.data.fullName || null,
+      username: cleanUsername,
     })
     .select("id")
     .single();
 
   if (error) {
-    if (error.code === "23505") return { error: "Bu e-posta zaten erişim listesinde." };
+    if (error.code === "23505") {
+      // Either the e-mail or the username collides with an existing pending grant.
+      return { error: "Bu e-posta veya kullanıcı adı zaten erişim listesinde." };
+    }
     return { error: error.message };
   }
 
@@ -216,6 +258,43 @@ export async function renameWorkspaceMember(
     if (error.message?.includes("yetkiniz")) return { error: PERM_DENIED };
     if (error.message?.includes("bulunamadı")) return { error: "Üye bulunamadı." };
     return { error: "İsim güncellenemedi. Lütfen tekrar deneyin." };
+  }
+  revalidatePath("/settings");
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+// ── 4c. Set a member's username (owner only) ──────────────────────────────────
+// profiles RLS only allows self-edits, so write through a SECURITY DEFINER RPC
+// that re-verifies the caller manages the workspace and enforces format +
+// uniqueness server-side.
+export async function setMemberUsername(
+  memberId: string,
+  username: string
+): Promise<{ ok: true } | { error: string }> {
+  const usernameResult = validateUsername(username);
+  if (!usernameResult.ok) return { error: usernameResult.error };
+
+  const supabase = await createClient();
+  const ctx = await getCallerRole(supabase);
+  if (!ctx) return { error: "Kimlik doğrulama gerekli." };
+  if (!canManageMembers(ctx.role)) return { error: PERM_DENIED };
+
+  const { error } = await supabase.rpc("admin_set_member_username", {
+    p_member_id: memberId,
+    p_username: usernameResult.value,
+  });
+
+  if (error) {
+    if (error.message?.includes("username_taken")) {
+      return { error: "Bu kullanıcı adı zaten kullanılıyor." };
+    }
+    if (error.message?.includes("invalid_username")) {
+      return { error: "Kullanıcı adı yalnızca harf, rakam, nokta, tire ve alt çizgi içerebilir." };
+    }
+    if (error.message?.includes("yetkiniz")) return { error: PERM_DENIED };
+    if (error.message?.includes("bulunamadı")) return { error: "Üye bulunamadı." };
+    return { error: "Kullanıcı adı güncellenemedi. Lütfen tekrar deneyin." };
   }
   revalidatePath("/settings");
   revalidatePath("/", "layout");

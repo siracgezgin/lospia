@@ -46,7 +46,7 @@ export default async function SettingsPage() {
       supabase.from("workspaces").select("*").eq("id", workspaceId).single(),
       supabase
         .from("workspace_members")
-        .select("*, profiles(id, full_name, email, avatar_url)")
+        .select("*, profiles(id, full_name, username, email, avatar_url)")
         .eq("workspace_id", workspaceId),
       supabase.from("profiles").select("*").eq("id", user.id).single(),
       isOwner

@@ -193,6 +193,7 @@ export type Database = {
           full_name: string | null
           id: string
           updated_at: string
+          username: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -201,6 +202,7 @@ export type Database = {
           full_name?: string | null
           id: string
           updated_at?: string
+          username?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -209,6 +211,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           updated_at?: string
+          username?: string | null
         }
         Relationships: []
       }
@@ -879,6 +882,7 @@ export type Database = {
           id: string
           invited_by: string | null
           role: string
+          username: string | null
           workspace_id: string
         }
         Insert: {
@@ -890,6 +894,7 @@ export type Database = {
           id?: string
           invited_by?: string | null
           role: string
+          username?: string | null
           workspace_id: string
         }
         Update: {
@@ -901,6 +906,7 @@ export type Database = {
           id?: string
           invited_by?: string | null
           role?: string
+          username?: string | null
           workspace_id?: string
         }
         Relationships: [
@@ -1120,15 +1126,22 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      accept_workspace_access_grant: {
-        Args: { p_full_name?: string }
-        Returns: Json
-      }
+      accept_workspace_access_grant:
+        | { Args: { p_full_name?: string }; Returns: Json }
+        | { Args: { p_full_name?: string; p_username?: string }; Returns: Json }
       admin_set_member_name: {
         Args: { p_full_name: string; p_member_id: string }
         Returns: undefined
       }
+      admin_set_member_username: {
+        Args: { p_member_id: string; p_username: string }
+        Returns: undefined
+      }
       check_email_access_grant: { Args: { p_email: string }; Returns: boolean }
+      check_signup_access: {
+        Args: { p_email: string; p_username: string }
+        Returns: string
+      }
       create_default_saved_views: {
         Args: { p_owner_id: string; p_workspace_id: string }
         Returns: undefined
@@ -1177,6 +1190,10 @@ export type Database = {
       }
       provision_workspace: { Args: { p_full_name?: string }; Returns: Json }
       repair_pending_workspace_invites: { Args: never; Returns: number }
+      resolve_username_to_email: {
+        Args: { p_username: string }
+        Returns: string
+      }
       to_workspace_role: {
         Args: { p_role: string }
         Returns: Database["public"]["Enums"]["workspace_role"]

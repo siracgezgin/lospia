@@ -8,6 +8,7 @@ import {
   changeWorkspaceMemberRole,
   removeWorkspaceMember,
   renameWorkspaceMember,
+  setMemberUsername,
 } from "@/lib/actions/workspace";
 import type {
   WorkspaceMember, Profile, WorkspaceInvite, WorkspaceRole,
@@ -45,15 +46,20 @@ export function MembersManager({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  // Add-access form state — email + role only. The person enters their own name
-  // during signup, so no name field here.
+  // Add-access form state — email + username + role. The person enters their own
+  // name during signup, so no name field here.
   const [showAddForm, setShowAddForm] = useState(false);
   const [grantEmail, setGrantEmail] = useState("");
+  const [grantUsername, setGrantUsername] = useState("");
   const [grantRole, setGrantRole] = useState<"admin" | "member">("member");
 
   // Inline name editing (owner fixes stale/placeholder names).
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+
+  // Inline username editing (owner sets/corrects a member's username).
+  const [editingUsernameId, setEditingUsernameId] = useState<string | null>(null);
+  const [editUsername, setEditUsername] = useState("");
 
   // Pending confirmation for a destructive delete.
   const [confirm, setConfirm] = useState<
@@ -77,13 +83,15 @@ export function MembersManager({
 
   function handleAddAccess(e: React.FormEvent) {
     e.preventDefault();
-    if (!grantEmail.trim()) return;
+    if (!grantEmail.trim() || !grantUsername.trim()) return;
     setError(null);
+    const username = grantUsername.trim().toLowerCase();
     startTransition(async () => {
-      const result = await addTeamAccess(workspaceId, grantEmail.trim(), grantRole);
+      const result = await addTeamAccess(workspaceId, grantEmail.trim(), username, grantRole);
       if ("error" in result) { setError(result.error); return; }
       setGrants((prev) => [
-        ...prev,
+        // Drop any existing pending row for this e-mail (addTeamAccess upserts).
+        ...prev.filter((g) => g.email.toLowerCase() !== grantEmail.trim().toLowerCase()),
         {
           id: result.id,
           workspace_id: workspaceId,
@@ -94,9 +102,11 @@ export function MembersManager({
           accepted_user_id: null,
           created_at: new Date().toISOString(),
           full_name: null,
+          username,
         },
       ]);
       setGrantEmail("");
+      setGrantUsername("");
       setGrantRole("member");
       setShowAddForm(false);
     });
@@ -128,6 +138,24 @@ export function MembersManager({
         )
       );
       setEditingId(null);
+    });
+  }
+
+  function handleSaveUsername(memberId: string) {
+    const username = editUsername.trim().toLowerCase();
+    if (!username) { setEditingUsernameId(null); return; }
+    setError(null);
+    startTransition(async () => {
+      const result = await setMemberUsername(memberId, username);
+      if ("error" in result) { setError(result.error); return; }
+      setMembers((prev) =>
+        prev.map((m) =>
+          m.id === memberId
+            ? { ...m, profiles: { ...(m.profiles ?? {}), username } }
+            : m
+        )
+      );
+      setEditingUsernameId(null);
     });
   }
 
@@ -208,6 +236,54 @@ export function MembersManager({
                     )}
                   </p>
                 )}
+                {editingUsernameId === m.id ? (
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className="text-[11px] text-gray-400">@</span>
+                    <input
+                      value={editUsername}
+                      onChange={(e) => setEditUsername(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleSaveUsername(m.id);
+                        if (e.key === "Escape") setEditingUsernameId(null);
+                      }}
+                      autoFocus
+                      disabled={isPending}
+                      placeholder="kullanici.adi"
+                      className="flex-1 min-w-0 rounded-lg border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    <button
+                      onClick={() => handleSaveUsername(m.id)}
+                      disabled={isPending}
+                      className="p-1 rounded text-green-600 hover:bg-green-50 disabled:opacity-50"
+                      aria-label="Kaydet"
+                    >
+                      <Check size={14} />
+                    </button>
+                    <button
+                      onClick={() => setEditingUsernameId(null)}
+                      disabled={isPending}
+                      className="p-1 rounded text-gray-400 hover:bg-gray-100 disabled:opacity-50"
+                      aria-label="Vazgeç"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-500 truncate flex items-center gap-1">
+                    <span className="truncate">
+                      {m.profiles?.username ? `@${m.profiles.username}` : "Kullanıcı adı yok"}
+                    </span>
+                    {isOwner && (
+                      <button
+                        onClick={() => { setEditingUsernameId(m.id); setEditUsername(m.profiles?.username ?? ""); }}
+                        className="p-0.5 rounded text-gray-300 hover:text-gray-600 hover:bg-gray-100 shrink-0"
+                        aria-label="Kullanıcı adını düzenle"
+                      >
+                        <Pencil size={11} />
+                      </button>
+                    )}
+                  </p>
+                )}
                 <p className="text-xs text-gray-400 truncate">{m.profiles?.email}</p>
                 {(deptsByMember.get(m.id) ?? []).length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1">
@@ -264,7 +340,8 @@ export function MembersManager({
         <div>
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Ekip erişimi</p>
           <p className="text-xs text-gray-400 mt-1 mb-2">
-            Bu listeye eklenen e-posta adresleri hesap oluşturduğunda AF Operasyon’a katılır.
+            Bu listeye eklenen kullanıcı adı ve e-posta eşleşmesiyle hesap oluşturan kişiler AF
+            Operasyon’a katılır.
           </p>
 
           {grants.length > 0 && (
@@ -272,7 +349,10 @@ export function MembersManager({
               {grants.map((g) => (
                 <div key={g.id} className="flex items-center justify-between px-5 py-3 gap-3">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-700 truncate">{g.email}</p>
+                    <p className="text-sm font-medium text-gray-700 truncate">
+                      {g.username ? `@${g.username}` : "—"}
+                    </p>
+                    <p className="text-xs text-gray-400 truncate">{g.email}</p>
                     <p className="text-xs text-gray-400">
                       {roleLabel(g.role)} · Hesap bekleniyor
                     </p>
@@ -313,6 +393,16 @@ export function MembersManager({
                   className="flex-1 min-w-[200px] rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
                   disabled={isPending}
                 />
+                <input
+                  type="text"
+                  value={grantUsername}
+                  onChange={(e) => setGrantUsername(e.target.value)}
+                  placeholder="Kullanıcı adı"
+                  required
+                  autoComplete="off"
+                  className="flex-1 min-w-[160px] rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  disabled={isPending}
+                />
                 <select
                   value={grantRole}
                   onChange={(e) => setGrantRole(e.target.value as "admin" | "member")}
@@ -325,20 +415,21 @@ export function MembersManager({
                 </select>
               </div>
               <p className="text-xs text-gray-400">
-                Kişi /login üzerinden bu e-posta ile hesap oluşturduğunda AF Operasyon’a katılır.
-                Departman ataması, kişi katıldıktan sonra yukarıdaki Departmanlar bölümünden yapılır.
+                Kişi /login üzerinden bu e-posta ve kullanıcı adı ile hesap oluşturduğunda AF
+                Operasyon’a katılır. Departman ataması, kişi katıldıktan sonra yukarıdaki
+                Departmanlar bölümünden yapılır.
               </p>
               <div className="flex items-center gap-2">
                 <button
                   type="submit"
-                  disabled={isPending || !grantEmail.trim()}
+                  disabled={isPending || !grantEmail.trim() || !grantUsername.trim()}
                   className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
                 >
                   {isPending ? "Ekleniyor…" : "Erişim ekle"}
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setShowAddForm(false); setGrantEmail(""); setError(null); }}
+                  onClick={() => { setShowAddForm(false); setGrantEmail(""); setGrantUsername(""); setError(null); }}
                   className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
                 >
                   İptal
