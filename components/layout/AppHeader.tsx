@@ -73,21 +73,20 @@ function ProfileMenu({
 
       {open && (
         <div className="absolute right-0 top-full mt-2 w-64 bg-surface border border-line rounded-xl shadow-pop z-50 overflow-hidden">
-          {/* Identity card */}
+          {/* Identity card — name + email (role lives once, in Details below) */}
           <div className="flex items-center gap-3 px-4 py-3.5 bg-surface-muted/60 border-b border-line">
             <Avatar name={displayName} size="md" />
             <div className="min-w-0">
               <p className="text-sm font-semibold text-ink truncate">{displayName}</p>
-              <p className="text-[11px] text-subtle truncate">{ROLE_LABELS[role]}</p>
+              <p className="flex items-center gap-1.5 text-[11px] text-subtle truncate">
+                <Mail size={11} className="shrink-0" />
+                <span className="truncate">{email ?? "—"}</span>
+              </p>
             </div>
           </div>
 
-          {/* Details */}
-          <div className="px-4 py-3 space-y-2 border-b border-line">
-            <div className="flex items-center gap-2 text-[12px] text-muted">
-              <Mail size={13} className="text-subtle shrink-0" />
-              <span className="truncate">{email ?? "—"}</span>
-            </div>
+          {/* Details — role shown exactly once */}
+          <div className="px-4 py-3 border-b border-line">
             <div className="flex items-center gap-2 text-[12px] text-muted">
               <Shield size={13} className="text-subtle shrink-0" />
               <span>{ROLE_LABELS[role]}</span>
@@ -118,7 +117,7 @@ export function AppHeader({
   const displayName = getPersonDisplayName(userName ?? userEmail ?? null);
 
   return (
-    <header className="h-14 bg-surface border-b border-line flex items-center justify-between px-5 shrink-0">
+    <header className="relative z-30 h-14 bg-surface border-b border-line flex items-center justify-between px-5 shrink-0">
       <div className="flex items-center gap-2.5 min-w-0">
         <h1 className="text-[15px] font-semibold text-ink truncate">{title}</h1>
       </div>

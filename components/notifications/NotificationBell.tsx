@@ -51,14 +51,16 @@ export function NotificationBell({ unreadCount: initialCount, notifications = []
 
       {open && (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-9 z-20 w-80 rounded-xl bg-white shadow-lg border border-gray-200 overflow-hidden">
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-9 z-50 w-80 rounded-xl bg-white shadow-pop border border-gray-200 overflow-hidden">
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-              <h3 className="text-sm font-semibold text-gray-900">
+              <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
                 Bildirimler
                 {optimisticCount > 0 && (
-                  <span className="ml-2 text-xs font-normal text-gray-400">{optimisticCount} okunmamış</span>
+                  <span className="text-[10px] font-semibold text-white bg-red-500 rounded-full px-1.5 py-0.5 leading-none">
+                    {optimisticCount}
+                  </span>
                 )}
               </h3>
               {optimisticCount > 0 && (
@@ -72,33 +74,46 @@ export function NotificationBell({ unreadCount: initialCount, notifications = []
             </div>
 
             {/* List */}
-            <div className={cn("overflow-y-auto max-h-80", notifications.length === 0 && "py-8")}>
+            <div className={cn("overflow-y-auto max-h-80", notifications.length === 0 && "py-10")}>
               {notifications.length === 0 ? (
-                <p className="text-center text-sm text-gray-400">Henüz bildirim yok</p>
+                <div className="flex flex-col items-center gap-2 text-center px-4">
+                  <Bell size={26} className="text-gray-200" />
+                  <p className="text-sm text-gray-400">Yeni bildiriminiz yok.</p>
+                </div>
               ) : (
                 notifications.slice(0, 20).map((n) => (
                   <div
                     key={n.id}
                     className={cn(
-                      "px-4 py-3 border-b border-gray-50 last:border-0 flex gap-3 items-start",
-                      !n.is_read && "bg-blue-50/60"
+                      "px-4 py-3 border-b border-gray-50 last:border-0 flex gap-3 items-start transition-colors",
+                      !n.is_read
+                        ? "bg-blue-50/70 border-l-2 border-l-blue-500"
+                        : "bg-white border-l-2 border-l-transparent hover:bg-gray-50",
                     )}
                   >
                     <div className={cn(
                       "h-2 w-2 rounded-full mt-1.5 shrink-0",
-                      !n.is_read ? "bg-blue-500" : "bg-transparent"
+                      !n.is_read ? "bg-blue-500" : "bg-transparent",
                     )} />
                     <div className="flex-1 min-w-0">
                       {n.task_id ? (
                         <Link
                           href={`/tasks/${n.task_id}`}
                           onClick={() => { setOpen(false); if (!n.is_read) handleMarkOneRead(n.id); }}
-                          className="text-sm font-medium text-gray-800 hover:text-blue-600 block truncate"
+                          className={cn(
+                            "text-sm text-gray-800 hover:text-blue-600 block truncate",
+                            !n.is_read ? "font-semibold" : "font-normal",
+                          )}
                         >
                           {n.title}
                         </Link>
                       ) : (
-                        <p className="text-sm font-medium text-gray-800 truncate">{n.title}</p>
+                        <p className={cn(
+                          "text-sm text-gray-800 truncate",
+                          !n.is_read ? "font-semibold" : "font-normal",
+                        )}>
+                          {n.title}
+                        </p>
                       )}
                       {n.body && (
                         <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{n.body}</p>

@@ -28,7 +28,7 @@ interface Props {
   deptMembers?: DepartmentMember[];
 }
 
-/** Build an invite link the owner can hand to a person directly. */
+/** Build the sign-up link an admin can hand to an approved person directly. */
 function inviteLink(email: string): string {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   return `${origin}/login?mode=signup&email=${encodeURIComponent(email)}`;
@@ -47,7 +47,7 @@ function CopyLinkButton({ email }: { email: string }) {
         } catch { /* clipboard unavailable — link is still shown below */ }
       }}
       className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 shrink-0"
-      title="Davet bağlantısını kopyala"
+      title="Kayıt bağlantısını kopyala"
     >
       {copied ? <Check size={12} /> : <Copy size={12} />}
       {copied ? "Kopyalandı" : "Bağlantıyı kopyala"}
@@ -205,10 +205,10 @@ export function MembersManager({
         })}
       </div>
 
-      {/* Pending invites */}
+      {/* Approved e-mails awaiting first sign-up */}
       {invites.length > 0 && (
         <div>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Bekleyen davetler</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Kayıt izni verilenler</p>
           <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
             {invites.map((inv) => (
               <div key={inv.id} className="flex items-center justify-between px-5 py-3 gap-3">
@@ -223,7 +223,7 @@ export function MembersManager({
                       onClick={() => handleCancelInvite(inv.id)}
                       disabled={isPending}
                       className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-50 transition-colors"
-                      aria-label="Daveti iptal et"
+                      aria-label="Kayıt iznini kaldır"
                     >
                       <X size={14} />
                     </button>
@@ -233,8 +233,8 @@ export function MembersManager({
             ))}
           </div>
           <p className="text-xs text-gray-400 mt-2">
-            Davet kaydedildi. E-posta gönderimi aktif değilse bu bağlantıyı kişiye iletin; kişi davet edilen
-            e-posta ile kayıt olmalı.
+            Kayıt izni kaydedildi. Bu bağlantıyı kişiye iletin; kişi izin verilen e-posta adresiyle
+            kayıt olup giriş yapabilir.
           </p>
         </div>
       )}
@@ -248,11 +248,11 @@ export function MembersManager({
               className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium"
             >
               <Plus size={14} />
-              Üye davet et
+              Kayıt izni ver
             </button>
           ) : (
             <form onSubmit={handleInvite} className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Yeni davet</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Yeni kayıt izni</p>
               <div className="flex flex-wrap gap-2">
                 <input
                   type="email"
@@ -281,7 +281,7 @@ export function MembersManager({
                   disabled={isPending || !inviteEmail.trim()}
                   className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
                 >
-                  {isPending ? "Oluşturuluyor…" : "Davet oluştur"}
+                  {isPending ? "Kaydediliyor…" : "Kayıt izni ver"}
                 </button>
                 <button
                   type="button"

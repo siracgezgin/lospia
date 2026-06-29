@@ -134,10 +134,11 @@ export default async function AppLayout({
               <div className="max-w-md w-full bg-amber-50 border border-amber-200 rounded-xl p-8 text-center space-y-4">
                 <div className="text-4xl">🔒</div>
                 <h2 className="text-lg font-semibold text-amber-900">
-                  Davet gerekli
+                  Erişim izni gerekli
                 </h2>
                 <p className="text-sm text-amber-800">
-                  Bu sistem şu anda davet ile kullanılmaktadır. Erişim için yöneticinizden davet isteyin.
+                  Bu çalışma alanına yalnızca kayıt izni verilen e-posta adresleri giriş yapabilir.
+                  Erişim için yöneticinizle iletişime geçin.
                 </p>
                 <p className="text-xs text-amber-600">
                   Giriş yaptığınız hesap: {user.email}

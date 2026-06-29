@@ -11,10 +11,9 @@ export function LoginForm({
   initialMode?: "signin" | "signup";
   initialEmail?: string;
 }) {
-  // Invite-only is enforced server-side: after sign-up, AppLayout calls
-  // provision_workspace() which returns {error:"no_invite"} and shows the gate
-  // for anyone without a pending invite. So it is safe to expose sign-up here —
-  // invited users (who arrive via the invite link) can create their account.
+  // Access is restricted server-side: sign-up only succeeds for e-mail addresses
+  // an admin has pre-approved (the internal allowlist). Anyone else is shown a
+  // clear "access not granted" message rather than getting a stray workspace.
   const [mode, setMode] = useState<"signin" | "signup">(initialMode);
   const [signInState, signInAction, signInPending] = useActionState<AuthFormState, FormData>(
     signIn,
@@ -70,7 +69,8 @@ export function LoginForm({
 
       {effectiveMode === "signup" && (
         <p className="text-xs text-gray-500 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
-          Hesap oluşturmak için size iletilen davet bağlantısını kullanın.
+          Hesabınızı oluşturun. Yöneticinizin kayıt izni verdiği e-posta adresleriyle
+          AF Operasyon çalışma alanına giriş yapabilirsiniz.
         </p>
       )}
 

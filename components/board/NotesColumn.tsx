@@ -413,7 +413,7 @@ export function NotesColumn({
   return (
     <div className="flex flex-col gap-2 w-64 shrink-0">
       {/* Header */}
-      <div className="flex items-center justify-between px-0.5 sticky top-0 z-20 bg-app pb-1.5 -mt-1 pt-1">
+      <div className="flex items-center justify-between sticky top-0 z-20 bg-app -mt-4 pt-4 -mx-1 px-1 pb-2 border-b border-line shadow-[0_6px_8px_-6px_rgba(16,24,40,0.12)]">
         <div className="flex items-center gap-2">
           <StickyNote size={13} className="text-[#c8c39e]" />
           <h3 className="text-xs font-bold uppercase tracking-wider text-[#6b6748]">Notlar</h3>

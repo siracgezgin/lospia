@@ -6,6 +6,7 @@ import { ChevronRight, Plus, Trash2, UserPlus, UserMinus } from "lucide-react";
 import type { WorkspaceDepartment, DepartmentMember, WorkspaceMember, Profile } from "@/types";
 import { Avatar, AvatarGroup } from "@/components/ui/Avatar";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
+import { resolveDeptColorKey } from "@/lib/utils/departments";
 import {
   provisionAfDepartments,
   createDepartment,
@@ -24,12 +25,16 @@ interface Props {
 }
 
 const COLOR_CLASSES: Record<string, string> = {
+  red:    "bg-red-100 text-red-700",
   purple: "bg-purple-100 text-purple-700",
   orange: "bg-orange-100 text-orange-700",
   blue:   "bg-blue-100 text-blue-700",
   pink:   "bg-pink-100 text-pink-700",
   green:  "bg-green-100 text-green-700",
+  teal:   "bg-teal-100 text-teal-700",
   amber:  "bg-amber-100 text-amber-700",
+  brown:  "bg-amber-100 text-amber-800",
+  slate:  "bg-slate-100 text-slate-700",
 };
 
 function memberName(m: MemberRow) {
@@ -128,6 +133,8 @@ function DeptCard({
   dept,
   children,
   deptMembers,
+  aggregateMembers,
+  colorKey,
   workspaceMembers,
   canManage,
   onDelete,
@@ -135,6 +142,11 @@ function DeptCard({
   dept: WorkspaceDepartment;
   children?: React.ReactNode;
   deptMembers: (DepartmentMember & { profiles?: Partial<Profile> | null })[];
+  // Deduped members across this department + (for top-level) its children.
+  // Drives the collapsed header count/avatars so a parent reflects its sub-teams.
+  aggregateMembers: (DepartmentMember & { profiles?: Partial<Profile> | null })[];
+  // Effective colour key (canonical AF override / stored / inherited from parent).
+  colorKey: string | null;
   workspaceMembers: MemberRow[];
   canManage: boolean;
   onDelete: (id: string) => void;
@@ -144,7 +156,7 @@ function DeptCard({
   const [, startTransition] = useTransition();
   const router = useRouter();
 
-  const colorClass = dept.color_key ? (COLOR_CLASSES[dept.color_key] ?? "bg-gray-100 text-gray-700") : "bg-gray-100 text-gray-700";
+  const colorClass = colorKey ? (COLOR_CLASSES[colorKey] ?? "bg-gray-100 text-gray-700") : "bg-gray-100 text-gray-700";
   const myMembers = deptMembers.filter((dm) => dm.department_id === dept.id);
   const existingMemberIds = new Set(myMembers.map((dm) => dm.member_id));
 
@@ -170,10 +182,10 @@ function DeptCard({
         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${colorClass}`}>
           {dept.name}
         </span>
-        {myMembers.length > 0 && (
+        {aggregateMembers.length > 0 && (
           <div className="flex items-center gap-1.5 ml-auto">
-            <AvatarGroup names={myMembers.map((dm) => getPersonDisplayName(dm.profiles ?? dm.member_id.slice(0, 8)))} max={4} />
-            <span className="text-xs text-gray-400">{myMembers.length} kişi</span>
+            <AvatarGroup names={aggregateMembers.map((dm) => getPersonDisplayName(dm.profiles ?? dm.member_id.slice(0, 8)))} max={4} />
+            <span className="text-xs text-gray-400">{aggregateMembers.length} kişi</span>
           </div>
         )}
         {canManage && (
@@ -285,6 +297,30 @@ export function DepartmentsManager({ departments, deptMembers, workspaceMembers,
   const children = (parentId: string) =>
     departments.filter((d) => d.parent_id === parentId).sort((a, b) => a.position - b.position);
 
+  // Deduped member rows for a department's collapsed header. A top-level
+  // department aggregates its own members plus everyone in its child
+  // departments, de-duplicated by member_id; a child shows its direct members.
+  const aggregateFor = (deptId: string) => {
+    const childIds = new Set(children(deptId).map((c) => c.id));
+    const byMember = new Map<string, (DepartmentMember & { profiles?: Partial<Profile> | null })>();
+    for (const dm of deptMembers) {
+      if (dm.department_id === deptId || childIds.has(dm.department_id)) {
+        if (!byMember.has(dm.member_id)) byMember.set(dm.member_id, dm);
+      }
+    }
+    return [...byMember.values()];
+  };
+  // Resolve a department's effective colour: canonical/stored, else inherit parent.
+  const colorFor = (dept: WorkspaceDepartment) => {
+    const own = resolveDeptColorKey(dept.name, dept.color_key ?? null);
+    if (own) return own;
+    if (dept.parent_id) {
+      const parent = departments.find((d) => d.id === dept.parent_id);
+      if (parent) return resolveDeptColorKey(parent.name, parent.color_key ?? null);
+    }
+    return null;
+  };
+
   function handleDelete(id: string) {
     if (!confirm("Bu departmanı silmek istediğinizden emin misiniz?")) return;
     startDelete(async () => {
@@ -329,6 +365,8 @@ export function DepartmentsManager({ departments, deptMembers, workspaceMembers,
             <DeptCard
               dept={dept}
               deptMembers={deptMembers}
+              aggregateMembers={aggregateFor(dept.id)}
+              colorKey={colorFor(dept)}
               workspaceMembers={workspaceMembers}
               canManage={canManage}
               onDelete={handleDelete}
@@ -339,6 +377,8 @@ export function DepartmentsManager({ departments, deptMembers, workspaceMembers,
                   key={child.id}
                   dept={child}
                   deptMembers={deptMembers}
+                  aggregateMembers={aggregateFor(child.id)}
+                  colorKey={colorFor(child)}
                   workspaceMembers={workspaceMembers}
                   canManage={canManage}
                   onDelete={handleDelete}

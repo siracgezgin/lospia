@@ -1,14 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { ContactsManager } from "@/components/settings/ContactsManager";
 import { WorkspaceNameEditor } from "@/components/settings/WorkspaceNameEditor";
 import { MembersManager } from "@/components/settings/MembersManager";
 import { DepartmentsManager } from "@/components/settings/DepartmentsManager";
 import { canManageSettings, canRenameWorkspace, canManageMembers, canManageWorkspace } from "@/lib/auth/permissions";
 import { roleLabel } from "@/lib/utils/roles";
 import type {
-  Workspace, WorkspaceMember, Profile, CustomFieldDefinition,
-  WorkspaceContact, WorkspaceRole, WorkspaceInvite,
+  Workspace, WorkspaceMember, Profile,
+  WorkspaceRole, WorkspaceInvite,
   WorkspaceDepartment, DepartmentMember,
 } from "@/types";
 
@@ -41,7 +40,7 @@ export default async function SettingsPage() {
   const canManage = canManageMembers(userRole);          // owner-only (invites)
   const canManageDepts = canManageWorkspace(userRole);   // owner + admin (departments)
 
-  const [wsResult, membersResult, profileResult, cfResult, contactsResult, invitesResult,
+  const [wsResult, membersResult, profileResult, invitesResult,
          deptsResult, deptMembersResult] =
     await Promise.all([
       supabase.from("workspaces").select("*").eq("id", workspaceId).single(),
@@ -50,16 +49,6 @@ export default async function SettingsPage() {
         .select("*, profiles(id, full_name, email, avatar_url)")
         .eq("workspace_id", workspaceId),
       supabase.from("profiles").select("*").eq("id", user.id).single(),
-      supabase
-        .from("custom_field_definitions")
-        .select("*")
-        .eq("workspace_id", workspaceId)
-        .order("position"),
-      supabase
-        .from("workspace_contacts")
-        .select("*")
-        .eq("workspace_id", workspaceId)
-        .order("created_at"),
       isOwner
         ? supabase
             .from("workspace_invites")
@@ -81,8 +70,6 @@ export default async function SettingsPage() {
 
   const workspace: Workspace | null = wsResult.data;
   const profile: Profile | null = profileResult.data;
-  const customFields: CustomFieldDefinition[] = cfResult.data ?? [];
-  const contacts: WorkspaceContact[] = (contactsResult.data ?? []) as WorkspaceContact[];
   const invites: WorkspaceInvite[] = (invitesResult.data ?? []) as WorkspaceInvite[];
   const departments: WorkspaceDepartment[] = (deptsResult.data ?? []) as WorkspaceDepartment[];
   // department_members.member_id → workspace_members → profiles. Flatten the
@@ -191,37 +178,6 @@ export default async function SettingsPage() {
             )}
           </div>
         )}
-      </section>
-
-      {/* İş birliği kişileri */}
-      <section className="space-y-4">
-        <h2 className="text-base font-semibold text-gray-700">İş birliği kişileri</h2>
-        <p className="text-xs text-gray-400 -mt-2">
-          Görevlerde iş birliği kişisi olarak seçilebilen kişiler. Sisteme giriş yapmalarına gerek yoktur.
-        </p>
-        <ContactsManager workspaceId={workspaceId} initialContacts={contacts} />
-      </section>
-
-      {/* Custom fields */}
-      <section className="space-y-4">
-        <h2 className="text-base font-semibold text-gray-700">Özel alanlar</h2>
-        <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
-          {customFields.length === 0 ? (
-            <p className="px-5 py-4 text-sm text-gray-400">Henüz özel alan tanımlanmamış.</p>
-          ) : (
-            customFields.map((cf: CustomFieldDefinition) => (
-              <div key={cf.id} className="flex items-center justify-between px-5 py-3">
-                <div>
-                  <p className="text-sm font-medium">{cf.name}</p>
-                  <p className="text-xs text-gray-400 font-mono">{cf.field_key}</p>
-                </div>
-                <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
-                  {cf.field_type}
-                </span>
-              </div>
-            ))
-          )}
-        </div>
       </section>
     </div>
   );

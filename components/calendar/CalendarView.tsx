@@ -86,40 +86,50 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
 
   return (
     <div className="p-4 sm:p-6 h-full flex flex-col gap-4">
-      {/* Header */}
-      <div className="flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-gray-900">Takvim</h1>
-          <span className="text-sm font-semibold text-gray-500 capitalize hidden sm:inline">
+      {/* Header — all navigation grouped on the left, next to the title */}
+      <div className="flex items-center gap-3 flex-wrap shrink-0">
+        <h1 className="text-2xl font-bold text-gray-900">Takvim</h1>
+
+        {/* Prev · month label · next */}
+        <div className="flex items-center rounded-lg border border-gray-200 overflow-hidden">
+          <button
+            onClick={() => setCurrent((d) => subMonths(d, 1))}
+            className="p-1.5 hover:bg-gray-50 text-gray-500"
+            aria-label="Önceki ay"
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <span className="text-sm font-semibold text-gray-700 w-32 text-center border-x border-gray-200 py-1.5 capitalize select-none">
             {format(current, "MMMM yyyy", { locale: tr })}
           </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center rounded-lg border border-gray-200 overflow-hidden">
-            <button
-              onClick={() => setCurrent((d) => subMonths(d, 1))}
-              className="p-1.5 hover:bg-gray-50 text-gray-500"
-              aria-label="Önceki ay"
-            >
-              <ChevronLeft size={18} />
-            </button>
-            <span className="text-sm font-medium text-gray-700 w-28 text-center border-x border-gray-200 py-1.5 capitalize sm:hidden">
-              {format(current, "MMM yyyy", { locale: tr })}
-            </span>
-            <button
-              onClick={() => setCurrent((d) => addMonths(d, 1))}
-              className="p-1.5 hover:bg-gray-50 text-gray-500"
-              aria-label="Sonraki ay"
-            >
-              <ChevronRight size={18} />
-            </button>
-          </div>
           <button
-            onClick={() => { setCurrent(new Date()); setSelectedDay(new Date()); }}
-            className="text-sm px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 font-medium"
+            onClick={() => setCurrent((d) => addMonths(d, 1))}
+            className="p-1.5 hover:bg-gray-50 text-gray-500"
+            aria-label="Sonraki ay"
           >
-            Bugün
+            <ChevronRight size={18} />
           </button>
+        </div>
+
+        <button
+          onClick={() => { setCurrent(new Date()); setSelectedDay(new Date()); }}
+          className="text-sm px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 font-medium"
+        >
+          Bugün
+        </button>
+
+        {/* Direct month/year jump — plan ahead to 2027/2028 in one step */}
+        <div className="flex items-center gap-1.5 text-sm px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50">
+          <CalendarDays size={15} className="text-gray-400 shrink-0" />
+          <input
+            type="month"
+            value={format(current, "yyyy-MM")}
+            onChange={(e) => {
+              if (e.target.value) setCurrent(parseISO(`${e.target.value}-01`));
+            }}
+            className="bg-transparent text-gray-700 text-sm outline-none cursor-pointer"
+            aria-label="Ay ve yıl seç"
+          />
         </div>
       </div>
 

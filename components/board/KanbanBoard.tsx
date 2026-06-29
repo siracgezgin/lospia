@@ -892,7 +892,7 @@ function KanbanColumn({
 
   return (
     <div className="flex flex-col gap-2 w-72 shrink-0">
-      <div className="sticky top-0 z-20 bg-app/95 backdrop-blur-sm -mx-1 px-1 pt-1.5 pb-2 border-b border-line shadow-[0_6px_8px_-6px_rgba(16,24,40,0.12)]">
+      <div className="sticky top-0 z-20 bg-app -mt-4 pt-4 -mx-1 px-1 pb-2 border-b border-line shadow-[0_6px_8px_-6px_rgba(16,24,40,0.12)]">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <h3 className={cn("text-xs font-bold uppercase tracking-wider truncate", headerTone)}>
@@ -967,7 +967,7 @@ function StaticKanbanColumn({
     : "text-gray-500";
   return (
     <div className="flex flex-col gap-2 w-72 shrink-0">
-      <div className="sticky top-0 z-20 bg-app/95 backdrop-blur-sm -mx-1 px-1 pt-1.5 pb-2 border-b border-line shadow-[0_6px_8px_-6px_rgba(16,24,40,0.12)]">
+      <div className="sticky top-0 z-20 bg-app -mt-4 pt-4 -mx-1 px-1 pb-2 border-b border-line shadow-[0_6px_8px_-6px_rgba(16,24,40,0.12)]">
         <div className="flex items-center gap-2">
           <h3 className={cn("text-xs font-bold uppercase tracking-wider truncate", headerTone)}>
             {colDef.label}

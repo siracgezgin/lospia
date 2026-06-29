@@ -32,6 +32,9 @@ export interface CardStyle {
 // Curated pastel families. None of these is the success-green — that hue is
 // reserved exclusively for completed tasks (DONE_STYLE).
 const FAMILY: Record<string, CardStyle> = {
+  // Strong red — reserved for the critical Marka Yönetimi / CEO Katmanı family.
+  // Distinct from the solid urgent-priority red and from the "rose" pastel.
+  red:      { surface: "bg-[#fdeeec]", border: "border-[#f5d3cd]", accent: "border-l-[#d4503c]", chip: "bg-[#fadbd4] text-[#9e2f20]", dot: "bg-[#cf4a38]" },
   lavender: { surface: "bg-[#f4f1fb]", border: "border-[#e4ddf3]", accent: "border-l-[#9b80d6]", chip: "bg-[#ece5fa] text-[#5b46a0]", dot: "bg-[#7c5cbf]" },
   blue:     { surface: "bg-[#eef4fc]", border: "border-[#d9e6f5]", accent: "border-l-[#5b93d6]", chip: "bg-[#e3edfa] text-[#285a8c]", dot: "bg-[#3b7bb5]" },
   teal:     { surface: "bg-[#e8f6f8]", border: "border-[#cfe8eb]", accent: "border-l-[#2f9aa6]", chip: "bg-[#dbf0f3] text-[#1d6d76]", dot: "bg-[#1f97a3]" }, // cyan-teal, NOT green
@@ -114,6 +117,7 @@ export const getCategoryStyle = getCategoryCardStyle;
 // A department's color_key maps to a pastel family. 'green' is remapped to teal
 // because green is reserved exclusively for completed tasks (DONE_STYLE).
 const DEPT_COLOR_TO_FAMILY: Record<string, keyof typeof FAMILY> = {
+  red: "red",       // Marka Yönetimi / CEO Katmanı (critical)
   purple: "lavender",
   lavender: "lavender",
   orange: "orange",
@@ -125,7 +129,7 @@ const DEPT_COLOR_TO_FAMILY: Record<string, keyof typeof FAMILY> = {
   amber: "amber",
   sand: "sand",
   slate: "slate",
-  brown: "brown",
+  brown: "brown",  // Finans & Operasyon (own distinct olive/brown tone)
 };
 
 /** Department card style from a department color_key. Neutral when absent. */
