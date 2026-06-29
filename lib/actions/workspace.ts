@@ -166,6 +166,42 @@ export async function changeWorkspaceMemberRole(
   return { ok: true };
 }
 
+// ── 4b. Rename a member's display name (owner only) ───────────────────────────
+// Lets an admin correct a stale/placeholder profile name (e.g. `Test"`) without
+// the person having to re-sign-up. Writes profiles.full_name for the member.
+const MemberNameSchema = z.object({
+  fullName: z.string().trim().min(1, "İsim gerekli").max(100, "İsim en fazla 100 karakter olabilir"),
+});
+
+export async function renameWorkspaceMember(
+  memberId: string,
+  fullName: string
+): Promise<{ ok: true } | { error: string }> {
+  const parsed = MemberNameSchema.safeParse({ fullName });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const supabase = await createClient();
+  const ctx = await getCallerRole(supabase);
+  if (!ctx) return { error: "Kimlik doğrulama gerekli." };
+  if (!canManageMembers(ctx.role)) return { error: PERM_DENIED };
+
+  // profiles RLS only allows self-edits, so write through the SECURITY DEFINER
+  // RPC, which re-verifies the caller manages the target member's workspace.
+  const { error } = await supabase.rpc("admin_set_member_name", {
+    p_member_id: memberId,
+    p_full_name: parsed.data.fullName,
+  });
+
+  if (error) {
+    if (error.message?.includes("yetkiniz")) return { error: PERM_DENIED };
+    if (error.message?.includes("bulunamadı")) return { error: "Üye bulunamadı." };
+    return { error: "İsim güncellenemedi. Lütfen tekrar deneyin." };
+  }
+  revalidatePath("/settings");
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
 // ── 5. Remove workspace member (owner only) ───────────────────────────────────
 export async function removeWorkspaceMember(
   memberId: string

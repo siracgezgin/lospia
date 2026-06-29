@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ChevronRight, Plus, Trash2, UserPlus, UserMinus } from "lucide-react";
 import type { WorkspaceDepartment, DepartmentMember, WorkspaceMember, Profile } from "@/types";
 import { Avatar, AvatarGroup } from "@/components/ui/Avatar";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { resolveDeptColorKey } from "@/lib/utils/departments";
 import {
@@ -153,16 +154,25 @@ function DeptCard({
 }) {
   const [open, setOpen] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
-  const [, startTransition] = useTransition();
+  const [removeTarget, setRemoveTarget] = useState<{ id: string; name: string } | null>(null);
+  const [pendingRemove, startTransition] = useTransition();
   const router = useRouter();
 
   const colorClass = colorKey ? (COLOR_CLASSES[colorKey] ?? "bg-gray-100 text-gray-700") : "bg-gray-100 text-gray-700";
   const myMembers = deptMembers.filter((dm) => dm.department_id === dept.id);
   const existingMemberIds = new Set(myMembers.map((dm) => dm.member_id));
 
-  function handleRemoveMember(dmId: string) {
+  function requestRemoveMember(dmId: string) {
+    const dm = myMembers.find((m) => m.id === dmId);
+    setRemoveTarget({ id: dmId, name: getPersonDisplayName(dm?.profiles ?? dmId.slice(0, 8)) });
+  }
+
+  function confirmRemoveMember() {
+    if (!removeTarget) return;
+    const id = removeTarget.id;
     startTransition(async () => {
-      await removeDepartmentMember(dmId);
+      await removeDepartmentMember(id);
+      setRemoveTarget(null);
       router.refresh();
     });
   }
@@ -210,7 +220,7 @@ function DeptCard({
               key={dm.id}
               dm={dm}
               canManage={canManage}
-              onRemove={handleRemoveMember}
+              onRemove={requestRemoveMember}
             />
           ))}
 
@@ -236,6 +246,15 @@ function DeptCard({
           {children && <div className="mt-2 space-y-1">{children}</div>}
         </div>
       )}
+
+      <ConfirmDialog
+        open={removeTarget !== null}
+        pending={pendingRemove}
+        title="Silmek istediğinize emin misiniz?"
+        message={`${removeTarget?.name ?? "Bu kişi"} bu departmandan kaldırılacak.`}
+        onConfirm={confirmRemoveMember}
+        onCancel={() => setRemoveTarget(null)}
+      />
     </div>
   );
 }
@@ -289,7 +308,8 @@ export function DepartmentsManager({ departments, deptMembers, workspaceMembers,
   const [showAddTop, setShowAddTop] = useState(false);
   const [showAddChild, setShowAddChild] = useState<string | null>(null);
   const [provisioning, startProvisioning] = useTransition();
-  const [, startDelete] = useTransition();
+  const [pendingDelete, startDelete] = useTransition();
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [provisionErr, setProvisionErr] = useState<string | null>(null);
   const [provisionOk, setProvisionOk] = useState(false);
 
@@ -322,9 +342,16 @@ export function DepartmentsManager({ departments, deptMembers, workspaceMembers,
   };
 
   function handleDelete(id: string) {
-    if (!confirm("Bu departmanı silmek istediğinizden emin misiniz?")) return;
+    const dept = departments.find((d) => d.id === id);
+    setDeleteTarget({ id, name: dept?.name ?? "Bu departman" });
+  }
+
+  function confirmDelete() {
+    if (!deleteTarget) return;
+    const id = deleteTarget.id;
     startDelete(async () => {
       await deleteDepartment(id);
+      setDeleteTarget(null);
     });
   }
 
@@ -443,6 +470,15 @@ export function DepartmentsManager({ departments, deptMembers, workspaceMembers,
           </div>
         </details>
       )}
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        pending={pendingDelete}
+        title="Silmek istediğinize emin misiniz?"
+        message={`${deleteTarget?.name ?? "Bu departman"} silinecek. Mevcut görevler korunur.`}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

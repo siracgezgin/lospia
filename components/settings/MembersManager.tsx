@@ -1,18 +1,20 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Plus, X, UserMinus, ChevronDown } from "lucide-react";
+import { Plus, X, UserMinus, ChevronDown, Pencil, Check } from "lucide-react";
 import {
   addTeamAccess,
   revokeTeamAccess,
   changeWorkspaceMemberRole,
   removeWorkspaceMember,
+  renameWorkspaceMember,
 } from "@/lib/actions/workspace";
 import type {
   WorkspaceMember, Profile, WorkspaceInvite, WorkspaceRole,
   WorkspaceDepartment, DepartmentMember,
 } from "@/types";
 import { roleLabel, ASSIGNABLE_ROLE_OPTIONS } from "@/lib/utils/roles";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 interface MemberRow extends WorkspaceMember {
   profiles?: Partial<Profile> | null;
@@ -43,11 +45,22 @@ export function MembersManager({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  // Add-access form state
+  // Add-access form state — email + role only. The person enters their own name
+  // during signup, so no name field here.
   const [showAddForm, setShowAddForm] = useState(false);
-  const [grantName, setGrantName] = useState("");
   const [grantEmail, setGrantEmail] = useState("");
   const [grantRole, setGrantRole] = useState<"admin" | "member">("member");
+
+  // Inline name editing (owner fixes stale/placeholder names).
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+
+  // Pending confirmation for a destructive delete.
+  const [confirm, setConfirm] = useState<
+    | { kind: "grant"; id: string; label: string }
+    | { kind: "member"; id: string; label: string }
+    | null
+  >(null);
 
   const isOwner = userRole === "owner";
 
@@ -66,9 +79,8 @@ export function MembersManager({
     e.preventDefault();
     if (!grantEmail.trim()) return;
     setError(null);
-    const name = grantName.trim();
     startTransition(async () => {
-      const result = await addTeamAccess(workspaceId, grantEmail.trim(), grantRole, name || undefined);
+      const result = await addTeamAccess(workspaceId, grantEmail.trim(), grantRole);
       if ("error" in result) { setError(result.error); return; }
       setGrants((prev) => [
         ...prev,
@@ -81,22 +93,12 @@ export function MembersManager({
           accepted_at: null,
           accepted_user_id: null,
           created_at: new Date().toISOString(),
-          full_name: name || null,
+          full_name: null,
         },
       ]);
-      setGrantName("");
       setGrantEmail("");
       setGrantRole("member");
       setShowAddForm(false);
-    });
-  }
-
-  function handleRevokeAccess(id: string) {
-    setError(null);
-    startTransition(async () => {
-      const result = await revokeTeamAccess(id);
-      if ("error" in result) { setError(result.error); return; }
-      setGrants((prev) => prev.filter((g) => g.id !== id));
     });
   }
 
@@ -111,12 +113,40 @@ export function MembersManager({
     });
   }
 
-  function handleRemoveMember(memberId: string) {
+  function handleSaveName(memberId: string) {
+    const name = editName.trim();
+    if (!name) { setEditingId(null); return; }
     setError(null);
     startTransition(async () => {
-      const result = await removeWorkspaceMember(memberId);
+      const result = await renameWorkspaceMember(memberId, name);
       if ("error" in result) { setError(result.error); return; }
-      setMembers((prev) => prev.filter((m) => m.id !== memberId));
+      setMembers((prev) =>
+        prev.map((m) =>
+          m.id === memberId
+            ? { ...m, profiles: { ...(m.profiles ?? {}), full_name: name } }
+            : m
+        )
+      );
+      setEditingId(null);
+    });
+  }
+
+  // Runs only after the user confirms in the dialog.
+  function runConfirmedDelete() {
+    if (!confirm) return;
+    const target = confirm;
+    setError(null);
+    startTransition(async () => {
+      if (target.kind === "grant") {
+        const result = await revokeTeamAccess(target.id);
+        if ("error" in result) { setError(result.error); setConfirm(null); return; }
+        setGrants((prev) => prev.filter((g) => g.id !== target.id));
+      } else {
+        const result = await removeWorkspaceMember(target.id);
+        if ("error" in result) { setError(result.error); setConfirm(null); return; }
+        setMembers((prev) => prev.filter((m) => m.id !== target.id));
+      }
+      setConfirm(null);
     });
   }
 
@@ -133,10 +163,51 @@ export function MembersManager({
             <div key={m.id} className="px-5 py-3">
             <div className="flex items-center justify-between gap-3">
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">
-                  {m.profiles?.full_name ?? m.profiles?.email ?? "—"}
-                  {isSelf && <span className="ml-1.5 text-[10px] text-gray-400">(siz)</span>}
-                </p>
+                {editingId === m.id ? (
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleSaveName(m.id);
+                        if (e.key === "Escape") setEditingId(null);
+                      }}
+                      autoFocus
+                      disabled={isPending}
+                      className="flex-1 min-w-0 rounded-lg border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    <button
+                      onClick={() => handleSaveName(m.id)}
+                      disabled={isPending}
+                      className="p-1 rounded text-green-600 hover:bg-green-50 disabled:opacity-50"
+                      aria-label="Kaydet"
+                    >
+                      <Check size={14} />
+                    </button>
+                    <button
+                      onClick={() => setEditingId(null)}
+                      disabled={isPending}
+                      className="p-1 rounded text-gray-400 hover:bg-gray-100 disabled:opacity-50"
+                      aria-label="Vazgeç"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-sm font-medium text-gray-900 truncate flex items-center gap-1.5">
+                    <span className="truncate">{m.profiles?.full_name ?? m.profiles?.email ?? "—"}</span>
+                    {isSelf && <span className="text-[10px] text-gray-400">(siz)</span>}
+                    {isOwner && (
+                      <button
+                        onClick={() => { setEditingId(m.id); setEditName(m.profiles?.full_name ?? ""); }}
+                        className="p-0.5 rounded text-gray-300 hover:text-gray-600 hover:bg-gray-100 shrink-0"
+                        aria-label="İsmi düzenle"
+                      >
+                        <Pencil size={11} />
+                      </button>
+                    )}
+                  </p>
+                )}
                 <p className="text-xs text-gray-400 truncate">{m.profiles?.email}</p>
                 {(deptsByMember.get(m.id) ?? []).length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1">
@@ -165,7 +236,11 @@ export function MembersManager({
                     <ChevronDown size={10} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                   </div>
                   <button
-                    onClick={() => handleRemoveMember(m.id)}
+                    onClick={() => setConfirm({
+                      kind: "member",
+                      id: m.id,
+                      label: m.profiles?.full_name ?? m.profiles?.email ?? "",
+                    })}
                     disabled={isPending}
                     className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-50 transition-colors"
                     aria-label="Üyeyi kaldır"
@@ -197,13 +272,13 @@ export function MembersManager({
               {grants.map((g) => (
                 <div key={g.id} className="flex items-center justify-between px-5 py-3 gap-3">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-700 truncate">{g.full_name || g.email}</p>
+                    <p className="text-sm text-gray-700 truncate">{g.email}</p>
                     <p className="text-xs text-gray-400">
-                      {g.full_name ? `${g.email} · ` : ""}{roleLabel(g.role)} · Hesap bekleniyor
+                      {roleLabel(g.role)} · Hesap bekleniyor
                     </p>
                   </div>
                   <button
-                    onClick={() => handleRevokeAccess(g.id)}
+                    onClick={() => setConfirm({ kind: "grant", id: g.id, label: g.email })}
                     disabled={isPending}
                     className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-50 transition-colors"
                     aria-label="Erişimi kaldır"
@@ -229,20 +304,12 @@ export function MembersManager({
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Yeni erişim</p>
               <div className="flex flex-wrap gap-2">
                 <input
-                  type="text"
-                  value={grantName}
-                  onChange={(e) => setGrantName(e.target.value)}
-                  placeholder="Ad Soyad (opsiyonel)"
-                  autoFocus
-                  className="flex-1 min-w-[160px] rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  disabled={isPending}
-                />
-                <input
                   type="email"
                   value={grantEmail}
                   onChange={(e) => setGrantEmail(e.target.value)}
                   placeholder="E-posta"
                   required
+                  autoFocus
                   className="flex-1 min-w-[200px] rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
                   disabled={isPending}
                 />
@@ -271,7 +338,7 @@ export function MembersManager({
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setShowAddForm(false); setGrantName(""); setGrantEmail(""); setError(null); }}
+                  onClick={() => { setShowAddForm(false); setGrantEmail(""); setError(null); }}
                   className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
                 >
                   İptal
@@ -284,6 +351,20 @@ export function MembersManager({
       )}
 
       {error && !showAddForm && <p className="text-xs text-red-600">{error}</p>}
+
+      <ConfirmDialog
+        open={confirm !== null}
+        pending={isPending}
+        message={
+          confirm?.kind === "grant"
+            ? `${confirm.label} için ekip erişimi kaldırılacak.`
+            : confirm?.kind === "member"
+              ? `${confirm.label} çalışma alanından kaldırılacak. Mevcut görev kayıtları korunur.`
+              : ""
+        }
+        onConfirm={runConfirmedDelete}
+        onCancel={() => setConfirm(null)}
+      />
     </div>
   );
 }

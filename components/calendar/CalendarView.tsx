@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useSyncExternalStore } from "react";
 import Link from "next/link";
 import {
   startOfMonth,
@@ -46,6 +46,12 @@ interface Props {
 }
 
 const DONE_CLS = "line-through text-gray-400";
+
+// Mount detection via useSyncExternalStore — tells client from server render
+// without a setState-in-effect (which the lint rules reject).
+const _subscribeMounted = () => () => {};
+const _getMounted = () => true;
+const _getServerMounted = () => false;
 
 const TR_MONTHS_SHORT = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
 
@@ -158,6 +164,12 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
   const [showMobilePanel, setShowMobilePanel] = useState(false);
   const [createModalDate, setCreateModalDate] = useState<string | null>(null);
 
+  // The whole grid is derived from `new Date()`, which differs between the
+  // server (UTC) and the client (local TZ). Rendering it during SSR produced a
+  // hydration mismatch that left the calendar half-drawn until a manual refresh.
+  // Render a stable skeleton until mounted, then draw the real, client-only grid.
+  const mounted = useSyncExternalStore(_subscribeMounted, _getMounted, _getServerMounted);
+
   const monthStart = startOfMonth(current);
   const monthEnd = endOfMonth(current);
   const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
@@ -181,6 +193,18 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
   }
 
   const selectedDayTasks = getTasksForDay(selectedDay);
+
+  // Server / pre-hydration skeleton — same outer shape so layout doesn't jump.
+  if (!mounted) {
+    return (
+      <div className="p-4 sm:p-6 h-full flex flex-col gap-4">
+        <div className="flex items-center gap-3 shrink-0">
+          <h1 className="text-2xl font-bold text-gray-900">Takvim</h1>
+        </div>
+        <div className="flex-1 min-h-0 bg-white rounded-xl border border-gray-200 shadow-sm animate-pulse" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 sm:p-6 h-full flex flex-col gap-4">
