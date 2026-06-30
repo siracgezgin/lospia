@@ -18,7 +18,7 @@ import {
   parseISO,
 } from "date-fns";
 import { tr } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, X, Plus, CalendarDays, ChevronDown } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Plus, CalendarDays, ChevronDown, Lock } from "lucide-react";
 import type { TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceDepartment } from "@/types";
 import { cn } from "@/lib/utils/cn";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
@@ -33,6 +33,7 @@ type CalTask = {
   due_date: string | null;
   start_date: string | null;
   department_id: string | null;
+  visibility?: string | null;
 };
 
 interface Props {
@@ -350,6 +351,7 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
                         )}
                       >
                         <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", dotFor(task))} />
+                        {task.visibility === "admin_only" && <Lock size={9} className="shrink-0 text-amber-600" />}
                         <span className="truncate text-gray-700">{task.title}</span>
                       </span>
                     ))}
@@ -394,6 +396,7 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
                   )}
                 >
                   <span className={cn("h-2.5 w-2.5 rounded-full shrink-0", dotFor(task))} />
+                  {task.visibility === "admin_only" && <Lock size={12} className="shrink-0 text-amber-600" />}
                   <span className={cn(
                     "text-sm text-gray-800 group-hover:text-blue-600 flex-1 truncate",
                     task.status === "done" && "line-through text-gray-400",
@@ -452,6 +455,7 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
                     )}
                   >
                     <span className={cn("h-2.5 w-2.5 rounded-full shrink-0", dotFor(task))} />
+                    {task.visibility === "admin_only" && <Lock size={12} className="shrink-0 text-amber-600" />}
                     <span className={cn("text-sm text-gray-800 group-hover:text-blue-600 flex-1 truncate", task.status === "done" && "line-through")}>
                       {task.title}
                     </span>

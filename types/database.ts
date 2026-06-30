@@ -630,6 +630,7 @@ export type Database = {
           tags: string[]
           title: string
           updated_at: string
+          visibility: string
           waiting_on_contact_id: string | null
           waiting_on_member_id: string | null
           waiting_reason: string | null
@@ -660,6 +661,7 @@ export type Database = {
           tags?: string[]
           title: string
           updated_at?: string
+          visibility?: string
           waiting_on_contact_id?: string | null
           waiting_on_member_id?: string | null
           waiting_reason?: string | null
@@ -690,6 +692,7 @@ export type Database = {
           tags?: string[]
           title?: string
           updated_at?: string
+          visibility?: string
           waiting_on_contact_id?: string | null
           waiting_on_member_id?: string | null
           waiting_reason?: string | null
@@ -1203,6 +1206,7 @@ export type Database = {
         Args: { p_member_id: string; p_username: string }
         Returns: undefined
       }
+      can_access_task: { Args: { p_task_id: string }; Returns: boolean }
       check_email_access_grant: { Args: { p_email: string }; Returns: boolean }
       check_signup_access: {
         Args: { p_email: string; p_username: string }
@@ -1214,13 +1218,13 @@ export type Database = {
       }
       create_task_notifications: {
         Args: {
-          p_workspace_id: string
-          p_task_id: string | null
-          p_type: Database["public"]["Enums"]["notification_type"]
-          p_title: string
-          p_body: string | null
-          p_user_ids: string[]
+          p_body: string
           p_dedupe_seconds?: number
+          p_task_id: string
+          p_title: string
+          p_type: Database["public"]["Enums"]["notification_type"]
+          p_user_ids: string[]
+          p_workspace_id: string
         }
         Returns: number
       }
@@ -1268,6 +1272,10 @@ export type Database = {
         Returns: undefined
       }
       provision_workspace: { Args: { p_full_name?: string }; Returns: Json }
+      repair_missing_task_points: {
+        Args: { p_workspace_id: string }
+        Returns: Json
+      }
       repair_pending_workspace_invites: { Args: never; Returns: number }
       resolve_username_to_email: {
         Args: { p_username: string }

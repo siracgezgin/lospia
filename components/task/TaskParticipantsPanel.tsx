@@ -12,7 +12,7 @@ import {
   setTaskParticipants,
 } from "@/lib/actions/completions";
 
-export type PanelMember = { memberId: string; userId: string; name: string };
+export type PanelMember = { memberId: string; userId: string; name: string; isAdmin?: boolean };
 export type PanelParticipant = {
   memberId: string;
   completed: boolean;
@@ -31,18 +31,24 @@ interface Props {
   isViewer: boolean;
   // Member ids eligible for this task's department; null = no department → all.
   eligibleMemberIds?: string[] | null;
+  // Admin_only task → only owner/admin people may be responsible.
+  adminOnly?: boolean;
 }
 
 export function TaskParticipantsPanel({
   taskId, members, participants, currentMemberId, isAdmin, isViewer, eligibleMemberIds = null,
+  adminOnly = false,
 }: Props) {
   const [pending, startTransition] = useTransition();
   const [editing, setEditing] = useState(false);
 
   // Department-filtered picker: when a department is selected, only its members
-  // are offered. Already-selected participants stay editable regardless.
+  // are offered. Already-selected participants stay editable regardless. On an
+  // admin_only task the picker is further narrowed to owner/admin people.
   const eligibleSet = eligibleMemberIds ? new Set(eligibleMemberIds) : null;
-  const pickerMembers = eligibleSet ? members.filter((m) => eligibleSet.has(m.memberId)) : members;
+  const pickerMembers = members.filter(
+    (m) => (!eligibleSet || eligibleSet.has(m.memberId)) && (!adminOnly || m.isAdmin),
+  );
 
   const nameOf = (memberId: string) =>
     getPersonDisplayName(members.find((m) => m.memberId === memberId)?.name ?? null);

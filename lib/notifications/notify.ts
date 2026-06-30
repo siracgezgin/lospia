@@ -45,10 +45,33 @@ export async function notifyTaskEvent(
 ): Promise<void> {
   const { workspaceId, taskId, event, taskTitle, actorId, bodySuffix } = args;
 
-  const recipients = Array.from(
+  let recipients = Array.from(
     new Set(args.recipientUserIds.filter((id): id is string => !!id)),
   ).filter((id) => id !== actorId);
   if (recipients.length === 0) return;
+
+  // Admin_only tasks never notify non-admins. RLS already hides such rows from
+  // members, but we also refuse to write them — keeping the notifications table
+  // free of leaked titles/bodies for hidden tasks. This is the single chokepoint
+  // every task notification flows through.
+  if (taskId) {
+    const { data: task } = await sb
+      .from("tasks")
+      .select("visibility")
+      .eq("id", taskId)
+      .maybeSingle();
+    if (task?.visibility === "admin_only") {
+      const { data: admins } = await sb
+        .from("workspace_members")
+        .select("user_id")
+        .eq("workspace_id", workspaceId)
+        .in("user_id", recipients)
+        .in("role", ["owner", "admin"]);
+      const allowed = new Set((admins ?? []).map((a) => a.user_id as string));
+      recipients = recipients.filter((id) => allowed.has(id));
+      if (recipients.length === 0) return;
+    }
+  }
 
   const { dbType, title } = NOTIFICATION_EVENTS[event];
   const base = taskTitle ?? "";

@@ -13,7 +13,8 @@ import {
 } from "@tanstack/react-table";
 import { useState, useOptimistic, useTransition, useMemo } from "react";
 import Link from "next/link";
-import { ArrowUp, ArrowDown, ArrowUpDown, Plus, FileSpreadsheet } from "lucide-react";
+import { ArrowUp, ArrowDown, ArrowUpDown, Plus, FileSpreadsheet, Lock } from "lucide-react";
+import { ADMIN_ONLY_CHIP_LABEL } from "@/lib/utils/visibility";
 import type { Task, SavedView, TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceDepartment } from "@/types";
 import {
   TASK_PRIORITIES,
@@ -254,6 +255,11 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
           >
             {info.getValue()}
           </Link>
+          {(info.row.original as unknown as { visibility?: string }).visibility === "admin_only" && (
+            <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1 py-0.5 leading-none mt-1">
+              <Lock size={9} /> {ADMIN_ONLY_CHIP_LABEL}
+            </span>
+          )}
           {(info.row.original.tags?.length ?? 0) > 0 && (
             <div className="flex gap-1 mt-1 flex-wrap">
               {[...new Set(info.row.original.tags)].slice(0, 3).map((tag, i) => (

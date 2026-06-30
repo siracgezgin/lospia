@@ -110,6 +110,7 @@ const CreateTaskSchema = z.object({
   start_date: z.string().nullable().optional(),
   department_id: hexUuid("Geçersiz departman").nullable().optional(),
   effort_size: z.enum(["small", "medium", "large"]).optional(),
+  visibility: z.enum(["workspace", "admin_only"]).optional(),
   tags: z.array(z.string().max(50)).max(20).default([]),
   custom_fields: z.record(z.string(), z.unknown()).default({}),
 });
@@ -135,6 +136,7 @@ const UpdateTaskSchema = z.object({
   waiting_reason: z.string().max(500).nullable().optional(),
   department_id: hexUuid("Geçersiz departman").nullable().optional(),
   effort_size: z.enum(["small", "medium", "large"]).optional(),
+  visibility: z.enum(["workspace", "admin_only"]).optional(),
 });
 
 const ReorderTaskSchema = z.object({
@@ -169,12 +171,18 @@ export async function createTask(
   const effort_size: EffortSize = isAdminRole(role) && parsed.data.effort_size
     ? parsed.data.effort_size
     : "medium";
+  // Visibility is an admin-only lever. A non-admin (or unset) always lands on
+  // 'workspace' — a member can never create a hidden, admin-only task.
+  const visibility = isAdminRole(role) && parsed.data.visibility === "admin_only"
+    ? "admin_only"
+    : "workspace";
   const taskData = {
     ...parsed.data,
     tags: normalizeTags(parsed.data.tags),
     start_date: parsed.data.start_date ?? today,
     effort_size,
     points_value: pointsForEffort(effort_size),
+    visibility,
   };
 
   // Get the last fractional_index for this status column
@@ -277,6 +285,12 @@ export async function updateTask(
     }
   }
 
+  // Visibility is admin-only. Strip it for non-admins so a member can never flip
+  // a task to/from admin_only (RLS would block it anyway, but fail-soft here).
+  if ("visibility" in updates && !isAdminRole(role)) {
+    delete updates.visibility;
+  }
+
   // Fetch current state for both permission check and activity logging
   const { data: currentTask } = await supabase
     .from("tasks")
@@ -289,6 +303,45 @@ export async function updateTask(
   const task = currentTask as Record<string, unknown>;
   if (!canEditTask(role, { assignee_id: task.assignee_id as string | null, created_by: task.created_by as string | null }, user.id)) {
     return { error: PERM_DENIED };
+  }
+
+  // Turning a task admin_only: every current responsible person (participants ∪
+  // legacy assignee fallback) must already be an owner/admin. We reject rather
+  // than silently dropping members, so the admin consciously removes them first.
+  const nextVisibility = "visibility" in updates ? (updates.visibility as string | undefined) : undefined;
+  if (nextVisibility === "admin_only" && task.visibility !== "admin_only") {
+    const wsId = task.workspace_id as string;
+    const { data: parts } = await supabase
+      .from("task_member_completions")
+      .select("workspace_members(user_id, role)")
+      .eq("task_id", id);
+    const responsibleRoles: { user_id: string | null; role: string }[] = (parts ?? [])
+      .map((p) => {
+        const wm = (p as { workspace_members: unknown }).workspace_members;
+        return (Array.isArray(wm) ? wm[0] : wm) as { user_id: string | null; role: string } | null;
+      })
+      .filter((r): r is { user_id: string | null; role: string } => !!r);
+
+    // Fall back to the legacy assignee when there are no participant rows.
+    if (responsibleRoles.length === 0 && task.assignee_id) {
+      const { data: am } = await supabase
+        .from("workspace_members")
+        .select("user_id, role")
+        .eq("workspace_id", wsId)
+        .eq("user_id", task.assignee_id as string)
+        .maybeSingle();
+      if (am) responsibleRoles.push(am as { user_id: string | null; role: string });
+    }
+
+    const hasNonAdmin = responsibleRoles.some(
+      (r) => r.role !== "owner" && r.role !== "admin",
+    );
+    if (hasNonAdmin) {
+      return {
+        error:
+          "Bu görevi sadece yöneticilere özel yapmak için yönetici olmayan sorumluları kaldırın.",
+      };
+    }
   }
 
   // Only owner/admin can mark a task finally done OR reopen a done task; members

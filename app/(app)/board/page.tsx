@@ -4,7 +4,7 @@ import { KanbanBoard } from "@/components/board/KanbanBoard";
 import type { Task, SavedView, Profile, WorkspaceContact, WorkspaceNote, WorkspaceRole, WorkspaceDepartment, TaskParticipant } from "@/types";
 
 export type BoardRule = { id: string; title: string; category: string | null; updated_at: string };
-export type BoardMember = { memberId: string; userId: string; name: string };
+export type BoardMember = { memberId: string; userId: string; name: string; isAdmin?: boolean };
 
 function parseWeekParam(weekStr?: string): string | null {
   if (!weekStr) return null;
@@ -50,14 +50,19 @@ export default async function BoardPage({
     );
   }
 
+  // Admin_only tasks are hidden from non-admins at the RLS layer; we also filter
+  // explicitly here as defense-in-depth (and so counts/columns never include them).
+  const isAdmin = userRole === "owner" || userRole === "admin";
+  const tasksQuery = supabase
+    .from("tasks")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .is("archived_at", null)
+    .is("deleted_at", null);
+  if (!isAdmin) tasksQuery.eq("visibility", "workspace");
+
   const [tasksResult, viewsResult, profilesResult, contactsResult, notesResult, rulesResult, deptsResult, completionsResult, deptMembersResult] = await Promise.all([
-    supabase
-      .from("tasks")
-      .select("*")
-      .eq("workspace_id", workspaceId)
-      .is("archived_at", null)
-      .is("deleted_at", null)
-      .order("fractional_index"),
+    tasksQuery.order("fractional_index"),
     supabase
       .from("saved_views")
       .select("*")
@@ -68,7 +73,7 @@ export default async function BoardPage({
     // workspace_members row id so we can build the dept-filtered responsible picker.
     supabase
       .from("workspace_members")
-      .select("id, user_id, profiles(id, full_name, email)")
+      .select("id, user_id, role, profiles(id, full_name, email)")
       .eq("workspace_id", workspaceId),
     supabase
       .from("workspace_contacts")
@@ -109,14 +114,17 @@ export default async function BoardPage({
   const tasks: Task[] = tasksResult.data ?? [];
   const savedViews: SavedView[] = viewsResult.data ?? [];
   type ProfileLite = Pick<Profile, "id" | "full_name" | "email">;
-  type MemberRow = { id: string; user_id: string; profiles: ProfileLite | ProfileLite[] | null };
+  type MemberRow = { id: string; user_id: string; role: string; profiles: ProfileLite | ProfileLite[] | null };
   const memberRowsData = (profilesResult.data ?? []) as unknown as MemberRow[];
   const profiles: ProfileLite[] = memberRowsData
     .flatMap((m) => (Array.isArray(m.profiles) ? m.profiles : m.profiles ? [m.profiles] : []));
   // Workspace members keyed by workspace_members.id — the unit task participants use.
   const members: BoardMember[] = memberRowsData.map((m) => {
     const prof = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
-    return { memberId: m.id, userId: m.user_id, name: prof?.full_name ?? prof?.email ?? "—" };
+    return {
+      memberId: m.id, userId: m.user_id, name: prof?.full_name ?? prof?.email ?? "—",
+      isAdmin: m.role === "owner" || m.role === "admin",
+    };
   });
   const deptMembers = (deptMembersResult.data ?? []) as { department_id: string; member_id: string }[];
   const contacts: WorkspaceContact[] = (contactsResult.data ?? []) as WorkspaceContact[];

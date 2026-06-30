@@ -26,6 +26,10 @@ import {
   STATUS_CHIP_TONE, PRIORITY_CHIP, getTaskStateMarkers,
 } from "@/lib/design/semantics";
 import { cn } from "@/lib/utils/cn";
+import {
+  TASK_VISIBILITIES, VISIBILITY_LABELS, VISIBILITY_DESCRIPTIONS,
+  ADMIN_ONLY_CHIP_LABEL, asVisibility, type TaskVisibility,
+} from "@/lib/utils/visibility";
 
 interface Props {
   task: Task;
@@ -38,6 +42,8 @@ interface Props {
   departments: WorkspaceDepartment[];
   userId: string;
   canComplete?: boolean;
+  // Visibility is an admin-only lever; members never see or edit it.
+  isAdmin?: boolean;
 }
 
 // ---- Draft model: explicit edit/save, NO auto-save ----
@@ -50,6 +56,7 @@ interface Draft {
   priority: TaskPriority;
   start_date: string;
   due_date: string;
+  visibility: TaskVisibility;
 }
 
 function draftFromTask(task: Task): Draft {
@@ -61,6 +68,7 @@ function draftFromTask(task: Task): Draft {
     priority: task.priority,
     start_date: task.start_date ?? "",
     due_date: task.due_date ?? "",
+    visibility: asVisibility((task as unknown as Record<string, unknown>).visibility),
   };
 }
 
@@ -80,8 +88,8 @@ const inputCls = "w-full text-sm border border-gray-200 rounded-lg px-2.5 py-1.5
 // ---- Editor (remounts via key when the server task changes) ----
 
 function TaskEditor({
-  task, departments, canEdit, canComplete,
-}: { task: Task; departments: WorkspaceDepartment[]; canEdit: boolean; canComplete: boolean }) {
+  task, departments, canEdit, canComplete, isAdmin,
+}: { task: Task; departments: WorkspaceDepartment[]; canEdit: boolean; canComplete: boolean; isAdmin: boolean }) {
   const router = useRouter();
   const initial = useMemo(() => draftFromTask(task), [task]);
   const [draft, setDraft] = useState<Draft>(initial);
@@ -125,6 +133,9 @@ function TaskEditor({
     if (draft.due_date !== initial.due_date) updates.due_date = draft.due_date || null;
     if (draft.department_id !== initial.department_id) {
       (updates as Record<string, unknown>).department_id = draft.department_id || null;
+    }
+    if (draft.visibility !== initial.visibility) {
+      (updates as Record<string, unknown>).visibility = draft.visibility;
     }
 
     startSaving(async () => {
@@ -227,6 +238,11 @@ function TaskEditor({
               <Lock size={11} /> Tamamlandı — yalnızca yönetici değiştirebilir
             </span>
           )}
+          {isAdmin && draft.visibility === "admin_only" && (
+            <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+              <Lock size={11} /> {ADMIN_ONLY_CHIP_LABEL}
+            </span>
+          )}
         </div>
       </div>
 
@@ -308,6 +324,43 @@ function TaskEditor({
               className={inputCls}
             />
           </FieldRow>
+
+          {/* Görünürlük — admin-only. Members never see or edit this. */}
+          {isAdmin && (
+            <FieldRow label="Görünürlük" className="sm:col-span-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {TASK_VISIBILITIES.map((v) => {
+                  const on = draft.visibility === v;
+                  return (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => set("visibility", v)}
+                      disabled={!canEdit}
+                      className={cn(
+                        "text-left rounded-lg border px-3 py-2 transition-colors disabled:opacity-60",
+                        on
+                          ? "bg-amber-50 border-amber-300"
+                          : "bg-white border-gray-200 hover:bg-gray-50",
+                      )}
+                    >
+                      <span className={cn("flex items-center gap-1.5 text-sm font-medium", on ? "text-amber-800" : "text-gray-700")}>
+                        {v === "admin_only" && <Lock size={12} />}
+                        {VISIBILITY_LABELS[v]}
+                      </span>
+                      <span className="block text-[11px] text-gray-500 mt-0.5 leading-snug">
+                        {VISIBILITY_DESCRIPTIONS[v]}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-gray-400 mt-1.5">
+                Değişiklik &quot;Değişiklikleri Kaydet&quot; ile uygulanır. Yöneticiye özel
+                görevlerde yalnızca yönetici kişiler sorumlu olabilir.
+              </p>
+            </FieldRow>
+          )}
         </div>
 
         {/* Inline feedback (also visible on mobile, where the top bar hides it). */}
@@ -391,6 +444,7 @@ export function TaskDetail({
   departments,
   userId,
   canComplete = false,
+  isAdmin = false,
 }: Props) {
   // Mirrors server canEditTask: admins always; members only own/created tasks.
   const canEdit = canComplete
@@ -403,7 +457,7 @@ export function TaskDetail({
 
   return (
     <div className="max-w-3xl mx-auto py-6 px-4 space-y-5">
-      <TaskEditor key={version} task={task} departments={departments} canEdit={canEdit} canComplete={canComplete} />
+      <TaskEditor key={version} task={task} departments={departments} canEdit={canEdit} canComplete={canComplete} isAdmin={isAdmin} />
 
       <ActivityLogSection logs={activityLogs} profiles={profiles} contacts={contacts} />
 

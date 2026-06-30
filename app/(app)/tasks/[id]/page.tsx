@@ -68,7 +68,7 @@ export default async function TaskDetailPage({
       // Workspace members (for the participant picker)
       supabase
         .from("workspace_members")
-        .select("id, user_id, profiles(id, full_name, email)")
+        .select("id, user_id, role, profiles(id, full_name, email)")
         .eq("workspace_id", task.workspace_id),
       // Current participant completions for this task
       supabase
@@ -109,6 +109,13 @@ export default async function TaskDetailPage({
   const canComplete = myMember?.role === "owner" || myMember?.role === "admin";
   const currentMemberId = (myMember?.id as string | undefined) ?? null;
 
+  // Admin_only tasks are invisible to non-admins. RLS already blocks the SELECT
+  // above for members (→ notFound), but we re-assert it explicitly so the title,
+  // description and notes of a hidden task can never reach a member's client.
+  if ((task as unknown as { visibility?: string }).visibility === "admin_only" && !canComplete) {
+    notFound();
+  }
+
   // Puan & Motivasyon is admin-only: members never see point values, pending
   // points, effort changes or who earned what — so we strip those audit rows
   // for non-admins and only fetch the task's earned ledger for admins.
@@ -138,11 +145,14 @@ export default async function TaskDetailPage({
     : "medium";
 
   // Participant panel data
-  type MemberRow = { id: string; user_id: string; profiles: Pick<Profile, "id" | "full_name" | "email"> | Pick<Profile, "id" | "full_name" | "email">[] | null };
+  type MemberRow = { id: string; user_id: string; role: string; profiles: Pick<Profile, "id" | "full_name" | "email"> | Pick<Profile, "id" | "full_name" | "email">[] | null };
   const panelMembers: PanelMember[] = ((membersResult.data ?? []) as unknown as MemberRow[])
     .map((m) => {
       const prof = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
-      return { memberId: m.id, userId: m.user_id, name: prof?.full_name ?? prof?.email ?? "—" };
+      return {
+        memberId: m.id, userId: m.user_id, name: prof?.full_name ?? prof?.email ?? "—",
+        isAdmin: m.role === "owner" || m.role === "admin",
+      };
     });
   const panelParticipants: PanelParticipant[] = ((completionsResult.data ?? []) as { member_id: string; completed_at: string | null }[])
     .map((c) => ({ memberId: c.member_id, completed: c.completed_at != null, completedAt: c.completed_at }));
@@ -190,6 +200,7 @@ export default async function TaskDetailPage({
         departments={departments}
         userId={user.id}
         canComplete={canComplete}
+        isAdmin={canComplete}
       />
       <div className="max-w-3xl mx-auto px-4 pb-6 space-y-5">
         {canComplete && (
@@ -209,6 +220,7 @@ export default async function TaskDetailPage({
           isAdmin={canComplete}
           isViewer={isViewer}
           eligibleMemberIds={eligibleMemberIds}
+          adminOnly={(task as unknown as { visibility?: string }).visibility === "admin_only"}
         />
         <TaskNotesPanel
           taskId={task.id}

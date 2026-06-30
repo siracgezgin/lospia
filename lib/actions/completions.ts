@@ -7,6 +7,8 @@ import { notifyTaskEvent } from "@/lib/notifications/notify";
 import type { AppRole } from "@/lib/auth/permissions";
 
 const PERM = "Bu işlem için yetkiniz yok.";
+const ADMIN_ONLY_RESPONSIBLE =
+  "Yöneticiye özel görevlerde yalnızca yönetici kişiler sorumlu olabilir.";
 const ACTIVE_STATUSES = ["backlog", "ready", "in_progress", "blocked"];
 const isAdmin = (r: AppRole) => r === "owner" || r === "admin";
 
@@ -136,6 +138,23 @@ export async function setTaskParticipants(
   const c = await getCtx(sb);
   if (!c) return { error: "Kimlik doğrulama gerekli." };
   if (c.role === "viewer") return { error: PERM };
+
+  // Admin_only tasks: only owner/admin people may be responsible. Reject the
+  // whole change rather than silently dropping people, so the caller is aware.
+  const { data: vTask } = await sb
+    .from("tasks")
+    .select("visibility")
+    .eq("id", taskId)
+    .maybeSingle();
+  if (vTask?.visibility === "admin_only" && memberIds.length > 0) {
+    const { data: roles } = await sb
+      .from("workspace_members")
+      .select("id, role")
+      .in("id", memberIds);
+    const allAdmin = (roles ?? []).length === memberIds.length
+      && (roles ?? []).every((m) => m.role === "owner" || m.role === "admin");
+    if (!allAdmin) return { error: ADMIN_ONLY_RESPONSIBLE };
+  }
 
   const { data: existing } = await sb
     .from("task_member_completions")

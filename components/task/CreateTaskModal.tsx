@@ -16,9 +16,14 @@ import { Avatar } from "@/components/ui/Avatar";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { cn } from "@/lib/utils/cn";
 import { EFFORT_OPTIONS, EFFORT_LABELS, type EffortSize } from "@/lib/points/effort";
+import {
+  TASK_VISIBILITIES, VISIBILITY_LABELS, VISIBILITY_DESCRIPTIONS,
+  type TaskVisibility,
+} from "@/lib/utils/visibility";
+import { Lock } from "lucide-react";
 import type { TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceDepartment } from "@/types";
 
-type BoardMember = { memberId: string; userId: string; name: string };
+type BoardMember = { memberId: string; userId: string; name: string; isAdmin?: boolean };
 
 interface Props {
   onClose: () => void;
@@ -61,6 +66,8 @@ export function CreateTaskModal({
   const [status, setStatus] = useState<TaskStatus>(defaultStatus);
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [effort, setEffort] = useState<EffortSize>("medium");
+  // Visibility is admin-only; members always create 'workspace' tasks.
+  const [visibility, setVisibility] = useState<TaskVisibility>("workspace");
 
   const topDepts = useMemo(() => departments.filter((d) => d.parent_id === null), [departments]);
   const childDepts = useMemo(() => {
@@ -73,7 +80,9 @@ export function CreateTaskModal({
   // assigned to the department, its parent, or its direct children. With no
   // department chosen we offer every workspace member.
   const eligibleMembers = useMemo<BoardMember[]>(() => {
-    if (!departmentId) return members;
+    // Admin_only tasks may only have owner/admin people as responsibles.
+    const base = visibility === "admin_only" ? members.filter((m) => m.isAdmin) : members;
+    if (!departmentId) return base;
     const self = departments.find((d) => d.id === departmentId);
     const related = new Set<string>([departmentId]);
     if (self?.parent_id) related.add(self.parent_id);
@@ -81,8 +90,17 @@ export function CreateTaskModal({
     const eligibleIds = new Set(
       deptMembers.filter((dm) => related.has(dm.department_id)).map((dm) => dm.member_id),
     );
-    return members.filter((m) => eligibleIds.has(m.memberId));
-  }, [departmentId, departments, deptMembers, members]);
+    return base.filter((m) => eligibleIds.has(m.memberId));
+  }, [departmentId, departments, deptMembers, members, visibility]);
+
+  // Switching to admin_only drops any already-picked non-admin responsibles.
+  function handleVisibilityChange(value: TaskVisibility) {
+    setVisibility(value);
+    if (value === "admin_only") {
+      const adminIds = new Set(members.filter((m) => m.isAdmin).map((m) => m.memberId));
+      setResponsibleIds((prev) => prev.filter((id) => adminIds.has(id)));
+    }
+  }
 
   function toggleResponsible(memberId: string) {
     setResponsibleIds((prev) =>
@@ -128,6 +146,7 @@ export function CreateTaskModal({
         due_date: dueDate || null,
         start_date: startDate || null,
         effort_size: isAdmin ? effort : undefined,
+        visibility: isAdmin ? visibility : undefined,
         tags: [],
         custom_fields: customFields,
       });
@@ -341,6 +360,44 @@ export function CreateTaskModal({
               <p className="text-[11px] text-gray-400 mt-1.5">
                 Puan yalnızca yönetici onayından sonra kesinleşir.
               </p>
+            </div>
+          )}
+
+          {/* Görünürlük — admin-only. Members always create 'workspace' tasks. */}
+          {isAdmin && (
+            <div>
+              <label className={labelCls}>Görünürlük</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {TASK_VISIBILITIES.map((v) => {
+                  const on = visibility === v;
+                  return (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => handleVisibilityChange(v)}
+                      className={cn(
+                        "text-left rounded-lg border px-3 py-2 transition-colors",
+                        on
+                          ? "bg-amber-50 border-amber-300"
+                          : "bg-white border-gray-200 hover:bg-gray-50",
+                      )}
+                    >
+                      <span className={cn("flex items-center gap-1.5 text-sm font-medium", on ? "text-amber-800" : "text-gray-700")}>
+                        {v === "admin_only" && <Lock size={12} />}
+                        {VISIBILITY_LABELS[v]}
+                      </span>
+                      <span className="block text-[11px] text-gray-500 mt-0.5 leading-snug">
+                        {VISIBILITY_DESCRIPTIONS[v]}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              {visibility === "admin_only" && (
+                <p className="text-[11px] text-amber-700 mt-1.5">
+                  Bu görevde yalnızca yönetici kişiler sorumlu olarak seçilebilir.
+                </p>
+              )}
             </div>
           )}
 

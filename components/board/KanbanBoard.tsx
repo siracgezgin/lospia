@@ -33,8 +33,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   GripVertical, Plus, FileSpreadsheet, Search, X, Check,
-  ChevronLeft, ChevronRight, ChevronDown, MoreVertical, Pencil, Copy, Archive, Trash2, AlertTriangle,
+  ChevronLeft, ChevronRight, ChevronDown, MoreVertical, Pencil, Copy, Archive, Trash2, AlertTriangle, Lock,
 } from "lucide-react";
+import { ADMIN_ONLY_CHIP_LABEL } from "@/lib/utils/visibility";
 import { Avatar } from "@/components/ui/Avatar";
 import {
   BOARD_COLUMNS,
@@ -669,6 +670,13 @@ function CardContent({
           {showPriority && (
             <Badge size="xs" className={cn("shrink-0", PRIORITY_CHIP[task.priority])}>
               {PRIORITY_LABELS[task.priority]}
+            </Badge>
+          )}
+          {/* Admin_only marker. Members never receive these tasks, so this chip
+              is, by construction, only ever visible to owner/admin. */}
+          {(task as unknown as { visibility?: string }).visibility === "admin_only" && (
+            <Badge size="xs" className="shrink-0 bg-amber-50 text-amber-700 border border-amber-200">
+              <Lock size={9} className="mr-0.5" /> {ADMIN_ONLY_CHIP_LABEL}
             </Badge>
           )}
         </div>
