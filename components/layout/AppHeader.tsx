@@ -1,12 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
-import { ChevronDown, LogOut, Mail, Shield, Sparkles, Clock3 } from "lucide-react";
+import { ChevronDown, LogOut, Mail, Shield, Sparkles, Clock3, Settings } from "lucide-react";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { Avatar } from "@/components/ui/Avatar";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { ROLE_LABELS } from "@/lib/utils/roles";
+import { canManageSettings } from "@/lib/auth/permissions";
 import { signOut } from "@/lib/actions/auth";
 import type { Workspace, Notification, WorkspaceRole } from "@/types";
 
@@ -24,6 +26,7 @@ interface Props {
 
 // Page-context titles. Header shows WHERE you are; the sidebar owns brand/workspace.
 const PAGE_TITLES: { match: (p: string) => boolean; title: string }[] = [
+  { match: (p) => p.startsWith("/admin-board"), title: "Yönetici Pano" },
   { match: (p) => p.startsWith("/board"), title: "Pano" },
   { match: (p) => p.startsWith("/list"), title: "Liste" },
   { match: (p) => p.startsWith("/dashboard"), title: "Gösterge Paneli" },
@@ -123,6 +126,19 @@ function ProfileMenu({
               </span>
             </div>
           </div>
+
+          {/* Ayarlar — admin-only. On mobile the bottom nav no longer carries
+              Ayarlar (it shows Yönetici Pano), so this is its primary phone entry. */}
+          {canManageSettings(role) && (
+            <Link
+              href="/settings"
+              onClick={() => setOpen(false)}
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-muted hover:bg-surface-muted hover:text-ink transition-colors border-b border-line"
+            >
+              <Settings size={15} className="shrink-0" />
+              Ayarlar
+            </Link>
+          )}
 
           {/* Sign out */}
           <form action={signOut}>

@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils/cn";
 import { EFFORT_OPTIONS, EFFORT_LABELS, type EffortSize } from "@/lib/points/effort";
 import {
   TASK_VISIBILITIES, VISIBILITY_LABELS, VISIBILITY_DESCRIPTIONS,
-  type TaskVisibility,
+  DEFAULT_VISIBILITY, type TaskVisibility,
 } from "@/lib/utils/visibility";
 import { Lock } from "lucide-react";
 import type { TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceDepartment } from "@/types";
@@ -37,6 +37,11 @@ interface Props {
   deptMembers?: { department_id: string; member_id: string }[];
   // Effort is an admin-only lever; members never see or set it.
   isAdmin?: boolean;
+  // Pre-select a visibility (e.g. the Yönetici Pano tab decides this).
+  defaultVisibility?: TaskVisibility;
+  // Restrict the responsible picker to owner/admin people regardless of
+  // visibility — used by Yönetici Pano so manager work stays with managers.
+  lockResponsibleToAdmins?: boolean;
 }
 
 const SIMPLE_STATUS_OPTIONS = CARD_STATUS_OPTIONS;
@@ -50,6 +55,8 @@ export function CreateTaskModal({
   members = [],
   deptMembers = [],
   isAdmin = false,
+  defaultVisibility = DEFAULT_VISIBILITY,
+  lockResponsibleToAdmins = false,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -66,8 +73,11 @@ export function CreateTaskModal({
   const [status, setStatus] = useState<TaskStatus>(defaultStatus);
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [effort, setEffort] = useState<EffortSize>("medium");
-  // Visibility is admin-only; members always create 'workspace' tasks.
-  const [visibility, setVisibility] = useState<TaskVisibility>("workspace");
+  // Visibility is admin-only; members always create 'workspace' tasks. Yönetici
+  // Pano pre-selects the visibility that matches the active tab.
+  const [visibility, setVisibility] = useState<TaskVisibility>(
+    isAdmin ? defaultVisibility : "workspace",
+  );
 
   const topDepts = useMemo(() => departments.filter((d) => d.parent_id === null), [departments]);
   const childDepts = useMemo(() => {
@@ -80,8 +90,10 @@ export function CreateTaskModal({
   // assigned to the department, its parent, or its direct children. With no
   // department chosen we offer every workspace member.
   const eligibleMembers = useMemo<BoardMember[]>(() => {
-    // Admin_only tasks may only have owner/admin people as responsibles.
-    const base = visibility === "admin_only" ? members.filter((m) => m.isAdmin) : members;
+    // Admin_only tasks may only have owner/admin people as responsibles; the
+    // Yönetici Pano can also force this for its 'workspace' tab.
+    const adminsOnly = visibility === "admin_only" || lockResponsibleToAdmins;
+    const base = adminsOnly ? members.filter((m) => m.isAdmin) : members;
     if (!departmentId) return base;
     const self = departments.find((d) => d.id === departmentId);
     const related = new Set<string>([departmentId]);
@@ -91,7 +103,7 @@ export function CreateTaskModal({
       deptMembers.filter((dm) => related.has(dm.department_id)).map((dm) => dm.member_id),
     );
     return base.filter((m) => eligibleIds.has(m.memberId));
-  }, [departmentId, departments, deptMembers, members, visibility]);
+  }, [departmentId, departments, deptMembers, members, visibility, lockResponsibleToAdmins]);
 
   // Switching to admin_only drops any already-picked non-admin responsibles.
   function handleVisibilityChange(value: TaskVisibility) {

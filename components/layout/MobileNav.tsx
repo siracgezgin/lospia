@@ -2,26 +2,32 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Kanban, List, Calendar, LayoutDashboard, Settings, User } from "lucide-react";
+import { Kanban, List, Calendar, LayoutDashboard, User, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
 type NavItem = { href: string; label: string; icon: typeof Kanban };
 
-// Shared first four tabs. The fifth differs by role: an admin manages the
-// workspace (Ayarlar), a member only needs their own profile (Profil).
-const BASE_NAV: NavItem[] = [
+// A member's tabs end in their own profile; an admin trades that slot for the
+// Yönetici Pano (Ayarlar moves to the top-right profile menu on mobile).
+const MEMBER_NAV: NavItem[] = [
   { href: "/board",     label: "Pano",   icon: Kanban          },
   { href: "/list",      label: "Liste",  icon: List            },
   { href: "/calendar",  label: "Takvim", icon: Calendar        },
   { href: "/dashboard", label: "Rapor",  icon: LayoutDashboard },
+  { href: "/profile",   label: "Profil", icon: User            },
 ];
 
-const ADMIN_LAST: NavItem = { href: "/settings", label: "Ayarlar", icon: Settings };
-const MEMBER_LAST: NavItem = { href: "/profile", label: "Profil", icon: User };
+const ADMIN_NAV: NavItem[] = [
+  { href: "/board",       label: "Pano",     icon: Kanban          },
+  { href: "/admin-board", label: "Yönetici", icon: ShieldCheck     },
+  { href: "/list",        label: "Liste",    icon: List            },
+  { href: "/calendar",    label: "Takvim",   icon: Calendar        },
+  { href: "/dashboard",   label: "Rapor",    icon: LayoutDashboard },
+];
 
 export function MobileNav({ isAdmin = false }: { isAdmin?: boolean }) {
   const pathname = usePathname();
-  const items: NavItem[] = [...BASE_NAV, isAdmin ? ADMIN_LAST : MEMBER_LAST];
+  const items: NavItem[] = isAdmin ? ADMIN_NAV : MEMBER_NAV;
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur border-t border-gray-200 safe-bottom">
