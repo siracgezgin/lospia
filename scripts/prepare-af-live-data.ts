@@ -98,8 +98,9 @@ const PEOPLE: Person[] = [
     role_label: "Creative Direction · VIP Müşteri İlişkileri · Marka / CEO" },
   { canonical: "Sıraç Gezgin",   aliases: ["Sıraç", "Sirac"],              official: true,
     role_label: "Sistem Kurulumu · Genel Koordinasyon" },
-  { canonical: "Şeyda",          aliases: ["Seyda"],                       official: false,
-    role_label: "Üretim (kalıp)" },
+  // NOTE: Şeyda appears as a collaborator in the sheet but is NOT in the team
+  // roster, so we do not auto-create a contact for her. She is never a *primary*
+  // collaborator in the data, so responsible mapping is unaffected.
 ];
 
 // HEDEF (operational area in the sheet) → workspace_departments.name
@@ -195,21 +196,28 @@ function mapStatus(raw: string): { status: TaskStatus; done: boolean } {
 }
 
 // ── test/dummy task detection ─────────────────────────────────────────────────
-// A task is a DELETE candidate only if it shows NO sign of being real AND its
-// title matches an explicit junk value or a junk pattern. Real tasks (anything
-// carrying an import marker, a due date, or a substantive description) are never
-// candidates — even if their title happens to contain the word "test".
+// The ONLY thing that protects a task from deletion is an import marker — the real
+// AFTeamWork tasks all carry custom_fields.source / import_source / import_key. A
+// dummy title is deleted even if someone gave it a due date or a description while
+// testing in the UI. We never use a blind "contains the word test" rule: matching
+// is by exact junk title, a junk pattern, or a 1–2 character nonsense title.
 const EXPLICIT_JUNK = new Set([
   "benim adim", "test denme", "ss", "sss", "ssss", "sssss", "est", "test",
   "bentest", "kursadv", "test111", "aaaa", "aaa", "aa", "yeni gorev test",
   "yeni gorev", "deneme", "xxx", "asd", "asdf", "qwe", "qwer",
+  // exact dummy titles seen on production (kept here so the match is title-exact,
+  // never a substring rule that could hit a real task):
+  "ben", "gorsel duzenleme", "testyonetici", "yonetici test", "test nermeks",
+  "t12345estttttt", "sssaa", "test nermek", "testnermeks",
 ]);
 const JUNK_REGEX: RegExp[] = [
   /^test\d*$/,        // test, test1, test111
   /^deneme\d*$/,      // deneme, deneme1
   /^benim adim/,      // "benim adım", "benim adım 2"
   /^yeni gorev/,      // "yeni gorev test"
-  /kursadv/,          // bentest-style account names used while testing
+  /^yonetici test/,   // "yonetici test …"
+  /^test yonetici/,
+  /kursadv/,          // account names used while testing
   /bentest/,
   /^est$/,
   /^(.)\1{1,}$/,      // single character repeated: ss, sss, aaaa, xxxx
@@ -237,10 +245,9 @@ function hasImportMarker(cf: Record<string, unknown> | null): boolean {
 function testTaskReason(t: DbTask): string | null {
   const n = normalize(t.title);
   if (!n) return "boş başlık";
-  if (hasImportMarker(t.custom_fields)) return null;           // real import — protected
-  if (t.due_date) return null;                                  // has a real due date — protected
-  if ((t.description ?? "").trim().length > 40) return null;    // substantive content — protected
-  if (EXPLICIT_JUNK.has(n)) return `explicit test başlığı`;
+  if (hasImportMarker(t.custom_fields)) return null;           // real import — the only protection
+  if (EXPLICIT_JUNK.has(n)) return `explicit test/dummy başlığı`;
+  if (n.length <= 2) return `çok kısa anlamsız başlık ("${t.title}")`; // "s", "j", "aa", "ss" …
   for (const re of JUNK_REGEX) if (re.test(n)) return `test pattern ${re}`;
   return null;
 }
