@@ -122,9 +122,15 @@ body {
     padding-top: env(safe-area-inset-top, 0px);
   }
   /* Clears the fixed bottom nav (3.5rem) plus the home-indicator inset, with a
-     ~1rem of breathing room so the last card never sits flush against the nav. */
-  .pb-bottom-nav {
-    padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+     ~1rem of breathing room so the last card never sits flush against the nav.
+     The bottom nav is mobile-only (md:hidden), so this clearance must apply ONLY
+     below md — otherwise desktop panes inherit a phantom ~4.5rem gap at the
+     bottom (cards cut off, large empty band above the fold). Scoping the rule
+     itself avoids relying on a `md:pb-0` override winning the cascade. */
+  @media (max-width: 767px) {
+    .pb-bottom-nav {
+      padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+    }
   }
   /* Sticky sheet footer that floats above the bottom nav + safe inset. */
   .mb-bottom-nav {

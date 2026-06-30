@@ -111,6 +111,9 @@ const CreateTaskSchema = z.object({
   department_id: hexUuid("Geçersiz departman").nullable().optional(),
   effort_size: z.enum(["small", "medium", "large"]).optional(),
   visibility: z.enum(["workspace", "admin_only"]).optional(),
+  // When true (interactive create form), start + due date are mandatory. Bulk /
+  // system creators (Excel import, note→task) omit this and keep their behaviour.
+  require_schedule: z.boolean().optional(),
   tags: z.array(z.string().max(50)).max(20).default([]),
   custom_fields: z.record(z.string(), z.unknown()).default({}),
 });
@@ -163,6 +166,17 @@ export async function createTask(
 
   if (!canCreateTask(role)) return { error: PERM_DENIED };
 
+  // Date discipline. Interactive creates (require_schedule) must carry both a
+  // start and a due date; any create with both must keep start ≤ due.
+  const { require_schedule, ...createInput } = parsed.data;
+  if (require_schedule) {
+    if (!createInput.start_date) return { error: "Başlangıç tarihi zorunludur." };
+    if (!createInput.due_date) return { error: "Teslim tarihi zorunludur." };
+  }
+  if (createInput.start_date && createInput.due_date && createInput.start_date > createInput.due_date) {
+    return { error: "Başlangıç tarihi teslim tarihinden sonra olamaz." };
+  }
+
   // Visibility is admin-only. A non-admin explicitly asking for an admin_only
   // task is rejected (the UI never offers them the field, so this only fires for
   // hand-crafted requests). Members otherwise default to 'workspace' below.
@@ -175,18 +189,18 @@ export async function createTask(
   const today = new Date().toISOString().slice(0, 10);
   // Effort is an admin-only lever; members always create at the default (medium
   // / 3 points). points_value is always derived from effort server-side.
-  const effort_size: EffortSize = isAdminRole(role) && parsed.data.effort_size
-    ? parsed.data.effort_size
+  const effort_size: EffortSize = isAdminRole(role) && createInput.effort_size
+    ? createInput.effort_size
     : "medium";
   // Visibility is an admin-only lever. A non-admin (or unset) always lands on
   // 'workspace' — a member can never create a hidden, admin-only task.
-  const visibility = isAdminRole(role) && parsed.data.visibility === "admin_only"
+  const visibility = isAdminRole(role) && createInput.visibility === "admin_only"
     ? "admin_only"
     : "workspace";
   const taskData = {
-    ...parsed.data,
-    tags: normalizeTags(parsed.data.tags),
-    start_date: parsed.data.start_date ?? today,
+    ...createInput,
+    tags: normalizeTags(createInput.tags),
+    start_date: createInput.start_date ?? today,
     effort_size,
     points_value: pointsForEffort(effort_size),
     visibility,

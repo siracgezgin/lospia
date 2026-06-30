@@ -42,6 +42,10 @@ interface Props {
   // Restrict the responsible picker to owner/admin people regardless of
   // visibility — used by Yönetici Pano so manager work stays with managers.
   lockResponsibleToAdmins?: boolean;
+  // Pre-select responsible people (workspace_members ids). Yönetici Pano seeds
+  // this with the active manager (or the creating admin) so a new task lands in
+  // the current filter immediately.
+  defaultResponsibleIds?: string[];
 }
 
 const SIMPLE_STATUS_OPTIONS = CARD_STATUS_OPTIONS;
@@ -57,6 +61,7 @@ export function CreateTaskModal({
   isAdmin = false,
   defaultVisibility = DEFAULT_VISIBILITY,
   lockResponsibleToAdmins = false,
+  defaultResponsibleIds = [],
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -66,8 +71,7 @@ export function CreateTaskModal({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [departmentId, setDepartmentId] = useState("");
-  const [konu, setKonu] = useState("");
-  const [responsibleIds, setResponsibleIds] = useState<string[]>([]);
+  const [responsibleIds, setResponsibleIds] = useState<string[]>(defaultResponsibleIds);
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [dueDate, setDueDate] = useState(defaultDueDate);
   const [status, setStatus] = useState<TaskStatus>(defaultStatus);
@@ -137,13 +141,18 @@ export function CreateTaskModal({
 
   const workspaceIdMissing = !workspaceId || workspaceId.length < 10;
 
+  // Start + due date are both mandatory for a manually created task.
+  const datesMissing = !startDate || !dueDate;
+  const dateOrderInvalid = !!startDate && !!dueDate && startDate > dueDate;
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim() || workspaceIdMissing) return;
     setError(null);
 
-    const customFields: Record<string, unknown> = {};
-    if (konu.trim()) customFields.category = konu.trim(); // stored under legacy key, shown as "Konu"
+    if (!startDate) { setError("Başlangıç tarihi zorunludur."); return; }
+    if (!dueDate) { setError("Teslim tarihi zorunludur."); return; }
+    if (dateOrderInvalid) { setError("Başlangıç tarihi teslim tarihinden sonra olamaz."); return; }
 
     startTransition(async () => {
       const result = await createTask({
@@ -159,8 +168,9 @@ export function CreateTaskModal({
         start_date: startDate || null,
         effort_size: isAdmin ? effort : undefined,
         visibility: isAdmin ? visibility : undefined,
+        require_schedule: true,
         tags: [],
-        custom_fields: customFields,
+        custom_fields: {},
       });
 
       if ("error" in result) {
@@ -243,19 +253,7 @@ export function CreateTaskModal({
             </select>
           </div>
 
-          {/* 4. Konu */}
-          <div>
-            <label className={labelCls}>Konu</label>
-            <input
-              type="text"
-              value={konu}
-              onChange={(e) => setKonu(e.target.value)}
-              placeholder="Bu işin konusu / bağlamı…"
-              className={inputCls}
-            />
-          </div>
-
-          {/* 5. Sorumlu kişiler — multi-select, filtered by department */}
+          {/* 4. Sorumlu kişiler — multi-select, filtered by department */}
           <div>
             <label className={labelCls}>Sorumlu kişiler</label>
             {eligibleMembers.length === 0 ? (
@@ -297,28 +295,35 @@ export function CreateTaskModal({
             )}
           </div>
 
-          {/* 6 + 7. Başlangıç tarihi + Teslim tarihi */}
+          {/* 6 + 7. Başlangıç tarihi + Teslim tarihi — both mandatory */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelCls}>Başlangıç tarihi</label>
+              <label className={labelCls}>Başlangıç tarihi <span className="text-red-500">*</span></label>
               <input
                 type="date"
                 value={startDate}
+                required
                 onChange={(e) => setStartDate(e.target.value)}
                 className={selectCls}
               />
             </div>
             <div>
-              <label className={labelCls}>Teslim tarihi</label>
+              <label className={labelCls}>Teslim tarihi <span className="text-red-500">*</span></label>
               <input
                 type="date"
                 value={dueDate}
                 min={startDate || undefined}
+                required
                 onChange={(e) => setDueDate(e.target.value)}
                 className={selectCls}
               />
             </div>
           </div>
+          {dateOrderInvalid && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              Başlangıç tarihi teslim tarihinden sonra olamaz.
+            </p>
+          )}
 
           {/* 8 + 9. Durum + Öncelik */}
           <div className="grid grid-cols-2 gap-3">
@@ -433,10 +438,10 @@ export function CreateTaskModal({
             </button>
             <button
               type="submit"
-              disabled={isPending || !title.trim() || workspaceIdMissing}
+              disabled={isPending || !title.trim() || workspaceIdMissing || datesMissing || dateOrderInvalid}
               className={cn(
                 "px-4 py-2 text-sm font-medium rounded-lg transition-colors",
-                isPending || !title.trim() || workspaceIdMissing
+                isPending || !title.trim() || workspaceIdMissing || datesMissing || dateOrderInvalid
                   ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                   : "bg-blue-600 text-white hover:bg-blue-700",
               )}

@@ -33,9 +33,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   GripVertical, Plus, FileSpreadsheet, Search, X, Check,
-  ChevronLeft, ChevronRight, ChevronDown, MoreVertical, Pencil, Copy, Archive, Trash2, AlertTriangle, Lock,
+  ChevronLeft, ChevronRight, ChevronDown, MoreVertical, Pencil, Copy, Archive, Trash2, AlertTriangle, Lock, ShieldCheck,
 } from "lucide-react";
-import { ADMIN_ONLY_CHIP_LABEL } from "@/lib/utils/visibility";
+import { ADMIN_ONLY_CHIP_LABEL, asVisibility, VISIBILITY_LABELS, type TaskVisibility } from "@/lib/utils/visibility";
 import { Avatar } from "@/components/ui/Avatar";
 import {
   BOARD_COLUMNS,
@@ -57,6 +57,7 @@ import { Badge } from "@/components/ui/Badge";
 import { reorderTask, updateTask, softDeleteTask, archiveTask, duplicateTask } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils/cn";
 import { formatDateTR } from "@/lib/utils/format-date";
+import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { buildDeptMeta, type DeptMeta } from "@/lib/utils/departments";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
 import { ExcelImportModal } from "@/components/task/ExcelImportModal";
@@ -86,8 +87,22 @@ type BoardCtxValue = {
   canComplete: boolean;                       // owner/admin may finalize Tamamlandı
   isResponsible: (task: Task) => boolean;     // admin → always; member → own/participant
   showToast: (msg: string) => void;
+  taskHrefSuffix: string;                     // appended to /tasks/{id} (e.g. ?from=admin-board)
 };
 const BoardContext = createContext<BoardCtxValue | null>(null);
+
+// ── Yönetici Pano (manager board) configuration ──────────────────────────────
+// When present, the board runs in manager mode: visibility tabs + a manager-only
+// person filter replace the saved-view / week / person chrome. All card, DnD,
+// status and create behaviour is identical to the normal board.
+export type ManagerOption = { userId: string; name: string };
+export type AdminBoardConfig = {
+  visibility: TaskVisibility;       // initial active tab
+  manager: string;                  // "all" | manager userId
+  managers: ManagerOption[];        // owner/admin people only
+  managerUserIds: string[];         // for the "all" workspace-tab filter
+  responsibleByTask: Record<string, string[]>; // canonical responsible user_ids
+};
 
 // Mobile board segments — a single full-width column at a time. "notes" is the
 // special first segment; the rest mirror the desktop kanban columns.
@@ -416,6 +431,8 @@ interface Props {
   members?: BoardMember[];
   deptMembers?: { department_id: string; member_id: string }[];
   userRole?: WorkspaceRole;
+  // When set, the board runs as the Yönetici Pano (manager mode).
+  adminBoard?: AdminBoardConfig;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -631,11 +648,12 @@ function CardContent({
   canDeleteCard?: boolean;
   showMenu?: boolean;
 }) {
-  const cf = task.custom_fields as Record<string, unknown>;
-  const konu = cf?.category as string | undefined; // legacy key, shown as "Konu"
   // Department drives the card identity chip (even on a done card).
   const dept = useTaskDept(task);
   const deptStyle = getDepartmentCardStyle(dept?.color);
+  // Detail link keeps the originating board's context (so "← geri" returns here).
+  const hrefSuffix = useContext(BoardContext)?.taskHrefSuffix ?? "";
+  const taskHref = `/tasks/${task.id}${hrefSuffix}`;
   // Active member participants (with per-person completion) drive the people chips.
   const participants = useTaskParticipants(task.id);
   const responsibleName =
@@ -682,7 +700,7 @@ function CardContent({
         </div>
         {interactive && showMenu && onDelete && onArchive && onDuplicate && (
           <CardMenu
-            onEdit={() => { window.location.href = `/tasks/${task.id}`; }}
+            onEdit={() => { window.location.href = taskHref; }}
             onDuplicate={() => onDuplicate(task.id)}
             onArchive={() => onArchive(task.id)}
             onDelete={() => onDelete(task.id)}
@@ -695,7 +713,7 @@ function CardContent({
       {/* Title */}
       <Link
         prefetch={false}
-        href={`/tasks/${task.id}`}
+        href={taskHref}
         className={cn(
           "text-[13px] font-medium line-clamp-2 block leading-snug tracking-[-0.005em]",
           markers.shouldStrike
@@ -706,11 +724,6 @@ function CardContent({
       >
         {task.title}
       </Link>
-
-      {/* Konu (changing topic) — subtle, only when present */}
-      {konu && (
-        <p className="text-[10px] text-subtle/90 mt-0.5 truncate">Konu: {konu}</p>
-      )}
 
       {/* Description (one line) */}
       {task.description && (
@@ -1061,7 +1074,9 @@ export function KanbanBoard({
   members = [],
   deptMembers = [],
   userRole = "member",
+  adminBoard,
 }: Props) {
+  const isAdminBoard = !!adminBoard;
   const deptMeta = useMemo(() => buildDeptMeta(departments), [departments]);
   // Top-level departments for the Departman filter dropdown
   const deptFilterOptions = useMemo(
@@ -1112,6 +1127,26 @@ export function KanbanBoard({
   const [personFilter, setPersonFilter] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [search, setSearch] = useState("");
+
+  // Manager-mode state (visibility tab + manager person filter). URL-synced so a
+  // Yönetici Pano view is shareable; defaults come from the server-parsed params.
+  const [adminVisibility, setAdminVisibility] = useState<TaskVisibility>(adminBoard?.visibility ?? "admin_only");
+  const [adminManager, setAdminManager] = useState<string>(adminBoard?.manager ?? "all");
+  const managerUserIdSet = useMemo(() => new Set(adminBoard?.managerUserIds ?? []), [adminBoard]);
+  // userId → workspace_members.id, so create-from-board can seed a default
+  // responsible (the active manager, or the creating admin).
+  const memberIdByUserId = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const mm of members) if (mm.userId) m[mm.userId] = mm.memberId;
+    return m;
+  }, [members]);
+
+  function syncAdminUrl(vis: TaskVisibility, mgr: string) {
+    const params = new URLSearchParams();
+    params.set("visibility", vis);
+    if (mgr !== "all") params.set("manager", mgr);
+    router.replace(`/admin-board?${params.toString()}`, { scroll: false });
+  }
 
   // Week selector — initialized from URL param (weekIso) so page reload preserves selection
   const [weekStart, setWeekStart] = useState<Date>(() =>
@@ -1204,17 +1239,33 @@ export function KanbanBoard({
     });
   }
 
-  // Composed filter: saved-view → department → person → search
+  // Composed filter. Normal board: saved-view → department → person → search.
+  // Manager board: visibility tab → manager → department → search (no week/view,
+  // and the manager filter replaces the assignee-based person filter).
   const filteredTasks = useMemo(() => {
-    let tasks = applyViewFilter(optimisticTasks, effectiveSlug, userId, weekStart);
+    let tasks: Task[];
+    if (adminBoard) {
+      tasks = optimisticTasks.filter((t) => asVisibility(t.visibility) === adminVisibility);
+      tasks = tasks.filter((t) => {
+        const resp = adminBoard.responsibleByTask[t.id] ?? [];
+        if (adminManager === "all") {
+          // admin_only is managers-only by construction → show all; the workspace
+          // tab keeps only tasks owned by at least one manager.
+          return adminVisibility === "admin_only" || resp.some((uid) => managerUserIdSet.has(uid));
+        }
+        return resp.includes(adminManager);
+      });
+    } else {
+      tasks = applyViewFilter(optimisticTasks, effectiveSlug, userId, weekStart);
+    }
     if (departmentFilter) {
       const allowed = deptMatchIds[departmentFilter] ?? new Set([departmentFilter]);
       tasks = tasks.filter((t) => t.department_id != null && allowed.has(t.department_id));
     }
-    tasks = applyPersonFilter(tasks, personFilter);
+    if (!adminBoard) tasks = applyPersonFilter(tasks, personFilter);
     tasks = tasks.filter((t) => matchesSearch(t, search, responsibleNames));
     return tasks;
-  }, [optimisticTasks, effectiveSlug, userId, weekStart, departmentFilter, deptMatchIds, personFilter, search, responsibleNames]);
+  }, [adminBoard, adminVisibility, adminManager, managerUserIdSet, optimisticTasks, effectiveSlug, userId, weekStart, departmentFilter, deptMatchIds, personFilter, search, responsibleNames]);
 
   // Distribute filtered tasks into columns
   const tasksByCol = useMemo(() => {
@@ -1279,8 +1330,9 @@ export function KanbanBoard({
 
     // Explain disappearance: if this status change pushes the task out of the
     // current saved-view filter, never let it silently vanish — tell the user
-    // why and give a one-click way to find it in "Tüm işler".
-    if (newStatus !== srcTask.status) {
+    // why and give a one-click way to find it in "Tüm işler". (Manager board has
+    // no week/view filter, so a status change never hides a card there.)
+    if (!isAdminBoard && newStatus !== srcTask.status) {
       const updatedForFilter: Task = {
         ...srcTask,
         status: newStatus,
@@ -1325,11 +1377,27 @@ export function KanbanBoard({
     });
   }, [optimisticTasks, tasksByCol]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const hasActiveFilter = !!personFilter || !!search || !!departmentFilter;
+  const hasActiveFilter = (isAdminBoard ? adminManager !== "all" : !!personFilter) || !!search || !!departmentFilter;
 
-  // Person workload summary (computed from raw tasks, not view-filtered)
+  // Manager-board task detail links carry the originating context so the detail
+  // page's "← geri" returns to the right Yönetici Pano tab.
+  const taskHrefSuffix = isAdminBoard
+    ? `?from=admin-board&visibility=${adminVisibility}${adminManager !== "all" ? `&manager=${adminManager}` : ""}`
+    : "";
+
+  // Seed the create form's responsible people so a new manager-board task lands
+  // in the current filter: the selected manager, else the creating admin.
+  const adminCreateResponsibleIds = useMemo<string[] | undefined>(() => {
+    if (!isAdminBoard) return undefined;
+    const seedUser = adminManager !== "all" ? adminManager : userId;
+    const mid = memberIdByUserId[seedUser];
+    return mid ? [mid] : [];
+  }, [isAdminBoard, adminManager, memberIdByUserId, userId]);
+
+  // Person workload summary (computed from raw tasks, not view-filtered). Not
+  // shown on the manager board (its person filter lists managers, not members).
   const personStats = useMemo(() => {
-    if (!personFilter) return null;
+    if (isAdminBoard || !personFilter) return null;
     const today = localISO(new Date());
     const thisMonday = getMondayOf(new Date());
     const personName = personFilter.startsWith("member:")
@@ -1345,11 +1413,11 @@ export function KanbanBoard({
       waiting: personTasks.filter((t) => t.status === "blocked" || t.waiting_on_member_id != null || t.waiting_on_contact_id != null).length,
       overdue: personTasks.filter((t) => t.due_date != null && t.due_date < today && t.status !== "done").length,
     };
-  }, [personFilter, optimisticTasks, responsibleNames]);
+  }, [isAdminBoard, personFilter, optimisticTasks, responsibleNames]);
 
   const boardCtx = useMemo<BoardCtxValue>(
-    () => ({ canComplete, isResponsible, showToast }),
-    [canComplete, isResponsible], // eslint-disable-line react-hooks/exhaustive-deps -- showToast uses stable setToasts
+    () => ({ canComplete, isResponsible, showToast, taskHrefSuffix }),
+    [canComplete, isResponsible, taskHrefSuffix], // eslint-disable-line react-hooks/exhaustive-deps -- showToast uses stable setToasts
   );
 
   return (
@@ -1361,10 +1429,37 @@ export function KanbanBoard({
         page and only the compact status tabs stay sticky. */}
     <div className="flex flex-col h-full max-md:h-auto max-md:min-h-full">
 
-      {/* ── Rules panel (compact, collapsible) ────────────────────────────── */}
-      <BoardRulesPanel rules={rules} newCount={newRulesCount} />
+      {/* ── Manager board header: visibility tabs (Yönetici Pano only) ─────── */}
+      {isAdminBoard && (
+        <div className="flex items-center gap-2 px-4 pt-3 pb-2 bg-white border-b border-gray-100 shrink-0 flex-wrap">
+          <ShieldCheck size={16} className="text-[#2f5d6b] shrink-0" />
+          <span className="text-sm font-semibold text-gray-800 mr-1">Yönetici Pano</span>
+          <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
+            {(["admin_only", "workspace"] as TaskVisibility[]).map((v) => {
+              const on = adminVisibility === v;
+              return (
+                <button
+                  key={v}
+                  onClick={() => { setAdminVisibility(v); syncAdminUrl(v, adminManager); }}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors",
+                    on ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700",
+                  )}
+                >
+                  {v === "admin_only" && <Lock size={12} />}
+                  {VISIBILITY_LABELS[v]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
-      {/* ── Week selector ─────────────────────────────────────────────────── */}
+      {/* ── Rules panel (compact, collapsible) — normal board only ────────── */}
+      {!isAdminBoard && <BoardRulesPanel rules={rules} newCount={newRulesCount} />}
+
+      {/* ── Week selector — normal board only ─────────────────────────────── */}
+      {!isAdminBoard && (
       <div className="flex items-center gap-1.5 px-4 py-2 bg-white border-b border-gray-100 shrink-0">
         <button
           onClick={() => {
@@ -1411,9 +1506,10 @@ export function KanbanBoard({
           <span className="ml-1 text-xs text-gray-400 select-none">Bu hafta</span>
         )}
       </div>
+      )}
 
-      {/* ── Saved-view tab strip ─────────────────────────────────────────── */}
-      {savedViews.length > 0 && (
+      {/* ── Saved-view tab strip — normal board only ──────────────────────── */}
+      {!isAdminBoard && savedViews.length > 0 && (
         <div className="flex gap-0 px-4 pt-3 border-b border-gray-200 bg-white overflow-x-auto no-scrollbar shrink-0">
           {savedViews.map((view) => {
             const slug = SAVED_VIEW_SLUG_MAP[view.name] ?? view.id;
@@ -1452,7 +1548,7 @@ export function KanbanBoard({
             Görev oluştur
           </button>
         )}
-        {canCreate && (
+        {canCreate && !isAdminBoard && (
           <button
             onClick={() => setImportOpen(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors"
@@ -1479,32 +1575,51 @@ export function KanbanBoard({
             {deptFilterOptions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
 
-          {/* Person filter */}
-          <select
-            value={personFilter}
-            onChange={(e) => setPersonFilter(e.target.value)}
-            className={cn(
-              "text-sm border rounded-lg px-2 py-1.5 bg-white transition-colors cursor-pointer",
-              personFilter ? "border-blue-400 text-blue-700" : "border-gray-200 text-gray-600",
-            )}
-            aria-label="Kişiye göre filtrele"
-          >
-            <option value="">Kişi</option>
-            {profiles.length > 0 && (
-              <optgroup label="Üyeler">
-                {profiles.map((p) => (
-                  <option key={p.id} value={`member:${p.id}`}>{p.full_name ?? p.email}</option>
-                ))}
-              </optgroup>
-            )}
-            {contacts.length > 0 && (
-              <optgroup label="Kişiler">
-                {contacts.map((c) => (
-                  <option key={c.id} value={`contact:${c.id}`}>{c.name}</option>
-                ))}
-              </optgroup>
-            )}
-          </select>
+          {/* Person filter. Manager board lists ONLY owner/admin people and
+              filters by canonical responsibility; the normal board keeps the
+              member/contact assignee filter. */}
+          {isAdminBoard ? (
+            <select
+              value={adminManager}
+              onChange={(e) => { setAdminManager(e.target.value); syncAdminUrl(adminVisibility, e.target.value); }}
+              className={cn(
+                "text-sm border rounded-lg px-2 py-1.5 bg-white transition-colors cursor-pointer",
+                adminManager !== "all" ? "border-blue-400 text-blue-700" : "border-gray-200 text-gray-600",
+              )}
+              aria-label="Yöneticiye göre filtrele"
+            >
+              <option value="all">Tüm yöneticiler</option>
+              {(adminBoard?.managers ?? []).map((m) => (
+                <option key={m.userId} value={m.userId}>{getPersonDisplayName(m.name)}</option>
+              ))}
+            </select>
+          ) : (
+            <select
+              value={personFilter}
+              onChange={(e) => setPersonFilter(e.target.value)}
+              className={cn(
+                "text-sm border rounded-lg px-2 py-1.5 bg-white transition-colors cursor-pointer",
+                personFilter ? "border-blue-400 text-blue-700" : "border-gray-200 text-gray-600",
+              )}
+              aria-label="Kişiye göre filtrele"
+            >
+              <option value="">Kişi</option>
+              {profiles.length > 0 && (
+                <optgroup label="Üyeler">
+                  {profiles.map((p) => (
+                    <option key={p.id} value={`member:${p.id}`}>{p.full_name ?? p.email}</option>
+                  ))}
+                </optgroup>
+              )}
+              {contacts.length > 0 && (
+                <optgroup label="Kişiler">
+                  {contacts.map((c) => (
+                    <option key={c.id} value={`contact:${c.id}`}>{c.name}</option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+          )}
 
           {/* Search */}
           <div className="relative">
@@ -1525,7 +1640,10 @@ export function KanbanBoard({
           {/* Clear all */}
           {hasActiveFilter && (
             <button
-              onClick={() => { setPersonFilter(""); setDepartmentFilter(""); setSearch(""); }}
+              onClick={() => {
+                setPersonFilter(""); setDepartmentFilter(""); setSearch("");
+                if (isAdminBoard) { setAdminManager("all"); syncAdminUrl(adminVisibility, "all"); }
+              }}
               className="text-xs text-gray-400 hover:text-gray-700 px-1.5 py-0.5 rounded hover:bg-gray-100 transition-colors whitespace-nowrap"
               aria-label="Filtreleri temizle"
             >
@@ -1565,7 +1683,7 @@ export function KanbanBoard({
             {/* Continuous sticky band behind every column header (no gaps/peek). */}
             <div aria-hidden className="sticky top-0 z-10 h-11 bg-app border-b border-line shadow-[0_4px_10px_-6px_rgba(16,24,40,0.18)]" />
             <div className="flex gap-3 sm:gap-4 px-3 sm:px-4 pb-4 items-start -mt-11">
-              <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} />
+              {!isAdminBoard && <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} />}
               {BOARD_COLUMNS.map((col) => (
                 <StaticKanbanColumn
                   key={col.id}
@@ -1594,7 +1712,7 @@ export function KanbanBoard({
               {/* Continuous sticky band behind every column header (no gaps/peek). */}
               <div aria-hidden className="sticky top-0 z-10 h-11 bg-app border-b border-line shadow-[0_4px_10px_-6px_rgba(16,24,40,0.18)]" />
               <div className="flex gap-3 sm:gap-4 px-3 sm:px-4 pb-4 items-start -mt-11">
-                <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} />
+                {!isAdminBoard && <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} />}
                 {BOARD_COLUMNS.map((col) => (
                   <KanbanColumn
                     key={col.id}
@@ -1637,7 +1755,7 @@ export function KanbanBoard({
         {/* Segmented status tabs — the one sticky element on mobile (compact, single
             row, horizontal scroll with the scrollbar hidden). */}
         <div className="flex gap-1.5 px-3 py-2 overflow-x-auto no-scrollbar bg-white/95 backdrop-blur border-b border-gray-100 sticky top-0 z-10">
-          {MOBILE_SEGMENTS.map((seg) => {
+          {(isAdminBoard ? MOBILE_SEGMENTS.filter((s) => s.id !== "notes") : MOBILE_SEGMENTS).map((seg) => {
             const count = seg.id === "notes" ? notes.length : (tasksByCol[seg.id as BoardColId]?.length ?? 0);
             const active = mobileSeg === seg.id;
             return (
@@ -1666,7 +1784,7 @@ export function KanbanBoard({
 
         {/* Single column content — flows into the page scroll (no inner scroll) */}
         <div className="px-3 py-3">
-          {mobileSeg === "notes" ? (
+          {!isAdminBoard && mobileSeg === "notes" ? (
             <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} mobile />
           ) : (
             (() => {
@@ -1743,7 +1861,7 @@ export function KanbanBoard({
       {/* ── Modals ────────────────────────────────────────────────────────── */}
       {modalOpen && (
         <CreateTaskModal
-          key={modalDefaultStatus}
+          key={`${modalDefaultStatus}-${adminVisibility}-${adminManager}`}
           onClose={() => setModalOpen(false)}
           workspaceId={workspaceId}
           defaultStatus={modalDefaultStatus}
@@ -1753,6 +1871,9 @@ export function KanbanBoard({
           members={members}
           deptMembers={deptMembers}
           isAdmin={canComplete}
+          defaultVisibility={isAdminBoard ? adminVisibility : undefined}
+          lockResponsibleToAdmins={isAdminBoard}
+          defaultResponsibleIds={adminCreateResponsibleIds}
         />
       )}
       {importOpen && (

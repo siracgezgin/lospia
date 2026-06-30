@@ -44,6 +44,9 @@ interface Props {
   canComplete?: boolean;
   // Visibility is an admin-only lever; members never see or edit it.
   isAdmin?: boolean;
+  // Back link target — follows the board the task was opened from.
+  backHref?: string;
+  backLabel?: string;
 }
 
 // ---- Draft model: explicit edit/save, NO auto-save ----
@@ -88,8 +91,8 @@ const inputCls = "w-full text-sm border border-gray-200 rounded-lg px-2.5 py-1.5
 // ---- Editor (remounts via key when the server task changes) ----
 
 function TaskEditor({
-  task, departments, canEdit, canComplete, isAdmin,
-}: { task: Task; departments: WorkspaceDepartment[]; canEdit: boolean; canComplete: boolean; isAdmin: boolean }) {
+  task, departments, canEdit, canComplete, isAdmin, backHref, backLabel,
+}: { task: Task; departments: WorkspaceDepartment[]; canEdit: boolean; canComplete: boolean; isAdmin: boolean; backHref: string; backLabel: string }) {
   const router = useRouter();
   const initial = useMemo(() => draftFromTask(task), [task]);
   const [draft, setDraft] = useState<Draft>(initial);
@@ -157,8 +160,8 @@ function TaskEditor({
     <>
       {/* ── Top action bar: back link + explicit Save / Cancel ─────────────── */}
       <div className="sticky top-0 z-30 -mx-4 px-4 py-2 bg-app/90 backdrop-blur border-b border-line/60 flex items-center justify-between gap-3 flex-wrap">
-        <Link href="/board" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
-          <ArrowLeft size={14} /> Panoya dön
+        <Link href={backHref} className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
+          <ArrowLeft size={14} /> {backLabel}
         </Link>
         <div className="flex items-center gap-2 ml-auto">
           {feedback && (
@@ -445,6 +448,8 @@ export function TaskDetail({
   userId,
   canComplete = false,
   isAdmin = false,
+  backHref = "/board",
+  backLabel = "Panoya dön",
 }: Props) {
   // Mirrors server canEditTask: admins always; members only own/created tasks.
   const canEdit = canComplete
@@ -457,7 +462,7 @@ export function TaskDetail({
 
   return (
     <div className="max-w-3xl mx-auto py-6 px-4 space-y-5">
-      <TaskEditor key={version} task={task} departments={departments} canEdit={canEdit} canComplete={canComplete} isAdmin={isAdmin} />
+      <TaskEditor key={version} task={task} departments={departments} canEdit={canEdit} canComplete={canComplete} isAdmin={isAdmin} backHref={backHref} backLabel={backLabel} />
 
       <ActivityLogSection logs={activityLogs} profiles={profiles} contacts={contacts} />
 

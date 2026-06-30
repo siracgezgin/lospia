@@ -9,14 +9,29 @@ import { isEffortSize } from "@/lib/points/effort";
 
 export default async function TaskDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ from?: string; visibility?: string; manager?: string }>;
 }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
   const { id } = await params;
+
+  // Back link follows the board the task was opened from (Yönetici Pano keeps its
+  // visibility/manager tab); anything else falls back to the normal board.
+  const sp = await searchParams;
+  let backHref = "/board";
+  let backLabel = "Panoya dön";
+  if (sp.from === "admin-board") {
+    const qs = new URLSearchParams();
+    if (sp.visibility) qs.set("visibility", sp.visibility);
+    if (sp.manager) qs.set("manager", sp.manager);
+    backHref = qs.toString() ? `/admin-board?${qs.toString()}` : "/admin-board";
+    backLabel = "Yönetici Pano’ya dön";
+  }
 
   // Fetch task first to get workspace_id
   const taskResult = await supabase.from("tasks").select("*").eq("id", id).single();
@@ -201,6 +216,8 @@ export default async function TaskDetailPage({
         userId={user.id}
         canComplete={canComplete}
         isAdmin={canComplete}
+        backHref={backHref}
+        backLabel={backLabel}
       />
       <div className="max-w-3xl mx-auto px-4 pb-6 space-y-5">
         {canComplete && (

@@ -1,10 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { AdminBoardView, type ManagerOption } from "@/components/board/AdminBoardView";
+import { KanbanBoard, type ManagerOption } from "@/components/board/KanbanBoard";
 import { asVisibility, type TaskVisibility } from "@/lib/utils/visibility";
-import type { Task, Profile, WorkspaceContact, WorkspaceDepartment, WorkspaceRole } from "@/types";
-
-type BoardMember = { memberId: string; userId: string; name: string; isAdmin?: boolean };
+import type { Task, Profile, WorkspaceContact, WorkspaceDepartment, WorkspaceRole, TaskParticipant } from "@/types";
+import type { BoardMember } from "@/app/(app)/board/page";
 
 export default async function AdminBoardPage({
   searchParams,
@@ -56,10 +55,10 @@ export default async function AdminBoardPage({
         .select("id, parent_id, name, color_key")
         .eq("workspace_id", workspaceId)
         .order("position"),
-      // Participants drive canonical responsibility (their user_ids).
+      // Participants → both the card chips and the canonical responsibility map.
       supabase
         .from("task_member_completions")
-        .select("task_id, member_id, workspace_members(id, user_id, role)")
+        .select("task_id, member_id, completed_at, workspace_members(id, user_id, profiles(id, full_name, email))")
         .eq("workspace_id", workspaceId),
       supabase
         .from("department_members")
@@ -86,31 +85,38 @@ export default async function AdminBoardPage({
     };
   });
 
-  // Manager (owner/admin) people only — used for the person filter and as the
-  // canonical "manager responsible" set.
-  const managerUserIds = new Set(members.filter((m) => m.isAdmin && m.userId).map((m) => m.userId));
+  // Manager (owner/admin) people only — drive the person filter and the canonical
+  // "manager responsible" set.
+  const managerUserIds = members.filter((m) => m.isAdmin && m.userId).map((m) => m.userId);
+  const managerUserIdSet = new Set(managerUserIds);
   const managers: ManagerOption[] = members
     .filter((m) => m.isAdmin && m.userId)
     .map((m) => ({ userId: m.userId, name: m.name }))
     .sort((a, b) => a.name.localeCompare(b.name, "tr"));
 
-  // Canonical responsible user_ids per task: participants' user_ids, falling
-  // back to the task's assignee_id when there are no participant rows. Mirrors
-  // the points / detail responsibility model used elsewhere.
+  // Card participant chips + canonical responsible user_ids, from one query.
   type CompRow = {
     task_id: string;
     member_id: string;
+    completed_at: string | null;
     workspace_members:
-      | { id: string; user_id: string | null; role: string }
-      | { id: string; user_id: string | null; role: string }[]
+      | { id: string; user_id: string | null; profiles: ProfileLite | ProfileLite[] | null }
+      | { id: string; user_id: string | null; profiles: ProfileLite | ProfileLite[] | null }[]
       | null;
   };
+  const participantsByTask: Record<string, TaskParticipant[]> = {};
   const participantUsersByTask: Record<string, string[]> = {};
   for (const row of (completionsResult.data ?? []) as unknown as CompRow[]) {
     const wm = Array.isArray(row.workspace_members) ? row.workspace_members[0] : row.workspace_members;
-    const uid = wm?.user_id;
-    if (!uid) continue;
-    (participantUsersByTask[row.task_id] ??= []).push(uid);
+    const prof = wm && (Array.isArray(wm.profiles) ? wm.profiles[0] : wm.profiles);
+    if (!prof) continue;
+    (participantsByTask[row.task_id] ??= []).push({
+      memberId: row.member_id,
+      userId: prof.id,
+      name: prof.full_name ?? prof.email ?? "—",
+      completed: row.completed_at != null,
+    });
+    if (wm?.user_id) (participantUsersByTask[row.task_id] ??= []).push(wm.user_id);
   }
 
   const responsibleByTask: Record<string, string[]> = {};
@@ -125,39 +131,40 @@ export default async function AdminBoardPage({
     }
   }
 
-  // Candidate set sent to the client:
-  //   • all admin_only tasks (managers-only by construction)
-  //   • workspace tasks that have at least one manager responsible
-  // Sundry workspace tasks owned only by members never reach the manager board.
+  // Candidate set passed to the board (both visibilities; the tab is a client
+  // filter). admin_only is managers-only by construction; workspace tasks must
+  // have at least one manager responsible to belong on the manager board.
   const tasks = allTasks.filter((t) => {
-    const vis = asVisibility(t.visibility);
-    if (vis === "admin_only") return true;
-    return (responsibleByTask[t.id] ?? []).some((uid) => managerUserIds.has(uid));
+    if (asVisibility(t.visibility) === "admin_only") return true;
+    return (responsibleByTask[t.id] ?? []).some((uid) => managerUserIdSet.has(uid));
   });
-
-  // Prune the responsible map to the tasks we actually send.
-  const responsibleForView: Record<string, string[]> = {};
-  for (const t of tasks) responsibleForView[t.id] = responsibleByTask[t.id] ?? [];
 
   const contacts: WorkspaceContact[] = (contactsResult.data ?? []) as WorkspaceContact[];
   const departments = (deptsResult.data ?? []) as WorkspaceDepartment[];
   const deptMembers = (deptMembersResult.data ?? []) as { department_id: string; member_id: string }[];
 
   return (
-    <AdminBoardView
+    <KanbanBoard
       tasks={tasks}
-      responsibleByTask={responsibleForView}
-      managers={managers}
+      savedViews={[]}
+      viewSlug={null}
       workspaceId={workspaceId}
       userId={user.id}
-      userRole={userRole}
       profiles={profiles}
       contacts={contacts}
+      notes={[]}
       departments={departments}
+      participantsByTask={participantsByTask}
       members={members}
       deptMembers={deptMembers}
-      initialVisibility={visibility}
-      initialManager={manager}
+      userRole={userRole}
+      adminBoard={{
+        visibility,
+        manager,
+        managers,
+        managerUserIds,
+        responsibleByTask,
+      }}
     />
   );
 }
