@@ -91,8 +91,8 @@ const inputCls = "w-full text-sm border border-gray-200 rounded-lg px-2.5 py-1.5
 // ---- Editor (remounts via key when the server task changes) ----
 
 function TaskEditor({
-  task, departments, canEdit, canComplete, isAdmin, backHref, backLabel,
-}: { task: Task; departments: WorkspaceDepartment[]; canEdit: boolean; canComplete: boolean; isAdmin: boolean; backHref: string; backLabel: string }) {
+  task, departments, canEdit, canComplete, isAdmin, backHref, backLabel, creatorName,
+}: { task: Task; departments: WorkspaceDepartment[]; canEdit: boolean; canComplete: boolean; isAdmin: boolean; backHref: string; backLabel: string; creatorName: string | null }) {
   const router = useRouter();
   const initial = useMemo(() => draftFromTask(task), [task]);
   const [draft, setDraft] = useState<Draft>(initial);
@@ -305,6 +305,9 @@ function TaskEditor({
             </select>
           </FieldRow>
 
+          <FieldRow label="Oluşturan">
+            <span className="text-sm text-gray-700 block py-1.5">{creatorName ?? "—"}</span>
+          </FieldRow>
           <FieldRow label="Giriş tarihi">
             <span className="text-sm text-gray-500 block py-1.5">{formatDateTimeTR(task.created_at)}</span>
           </FieldRow>
@@ -460,9 +463,13 @@ export function TaskDetail({
   // refresh) so the draft resets cleanly — no setState-in-effect needed.
   const version = `${task.id}:${task.updated_at}`;
 
+  // Resolve the creator's display name from the loaded member profiles.
+  const creator = task.created_by ? profiles.find((p) => p.id === task.created_by) : null;
+  const creatorName = creator ? (creator.full_name ?? creator.email ?? null) : null;
+
   return (
     <div className="max-w-3xl mx-auto py-6 px-4 space-y-5">
-      <TaskEditor key={version} task={task} departments={departments} canEdit={canEdit} canComplete={canComplete} isAdmin={isAdmin} backHref={backHref} backLabel={backLabel} />
+      <TaskEditor key={version} task={task} departments={departments} canEdit={canEdit} canComplete={canComplete} isAdmin={isAdmin} backHref={backHref} backLabel={backLabel} creatorName={creatorName} />
 
       <ActivityLogSection logs={activityLogs} profiles={profiles} contacts={contacts} />
 

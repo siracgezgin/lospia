@@ -156,6 +156,7 @@ function MobileTaskCard({
     responsibleNames[task.assignee_id ?? ""] ??
     responsibleNames[(task as { responsible_contact_id?: string | null }).responsible_contact_id ?? ""] ??
     "";
+  const creatorName = task.created_by ? responsibleNames[task.created_by] : null;
   const today = new Date().toISOString().slice(0, 10);
   const isOverdue = !!task.due_date && task.due_date < today && task.status !== "done";
 
@@ -202,6 +203,14 @@ function MobileTaskCard({
           <span className="ml-auto text-[11px] text-gray-500 truncate max-w-[40%]">{responsible}</span>
         )}
       </div>
+
+      {(creatorName || task.created_at) && (
+        <p className="mt-2 text-[10px] text-gray-400 truncate">
+          {creatorName && <span className="font-medium text-gray-500">{creatorName}</span>}
+          {creatorName && task.created_at && " · "}
+          {task.created_at && formatDateTR(task.created_at, { day: "numeric", month: "short" })}
+        </p>
+      )}
     </Link>
   );
 }
@@ -405,6 +414,34 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
             : <span className="text-xs text-gray-300">—</span>;
         },
         enableSorting: false,
+      }
+    ),
+    // Oluşturan — who created the task + when (mirrors the note/card metadata).
+    columnHelper.accessor(
+      (row) => (row.created_by ? responsibleNames[row.created_by] ?? "" : ""),
+      {
+        id: "creator",
+        header: "Oluşturan",
+        cell: (info) => {
+          const name = info.getValue();
+          const created = info.row.original.created_at;
+          if (!name && !created) return <span className="text-xs text-gray-300">—</span>;
+          return (
+            <div className="leading-tight">
+              {name && <span className="text-xs text-gray-600 block">{name}</span>}
+              {created && (
+                <span className="text-[10px] text-gray-400 whitespace-nowrap">
+                  {formatDateTR(created as string, { day: "numeric", month: "short" })}
+                </span>
+              )}
+            </div>
+          );
+        },
+        sortingFn: (a, b) => {
+          const na = a.original.created_by ? responsibleNames[a.original.created_by] ?? "" : "";
+          const nb = b.original.created_by ? responsibleNames[b.original.created_by] ?? "" : "";
+          return na.localeCompare(nb, "tr", { sensitivity: "base" });
+        },
       }
     ),
     columnHelper.accessor("updated_at", {

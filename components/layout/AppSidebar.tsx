@@ -84,9 +84,17 @@ export function AppSidebar({
         collapsed ? "w-14" : "w-60",
       )}
     >
-      {/* Brand row — text-based workspace identity, and only here. */}
-      <div className={cn("flex items-center h-14 border-b border-line", collapsed ? "justify-center px-0" : "px-4")}>
-        <Wordmark name={wsName} compact={collapsed} />
+      {/* Brand row — AF icon + workspace wordmark. */}
+      <div className={cn("flex items-center gap-2.5 h-14 border-b border-line", collapsed ? "justify-center px-0" : "px-4")}>
+        <img
+          src="/brands/af-icon.png"
+          alt="AF"
+          width={26}
+          height={24}
+          className="h-6 w-auto shrink-0 select-none"
+          draggable={false}
+        />
+        {!collapsed && <Wordmark name={wsName} />}
       </div>
 
       {/* Nav groups */}
@@ -219,6 +227,18 @@ export function AppSidebar({
             <p className="relative text-[12px] leading-relaxed text-ink/85 italic font-medium">
               “{weeklyQuote}”
             </p>
+          </div>
+
+          {/* Aslı Filinta brand lockup — anchors the sidebar with the parent brand. */}
+          <div className="pt-1.5 flex justify-center">
+            <img
+              src="/brands/asli-filinta-logo.png"
+              alt="Aslı Filinta"
+              width={140}
+              height={72}
+              className="h-9 w-auto object-contain opacity-80 select-none"
+              draggable={false}
+            />
           </div>
         </div>
       )}

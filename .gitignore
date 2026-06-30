@@ -55,9 +55,14 @@ data/
 # local planning / notes
 plan.md
 
-# local asset files not part of app bundle
+# local source/asset files not part of app bundle — the optimized,
+# committed copies live in public/brands/.
 AF_logo.png
+AF_logo.jpeg
+AF.png
+AF_.psd
 aslifilinta.png
+asli_filinta_logo_transparent.png
 
 # local utility scripts not for production
 scripts/import-*.ts

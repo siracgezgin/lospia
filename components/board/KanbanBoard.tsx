@@ -56,7 +56,7 @@ import {
 import { Badge } from "@/components/ui/Badge";
 import { reorderTask, updateTask, softDeleteTask, archiveTask, duplicateTask } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils/cn";
-import { formatDateTR } from "@/lib/utils/format-date";
+import { formatDateTR, formatNoteTimeTR } from "@/lib/utils/format-date";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { buildDeptMeta, type DeptMeta } from "@/lib/utils/departments";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
@@ -731,6 +731,19 @@ function CardContent({
           {task.description}
         </p>
       )}
+
+      {/* Creator metadata — mirrors the note cards: subtle "name · when" line. */}
+      {(() => {
+        const creatorName = task.created_by ? responsibleNames[task.created_by] : null;
+        if (!creatorName && !task.created_at) return null;
+        return (
+          <p className="mt-1.5 text-[10px] text-subtle truncate">
+            {creatorName && <span className="font-medium text-muted">{creatorName}</span>}
+            {creatorName && task.created_at && <span> · </span>}
+            {task.created_at && <span>{formatNoteTimeTR(task.created_at)}</span>}
+          </p>
+        );
+      })()}
 
       {/* Bottom row: status (clickable) + due + people chips (bottom-right) */}
       <div className="flex items-center gap-1.5 mt-2.5 flex-wrap">
