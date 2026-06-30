@@ -278,3 +278,12 @@ end;
 $$;
 
 grant execute on function public.repair_missing_task_points(uuid) to authenticated;
+
+-- 7. Reload PostgREST's schema cache --------------------------------------------
+-- The new `visibility` column must be known to the API layer immediately. Without
+-- this, a server query that filters `.eq("visibility","workspace")` (the member
+-- path) hits an unknown column and returns nothing — which looks like "the member
+-- suddenly sees no tasks" while the admin (no such filter) still works. Notifying
+-- pgrst makes the column queryable the moment the migration is applied, in every
+-- environment (db push / db reset / direct apply).
+notify pgrst, 'reload schema';

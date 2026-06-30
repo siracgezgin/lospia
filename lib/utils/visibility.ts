@@ -2,9 +2,11 @@
 // Task visibility — "Görev Görünürlüğü"
 // ---------------------------------------------------------------------------
 // Two levels, enforced at the DB/RLS layer (see 20240203000000_task_visibility):
-//   • workspace  → "Herkes"            — the relevant team can see the task
+//   • workspace  → "Tüm üyeler"         — every workspace member can see the task
 //   • admin_only → "Sadece yöneticiler" — only owner/admin roles can see it
-// Default is 'workspace', so existing tasks and behaviour are unchanged.
+// UI copy follows the app's role language (Üye / Yönetici), so we say "Tüm
+// üyeler" rather than the ambiguous "Herkes". Default is 'workspace', so existing
+// tasks and behaviour are unchanged.
 
 export const TASK_VISIBILITIES = ["workspace", "admin_only"] as const;
 export type TaskVisibility = (typeof TASK_VISIBILITIES)[number];
@@ -21,12 +23,12 @@ export function asVisibility(v: unknown): TaskVisibility {
 }
 
 export const VISIBILITY_LABELS: Record<TaskVisibility, string> = {
-  workspace: "Herkes",
+  workspace: "Tüm üyeler",
   admin_only: "Sadece yöneticiler",
 };
 
 export const VISIBILITY_DESCRIPTIONS: Record<TaskVisibility, string> = {
-  workspace: "Bu görev çalışma alanındaki ilgili ekip tarafından görülebilir.",
+  workspace: "Bu görev çalışma alanındaki üyeler tarafından görülebilir.",
   admin_only: "Bu görev yalnızca yönetici ve sistem adminleri tarafından görülebilir.",
 };
 

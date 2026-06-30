@@ -163,6 +163,13 @@ export async function createTask(
 
   if (!canCreateTask(role)) return { error: PERM_DENIED };
 
+  // Visibility is admin-only. A non-admin explicitly asking for an admin_only
+  // task is rejected (the UI never offers them the field, so this only fires for
+  // hand-crafted requests). Members otherwise default to 'workspace' below.
+  if (parsed.data.visibility === "admin_only" && !isAdminRole(role)) {
+    return { error: "Yöneticiye özel görev oluşturma yetkiniz yok." };
+  }
+
   // AF works weekly: a new task's entry date (start_date) defaults to today so
   // it always lands in the current week's board even if no due date is set yet.
   const today = new Date().toISOString().slice(0, 10);
