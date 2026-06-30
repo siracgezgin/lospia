@@ -3,8 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { canRenameWorkspace, canManageMembers, type AppRole } from "@/lib/auth/permissions";
+import { getAdminClient } from "@/lib/supabase/admin";
+import { canRenameWorkspace, canManageMembers, canManageWorkspace, type AppRole } from "@/lib/auth/permissions";
 import { validateUsername } from "@/lib/utils/username";
+
+// Admin-created accounts use an internal auth e-mail derived from the username.
+// The person never sees or types this; they sign in with username + password.
+const INTERNAL_EMAIL_DOMAIN = "lospia.local";
 
 const hexUuid = (msg: string) =>
   z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, msg);
@@ -347,4 +352,134 @@ export async function removeWorkspaceMember(
 
   revalidatePath("/settings");
   return { ok: true };
+}
+
+// ── 6. Admin-created account (username + password) ────────────────────────────
+// Replaces the old self-signup flow. An owner/admin creates a working account
+// for a person directly: the person never registers — they just sign in with the
+// username + password the admin set. We never store the password (it's passed
+// only to Supabase Auth at createUser), and we derive an internal auth e-mail
+// (`<username>@lospia.local`) the user never sees. Requires the server-only
+// service_role key (admin client); fails cleanly with a clear message if absent.
+const CreateAccountSchema = z.object({
+  workspaceId: hexUuid("Geçersiz çalışma alanı"),
+  fullName: z
+    .string()
+    .trim()
+    .min(2, "Ad soyad gerekli.")
+    .max(100, "Ad soyad en fazla 100 karakter olabilir."),
+  role: z.enum(["admin", "member"], { error: "Geçersiz rol" }),
+  departmentId: hexUuid("Geçersiz departman").nullable().optional(),
+});
+
+export async function createMemberAccount(input: {
+  workspaceId: string;
+  fullName: string;
+  username: string;
+  password: string;
+  role: "admin" | "member";
+  departmentId?: string | null;
+}): Promise<{ ok: true; userId: string } | { error: string }> {
+  const parsed = CreateAccountSchema.safeParse({
+    workspaceId: input.workspaceId,
+    fullName: input.fullName,
+    role: input.role,
+    departmentId: input.departmentId ?? null,
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const usernameResult = validateUsername(input.username);
+  if (!usernameResult.ok) return { error: usernameResult.error };
+  const username = usernameResult.value;
+
+  if (typeof input.password !== "string" || input.password.length < 6) {
+    return { error: "Şifre en az 6 karakter olmalıdır." };
+  }
+
+  const supabase = await createClient();
+  const ctx = await getCallerRole(supabase);
+  if (!ctx) return { error: "Kimlik doğrulama gerekli." };
+  // Owner + admin may create accounts (not plain members / viewers).
+  if (!canManageWorkspace(ctx.role)) return { error: PERM_DENIED };
+  if (ctx.workspaceId !== parsed.data.workspaceId) return { error: PERM_DENIED };
+
+  const admin = getAdminClient();
+  if (!admin) {
+    return {
+      error:
+        "Hesap oluşturma sunucuda yapılandırılmamış (SUPABASE_SERVICE_ROLE_KEY eksik).",
+    };
+  }
+
+  // Username uniqueness is global + case-insensitive. Check via the admin client
+  // so RLS visibility can't let a duplicate slip through.
+  const { data: dupProfile } = await admin
+    .from("profiles")
+    .select("id")
+    .ilike("username", username)
+    .maybeSingle();
+  if (dupProfile) return { error: "Bu kullanıcı adı zaten kullanılıyor." };
+
+  const { data: dupGrant } = await admin
+    .from("workspace_invites")
+    .select("id")
+    .ilike("username", username)
+    .is("accepted_at", null)
+    .maybeSingle();
+  if (dupGrant) return { error: "Bu kullanıcı adı zaten kullanılıyor." };
+
+  const email = `${username}@${INTERNAL_EMAIL_DOMAIN}`;
+
+  // 1. Create the auth user (already confirmed → can sign in immediately).
+  const { data: created, error: createErr } = await admin.auth.admin.createUser({
+    email,
+    password: input.password,
+    email_confirm: true,
+    user_metadata: { full_name: parsed.data.fullName, username },
+  });
+  if (createErr || !created?.user) {
+    const msg = createErr?.message?.toLowerCase() ?? "";
+    if (msg.includes("already") || msg.includes("registered") || msg.includes("exists")) {
+      return { error: "Bu kullanıcı adı için hesap zaten var." };
+    }
+    return { error: "Hesap oluşturulamadı. Lütfen tekrar deneyin." };
+  }
+  const userId = created.user.id;
+
+  // 2. Profile (carries display name + username + the internal e-mail, which MUST
+  //    match the auth e-mail so username→email login resolves correctly).
+  const { error: profileErr } = await admin
+    .from("profiles")
+    .upsert(
+      { id: userId, email, full_name: parsed.data.fullName, username },
+      { onConflict: "id" },
+    );
+  if (profileErr) {
+    await admin.auth.admin.deleteUser(userId);
+    return { error: "Profil oluşturulamadı. Lütfen tekrar deneyin." };
+  }
+
+  // 3. Workspace membership with the chosen role.
+  const { data: member, error: memberErr } = await admin
+    .from("workspace_members")
+    .insert({ workspace_id: ctx.workspaceId, user_id: userId, role: parsed.data.role })
+    .select("id")
+    .single();
+  if (memberErr || !member) {
+    await admin.auth.admin.deleteUser(userId);
+    return { error: "Üyelik oluşturulamadı. Lütfen tekrar deneyin." };
+  }
+
+  // 4. Optional department assignment (best-effort; non-fatal).
+  if (parsed.data.departmentId) {
+    await admin.from("department_members").insert({
+      workspace_id: ctx.workspaceId,
+      department_id: parsed.data.departmentId,
+      member_id: member.id,
+    });
+  }
+
+  revalidatePath("/settings");
+  revalidatePath("/", "layout");
+  return { ok: true, userId };
 }

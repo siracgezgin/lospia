@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useTransition } from "react";
+import { useState, useMemo, useTransition, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { formatDateTimeTR } from "@/lib/utils/format-date";
 import Link from "next/link";
@@ -98,6 +98,16 @@ function TaskEditor({
   const [draft, setDraft] = useState<Draft>(initial);
   const [saving, startSaving] = useTransition();
   const [feedback, setFeedback] = useState<{ kind: "ok" | "err"; msg: string } | null>(null);
+
+  // The title is a textarea so long operasyon başlıkları wrap and stay fully
+  // visible (in both view + edit modes). Auto-grow to fit the content height.
+  const titleRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = titleRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [draft.title]);
 
   const dirty = useMemo(
     () => (Object.keys(initial) as (keyof Draft)[]).some((k) => draft[k] !== initial[k]),
@@ -201,14 +211,16 @@ function TaskEditor({
       {/* Header: editable title + live status / priority / due chips */}
       <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
         <div className="group relative">
-          <input
+          <textarea
+            ref={titleRef}
             value={draft.title}
             onChange={(e) => set("title", e.target.value)}
             disabled={fieldsDisabled}
+            rows={1}
             placeholder="Görev başlığı"
             aria-label="Görev başlığı"
             className={cn(
-              "w-full text-2xl font-bold text-gray-900 bg-transparent outline-none pr-8 pb-1 transition-colors",
+              "w-full resize-none overflow-hidden text-2xl font-bold text-gray-900 bg-transparent outline-none pr-8 pb-1 leading-tight break-words transition-colors",
               fieldsDisabled
                 ? "border-b border-transparent text-gray-600"
                 : "border-b border-dashed border-gray-300 hover:border-gray-400 focus:border-solid focus:border-[#406775]",

@@ -11,8 +11,9 @@ import {
   type ColumnFiltersState,
   type VisibilityState,
 } from "@tanstack/react-table";
-import { useState, useOptimistic, useTransition, useMemo } from "react";
+import { useState, useOptimistic, useTransition, useMemo, useCallback } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowUp, ArrowDown, ArrowUpDown, Plus, FileSpreadsheet, Lock } from "lucide-react";
 import { ADMIN_ONLY_CHIP_LABEL } from "@/lib/utils/visibility";
 import type { Task, SavedView, TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceDepartment } from "@/types";
@@ -42,6 +43,25 @@ interface Props {
   members?: { memberId: string; userId: string; name: string }[];
   deptMembers?: { department_id: string; member_id: string }[];
   isAdmin?: boolean;
+  // Person filter seed from the URL (?person=<member userId | contact id>).
+  initialPerson?: string;
+}
+
+// A task is related to a person when they are the assignee, the responsible
+// contact, or listed among the collaborators (custom_fields.collaborators).
+// `personId` is a bare id (member user_id or contact id) — they never collide.
+function taskMatchesPerson(task: Task, personId: string): boolean {
+  if (!personId) return true;
+  if (task.assignee_id === personId) return true;
+  if ((task as { responsible_contact_id?: string | null }).responsible_contact_id === personId) return true;
+  try {
+    const cf = task.custom_fields;
+    if (cf && typeof cf === "object" && !Array.isArray(cf)) {
+      const collabs = (cf as Record<string, unknown>).collaborators;
+      if (Array.isArray(collabs) && (collabs as unknown[]).includes(personId)) return true;
+    }
+  } catch { /* ignore malformed custom_fields */ }
+  return false;
 }
 
 // ---- Status display — simplified user-facing labels ----
@@ -217,7 +237,9 @@ function MobileTaskCard({
 
 // ---- Main component ----
 
-export function TaskListView({ tasks, savedViews, workspaceId, profiles, contacts, departments = [], members = [], deptMembers = [], isAdmin = false }: Props) {
+export function TaskListView({ tasks, savedViews, workspaceId, profiles, contacts, departments = [], members = [], deptMembers = [], isAdmin = false, initialPerson = "" }: Props) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const deptMeta = useMemo(() => buildDeptMeta(departments), [departments]);
   const responsibleNames = useMemo<Record<string, string>>(() => {
     const map: Record<string, string> = {};
@@ -237,17 +259,36 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
   const [search, setSearch] = useState("");
   const [filterStatusKey, setFilterStatusKey] = useState<StatusFilterKey>("all");
   const [filterPriority, setFilterPriority] = useState<TaskPriority | "all">("all");
+  const [personFilter, setPersonFilter] = useState(initialPerson);
   const [modalOpen, setModalOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+
+  // Person dropdown options — same data source as the board's Kişi filter:
+  // workspace members first, then contacts. Value is the bare id.
+  const personOptions = useMemo(() => ({
+    members: profiles.map((p) => ({ id: p.id, name: p.full_name ?? p.email ?? "—" })),
+    contacts: contacts.map((c) => ({ id: c.id, name: c.name })),
+  }), [profiles, contacts]);
+
+  // Keep the selection in the URL (?person=…) so a refresh preserves the filter.
+  const handlePersonChange = useCallback((value: string) => {
+    setPersonFilter(value);
+    const params = new URLSearchParams(searchParams.toString());
+    if (value) params.set("person", value);
+    else params.delete("person");
+    const qs = params.toString();
+    router.replace(qs ? `/list?${qs}` : "/list", { scroll: false });
+  }, [router, searchParams]);
 
   const allowedStatuses = STATUS_FILTER_OPTIONS.find((o) => o.key === filterStatusKey)?.statuses ?? [];
 
   const filteredTasks = useMemo(() => tasks.filter((t) => {
     if (allowedStatuses.length > 0 && !allowedStatuses.includes(t.status)) return false;
     if (filterPriority !== "all" && t.priority !== filterPriority) return false;
+    if (personFilter && !taskMatchesPerson(t, personFilter)) return false;
     if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
-  }), [tasks, allowedStatuses, filterPriority, search]);
+  }), [tasks, allowedStatuses, filterPriority, personFilter, search]);
 
   // Columns MUST be memoized — recreating the array every render causes TanStack Table
   // to re-derive its internal model on every keystroke/sort click, which freezes the UI.
@@ -260,7 +301,8 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
           <Link
             prefetch={false}
             href={`/tasks/${info.row.original.id}`}
-            className="font-medium text-gray-900 hover:text-blue-600 text-sm line-clamp-1 block"
+            title={info.getValue()}
+            className="font-medium text-gray-900 hover:text-blue-600 text-sm line-clamp-2 block leading-snug break-words"
           >
             {info.getValue()}
           </Link>
@@ -552,6 +594,32 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
           {TASK_PRIORITIES.map((p) => (
             <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>
           ))}
+        </select>
+        {/* Kişi filtresi — seçilen kişinin (üye veya kişi) görevlerini gösterir. */}
+        <select
+          value={personFilter}
+          onChange={(e) => handlePersonChange(e.target.value)}
+          aria-label="Kişiye göre filtrele"
+          className={cn(
+            "rounded-lg border px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors",
+            personFilter ? "border-blue-400 text-blue-700" : "border-gray-200 text-gray-600",
+          )}
+        >
+          <option value="">Tüm kişiler</option>
+          {personOptions.members.length > 0 && (
+            <optgroup label="Üyeler">
+              {personOptions.members.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </optgroup>
+          )}
+          {personOptions.contacts.length > 0 && (
+            <optgroup label="Kişiler">
+              {personOptions.contacts.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </optgroup>
+          )}
         </select>
         <span className="ml-auto text-xs text-gray-400 self-center">{totalRows} görev</span>
       </div>

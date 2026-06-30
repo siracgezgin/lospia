@@ -8,7 +8,7 @@ import { generateKeyBetween } from "fractional-indexing";
 import { normalizeTags } from "@/lib/utils/normalize-tags";
 import {
   canCreateTask, canArchiveTask, canDeleteTask, canPermanentDeleteTask,
-  canEditTask, canReorderTask, canCompleteTask, type AppRole,
+  canDeleteTaskItem, canEditTask, canReorderTask, canCompleteTask, type AppRole,
 } from "@/lib/auth/permissions";
 import {
   logTaskActivity, logTaskActivities, ACTIVITY_ACTIONS,
@@ -475,7 +475,19 @@ export async function softDeleteTask(
   const supabase = await createClient();
   const ctx = await getUserAndRole(supabase);
   if (!ctx) return { error: "Not authenticated" };
-  if (!canDeleteTask(ctx.role)) return { error: PERM_DENIED };
+
+  // Members may trash ONLY tasks they created; owner/admin may trash any. We must
+  // resolve created_by first (UI hides the button, but the server is the real
+  // boundary).
+  const { data: target } = await supabase
+    .from("tasks")
+    .select("created_by")
+    .eq("id", taskId)
+    .maybeSingle();
+  if (!target) return { error: "Görev bulunamadı." };
+  if (!canDeleteTaskItem(ctx.role, { created_by: target.created_by as string | null }, ctx.user.id)) {
+    return { error: PERM_DENIED };
+  }
 
   const { error } = await supabase
     .from("tasks")

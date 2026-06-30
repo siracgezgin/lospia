@@ -86,6 +86,7 @@ function useTaskParticipants(taskId: string): TaskParticipant[] {
 type BoardCtxValue = {
   canComplete: boolean;                       // owner/admin may finalize Tamamlandı
   isResponsible: (task: Task) => boolean;     // admin → always; member → own/participant
+  canDeleteTask: (task: Task) => boolean;     // admin → any; member → only own-created
   showToast: (msg: string) => void;
   taskHrefSuffix: string;                     // appended to /tasks/{id} (e.g. ?from=admin-board)
 };
@@ -216,8 +217,15 @@ function ParticipantChips({ participants }: { participants: TaskParticipant[] })
   return (
     <span className="ml-auto flex items-center -space-x-1 shrink-0">
       {shown.map((p) => (
-        <span key={p.memberId} className="relative" title={`${p.name}${p.completed ? " — tamamladı" : " — bekleniyor"}`}>
-          <Avatar name={p.name} size="xs" className={cn("ring-1 ring-white", p.completed && "ring-2 ring-green-500")} />
+        <span key={p.memberId} className="relative" title={`${p.name} — ${p.completed ? "Tamamladı" : "Tamamlanmadı"}`}>
+          {/* Neutral until this person completes; green (with check) once done. */}
+          <Avatar
+            name={p.name}
+            size="xs"
+            tone={p.completed ? "done" : "neutral"}
+            title={`${p.name} — ${p.completed ? "Tamamladı" : "Tamamlanmadı"}`}
+            className="ring-1 ring-white"
+          />
           {p.completed && (
             <Check size={8} className="absolute -bottom-0.5 -right-0.5 text-green-600 bg-white rounded-full" strokeWidth={3} />
           )}
@@ -291,16 +299,14 @@ function applyViewFilter(tasks: Task[], slug: string, userId: string, monday: Da
     !t.archived_at && !t.deleted_at && t.status !== "archived";
 
   switch (slug) {
-    case "all": // Tüm işler — ALL active tasks, not scoped to the selected week
-      return tasks.filter((t) => notArchived(t));
-
-    case "_week_scoped_all_DEPRECATED":
+    case "all": // Tüm işler — tüm aktif işler ama YALNIZCA seçili hafta içinde.
+                // (Önceki haftaların teslimli işleri bu haftaya sızmamalı.)
       return tasks.filter((t) => {
         if (!notArchived(t)) return false;
         // A done task belongs to the week if it was DUE that week or COMPLETED
         // that week — so completing a task due this week keeps it on this board.
         if (t.status === "done") return inWeekByDate(t) || isInWeek(t.completed_at, monday);
-        return inWeekByDate(t); // tasks without due_date are not shown in weekly board
+        return inWeekByDate(t);
       });
 
     case "mine": // Bana atananlar — assigned to me in selected week
@@ -322,11 +328,13 @@ function applyViewFilter(tasks: Task[], slug: string, userId: string, monday: Da
         return inWeekByDate(t);
       });
 
-    case "overdue": // Gecikenler — overdue regardless of selected week
+    case "overdue": // Gecikenler — seçili haftanın gecikenleri: teslimi geçmiş VE
+                    // teslim tarihi seçili hafta aralığında olan işler.
       return tasks.filter((t) =>
         notArchived(t) &&
         t.status !== "done" &&
-        t.due_date !== null && t.due_date < today,
+        t.due_date !== null && t.due_date < today &&
+        inRange(t.due_date),
       );
 
     case "done": // Tamamlananlar — completed in selected week
@@ -588,8 +596,13 @@ function QuickAssigneeSelect({
   return (
     <div className="relative inline-flex items-center gap-1 ml-auto shrink-0">
       {currentName ? (
-        // Initials only; full name via Avatar title tooltip
-        <Avatar name={currentName} size="xs" />
+        // Initials only; neutral until the task is done (never "green by default").
+        <Avatar
+          name={currentName}
+          size="xs"
+          tone={task.status === "done" ? "done" : "neutral"}
+          title={`${currentName} — ${task.status === "done" ? "Tamamladı" : "Tamamlanmadı"}`}
+        />
       ) : (
         <span className="text-[10px] text-gray-300 pointer-events-none">—</span>
       )}
@@ -652,8 +665,12 @@ function CardContent({
   const dept = useTaskDept(task);
   const deptStyle = getDepartmentCardStyle(dept?.color);
   // Detail link keeps the originating board's context (so "← geri" returns here).
-  const hrefSuffix = useContext(BoardContext)?.taskHrefSuffix ?? "";
+  const boardCtx = useContext(BoardContext);
+  const hrefSuffix = boardCtx?.taskHrefSuffix ?? "";
   const taskHref = `/tasks/${task.id}${hrefSuffix}`;
+  // Per-card delete: members may only delete tasks they created (server-enforced).
+  const canDeleteThis = boardCtx ? boardCtx.canDeleteTask(task) : canDeleteCard;
+  const taskDone = task.status === "done";
   // Active member participants (with per-person completion) drive the people chips.
   const participants = useTaskParticipants(task.id);
   const responsibleName =
@@ -705,17 +722,19 @@ function CardContent({
             onArchive={() => onArchive(task.id)}
             onDelete={() => onDelete(task.id)}
             canArchive={canArchiveCard}
-            canDelete={canDeleteCard}
+            canDelete={canDeleteThis}
           />
         )}
       </div>
 
-      {/* Title */}
+      {/* Title — operasyon başlıkları uzun olabilir; 4 satıra kadar tam okunsun
+          ve tooltip ile tamamı görülebilsin. Başlık açıklamadan önceliklidir. */}
       <Link
         prefetch={false}
         href={taskHref}
+        title={task.title}
         className={cn(
-          "text-[13px] font-medium line-clamp-2 block leading-snug tracking-[-0.005em]",
+          "text-[13px] font-medium line-clamp-4 block leading-snug tracking-[-0.005em] break-words",
           markers.shouldStrike
             ? "text-success/90 line-through decoration-success/40"
             : "text-ink hover:text-brand",
@@ -775,7 +794,13 @@ function CardContent({
             responsibleNames={responsibleNames}
           />
         ) : responsibleName ? (
-          <Avatar name={responsibleName} size="xs" className="shrink-0 ml-auto" />
+          <Avatar
+            name={responsibleName}
+            size="xs"
+            tone={taskDone ? "done" : "neutral"}
+            title={`${responsibleName} — ${taskDone ? "Tamamladı" : "Tamamlanmadı"}`}
+            className="shrink-0 ml-auto"
+          />
         ) : null}
       </div>
     </div>
@@ -1120,6 +1145,15 @@ export function KanbanBoard({
     if (task.assignee_id === userId || task.created_by === userId) return true;
     return (participantsByTask[task.id] ?? []).some((p) => p.userId === userId);
   }, [userRole, userId, participantsByTask]);
+
+  // Delete rule mirrors the server (canDeleteTaskItem): admins delete any task;
+  // members delete ONLY tasks they created — never an admin-created task, even if
+  // they are the responsible person.
+  const canDeleteTaskFn = useCallback((task: Task) => {
+    if (userRole === "owner" || userRole === "admin") return true;
+    if (userRole === "viewer") return false;
+    return (task.created_by ?? null) === userId;
+  }, [userRole, userId]);
   const mounted = useSyncExternalStore(subscribeMounted, getMounted, getServerMounted);
   const router = useRouter();
 
@@ -1429,8 +1463,8 @@ export function KanbanBoard({
   }, [isAdminBoard, personFilter, optimisticTasks, responsibleNames]);
 
   const boardCtx = useMemo<BoardCtxValue>(
-    () => ({ canComplete, isResponsible, showToast, taskHrefSuffix }),
-    [canComplete, isResponsible, taskHrefSuffix], // eslint-disable-line react-hooks/exhaustive-deps -- showToast uses stable setToasts
+    () => ({ canComplete, isResponsible, canDeleteTask: canDeleteTaskFn, showToast, taskHrefSuffix }),
+    [canComplete, isResponsible, canDeleteTaskFn, taskHrefSuffix], // eslint-disable-line react-hooks/exhaustive-deps -- showToast uses stable setToasts
   );
 
   return (
@@ -1696,7 +1730,7 @@ export function KanbanBoard({
             {/* Continuous sticky band behind every column header (no gaps/peek). */}
             <div aria-hidden className="sticky top-0 z-10 h-11 bg-app border-b border-line shadow-[0_4px_10px_-6px_rgba(16,24,40,0.18)]" />
             <div className="flex gap-3 sm:gap-4 px-3 sm:px-4 pb-4 items-start -mt-11">
-              {!isAdminBoard && <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} />}
+              {!isAdminBoard && <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} currentUserId={userId} isAdmin={canComplete} />}
               {BOARD_COLUMNS.map((col) => (
                 <StaticKanbanColumn
                   key={col.id}
@@ -1725,7 +1759,7 @@ export function KanbanBoard({
               {/* Continuous sticky band behind every column header (no gaps/peek). */}
               <div aria-hidden className="sticky top-0 z-10 h-11 bg-app border-b border-line shadow-[0_4px_10px_-6px_rgba(16,24,40,0.18)]" />
               <div className="flex gap-3 sm:gap-4 px-3 sm:px-4 pb-4 items-start -mt-11">
-                {!isAdminBoard && <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} />}
+                {!isAdminBoard && <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} currentUserId={userId} isAdmin={canComplete} />}
                 {BOARD_COLUMNS.map((col) => (
                   <KanbanColumn
                     key={col.id}
@@ -1798,7 +1832,7 @@ export function KanbanBoard({
         {/* Single column content — flows into the page scroll (no inner scroll) */}
         <div className="px-3 py-3">
           {!isAdminBoard && mobileSeg === "notes" ? (
-            <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} mobile />
+            <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} currentUserId={userId} isAdmin={canComplete} mobile />
           ) : (
             (() => {
               const colTasks = tasksByCol[mobileSeg as BoardColId] ?? [];

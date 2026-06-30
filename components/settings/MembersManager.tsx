@@ -1,9 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Plus, X, UserMinus, ChevronDown, Pencil, Check } from "lucide-react";
+import { X, UserMinus, ChevronDown, Pencil, Check } from "lucide-react";
 import {
-  addTeamAccess,
   revokeTeamAccess,
   changeWorkspaceMemberRole,
   removeWorkspaceMember,
@@ -36,7 +35,6 @@ interface Props {
 }
 
 export function MembersManager({
-  workspaceId,
   currentUserId,
   userRole,
   initialMembers,
@@ -48,13 +46,6 @@ export function MembersManager({
   const [grants, setGrants] = useState(pendingGrants);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-
-  // Add-access form state — email + username + role. The person enters their own
-  // name during signup, so no name field here.
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [grantEmail, setGrantEmail] = useState("");
-  const [grantUsername, setGrantUsername] = useState("");
-  const [grantRole, setGrantRole] = useState<"admin" | "member">("member");
 
   // Inline name editing (owner fixes stale/placeholder names).
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -82,37 +73,6 @@ export function MembersManager({
     const arr = deptsByMember.get(dm.member_id) ?? [];
     arr.push({ name: meta.name, color: meta.color });
     deptsByMember.set(dm.member_id, arr);
-  }
-
-  function handleAddAccess(e: React.FormEvent) {
-    e.preventDefault();
-    if (!grantEmail.trim() || !grantUsername.trim()) return;
-    setError(null);
-    const username = grantUsername.trim().toLowerCase();
-    startTransition(async () => {
-      const result = await addTeamAccess(workspaceId, grantEmail.trim(), username, grantRole);
-      if ("error" in result) { setError(result.error); return; }
-      setGrants((prev) => [
-        // Drop any existing pending row for this e-mail (addTeamAccess upserts).
-        ...prev.filter((g) => g.email.toLowerCase() !== grantEmail.trim().toLowerCase()),
-        {
-          id: result.id,
-          workspace_id: workspaceId,
-          email: grantEmail.trim().toLowerCase(),
-          role: grantRole,
-          invited_by: currentUserId,
-          accepted_at: null,
-          accepted_user_id: null,
-          created_at: new Date().toISOString(),
-          full_name: null,
-          username,
-        },
-      ]);
-      setGrantEmail("");
-      setGrantUsername("");
-      setGrantRole("member");
-      setShowAddForm(false);
-    });
   }
 
   function handleRoleChange(memberId: string, newRole: "admin" | "member" | "viewer") {
@@ -349,113 +309,40 @@ export function MembersManager({
         })}
       </div>
 
-      {/* Team access — allowed e-mails awaiting first sign-in */}
-      {isOwner && (
+      {/* Legacy team-access grants. Self-signup is DISABLED — new people are added
+          via "Hesap oluştur" above. Any leftover pending grants from the old flow
+          are shown here so an owner can revoke them; no new ones can be added. */}
+      {isOwner && grants.length > 0 && (
         <div>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Ekip erişimi</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Bekleyen eski erişimler</p>
           <p className="text-xs text-gray-400 mt-1 mb-2">
-            Bu listeye eklenen kullanıcı adı ve e-posta eşleşmesiyle hesap oluşturan kişiler AF
-            Operasyon’a katılır.
+            Self-signup kapatıldı. Aşağıdaki eski kayıtlar artık kullanılmıyor; kaldırabilirsiniz.
           </p>
-
-          {grants.length > 0 && (
-            <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
-              {grants.map((g) => (
-                <div key={g.id} className="flex items-center justify-between px-5 py-3 gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-700 truncate">
-                      {g.username ? `@${g.username}` : "—"}
-                    </p>
-                    <p className="text-xs text-gray-400 truncate">{g.email}</p>
-                    <p className="text-xs text-gray-400">
-                      {roleLabel(g.role)} · Hesap bekleniyor
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setConfirm({ kind: "grant", id: g.id, label: g.email })}
-                    disabled={isPending}
-                    className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-50 transition-colors"
-                    aria-label="Erişimi kaldır"
-                  >
-                    <X size={14} />
-                  </button>
+          <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+            {grants.map((g) => (
+              <div key={g.id} className="flex items-center justify-between px-5 py-3 gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-700 truncate">
+                    {g.username ? `@${g.username}` : "—"}
+                  </p>
+                  <p className="text-xs text-gray-400 truncate">{g.email}</p>
+                  <p className="text-xs text-gray-400">{roleLabel(g.role)} · Kullanılmıyor</p>
                 </div>
-              ))}
-            </div>
-          )}
-
-          {/* Add-access form */}
-          {!showAddForm ? (
-            <button
-              onClick={() => setShowAddForm(true)}
-              className="mt-3 flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium"
-            >
-              <Plus size={14} />
-              Erişim ekle
-            </button>
-          ) : (
-            <form onSubmit={handleAddAccess} className="mt-3 bg-white rounded-xl border border-gray-200 p-4 space-y-3">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Yeni erişim</p>
-              <div className="flex flex-wrap gap-2">
-                <input
-                  type="email"
-                  value={grantEmail}
-                  onChange={(e) => setGrantEmail(e.target.value)}
-                  placeholder="E-posta"
-                  required
-                  autoFocus
-                  className="flex-1 min-w-[200px] rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  disabled={isPending}
-                />
-                <input
-                  type="text"
-                  value={grantUsername}
-                  onChange={(e) => setGrantUsername(e.target.value)}
-                  placeholder="Kullanıcı adı"
-                  required
-                  autoComplete="off"
-                  className="flex-1 min-w-[160px] rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  disabled={isPending}
-                />
-                <select
-                  value={grantRole}
-                  onChange={(e) => setGrantRole(e.target.value as "admin" | "member")}
-                  className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  disabled={isPending}
-                >
-                  {ASSIGNABLE_ROLE_OPTIONS.map((r) => (
-                    <option key={r.value} value={r.value}>{r.label}</option>
-                  ))}
-                </select>
-              </div>
-              <p className="text-xs text-gray-400">
-                Kişi /login üzerinden bu e-posta ve kullanıcı adı ile hesap oluşturduğunda AF
-                Operasyon’a katılır. Departman ataması, kişi katıldıktan sonra yukarıdaki
-                Departmanlar bölümünden yapılır.
-              </p>
-              <div className="flex items-center gap-2">
                 <button
-                  type="submit"
-                  disabled={isPending || !grantEmail.trim() || !grantUsername.trim()}
-                  className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  onClick={() => setConfirm({ kind: "grant", id: g.id, label: g.email })}
+                  disabled={isPending}
+                  className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-50 transition-colors"
+                  aria-label="Erişimi kaldır"
                 >
-                  {isPending ? "Ekleniyor…" : "Erişim ekle"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setShowAddForm(false); setGrantEmail(""); setGrantUsername(""); setError(null); }}
-                  className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                  İptal
+                  <X size={14} />
                 </button>
               </div>
-              {error && <p className="text-xs text-red-600">{error}</p>}
-            </form>
-          )}
+            ))}
+          </div>
         </div>
       )}
 
-      {error && !showAddForm && <p className="text-xs text-red-600">{error}</p>}
+      {error && <p className="text-xs text-red-600">{error}</p>}
 
       <ConfirmDialog
         open={confirm !== null}

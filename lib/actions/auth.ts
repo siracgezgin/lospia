@@ -3,46 +3,21 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { validateUsername } from "@/lib/utils/username";
 import { z } from "zod";
 
 // Sign-in takes an identifier that is EITHER a username OR an e-mail, plus a
 // non-empty password — the stored password may predate any length rule, so we
 // must NOT reject short ones here or existing users could be locked out.
+//
+// Public self-signup has been REMOVED: accounts are created by an owner/admin in
+// Settings → "Hesap oluştur" (see createMemberAccount). There is no signUp action
+// and no public registration path; login is username/e-mail + password only.
 const signInSchema = z.object({
   identifier: z.string().trim().min(1, "Kullanıcı adı veya e-posta gerekli."),
   password: z.string().min(1, "Şifre gerekli."),
 });
 
-// Sign-up is strict: a real name, a username, a valid e-mail and a password that
-// satisfies the Supabase minimum (config.toml minimum_password_length = 6).
-const signUpSchema = z.object({
-  fullName: z
-    .string()
-    .trim()
-    .min(1, "Ad soyad alanı zorunludur.")
-    .min(3, "Lütfen geçerli bir ad soyad girin.")
-    .max(100, "Ad soyad en fazla 100 karakter olabilir."),
-  email: z.string().trim().toLowerCase().email("Geçerli bir e-posta adresi girin."),
-  password: z.string().min(6, "Şifre en az 6 karakter olmalıdır."),
-});
-
-/** Normalize a display name: collapse internal whitespace and drop stray leading
- *  or trailing quote characters (the source of placeholder names like `Test"`). */
-function sanitizeName(raw: string | null | undefined): string | null {
-  if (!raw) return null;
-  const cleaned = raw
-    .replace(/\s+/g, " ")
-    .replace(/^["'`]+|["'`]+$/g, "")
-    .trim();
-  return cleaned.length > 0 ? cleaned : null;
-}
-
-export type AuthFormState =
-  | { error: string; success?: never; existing?: never }
-  | { success: true; error?: never; existing?: never }
-  | { existing: true; error?: never; success?: never }
-  | null;
+export type AuthFormState = { error: string } | null;
 
 export async function signIn(
   _prevState: AuthFormState,
@@ -97,122 +72,6 @@ export async function signIn(
   // already existed). No-op for users who are already members. Errors are
   // swallowed — login should never fail because of the attach step.
   await supabase.rpc("accept_workspace_access_grant", { p_full_name: null });
-
-  revalidatePath("/", "layout");
-  redirect("/board");
-}
-
-/**
- * Self-service signup gated by the team-access allowlist (no outbound email,
- * no service_role).
- *
- * The person enters Ad Soyad / Kullanıcı adı / E-posta / Şifre. Flow:
- *   1. check_signup_access(email, username) — the e-mail AND username must both
- *      match an open team-access grant before we create anything.
- *   2. supabase.auth.signUp() — Confirm Email is OFF in the dashboard, so this
- *      returns an authenticated session immediately, with NO e-mail sent and no
- *      project-wide email rate limit to hit.
- *   3. accept_workspace_access_grant(full_name, username) — runs as the new user,
- *      upserts the profile with the latest display name + username, attaches the
- *      user to AF Operasyon with the granted role, and marks the grant accepted.
- *
- * If the account already exists we try to sign in with the supplied password;
- * a correct password logs the person in (and updates their display name), a
- * wrong one returns { existing: true } so the UI prompts them to log in.
- */
-export async function signUp(
-  _prevState: AuthFormState,
-  formData: FormData
-): Promise<AuthFormState> {
-  // 0. Validate name + username + e-mail + password BEFORE any Supabase auth
-  //    call, so an invalid/empty submission never reaches the auth server (and
-  //    never burns the auth rate limit).
-  const parsed = signUpSchema.safeParse({
-    fullName: formData.get("full_name"),
-    email: formData.get("email"),
-    password: formData.get("password"),
-  });
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0].message };
-  }
-  const usernameResult = validateUsername(formData.get("username") as string | null);
-  if (!usernameResult.ok) {
-    return { error: usernameResult.error };
-  }
-  const username = usernameResult.value;
-  const email = parsed.data.email;
-  const password = parsed.data.password;
-  const formName = sanitizeName(parsed.data.fullName);
-  if (!formName) {
-    return { error: "Ad soyad alanı zorunludur." };
-  }
-
-  const supabase = await createClient();
-
-  // 1. The e-mail AND username must both match an active team-access grant.
-  //    Gate BEFORE auth.signUp so a non-allowed pair creates nothing.
-  const { data: gate, error: gateError } = await supabase.rpc("check_signup_access", {
-    p_email: email,
-    p_username: username,
-  });
-  if (gateError) {
-    return { error: "Bu işlem şu anda tamamlanamadı. Lütfen tekrar deneyin." };
-  }
-  if (gate === "email_not_allowed") {
-    return { error: "Bu e-posta adresi için AF Operasyon erişimi tanımlı değil." };
-  }
-  if (gate === "username_mismatch") {
-    return { error: "Bu kullanıcı adı bu e-posta adresi için tanımlı değil." };
-  }
-  if (gate === "username_taken") {
-    return { error: "Bu kullanıcı adı zaten kullanılıyor." };
-  }
-  if (gate !== "ok") {
-    return { error: "Bu işlem şu anda tamamlanamadı. Lütfen tekrar deneyin." };
-  }
-
-  // 2. Create the account. Confirm Email is OFF → an active session is returned
-  //    and no e-mail is sent. For an already-registered e-mail, Supabase returns
-  //    an obfuscated user with no session (or an "already registered" error).
-  const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-    email,
-    password,
-    options: { data: { full_name: formName, username } },
-  });
-
-  let hasSession = !!signUpData?.session;
-
-  if (signUpError) {
-    const msg = signUpError.message?.toLowerCase() ?? "";
-    if (msg.includes("rate limit")) {
-      return { error: "Çok fazla deneme yapıldı. Lütfen biraz sonra tekrar deneyin." };
-    }
-    if (!(msg.includes("already") || msg.includes("registered") || msg.includes("exists"))) {
-      return { error: "Hesap oluşturulamadı. Lütfen tekrar deneyin." };
-    }
-    // fall through to the existing-account sign-in attempt below.
-  }
-
-  // 3. If no fresh session (account already existed), try to sign in. A correct
-  //    password attaches them and refreshes their name; otherwise prompt login.
-  if (!hasSession) {
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-    if (signInError) {
-      return { existing: true };
-    }
-    hasSession = true;
-  }
-
-  // 4. Attach to AF Operasyon and persist the latest display name + username.
-  const { data: accept } = await supabase.rpc("accept_workspace_access_grant", {
-    p_full_name: formName,
-    p_username: username,
-  });
-  const acceptObj =
-    accept && typeof accept === "object" ? (accept as Record<string, unknown>) : null;
-  if (acceptObj?.error === "username_taken") {
-    return { error: "Bu kullanıcı adı zaten kullanılıyor." };
-  }
 
   revalidatePath("/", "layout");
   redirect("/board");

@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { WorkspaceNameEditor } from "@/components/settings/WorkspaceNameEditor";
 import { MembersManager } from "@/components/settings/MembersManager";
+import { CreateAccountPanel } from "@/components/settings/CreateAccountPanel";
 import { DepartmentsManager } from "@/components/settings/DepartmentsManager";
 import { canManageSettings, canRenameWorkspace, canManageMembers, canManageWorkspace } from "@/lib/auth/permissions";
 import { roleLabel } from "@/lib/utils/roles";
@@ -143,6 +144,16 @@ export default async function SettingsPage() {
           canManage={canManageDepts}
         />
       </section>
+
+      {/* Account creation — admin-created accounts (owner + admin). Replaces the
+          old self-signup flow: the person signs in directly with the username +
+          password set here. */}
+      {canManageDepts && (
+        <section className="space-y-4">
+          <h2 className="text-base font-semibold text-gray-700">Hesap oluştur</h2>
+          <CreateAccountPanel workspaceId={workspaceId} departments={departments} />
+        </section>
+      )}
 
       {/* Members */}
       <section className="space-y-4">

@@ -244,6 +244,7 @@ export default async function TaskDetailPage({
           initialNotes={taskNotes}
           currentUserId={user.id}
           isViewer={isViewer}
+          isAdmin={canComplete}
         />
       </div>
     </>

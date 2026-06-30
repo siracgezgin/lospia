@@ -5,6 +5,9 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { logTaskActivity, ACTIVITY_ACTIONS } from "@/lib/activity/log-task-activity";
 import { notifyTaskEvent } from "@/lib/notifications/notify";
+import { canDeleteNoteItem, type AppRole } from "@/lib/auth/permissions";
+
+const PERM_DENIED = "Bu işlem için yetkiniz yok.";
 
 function hexUuid() {
   return z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, "Geçersiz UUID");
@@ -42,6 +45,34 @@ export async function createNote(data: {
   return { success: true };
 }
 
+// Resolve the caller's workspace role + the author of a workspace note, so we can
+// enforce "author or admin" on edit/delete (the UI hides the controls, but the
+// server is the real boundary).
+async function resolveNoteAuth(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  noteId: string,
+): Promise<{ userId: string; role: AppRole; createdBy: string | null } | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data: member } = await supabase
+    .from("workspace_members")
+    .select("role")
+    .eq("user_id", user.id)
+    .limit(1)
+    .maybeSingle();
+  if (!member) return null;
+  const { data: note } = await supabase
+    .from("workspace_notes")
+    .select("created_by")
+    .eq("id", noteId)
+    .maybeSingle();
+  return {
+    userId: user.id,
+    role: member.role as AppRole,
+    createdBy: (note?.created_by ?? null) as string | null,
+  };
+}
+
 export async function updateNote(data: {
   id: string;
   title?: string;
@@ -49,8 +80,6 @@ export async function updateNote(data: {
   color?: string;
 }) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Oturum açılmamış" };
 
   const schema = z.object({
     id: hexUuid(),
@@ -61,6 +90,12 @@ export async function updateNote(data: {
 
   const parsed = schema.safeParse(data);
   if (!parsed.success) return { error: "Geçersiz veri" };
+
+  const auth = await resolveNoteAuth(supabase, parsed.data.id);
+  if (!auth) return { error: "Oturum açılmamış" };
+  if (!canDeleteNoteItem(auth.role, { created_by: auth.createdBy }, auth.userId)) {
+    return { error: PERM_DENIED };
+  }
 
   const { id, ...rest } = parsed.data;
   if (Object.keys(rest).length === 0) return { success: true };
@@ -77,11 +112,15 @@ export async function updateNote(data: {
 
 export async function deleteNote(id: string) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Oturum açılmamış" };
 
   const parsed = hexUuid().safeParse(id);
   if (!parsed.success) return { error: "Geçersiz ID" };
+
+  const auth = await resolveNoteAuth(supabase, parsed.data);
+  if (!auth) return { error: "Oturum açılmamış" };
+  if (!canDeleteNoteItem(auth.role, { created_by: auth.createdBy }, auth.userId)) {
+    return { error: PERM_DENIED };
+  }
 
   const { error } = await supabase
     .from("workspace_notes")
@@ -225,6 +264,18 @@ export async function deleteTaskNote(
   const ctx = await getTaskCallerCtx(supabase);
   if (!ctx) return { error: "Kimlik doğrulama gerekli." };
 
+  // Author may delete their own note; owner/admin may delete any.
+  const { data: note } = await supabase
+    .from("task_notes")
+    .select("author_id")
+    .eq("id", noteId)
+    .eq("workspace_id", ctx.workspaceId)
+    .maybeSingle();
+  if (!note) return { error: "Not bulunamadı." };
+  if (!canDeleteNoteItem(ctx.role as AppRole, { author_id: note.author_id as string | null }, ctx.user.id)) {
+    return { error: PERM_DENIED };
+  }
+
   const { error } = await supabase
     .from("task_notes")
     .delete()
@@ -247,6 +298,17 @@ export async function updateTaskNote(
   const supabase = await createClient();
   const ctx = await getTaskCallerCtx(supabase);
   if (!ctx) return { error: "Kimlik doğrulama gerekli." };
+
+  const { data: note } = await supabase
+    .from("task_notes")
+    .select("author_id")
+    .eq("id", noteId)
+    .eq("workspace_id", ctx.workspaceId)
+    .maybeSingle();
+  if (!note) return { error: "Not bulunamadı." };
+  if (!canDeleteNoteItem(ctx.role as AppRole, { author_id: note.author_id as string | null }, ctx.user.id)) {
+    return { error: PERM_DENIED };
+  }
 
   const { error } = await supabase
     .from("task_notes")

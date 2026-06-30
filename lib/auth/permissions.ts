@@ -39,6 +39,34 @@ export function canDeleteTask(role: AppRole): boolean {
   return ADMIN_ROLES.includes(role);
 }
 
+// Per-item delete rule: owner/admin may delete any task; a member may delete
+// ONLY tasks they created. A task created by an admin is never deletable by a
+// member, even if the member is the responsible/assigned person. Viewers never
+// delete. Mirrors the same rule for notes via canDeleteNoteItem.
+export function canDeleteTaskItem(
+  role: AppRole,
+  task: { created_by?: string | null },
+  currentUserId: string,
+): boolean {
+  if (ADMIN_ROLES.includes(role)) return true;
+  if (role === "viewer") return false;
+  return (task.created_by ?? null) === currentUserId;
+}
+
+// Notes (workspace sticky notes + task notes): owner/admin delete any; the
+// author deletes their own. `created_by` covers workspace_notes, `author_id`
+// covers task_notes.
+export function canDeleteNoteItem(
+  role: AppRole,
+  note: { created_by?: string | null; author_id?: string | null },
+  currentUserId: string,
+): boolean {
+  if (ADMIN_ROLES.includes(role)) return true;
+  if (role === "viewer") return false;
+  const owner = note.created_by ?? note.author_id ?? null;
+  return owner === currentUserId;
+}
+
 export function canPermanentDeleteTask(role: AppRole): boolean {
   return role === "owner" || role === "admin";
 }

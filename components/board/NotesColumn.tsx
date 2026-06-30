@@ -67,11 +67,12 @@ function NoteCardContent({
   onUpdate,
   onConvertToTask,
   readOnly = false,
+  canModify = true,
   containerRef,
   containerStyle,
   dragHandleProps,
   isDragging,
-}: { note: WorkspaceNote } & NoteHandlers & DragProps) {
+}: { note: WorkspaceNote; canModify?: boolean } & NoteHandlers & DragProps) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(note.title);
   const [body, setBody] = useState(note.body ?? "");
@@ -170,7 +171,7 @@ function NoteCardContent({
             <p className={cn("text-sm font-semibold leading-snug flex-1 min-w-0 break-words", colors.title)}>
               {note.title}
             </p>
-            {!readOnly && (
+            {!readOnly && canModify && (
             <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
               <button
                 onClick={() => onConvertToTask(note.id, note.title, note.body ?? "")}
@@ -224,11 +225,12 @@ function NoteMeta({ note }: { note: WorkspaceNote }) {
 
 // ── Sortable wrapper — only mounted client-side to avoid aria-describedby mismatch ──
 
-function SortableNoteCard({ note, ...handlers }: { note: WorkspaceNote } & NoteHandlers) {
+function SortableNoteCard({ note, canModify, ...handlers }: { note: WorkspaceNote; canModify?: boolean } & NoteHandlers) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: note.id });
   return (
     <NoteCardContent
       note={note}
+      canModify={canModify}
       {...handlers}
       containerRef={setNodeRef}
       containerStyle={{ transform: CSS.Transform.toString(transform), transition }}
@@ -240,8 +242,8 @@ function SortableNoteCard({ note, ...handlers }: { note: WorkspaceNote } & NoteH
 
 // ── Static wrapper — SSR-safe, no dnd-kit hooks ───────────────────────────────
 
-function StaticNoteCard({ note, ...handlers }: { note: WorkspaceNote } & NoteHandlers) {
-  return <NoteCardContent note={note} {...handlers} />;
+function StaticNoteCard({ note, canModify, ...handlers }: { note: WorkspaceNote; canModify?: boolean } & NoteHandlers) {
+  return <NoteCardContent note={note} canModify={canModify} {...handlers} />;
 }
 
 // ── Add note form ──────────────────────────────────────────────────────────────
@@ -331,6 +333,8 @@ export function NotesColumn({
   readOnly = false,
   authorsById = {},
   mobile = false,
+  currentUserId,
+  isAdmin = false,
 }: {
   notes: WorkspaceNote[];
   workspaceId: string;
@@ -338,7 +342,13 @@ export function NotesColumn({
   authorsById?: Record<string, string>;
   // Mobile single-column view: drop the fixed kanban width and fill the screen.
   mobile?: boolean;
+  // Per-note edit/delete gating: admins manage any note; members only their own.
+  currentUserId?: string;
+  isAdmin?: boolean;
 }) {
+  // A note is modifiable by an owner/admin, or by the member who authored it.
+  const canModifyNote = (note: WorkspaceNote) =>
+    isAdmin || (!!currentUserId && note.created_by === currentUserId);
   // Detects client vs server render without triggering a state update in effect
   const mounted = useSyncExternalStore(_subscribeMounted, _getMounted, _getServerMounted);
   const [_isPending, startTransition] = useTransition();
@@ -472,7 +482,7 @@ export function NotesColumn({
       {!mounted && (
         <div className={listCls}>
           {optimisticNotes.map((note) => (
-            <StaticNoteCard key={note.id} note={note} {...handlers} />
+            <StaticNoteCard key={note.id} note={note} canModify={canModifyNote(note)} {...handlers} />
           ))}
         </div>
       )}
@@ -483,7 +493,7 @@ export function NotesColumn({
           <SortableContext items={noteIds} strategy={verticalListSortingStrategy}>
             <div className={listCls}>
               {optimisticNotes.map((note) => (
-                <SortableNoteCard key={note.id} note={note} {...handlers} />
+                <SortableNoteCard key={note.id} note={note} canModify={canModifyNote(note)} {...handlers} />
               ))}
             </div>
           </SortableContext>

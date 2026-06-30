@@ -3,7 +3,13 @@ import { redirect } from "next/navigation";
 import { TaskListView } from "@/components/list/TaskListView";
 import type { Task, SavedView, Profile, WorkspaceContact, WorkspaceDepartment } from "@/types";
 
-export default async function ListPage() {
+export default async function ListPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ person?: string; view?: string }>;
+}) {
+  const params = await searchParams;
+  const initialPerson = typeof params.person === "string" ? params.person : "";
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
@@ -83,6 +89,7 @@ export default async function ListPage() {
       members={members}
       deptMembers={deptMembers}
       isAdmin={isAdmin}
+      initialPerson={initialPerson}
     />
   );
 }

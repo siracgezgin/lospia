@@ -12,6 +12,7 @@ interface Props {
   initialNotes: TaskNoteWithAuthor[];
   currentUserId: string;
   isViewer: boolean;
+  isAdmin?: boolean;
 }
 
 function NoteItem({
@@ -19,19 +20,22 @@ function NoteItem({
   taskId,
   currentUserId,
   isViewer,
+  isAdmin,
 }: {
   note: TaskNoteWithAuthor;
   taskId: string;
   currentUserId: string;
   isViewer: boolean;
+  isAdmin: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(note.content);
   const [, startTransition] = useTransition();
 
   const authorName = note.author?.full_name ?? note.author?.email ?? "Bilinmeyen kullanıcı";
-  const canEdit = !isViewer && (note.author_id === currentUserId);
-  const canDelete = !isViewer && (note.author_id === currentUserId);
+  // Author manages their own note; owner/admin manages any note.
+  const canEdit = !isViewer && (isAdmin || note.author_id === currentUserId);
+  const canDelete = !isViewer && (isAdmin || note.author_id === currentUserId);
 
   function handleSaveEdit() {
     setEditing(false);
@@ -148,7 +152,7 @@ function AddNoteForm({ taskId, isViewer }: { taskId: string; isViewer: boolean }
   );
 }
 
-export function TaskNotesPanel({ taskId, initialNotes, currentUserId, isViewer }: Props) {
+export function TaskNotesPanel({ taskId, initialNotes, currentUserId, isViewer, isAdmin = false }: Props) {
   const pinned = initialNotes.filter((n) => n.is_pinned);
   const rest = initialNotes.filter((n) => !n.is_pinned);
   const sorted = [...pinned, ...rest];
@@ -172,6 +176,7 @@ export function TaskNotesPanel({ taskId, initialNotes, currentUserId, isViewer }
               taskId={taskId}
               currentUserId={currentUserId}
               isViewer={isViewer}
+              isAdmin={isAdmin}
             />
           ))}
         </ol>
