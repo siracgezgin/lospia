@@ -11,7 +11,7 @@ import {
   SortableContext, verticalListSortingStrategy, useSortable, arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Plus, Trash2, Pencil, StickyNote, Check, X, GripVertical, ArrowRightCircle, Undo2 } from "lucide-react";
+import { Plus, Trash2, Pencil, StickyNote, Check, X, GripVertical, ArrowRightCircle, Undo2, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { createNote, updateNote, deleteNote, reorderNotes } from "@/lib/actions/notes";
 import { createTask, softDeleteTask } from "@/lib/actions/tasks";
@@ -326,6 +326,31 @@ const _subscribeMounted = () => () => {};
 const _getMounted = () => true;
 const _getServerMounted = () => false;
 
+// ── Notes-column collapse preference (localStorage, SSR-safe) ──────────────────
+// Read via useSyncExternalStore so there is no setState-in-effect (which the
+// project's lint forbids) and no hydration mismatch. Returns "1"/"0" when the
+// user has set a preference, or null to fall back to a deterministic default.
+const NOTES_COLLAPSE_KEY = "af-board-notes-collapsed";
+const _collapseListeners = new Set<() => void>();
+function readCollapsePref(): "1" | "0" | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const v = localStorage.getItem(NOTES_COLLAPSE_KEY);
+    return v === "1" || v === "0" ? v : null;
+  } catch { return null; }
+}
+function writeCollapsePref(v: "1" | "0") {
+  try { localStorage.setItem(NOTES_COLLAPSE_KEY, v); } catch { /* ignore */ }
+  _collapseListeners.forEach((l) => l());
+}
+function subscribeCollapse(cb: () => void) {
+  _collapseListeners.add(cb);
+  const onStorage = (e: StorageEvent) => { if (e.key === NOTES_COLLAPSE_KEY) cb(); };
+  window.addEventListener("storage", onStorage);
+  return () => { _collapseListeners.delete(cb); window.removeEventListener("storage", onStorage); };
+}
+const _getServerCollapse = () => null;
+
 // ── Main column ────────────────────────────────────────────────────────────────
 
 export function NotesColumn({
@@ -354,6 +379,15 @@ export function NotesColumn({
   const mounted = useSyncExternalStore(_subscribeMounted, _getMounted, _getServerMounted);
   const [_isPending, startTransition] = useTransition();
   const [adding, setAdding] = useState(false);
+
+  // Collapsible desktop rail — frees horizontal space for the task columns. The
+  // stored preference wins; with none set, the deterministic default is "open only
+  // when notes exist". Read via an external store to stay SSR-safe + lint-clean.
+  const collapsePref = useSyncExternalStore(subscribeCollapse, readCollapsePref, _getServerCollapse);
+  const collapsed = collapsePref != null ? collapsePref === "1" : initialNotes.length === 0;
+  function toggleCollapsed() {
+    writeCollapsePref(collapsed ? "0" : "1");
+  }
 
   // Confirm popup (before a destructive note action) + short-lived undo toast.
   const [confirmAction, setConfirmAction] = useState<
@@ -515,6 +549,33 @@ export function NotesColumn({
     readOnly,
   };
 
+  // ── Collapsed desktop rail ────────────────────────────────────────────────
+  // A slim, clickable spine that keeps notes one click away while handing the
+  // freed width to the task columns. Not used on mobile (single-column segments).
+  if (collapsed && !mobile) {
+    return (
+      <div className="flex flex-col shrink-0 w-9">
+        <div className="sticky top-0 z-20 flex flex-col items-stretch">
+          <button
+            onClick={toggleCollapsed}
+            className="group flex flex-col items-center gap-1.5 rounded-lg border border-[#e2dcc9] bg-[#faf7ef] py-2.5 hover:bg-[#f3ecdc] transition-colors"
+            title="Notları göster"
+            aria-label="Notları göster"
+          >
+            <ChevronRight size={13} className="text-[#a49d82]" />
+            <StickyNote size={14} className="text-[#c2ab5f]" />
+            <span className="[writing-mode:vertical-rl] rotate-180 text-[10px] font-bold uppercase tracking-wider text-[#6b6748]">
+              Notlar
+            </span>
+            <span className="rounded-full bg-[#efe9dc] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-[#6b6748]">
+              {optimisticNotes.length}
+            </span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <NoteAuthorsContext.Provider value={authorsById}>
     <div className={cn("flex flex-col gap-2 shrink-0", mobile ? "w-full" : "w-[80vw] max-w-64 sm:w-64")}>
@@ -527,15 +588,27 @@ export function NotesColumn({
             {optimisticNotes.length}
           </span>
         </div>
-        {!readOnly && (
-          <button
-            onClick={() => setAdding(true)}
-            className="p-0.5 text-gray-300 hover:text-[#406775] rounded transition-colors"
-            aria-label="Not ekle"
-          >
-            <Plus size={14} />
-          </button>
-        )}
+        <div className="flex items-center gap-0.5">
+          {!readOnly && (
+            <button
+              onClick={() => setAdding(true)}
+              className="p-0.5 text-gray-300 hover:text-[#406775] rounded transition-colors"
+              aria-label="Not ekle"
+            >
+              <Plus size={14} />
+            </button>
+          )}
+          {!mobile && (
+            <button
+              onClick={toggleCollapsed}
+              className="p-0.5 text-gray-300 hover:text-[#406775] rounded transition-colors"
+              aria-label="Notları gizle"
+              title="Notları gizle"
+            >
+              <ChevronLeft size={14} />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Pre-mount: static list — no dnd-kit, no aria-describedby generation */}

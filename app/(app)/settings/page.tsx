@@ -88,46 +88,54 @@ export default async function SettingsPage() {
   });
 
   return (
-    <div className="max-w-2xl mx-auto py-8 px-4 space-y-10">
-      <h1 className="text-2xl font-bold text-gray-900">Ayarlar</h1>
+    <div className="max-w-5xl mx-auto py-8 px-4 sm:px-6 lg:px-8 space-y-10">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Ayarlar</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Profiliniz, çalışma alanı, departmanlar ve ekip üyelerini buradan yönetin.
+        </p>
+      </div>
 
-      {/* Profile */}
-      <section className="space-y-4">
-        <h2 className="text-base font-semibold text-gray-700">Profiliniz</h2>
-        <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
-          <div>
-            <p className="text-xs text-gray-500">İsim</p>
-            <p className="text-sm font-medium">{profile?.full_name ?? "—"}</p>
+      {/* Profile + Workspace side by side on wider screens */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Profile */}
+        <section className="space-y-4">
+          <h2 className="text-base font-semibold text-gray-700">Profiliniz</h2>
+          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3 h-full">
+            <div>
+              <p className="text-xs text-gray-500">İsim</p>
+              <p className="text-sm font-medium">{profile?.full_name ?? "—"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">E-posta</p>
+              <p className="text-sm font-medium">{profile?.email}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-xs text-gray-500">E-posta</p>
-            <p className="text-sm font-medium">{profile?.email}</p>
-          </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Workspace */}
-      <section className="space-y-4">
-        <h2 className="text-base font-semibold text-gray-700">Çalışma alanı</h2>
-        <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
-          <div>
-            <p className="text-xs text-gray-500 mb-1">İsim</p>
-            {isOwner && workspace ? (
-              <WorkspaceNameEditor workspaceId={workspaceId} currentName={workspace.name} />
-            ) : (
-              <p className="text-sm font-medium">{workspace?.name}</p>
-            )}
+        {/* Workspace */}
+        <section className="space-y-4">
+          <h2 className="text-base font-semibold text-gray-700">Çalışma alanı</h2>
+          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3 h-full">
+            <div>
+              <p className="text-xs text-gray-500 mb-1">İsim</p>
+              {isOwner && workspace ? (
+                <WorkspaceNameEditor workspaceId={workspaceId} currentName={workspace.name} />
+              ) : (
+                <p className="text-sm font-medium">{workspace?.name}</p>
+              )}
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Kısa ad</p>
+              <p className="text-sm font-mono text-gray-600">{workspace?.slug}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Rolünüz</p>
+              <p className="text-sm font-medium">{roleLabel(userRole)}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-xs text-gray-500">Kısa ad</p>
-            <p className="text-sm font-mono text-gray-600">{workspace?.slug}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-500">Rolünüz</p>
-            <p className="text-sm font-medium">{roleLabel(userRole)}</p>
-          </div>
-        </div>
-      </section>
+        </section>
+      </div>
 
       {/* Departmanlar */}
       <section className="space-y-4">

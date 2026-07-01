@@ -33,7 +33,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   GripVertical, Plus, FileSpreadsheet, Search, X, Check,
-  ChevronLeft, ChevronRight, ChevronDown, MoreVertical, Pencil, Copy, Archive, Trash2, AlertTriangle, Lock, ShieldCheck,
+  ChevronLeft, ChevronRight, ChevronDown, MoreVertical, Pencil, Copy, Archive, Trash2, AlertTriangle, Lock, ShieldCheck, CalendarRange,
 } from "lucide-react";
 import { ADMIN_ONLY_CHIP_LABEL, asVisibility, VISIBILITY_LABELS, type TaskVisibility } from "@/lib/utils/visibility";
 import { Avatar } from "@/components/ui/Avatar";
@@ -334,11 +334,21 @@ function applyViewFilter(tasks: Task[], slug: string, userId: string, monday: Da
         return isWaiting && inWeek(t);
       });
 
-    case "all":       // Tüm işler
-    case "this-week": // Bu hafta (same scope; tab just navigates to current week)
-    default:          // fallback = same as "all"
+    case "all": // Tüm işler — HAFTAYA BAĞLI DEĞİL. Seçili haftadan bağımsız,
+                // tüm aktif (arşivlenmemiş/silinmemiş) işler görünür.
+      return tasks.filter((t) => notArchived(t));
+
+    case "this-week": // Bu hafta — yalnızca seçili haftada teslimli aktif işler.
+    default:          // varsayılan görünüm = Bu hafta
       return tasks.filter((t) => notArchived(t) && inWeek(t));
   }
+}
+
+// Every view except "Tüm işler" is scoped to the selected week. Used to drive the
+// "Hafta filtresi aktif" / "Tüm zamanlar" chip and to de-emphasize the week
+// selector when it has no effect.
+function isWeekScopedSlug(slug: string): boolean {
+  return slug !== "all";
 }
 
 function applyPersonFilter(tasks: Task[], personFilter: string): Task[] {
@@ -750,7 +760,7 @@ function CardContent({
         title={task.title}
         draggable={false}
         className={cn(
-          "text-[13px] font-medium line-clamp-4 block leading-snug tracking-[-0.005em] break-words",
+          "text-[14px] font-semibold line-clamp-3 block leading-snug tracking-[-0.01em] break-words",
           markers.shouldStrike
             ? "text-success/90 line-through decoration-success/40"
             : "text-ink hover:text-brand",
@@ -760,9 +770,9 @@ function CardContent({
         {task.title}
       </Link>
 
-      {/* Description (one line) */}
+      {/* Description — two balanced lines so the card reads as a real summary. */}
       {task.description && (
-        <p className="text-[11px] text-subtle mt-1 line-clamp-1 leading-snug">
+        <p className="text-[12px] text-subtle mt-1 line-clamp-2 leading-relaxed">
           {task.description}
         </p>
       )}
@@ -1020,7 +1030,7 @@ function KanbanColumn({
   const headerTone = BOARD_COL_HEADER_TONE[colDef.id] ?? "text-gray-500";
 
   return (
-    <div className="flex flex-col gap-2 w-[80vw] max-w-72 sm:w-72 shrink-0">
+    <div className="flex flex-col gap-2 w-[80vw] max-w-[88vw] sm:w-72 xl:w-[20rem] 2xl:w-[22rem] shrink-0">
       <div className="sticky top-0 z-20 h-11 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <h3 className={cn("text-xs font-bold uppercase tracking-wider truncate", headerTone)}>
@@ -1090,7 +1100,7 @@ function StaticKanbanColumn({
 }) {
   const headerTone = BOARD_COL_HEADER_TONE[colDef.id] ?? "text-gray-500";
   return (
-    <div className="flex flex-col gap-2 w-[80vw] max-w-72 sm:w-72 shrink-0">
+    <div className="flex flex-col gap-2 w-[80vw] max-w-[88vw] sm:w-72 xl:w-[20rem] 2xl:w-[22rem] shrink-0">
       <div className="sticky top-0 z-20 h-11 flex items-center gap-2">
         <h3 className={cn("text-xs font-bold uppercase tracking-wider truncate", headerTone)}>
           {colDef.label}
@@ -1236,8 +1246,11 @@ export function KanbanBoard({
     setToasts((p) => p.filter((t) => t.id !== id));
   }
 
-  // Effective slug: null or missing → treat as "all"
-  const effectiveSlug = viewSlug ?? "all";
+  // Effective slug: null or missing → default to "Bu hafta" so the board opens on
+  // the current week (not an unbounded all-time list).
+  const effectiveSlug = viewSlug ?? "this-week";
+  // "Tüm işler" ignores the week entirely; every other view is week-scoped.
+  const weekFilterActive = !isAdminBoard && isWeekScopedSlug(effectiveSlug);
 
   const responsibleNames = useMemo<Record<string, string>>(() => {
     const map: Record<string, string> = {};
@@ -1540,51 +1553,73 @@ export function KanbanBoard({
       {!isAdminBoard && <BoardRulesPanel rules={rules} newCount={newRulesCount} />}
 
       {/* ── Week selector — normal board only ─────────────────────────────── */}
+      {/* In "Tüm işler" the week has no effect, so the selector is dimmed and a
+          clear note explains that the week filter is off. Every other view is
+          week-scoped and shows a "Hafta filtresi aktif" chip. */}
       {!isAdminBoard && (
-      <div className="flex items-center gap-1.5 px-4 py-2 bg-white border-b border-gray-100 shrink-0">
-        <button
-          onClick={() => {
-            const n = new Date(weekStart);
-            n.setDate(n.getDate() - 7);
-            const monday = getMondayOf(n);
-            setWeekStart(monday);
-            router.push(`/board?view=${effectiveSlug}&week=${localISO(monday)}`);
-          }}
-          className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
-          aria-label="Önceki hafta"
+      <div className="flex items-center gap-1.5 px-4 py-2 bg-white border-b border-gray-100 shrink-0 flex-wrap">
+        <div
+          className={cn(
+            "flex items-center gap-1.5 transition-opacity",
+            weekFilterActive ? "opacity-100" : "opacity-45",
+          )}
         >
-          <ChevronLeft size={14} />
-        </button>
-        <span className="text-sm font-medium text-gray-700 min-w-32 text-center select-none">
-          {formatWeekLabel(weekStart)}
-        </span>
-        <button
-          onClick={() => {
-            const n = new Date(weekStart);
-            n.setDate(n.getDate() + 7);
-            const monday = getMondayOf(n);
-            setWeekStart(monday);
-            router.push(`/board?view=${effectiveSlug}&week=${localISO(monday)}`);
-          }}
-          className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
-          aria-label="Sonraki hafta"
-        >
-          <ChevronRight size={14} />
-        </button>
-        {!isCurrentWeek && (
           <button
             onClick={() => {
-              const monday = getMondayOf(new Date());
+              const n = new Date(weekStart);
+              n.setDate(n.getDate() - 7);
+              const monday = getMondayOf(n);
               setWeekStart(monday);
               router.push(`/board?view=${effectiveSlug}&week=${localISO(monday)}`);
             }}
-            className="ml-1 text-xs text-blue-600 hover:text-blue-700 px-2 py-0.5 rounded hover:bg-blue-50 transition-colors"
+            className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+            aria-label="Önceki hafta"
           >
-            Bu hafta
+            <ChevronLeft size={14} />
           </button>
-        )}
-        {isCurrentWeek && (
-          <span className="ml-1 text-xs text-gray-400 select-none">Bu hafta</span>
+          <span className="text-sm font-medium text-gray-700 min-w-32 text-center select-none">
+            {formatWeekLabel(weekStart)}
+          </span>
+          <button
+            onClick={() => {
+              const n = new Date(weekStart);
+              n.setDate(n.getDate() + 7);
+              const monday = getMondayOf(n);
+              setWeekStart(monday);
+              router.push(`/board?view=${effectiveSlug}&week=${localISO(monday)}`);
+            }}
+            className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+            aria-label="Sonraki hafta"
+          >
+            <ChevronRight size={14} />
+          </button>
+          {!isCurrentWeek && (
+            <button
+              onClick={() => {
+                const monday = getMondayOf(new Date());
+                setWeekStart(monday);
+                router.push(`/board?view=${effectiveSlug}&week=${localISO(monday)}`);
+              }}
+              className="ml-1 text-xs text-blue-600 hover:text-blue-700 px-2 py-0.5 rounded hover:bg-blue-50 transition-colors"
+            >
+              Bu haftaya dön
+            </button>
+          )}
+          {isCurrentWeek && (
+            <span className="ml-1 text-xs text-gray-400 select-none">Bu hafta</span>
+          )}
+        </div>
+
+        {/* Filter-scope chip — tells the user exactly what the current view shows. */}
+        {weekFilterActive ? (
+          <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-medium text-blue-700 border border-blue-100">
+            <CalendarRange size={11} />
+            Hafta filtresi aktif
+          </span>
+        ) : (
+          <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-0.5 text-[11px] font-medium text-gray-500 border border-gray-200">
+            Tüm zamanlar · hafta filtresi uygulanmaz
+          </span>
         )}
       </div>
       )}

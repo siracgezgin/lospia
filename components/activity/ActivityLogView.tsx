@@ -146,6 +146,28 @@ export function ActivityLogView({ rows }: { rows: ActivityRow[] }) {
     return rows.filter((r) => active.actions.includes(r.action));
   }, [rows, filter]);
 
+  // Collapse the visual repetition: consecutive changes by the SAME person on the
+  // SAME task within a short window read as one editing session. We group them so
+  // the actor + task title appear once, with each change listed compactly beneath.
+  // No audit record is dropped — this is purely presentational.
+  const groups = useMemo(() => {
+    const GAP_MS = 5 * 60 * 1000; // 5 dk içinde art arda gelen değişiklikler
+    const out: { key: string; rows: ActivityRow[] }[] = [];
+    for (const r of visible) {
+      const last = out[out.length - 1];
+      const lastRow = last?.rows[last.rows.length - 1];
+      const sameContext =
+        lastRow &&
+        lastRow.task_id === r.task_id &&
+        r.task_id != null &&
+        lastRow.actor_name === r.actor_name &&
+        Math.abs(new Date(lastRow.created_at).getTime() - new Date(r.created_at).getTime()) <= GAP_MS;
+      if (sameContext) last!.rows.push(r);
+      else out.push({ key: r.id, rows: [r] });
+    }
+    return out;
+  }, [visible]);
+
   return (
     <div className="max-w-3xl mx-auto py-8 px-4 space-y-5">
       <div>
@@ -180,55 +202,90 @@ export function ActivityLogView({ rows }: { rows: ActivityRow[] }) {
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100 overflow-hidden">
-        {visible.length === 0 ? (
+        {groups.length === 0 ? (
           <p className="px-5 py-10 text-sm text-gray-400 text-center">Bu filtreyle eşleşen kayıt yok.</p>
         ) : (
-          visible.map((r) => {
-            const meta = metaFor(r.action);
-            const tone = TONE_CLS[meta.tone];
-            const Icon = meta.icon;
-            const detail = changeDetail(r);
-            const actorName = getPersonDisplayName(r.actor_name);
+          groups.map((g) => {
+            const head = g.rows[0];
+            const headMeta = metaFor(head.action);
+            const headTone = TONE_CLS[headMeta.tone];
+            const HeadIcon = headMeta.icon;
+            const actorName = getPersonDisplayName(head.actor_name);
+            const isGroup = g.rows.length > 1;
+
             return (
-              <div key={r.id} className="flex items-start gap-3 px-4 py-3.5 hover:bg-gray-50/60 transition-colors">
-                <div className={cn("mt-0.5 grid h-8 w-8 place-items-center rounded-full shrink-0", tone.icon)}>
-                  <Icon size={15} />
+              <div key={g.key} className="flex items-start gap-3 px-4 py-3.5 hover:bg-gray-50/60 transition-colors">
+                <div className={cn("mt-0.5 grid h-8 w-8 place-items-center rounded-full shrink-0", headTone.icon)}>
+                  <HeadIcon size={15} />
                 </div>
                 <div className="flex-1 min-w-0">
+                  {/* Header: actor + task (once per group) + latest time */}
                   <div className="flex items-start justify-between gap-3">
                     <p className="text-sm text-gray-600 leading-snug">
                       <span className="font-semibold text-gray-900">{actorName}</span>{" "}
-                      {meta.verb}
-                      {r.task_title && r.task_id && (
+                      {isGroup ? (
+                        <span className="text-gray-500">{g.rows.length} değişiklik yaptı</span>
+                      ) : (
+                        headMeta.verb
+                      )}
+                      {head.task_title && head.task_id && (
                         <>
                           {" — "}
                           <Link
-                            href={`/tasks/${r.task_id}`}
+                            href={`/tasks/${head.task_id}`}
                             prefetch={false}
                             className="font-medium text-gray-900 hover:text-blue-600 hover:underline underline-offset-2 break-words"
                           >
-                            {r.task_title}
+                            {head.task_title}
                           </Link>
                         </>
                       )}
                     </p>
                     <span className="text-xs text-gray-400 shrink-0 text-right tabular-nums">
-                      {formatDateTimeTR(r.created_at)}
+                      {formatDateTimeTR(head.created_at)}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                    <span className={cn("inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium", tone.chip)}>
-                      {meta.label}
-                    </span>
-                    {detail && (
-                      <span className="text-[11px] text-gray-500">
-                        {detail.label}:{" "}
-                        <span className="text-gray-400">{detail.from}</span>
-                        <span className="mx-1 text-gray-300">→</span>
-                        <span className="text-gray-700 font-medium">{detail.to}</span>
+
+                  {isGroup ? (
+                    // Grouped: one compact line per change (no repeated actor/task).
+                    <ul className="mt-2 space-y-1.5">
+                      {g.rows.map((r) => {
+                        const m = metaFor(r.action);
+                        const detail = changeDetail(r);
+                        return (
+                          <li key={r.id} className="flex items-center gap-2 flex-wrap text-[11px]">
+                            <span className={cn("inline-flex items-center rounded-md border px-1.5 py-0.5 font-medium", TONE_CLS[m.tone].chip)}>
+                              {m.label}
+                            </span>
+                            <span className="text-gray-500">{m.verb}</span>
+                            {detail && (
+                              <span className="text-gray-500">
+                                {detail.label}:{" "}
+                                <span className="text-gray-400">{detail.from}</span>
+                                <span className="mx-1 text-gray-300">→</span>
+                                <span className="text-gray-700 font-medium">{detail.to}</span>
+                              </span>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    // Single change: label + optional from → to detail.
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                      <span className={cn("inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium", headTone.chip)}>
+                        {headMeta.label}
                       </span>
-                    )}
-                  </div>
+                      {changeDetail(head) && (
+                        <span className="text-[11px] text-gray-500">
+                          {changeDetail(head)!.label}:{" "}
+                          <span className="text-gray-400">{changeDetail(head)!.from}</span>
+                          <span className="mx-1 text-gray-300">→</span>
+                          <span className="text-gray-700 font-medium">{changeDetail(head)!.to}</span>
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             );
