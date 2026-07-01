@@ -290,69 +290,40 @@ function applyViewFilter(tasks: Task[], slug: string, userId: string, monday: Da
   const mondayStr = localISO(monday);
   const sundayStr = (() => { const d = new Date(monday); d.setDate(d.getDate() + 6); return localISO(d); })();
 
-  // Weekly membership is DUE-DATE-driven: a task's week is the week its delivery
-  // date (due_date) falls in — nothing else. Previously start_date was also
-  // considered, which leaked past-week work into the current week (e.g. a task
-  // due 27 Haz showing up in the 29 Haz–5 Tem week just because it was created
-  // that week). Undated tasks have no natural week, so they surface ONLY in the
-  // current week — freshly-created work stays visible without polluting the
-  // history when you page back/forward through weeks. due_date is a date-only
-  // column ("YYYY-MM-DD"), so plain string comparison is timezone-safe.
-  const inRange = (d: string | null) => d !== null && d >= mondayStr && d <= sundayStr;
-  const isCurrentWeek = mondayStr === localISO(getMondayOf(new Date()));
-  const inWeekByDate = (t: Task) => (t.due_date ? inRange(t.due_date) : isCurrentWeek);
+  // Weekly membership is DUE-DATE-ONLY and strictly date-only. A task belongs to a
+  // week if and only if its delivery date (due_date, "YYYY-MM-DD") falls inside
+  // that Monday–Sunday range — NOTHING else is consulted (not start_date, not
+  // completed_at, not created_at). This holds for EVERY column and EVERY saved
+  // view, done tasks included: an old completed task due 27 Haz can never leak
+  // into the 29 Haz–5 Tem week just because it was created/completed that week.
+  // Undated tasks have no natural week, so they are excluded from the weekly board
+  // entirely. due_date is sliced to its date part so any timestamp leak is dropped
+  // (no 03:00-style timezone artefacts), and plain string comparison is TZ-safe.
+  const dueDay = (t: Task) => (t.due_date ? t.due_date.slice(0, 10) : null);
+  const inWeek = (t: Task) => {
+    const d = dueDay(t);
+    return d !== null && d >= mondayStr && d <= sundayStr;
+  };
 
   const notArchived = (t: Task) =>
     !t.archived_at && !t.deleted_at && t.status !== "archived";
 
   switch (slug) {
-    case "all": // Tüm işler — tüm aktif işler ama YALNIZCA seçili hafta içinde.
-                // (Önceki haftaların teslimli işleri bu haftaya sızmamalı.)
+    case "mine": // Bana atananlar — assigned to me, due in the selected week.
+      return tasks.filter((t) => notArchived(t) && t.assignee_id === userId && inWeek(t));
+
+    case "overdue": // Gecikenler — teslimi geçmiş VE teslim tarihi seçili hafta
+                    // aralığında olan, tamamlanmamış işler.
       return tasks.filter((t) => {
-        if (!notArchived(t)) return false;
-        // A done task belongs to the week if it was DUE that week or COMPLETED
-        // that week — so completing a task due this week keeps it on this board.
-        if (t.status === "done") return inWeekByDate(t) || isInWeek(t.completed_at, monday);
-        return inWeekByDate(t);
+        if (!notArchived(t) || t.status === "done") return false;
+        const d = dueDay(t);
+        return d !== null && d < today && inWeek(t);
       });
 
-    case "mine": // Bana atananlar — assigned to me in selected week
-      return tasks.filter((t) => {
-        if (!notArchived(t)) return false;
-        if (t.assignee_id !== userId) return false;
-        // A done task belongs to the week if it was DUE that week or COMPLETED
-        // that week — so completing a task due this week keeps it on this board.
-        if (t.status === "done") return inWeekByDate(t) || isInWeek(t.completed_at, monday);
-        return inWeekByDate(t);
-      });
+    case "done": // Tamamlananlar — done AND due in the selected week (date-only).
+      return tasks.filter((t) => t.status === "done" && !t.deleted_at && !t.archived_at && inWeek(t));
 
-    case "this-week": // Bu hafta — same scope as "all" (tab navigates to current week)
-      return tasks.filter((t) => {
-        if (!notArchived(t)) return false;
-        // A done task belongs to the week if it was DUE that week or COMPLETED
-        // that week — so completing a task due this week keeps it on this board.
-        if (t.status === "done") return inWeekByDate(t) || isInWeek(t.completed_at, monday);
-        return inWeekByDate(t);
-      });
-
-    case "overdue": // Gecikenler — seçili haftanın gecikenleri: teslimi geçmiş VE
-                    // teslim tarihi seçili hafta aralığında olan işler.
-      return tasks.filter((t) =>
-        notArchived(t) &&
-        t.status !== "done" &&
-        t.due_date !== null && t.due_date < today &&
-        inRange(t.due_date),
-      );
-
-    case "done": // Tamamlananlar — completed in selected week
-      return tasks.filter((t) =>
-        t.status === "done" &&
-        (t.completed_at
-          ? isInWeek(t.completed_at, monday)
-          : inWeekByDate(t)),
-      );
-
-    case "waiting-approval": // Onay bekleyenler
+    case "waiting-approval": // Onay bekleyenler — bekleyen VE seçili haftada teslimli.
       return tasks.filter((t) => {
         if (!notArchived(t) || t.status === "done") return false;
         const isWaiting =
@@ -360,20 +331,13 @@ function applyViewFilter(tasks: Task[], slug: string, userId: string, monday: Da
           t.approval_required === true ||
           t.waiting_on_member_id != null ||
           t.waiting_on_contact_id != null;
-        if (!isWaiting) return false;
-        // Week-scope if has due_date; otherwise include (urgent to resolve)
-        if (t.due_date) return inWeekByDate(t);
-        return true;
+        return isWaiting && inWeek(t);
       });
 
-    default: // fallback = same as "all"
-      return tasks.filter((t) => {
-        if (!notArchived(t)) return false;
-        // A done task belongs to the week if it was DUE that week or COMPLETED
-        // that week — so completing a task due this week keeps it on this board.
-        if (t.status === "done") return inWeekByDate(t) || isInWeek(t.completed_at, monday);
-        return inWeekByDate(t);
-      });
+    case "all":       // Tüm işler
+    case "this-week": // Bu hafta (same scope; tab just navigates to current week)
+    default:          // fallback = same as "all"
+      return tasks.filter((t) => notArchived(t) && inWeek(t));
   }
 }
 
@@ -476,22 +440,28 @@ function taskUrgencyRank(t: Task, today: string): number {
   return 3;
 }
 
-// Urgent (Acil) tasks get a strong red emphasis that overrides the department
-// colour so they can't be missed. Applied to every card variant. Kept as plain
-// class strings (no cn()) because tailwind-merge strips arbitrary border-l-*.
+// Urgent (Acil) tasks get a strong red emphasis that reads as a SECOND, distinct
+// visual layer on top of the department colour — never mistakable for a red/pink
+// department card. The differentiator is a full red RING that encircles all four
+// sides (departments only ever carry a single left accent strip), plus a light
+// red wash and a thicker red left accent. The result is a "featured / critical"
+// card that pops even when it sits next to a crimson Marka Yönetimi card. Applied
+// to every card variant. Kept as plain class strings (no cn()) because
+// tailwind-merge strips arbitrary border-l-* and ring utilities.
 function urgentCardStyle(
   task: Task,
   base: { surface: string; border: string; accent: string },
-): { surface: string; border: string; accent: string; widthCls: string; urgent: boolean } {
+): { surface: string; border: string; accent: string; widthCls: string; ring: string; urgent: boolean } {
   const urgent = task.priority === "urgent" && task.status !== "done";
   if (!urgent) {
-    return { surface: base.surface, border: base.border, accent: base.accent, widthCls: "border-l-[3px]", urgent };
+    return { surface: base.surface, border: base.border, accent: base.accent, widthCls: "border-l-[3px]", ring: "", urgent };
   }
   return {
-    surface: "bg-[#fff2f0]",
-    border: "border-[#f4bcb2]",
+    surface: "bg-[#fff5f4]",
+    border: "border-[#f3b4aa]",
     accent: "border-l-[#dc2626]",
-    widthCls: "border-l-[4px]",
+    widthCls: "border-l-[5px]",
+    ring: "ring-2 ring-[#dc2626] ring-offset-1 ring-offset-white",
     urgent,
   };
 }
@@ -870,7 +840,7 @@ function StaticTaskCard({
   // border (all sides) then border-l accent last so it wins. No cn() — tailwind-merge strips border-l-*.
   const dept = useTaskDept(task);
   const em = urgentCardStyle(task, getTaskCardStyle(task.status, dept?.color));
-  const cardCls = `rounded-lg border ${em.widthCls} p-3 shadow-card transition-all ${em.surface} ${em.border} ${em.accent}`;
+  const cardCls = `rounded-lg border ${em.widthCls} p-3 shadow-card transition-all ${em.surface} ${em.border} ${em.accent} ${em.ring}`;
   return (
     <div className={cardCls}>
       <div className="flex items-start gap-1.5">
@@ -918,7 +888,7 @@ function TaskCard({
   // overrides both with a red emphasis. No cn() — tailwind-merge strips border-l-*.
   const dept = useTaskDept(task);
   const em = urgentCardStyle(task, getTaskCardStyle(task.status, dept?.color));
-  const colorCls = `${em.surface} ${em.border} ${em.accent}`;
+  const colorCls = `${em.surface} ${em.border} ${em.accent} ${em.ring}`;
   const stateCls = [
     isDragging ? "opacity-40" : "",
     isDragOverlay ? "shadow-pop rotate-1" : "hover:shadow-pop transition-shadow",
@@ -991,7 +961,7 @@ function MobileTaskCard({
   // Same colour language as the desktop card; no cn() — tailwind-merge strips border-l-*.
   const dept = useTaskDept(task);
   const em = urgentCardStyle(task, getTaskCardStyle(task.status, dept?.color));
-  const colorCls = `${em.surface} ${em.border} ${em.accent}`;
+  const colorCls = `${em.surface} ${em.border} ${em.accent} ${em.ring}`;
   return (
     <div className={`rounded-xl border ${em.widthCls} p-3.5 shadow-card ${colorCls}`}>
       <CardContent

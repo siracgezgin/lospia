@@ -13,9 +13,13 @@ interface Props {
   unreadCount: number;
   userId: string;
   notifications?: Notification[];
+  // task_ids whose task was deleted → their notifications become passive
+  // ("Silinmiş görev"): shown for history, but never a live link into a dead task.
+  deadTaskIds?: string[];
 }
 
-export function NotificationBell({ unreadCount: initialCount, notifications = [] }: Props) {
+export function NotificationBell({ unreadCount: initialCount, notifications = [], deadTaskIds = [] }: Props) {
+  const deadSet = new Set(deadTaskIds);
   const [open, setOpen] = useState(false);
   const [_pending, startTransition] = useTransition();
   const [optimisticCount, setOptimisticCount] = useOptimistic(initialCount);
@@ -67,39 +71,59 @@ export function NotificationBell({ unreadCount: initialCount, notifications = []
     ) : (
       notifications.slice(0, 20).map((n) => {
         const { title, body } = normalizeNotificationDisplay(n);
+        // The task this notification points at was deleted → passive row: kept for
+        // history, tagged "Silinmiş görev", never a live link into a dead task.
+        const dead = n.task_id != null && deadSet.has(n.task_id);
         // The title/body/date column is the click target → go to the task and
         // mark this row read. The check button is a separate read-only action.
         const inner = (
           <>
-            <p className={cn(
-              "text-sm text-gray-900 line-clamp-1 break-words",
-              !n.is_read ? "font-medium" : "font-normal",
-            )}>
-              {title}
-            </p>
+            <div className="flex items-center gap-1.5">
+              <p className={cn(
+                "text-sm line-clamp-1 break-words min-w-0",
+                dead ? "text-gray-400 font-normal" : "text-gray-900",
+                !dead && !n.is_read ? "font-medium" : "font-normal",
+              )}>
+                {title}
+              </p>
+              {dead && (
+                <span className="shrink-0 text-[9px] font-medium uppercase tracking-wide text-gray-400 bg-gray-100 rounded px-1 py-0.5 leading-none">
+                  Silinmiş görev
+                </span>
+              )}
+            </div>
             {body && (
-              <p className="text-xs text-gray-500 mt-0.5 line-clamp-2 break-words">{body}</p>
+              <p className={cn("text-xs mt-0.5 line-clamp-2 break-words", dead ? "text-gray-400" : "text-gray-500")}>{body}</p>
             )}
             <p className="text-[10px] text-gray-400 mt-1">
               {formatNotificationTimeTR(n.created_at)}
             </p>
           </>
         );
+        // A dead notification is never unread-emphasised (it's excluded from the
+        // badge count too), so it reads as resolved history.
+        const showUnread = !n.is_read && !dead;
         return (
           <div
             key={n.id}
             className={cn(
               "px-4 py-2.5 border-b border-gray-50 last:border-0 flex gap-2.5 items-start transition-colors",
-              !n.is_read
+              showUnread
                 ? "bg-blue-50/40 border-l-2 border-l-blue-400"
-                : "bg-white border-l-2 border-l-transparent hover:bg-gray-50",
+                : "bg-white border-l-2 border-l-transparent",
+              dead ? "opacity-80" : !showUnread && "hover:bg-gray-50",
             )}
           >
             <div className={cn(
               "h-2 w-2 rounded-full mt-1.5 shrink-0",
-              !n.is_read ? "bg-blue-400" : "bg-transparent",
+              showUnread ? "bg-blue-400" : "bg-transparent",
             )} />
-            {n.task_id ? (
+            {dead ? (
+              // No navigation, no link — a deleted task has no detail page to open.
+              <div className="flex-1 min-w-0" title="Bu görev silinmiş">
+                {inner}
+              </div>
+            ) : n.task_id ? (
               <Link
                 href={`/tasks/${n.task_id}`}
                 onClick={() => { setOpen(false); if (!n.is_read) handleMarkOneRead(n.id); }}
@@ -116,7 +140,7 @@ export function NotificationBell({ unreadCount: initialCount, notifications = []
                 {inner}
               </button>
             )}
-            {!n.is_read && (
+            {showUnread && (
               <button
                 onClick={() => handleMarkOneRead(n.id)}
                 className="text-gray-300 hover:text-blue-500 shrink-0 mt-0.5 p-0.5"

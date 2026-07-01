@@ -37,6 +37,9 @@ export default async function TaskDetailPage({
   const taskResult = await supabase.from("tasks").select("*").eq("id", id).single();
   if (!taskResult.data) notFound();
   const task: Task = taskResult.data;
+  // A soft-deleted task has no live detail/edit screen — a stale notification (or
+  // bookmark) must never open it. Treat it as gone.
+  if (task.deleted_at) notFound();
 
   const [activityResult, activityLogsResult, activeTimerResult, customFieldsResult, profilesResult, contactsResult, deptsResult, notesResult, membersResult, completionsResult, deptMembersResult, deptTreeResult] =
     await Promise.all([

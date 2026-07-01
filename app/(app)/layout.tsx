@@ -74,6 +74,8 @@ export default async function AppLayout({
   let savedViews: SavedView[] = [];
   let unreadCount = 0;
   let notifications: Notification[] = [];
+  // task_ids whose task is soft-deleted or gone → their notifications are passive.
+  let deadTaskIds: string[] = [];
   // Puan & Motivasyon — personal summary (profile menu) + team progress (sidebar)
   let pointsThisMonth = 0;
   let pendingPoints = 0;
@@ -114,7 +116,28 @@ export default async function AppLayout({
     workspace = wsResult.data;
     savedViews = viewsResult.data ?? [];
     notifications = notifResult.data ?? [];
-    unreadCount = notifications.filter((n: Notification) => !n.is_read).length;
+
+    // A notification may point at a task that has since been soft-deleted
+    // (deleted_at set) or hard-removed. Such a notification must not act as a live
+    // link into a dead task, nor keep nagging the bell badge. Resolve which
+    // referenced tasks are still live; the rest are treated as "silinmiş görev"
+    // (rendered passive + excluded from the unread count).
+    const notifTaskIds = [
+      ...new Set(notifications.map((n) => n.task_id).filter((id): id is string => !!id)),
+    ];
+    if (notifTaskIds.length > 0) {
+      const { data: liveRows } = await supabase
+        .from("tasks")
+        .select("id")
+        .in("id", notifTaskIds)
+        .is("deleted_at", null);
+      const liveIds = new Set((liveRows ?? []).map((r) => r.id as string));
+      deadTaskIds = notifTaskIds.filter((id) => !liveIds.has(id));
+    }
+    const deadSet = new Set(deadTaskIds);
+    const isDeadNotif = (n: Notification) => n.task_id != null && deadSet.has(n.task_id);
+
+    unreadCount = notifications.filter((n: Notification) => !n.is_read && !isDeadNotif(n)).length;
     userName = profileResult.data?.full_name ?? userName;
 
     // Personal points summary for everyone. Workspace-wide progress counts are
@@ -166,6 +189,7 @@ export default async function AppLayout({
           userName={userName}
           userEmail={user.email ?? null}
           notifications={notifications}
+          deadTaskIds={deadTaskIds}
           userRole={userRole}
           pointsThisMonth={pointsThisMonth}
           pendingPoints={pendingPoints}

@@ -19,6 +19,7 @@ interface Props {
   userName?: string | null;
   userEmail?: string | null;
   notifications?: Notification[];
+  deadTaskIds?: string[];
   userRole?: WorkspaceRole;
   pointsThisMonth?: number;
   pendingPoints?: number;
@@ -157,7 +158,7 @@ function ProfileMenu({
 }
 
 export function AppHeader({
-  unreadCount, userId, userName, userEmail, notifications = [], userRole = "member",
+  unreadCount, userId, userName, userEmail, notifications = [], deadTaskIds = [], userRole = "member",
   pointsThisMonth = 0, pendingPoints = 0,
 }: Props) {
   const pathname = usePathname();
@@ -179,7 +180,7 @@ export function AppHeader({
       </div>
 
       <div className="flex items-center gap-3">
-        <NotificationBell unreadCount={unreadCount} userId={userId} notifications={notifications} />
+        <NotificationBell unreadCount={unreadCount} userId={userId} notifications={notifications} deadTaskIds={deadTaskIds} />
         <div className={showProfileOnMobile ? "block" : "hidden md:block"}>
           <ProfileMenu
             displayName={displayName}
