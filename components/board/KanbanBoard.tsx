@@ -750,14 +750,15 @@ function CardContent({
         )}
       </div>
 
-      {/* Title — kept to two lines so cards stay compact; the full title is on the
-          task detail page (no native hover tooltip that pops over the board). */}
+      {/* Title — operasyon başlıkları uzun olabilir; 4 satıra kadar tam okunsun
+          ve tooltip ile tamamı görülebilsin. Başlık açıklamadan önceliklidir. */}
       <Link
         prefetch={false}
         href={taskHref}
+        title={task.title}
         draggable={false}
         className={cn(
-          "text-[14px] font-semibold line-clamp-2 block leading-snug tracking-[-0.01em] break-words",
+          "text-[13px] font-medium line-clamp-4 block leading-snug tracking-[-0.005em] break-words",
           markers.shouldStrike
             ? "text-success/90 line-through decoration-success/40"
             : "text-ink hover:text-brand",
@@ -767,9 +768,9 @@ function CardContent({
         {task.title}
       </Link>
 
-      {/* Description — two balanced lines so the card reads as a real summary. */}
+      {/* Description (one line) */}
       {task.description && (
-        <p className="text-[12px] text-subtle mt-1 line-clamp-2 leading-relaxed">
+        <p className="text-[11px] text-subtle mt-1 line-clamp-1 leading-snug">
           {task.description}
         </p>
       )}
@@ -1027,7 +1028,7 @@ function KanbanColumn({
   const headerTone = BOARD_COL_HEADER_TONE[colDef.id] ?? "text-gray-500";
 
   return (
-    <div className="flex flex-col gap-2 w-[80vw] max-w-[88vw] sm:w-60 xl:w-64 2xl:w-[17rem] shrink-0">
+    <div className="flex flex-col gap-2 w-[80vw] max-w-72 sm:w-72 shrink-0">
       <div className="sticky top-0 z-20 h-11 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <h3 className={cn("text-xs font-bold uppercase tracking-wider truncate", headerTone)}>
@@ -1097,7 +1098,7 @@ function StaticKanbanColumn({
 }) {
   const headerTone = BOARD_COL_HEADER_TONE[colDef.id] ?? "text-gray-500";
   return (
-    <div className="flex flex-col gap-2 w-[80vw] max-w-[88vw] sm:w-60 xl:w-64 2xl:w-[17rem] shrink-0">
+    <div className="flex flex-col gap-2 w-[80vw] max-w-72 sm:w-72 shrink-0">
       <div className="sticky top-0 z-20 h-11 flex items-center gap-2">
         <h3 className={cn("text-xs font-bold uppercase tracking-wider truncate", headerTone)}>
           {colDef.label}

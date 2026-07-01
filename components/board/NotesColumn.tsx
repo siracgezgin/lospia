@@ -11,7 +11,7 @@ import {
   SortableContext, verticalListSortingStrategy, useSortable, arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Plus, Trash2, Pencil, StickyNote, Check, X, GripVertical, ArrowRightCircle, Undo2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Trash2, Pencil, StickyNote, Check, X, GripVertical, ArrowRightCircle, Undo2 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { createNote, updateNote, deleteNote, reorderNotes } from "@/lib/actions/notes";
 import { createTask, softDeleteTask } from "@/lib/actions/tasks";
@@ -173,30 +173,28 @@ function NoteCardContent({
               {note.title}
             </p>
             {!readOnly && canModify && (
-            <div className="flex items-center gap-0.5 opacity-70 group-hover:opacity-100 transition-opacity shrink-0">
+            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
               <button
                 onClick={() => onConvertToTask(note.id, note.title, note.body ?? "")}
-                className="p-0.5 text-gray-400 hover:text-[#406775] rounded"
+                className="p-0.5 text-gray-300 hover:text-[#406775] rounded"
                 aria-label="Göreve dönüştür"
                 title="Göreve dönüştür"
               >
-                <ArrowRightCircle size={12} />
+                <ArrowRightCircle size={11} />
               </button>
               <button
                 onClick={() => setEditing(true)}
-                className="p-0.5 text-gray-400 hover:text-gray-600 rounded"
+                className="p-0.5 text-gray-300 hover:text-gray-600 rounded"
                 aria-label="Notu düzenle"
-                title="Notu düzenle"
               >
-                <Pencil size={12} />
+                <Pencil size={11} />
               </button>
               <button
                 onClick={() => onDelete(note.id)}
-                className="p-0.5 text-gray-400 hover:text-red-500 rounded"
+                className="p-0.5 text-gray-300 hover:text-red-500 rounded"
                 aria-label="Notu sil"
-                title="Notu sil"
               >
-                <Trash2 size={12} />
+                <Trash2 size={11} />
               </button>
             </div>
             )}
@@ -328,31 +326,6 @@ const _subscribeMounted = () => () => {};
 const _getMounted = () => true;
 const _getServerMounted = () => false;
 
-// ── Notes-column collapse preference (localStorage, SSR-safe) ──────────────────
-// Read via useSyncExternalStore so there is no setState-in-effect (which the
-// project's lint forbids) and no hydration mismatch. Returns "1"/"0" when the
-// user has set a preference, or null to fall back to a deterministic default.
-const NOTES_COLLAPSE_KEY = "af-board-notes-collapsed";
-const _collapseListeners = new Set<() => void>();
-function readCollapsePref(): "1" | "0" | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const v = localStorage.getItem(NOTES_COLLAPSE_KEY);
-    return v === "1" || v === "0" ? v : null;
-  } catch { return null; }
-}
-function writeCollapsePref(v: "1" | "0") {
-  try { localStorage.setItem(NOTES_COLLAPSE_KEY, v); } catch { /* ignore */ }
-  _collapseListeners.forEach((l) => l());
-}
-function subscribeCollapse(cb: () => void) {
-  _collapseListeners.add(cb);
-  const onStorage = (e: StorageEvent) => { if (e.key === NOTES_COLLAPSE_KEY) cb(); };
-  window.addEventListener("storage", onStorage);
-  return () => { _collapseListeners.delete(cb); window.removeEventListener("storage", onStorage); };
-}
-const _getServerCollapse = () => null;
-
 // ── Main column ────────────────────────────────────────────────────────────────
 
 export function NotesColumn({
@@ -381,16 +354,6 @@ export function NotesColumn({
   const mounted = useSyncExternalStore(_subscribeMounted, _getMounted, _getServerMounted);
   const [_isPending, startTransition] = useTransition();
   const [adding, setAdding] = useState(false);
-
-  // Collapsible desktop column — an optional way to free horizontal space for the
-  // task columns. It defaults to OPEN (so the add button and note actions are
-  // always visible); it only collapses when the user explicitly asks. Read via an
-  // external store to stay SSR-safe + lint-clean.
-  const collapsePref = useSyncExternalStore(subscribeCollapse, readCollapsePref, _getServerCollapse);
-  const collapsed = collapsePref === "1";
-  function toggleCollapsed() {
-    writeCollapsePref(collapsed ? "0" : "1");
-  }
 
   // Confirm popup (before a destructive note action) + short-lived undo toast.
   const [confirmAction, setConfirmAction] = useState<
@@ -541,14 +504,9 @@ export function NotesColumn({
 
   const emptyState = optimisticNotes.length === 0 && !adding;
   const listCls = cn(
-    "flex flex-col gap-2 rounded-lg p-1",
-    emptyState
-      ? "min-h-[3.5rem] border border-dashed border-[#e2dcc9] items-center justify-center"
-      : "min-h-20",
+    "flex flex-col gap-2 rounded-lg p-1 min-h-20",
+    emptyState && "border-2 border-dashed border-[#d4cf9e]",
   );
-  const emptyHint = emptyState ? (
-    <p className="text-[11px] text-[#a49d82] text-center px-2 select-none">Not eklemek için +</p>
-  ) : null;
 
   const handlers: NoteHandlers = {
     onDelete: requestDelete,
@@ -557,45 +515,9 @@ export function NotesColumn({
     readOnly,
   };
 
-  // ── Collapsed desktop column ──────────────────────────────────────────────
-  // A compact, normal (horizontal) mini column — NOT a vertical text rail. Its
-  // header aligns with the task-column headers; clicking anywhere expands it back.
-  // Not used on mobile (single-column segments).
-  if (collapsed && !mobile) {
-    return (
-      <div className="flex flex-col gap-2 shrink-0 w-[7.5rem]">
-        <div className="flex items-center justify-between sticky top-0 z-20 h-11">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <StickyNote size={13} className="text-[#c8c39e] shrink-0" />
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[#6b6748] truncate">Notlar</h3>
-          </div>
-          <button
-            onClick={toggleCollapsed}
-            className="p-0.5 text-gray-300 hover:text-[#406775] rounded transition-colors shrink-0"
-            aria-label="Notları göster"
-            title="Notları göster"
-          >
-            <ChevronRight size={14} />
-          </button>
-        </div>
-        <button
-          onClick={toggleCollapsed}
-          className="flex flex-col items-center justify-center gap-1 rounded-lg border border-[#e2dcc9] bg-[#faf7ef] py-4 hover:bg-[#f3ecdc] transition-colors text-[#6b6748]"
-          title="Notları göster"
-          aria-label="Notları göster"
-        >
-          <span className="rounded-full bg-[#efe9dc] px-2 py-0.5 text-xs font-semibold leading-none">
-            {optimisticNotes.length}
-          </span>
-          <span className="text-[10px] font-medium">not</span>
-        </button>
-      </div>
-    );
-  }
-
   return (
     <NoteAuthorsContext.Provider value={authorsById}>
-    <div className={cn("flex flex-col gap-2 shrink-0", mobile ? "w-full" : "w-[80vw] max-w-60 sm:w-52")}>
+    <div className={cn("flex flex-col gap-2 shrink-0", mobile ? "w-full" : "w-[80vw] max-w-64 sm:w-64")}>
       {/* Header */}
       <div className="flex items-center justify-between sticky top-0 z-20 h-11">
         <div className="flex items-center gap-2">
@@ -605,33 +527,20 @@ export function NotesColumn({
             {optimisticNotes.length}
           </span>
         </div>
-        <div className="flex items-center gap-0.5">
-          {!readOnly && (
-            <button
-              onClick={() => setAdding(true)}
-              className="p-0.5 text-gray-300 hover:text-[#406775] rounded transition-colors"
-              aria-label="Not ekle"
-            >
-              <Plus size={14} />
-            </button>
-          )}
-          {!mobile && (
-            <button
-              onClick={toggleCollapsed}
-              className="p-0.5 text-gray-300 hover:text-[#406775] rounded transition-colors"
-              aria-label="Notları gizle"
-              title="Notları gizle"
-            >
-              <ChevronLeft size={14} />
-            </button>
-          )}
-        </div>
+        {!readOnly && (
+          <button
+            onClick={() => setAdding(true)}
+            className="p-0.5 text-gray-300 hover:text-[#406775] rounded transition-colors"
+            aria-label="Not ekle"
+          >
+            <Plus size={14} />
+          </button>
+        )}
       </div>
 
       {/* Pre-mount: static list — no dnd-kit, no aria-describedby generation */}
       {!mounted && (
         <div className={listCls}>
-          {emptyHint}
           {optimisticNotes.map((note) => (
             <StaticNoteCard key={note.id} note={note} canModify={canModifyNote(note)} {...handlers} />
           ))}
@@ -643,7 +552,6 @@ export function NotesColumn({
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={noteIds} strategy={verticalListSortingStrategy}>
             <div className={listCls}>
-              {emptyHint}
               {optimisticNotes.map((note) => (
                 <SortableNoteCard key={note.id} note={note} canModify={canModifyNote(note)} {...handlers} />
               ))}
