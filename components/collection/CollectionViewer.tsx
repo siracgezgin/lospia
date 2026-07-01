@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { parseDelimited, isSensitiveColumn, type ParsedTable } from "@/lib/utils/csv";
 import { cn } from "@/lib/utils/cn";
+import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 
 interface Props {
   isAdmin: boolean;
@@ -71,23 +72,21 @@ export function CollectionViewer({ isAdmin }: Props) {
   return (
     <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8">
       {/* Header */}
-      <div className="mb-4 flex items-start gap-3">
-        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">
-          <Boxes size={18} />
-        </div>
-        <div>
-          <h1 className="text-lg font-semibold text-ink">Koleksiyon &amp; Üretim</h1>
-          <p className="mt-0.5 text-[13px] text-muted">
-            Koleksiyon/kumaş verilerini Lospia içinde güvenle görüntüleyin.
-          </p>
-        </div>
-      </div>
+      <ModulePageHeader
+        title="Koleksiyon & Üretim"
+        description="Koleksiyon/kumaş verilerini Lospia içinde güvenle görüntüleyin."
+        icon={Boxes}
+        badge="Salt okunur"
+        secondaryBackHref="/board"
+      />
 
       {/* Read-only banner */}
       <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-[#c4daf6] bg-[#e8f1fd] px-4 py-3">
         <ShieldAlert size={16} className="mt-0.5 shrink-0 text-[#1a4889]" />
         <div className="text-[12.5px] leading-relaxed text-[#1a4889]">
-          <span className="font-semibold">Bu veri şu anda salt okunur gösteriliyor.</span>{" "}
+          <span className="font-semibold">
+            Bu alan şu anda yalnızca yöneticiler için salt okunur önizleme modundadır.
+          </span>{" "}
           Supabase&apos;e kalıcı import yapılmıyor; dosya yalnızca tarayıcınızda geçici olarak
           okunur ve hiçbir yere yüklenmez.
         </div>

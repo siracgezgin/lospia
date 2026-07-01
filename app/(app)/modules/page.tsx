@@ -4,6 +4,7 @@ import { requireModuleAdmin } from "@/lib/modules/context";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { DEPARTMENT_MODULES } from "@/lib/modules/registry";
 import { DepartmentCard } from "@/components/modules/DepartmentCard";
+import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 
 export const dynamic = "force-dynamic";
 
@@ -48,23 +49,14 @@ export default async function ModulesPage() {
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
       {/* Page header */}
-      <div className="mb-6 flex items-start gap-3">
-        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">
-          <LayoutGrid size={18} />
-        </div>
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-lg font-semibold text-ink">Operasyon Modülleri</h1>
-            <span className="rounded-full bg-brand-soft px-2 py-0.5 text-[10.5px] font-medium text-brand-strong">
-              Yönetici operasyon alanı
-            </span>
-          </div>
-          <p className="mt-0.5 text-[13px] text-muted">
-            Departmanlara göre ilgili çalışma alanlarına buradan ulaşın. Bazı modüller
-            hazırlık aşamasındadır.
-          </p>
-        </div>
-      </div>
+      <ModulePageHeader
+        title="Operasyon Modülleri"
+        description="Departmanlara göre ilgili çalışma alanlarına buradan ulaşın. Bazı modüller hazırlık aşamasındadır."
+        icon={LayoutGrid}
+        badge="Yönetici operasyon alanı"
+        backHref="/board"
+        backLabel="Panoya dön"
+      />
 
       {/* Department grid */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">

@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowLeft, Sparkles, ArrowUpRight } from "lucide-react";
+import { Sparkles, ArrowUpRight, Wrench } from "lucide-react";
+import { ModulePageHeader } from "./ModulePageHeader";
 import type { ModuleShell } from "@/lib/modules/registry";
 
 /** Quick links to the live screens a "hazırlık" module relates to. */
@@ -20,21 +21,20 @@ const RELATED_LINKS: { label: string; href: string }[] = [
 export function ModuleShellView({ shell }: { shell: ModuleShell }) {
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 lg:px-8">
-      <Link
-        href="/modules"
-        className="inline-flex items-center gap-1.5 text-[13px] text-muted transition-colors hover:text-ink"
-      >
-        <ArrowLeft size={14} />
-        Operasyon Modülleri
-      </Link>
+      <ModulePageHeader
+        title={shell.title}
+        description={shell.summary}
+        icon={Wrench}
+        badge="Hazırlık aşamasında"
+        secondaryBackHref="/board"
+      />
 
-      <div className="mt-4 rounded-2xl border border-line bg-surface p-6 shadow-card">
+      <div className="rounded-2xl border border-line bg-surface p-6 shadow-card">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-soft px-2.5 py-1 text-[11px] font-medium text-brand-strong">
           <Sparkles size={12} />
-          Hazırlık aşamasında
+          Bu modül sonraki fazda açılacak
         </span>
-        <h1 className="mt-3 text-lg font-semibold text-ink">{shell.title}</h1>
-        <p className="mt-1 text-[13.5px] text-muted">{shell.summary}</p>
+        <p className="mt-3 text-[13.5px] text-muted">{shell.summary}</p>
 
         <ul className="mt-4 space-y-2 border-t border-hairline pt-4">
           {shell.purpose.map((line, i) => (

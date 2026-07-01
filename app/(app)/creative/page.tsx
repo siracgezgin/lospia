@@ -3,15 +3,12 @@ import { Link2 } from "lucide-react";
 import { requireModuleAdmin } from "@/lib/modules/context";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { CreativeView } from "@/components/creative/CreativeView";
+import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
+import { SetupRequiredNotice } from "@/components/modules/SetupRequiredNotice";
+import { maybeDatabaseSetupRequired } from "@/lib/utils/supabase-errors";
 import type { CreativeAsset, WorkspaceDepartment } from "@/types";
 
 export const dynamic = "force-dynamic";
-
-// True when the creative_assets table hasn't been migrated on this DB yet.
-function isMissingTable(err: { code?: string; message?: string } | null): boolean {
-  if (!err) return false;
-  return err.code === "42P01" || /relation .*creative_assets.* does not exist/i.test(err.message ?? "");
-}
 
 export default async function CreativePage({
   searchParams,
@@ -31,21 +28,34 @@ export default async function CreativePage({
     .eq("workspace_id", workspaceId)
     .order("created_at", { ascending: false });
 
-  // Graceful state when the migration hasn't been applied to this environment.
-  if (assetsResult.error && isMissingTable(assetsResult.error)) {
+  // Graceful state when the creative_assets migration hasn't been applied to
+  // this environment. Renders a proper module shell (header + back nav + setup
+  // notice) instead of a raw PostgREST error, and disables link creation.
+  const setup = maybeDatabaseSetupRequired(assetsResult.error);
+  if (setup.setupRequired) {
     return (
-      <div className="mx-auto w-full max-w-2xl px-4 py-10 sm:px-6">
-        <div className="flex items-start gap-3 rounded-2xl border border-line bg-surface p-6 shadow-card">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">
-            <Link2 size={18} />
-          </div>
-          <div>
-            <h1 className="text-lg font-semibold text-ink">Kreatif Linkler</h1>
-            <p className="mt-1 text-[13.5px] text-muted">
-              Bu modül hazırlanıyor. Kayıt alanı henüz bu ortamda etkin değil; kısa süre
-              içinde açılacaktır.
-            </p>
-          </div>
+      <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 lg:px-8">
+        <ModulePageHeader
+          title="Kreatif Linkler"
+          description="Canva, Drive ve Figma bağlantılarının kayıt altında tutulacağı alan."
+          icon={Link2}
+          secondaryBackHref="/board"
+        />
+        <SetupRequiredNotice
+          variant="block"
+          title="Kreatif Linkler tablosu henüz oluşturulmadı"
+          message={
+            setup.message ??
+            "Kreatif Linkler tablosu henüz production veritabanında oluşturulmamış. Migration uygulandıktan sonra bağlantı ekleme aktif olacak."
+          }
+          technicalDetail={isAdmin ? setup.technicalDetail : null}
+        />
+        <div className="mt-4 rounded-2xl border border-line bg-surface p-5 shadow-card">
+          <p className="text-[13px] text-muted">
+            Bu modül bir <span className="font-medium text-ink">bağlantı kaydı</span> alanıdır —
+            dosya yüklenmez, yalnızca Canva/Drive/Figma bağlantıları ve onay durumu izlenir.
+            Kurulum tamamlandığında bu ekran otomatik olarak aktif hâle gelir.
+          </p>
         </div>
       </div>
     );

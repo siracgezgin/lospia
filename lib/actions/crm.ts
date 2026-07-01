@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { canManageContacts, type AppRole } from "@/lib/auth/permissions";
+import { toActionErrorMessage } from "@/lib/utils/supabase-errors";
 
 // CRM v0 builds on the existing workspace_contacts table (used for task
 // responsible/contact mapping). These actions only touch the additive columns
@@ -93,7 +94,7 @@ export async function createCrmContact(
     .select("id")
     .single();
 
-  if (error) return { error: error.message };
+  if (error) return { error: toActionErrorMessage(error) };
   revalidatePath("/crm");
   revalidatePath("/settings");
   return { id: (data as { id: string }).id };
@@ -116,7 +117,7 @@ export async function updateCrmContact(
     .eq("id", contactId)
     .eq("workspace_id", ctx.workspaceId);
 
-  if (error) return { error: error.message };
+  if (error) return { error: toActionErrorMessage(error) };
   revalidatePath("/crm");
   revalidatePath("/settings");
   return { ok: true };
@@ -154,7 +155,7 @@ export async function linkContactToUser(
 
   if (error) {
     if (error.code === "23505") return { error: "Bu sistem hesabı başka bir kişiyle zaten eşleşmiş." };
-    return { error: error.message };
+    return { error: toActionErrorMessage(error) };
   }
   revalidatePath("/crm");
   revalidatePath("/settings");
@@ -176,7 +177,7 @@ export async function unlinkContactUser(
     .eq("id", contactId)
     .eq("workspace_id", ctx.workspaceId);
 
-  if (error) return { error: error.message };
+  if (error) return { error: toActionErrorMessage(error) };
   revalidatePath("/crm");
   revalidatePath("/settings");
   return { ok: true };
@@ -195,7 +196,7 @@ export async function deleteCrmContact(
     .eq("id", contactId)
     .eq("workspace_id", ctx.workspaceId);
 
-  if (error) return { error: error.message };
+  if (error) return { error: toActionErrorMessage(error) };
   revalidatePath("/crm");
   revalidatePath("/settings");
   return { ok: true };

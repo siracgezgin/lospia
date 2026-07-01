@@ -3,6 +3,7 @@ import { requireModuleAdmin } from "@/lib/modules/context";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { CrmView } from "@/components/crm/CrmView";
 import { contactDescriptor, taskMatchesPerson, type PersonMatchTask } from "@/lib/utils/task-person-match";
+import { maybeDatabaseSetupRequired } from "@/lib/utils/supabase-errors";
 import type { WorkspaceContact, Profile } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +20,9 @@ export default async function CrmPage({
   if (gate === "login") redirect("/login");
   if (gate !== "ok" || !workspaceId) return <AccessDenied />;
 
-  const [contactsResult, membersResult, tasksResult] = await Promise.all([
+  const [contactsResult, membersResult, tasksResult, probeResult] = await Promise.all([
+    // Base contacts always load with select("*") — resilient even when the CRM
+    // migration hasn't been applied yet (missing columns are simply absent).
     supabase
       .from("workspace_contacts")
       .select("*")
@@ -38,7 +41,17 @@ export default async function CrmPage({
       .eq("workspace_id", workspaceId)
       .is("deleted_at", null)
       .neq("status", "archived"),
+    // Probe the additive CRM columns. If the Phase 1 migration hasn't been
+    // applied yet this errors with PGRST204/42703 → we render a setup banner and
+    // disable migration-dependent actions instead of leaking a raw error.
+    supabase
+      .from("workspace_contacts")
+      .select("id, crm_status, segment, user_id")
+      .eq("workspace_id", workspaceId)
+      .limit(1),
   ]);
+
+  const setup = maybeDatabaseSetupRequired(probeResult.error);
 
   const contacts = (contactsResult.data ?? []) as WorkspaceContact[];
 
@@ -71,6 +84,9 @@ export default async function CrmPage({
       taskCounts={taskCounts}
       isAdmin
       initialSegment={initialSegment}
+      setupRequired={setup.setupRequired}
+      setupMessage={setup.message}
+      setupTechnicalDetail={setup.technicalDetail}
     />
   );
 }

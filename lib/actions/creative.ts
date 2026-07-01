@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import type { AppRole } from "@/lib/auth/permissions";
+import { toActionErrorMessage } from "@/lib/utils/supabase-errors";
 
 // Kreatif Linkler — a link registry (no file storage). Phase 1: this is an
 // admin-only area, so every mutation requires owner/admin. RLS on creative_assets
@@ -86,7 +87,7 @@ export async function createCreativeAsset(
     .select("id")
     .single();
 
-  if (error) return { error: error.message };
+  if (error) return { error: toActionErrorMessage(error) };
   revalidatePath("/creative");
   return { id: (row as { id: string }).id };
 }
@@ -120,7 +121,7 @@ export async function updateCreativeAsset(
     .eq("id", assetId)
     .eq("workspace_id", ctx.workspaceId);
 
-  if (error) return { error: error.message };
+  if (error) return { error: toActionErrorMessage(error) };
   revalidatePath("/creative");
   return { ok: true };
 }
@@ -140,7 +141,7 @@ export async function archiveCreativeAsset(
     .eq("id", assetId)
     .eq("workspace_id", ctx.workspaceId);
 
-  if (error) return { error: error.message };
+  if (error) return { error: toActionErrorMessage(error) };
   revalidatePath("/creative");
   return { ok: true };
 }
@@ -159,7 +160,7 @@ export async function deleteCreativeAsset(
     .eq("id", assetId)
     .eq("workspace_id", ctx.workspaceId);
 
-  if (error) return { error: error.message };
+  if (error) return { error: toActionErrorMessage(error) };
   revalidatePath("/creative");
   return { ok: true };
 }

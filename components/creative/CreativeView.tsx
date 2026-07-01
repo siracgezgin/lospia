@@ -13,6 +13,7 @@ import {
   CREATIVE_STATUS_TONE,
 } from "@/lib/creative/constants";
 import { cn } from "@/lib/utils/cn";
+import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { CreativeLinkModal } from "./CreativeLinkModal";
 import type { CreativeAsset, WorkspaceDepartment } from "@/types";
 
@@ -78,27 +79,21 @@ export function CreativeView({
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
       {/* Header */}
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">
-            <Link2 size={18} />
-          </div>
-          <div>
-            <h1 className="text-lg font-semibold text-ink">Kreatif Linkler</h1>
-            <p className="mt-0.5 text-[13px] text-muted">
-              Canva, Drive ve Figma bağlantıları burada kayıt altında tutulur — dosyalar
-              yüklenmez, yalnızca bağlantı ve onay durumu izlenir.
-            </p>
-          </div>
-        </div>
-        <button
-          onClick={openNew}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-3.5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand-strong"
-        >
-          <Plus size={15} />
-          Yeni link ekle
-        </button>
-      </div>
+      <ModulePageHeader
+        title="Kreatif Linkler"
+        description="Canva, Drive ve Figma bağlantıları burada kayıt altında tutulur — dosyalar yüklenmez, yalnızca bağlantı ve onay durumu izlenir."
+        icon={Link2}
+        secondaryBackHref="/board"
+        rightSlot={
+          <button
+            onClick={openNew}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-3.5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand-strong"
+          >
+            <Plus size={15} />
+            Yeni link ekle
+          </button>
+        }
+      />
 
       {/* Toolbar */}
       <div className="mb-4 flex flex-wrap items-center gap-2">

@@ -22,6 +22,8 @@ import {
 } from "@/lib/crm/constants";
 import { formatDateOnlyTR } from "@/lib/utils/format-date";
 import { cn } from "@/lib/utils/cn";
+import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
+import { SetupRequiredNotice } from "@/components/modules/SetupRequiredNotice";
 import { CrmContactModal } from "./CrmContactModal";
 import { ContactMatchingPanel } from "./ContactMatchingPanel";
 import type { WorkspaceContact } from "@/types";
@@ -39,6 +41,10 @@ interface Props {
   taskCounts: Record<string, number>;
   isAdmin: boolean;
   initialSegment: string;
+  /** True when the additive CRM columns are not yet migrated on this DB. */
+  setupRequired?: boolean;
+  setupMessage?: string | null;
+  setupTechnicalDetail?: string | null;
 }
 
 // diacritic-insensitive search
@@ -52,7 +58,16 @@ function norm(s: string): string {
 
 const columnHelper = createColumnHelper<WorkspaceContact>();
 
-export function CrmView({ contacts, members, taskCounts, isAdmin, initialSegment }: Props) {
+export function CrmView({
+  contacts,
+  members,
+  taskCounts,
+  isAdmin,
+  initialSegment,
+  setupRequired = false,
+  setupMessage,
+  setupTechnicalDetail,
+}: Props) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [segment, setSegment] = useState(initialSegment);
@@ -188,7 +203,7 @@ export function CrmView({ contacts, members, taskCounts, isAdmin, initialSegment
               href={`/list?person=${info.row.original.id}`}
               className="inline-flex items-center gap-1 text-[12.5px] font-medium text-brand hover:text-brand-strong"
             >
-              {n} görev <ExternalLink size={11} />
+              {n} ilişkili görev <ExternalLink size={11} />
             </Link>
           );
         },
@@ -235,47 +250,73 @@ export function CrmView({ contacts, members, taskCounts, isAdmin, initialSegment
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
       {/* Header */}
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">
-            <Users size={18} />
-          </div>
-          <div>
-            <h1 className="text-lg font-semibold text-ink">İlişkiler / CRM</h1>
-            <p className="mt-0.5 text-[13px] text-muted">
-              VIP müşteriler, PR kontakları, influencerlar, tedarikçiler ve işbirliği adayları.
-            </p>
-          </div>
-        </div>
-        {isAdmin && (
-          <div className="flex shrink-0 items-center gap-2">
-            <button
-              onClick={() => setShowMatching((s) => !s)}
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-medium transition-colors",
-                showMatching
-                  ? "border-brand-ring bg-brand-soft text-brand-strong"
-                  : "border-line text-muted hover:bg-surface-muted",
-              )}
-            >
-              <LinkIcon size={14} />
-              Kişi eşleştirme
-              {linkedCount > 0 && (
-                <span className="rounded-full bg-surface px-1.5 text-[11px] tabular-nums text-subtle">{linkedCount}</span>
-              )}
-            </button>
-            <button
-              onClick={openNew}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3.5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand-strong"
-            >
-              <Plus size={15} />
-              Yeni ilişki ekle
-            </button>
-          </div>
-        )}
-      </div>
+      <ModulePageHeader
+        title="İlişkiler / CRM"
+        description="VIP müşteriler, PR kontakları, influencerlar, tedarikçiler ve işbirliği adayları."
+        icon={Users}
+        secondaryBackHref="/board"
+        rightSlot={
+          isAdmin ? (
+            <>
+              <button
+                onClick={() => setShowMatching((s) => !s)}
+                disabled={setupRequired}
+                title={
+                  setupRequired
+                    ? "Kişi eşleştirme için veritabanı güncellemesi bekleniyor."
+                    : undefined
+                }
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-medium transition-colors",
+                  setupRequired
+                    ? "cursor-not-allowed border-line bg-surface-sunken text-subtle"
+                    : showMatching
+                      ? "border-brand-ring bg-brand-soft text-brand-strong"
+                      : "border-line text-muted hover:bg-surface-muted",
+                )}
+              >
+                <LinkIcon size={14} />
+                Kişi eşleştirme
+                {!setupRequired && linkedCount > 0 && (
+                  <span className="rounded-full bg-surface px-1.5 text-[11px] tabular-nums text-subtle">{linkedCount}</span>
+                )}
+              </button>
+              <button
+                onClick={openNew}
+                disabled={setupRequired}
+                title={
+                  setupRequired
+                    ? "Yeni ilişki ekleme için veritabanı güncellemesi bekleniyor."
+                    : undefined
+                }
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[13px] font-medium transition-colors",
+                  setupRequired
+                    ? "cursor-not-allowed bg-brand/40 text-white"
+                    : "bg-brand text-white hover:bg-brand-strong",
+                )}
+              >
+                <Plus size={15} />
+                Yeni ilişki ekle
+              </button>
+            </>
+          ) : undefined
+        }
+      />
 
-      {isAdmin && showMatching && (
+      {setupRequired && (
+        <div className="mb-4">
+          <SetupRequiredNotice
+            message={
+              setupMessage ??
+              "CRM alanları için veritabanı güncellemesi bekleniyor. Migration uygulandıktan sonra yeni ilişki ekleme ve kişi eşleştirme aktif olacak."
+            }
+            technicalDetail={isAdmin ? setupTechnicalDetail : null}
+          />
+        </div>
+      )}
+
+      {isAdmin && showMatching && !setupRequired && (
         <ContactMatchingPanel contacts={contacts} members={members} />
       )}
 

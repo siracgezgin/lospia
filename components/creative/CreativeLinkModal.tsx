@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { X } from "lucide-react";
+import { X, AlertCircle } from "lucide-react";
 import { createCreativeAsset, updateCreativeAsset } from "@/lib/actions/creative";
 import { CREATIVE_PROVIDERS, CREATIVE_STATUSES } from "@/lib/creative/constants";
 import { cn } from "@/lib/utils/cn";
@@ -94,10 +94,11 @@ export function CreativeLinkModal({ onClose, onSaved, departments, tasks, contac
           <div>
             <label className={labelCls}>Bağlantı (URL) *</label>
             <input
-              className={inputCls}
+              className={cn(inputCls, "truncate")}
               value={form.url}
               onChange={(e) => handleUrlChange(e.target.value)}
               placeholder="https://…"
+              inputMode="url"
             />
           </div>
 
@@ -165,7 +166,12 @@ export function CreativeLinkModal({ onClose, onSaved, departments, tasks, contac
             />
           </div>
 
-          {error && <p className="text-[13px] text-danger">{error}</p>}
+          {error && (
+            <div className="flex items-start gap-2 rounded-lg border border-[#f1c3bb] bg-[#fdeae7] px-3 py-2.5 text-[12.5px] leading-relaxed text-[#971f12]">
+              <AlertCircle size={15} className="mt-0.5 shrink-0" />
+              <span className="min-w-0 break-words">{error}</span>
+            </div>
+          )}
         </div>
 
         <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-line bg-surface px-5 py-3">
