@@ -11,10 +11,11 @@ import {
   SortableContext, verticalListSortingStrategy, useSortable, arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Plus, Trash2, Pencil, StickyNote, Check, X, GripVertical, ArrowRightCircle } from "lucide-react";
+import { Plus, Trash2, Pencil, StickyNote, Check, X, GripVertical, ArrowRightCircle, Undo2 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { createNote, updateNote, deleteNote, reorderNotes } from "@/lib/actions/notes";
-import { createTask } from "@/lib/actions/tasks";
+import { createTask, softDeleteTask } from "@/lib/actions/tasks";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import type { WorkspaceNote, NoteColor } from "@/types";
 
 // ── Note color palette — brand-derived warm tones ─────────────────────────────
@@ -354,6 +355,24 @@ export function NotesColumn({
   const [_isPending, startTransition] = useTransition();
   const [adding, setAdding] = useState(false);
 
+  // Confirm popup (before a destructive note action) + short-lived undo toast.
+  const [confirmAction, setConfirmAction] = useState<
+    | { kind: "delete"; note: WorkspaceNote }
+    | { kind: "convert"; note: WorkspaceNote }
+    | null
+  >(null);
+  const [undo, setUndo] = useState<
+    | { kind: "delete"; note: WorkspaceNote }
+    | { kind: "convert"; note: WorkspaceNote; taskId: string }
+    | null
+  >(null);
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function showUndo(u: NonNullable<typeof undo>) {
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    setUndo(u);
+    undoTimer.current = setTimeout(() => setUndo(null), 7000);
+  }
+
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const [optimisticNotes, applyOptimistic] = useOptimistic(
@@ -395,13 +414,6 @@ export function NotesColumn({
     });
   }
 
-  function handleDelete(id: string) {
-    startTransition(async () => {
-      applyOptimistic({ type: "delete", id });
-      await deleteNote(id);
-    });
-  }
-
   function handleUpdate(id: string, title: string, body: string, color: NoteColor) {
     startTransition(async () => {
       applyOptimistic({ type: "update", id, title, body, color });
@@ -409,19 +421,67 @@ export function NotesColumn({
     });
   }
 
-  function handleConvertToTask(id: string, title: string, body: string) {
+  // ── Destructive note actions: confirm popup → act → undo toast ───────────────
+  // Both "notu sil" and "göreve dönüştür" first ask for confirmation (a stray
+  // click shouldn't destroy a note), then surface an undo affordance.
+  function requestDelete(id: string) {
+    const note = optimisticNotes.find((n) => n.id === id);
+    if (note) setConfirmAction({ kind: "delete", note });
+  }
+  function requestConvert(id: string) {
+    const note = optimisticNotes.find((n) => n.id === id);
+    if (note) setConfirmAction({ kind: "convert", note });
+  }
+
+  function performDelete(note: WorkspaceNote) {
     startTransition(async () => {
-      await createTask({
+      applyOptimistic({ type: "delete", id: note.id });
+      await deleteNote(note.id);
+      showUndo({ kind: "delete", note });
+    });
+  }
+
+  function performConvert(note: WorkspaceNote) {
+    startTransition(async () => {
+      const created = await createTask({
         workspace_id: workspaceId,
-        title,
-        description: body || undefined,
+        title: note.title,
+        description: note.body || undefined,
         status: "backlog",
         priority: "medium",
         tags: [],
         custom_fields: {},
       });
-      applyOptimistic({ type: "delete", id });
-      await deleteNote(id);
+      applyOptimistic({ type: "delete", id: note.id });
+      await deleteNote(note.id);
+      if (created && "id" in created) showUndo({ kind: "convert", note, taskId: created.id });
+    });
+  }
+
+  function runConfirmed() {
+    if (!confirmAction) return;
+    const action = confirmAction;
+    setConfirmAction(null);
+    if (action.kind === "delete") performDelete(action.note);
+    else performConvert(action.note);
+  }
+
+  // Undo re-creates the note (and, for a conversion, removes the just-created
+  // task). Best-effort within the session — enough to recover a misclick.
+  function runUndo() {
+    if (!undo) return;
+    const u = undo;
+    setUndo(null);
+    startTransition(async () => {
+      if (u.kind === "convert") await softDeleteTask(u.taskId);
+      const restored: WorkspaceNote = { ...u.note, id: crypto.randomUUID() };
+      applyOptimistic({ type: "add", note: restored });
+      await createNote({
+        workspace_id: workspaceId,
+        title: u.note.title,
+        body: u.note.body || undefined,
+        color: u.note.color,
+      });
     });
   }
 
@@ -449,9 +509,9 @@ export function NotesColumn({
   );
 
   const handlers: NoteHandlers = {
-    onDelete: handleDelete,
+    onDelete: requestDelete,
     onUpdate: handleUpdate,
-    onConvertToTask: handleConvertToTask,
+    onConvertToTask: (id: string) => requestConvert(id),
     readOnly,
   };
 
@@ -506,6 +566,49 @@ export function NotesColumn({
           onAdd={handleAdd}
           onCancel={() => setAdding(false)}
         />
+      )}
+
+      {/* Confirm before converting / deleting a note (guards against misclicks) */}
+      <ConfirmDialog
+        open={confirmAction !== null}
+        title={
+          confirmAction?.kind === "convert"
+            ? "Bu notu göreve dönüştürmek istediğinizden emin misiniz?"
+            : "Bu notu silmek istediğinizden emin misiniz?"
+        }
+        message={
+          confirmAction?.kind === "convert"
+            ? `"${confirmAction.note.title}" notu bir göreve dönüştürülecek ve not listesinden kaldırılacak.`
+            : confirmAction?.kind === "delete"
+              ? `"${confirmAction.note.title}" notu silinecek.`
+              : ""
+        }
+        confirmLabel={confirmAction?.kind === "convert" ? "Evet, dönüştür" : "Evet, sil"}
+        cancelLabel="İptal"
+        onConfirm={runConfirmed}
+        onCancel={() => setConfirmAction(null)}
+      />
+
+      {/* Undo toast — recover a just-converted/deleted note within the session */}
+      {undo && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] pointer-events-auto bg-[#1d2127] text-white text-sm px-4 py-2.5 rounded-lg shadow-pop flex items-center gap-3 max-w-sm">
+          <span className="flex-1">
+            {undo.kind === "convert" ? "Not göreve dönüştürüldü." : "Not silindi."}
+          </span>
+          <button
+            onClick={runUndo}
+            className="shrink-0 inline-flex items-center gap-1 font-medium text-[#8fc7d6] hover:text-white underline underline-offset-2"
+          >
+            <Undo2 size={13} /> Geri al
+          </button>
+          <button
+            onClick={() => setUndo(null)}
+            className="shrink-0 text-white/50 hover:text-white"
+            aria-label="Kapat"
+          >
+            <X size={14} />
+          </button>
+        </div>
       )}
     </div>
     </NoteAuthorsContext.Provider>

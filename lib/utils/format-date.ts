@@ -27,6 +27,23 @@ export function formatDateTR(
   return new Intl.DateTimeFormat(LOCALE, { timeZone: TZ, ...opts }).format(new Date(iso));
 }
 
+/**
+ * Date-only stamp for `date` columns (e.g. tasks.due_date, stored "YYYY-MM-DD").
+ * NEVER shows a time — using formatDateTimeTR on a date-only value renders a
+ * spurious "03:00" (UTC midnight seen from UTC+3). Output: "25.06.2026".
+ */
+export function formatDateOnlyTR(iso: string): string {
+  // Anchor to local noon so the Istanbul timezone conversion can't roll the
+  // calendar day backward for a bare "YYYY-MM-DD".
+  const d = iso.length === 10 ? new Date(iso + "T12:00:00") : new Date(iso);
+  return new Intl.DateTimeFormat(LOCALE, {
+    timeZone: TZ,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(d);
+}
+
 // ── Istanbul-local calendar helpers ───────────────────────────────────────────
 // Intl gives us the wall-clock parts in Europe/Istanbul regardless of the
 // runtime timezone, so "today / yesterday" comparisons stay correct on Vercel.

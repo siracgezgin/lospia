@@ -354,6 +354,105 @@ export async function removeWorkspaceMember(
   return { ok: true };
 }
 
+// ── 5b. Hard-delete a member's account (owner only) ───────────────────────────
+// Fully removes a person from the system — workspace membership, department
+// assignments, pending grants, AND the underlying Supabase Auth user (deleting
+// the auth user cascades their profile → membership → dept memberships). Real
+// work is preserved: the NOT-NULL / RESTRICT authorship columns
+// (tasks.created_by, task_activity.user_id, attachments.uploaded_by,
+// workspaces.created_by) are re-attributed to the acting owner first, otherwise
+// those foreign keys would block the cascade. Requires the server-only
+// service_role key (admin client). If the auth user still can't be removed (an
+// FK we don't reassign), we fall back to a soft-disable: the membership is
+// dropped so the person can no longer reach the workspace, and we return a clear
+// message so the UI can explain that access was revoked but history kept.
+export async function removeWorkspaceMemberAccount(
+  memberId: string,
+): Promise<{ ok: true; hardDeleted: boolean } | { error: string }> {
+  const parsed = hexUuid("Geçersiz üye").safeParse(memberId);
+  if (!parsed.success) return { error: "Geçersiz üye." };
+
+  const supabase = await createClient();
+  const ctx = await getCallerRole(supabase);
+  if (!ctx) return { error: "Kimlik doğrulama gerekli." };
+  if (!canManageMembers(ctx.role)) return { error: PERM_DENIED };
+
+  const { data: targetMember } = await supabase
+    .from("workspace_members")
+    .select("user_id, role, profiles!inner(email)")
+    .eq("id", memberId)
+    .eq("workspace_id", ctx.workspaceId)
+    .maybeSingle();
+
+  if (!targetMember) return { error: "Üye bulunamadı." };
+  if (targetMember.user_id === ctx.user.id) return { error: "Kendi hesabınızı silemezsiniz." };
+  // Extra protection for the system admin / owner: never deletable this way.
+  if (targetMember.role === "owner") return { error: "Sistem admini silinemez." };
+
+  const targetUserId = targetMember.user_id as string;
+  const removedEmail =
+    (targetMember as { profiles?: { email?: string | null } | null }).profiles?.email ?? null;
+
+  async function revokeAccessOnly() {
+    await supabase
+      .from("workspace_members")
+      .delete()
+      .eq("id", memberId)
+      .eq("workspace_id", ctx!.workspaceId);
+    if (removedEmail) {
+      await supabase
+        .from("workspace_invites")
+        .delete()
+        .eq("workspace_id", ctx!.workspaceId)
+        .ilike("email", removedEmail);
+    }
+  }
+
+  const admin = getAdminClient();
+
+  // No service role → we cannot touch Supabase Auth. Still revoke access so the
+  // person can't reach the workspace (soft-disable), and say so honestly.
+  if (!admin) {
+    await revokeAccessOnly();
+    revalidatePath("/settings");
+    revalidatePath("/", "layout");
+    return { ok: true, hardDeleted: false };
+  }
+
+  // Re-attribute the RESTRICT / NOT-NULL authorship refs to the acting owner so
+  // the auth-user cascade isn't blocked. Tasks and history are preserved.
+  await admin.from("tasks").update({ created_by: ctx.user.id }).eq("created_by", targetUserId);
+  await admin.from("task_activity").update({ user_id: ctx.user.id }).eq("user_id", targetUserId);
+  await admin.from("attachments").update({ uploaded_by: ctx.user.id }).eq("uploaded_by", targetUserId);
+  await admin.from("workspaces").update({ created_by: ctx.user.id }).eq("created_by", targetUserId);
+
+  // Drop pending grants for this e-mail so they can't silently re-attach later.
+  if (removedEmail) {
+    await admin
+      .from("workspace_invites")
+      .delete()
+      .eq("workspace_id", ctx.workspaceId)
+      .ilike("email", removedEmail);
+  }
+
+  // Delete the auth user → cascades profile → workspace_members → dept members.
+  const { error: delErr } = await admin.auth.admin.deleteUser(targetUserId);
+  if (delErr) {
+    // Hard delete blocked by an FK we don't reassign — revoke access instead.
+    await revokeAccessOnly();
+    revalidatePath("/settings");
+    revalidatePath("/", "layout");
+    return {
+      error:
+        "Kullanıcı görev geçmişinde kullanıldığı için tamamen silinemedi; erişimi kaldırıldı.",
+    };
+  }
+
+  revalidatePath("/settings");
+  revalidatePath("/", "layout");
+  return { ok: true, hardDeleted: true };
+}
+
 // ── 6. Admin-created account (username + password) ────────────────────────────
 // Replaces the old self-signup flow. An owner/admin creates a working account
 // for a person directly: the person never registers — they just sign in with the

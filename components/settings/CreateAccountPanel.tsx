@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { UserPlus, Check } from "lucide-react";
 import { createMemberAccount } from "@/lib/actions/workspace";
 import { ASSIGNABLE_ROLE_OPTIONS } from "@/lib/utils/roles";
@@ -15,6 +16,7 @@ interface Props {
 // an owner/admin sets the person's name, username, password and role; the person
 // then signs in directly with that username + password — no registration step.
 export function CreateAccountPanel({ workspaceId, departments = [] }: Props) {
+  const router = useRouter();
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -52,6 +54,8 @@ export function CreateAccountPanel({ workspaceId, departments = [] }: Props) {
       setPassword("");
       setRole("member");
       setDepartmentId("");
+      // Surface the new member in the list immediately (no manual reload).
+      router.refresh();
     });
   }
 

@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useTransition, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { formatDateTimeTR } from "@/lib/utils/format-date";
+import { formatDateTimeTR, formatDateOnlyTR } from "@/lib/utils/format-date";
 import Link from "next/link";
 import { ArrowLeft, History, Save, X, Check, AlertCircle, Lock, Pencil } from "lucide-react";
 import type {
@@ -245,7 +245,7 @@ function TaskEditor({
           </span>
           {draft.due_date && (
             <span className={cn("text-[11px] rounded-full px-2 py-0.5 bg-gray-50 border border-gray-100", markers.dueDateClass)}>
-              Teslim: {formatDateTimeTR(draft.due_date)}
+              Teslim: {formatDateOnlyTR(draft.due_date)}
             </span>
           )}
           {doneLocked && (

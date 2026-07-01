@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { X, UserMinus, ChevronDown, Pencil, Check } from "lucide-react";
 import {
   revokeTeamAccess,
   changeWorkspaceMemberRole,
-  removeWorkspaceMember,
+  removeWorkspaceMemberAccount,
   renameWorkspaceMember,
   setMemberUsername,
 } from "@/lib/actions/workspace";
@@ -42,6 +43,7 @@ export function MembersManager({
   departments = [],
   deptMembers = [],
 }: Props) {
+  const router = useRouter();
   const [members, setMembers] = useState(initialMembers);
   const [grants, setGrants] = useState(pendingGrants);
   const [isPending, startTransition] = useTransition();
@@ -133,9 +135,12 @@ export function MembersManager({
         if ("error" in result) { setError(result.error); setConfirm(null); return; }
         setGrants((prev) => prev.filter((g) => g.id !== target.id));
       } else {
-        const result = await removeWorkspaceMember(target.id);
+        const result = await removeWorkspaceMemberAccount(target.id);
         if ("error" in result) { setError(result.error); setConfirm(null); return; }
         setMembers((prev) => prev.filter((m) => m.id !== target.id));
+        // Reflect the server-side cleanup (auth user / profile removal) so the
+        // list can't show a stale row after a refresh.
+        router.refresh();
       }
       setConfirm(null);
     });
@@ -347,11 +352,17 @@ export function MembersManager({
       <ConfirmDialog
         open={confirm !== null}
         pending={isPending}
+        title={
+          confirm?.kind === "member"
+            ? "Bu kullanıcıyı silmek istediğinizden emin misiniz?"
+            : "Silmek istediğinize emin misiniz?"
+        }
+        confirmLabel={confirm?.kind === "member" ? "Evet, sil" : "Sil"}
         message={
           confirm?.kind === "grant"
             ? `${confirm.label} için ekip erişimi kaldırılacak.`
             : confirm?.kind === "member"
-              ? `${confirm.label} çalışma alanından kaldırılacak. Mevcut görev kayıtları korunur.`
+              ? `${confirm.label} silinecek. Bu işlem kullanıcının giriş erişimini kaldırır ve hesabını sistemden temizler. Oluşturduğu görev/not kayıtları korunur.`
               : ""
         }
         onConfirm={runConfirmedDelete}

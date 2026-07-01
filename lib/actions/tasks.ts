@@ -456,8 +456,20 @@ export async function deleteTask(
   taskId: string
 ): Promise<{ success: true } | { error: string }> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Not authenticated" };
+  const ctx = await getUserAndRole(supabase);
+  if (!ctx) return { error: "Not authenticated" };
+
+  // Same per-item rule as soft-delete: members may only delete tasks they
+  // created; owner/admin may delete any. Server is the real boundary.
+  const { data: target } = await supabase
+    .from("tasks")
+    .select("created_by")
+    .eq("id", taskId)
+    .maybeSingle();
+  if (!target) return { error: "Görev bulunamadı." };
+  if (!canDeleteTaskItem(ctx.role, { created_by: target.created_by as string | null }, ctx.user.id)) {
+    return { error: PERM_DENIED };
+  }
 
   const { error } = await supabase.from("tasks").delete().eq("id", taskId);
   if (error) return { error: error.message };

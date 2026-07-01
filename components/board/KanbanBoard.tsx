@@ -63,6 +63,7 @@ import { CreateTaskModal } from "@/components/task/CreateTaskModal";
 import { ExcelImportModal } from "@/components/task/ExcelImportModal";
 import { NotesColumn } from "@/components/board/NotesColumn";
 import { BoardRulesPanel } from "@/components/board/BoardRulesPanel";
+import { WorkspaceLiveRefresh } from "@/components/realtime/WorkspaceLiveRefresh";
 import { canCreateTask, canDeleteTask, canArchiveTask, canCompleteTask } from "@/lib/auth/permissions";
 import type { Task, SavedView, TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceNote, WorkspaceRole, WorkspaceDepartment } from "@/types";
 import type { BoardRule, BoardMember } from "@/app/(app)/board/page";
@@ -170,7 +171,7 @@ function CardStatusChip({ task }: { task: Task }) {
   }
 
   return (
-    <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
+    <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -289,11 +290,17 @@ function applyViewFilter(tasks: Task[], slug: string, userId: string, monday: Da
   const mondayStr = localISO(monday);
   const sundayStr = (() => { const d = new Date(monday); d.setDate(d.getDate() + 6); return localISO(d); })();
 
-  // A task belongs to the week if its due date OR its entry/start date falls in
-  // the week. New tasks default start_date to today, so they always appear in
-  // the current week even before a due date is chosen.
+  // Weekly membership is DUE-DATE-driven: a task's week is the week its delivery
+  // date (due_date) falls in — nothing else. Previously start_date was also
+  // considered, which leaked past-week work into the current week (e.g. a task
+  // due 27 Haz showing up in the 29 Haz–5 Tem week just because it was created
+  // that week). Undated tasks have no natural week, so they surface ONLY in the
+  // current week — freshly-created work stays visible without polluting the
+  // history when you page back/forward through weeks. due_date is a date-only
+  // column ("YYYY-MM-DD"), so plain string comparison is timezone-safe.
   const inRange = (d: string | null) => d !== null && d >= mondayStr && d <= sundayStr;
-  const inWeekByDate = (t: Task) => inRange(t.due_date) || inRange(t.start_date);
+  const isCurrentWeek = mondayStr === localISO(getMondayOf(new Date()));
+  const inWeekByDate = (t: Task) => (t.due_date ? inRange(t.due_date) : isCurrentWeek);
 
   const notArchived = (t: Task) =>
     !t.archived_at && !t.deleted_at && t.status !== "archived";
@@ -455,6 +462,40 @@ function formatDate(iso: string) {
   return formatDateTR(iso, { day: "numeric", month: "short" });
 }
 
+// Default board ordering weight: Acil → Geciken → Yakın teslim → normal. Within
+// the same tier we sort by due date then the manual fractional index, so drag &
+// drop ordering is still honoured but urgent/late work always floats to the top.
+function taskUrgencyRank(t: Task, today: string): number {
+  if (t.priority === "urgent" && t.status !== "done") return 0;
+  if (t.status !== "done" && t.due_date && t.due_date < today) return 1; // overdue
+  if (t.status !== "done" && t.due_date) {
+    const soon = new Date(today + "T00:00:00");
+    soon.setDate(soon.getDate() + 3);
+    if (t.due_date <= soon.toISOString().slice(0, 10)) return 2; // due soon (≤3d)
+  }
+  return 3;
+}
+
+// Urgent (Acil) tasks get a strong red emphasis that overrides the department
+// colour so they can't be missed. Applied to every card variant. Kept as plain
+// class strings (no cn()) because tailwind-merge strips arbitrary border-l-*.
+function urgentCardStyle(
+  task: Task,
+  base: { surface: string; border: string; accent: string },
+): { surface: string; border: string; accent: string; widthCls: string; urgent: boolean } {
+  const urgent = task.priority === "urgent" && task.status !== "done";
+  if (!urgent) {
+    return { surface: base.surface, border: base.border, accent: base.accent, widthCls: "border-l-[3px]", urgent };
+  }
+  return {
+    surface: "bg-[#fff2f0]",
+    border: "border-[#f4bcb2]",
+    accent: "border-l-[#dc2626]",
+    widthCls: "border-l-[4px]",
+    urgent,
+  };
+}
+
 // ── Card 3-dot menu ───────────────────────────────────────────────────────────
 
 function CardMenu({
@@ -494,6 +535,7 @@ function CardMenu({
       className="relative"
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
     >
       <button
         onClick={() => { setOpen((o) => !o); setConfirming(false); }}
@@ -611,6 +653,7 @@ function QuickAssigneeSelect({
         onChange={handleChange}
         onClick={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
         className="absolute inset-0 opacity-0 cursor-pointer w-full text-[10px]"
         aria-label="Sorumlu değiştir"
       >
@@ -701,9 +744,11 @@ function CardContent({
               {markers.chip.label === "Bekliyor" && waitingOnName ? `Bekliyor · ${waitingOnName}` : markers.chip.label}
             </Badge>
           )}
-          {/* Priority lives up here (secondary) so the bottom row stays for people */}
+          {/* Priority lives up here (secondary) so the bottom row stays for people.
+              Urgent gets an alarm icon so it reads as "Acil" at a glance. */}
           {showPriority && (
-            <Badge size="xs" className={cn("shrink-0", PRIORITY_CHIP[task.priority])}>
+            <Badge size="xs" className={cn("shrink-0 inline-flex items-center gap-0.5", PRIORITY_CHIP[task.priority])}>
+              {task.priority === "urgent" && <AlertTriangle size={9} strokeWidth={2.5} />}
               {PRIORITY_LABELS[task.priority]}
             </Badge>
           )}
@@ -733,6 +778,7 @@ function CardContent({
         prefetch={false}
         href={taskHref}
         title={task.title}
+        draggable={false}
         className={cn(
           "text-[13px] font-medium line-clamp-4 block leading-snug tracking-[-0.005em] break-words",
           markers.shouldStrike
@@ -823,8 +869,8 @@ function StaticTaskCard({
   // Department drives the card color; done overrides to the reserved green.
   // border (all sides) then border-l accent last so it wins. No cn() — tailwind-merge strips border-l-*.
   const dept = useTaskDept(task);
-  const style = getTaskCardStyle(task.status, dept?.color);
-  const cardCls = `rounded-lg border border-l-[3px] p-3 shadow-card transition-all ${style.surface} ${style.border} ${style.accent}`;
+  const em = urgentCardStyle(task, getTaskCardStyle(task.status, dept?.color));
+  const cardCls = `rounded-lg border ${em.widthCls} p-3 shadow-card transition-all ${em.surface} ${em.border} ${em.accent}`;
   return (
     <div className={cardCls}>
       <div className="flex items-start gap-1.5">
@@ -868,35 +914,37 @@ function TaskCard({
     id: task.id,
     data: { task },
   });
-  // Department drives the card color; done overrides to the reserved green. No cn() — tailwind-merge strips border-l-*.
+  // Department drives the card color; done overrides to the reserved green; urgent
+  // overrides both with a red emphasis. No cn() — tailwind-merge strips border-l-*.
   const dept = useTaskDept(task);
-  const style = getTaskCardStyle(task.status, dept?.color);
-  const colorCls = `${style.surface} ${style.border} ${style.accent}`;
+  const em = urgentCardStyle(task, getTaskCardStyle(task.status, dept?.color));
+  const colorCls = `${em.surface} ${em.border} ${em.accent}`;
   const stateCls = [
     isDragging ? "opacity-40" : "",
     isDragOverlay ? "shadow-pop rotate-1" : "hover:shadow-pop transition-shadow",
   ].filter(Boolean).join(" ");
+  // The WHOLE card is the drag handle (grab anywhere except interactive children,
+  // which stop pointer propagation). Grip icon stays as a subtle affordance.
+  const canDrag = !disableDrag && !isDragOverlay;
+  const dragCls = canDrag ? "cursor-grab active:cursor-grabbing" : "";
+  const dragProps = canDrag ? { ...attributes, ...listeners } : {};
 
   return (
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`rounded-lg border border-l-[3px] p-3 shadow-card group ${colorCls} ${stateCls}`}
+      className={`rounded-lg border ${em.widthCls} p-3 shadow-card group ${colorCls} ${stateCls} ${dragCls}`}
+      {...dragProps}
     >
       <div className="flex items-start gap-1.5">
-        {!disableDrag ? (
-          <button
-            {...attributes}
-            {...listeners}
-            className="mt-0.5 p-0.5 rounded text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-            aria-label="Sürükle"
-            tabIndex={-1}
-          >
-            <GripVertical size={13} />
-          </button>
-        ) : (
-          <span className="mt-0.5 p-0.5 shrink-0 text-transparent"><GripVertical size={13} /></span>
-        )}
+        <span
+          className={`mt-0.5 p-0.5 shrink-0 transition-opacity ${
+            disableDrag ? "text-transparent" : "text-gray-300 opacity-0 group-hover:opacity-100"
+          }`}
+          aria-hidden
+        >
+          <GripVertical size={13} />
+        </span>
         <CardContent
           task={task}
           profiles={profiles}
@@ -942,10 +990,10 @@ function MobileTaskCard({
 }) {
   // Same colour language as the desktop card; no cn() — tailwind-merge strips border-l-*.
   const dept = useTaskDept(task);
-  const style = getTaskCardStyle(task.status, dept?.color);
-  const colorCls = `${style.surface} ${style.border} ${style.accent}`;
+  const em = urgentCardStyle(task, getTaskCardStyle(task.status, dept?.color));
+  const colorCls = `${em.surface} ${em.border} ${em.accent}`;
   return (
-    <div className={`rounded-xl border border-l-[3px] p-3.5 shadow-card ${colorCls}`}>
+    <div className={`rounded-xl border ${em.widthCls} p-3.5 shadow-card ${colorCls}`}>
       <CardContent
         task={task}
         profiles={profiles}
@@ -1316,10 +1364,22 @@ export function KanbanBoard({
 
   // Distribute filtered tasks into columns
   const tasksByCol = useMemo(() => {
+    const today = localISO(new Date());
     return BOARD_COLUMNS.reduce<Record<BoardColId, Task[]>>((acc, col) => {
       acc[col.id] = filteredTasks
         .filter((t) => (col.statuses as TaskStatus[]).includes(t.status))
-        .sort((a, b) => (a.fractional_index ?? "").localeCompare(b.fractional_index ?? ""));
+        .sort((a, b) => {
+          // 1. Priority/urgency tier (Acil → Geciken → Yakın teslim → normal)
+          const ra = taskUrgencyRank(a, today);
+          const rb = taskUrgencyRank(b, today);
+          if (ra !== rb) return ra - rb;
+          // 2. Earlier due date first (undated last)
+          const da = a.due_date ?? "9999-12-31";
+          const db = b.due_date ?? "9999-12-31";
+          if (da !== db) return da < db ? -1 : 1;
+          // 3. Manual drag-and-drop order (fractional index) is the final word
+          return (a.fractional_index ?? "").localeCompare(b.fractional_index ?? "");
+        });
       return acc;
     }, {} as Record<BoardColId, Task[]>);
   }, [filteredTasks]);
@@ -1475,6 +1535,10 @@ export function KanbanBoard({
         natural height so the rules/week/tabs/filters chrome scrolls away with the
         page and only the compact status tabs stay sticky. */}
     <div className="flex flex-col h-full max-md:h-auto max-md:min-h-full">
+
+      {/* Live refresh: realtime when enabled, light polling otherwise, so other
+          people's changes surface without a manual reload. */}
+      <WorkspaceLiveRefresh workspaceId={workspaceId} />
 
       {/* ── Manager board header: visibility tabs (Yönetici Pano only) ─────── */}
       {isAdminBoard && (
