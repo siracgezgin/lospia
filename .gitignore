@@ -55,6 +55,10 @@ data/
 # local planning / notes
 plan.md
 
+# reference-only vendored repos (tablecn, react-spreadsheet-import) — inspected
+# for UI/table patterns only; never committed, imported, or bundled.
+/example/
+
 # local source/asset files not part of app bundle — the optimized,
 # committed copies live in public/brands/.
 AF_logo.png

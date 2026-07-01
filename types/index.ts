@@ -44,13 +44,48 @@ export type CustomFieldDefinition = Database["public"]["Tables"]["custom_field_d
 
 export type WebhookEvent = Database["public"]["Tables"]["webhook_events"]["Row"];
 
-// workspace_contacts is not in the generated schema yet — define manually
+// workspace_contacts is not in the generated schema yet — define manually.
+// The CRM v0 fields (organization … metadata) are additive/optional columns
+// from 20240204000000_crm_contact_fields.sql; older rows have them as null.
 export type WorkspaceContact = {
   id: string;
   workspace_id: string;
   name: string;
   email: string | null;
   role_label: string | null;
+  created_at: string;
+  updated_at: string;
+  // CRM v0 (all optional / additive)
+  organization?: string | null;
+  segment?: string | null;
+  phone?: string | null;
+  source_channel?: string | null;
+  notes?: string | null;
+  last_contact_at?: string | null;
+  next_follow_up_at?: string | null;
+  owner_id?: string | null;
+  crm_status?: string | null;
+  metadata?: Record<string, unknown> | null;
+};
+
+// creative_assets — Kreatif Linkler registry (link/reference, not file store).
+export type CreativeProvider =
+  | "canva" | "google_drive" | "dropbox" | "figma" | "website" | "other";
+export type CreativeStatus = "draft" | "in_review" | "approved" | "archived";
+
+export type CreativeAsset = {
+  id: string;
+  workspace_id: string;
+  title: string;
+  url: string;
+  provider: CreativeProvider;
+  department_id: string | null;
+  related_task_id: string | null;
+  related_contact_id: string | null;
+  status: CreativeStatus;
+  notes: string | null;
+  created_by: string | null;
+  archived_at: string | null;
   created_at: string;
   updated_at: string;
 };
