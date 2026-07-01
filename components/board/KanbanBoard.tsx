@@ -33,7 +33,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   GripVertical, Plus, FileSpreadsheet, Search, X, Check,
-  ChevronLeft, ChevronRight, ChevronDown, MoreVertical, Pencil, Copy, Archive, Trash2, AlertTriangle, Lock, ShieldCheck, CalendarRange,
+  ChevronLeft, ChevronRight, ChevronDown, MoreVertical, Pencil, Copy, Archive, Trash2, AlertTriangle, Lock, ShieldCheck,
 } from "lucide-react";
 import { ADMIN_ONLY_CHIP_LABEL, asVisibility, VISIBILITY_LABELS, type TaskVisibility } from "@/lib/utils/visibility";
 import { Avatar } from "@/components/ui/Avatar";
@@ -344,9 +344,9 @@ function applyViewFilter(tasks: Task[], slug: string, userId: string, monday: Da
   }
 }
 
-// Every view except "Tüm işler" is scoped to the selected week. Used to drive the
-// "Hafta filtresi aktif" / "Tüm zamanlar" chip and to de-emphasize the week
-// selector when it has no effect.
+// Every view except "Tüm işler" is scoped to the selected week. Used to decide
+// whether the week selector is shown at all ("Tüm işler" hides it, since the week
+// has no effect there).
 function isWeekScopedSlug(slug: string): boolean {
   return slug !== "all";
 }
@@ -450,14 +450,12 @@ function taskUrgencyRank(t: Task, today: string): number {
   return 3;
 }
 
-// Urgent (Acil) tasks get a strong red emphasis that reads as a SECOND, distinct
-// visual layer on top of the department colour — never mistakable for a red/pink
-// department card. The differentiator is a full red RING that encircles all four
-// sides (departments only ever carry a single left accent strip), plus a light
-// red wash and a thicker red left accent. The result is a "featured / critical"
-// card that pops even when it sits next to a crimson Marka Yönetimi card. Applied
+// Urgent (Acil) tasks get a single, restrained red emphasis: a thicker red left
+// accent over a soft red wash, plus the "Acil" badge in the card body. This reads
+// as "critical" without shouting — no all-sides ring (that double red border was
+// too loud and fought with the crimson Marka Yönetimi department cards). Applied
 // to every card variant. Kept as plain class strings (no cn()) because
-// tailwind-merge strips arbitrary border-l-* and ring utilities.
+// tailwind-merge strips arbitrary border-l-* utilities.
 function urgentCardStyle(
   task: Task,
   base: { surface: string; border: string; accent: string },
@@ -467,11 +465,11 @@ function urgentCardStyle(
     return { surface: base.surface, border: base.border, accent: base.accent, widthCls: "border-l-[3px]", ring: "", urgent };
   }
   return {
-    surface: "bg-[#fff5f4]",
-    border: "border-[#f3b4aa]",
+    surface: "bg-[#fff6f5]",
+    border: "border-[#f1c9c2]",
     accent: "border-l-[#dc2626]",
-    widthCls: "border-l-[5px]",
-    ring: "ring-2 ring-[#dc2626] ring-offset-1 ring-offset-white",
+    widthCls: "border-l-[4px]",
+    ring: "",
     urgent,
   };
 }
@@ -752,15 +750,14 @@ function CardContent({
         )}
       </div>
 
-      {/* Title — operasyon başlıkları uzun olabilir; 4 satıra kadar tam okunsun
-          ve tooltip ile tamamı görülebilsin. Başlık açıklamadan önceliklidir. */}
+      {/* Title — kept to two lines so cards stay compact; the full title is on the
+          task detail page (no native hover tooltip that pops over the board). */}
       <Link
         prefetch={false}
         href={taskHref}
-        title={task.title}
         draggable={false}
         className={cn(
-          "text-[14px] font-semibold line-clamp-3 block leading-snug tracking-[-0.01em] break-words",
+          "text-[14px] font-semibold line-clamp-2 block leading-snug tracking-[-0.01em] break-words",
           markers.shouldStrike
             ? "text-success/90 line-through decoration-success/40"
             : "text-ink hover:text-brand",
@@ -1030,7 +1027,7 @@ function KanbanColumn({
   const headerTone = BOARD_COL_HEADER_TONE[colDef.id] ?? "text-gray-500";
 
   return (
-    <div className="flex flex-col gap-2 w-[80vw] max-w-[88vw] sm:w-72 xl:w-[20rem] 2xl:w-[22rem] shrink-0">
+    <div className="flex flex-col gap-2 w-[80vw] max-w-[88vw] sm:w-60 xl:w-64 2xl:w-[17rem] shrink-0">
       <div className="sticky top-0 z-20 h-11 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <h3 className={cn("text-xs font-bold uppercase tracking-wider truncate", headerTone)}>
@@ -1100,7 +1097,7 @@ function StaticKanbanColumn({
 }) {
   const headerTone = BOARD_COL_HEADER_TONE[colDef.id] ?? "text-gray-500";
   return (
-    <div className="flex flex-col gap-2 w-[80vw] max-w-[88vw] sm:w-72 xl:w-[20rem] 2xl:w-[22rem] shrink-0">
+    <div className="flex flex-col gap-2 w-[80vw] max-w-[88vw] sm:w-60 xl:w-64 2xl:w-[17rem] shrink-0">
       <div className="sticky top-0 z-20 h-11 flex items-center gap-2">
         <h3 className={cn("text-xs font-bold uppercase tracking-wider truncate", headerTone)}>
           {colDef.label}
@@ -1552,18 +1549,13 @@ export function KanbanBoard({
       {/* ── Rules panel (compact, collapsible) — normal board only ────────── */}
       {!isAdminBoard && <BoardRulesPanel rules={rules} newCount={newRulesCount} />}
 
-      {/* ── Week selector — normal board only ─────────────────────────────── */}
-      {/* In "Tüm işler" the week has no effect, so the selector is dimmed and a
-          clear note explains that the week filter is off. Every other view is
-          week-scoped and shows a "Hafta filtresi aktif" chip. */}
-      {!isAdminBoard && (
+      {/* ── Week selector — normal board, week-scoped views only ──────────── */}
+      {/* Only week-scoped views (everything except "Tüm işler") show the week
+          picker. In "Tüm işler" the week has no effect, so the whole row is
+          hidden — no dimmed controls, no technical explanation chips. */}
+      {!isAdminBoard && weekFilterActive && (
       <div className="flex items-center gap-1.5 px-4 py-2 bg-white border-b border-gray-100 shrink-0 flex-wrap">
-        <div
-          className={cn(
-            "flex items-center gap-1.5 transition-opacity",
-            weekFilterActive ? "opacity-100" : "opacity-45",
-          )}
-        >
+        <div className="flex items-center gap-1.5">
           <button
             onClick={() => {
               const n = new Date(weekStart);
@@ -1605,22 +1597,7 @@ export function KanbanBoard({
               Bu haftaya dön
             </button>
           )}
-          {isCurrentWeek && (
-            <span className="ml-1 text-xs text-gray-400 select-none">Bu hafta</span>
-          )}
         </div>
-
-        {/* Filter-scope chip — tells the user exactly what the current view shows. */}
-        {weekFilterActive ? (
-          <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-medium text-blue-700 border border-blue-100">
-            <CalendarRange size={11} />
-            Hafta filtresi aktif
-          </span>
-        ) : (
-          <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-0.5 text-[11px] font-medium text-gray-500 border border-gray-200">
-            Tüm zamanlar · hafta filtresi uygulanmaz
-          </span>
-        )}
       </div>
       )}
 
