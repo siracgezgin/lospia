@@ -122,6 +122,66 @@ export async function updateCrmContact(
   return { ok: true };
 }
 
+// ── Contact ↔ system user link (manual, admin-only) ───────────────────────────
+// Confirms that a CRM contact IS a given team member. Never auto-applied — an
+// admin sets/clears it from the "Kişi eşleştirme" panel. Once linked, the task
+// deep-link matcher also treats the member's assignee tasks as this contact's.
+
+export async function linkContactToUser(
+  contactId: string,
+  userId: string,
+): Promise<{ ok: true } | { error: string }> {
+  if (!contactId || !userId) return { error: "Eksik bilgi." };
+
+  const supabase = await createClient();
+  const ctx = await requireContactAdmin(supabase);
+  if ("error" in ctx) return { error: ctx.error };
+
+  // The target user must be a member of this workspace.
+  const { data: member } = await supabase
+    .from("workspace_members")
+    .select("user_id")
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (!member) return { error: "Seçilen kişi bu çalışma alanının üyesi değil." };
+
+  const { error } = await supabase
+    .from("workspace_contacts")
+    .update({ user_id: userId })
+    .eq("id", contactId)
+    .eq("workspace_id", ctx.workspaceId);
+
+  if (error) {
+    if (error.code === "23505") return { error: "Bu sistem hesabı başka bir kişiyle zaten eşleşmiş." };
+    return { error: error.message };
+  }
+  revalidatePath("/crm");
+  revalidatePath("/settings");
+  return { ok: true };
+}
+
+export async function unlinkContactUser(
+  contactId: string,
+): Promise<{ ok: true } | { error: string }> {
+  if (!contactId) return { error: "Eksik bilgi." };
+
+  const supabase = await createClient();
+  const ctx = await requireContactAdmin(supabase);
+  if ("error" in ctx) return { error: ctx.error };
+
+  const { error } = await supabase
+    .from("workspace_contacts")
+    .update({ user_id: null })
+    .eq("id", contactId)
+    .eq("workspace_id", ctx.workspaceId);
+
+  if (error) return { error: error.message };
+  revalidatePath("/crm");
+  revalidatePath("/settings");
+  return { ok: true };
+}
+
 export async function deleteCrmContact(
   contactId: string,
 ): Promise<{ ok: true } | { error: string }> {

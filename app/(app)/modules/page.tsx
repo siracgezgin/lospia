@@ -1,18 +1,16 @@
 import { redirect } from "next/navigation";
 import { LayoutGrid } from "lucide-react";
-import { getWorkspaceContext } from "@/lib/modules/context";
+import { requireModuleAdmin } from "@/lib/modules/context";
+import { AccessDenied } from "@/components/modules/AccessDenied";
 import { DEPARTMENT_MODULES } from "@/lib/modules/registry";
 import { DepartmentCard } from "@/components/modules/DepartmentCard";
 
 export const dynamic = "force-dynamic";
 
 export default async function ModulesPage() {
-  const { supabase, user, workspaceId, isAdmin } = await getWorkspaceContext();
-  if (!user) redirect("/login");
-
-  if (!workspaceId) {
-    return <div className="p-8 text-muted">Çalışma alanı bulunamadı.</div>;
-  }
+  const { supabase, workspaceId, isAdmin, gate } = await requireModuleAdmin();
+  if (gate === "login") redirect("/login");
+  if (gate !== "ok" || !workspaceId) return <AccessDenied />;
 
   // Top-level departments → id, to join live task counts by name.
   const { data: deptRows } = await supabase
@@ -55,7 +53,12 @@ export default async function ModulesPage() {
           <LayoutGrid size={18} />
         </div>
         <div>
-          <h1 className="text-lg font-semibold text-ink">Operasyon Modülleri</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-semibold text-ink">Operasyon Modülleri</h1>
+            <span className="rounded-full bg-brand-soft px-2 py-0.5 text-[10.5px] font-medium text-brand-strong">
+              Yönetici operasyon alanı
+            </span>
+          </div>
           <p className="mt-0.5 text-[13px] text-muted">
             Departmanlara göre ilgili çalışma alanlarına buradan ulaşın. Bazı modüller
             hazırlık aşamasındadır.

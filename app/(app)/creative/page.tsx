@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { Link2 } from "lucide-react";
-import { getWorkspaceContext } from "@/lib/modules/context";
+import { requireModuleAdmin } from "@/lib/modules/context";
+import { AccessDenied } from "@/components/modules/AccessDenied";
 import { CreativeView } from "@/components/creative/CreativeView";
 import type { CreativeAsset, WorkspaceDepartment } from "@/types";
 
@@ -20,11 +21,9 @@ export default async function CreativePage({
   const params = await searchParams;
   const initialProvider = typeof params.provider === "string" ? params.provider : "";
 
-  const { supabase, user, workspaceId, isAdmin } = await getWorkspaceContext();
-  if (!user) redirect("/login");
-  if (!workspaceId) {
-    return <div className="p-8 text-muted">Çalışma alanı bulunamadı.</div>;
-  }
+  const { supabase, user, workspaceId, isAdmin, gate } = await requireModuleAdmin();
+  if (gate === "login") redirect("/login");
+  if (gate !== "ok" || !workspaceId || !user) return <AccessDenied />;
 
   const assetsResult = await supabase
     .from("creative_assets")

@@ -66,6 +66,8 @@ export type WorkspaceContact = {
   owner_id?: string | null;
   crm_status?: string | null;
   metadata?: Record<string, unknown> | null;
+  // Optional link to a system user/profile (20240206000000_contact_user_link).
+  user_id?: string | null;
 };
 
 // creative_assets — Kreatif Linkler registry (link/reference, not file store).

@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
-import { getWorkspaceContext } from "@/lib/modules/context";
+import { requireModuleAdmin } from "@/lib/modules/context";
+import { AccessDenied } from "@/components/modules/AccessDenied";
 import { CrmView } from "@/components/crm/CrmView";
+import { contactDescriptor, taskMatchesPerson, type PersonMatchTask } from "@/lib/utils/task-person-match";
 import type { WorkspaceContact, Profile } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -13,13 +15,11 @@ export default async function CrmPage({
   const params = await searchParams;
   const initialSegment = typeof params.segment === "string" ? params.segment : "";
 
-  const { supabase, user, workspaceId, isAdmin } = await getWorkspaceContext();
-  if (!user) redirect("/login");
-  if (!workspaceId) {
-    return <div className="p-8 text-muted">Çalışma alanı bulunamadı.</div>;
-  }
+  const { supabase, workspaceId, gate } = await requireModuleAdmin();
+  if (gate === "login") redirect("/login");
+  if (gate !== "ok" || !workspaceId) return <AccessDenied />;
 
-  const [contactsResult, membersResult, taskContactResult] = await Promise.all([
+  const [contactsResult, membersResult, tasksResult] = await Promise.all([
     supabase
       .from("workspace_contacts")
       .select("*")
@@ -29,12 +29,15 @@ export default async function CrmPage({
       .from("workspace_members")
       .select("user_id, role, profiles(id, full_name, email)")
       .eq("workspace_id", workspaceId),
+    // Fields needed to relate a task to a contact (same logic + scope the List
+    // filter uses — non-deleted, non-archived — so the "X görev" count and the
+    // list you land on agree).
     supabase
       .from("tasks")
-      .select("responsible_contact_id")
+      .select("responsible_contact_id, assignee_id, custom_fields")
       .eq("workspace_id", workspaceId)
       .is("deleted_at", null)
-      .not("responsible_contact_id", "is", null),
+      .neq("status", "archived"),
   ]);
 
   const contacts = (contactsResult.data ?? []) as WorkspaceContact[];
@@ -46,25 +49,27 @@ export default async function CrmPage({
     return {
       userId: m.user_id,
       name: prof?.full_name ?? prof?.email ?? "—",
+      email: prof?.email ?? null,
     };
   });
 
-  // İlgili görev sayısı — count tasks per responsible contact.
-  const taskCountByContact = new Map<string, number>();
-  for (const row of taskContactResult.data ?? []) {
-    const id = row.responsible_contact_id as string | null;
-    if (!id) continue;
-    taskCountByContact.set(id, (taskCountByContact.get(id) ?? 0) + 1);
-  }
+  // İlgili görev sayısı — count with the shared matcher so the number matches
+  // exactly what /list?person=<contactId> will display.
+  const tasks = (tasksResult.data ?? []) as PersonMatchTask[];
+  const descriptors = contacts.map((c) => ({ id: c.id, d: contactDescriptor(c) }));
   const taskCounts: Record<string, number> = {};
-  for (const [id, n] of taskCountByContact) taskCounts[id] = n;
+  for (const { id, d } of descriptors) {
+    let n = 0;
+    for (const t of tasks) if (taskMatchesPerson(t, d)) n++;
+    if (n > 0) taskCounts[id] = n;
+  }
 
   return (
     <CrmView
       contacts={contacts}
       members={members}
       taskCounts={taskCounts}
-      isAdmin={isAdmin}
+      isAdmin
       initialSegment={initialSegment}
     />
   );

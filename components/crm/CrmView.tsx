@@ -11,7 +11,7 @@ import {
   createColumnHelper,
   type SortingState,
 } from "@tanstack/react-table";
-import { Plus, Search, Users, Pencil, Trash2, ArrowUpDown, ExternalLink } from "lucide-react";
+import { Plus, Search, Users, Pencil, Trash2, ArrowUpDown, ExternalLink, Link2 as LinkIcon, UserCheck } from "lucide-react";
 import { deleteCrmContact } from "@/lib/actions/crm";
 import {
   CRM_SEGMENTS,
@@ -23,12 +23,15 @@ import {
 import { formatDateOnlyTR } from "@/lib/utils/format-date";
 import { cn } from "@/lib/utils/cn";
 import { CrmContactModal } from "./CrmContactModal";
+import { ContactMatchingPanel } from "./ContactMatchingPanel";
 import type { WorkspaceContact } from "@/types";
 
-interface Member {
+export interface CrmMember {
   userId: string;
   name: string;
+  email?: string | null;
 }
+type Member = CrmMember;
 
 interface Props {
   contacts: WorkspaceContact[];
@@ -57,6 +60,9 @@ export function CrmView({ contacts, members, taskCounts, isAdmin, initialSegment
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<WorkspaceContact | null>(null);
   const [isDeleting, startDelete] = useTransition();
+  const [showMatching, setShowMatching] = useState(false);
+
+  const linkedCount = useMemo(() => contacts.filter((c) => c.user_id).length, [contacts]);
 
   const memberName = useMemo(
     () => new Map(members.map((m) => [m.userId, m.name])),
@@ -100,7 +106,14 @@ export function CrmView({ contacts, members, taskCounts, isAdmin, initialSegment
           const c = info.row.original;
           return (
             <div className="min-w-0">
-              <div className="truncate font-medium text-ink">{c.name}</div>
+              <div className="flex items-center gap-1.5">
+                <span className="truncate font-medium text-ink">{c.name}</span>
+                {c.user_id && (
+                  <span title="Sistem hesabıyla eşleşti" className="shrink-0 text-[#1f6e4d]">
+                    <UserCheck size={13} />
+                  </span>
+                )}
+              </div>
               {c.organization && <div className="truncate text-[12px] text-subtle">{c.organization}</div>}
             </div>
           );
@@ -172,7 +185,7 @@ export function CrmView({ contacts, members, taskCounts, isAdmin, initialSegment
           if (!n) return <span className="text-subtle">—</span>;
           return (
             <Link
-              href={`/list?person=${encodeURIComponent(info.row.original.name)}`}
+              href={`/list?person=${info.row.original.id}`}
               className="inline-flex items-center gap-1 text-[12.5px] font-medium text-brand hover:text-brand-strong"
             >
               {n} görev <ExternalLink size={11} />
@@ -235,15 +248,36 @@ export function CrmView({ contacts, members, taskCounts, isAdmin, initialSegment
           </div>
         </div>
         {isAdmin && (
-          <button
-            onClick={openNew}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-3.5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand-strong"
-          >
-            <Plus size={15} />
-            Yeni ilişki ekle
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              onClick={() => setShowMatching((s) => !s)}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-medium transition-colors",
+                showMatching
+                  ? "border-brand-ring bg-brand-soft text-brand-strong"
+                  : "border-line text-muted hover:bg-surface-muted",
+              )}
+            >
+              <LinkIcon size={14} />
+              Kişi eşleştirme
+              {linkedCount > 0 && (
+                <span className="rounded-full bg-surface px-1.5 text-[11px] tabular-nums text-subtle">{linkedCount}</span>
+              )}
+            </button>
+            <button
+              onClick={openNew}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3.5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand-strong"
+            >
+              <Plus size={15} />
+              Yeni ilişki ekle
+            </button>
+          </div>
         )}
       </div>
+
+      {isAdmin && showMatching && (
+        <ContactMatchingPanel contacts={contacts} members={members} />
+      )}
 
       {/* Toolbar */}
       <div className="mb-3 flex flex-wrap items-center gap-2">

@@ -5,10 +5,10 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import type { AppRole } from "@/lib/auth/permissions";
 
-// Kreatif Linkler — a link registry (no file storage). Any workspace member can
-// add a link; edits/archive/delete are limited to the author or an owner/admin.
-// RLS on creative_assets is the real enforcement; the checks here just give
-// clean Turkish errors and set created_by/archived_at correctly.
+// Kreatif Linkler — a link registry (no file storage). Phase 1: this is an
+// admin-only area, so every mutation requires owner/admin. RLS on creative_assets
+// is the DB-level backstop; these checks give clean Turkish errors and set
+// created_by/archived_at correctly.
 
 const PERM_DENIED = "Bu işlem için yetkiniz yok.";
 const ADMIN_ROLES: AppRole[] = ["owner", "admin"];
@@ -72,6 +72,7 @@ export async function createCreativeAsset(
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: "Kimlik doğrulama gerekli." };
+  if (!ADMIN_ROLES.includes(ctx.role)) return { error: PERM_DENIED };
 
   const data = normalize(parsed.data);
   const { data: row, error } = await supabase
@@ -90,19 +91,11 @@ export async function createCreativeAsset(
   return { id: (row as { id: string }).id };
 }
 
-async function canMutate(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  ctx: NonNullable<Awaited<ReturnType<typeof getCtx>>>,
-  assetId: string,
-): Promise<boolean> {
-  if (ADMIN_ROLES.includes(ctx.role)) return true;
-  const { data } = await supabase
-    .from("creative_assets")
-    .select("created_by")
-    .eq("id", assetId)
-    .eq("workspace_id", ctx.workspaceId)
-    .maybeSingle();
-  return !!data && (data.created_by as string | null) === ctx.userId;
+// Phase 1: creative links are an admin-only area. All mutations require
+// owner/admin — a member/viewer gets a permission error even if they call the
+// action directly (RLS is the DB-level backstop).
+function canMutate(ctx: NonNullable<Awaited<ReturnType<typeof getCtx>>>): boolean {
+  return ADMIN_ROLES.includes(ctx.role);
 }
 
 export async function updateCreativeAsset(
@@ -115,7 +108,7 @@ export async function updateCreativeAsset(
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: "Kimlik doğrulama gerekli." };
-  if (!(await canMutate(supabase, ctx, assetId))) return { error: PERM_DENIED };
+  if (!canMutate(ctx)) return { error: PERM_DENIED };
 
   const data = normalize(parsed.data);
   const { error } = await supabase
@@ -139,7 +132,7 @@ export async function archiveCreativeAsset(
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: "Kimlik doğrulama gerekli." };
-  if (!(await canMutate(supabase, ctx, assetId))) return { error: PERM_DENIED };
+  if (!canMutate(ctx)) return { error: PERM_DENIED };
 
   const { error } = await supabase
     .from("creative_assets")
@@ -158,7 +151,7 @@ export async function deleteCreativeAsset(
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: "Kimlik doğrulama gerekli." };
-  if (!(await canMutate(supabase, ctx, assetId))) return { error: PERM_DENIED };
+  if (!canMutate(ctx)) return { error: PERM_DENIED };
 
   const { error } = await supabase
     .from("creative_assets")

@@ -28,6 +28,7 @@ import { updateTaskStatus } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils/cn";
 import { formatDateTR } from "@/lib/utils/format-date";
 import { buildDeptMeta } from "@/lib/utils/departments";
+import { resolvePersonDescriptor, resolvePersonName, taskMatchesPerson } from "@/lib/utils/task-person-match";
 import { getDepartmentBadge, STATUS_CHIP_TONE } from "@/lib/design/semantics";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
 import { ExcelImportModal } from "@/components/task/ExcelImportModal";
@@ -47,22 +48,9 @@ interface Props {
   initialPerson?: string;
 }
 
-// A task is related to a person when they are the assignee, the responsible
-// contact, or listed among the collaborators (custom_fields.collaborators).
-// `personId` is a bare id (member user_id or contact id) — they never collide.
-function taskMatchesPerson(task: Task, personId: string): boolean {
-  if (!personId) return true;
-  if (task.assignee_id === personId) return true;
-  if ((task as { responsible_contact_id?: string | null }).responsible_contact_id === personId) return true;
-  try {
-    const cf = task.custom_fields;
-    if (cf && typeof cf === "object" && !Array.isArray(cf)) {
-      const collabs = (cf as Record<string, unknown>).collaborators;
-      if (Array.isArray(collabs) && (collabs as unknown[]).includes(personId)) return true;
-    }
-  } catch { /* ignore malformed custom_fields */ }
-  return false;
-}
+// Person matching (assignee / responsible contact / collaborators / original
+// owner, by id or name) lives in a shared helper so the List filter and the CRM
+// "X görev" counts always agree. See lib/utils/task-person-match.
 
 // ---- Status display — simplified user-facing labels ----
 
@@ -282,13 +270,24 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
 
   const allowedStatuses = STATUS_FILTER_OPTIONS.find((o) => o.key === filterStatusKey)?.statuses ?? [];
 
+  // Resolve the selected person (?person=<contact id | member user id>) into a
+  // full descriptor + display name for matching and the filter banner.
+  const personDescriptor = useMemo(
+    () => (personFilter ? resolvePersonDescriptor(personFilter, { contacts, profiles }) : null),
+    [personFilter, contacts, profiles],
+  );
+  const personDisplayName = useMemo(
+    () => (personFilter ? resolvePersonName(personFilter, { contacts, profiles }) : null),
+    [personFilter, contacts, profiles],
+  );
+
   const filteredTasks = useMemo(() => tasks.filter((t) => {
     if (allowedStatuses.length > 0 && !allowedStatuses.includes(t.status)) return false;
     if (filterPriority !== "all" && t.priority !== filterPriority) return false;
-    if (personFilter && !taskMatchesPerson(t, personFilter)) return false;
+    if (personDescriptor && !taskMatchesPerson(t, personDescriptor)) return false;
     if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
-  }), [tasks, allowedStatuses, filterPriority, personFilter, search]);
+  }), [tasks, allowedStatuses, filterPriority, personDescriptor, search]);
 
   // Columns MUST be memoized — recreating the array every render causes TanStack Table
   // to re-derive its internal model on every keystroke/sort click, which freezes the UI.
@@ -623,6 +622,22 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
         </select>
         <span className="ml-auto text-xs text-gray-400 self-center">{totalRows} görev</span>
       </div>
+
+      {/* Active person filter banner — makes a deep-link from CRM explicit and
+          gives a one-click way to clear it. */}
+      {personFilter && (
+        <div className="flex items-center justify-between gap-2 px-4 py-2 bg-blue-50/70 border-b border-blue-100 shrink-0">
+          <span className="text-[13px] text-blue-800">
+            <span className="font-semibold">{personDisplayName ?? "Seçili kişi"}</span> ile ilişkili görevler
+          </span>
+          <button
+            onClick={() => handlePersonChange("")}
+            className="text-[12px] font-medium text-blue-600 hover:text-blue-800 underline underline-offset-2"
+          >
+            Filtreyi temizle
+          </button>
+        </div>
+      )}
 
       {/* Mobile: card list (no horizontal table) — flows into the page scroll */}
       <div className="md:hidden bg-gray-50/40 px-3 py-3">

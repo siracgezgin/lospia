@@ -28,3 +28,19 @@ export async function getWorkspaceContext() {
   const role = (member?.role as WorkspaceRole | undefined) ?? "member";
   return { supabase, user, workspaceId, role, isAdmin: role === "owner" || role === "admin" };
 }
+
+/**
+ * Admin gate for the Operasyon Modülleri routes. These are owner/admin-only in
+ * Phase 1 — a member/viewer must not see them even via a direct URL. Returns the
+ * same context as getWorkspaceContext plus a `gate`:
+ *   "login"  → no session, page should redirect("/login")
+ *   "denied" → signed in but not owner/admin, page should render <AccessDenied/>
+ *   "ok"     → owner/admin, proceed
+ */
+export async function requireModuleAdmin() {
+  const ctx = await getWorkspaceContext();
+  let gate: "ok" | "login" | "denied" = "ok";
+  if (!ctx.user) gate = "login";
+  else if (!ctx.workspaceId || !ctx.isAdmin) gate = "denied";
+  return { ...ctx, gate };
+}
