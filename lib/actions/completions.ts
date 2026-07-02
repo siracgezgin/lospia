@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { getAdminClient } from "@/lib/supabase/admin";
+import { toActionErrorMessage } from "@/lib/utils/supabase-errors";
 import { logTaskActivity, logTaskActivities, ACTIVITY_ACTIONS } from "@/lib/activity/log-task-activity";
 import { notifyTaskEvent } from "@/lib/notifications/notify";
 import type { AppRole } from "@/lib/auth/permissions";
@@ -10,6 +12,12 @@ const PERM = "Bu işlem için yetkiniz yok.";
 const ASSIGN_DENIED = "Bu göreve sorumlu kişi atama yetkiniz yok.";
 const ADMIN_ONLY_RESPONSIBLE =
   "Yöneticiye özel görevlerde yalnızca yönetici kişiler sorumlu olabilir.";
+const NOT_IN_WORKSPACE =
+  "Seçilen kişilerden bazıları bu çalışma alanına ait değil.";
+const SAVE_FAILED =
+  "Sorumlu kişiler kaydedilemedi. Lütfen tekrar deneyin; sorun sürerse yöneticinize bildirin.";
+const REMOVE_FAILED =
+  "Sorumlu kişi çıkarılamadı. Lütfen tekrar deneyin; sorun sürerse yöneticinize bildirin.";
 const ACTIVE_STATUSES = ["backlog", "ready", "in_progress", "blocked"];
 const isAdmin = (r: AppRole) => r === "owner" || r === "admin";
 
@@ -142,12 +150,18 @@ export async function setTaskParticipants(
   if (!c) return { error: "Kimlik doğrulama gerekli." };
   if (c.role === "viewer") return { error: ASSIGN_DENIED };
 
+  // Dedupe defensively — a double-picked person must never become a double row.
+  const wantIds = [...new Set(memberIds)];
+
   const { data: vTask } = await sb
     .from("tasks")
-    .select("title, visibility, assignee_id, created_by")
+    .select("title, visibility, assignee_id, created_by, workspace_id")
     .eq("id", taskId)
     .maybeSingle();
   if (!vTask) return { error: "Görev bulunamadı." };
+  // The privileged write below bypasses RLS, so the workspace boundary has to
+  // be enforced here: the task must live in the actor's own workspace.
+  if ((vTask.workspace_id as string) !== c.workspaceId) return { error: ASSIGN_DENIED };
 
   const { data: existing } = await sb
     .from("task_member_completions")
@@ -164,38 +178,55 @@ export async function setTaskParticipants(
     if (!isOnTask) return { error: ASSIGN_DENIED };
   }
 
-  // Admin_only tasks: only owner/admin people may be responsible. Reject the
-  // whole change rather than silently dropping people, so the caller is aware.
-  if (vTask.visibility === "admin_only" && memberIds.length > 0) {
-    const { data: roles } = await sb
+  // Every selected id must be a workspace_members row of THIS workspace. This
+  // blocks cross-workspace injection and catches a userId/memberId mix-up (a
+  // user id never matches a membership row id). Admin_only tasks additionally
+  // require every responsible person to be owner/admin — the whole change is
+  // rejected rather than silently dropping people, so the caller is aware.
+  if (wantIds.length > 0) {
+    const { data: picked } = await sb
       .from("workspace_members")
       .select("id, role")
-      .in("id", memberIds);
-    const allAdmin = (roles ?? []).length === memberIds.length
-      && (roles ?? []).every((m) => m.role === "owner" || m.role === "admin");
-    if (!allAdmin) return { error: ADMIN_ONLY_RESPONSIBLE };
+      .eq("workspace_id", c.workspaceId)
+      .in("id", wantIds);
+    if ((picked ?? []).length !== wantIds.length) return { error: NOT_IN_WORKSPACE };
+    if (vTask.visibility === "admin_only") {
+      const allAdmin = (picked ?? []).every((m) => m.role === "owner" || m.role === "admin");
+      if (!allAdmin) return { error: ADMIN_ONLY_RESPONSIBLE };
+    }
   }
 
   const have = new Set((existing ?? []).map((r) => r.member_id as string));
-  const want = new Set(memberIds);
+  const want = new Set(wantIds);
 
-  // The writes MUST be error-checked: RLS can reject them (e.g. the batch
-  // contains a row the policy forbids — Postgres then rolls back the WHOLE
-  // insert). Logging activity/notifications after a silently failed write is
-  // exactly the "activity says added, task shows nobody" bug — never again.
-  const addedIds = memberIds.filter((id) => !have.has(id));
+  // task_member_completions carries restrictive RLS — correct for direct client
+  // access, but it rejects a creator adding OTHER people. The permission gate
+  // above already decided this change is allowed, so the write itself runs with
+  // the server-side service-role client (never exposed to the browser). Without
+  // a configured service key we fall back to the user client + RLS.
+  //
+  // The writes MUST be error-checked: a rejected batch rolls back ALL rows while
+  // activity/notifications would still be written — exactly the "activity says
+  // added, task shows nobody" bug. Never log before the write succeeded.
+  const writer = getAdminClient() ?? sb;
+  const addedIds = wantIds.filter((id) => !have.has(id));
   const toAdd = addedIds.map((id) => ({ workspace_id: c.workspaceId, task_id: taskId, member_id: id }));
   if (toAdd.length) {
-    const { error: addErr } = await sb.from("task_member_completions").insert(toAdd);
-    if (addErr) return { error: `Sorumlu kişiler kaydedilemedi: ${addErr.message}` };
+    const { error: addErr } = await writer.from("task_member_completions").insert(toAdd);
+    // Raw RLS/Postgres text never reaches the user — map to a clear message.
+    if (addErr) return { error: toActionErrorMessage(addErr, SAVE_FAILED) };
   }
 
   const removedRows = (existing ?? []).filter((r) => !want.has(r.member_id as string));
   const removedMemberIds = removedRows.map((r) => r.member_id as string);
   const toRemove = removedRows.map((r) => r.id as string);
   if (toRemove.length) {
-    const { error: rmErr } = await sb.from("task_member_completions").delete().in("id", toRemove);
-    if (rmErr) return { error: `Sorumlu kişi çıkarılamadı: ${rmErr.message}` };
+    const { error: rmErr } = await writer
+      .from("task_member_completions")
+      .delete()
+      .in("id", toRemove)
+      .eq("task_id", taskId);
+    if (rmErr) return { error: toActionErrorMessage(rmErr, REMOVE_FAILED) };
   }
 
   // Notify + audit-log the handoff (resolve member_id → user_id so the activity

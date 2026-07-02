@@ -44,3 +44,17 @@ export async function requireModuleAdmin() {
   else if (!ctx.workspaceId || !ctx.isAdmin) gate = "denied";
   return { ...ctx, gate };
 }
+
+/**
+ * Member gate for the Office Center routes (Doküman Merkezi, Şablon
+ * Kütüphanesi, Tablo Merkezi). Unlike requireModuleAdmin these are open to
+ * every approved workspace member — RLS + server actions keep members limited
+ * to approved records and their own drafts. Same gate contract as above.
+ */
+export async function requireModuleMember() {
+  const ctx = await getWorkspaceContext();
+  let gate: "ok" | "login" | "denied" = "ok";
+  if (!ctx.user) gate = "login";
+  else if (!ctx.workspaceId) gate = "denied";
+  return { ...ctx, gate };
+}

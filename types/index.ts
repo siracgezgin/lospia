@@ -92,6 +92,96 @@ export type CreativeAsset = {
   updated_at: string;
 };
 
+// ── Office Center (Doküman Merkezi · Şablon Kütüphanesi · Tablo Merkezi) ─────
+// Link/metadata + JSON snapshot tables — no file storage. Tables come from
+// 20240207000000_office_center_foundation.sql (not in generated schema yet).
+
+export type OfficeRecordStatus = "draft" | "in_review" | "approved" | "archived";
+
+export type OperationDocumentType =
+  | "drive_link" | "google_doc" | "google_sheet" | "canva" | "figma"
+  | "pdf_link" | "word_link" | "excel_link" | "website" | "internal_note" | "other";
+
+export type OperationDocument = {
+  id: string;
+  workspace_id: string;
+  title: string;
+  description: string | null;
+  document_type: OperationDocumentType;
+  url: string | null;
+  department_id: string | null;
+  related_task_id: string | null;
+  related_contact_id: string | null;
+  status: OfficeRecordStatus;
+  owner_id: string | null;
+  tags: string[];
+  notes: string | null;
+  metadata: Record<string, unknown>;
+  created_by: string | null;
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TemplateCategory =
+  | "general" | "customer_email" | "whatsapp_message" | "producer_brief"
+  | "order_form" | "pr_influencer" | "sales" | "after_sales"
+  | "internal_process" | "other";
+
+export type TemplateChannel =
+  | "general" | "email" | "whatsapp" | "document" | "internal" | "other";
+
+export type DocumentTemplate = {
+  id: string;
+  workspace_id: string;
+  title: string;
+  description: string | null;
+  category: TemplateCategory;
+  channel: TemplateChannel;
+  content_json: unknown | null;
+  content_html: string | null;
+  plain_text: string | null;
+  variables: string[];
+  department_id: string | null;
+  related_task_id: string | null;
+  related_contact_id: string | null;
+  status: OfficeRecordStatus;
+  owner_id: string | null;
+  tags: string[];
+  metadata: Record<string, unknown>;
+  created_by: string | null;
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SpreadsheetType =
+  | "freeform" | "collection" | "production" | "inventory"
+  | "finance" | "sales" | "crm" | "other";
+
+export type SpreadsheetStatus = "draft" | "active" | "locked" | "archived";
+
+export type OperationSpreadsheet = {
+  id: string;
+  workspace_id: string;
+  title: string;
+  description: string | null;
+  sheet_type: SpreadsheetType;
+  snapshot: Record<string, unknown>;
+  schema_json: Record<string, unknown>;
+  department_id: string | null;
+  related_task_id: string | null;
+  related_contact_id: string | null;
+  status: SpreadsheetStatus;
+  owner_id: string | null;
+  tags: string[];
+  metadata: Record<string, unknown>;
+  created_by: string | null;
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 // workspace_rules — daily SOPs / checklists
 export type WorkspaceRule = Database["public"]["Tables"]["workspace_rules"]["Row"];
 export type WorkspaceRuleInsert = Database["public"]["Tables"]["workspace_rules"]["Insert"];

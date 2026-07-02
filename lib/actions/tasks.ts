@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { getAdminClient } from "@/lib/supabase/admin";
+import { toActionErrorMessage } from "@/lib/utils/supabase-errors";
 import { generateKeyBetween } from "fractional-indexing";
 import { normalizeTags } from "@/lib/utils/normalize-tags";
 import {
@@ -230,6 +232,30 @@ export async function createTask(
   const visibility = isAdminRole(role) && createInput.visibility === "admin_only"
     ? "admin_only"
     : "workspace";
+
+  // Validate the initial responsible selection BEFORE the task insert, so a bad
+  // payload can never produce a half-created task. Deduped ids must all be
+  // workspace_members rows of THIS workspace (also catches a userId/memberId
+  // mix-up — a user id never matches a membership row id), and admin_only tasks
+  // only accept owner/admin people.
+  const participantIds = [...new Set(participant_member_ids)];
+  if (participantIds.length > 0) {
+    const { data: picked } = await supabase
+      .from("workspace_members")
+      .select("id, role")
+      .eq("workspace_id", createInput.workspace_id)
+      .in("id", participantIds);
+    if ((picked ?? []).length !== participantIds.length) {
+      return { error: "Seçilen sorumlu kişilerden bazıları bu çalışma alanına ait değil." };
+    }
+    if (visibility === "admin_only") {
+      const allAdmin = (picked ?? []).every((m) => m.role === "owner" || m.role === "admin");
+      if (!allAdmin) {
+        return { error: "Yöneticiye özel görevlerde yalnızca yönetici kişiler sorumlu olabilir." };
+      }
+    }
+  }
+
   const taskData = {
     ...createInput,
     tags: normalizeTags(createInput.tags),
@@ -299,14 +325,16 @@ export async function createTask(
   // RESPONSIBLE_ADDED activity, notifications, review recompute). Runs
   // server-side inside the create flow so a failure can be surfaced cleanly
   // instead of leaving "activity says added but nobody is on the task".
-  if (participant_member_ids.length > 0) {
+  if (participantIds.length > 0) {
     const taskId = (data as { id: string }).id;
-    const pRes = await setTaskParticipants(taskId, participant_member_ids);
+    const pRes = await setTaskParticipants(taskId, participantIds);
     if ("error" in pRes) {
-      // No partial success: try to take the freshly created task back out.
-      // (RLS allows the delete for admins; if it is refused the task stays and
-      // the error says so explicitly — never a silent loss of the selection.)
-      const { data: deleted } = await supabase
+      // No partial success: take the freshly created task back out. The
+      // service-role client guarantees the rollback even where RLS would refuse
+      // the delete for the creator; without a service key the user client is
+      // the fallback and the message stays honest if the row survived.
+      const cleaner = getAdminClient() ?? supabase;
+      const { data: deleted } = await cleaner
         .from("tasks")
         .delete()
         .eq("id", taskId)
@@ -314,8 +342,8 @@ export async function createTask(
       const cleaned = (deleted?.length ?? 0) > 0;
       return {
         error: cleaned
-          ? `Görev oluşturulamadı — sorumlu kişiler kaydedilemedi: ${pRes.error}`
-          : `Görev oluşturuldu ancak sorumlu kişiler kaydedilemedi: ${pRes.error}`,
+          ? `Görev oluşturulamadı — ${pRes.error}`
+          : `Görev oluşturuldu ancak sorumlu kişiler kaydedilemedi. ${pRes.error}`,
       };
     }
   }
@@ -800,13 +828,26 @@ export async function duplicateTask(
     .select("member_id")
     .eq("task_id", taskId);
   if (srcParts && srcParts.length > 0) {
-    await supabase.from("task_member_completions").insert(
+    // Same safe write path as setTaskParticipants: the duplicate permission was
+    // checked above, and an unchecked RLS rejection here would silently produce
+    // a copy that lost its responsible people (the partial-success bug again).
+    const writer = getAdminClient() ?? supabase;
+    const { error: partErr } = await writer.from("task_member_completions").insert(
       srcParts.map((p) => ({
         workspace_id: source.workspace_id as string,
         task_id: newId,
         member_id: p.member_id as string,
       })),
     );
+    if (partErr) {
+      await writer.from("tasks").delete().eq("id", newId);
+      return {
+        error: toActionErrorMessage(
+          partErr,
+          "Görev çoğaltılamadı — sorumlu kişiler kopyalanamadı. Lütfen tekrar deneyin.",
+        ),
+      };
+    }
   }
 
   await logTaskActivity(supabase, {

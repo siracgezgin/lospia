@@ -53,11 +53,20 @@ export function isMissingSchemaError(error: AnyError): boolean {
 }
 
 /** Which module/feature the missing-schema error is about (for wording). */
-type SetupTopic = "crm" | "creative" | "generic";
+type SetupTopic = "crm" | "creative" | "office" | "generic";
 
 function detectTopic(error: AnyError): SetupTopic {
   const msg = messageOf(error).toLowerCase();
   if (msg.includes("creative_assets")) return "creative";
+  if (
+    msg.includes("operation_documents") ||
+    msg.includes("document_templates") ||
+    msg.includes("document_template_versions") ||
+    msg.includes("operation_spreadsheets") ||
+    msg.includes("operation_spreadsheet_versions")
+  ) {
+    return "office";
+  }
   if (
     msg.includes("workspace_contacts") ||
     msg.includes("crm_status") ||
@@ -75,6 +84,8 @@ const SETUP_MESSAGES: Record<SetupTopic, string> = {
   crm: "CRM alanları için veritabanı güncellemesi bekleniyor. Migration uygulandıktan sonra yeni ilişki ekleme ve kişi eşleştirme aktif olacak.",
   creative:
     "Kreatif Linkler tablosu henüz production veritabanında oluşturulmamış. Migration uygulandıktan sonra bağlantı ekleme aktif olacak.",
+  office:
+    "Doküman / Şablon / Tablo alanları için veritabanı güncellemesi bekleniyor. Migration uygulandıktan sonra bu modül aktif olacak.",
   generic:
     "Bu modül için veritabanı güncellemesi bekleniyor. Yönetici olarak migration uygulandıktan sonra bu alan aktif olacak.",
 };
