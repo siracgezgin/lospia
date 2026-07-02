@@ -4,7 +4,6 @@ import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { X, Check } from "lucide-react";
 import { createTask } from "@/lib/actions/tasks";
-import { setTaskParticipants } from "@/lib/actions/completions";
 import {
   STATUS_LABELS,
   PRIORITY_LABELS,
@@ -149,15 +148,15 @@ export function CreateTaskModal({
         require_schedule: true,
         tags: [],
         custom_fields: {},
+        // Responsible people become tracked participants (completion rows) —
+        // persisted server-side inside createTask so a failed write surfaces
+        // here as an error instead of silently losing the selection.
+        participant_member_ids: responsibleIds,
       });
 
       if ("error" in result) {
         setError(result.error);
         return;
-      }
-      // Responsible people become tracked participants (completion rows).
-      if (responsibleIds.length > 0) {
-        await setTaskParticipants(result.id, responsibleIds);
       }
       router.refresh(); // pull the newly created task into the board immediately
       onClose();

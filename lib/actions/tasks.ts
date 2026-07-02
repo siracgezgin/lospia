@@ -17,6 +17,7 @@ import {
 } from "@/lib/activity/log-task-activity";
 import { applyPointsForStatusTransition } from "@/lib/points/award";
 import { notifyTaskEvent } from "@/lib/notifications/notify";
+import { setTaskParticipants } from "@/lib/actions/completions";
 import { pointsForEffort, type EffortSize } from "@/lib/points/effort";
 import type { Json, TaskStatus as TaskStatusType } from "@/types";
 
@@ -141,6 +142,11 @@ const CreateTaskSchema = z.object({
   // When true (interactive create form), start + due date are mandatory. Bulk /
   // system creators (Excel import, note→task) omit this and keep their behaviour.
   require_schedule: z.boolean().optional(),
+  // Initial responsible people (workspace_members.id) picked in the create
+  // modal. The canonical multi-person source — persisted as
+  // task_member_completions rows via setTaskParticipants right after the task
+  // insert (legacy assignee_id stays a single-person fallback only).
+  participant_member_ids: z.array(hexUuid("Geçersiz üye seçimi")).max(50).default([]),
   tags: z.array(z.string().max(50)).max(20).default([]),
   custom_fields: z.record(z.string(), z.unknown()).default({}),
 });
@@ -195,7 +201,7 @@ export async function createTask(
 
   // Date discipline. Interactive creates (require_schedule) must carry both a
   // start and a due date; any create with both must keep start ≤ due.
-  const { require_schedule, ...createInput } = parsed.data;
+  const { require_schedule, participant_member_ids, ...createInput } = parsed.data;
   if (require_schedule) {
     if (!createInput.start_date) return { error: "Başlangıç tarihi zorunludur." };
     if (!createInput.due_date) return { error: "Teslim tarihi zorunludur." };
@@ -287,6 +293,32 @@ export async function createTask(
       responsible_contact_id: taskData.responsible_contact_id ?? null,
     },
   });
+
+  // Persist the responsible people picked in the create modal — the SAME code
+  // path the task-detail panel uses (permission gate, admin_only role check,
+  // RESPONSIBLE_ADDED activity, notifications, review recompute). Runs
+  // server-side inside the create flow so a failure can be surfaced cleanly
+  // instead of leaving "activity says added but nobody is on the task".
+  if (participant_member_ids.length > 0) {
+    const taskId = (data as { id: string }).id;
+    const pRes = await setTaskParticipants(taskId, participant_member_ids);
+    if ("error" in pRes) {
+      // No partial success: try to take the freshly created task back out.
+      // (RLS allows the delete for admins; if it is refused the task stays and
+      // the error says so explicitly — never a silent loss of the selection.)
+      const { data: deleted } = await supabase
+        .from("tasks")
+        .delete()
+        .eq("id", taskId)
+        .select("id");
+      const cleaned = (deleted?.length ?? 0) > 0;
+      return {
+        error: cleaned
+          ? `Görev oluşturulamadı — sorumlu kişiler kaydedilemedi: ${pRes.error}`
+          : `Görev oluşturuldu ancak sorumlu kişiler kaydedilemedi: ${pRes.error}`,
+      };
+    }
+  }
 
   // Notification: task created already assigned to someone else
   if (taskData.assignee_id && taskData.assignee_id !== user.id) {

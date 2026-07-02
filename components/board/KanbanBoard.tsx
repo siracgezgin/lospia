@@ -452,27 +452,28 @@ function taskUrgencyRank(t: Task, today: string): number {
 }
 
 // Urgent (Acil) tasks must read as critical at first glance: a thick red-600
-// left accent over a soft red wash, a thin red ring for separation from the
-// column background, plus the red "Acil" badge (with AlertTriangle) in the card
-// body. Distinct from the crimson Marka Yönetimi department chip because the
-// emphasis lives on the card FRAME (border/ring/wash), never the identity chip.
-// Done cards drop the emphasis (completed urgency is history). Applied to every
-// card variant. Kept as plain class strings (no cn()) because tailwind-merge
-// strips border-l-* utilities.
+// left accent over a red-to-white wash, a clear red ring + soft red glow for
+// separation from the column background, plus the red "Acil" badge (with
+// AlertTriangle) in the card body. Distinct from the crimson Marka Yönetimi
+// department chip because the emphasis lives on the card FRAME
+// (border/ring/wash/shadow), never the identity chip. Done cards drop the
+// emphasis (completed urgency is history). Applied to every card variant. Kept
+// as plain class strings (no cn()) because tailwind-merge strips border-l-*.
 function urgentCardStyle(
   task: Task,
   base: { surface: string; border: string; accent: string },
-): { surface: string; border: string; accent: string; widthCls: string; ring: string; urgent: boolean } {
+): { surface: string; border: string; accent: string; widthCls: string; ring: string; shadow: string; urgent: boolean } {
   const urgent = task.priority === "urgent" && task.status !== "done";
   if (!urgent) {
-    return { surface: base.surface, border: base.border, accent: base.accent, widthCls: "border-l-[3px]", ring: "", urgent };
+    return { surface: base.surface, border: base.border, accent: base.accent, widthCls: "border-l-[3px]", ring: "", shadow: "shadow-card", urgent };
   }
   return {
-    surface: "bg-red-50/60",
-    border: "border-red-200",
+    surface: "bg-gradient-to-br from-red-50 to-white",
+    border: "border-red-300",
     accent: "border-l-red-600",
-    widthCls: "border-l-4",
-    ring: "ring-1 ring-red-200/80",
+    widthCls: "border-l-[6px]",
+    ring: "ring-1 ring-red-300/80",
+    shadow: "shadow-[0_8px_24px_rgba(220,38,38,0.16)]",
     urgent,
   };
 }
@@ -792,7 +793,7 @@ function CardContent({
         title={task.title}
         draggable={false}
         className={cn(
-          "text-[13px] font-medium line-clamp-4 block leading-snug tracking-[-0.005em] break-words",
+          "text-[13px] font-semibold line-clamp-4 block leading-snug tracking-[-0.005em] break-words",
           markers.shouldStrike
             ? "text-success/90 line-through decoration-success/40"
             : "text-ink hover:text-brand",
@@ -802,9 +803,10 @@ function CardContent({
         {task.title}
       </Link>
 
-      {/* Description (one line) */}
+      {/* Description (one line) — muted (secondary) but readable, never the
+          near-invisible placeholder grey */}
       {task.description && (
-        <p className="text-[11px] text-subtle mt-1 line-clamp-1 leading-snug">
+        <p className="text-[11px] text-muted mt-1 line-clamp-1 leading-snug">
           {task.description}
         </p>
       )}
@@ -872,7 +874,7 @@ function StaticTaskCard({
   // border (all sides) then border-l accent last so it wins. No cn() — tailwind-merge strips border-l-*.
   const dept = useTaskDept(task);
   const em = urgentCardStyle(task, getTaskCardStyle(task.status, dept?.color));
-  const cardCls = `rounded-lg border ${em.widthCls} p-3 shadow-card transition-all cursor-pointer ${em.surface} ${em.border} ${em.accent} ${em.ring}`;
+  const cardCls = `rounded-lg border ${em.widthCls} p-3 ${em.shadow} transition-all cursor-pointer ${em.surface} ${em.border} ${em.accent} ${em.ring}`;
   return (
     <div className={cardCls}>
       <div className="flex items-start gap-1.5">
@@ -958,7 +960,7 @@ function TaskCard({
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`rounded-lg border ${em.widthCls} p-3 shadow-card group ${colorCls} ${stateCls} ${dragCls}`}
+      className={`rounded-lg border ${em.widthCls} p-3 ${em.shadow} group ${colorCls} ${stateCls} ${dragCls}`}
       {...dragProps}
       onClick={openDetail}
       onKeyDown={(e) => {
@@ -1036,7 +1038,7 @@ function MobileTaskCard({
   }
   return (
     <div
-      className={`rounded-xl border ${em.widthCls} p-3.5 shadow-card cursor-pointer ${colorCls}`}
+      className={`rounded-xl border ${em.widthCls} p-3.5 ${em.shadow} cursor-pointer ${colorCls}`}
       onClick={openDetail}
     >
       <CardContent

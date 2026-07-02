@@ -246,7 +246,7 @@ export function getTaskStateMarkers(t: CardSignals): TaskStateMarkers {
     dueDateClass:
       state === "overdue" ? "text-danger font-semibold"
       : state === "due_soon" ? "text-warning font-medium"
-      : "text-subtle",
+      : "text-muted", // secondary but readable — never the placeholder grey
   };
 }
 
@@ -256,7 +256,9 @@ export const PRIORITY_CHIP: Record<TaskPriority, string> = {
   low:    "bg-[#eef0f2] text-[#7a828b]",
   medium: "bg-[#fbeede] text-[#a05f1c]",
   high:   "bg-[#fbe6e2] text-[#a83a2c] ring-1 ring-[#f0c5bd]",
-  urgent: "bg-[#c0392b] text-white font-semibold",
+  // Acil — solid red-600 with a darker red-800 ring: the strongest chip on the
+  // card, clearly dominant over the crimson Marka Yönetimi department chip.
+  urgent: "bg-[#dc2626] text-white font-semibold ring-1 ring-[#991b1b]",
 };
 
 export const PRIORITY_SHOW_ON_BOARD: Record<TaskPriority, boolean> = {

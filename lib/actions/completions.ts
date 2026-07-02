@@ -179,14 +179,24 @@ export async function setTaskParticipants(
   const have = new Set((existing ?? []).map((r) => r.member_id as string));
   const want = new Set(memberIds);
 
+  // The writes MUST be error-checked: RLS can reject them (e.g. the batch
+  // contains a row the policy forbids — Postgres then rolls back the WHOLE
+  // insert). Logging activity/notifications after a silently failed write is
+  // exactly the "activity says added, task shows nobody" bug — never again.
   const addedIds = memberIds.filter((id) => !have.has(id));
   const toAdd = addedIds.map((id) => ({ workspace_id: c.workspaceId, task_id: taskId, member_id: id }));
-  if (toAdd.length) await sb.from("task_member_completions").insert(toAdd);
+  if (toAdd.length) {
+    const { error: addErr } = await sb.from("task_member_completions").insert(toAdd);
+    if (addErr) return { error: `Sorumlu kişiler kaydedilemedi: ${addErr.message}` };
+  }
 
   const removedRows = (existing ?? []).filter((r) => !want.has(r.member_id as string));
   const removedMemberIds = removedRows.map((r) => r.member_id as string);
   const toRemove = removedRows.map((r) => r.id as string);
-  if (toRemove.length) await sb.from("task_member_completions").delete().in("id", toRemove);
+  if (toRemove.length) {
+    const { error: rmErr } = await sb.from("task_member_completions").delete().in("id", toRemove);
+    if (rmErr) return { error: `Sorumlu kişi çıkarılamadı: ${rmErr.message}` };
+  }
 
   // Notify + audit-log the handoff (resolve member_id → user_id so the activity
   // trail can render "X sorumlu olarak eklendi / sorumluluktan çıkarıldı").

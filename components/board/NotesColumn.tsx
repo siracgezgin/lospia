@@ -451,6 +451,7 @@ export function NotesColumn({
         priority: "medium",
         tags: [],
         custom_fields: {},
+        participant_member_ids: [],
       });
       applyOptimistic({ type: "delete", id: note.id });
       await deleteNote(note.id);
