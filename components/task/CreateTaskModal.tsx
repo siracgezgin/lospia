@@ -57,7 +57,6 @@ export function CreateTaskModal({
   defaultDueDate = "",
   departments = [],
   members = [],
-  deptMembers = [],
   isAdmin = false,
   defaultVisibility = DEFAULT_VISIBILITY,
   lockResponsibleToAdmins = false,
@@ -90,24 +89,13 @@ export function CreateTaskModal({
     return m;
   }, [departments]);
 
-  // Members eligible as responsible people for the selected department: those
-  // assigned to the department, its parent, or its direct children. With no
-  // department chosen we offer every workspace member.
+  // Everyone in the workspace can be responsible for any task — department
+  // membership is organisational info only, never an assignment constraint.
+  // The only narrowing is admin_only visibility (owner/admin people only).
   const eligibleMembers = useMemo<BoardMember[]>(() => {
-    // Admin_only tasks may only have owner/admin people as responsibles; the
-    // Yönetici Pano can also force this for its 'workspace' tab.
     const adminsOnly = visibility === "admin_only" || lockResponsibleToAdmins;
-    const base = adminsOnly ? members.filter((m) => m.isAdmin) : members;
-    if (!departmentId) return base;
-    const self = departments.find((d) => d.id === departmentId);
-    const related = new Set<string>([departmentId]);
-    if (self?.parent_id) related.add(self.parent_id);
-    for (const d of departments) if (d.parent_id === departmentId) related.add(d.id);
-    const eligibleIds = new Set(
-      deptMembers.filter((dm) => related.has(dm.department_id)).map((dm) => dm.member_id),
-    );
-    return base.filter((m) => eligibleIds.has(m.memberId));
-  }, [departmentId, departments, deptMembers, members, visibility, lockResponsibleToAdmins]);
+    return adminsOnly ? members.filter((m) => m.isAdmin) : members;
+  }, [members, visibility, lockResponsibleToAdmins]);
 
   // Switching to admin_only drops any already-picked non-admin responsibles.
   function handleVisibilityChange(value: TaskVisibility) {
@@ -124,19 +112,9 @@ export function CreateTaskModal({
     );
   }
 
-  // Drop any previously-selected people who fall outside a newly chosen department.
+  // Department is informational — changing it never drops selected people.
   function handleDepartmentChange(value: string) {
     setDepartmentId(value);
-    if (value) {
-      const self = departments.find((d) => d.id === value);
-      const related = new Set<string>([value]);
-      if (self?.parent_id) related.add(self.parent_id);
-      for (const d of departments) if (d.parent_id === value) related.add(d.id);
-      const eligibleIds = new Set(
-        deptMembers.filter((dm) => related.has(dm.department_id)).map((dm) => dm.member_id),
-      );
-      setResponsibleIds((prev) => prev.filter((id) => eligibleIds.has(id)));
-    }
   }
 
   const workspaceIdMissing = !workspaceId || workspaceId.length < 10;
@@ -258,17 +236,10 @@ export function CreateTaskModal({
             <label className={labelCls}>Sorumlu kişiler</label>
             {eligibleMembers.length === 0 ? (
               <p className="text-xs text-gray-500 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
-                {departmentId
-                  ? "Bu departmana atanmış üye yok. Ayarlar > Departmanlar'dan üye ekleyin."
-                  : "Çalışma alanında üye yok."}
+                Çalışma alanında üye yok.
               </p>
             ) : (
               <>
-                {!departmentId && (
-                  <p className="text-[11px] text-gray-400 mb-1.5">
-                    İpucu: Önce departman seçerseniz liste o departmanın üyeleriyle daralır.
-                  </p>
-                )}
                 <div className="flex flex-wrap gap-2">
                   {eligibleMembers.map((m) => {
                     const on = responsibleIds.includes(m.memberId);

@@ -41,7 +41,7 @@ export default async function TaskDetailPage({
   // bookmark) must never open it. Treat it as gone.
   if (task.deleted_at) notFound();
 
-  const [activityResult, activityLogsResult, activeTimerResult, customFieldsResult, profilesResult, contactsResult, deptsResult, notesResult, membersResult, completionsResult, deptMembersResult, deptTreeResult] =
+  const [activityResult, activityLogsResult, activeTimerResult, customFieldsResult, profilesResult, contactsResult, deptsResult, notesResult, membersResult, completionsResult] =
     await Promise.all([
       supabase
         .from("task_activity")
@@ -93,16 +93,6 @@ export default async function TaskDetailPage({
         .from("task_member_completions")
         .select("member_id, completed_at")
         .eq("task_id", id),
-      // Department member assignments (for the dept-filtered responsible picker)
-      supabase
-        .from("department_members")
-        .select("department_id, member_id")
-        .eq("workspace_id", task.workspace_id),
-      // Departments (to resolve parent/child relationships for filtering)
-      supabase
-        .from("workspace_departments")
-        .select("id, parent_id")
-        .eq("workspace_id", task.workspace_id),
     ]);
 
   const activity: TaskActivity[] = activityResult.data ?? [];
@@ -192,46 +182,35 @@ export default async function TaskDetailPage({
     }
   }
 
-  // Eligible members for the responsible picker = members assigned to the task's
-  // department, plus its parent and direct children. null when no department.
-  let eligibleMemberIds: string[] | null = null;
-  if (task.department_id) {
-    const deptTree = (deptTreeResult.data ?? []) as { id: string; parent_id: string | null }[];
-    const self = deptTree.find((d) => d.id === task.department_id);
-    const relatedDeptIds = new Set<string>([task.department_id]);
-    if (self?.parent_id) relatedDeptIds.add(self.parent_id);
-    for (const d of deptTree) if (d.parent_id === task.department_id) relatedDeptIds.add(d.id);
-    const dm = (deptMembersResult.data ?? []) as { department_id: string; member_id: string }[];
-    eligibleMemberIds = [...new Set(dm.filter((r) => relatedDeptIds.has(r.department_id)).map((r) => r.member_id))];
-  }
+  // Responsible display names for the header card (participants ∪ fallback).
+  const responsiblePeople = panelParticipants
+    .map((p) => panelMembers.find((m) => m.memberId === p.memberId)?.name)
+    .filter((n): n is string => !!n);
+
+  // Who may add/remove responsible people — mirrors the server rule in
+  // setTaskParticipants: admins always; a member only on tasks they are on.
+  const canManageParticipants = canComplete
+    || task.assignee_id === user.id
+    || (task.created_by ?? null) === user.id
+    || (currentMemberId != null && panelParticipants.some((p) => p.memberId === currentMemberId));
 
   return (
-    <>
-      <TaskDetail
-        task={task}
-        activity={activity}
-        activityLogs={visibleActivityLogs}
-        activeTimer={activeTimer}
-        customFields={customFields}
-        profiles={profiles}
-        contacts={contacts}
-        departments={departments}
-        userId={user.id}
-        canComplete={canComplete}
-        isAdmin={canComplete}
-        backHref={backHref}
-        backLabel={backLabel}
-      />
-      <div className="max-w-3xl mx-auto px-4 pb-6 space-y-5">
-        {canComplete && (
-          <TaskEffortPanel
-            taskId={task.id}
-            effortSize={effortSize}
-            status={task.status}
-            participantCount={panelParticipants.length}
-            earned={earnedRows}
-          />
-        )}
+    <TaskDetail
+      task={task}
+      activity={activity}
+      activityLogs={visibleActivityLogs}
+      activeTimer={activeTimer}
+      customFields={customFields}
+      profiles={profiles}
+      contacts={contacts}
+      departments={departments}
+      userId={user.id}
+      canComplete={canComplete}
+      isAdmin={canComplete}
+      backHref={backHref}
+      backLabel={backLabel}
+      responsiblePeople={responsiblePeople}
+      participantsSlot={
         <TaskParticipantsPanel
           taskId={task.id}
           members={panelMembers}
@@ -239,9 +218,11 @@ export default async function TaskDetailPage({
           currentMemberId={currentMemberId}
           isAdmin={canComplete}
           isViewer={isViewer}
-          eligibleMemberIds={eligibleMemberIds}
+          canManage={!isViewer && canManageParticipants}
           adminOnly={(task as unknown as { visibility?: string }).visibility === "admin_only"}
         />
+      }
+      notesSlot={
         <TaskNotesPanel
           taskId={task.id}
           initialNotes={taskNotes}
@@ -249,7 +230,18 @@ export default async function TaskDetailPage({
           isViewer={isViewer}
           isAdmin={canComplete}
         />
-      </div>
-    </>
+      }
+      effortSlot={
+        canComplete ? (
+          <TaskEffortPanel
+            taskId={task.id}
+            effortSize={effortSize}
+            status={task.status}
+            participantCount={panelParticipants.length}
+            earned={earnedRows}
+          />
+        ) : undefined
+      }
+    />
   );
 }

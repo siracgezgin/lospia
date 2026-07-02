@@ -31,7 +31,7 @@ import { buildDeptMeta } from "@/lib/utils/departments";
 import { resolvePersonDescriptor, resolvePersonName, taskMatchesPerson } from "@/lib/utils/task-person-match";
 import { getDepartmentBadge, STATUS_CHIP_TONE } from "@/lib/design/semantics";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
-import { ExcelImportModal } from "@/components/task/ExcelImportModal";
+import { CsvImportModal } from "@/components/task/CsvImportModal";
 
 interface Props {
   tasks: Task[];
@@ -560,13 +560,16 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
           <Plus size={14} />
           Görev oluştur
         </button>
-        <button
-          onClick={() => setImportOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors"
-        >
-          <FileSpreadsheet size={14} />
-          Excel&apos;den içe aktar
-        </button>
+        {/* Toplu içe aktarma yönetici işidir — members never see it. */}
+        {isAdmin && (
+          <button
+            onClick={() => setImportOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <FileSpreadsheet size={14} />
+            CSV&apos;den içe aktar
+          </button>
+        )}
         <div className="w-px h-5 bg-gray-200 mx-1" />
         <input
           type="search"
@@ -731,11 +734,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
         />
       )}
       {importOpen && (
-        <ExcelImportModal
-          onClose={() => setImportOpen(false)}
-          workspaceId={workspaceId}
-          contacts={contacts}
-        />
+        <CsvImportModal onClose={() => setImportOpen(false)} />
       )}
     </div>
   );

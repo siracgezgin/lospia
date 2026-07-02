@@ -56,11 +56,11 @@ import {
 import { Badge } from "@/components/ui/Badge";
 import { reorderTask, updateTask, softDeleteTask, archiveTask, duplicateTask } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils/cn";
-import { formatDateTR, formatNoteTimeTR } from "@/lib/utils/format-date";
-import { getPersonDisplayName } from "@/lib/utils/person-display";
+import { formatDateTR } from "@/lib/utils/format-date";
+import { getPersonDisplayName, dedupeContactsAgainstProfiles } from "@/lib/utils/person-display";
 import { buildDeptMeta, type DeptMeta } from "@/lib/utils/departments";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
-import { ExcelImportModal } from "@/components/task/ExcelImportModal";
+import { CsvImportModal } from "@/components/task/CsvImportModal";
 import { NotesColumn } from "@/components/board/NotesColumn";
 import { BoardRulesPanel } from "@/components/board/BoardRulesPanel";
 import { WorkspaceLiveRefresh } from "@/components/realtime/WorkspaceLiveRefresh";
@@ -775,18 +775,8 @@ function CardContent({
         </p>
       )}
 
-      {/* Creator metadata — mirrors the note cards: subtle "name · when" line. */}
-      {(() => {
-        const creatorName = task.created_by ? responsibleNames[task.created_by] : null;
-        if (!creatorName && !task.created_at) return null;
-        return (
-          <p className="mt-1.5 text-[10px] text-subtle truncate">
-            {creatorName && <span className="font-medium text-muted">{creatorName}</span>}
-            {creatorName && task.created_at && <span> · </span>}
-            {task.created_at && <span>{formatNoteTimeTR(task.created_at)}</span>}
-          </p>
-        );
-      })()}
+      {/* No creator line here — the board card focuses on department, urgency
+          and the RESPONSIBLE people. "Oluşturan" lives in the task detail. */}
 
       {/* Bottom row: status (clickable) + due + people chips (bottom-right) */}
       <div className="flex items-center gap-1.5 mt-2.5 flex-wrap">
@@ -1257,6 +1247,13 @@ export function KanbanBoard({
     return map;
   }, [profiles, contacts]);
 
+  // Pickers/filters list a contact only when they don't duplicate a member with
+  // the same name (name resolution above still covers every contact id).
+  const pickerContacts = useMemo(
+    () => dedupeContactsAgainstProfiles(contacts, profiles),
+    [contacts, profiles],
+  );
+
   function handleAddTask(colId: BoardColId) {
     const col = BOARD_COLUMNS.find((c) => c.id === colId);
     setModalDefaultStatus(col?.targetStatus ?? "ready");
@@ -1642,13 +1639,14 @@ export function KanbanBoard({
             Görev oluştur
           </button>
         )}
-        {canCreate && !isAdminBoard && (
+        {/* Toplu içe aktarma yönetici işidir — members never see it. */}
+        {canComplete && !isAdminBoard && (
           <button
             onClick={() => setImportOpen(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors"
           >
             <FileSpreadsheet size={14} />
-            Excel&apos;den içe aktar
+            CSV&apos;den içe aktar
           </button>
         )}
 
@@ -1705,9 +1703,9 @@ export function KanbanBoard({
                   ))}
                 </optgroup>
               )}
-              {contacts.length > 0 && (
+              {pickerContacts.length > 0 && (
                 <optgroup label="Kişiler">
-                  {contacts.map((c) => (
+                  {pickerContacts.map((c) => (
                     <option key={c.id} value={`contact:${c.id}`}>{c.name}</option>
                   ))}
                 </optgroup>
@@ -1784,7 +1782,7 @@ export function KanbanBoard({
                   colDef={col}
                   tasks={tasksByCol[col.id] ?? []}
                   profiles={profiles}
-                  contacts={contacts}
+                  contacts={pickerContacts}
                   responsibleNames={responsibleNames}
                 />
               ))}
@@ -1813,7 +1811,7 @@ export function KanbanBoard({
                     colDef={col}
                     tasks={tasksByCol[col.id] ?? []}
                     profiles={profiles}
-                    contacts={contacts}
+                    contacts={pickerContacts}
                     responsibleNames={responsibleNames}
                     onAddTask={handleAddTask}
                     onDelete={handleDeleteCard}
@@ -1836,7 +1834,7 @@ export function KanbanBoard({
                 task={activeTask}
                 isDragOverlay
                 profiles={profiles}
-                contacts={contacts}
+                contacts={pickerContacts}
                 responsibleNames={responsibleNames}
               />
             ) : null}
@@ -1905,7 +1903,7 @@ export function KanbanBoard({
                       key={task.id}
                       task={task}
                       profiles={profiles}
-                      contacts={contacts}
+                      contacts={pickerContacts}
                       responsibleNames={responsibleNames}
                       onDelete={handleDeleteCard}
                       onArchive={handleArchiveCard}
@@ -1960,7 +1958,7 @@ export function KanbanBoard({
           workspaceId={workspaceId}
           defaultStatus={modalDefaultStatus}
           profiles={profiles}
-          contacts={contacts}
+          contacts={pickerContacts}
           departments={departments}
           members={members}
           deptMembers={deptMembers}
@@ -1971,11 +1969,7 @@ export function KanbanBoard({
         />
       )}
       {importOpen && (
-        <ExcelImportModal
-          onClose={() => setImportOpen(false)}
-          workspaceId={workspaceId}
-          contacts={contacts}
-        />
+        <CsvImportModal onClose={() => setImportOpen(false)} />
       )}
     </div>
     </BoardContext.Provider>

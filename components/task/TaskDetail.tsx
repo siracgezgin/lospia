@@ -4,7 +4,7 @@ import { useState, useMemo, useTransition, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { formatDateTimeTR, formatDateOnlyTR } from "@/lib/utils/format-date";
 import Link from "next/link";
-import { ArrowLeft, History, Save, X, Check, AlertCircle, Lock, Pencil } from "lucide-react";
+import { ArrowLeft, History, Save, X, Check, AlertCircle, Lock, Pencil, Users, Building2, CalendarDays } from "lucide-react";
 import type {
   Task,
   TaskActivity,
@@ -25,6 +25,8 @@ import { activityMessage } from "@/components/task/activity-messages";
 import {
   STATUS_CHIP_TONE, PRIORITY_CHIP, getTaskStateMarkers,
 } from "@/lib/design/semantics";
+import { Avatar } from "@/components/ui/Avatar";
+import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { cn } from "@/lib/utils/cn";
 import {
   TASK_VISIBILITIES, VISIBILITY_LABELS, VISIBILITY_DESCRIPTIONS,
@@ -47,6 +49,15 @@ interface Props {
   // Back link target — follows the board the task was opened from.
   backHref?: string;
   backLabel?: string;
+  // Display names of the current responsible people (participants ∪ assignee
+  // fallback) — shown under the title in the header card.
+  responsiblePeople?: string[];
+  // Page-composed panels, positioned by this layout:
+  //   main column → Görev bilgileri, Notlar
+  //   side column → Sorumlu kişiler, Puan & Motivasyon, Aktivite
+  participantsSlot?: React.ReactNode;
+  notesSlot?: React.ReactNode;
+  effortSlot?: React.ReactNode;
 }
 
 // ---- Draft model: explicit edit/save, NO auto-save ----
@@ -87,12 +98,24 @@ function FieldRow({ label, children, className }: { label: string; children: Rea
 }
 
 const inputCls = "w-full text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#406775] disabled:bg-gray-50 disabled:text-gray-400";
+// Read-only metadata (Oluşturan, Giriş tarihi) rendered in the same box shape as
+// the editable inputs so every field reads as one consistent UI.
+const readOnlyCls = "block w-full text-sm text-gray-700 bg-gray-50 border border-gray-100 rounded-lg px-2.5 py-1.5 truncate";
 
 // ---- Editor (remounts via key when the server task changes) ----
 
 function TaskEditor({
   task, departments, canEdit, canComplete, isAdmin, backHref, backLabel, creatorName,
-}: { task: Task; departments: WorkspaceDepartment[]; canEdit: boolean; canComplete: boolean; isAdmin: boolean; backHref: string; backLabel: string; creatorName: string | null }) {
+  responsiblePeople, participantsSlot, notesSlot, effortSlot, activitySlot,
+}: {
+  task: Task; departments: WorkspaceDepartment[]; canEdit: boolean; canComplete: boolean;
+  isAdmin: boolean; backHref: string; backLabel: string; creatorName: string | null;
+  responsiblePeople: string[];
+  participantsSlot?: React.ReactNode;
+  notesSlot?: React.ReactNode;
+  effortSlot?: React.ReactNode;
+  activitySlot: React.ReactNode;
+}) {
   const router = useRouter();
   const initial = useMemo(() => draftFromTask(task), [task]);
   const [draft, setDraft] = useState<Draft>(initial);
@@ -165,6 +188,9 @@ function TaskEditor({
   const topLevel = departments.filter((d) => d.parent_id === null);
   const children = (pid: string) => departments.filter((d) => d.parent_id === pid);
   const markers = getTaskStateMarkers(task);
+  const departmentName = draft.department_id
+    ? departments.find((d) => d.id === draft.department_id)?.name ?? null
+    : null;
 
   return (
     <>
@@ -208,8 +234,8 @@ function TaskEditor({
         </div>
       </div>
 
-      {/* Header: editable title + live status / priority / due chips */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+      {/* ── Header card: title + responsible people + state badges ─────────── */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3 mt-5">
         <div className="group relative">
           <textarea
             ref={titleRef}
@@ -220,7 +246,7 @@ function TaskEditor({
             placeholder="Görev başlığı"
             aria-label="Görev başlığı"
             className={cn(
-              "w-full resize-none overflow-hidden text-2xl font-bold text-gray-900 bg-transparent outline-none pr-8 pb-1 leading-tight break-words transition-colors",
+              "w-full resize-none overflow-hidden text-xl sm:text-2xl font-bold text-gray-900 bg-transparent outline-none pr-8 pb-1 leading-tight break-words transition-colors",
               fieldsDisabled
                 ? "border-b border-transparent text-gray-600"
                 : "border-b border-dashed border-gray-300 hover:border-gray-400 focus:border-solid focus:border-[#406775]",
@@ -233,9 +259,27 @@ function TaskEditor({
             />
           )}
         </div>
-        {!fieldsDisabled && (
-          <p className="text-[11px] text-gray-400 -mt-1">Düzenlemek için başlığa tıklayın.</p>
-        )}
+
+        {/* Responsible people — the primary "whose work is this" signal. */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-500">
+            <Users size={13} /> Sorumlu:
+          </span>
+          {responsiblePeople.length === 0 ? (
+            <span className="text-xs text-gray-400 italic">Henüz sorumlu atanmamış</span>
+          ) : (
+            responsiblePeople.map((name) => (
+              <span
+                key={name}
+                className="inline-flex items-center gap-1.5 rounded-full bg-gray-50 border border-gray-200 pl-1 pr-2.5 py-0.5 text-xs font-medium text-gray-700"
+              >
+                <Avatar name={name} size="xs" />
+                {getPersonDisplayName(name)}
+              </span>
+            ))
+          )}
+        </div>
+
         <div className="flex items-center gap-2 flex-wrap">
           <span className={cn("text-[11px] rounded-full px-2 py-0.5 font-medium", STATUS_CHIP_TONE[draft.status])}>
             {STATUS_LABELS[draft.status]}
@@ -244,8 +288,13 @@ function TaskEditor({
             {PRIORITY_LABELS[draft.priority]}
           </span>
           {draft.due_date && (
-            <span className={cn("text-[11px] rounded-full px-2 py-0.5 bg-gray-50 border border-gray-100", markers.dueDateClass)}>
-              Teslim: {formatDateOnlyTR(draft.due_date)}
+            <span className={cn("inline-flex items-center gap-1 text-[11px] rounded-full px-2 py-0.5 bg-gray-50 border border-gray-100", markers.dueDateClass)}>
+              <CalendarDays size={11} /> Teslim: {formatDateOnlyTR(draft.due_date)}
+            </span>
+          )}
+          {departmentName && (
+            <span className="inline-flex items-center gap-1 text-[11px] rounded-full px-2 py-0.5 bg-gray-50 border border-gray-100 text-gray-600">
+              <Building2 size={11} /> {departmentName}
             </span>
           )}
           {doneLocked && (
@@ -261,139 +310,162 @@ function TaskEditor({
         </div>
       </div>
 
-      {/* Details grid */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h3 className="text-sm font-semibold text-gray-700 mb-4">Görev bilgileri</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <FieldRow label="Açıklama" className="sm:col-span-2">
-            <textarea
-              value={draft.description}
-              onChange={(e) => set("description", e.target.value)}
-              disabled={fieldsDisabled}
-              rows={4}
-              placeholder="Açıklama ekle…"
-              className={cn(inputCls, "resize-y")}
-            />
-          </FieldRow>
+      {/* ── Two-column body ─────────────────────────────────────────────────
+          Desktop: main (Görev bilgileri + Notlar) | side (Sorumlular + Puan +
+          Aktivite). Mobile: single flow in the priority order Bilgiler →
+          Sorumlular → Notlar → Puan → Aktivite (via `contents` + order). */}
+      <div className="mt-5 flex flex-col gap-5 lg:flex-row lg:items-start">
+        <div className="contents lg:flex lg:min-w-0 lg:flex-1 lg:flex-col lg:gap-5">
 
-          <FieldRow label="Departman" className="sm:col-span-2">
-            <select
-              value={draft.department_id}
-              onChange={(e) => set("department_id", e.target.value)}
-              disabled={fieldsDisabled}
-              className={inputCls}
-            >
-              <option value="">— Departman yok —</option>
-              {topLevel.map((dept) => (
-                <optgroup key={dept.id} label={dept.name}>
-                  {children(dept.id).map((child) => (
-                    <option key={child.id} value={child.id}>{child.name}</option>
+          {/* Görev bilgileri */}
+          <div className="order-1 lg:order-none bg-white rounded-xl border border-gray-200 p-5">
+            <h3 className="text-sm font-semibold text-gray-700 mb-4">Görev bilgileri</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FieldRow label="Açıklama" className="sm:col-span-2">
+                <textarea
+                  value={draft.description}
+                  onChange={(e) => set("description", e.target.value)}
+                  disabled={fieldsDisabled}
+                  rows={4}
+                  placeholder="Açıklama ekle…"
+                  className={cn(inputCls, "resize-y")}
+                />
+              </FieldRow>
+
+              <FieldRow label="Durum">
+                <select
+                  value={USER_STATUS_OPTIONS.find((o) => o.value === draft.status)?.value ?? "ready"}
+                  onChange={(e) => set("status", e.target.value as TaskStatus)}
+                  disabled={fieldsDisabled}
+                  className={inputCls}
+                >
+                  {statusOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </FieldRow>
+
+              <FieldRow label="Öncelik">
+                <select
+                  value={draft.priority}
+                  onChange={(e) => set("priority", e.target.value as TaskPriority)}
+                  disabled={fieldsDisabled}
+                  className={inputCls}
+                >
+                  {TASK_PRIORITIES.map((p) => <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>)}
+                </select>
+              </FieldRow>
+
+              {/* Başlangıç + Teslim: always side by side from sm up. */}
+              <FieldRow label="Başlangıç tarihi">
+                <input
+                  type="date"
+                  value={draft.start_date}
+                  onChange={(e) => set("start_date", e.target.value)}
+                  disabled={fieldsDisabled}
+                  className={inputCls}
+                />
+              </FieldRow>
+              <FieldRow label="Teslim tarihi">
+                <input
+                  type="date"
+                  value={draft.due_date}
+                  min={draft.start_date || undefined}
+                  onChange={(e) => set("due_date", e.target.value)}
+                  disabled={fieldsDisabled}
+                  className={inputCls}
+                />
+              </FieldRow>
+
+              <FieldRow label="Departman" className="sm:col-span-2">
+                <select
+                  value={draft.department_id}
+                  onChange={(e) => set("department_id", e.target.value)}
+                  disabled={fieldsDisabled}
+                  className={inputCls}
+                >
+                  <option value="">— Departman yok —</option>
+                  {topLevel.map((dept) => (
+                    <optgroup key={dept.id} label={dept.name}>
+                      {children(dept.id).map((child) => (
+                        <option key={child.id} value={child.id}>{child.name}</option>
+                      ))}
+                      <option value={dept.id}>{dept.name} (genel)</option>
+                    </optgroup>
                   ))}
-                  <option value={dept.id}>{dept.name} (genel)</option>
-                </optgroup>
-              ))}
-            </select>
-          </FieldRow>
+                </select>
+              </FieldRow>
 
-          <FieldRow label="Durum">
-            <select
-              value={USER_STATUS_OPTIONS.find((o) => o.value === draft.status)?.value ?? "ready"}
-              onChange={(e) => set("status", e.target.value as TaskStatus)}
-              disabled={fieldsDisabled}
-              className={inputCls}
-            >
-              {statusOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </FieldRow>
+              <FieldRow label="Oluşturan">
+                <span className={readOnlyCls}>{creatorName ?? "—"}</span>
+              </FieldRow>
+              <FieldRow label="Giriş tarihi">
+                <span className={readOnlyCls}>{formatDateTimeTR(task.created_at)}</span>
+              </FieldRow>
 
-          <FieldRow label="Öncelik">
-            <select
-              value={draft.priority}
-              onChange={(e) => set("priority", e.target.value as TaskPriority)}
-              disabled={fieldsDisabled}
-              className={inputCls}
-            >
-              {TASK_PRIORITIES.map((p) => <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>)}
-            </select>
-          </FieldRow>
+              {/* Görünürlük — admin-only. Members never see or edit this. */}
+              {isAdmin && (
+                <FieldRow label="Görünürlük" className="sm:col-span-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {TASK_VISIBILITIES.map((v) => {
+                      const on = draft.visibility === v;
+                      return (
+                        <button
+                          key={v}
+                          type="button"
+                          onClick={() => set("visibility", v)}
+                          disabled={!canEdit}
+                          className={cn(
+                            "text-left rounded-lg border px-3 py-2 transition-colors disabled:opacity-60",
+                            on
+                              ? "bg-amber-50 border-amber-300"
+                              : "bg-white border-gray-200 hover:bg-gray-50",
+                          )}
+                        >
+                          <span className={cn("flex items-center gap-1.5 text-sm font-medium", on ? "text-amber-800" : "text-gray-700")}>
+                            {v === "admin_only" && <Lock size={12} />}
+                            {VISIBILITY_LABELS[v]}
+                          </span>
+                          <span className="block text-[11px] text-gray-500 mt-0.5 leading-snug">
+                            {VISIBILITY_DESCRIPTIONS[v]}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[11px] text-gray-400 mt-1.5">
+                    Değişiklik &quot;Değişiklikleri Kaydet&quot; ile uygulanır. Yöneticiye özel
+                    görevlerde yalnızca yönetici kişiler sorumlu olabilir.
+                  </p>
+                </FieldRow>
+              )}
+            </div>
 
-          <FieldRow label="Oluşturan">
-            <span className="text-sm text-gray-700 block py-1.5">{creatorName ?? "—"}</span>
-          </FieldRow>
-          <FieldRow label="Giriş tarihi">
-            <span className="text-sm text-gray-500 block py-1.5">{formatDateTimeTR(task.created_at)}</span>
-          </FieldRow>
-          <FieldRow label="Başlangıç tarihi">
-            <input
-              type="date"
-              value={draft.start_date}
-              onChange={(e) => set("start_date", e.target.value)}
-              disabled={fieldsDisabled}
-              className={inputCls}
-            />
-          </FieldRow>
-          <FieldRow label="Teslim tarihi" className="sm:col-span-2 sm:max-w-[calc(50%-0.5rem)]">
-            <input
-              type="date"
-              value={draft.due_date}
-              min={draft.start_date || undefined}
-              onChange={(e) => set("due_date", e.target.value)}
-              disabled={fieldsDisabled}
-              className={inputCls}
-            />
-          </FieldRow>
-
-          {/* Görünürlük — admin-only. Members never see or edit this. */}
-          {isAdmin && (
-            <FieldRow label="Görünürlük" className="sm:col-span-2">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {TASK_VISIBILITIES.map((v) => {
-                  const on = draft.visibility === v;
-                  return (
-                    <button
-                      key={v}
-                      type="button"
-                      onClick={() => set("visibility", v)}
-                      disabled={!canEdit}
-                      className={cn(
-                        "text-left rounded-lg border px-3 py-2 transition-colors disabled:opacity-60",
-                        on
-                          ? "bg-amber-50 border-amber-300"
-                          : "bg-white border-gray-200 hover:bg-gray-50",
-                      )}
-                    >
-                      <span className={cn("flex items-center gap-1.5 text-sm font-medium", on ? "text-amber-800" : "text-gray-700")}>
-                        {v === "admin_only" && <Lock size={12} />}
-                        {VISIBILITY_LABELS[v]}
-                      </span>
-                      <span className="block text-[11px] text-gray-500 mt-0.5 leading-snug">
-                        {VISIBILITY_DESCRIPTIONS[v]}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="text-[11px] text-gray-400 mt-1.5">
-                Değişiklik &quot;Değişiklikleri Kaydet&quot; ile uygulanır. Yöneticiye özel
-                görevlerde yalnızca yönetici kişiler sorumlu olabilir.
+            {/* Inline feedback (also visible on mobile, where the top bar hides it). */}
+            {feedback && (
+              <p className={cn(
+                "mt-4 inline-flex items-center gap-1.5 text-sm sm:hidden",
+                feedback.kind === "ok" ? "text-[#15803d]" : "text-red-600",
+              )}>
+                {feedback.kind === "ok" ? <Check size={14} /> : <AlertCircle size={14} />}
+                {feedback.msg}
               </p>
-            </FieldRow>
-          )}
+            )}
+            {!canEdit && !doneLocked && (
+              <p className="mt-4 text-xs text-gray-400">Bu görevi düzenleme yetkiniz yok.</p>
+            )}
+          </div>
+
+          {/* Notlar — the main working area under the task details. */}
+          {notesSlot && <div className="order-3 lg:order-none">{notesSlot}</div>}
         </div>
 
-        {/* Inline feedback (also visible on mobile, where the top bar hides it). */}
-        {feedback && (
-          <p className={cn(
-            "mt-4 inline-flex items-center gap-1.5 text-sm sm:hidden",
-            feedback.kind === "ok" ? "text-[#15803d]" : "text-red-600",
-          )}>
-            {feedback.kind === "ok" ? <Check size={14} /> : <AlertCircle size={14} />}
-            {feedback.msg}
-          </p>
-        )}
-        {!canEdit && !doneLocked && (
-          <p className="mt-4 text-xs text-gray-400">Bu görevi düzenleme yetkiniz yok.</p>
-        )}
+        <div className="contents lg:flex lg:w-[340px] lg:shrink-0 lg:flex-col lg:gap-5">
+          {/* Sorumlu kişiler — assignment management, right next to the details. */}
+          {participantsSlot && <div className="order-2 lg:order-none">{participantsSlot}</div>}
+          {/* Puan & Motivasyon — compact, above the audit trail. */}
+          {effortSlot && <div className="order-4 lg:order-none">{effortSlot}</div>}
+          {/* Aktivite — audit trail, intentionally last. */}
+          <div className="order-5 lg:order-none">{activitySlot}</div>
+        </div>
       </div>
     </>
   );
@@ -465,6 +537,10 @@ export function TaskDetail({
   isAdmin = false,
   backHref = "/board",
   backLabel = "Panoya dön",
+  responsiblePeople = [],
+  participantsSlot,
+  notesSlot,
+  effortSlot,
 }: Props) {
   // Mirrors server canEditTask: admins always; members only own/created tasks.
   const canEdit = canComplete
@@ -480,12 +556,23 @@ export function TaskDetail({
   const creatorName = creator ? (creator.full_name ?? creator.email ?? null) : null;
 
   return (
-    <div className="max-w-3xl mx-auto py-6 px-4 space-y-5">
-      <TaskEditor key={version} task={task} departments={departments} canEdit={canEdit} canComplete={canComplete} isAdmin={isAdmin} backHref={backHref} backLabel={backLabel} creatorName={creatorName} />
-
-      <ActivityLogSection logs={activityLogs} profiles={profiles} contacts={contacts} />
-
-      {/* Sorumlu kişiler + Efor + Notlar are rendered by the page below. */}
+    <div className="max-w-6xl mx-auto py-6 px-4">
+      <TaskEditor
+        key={version}
+        task={task}
+        departments={departments}
+        canEdit={canEdit}
+        canComplete={canComplete}
+        isAdmin={isAdmin}
+        backHref={backHref}
+        backLabel={backLabel}
+        creatorName={creatorName}
+        responsiblePeople={responsiblePeople}
+        participantsSlot={participantsSlot}
+        notesSlot={notesSlot}
+        effortSlot={effortSlot}
+        activitySlot={<ActivityLogSection logs={activityLogs} profiles={profiles} contacts={contacts} />}
+      />
     </div>
   );
 }

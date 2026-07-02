@@ -57,3 +57,25 @@ export function getPersonInitials(p: PersonLike): string {
 export function getPersonBadgeLabel(p: PersonLike): string {
   return getPersonInitials(p);
 }
+
+/** Locale-insensitive key for matching the same person across sources. */
+export function personNameKey(p: PersonLike): string {
+  return resolveName(p)
+    .toLocaleLowerCase("tr-TR")
+    .replace(/ğ/g, "g").replace(/ü/g, "u").replace(/ş/g, "s")
+    .replace(/ı/g, "i").replace(/ö/g, "o").replace(/ç/g, "c")
+    .replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Drop contacts that duplicate a workspace member (same normalized full name).
+ * Used by person pickers so someone who exists both as an auth user and as a
+ * workspace contact appears only once (the member entry wins).
+ */
+export function dedupeContactsAgainstProfiles<
+  C extends { name: string },
+  P extends { full_name?: string | null; email?: string | null },
+>(contacts: C[], profiles: P[]): C[] {
+  const memberKeys = new Set(profiles.map((p) => personNameKey(p)).filter(Boolean));
+  return contacts.filter((c) => !memberKeys.has(personNameKey(c.name)));
+}

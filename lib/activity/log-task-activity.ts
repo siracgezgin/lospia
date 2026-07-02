@@ -30,6 +30,8 @@ export const ACTIVITY_ACTIONS = {
   TASK_DUPLICATED: "task_duplicated",
   PARTICIPANT_COMPLETED: "participant_completed",
   PARTICIPANT_UNCOMPLETED: "participant_uncompleted",
+  RESPONSIBLE_ADDED: "responsible_added",
+  RESPONSIBLE_REMOVED: "responsible_removed",
   AUTO_MOVED_TO_REVIEW: "auto_moved_to_review",
   NOTE_ADDED: "note_added",
   // Puan & Motivasyon

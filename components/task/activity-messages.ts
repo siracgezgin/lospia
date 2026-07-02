@@ -90,6 +90,18 @@ export function activityMessage(
       return "görevi geri yükledi.";
     case "task_duplicated":
       return "görevi çoğalttı.";
+    case "responsible_added": {
+      const name = resolveName(typeof newV === "string" ? newV : null);
+      return name
+        ? `${name} kişisini sorumlu olarak ekledi.`
+        : "yeni bir sorumlu ekledi.";
+    }
+    case "responsible_removed": {
+      const name = resolveName(typeof oldV === "string" ? oldV : null);
+      return name
+        ? `${name} kişisini sorumluluktan çıkardı.`
+        : "bir sorumluyu çıkardı.";
+    }
     case "participant_completed":
       return "kendi işini tamamladı.";
     case "participant_uncompleted":
