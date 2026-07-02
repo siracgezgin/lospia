@@ -53,7 +53,9 @@ export function activityMessage(
 ): string {
   const oldV = log.old_value;
   const newV = log.new_value;
-  const meta = (log.metadata ?? {}) as { user_id?: string | null; points?: number };
+  const meta = (log.metadata ?? {}) as {
+    user_id?: string | null; points?: number; source_title?: string | null;
+  };
 
   switch (log.action) {
     case "effort_changed":
@@ -89,7 +91,9 @@ export function activityMessage(
     case "task_restored":
       return "görevi geri yükledi.";
     case "task_duplicated":
-      return "görevi çoğalttı.";
+      return meta.source_title
+        ? `görevi “${meta.source_title}” görevinden çoğalttı.`
+        : "görevi çoğalttı.";
     case "responsible_added": {
       const name = resolveName(typeof newV === "string" ? newV : null);
       return name

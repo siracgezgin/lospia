@@ -86,6 +86,26 @@ export function canEditTask(
   return false;
 }
 
+// Assignment (sorumlu ekleme/çıkarma/handoff) is stricter than general edit:
+// owner/admin manage any task; the creator manages their own task; a CURRENT
+// responsible person (legacy assignee or participant) may hand the task off.
+// A member can NEVER add themselves to a task they are not already on — that
+// was the "assign myself, gain edit rights" bypass. Viewers never mutate.
+export function canManageTaskAssignment(
+  role: AppRole,
+  task: { assignee_id?: string | null; created_by?: string | null },
+  currentUserId: string,
+  isParticipant: boolean,
+): boolean {
+  if (ADMIN_ROLES.includes(role)) return true;
+  if (role !== "member") return false;
+  return (
+    task.assignee_id === currentUserId ||
+    (task.created_by ?? null) === currentUserId ||
+    isParticipant
+  );
+}
+
 export function canReorderTask(
   role: AppRole,
   task: { assignee_id?: string | null; created_by?: string | null },

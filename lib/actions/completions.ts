@@ -7,6 +7,7 @@ import { notifyTaskEvent } from "@/lib/notifications/notify";
 import type { AppRole } from "@/lib/auth/permissions";
 
 const PERM = "Bu işlem için yetkiniz yok.";
+const ASSIGN_DENIED = "Bu göreve sorumlu kişi atama yetkiniz yok.";
 const ADMIN_ONLY_RESPONSIBLE =
   "Yöneticiye özel görevlerde yalnızca yönetici kişiler sorumlu olabilir.";
 const ACTIVE_STATUSES = ["backlog", "ready", "in_progress", "blocked"];
@@ -139,7 +140,7 @@ export async function setTaskParticipants(
   const sb = await createClient();
   const c = await getCtx(sb);
   if (!c) return { error: "Kimlik doğrulama gerekli." };
-  if (c.role === "viewer") return { error: PERM };
+  if (c.role === "viewer") return { error: ASSIGN_DENIED };
 
   const { data: vTask } = await sb
     .from("tasks")
@@ -160,7 +161,7 @@ export async function setTaskParticipants(
       vTask.assignee_id === c.user.id ||
       (vTask.created_by ?? null) === c.user.id ||
       (existing ?? []).some((r) => r.member_id === c.memberId);
-    if (!isOnTask) return { error: PERM };
+    if (!isOnTask) return { error: ASSIGN_DENIED };
   }
 
   // Admin_only tasks: only owner/admin people may be responsible. Reject the

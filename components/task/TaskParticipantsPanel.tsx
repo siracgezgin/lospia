@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Check, UserPlus, Loader2, Users } from "lucide-react";
+import { Check, UserPlus, Loader2, Users, X } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { cn } from "@/lib/utils/cn";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
@@ -11,8 +11,10 @@ import {
   setParticipantCompletion,
   setTaskParticipants,
 } from "@/lib/actions/completions";
+import { updateTask } from "@/lib/actions/tasks";
 
 export type PanelMember = { memberId: string; userId: string; name: string; isAdmin?: boolean };
+export type PanelContact = { contactId: string; name: string };
 export type PanelParticipant = {
   memberId: string;
   completed: boolean;
@@ -24,41 +26,65 @@ export type PanelParticipant = {
 
 interface Props {
   taskId: string;
-  members: PanelMember[];               // all workspace members
+  members: PanelMember[];               // all workspace members (never dept-filtered)
   participants: PanelParticipant[];     // current participants + completion
+  // CRM contacts with no matching member (from the shared assignable-people
+  // builder) — selectable as the task's responsible contact.
+  contacts?: PanelContact[];
+  // The task's current responsible_contact_id resolved to a contact, when that
+  // contact has no member counterpart (otherwise the member row represents them).
+  responsibleContact?: PanelContact | null;
   currentMemberId: string | null;
   isAdmin: boolean;
   isViewer: boolean;
   // Whether the current user may add/remove responsible people on this task.
   // Admin/owner always; a member only on tasks they are already on. Mirrors the
-  // server rule in setTaskParticipants.
+  // server rule in setTaskParticipants / updateTask.
   canManage?: boolean;
   // Admin_only task → only owner/admin people may be responsible.
   adminOnly?: boolean;
 }
 
+const ASSIGN_DENIED_NOTE = "Bu göreve sorumlu kişi atama yetkiniz yok.";
+
 export function TaskParticipantsPanel({
-  taskId, members, participants, currentMemberId, isAdmin, isViewer,
-  canManage = false, adminOnly = false,
+  taskId, members, participants, contacts = [], responsibleContact = null,
+  currentMemberId, isAdmin, isViewer, canManage = false, adminOnly = false,
 }: Props) {
   const [pending, startTransition] = useTransition();
   const [editing, setEditing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Everyone in the workspace is selectable — department membership never
   // restricts assignment. The only narrowing is admin_only visibility.
   const pickerMembers = members.filter((m) => !adminOnly || m.isAdmin);
+  const pickerContacts = adminOnly ? [] : contacts;
 
   const nameOf = (memberId: string) =>
     getPersonDisplayName(members.find((m) => m.memberId === memberId)?.name ?? null);
 
   const participantIds = new Set(participants.map((p) => p.memberId));
   const mine = currentMemberId ? participants.find((p) => p.memberId === currentMemberId) : undefined;
+  const hasAnyResponsible = participants.length > 0 || !!responsibleContact;
+
+  function run(action: () => Promise<{ ok?: true; success?: true } | { error: string }>) {
+    setError(null);
+    startTransition(async () => {
+      const res = await action();
+      if (res && "error" in res) setError(res.error || "İşlem tamamlanamadı.");
+    });
+  }
 
   function toggleParticipant(memberId: string) {
     const next = participantIds.has(memberId)
       ? participants.filter((p) => p.memberId !== memberId).map((p) => p.memberId)
       : [...participants.map((p) => p.memberId), memberId];
-    startTransition(() => { void setTaskParticipants(taskId, next); });
+    run(() => setTaskParticipants(taskId, next));
+  }
+
+  function toggleContact(contactId: string) {
+    const next = responsibleContact?.contactId === contactId ? null : contactId;
+    run(() => updateTask({ id: taskId, responsible_contact_id: next }));
   }
 
   return (
@@ -82,9 +108,19 @@ export function TaskParticipantsPanel({
         )}
       </div>
 
-      {/* Current participants with completion state */}
-      {participants.length === 0 ? (
-        <p className="text-sm text-gray-400">Henüz sorumlu kişi atanmadı.</p>
+      {/* Current responsible people with completion state */}
+      {!hasAnyResponsible ? (
+        <div className="space-y-2">
+          <p className="text-sm text-gray-400">Henüz sorumlu kişi atanmadı.</p>
+          {!isViewer && canManage && !editing && (
+            <button
+              onClick={() => setEditing(true)}
+              className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium"
+            >
+              <UserPlus size={14} /> Sorumlu kişi ekle
+            </button>
+          )}
+        </div>
       ) : (
         <ul className="divide-y divide-gray-50 rounded-lg border border-gray-100 overflow-hidden">
           {participants.map((p) => {
@@ -122,10 +158,9 @@ export function TaskParticipantsPanel({
                 {!isViewer && (isAdmin || isMe) && (
                   <button
                     disabled={pending}
-                    onClick={() => startTransition(() => {
-                      if (isMe) void toggleMyCompletion(taskId);
-                      else void setParticipantCompletion(taskId, p.memberId, !p.completed);
-                    })}
+                    onClick={() => run(() =>
+                      isMe ? toggleMyCompletion(taskId) : setParticipantCompletion(taskId, p.memberId, !p.completed),
+                    )}
                     className="text-xs text-blue-600 hover:text-blue-700 disabled:opacity-50 shrink-0"
                   >
                     {p.completed ? "Geri al" : "İşaretle"}
@@ -134,8 +169,36 @@ export function TaskParticipantsPanel({
               </li>
             );
           })}
+          {responsibleContact && (
+            <li className="flex items-center gap-2.5 px-3 py-2.5 text-sm bg-white">
+              <Avatar name={responsibleContact.name} size="sm" />
+              <div className="min-w-0 flex-1">
+                <p className="text-gray-800 truncate">
+                  {getPersonDisplayName(responsibleContact.name)}
+                  <span className="ml-1 text-[10px] text-gray-400">(harici kişi)</span>
+                </p>
+              </div>
+              {!isViewer && canManage && (
+                <button
+                  disabled={pending}
+                  onClick={() => toggleContact(responsibleContact.contactId)}
+                  className="text-xs text-gray-400 hover:text-red-600 disabled:opacity-50 shrink-0"
+                  aria-label="Sorumlu kişiyi kaldır"
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </li>
+          )}
         </ul>
       )}
+
+      {/* Unauthorized members see the list but can never change it. */}
+      {!isViewer && !canManage && (
+        <p className="text-xs text-gray-400">{ASSIGN_DENIED_NOTE}</p>
+      )}
+
+      {error && <p className="text-xs text-red-600">{error}</p>}
 
       {/* "Benim işim tamam" — only the responsible participant can mark their own
           work done. Non-participants see a clear notice instead (admins manage
@@ -143,7 +206,7 @@ export function TaskParticipantsPanel({
       {!isViewer && currentMemberId && mine && (
         <button
           disabled={pending}
-          onClick={() => startTransition(() => { void toggleMyCompletion(taskId); })}
+          onClick={() => run(() => toggleMyCompletion(taskId))}
           className="w-full mt-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-green-600 text-white text-sm font-medium py-2 hover:bg-green-700 disabled:opacity-50"
         >
           {pending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
@@ -156,7 +219,8 @@ export function TaskParticipantsPanel({
         </p>
       )}
 
-      {/* Participant editor: every workspace member is selectable */}
+      {/* Assignment editor: EVERY workspace member (and unmatched CRM contact)
+          is selectable — the shared assignable-people list, no department filter. */}
       {editing && !isViewer && canManage && (
         <div className="border-t border-gray-100 pt-3 space-y-1.5">
           <p className="text-xs text-gray-500">
@@ -184,6 +248,32 @@ export function TaskParticipantsPanel({
               <p className="text-xs text-gray-400">Çalışma alanında üye yok.</p>
             )}
           </div>
+          {pickerContacts.length > 0 && (
+            <>
+              <p className="text-xs text-gray-500 pt-1.5">
+                Kişiler (CRM) — sistem hesabı olmayan sorumlu:
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {pickerContacts.map((c) => {
+                  const on = responsibleContact?.contactId === c.contactId;
+                  return (
+                    <button
+                      key={c.contactId}
+                      disabled={pending}
+                      onClick={() => toggleContact(c.contactId)}
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs border transition-colors disabled:opacity-50 ${
+                        on ? "bg-blue-50 border-blue-300 text-blue-700" : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      <Avatar name={c.name} size="xs" />
+                      {getPersonDisplayName(c.name)}
+                      {on && <Check size={11} />}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

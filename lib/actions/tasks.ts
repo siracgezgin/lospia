@@ -8,7 +8,8 @@ import { generateKeyBetween } from "fractional-indexing";
 import { normalizeTags } from "@/lib/utils/normalize-tags";
 import {
   canCreateTask, canArchiveTask, canDeleteTask, canPermanentDeleteTask,
-  canDeleteTaskItem, canEditTask, canReorderTask, canCompleteTask, type AppRole,
+  canDeleteTaskItem, canEditTask, canReorderTask, canCompleteTask,
+  canManageTaskAssignment, type AppRole,
 } from "@/lib/auth/permissions";
 import {
   logTaskActivity, logTaskActivities, ACTIVITY_ACTIONS,
@@ -23,6 +24,8 @@ const ADMIN_ROLES: AppRole[] = ["owner", "admin"];
 const isAdminRole = (r: AppRole) => ADMIN_ROLES.includes(r);
 
 const PERM_DENIED = "Bu işlem için yetkiniz yok.";
+const ASSIGN_DENIED = "Bu göreve sorumlu kişi atama yetkiniz yok.";
+const DUPLICATE_DENIED = "Bu görevi çoğaltma yetkiniz yok.";
 const FINAL_DONE_DENIED = "Görevi yalnızca yönetici tamamlanmış olarak işaretleyebilir. Lütfen 'Kontrol / Onay'a taşıyın.";
 const DONE_LOCKED_DENIED = "Tamamlanmış görevleri yalnızca yönetici değiştirebilir.";
 
@@ -82,6 +85,30 @@ async function getUserAndRole(supabase: Awaited<ReturnType<typeof createClient>>
     .maybeSingle();
 
   return member ? { user, role: member.role as AppRole, workspaceId: member.workspace_id } : null;
+}
+
+// Is this user a current responsible participant (task_member_completions row)
+// of the task? Used by assignment/duplicate permission checks and reorderTask.
+async function isTaskParticipant(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  taskId: string,
+  workspaceId: string,
+  userId: string,
+): Promise<boolean> {
+  const { data: myMember } = await supabase
+    .from("workspace_members")
+    .select("id")
+    .eq("workspace_id", workspaceId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (!myMember?.id) return false;
+  const { data: comp } = await supabase
+    .from("task_member_completions")
+    .select("id")
+    .eq("task_id", taskId)
+    .eq("member_id", myMember.id)
+    .maybeSingle();
+  return !!comp;
 }
 
 // ---- Zod schemas ----
@@ -322,7 +349,36 @@ export async function updateTask(
   if (!currentTask) return { error: "Task not found" };
 
   const task = currentTask as Record<string, unknown>;
-  if (!canEditTask(role, { assignee_id: task.assignee_id as string | null, created_by: task.created_by as string | null }, user.id)) {
+  const taskPerm = {
+    assignee_id: task.assignee_id as string | null,
+    created_by: task.created_by as string | null,
+  };
+
+  // Assignment fields (sorumlu) are gated separately from general edits. The
+  // server is the boundary: a member who is not on the task can NEVER assign
+  // anyone (including themselves) — regardless of what the UI showed. A member
+  // who IS a current responsible participant may hand the task off even though
+  // they cannot edit other fields (canEditTask covers admins/assignee/creator).
+  const ASSIGNMENT_FIELDS = ["assignee_id", "responsible_contact_id"];
+  const providedFields = Object.keys(updates);
+  const touchesAssignment = ASSIGNMENT_FIELDS.some(
+    (f) => f in updates && (updates[f] ?? null) !== ((task[f] as string | null) ?? null),
+  );
+  const onlyAssignment =
+    providedFields.length > 0 && providedFields.every((f) => ASSIGNMENT_FIELDS.includes(f));
+
+  const canEdit = canEditTask(role, taskPerm, user.id);
+  if (touchesAssignment) {
+    const isParticipant = canEdit || role !== "member"
+      ? false // not needed — decided by role/assignee/creator already
+      : await isTaskParticipant(supabase, id, task.workspace_id as string, user.id);
+    if (!canManageTaskAssignment(role, taskPerm, user.id, isParticipant)) {
+      return { error: ASSIGN_DENIED };
+    }
+    // A pure handoff by a current participant is allowed even without general
+    // edit rights; anything beyond assignment still requires canEditTask below.
+    if (!canEdit && !onlyAssignment) return { error: PERM_DENIED };
+  } else if (!canEdit) {
     return { error: PERM_DENIED };
   }
 
@@ -638,6 +694,17 @@ export async function duplicateTask(
 
   const source = src as Record<string, unknown>;
 
+  // A member may duplicate only tasks they are on (creator, assignee or a
+  // responsible participant); owner/admin any. Server-enforced — the card menu
+  // hides the action too, but UI hiding alone is never the boundary.
+  if (!isAdminRole(role)) {
+    const onTask =
+      (source.created_by as string | null) === user.id ||
+      (source.assignee_id as string | null) === user.id ||
+      (await isTaskParticipant(supabase, taskId, source.workspace_id as string, user.id));
+    if (!onTask) return { error: DUPLICATE_DENIED };
+  }
+
   // Get last fractional_index in the same status column
   const { data: lastTask } = await supabase
     .from("tasks")
@@ -649,13 +716,22 @@ export async function duplicateTask(
     .maybeSingle();
 
   const rawLastIndex2 = (lastTask as { fractional_index?: string } | null)?.fractional_index ?? null;
-  let fractional_index2: string;
+  let fractional_index: string;
   try {
-    fractional_index2 = generateKeyBetween(rawLastIndex2, null);
+    fractional_index = generateKeyBetween(rawLastIndex2, null);
   } catch {
-    fractional_index2 = generateKeyBetween(null, null);
+    fractional_index = generateKeyBetween(null, null);
   }
-  const fractional_index = fractional_index2;
+
+  // The copy is NEW work: it never inherits completion/approval state, so a
+  // duplicate of a done/review task starts back in "Yapılacak". completed_at,
+  // archived_at and deleted_at are simply never written (DB defaults = null).
+  const sourceStatus = source.status as TaskStatusType;
+  const copyStatus: TaskStatusType =
+    sourceStatus === "done" || sourceStatus === "review" ? "ready" : sourceStatus;
+  // Visibility carries over only for admins (RLS hides admin_only sources from
+  // members anyway; a member's copy is always a normal workspace task).
+  const copyVisibility = isAdminRole(role) ? (source.visibility ?? "workspace") : "workspace";
 
   const { data: newTask, error } = await supabase
     .from("tasks")
@@ -663,12 +739,16 @@ export async function duplicateTask(
       workspace_id:           source.workspace_id,
       title:                  `${source.title as string} kopyası`,
       description:            source.description,
-      status:                 source.status,
+      status:                 copyStatus,
       priority:               source.priority,
       assignee_id:            source.assignee_id,
       responsible_contact_id: source.responsible_contact_id,
       due_date:               source.due_date,
       start_date:             source.start_date,
+      department_id:          source.department_id,
+      visibility:             copyVisibility,
+      effort_size:            source.effort_size,
+      points_value:           source.points_value,
       tags:                   source.tags,
       custom_fields:          source.custom_fields,
       fractional_index,
@@ -678,16 +758,35 @@ export async function duplicateTask(
     .single();
 
   if (error) return { error: error.message };
+  const newId = (newTask as { id: string }).id;
+
+  // Copy the responsible people (participants) with completion RESET — the
+  // same team owns the copy, but nobody has "done" the new task yet. Old task
+  // notes and activity history are intentionally NOT copied.
+  const { data: srcParts } = await supabase
+    .from("task_member_completions")
+    .select("member_id")
+    .eq("task_id", taskId);
+  if (srcParts && srcParts.length > 0) {
+    await supabase.from("task_member_completions").insert(
+      srcParts.map((p) => ({
+        workspace_id: source.workspace_id as string,
+        task_id: newId,
+        member_id: p.member_id as string,
+      })),
+    );
+  }
+
   await logTaskActivity(supabase, {
     workspaceId: source.workspace_id as string,
-    taskId: (newTask as { id: string }).id,
+    taskId: newId,
     actorId: user.id,
     action: ACTIVITY_ACTIONS.TASK_DUPLICATED,
-    metadata: { source_task_id: taskId },
+    metadata: { source_task_id: taskId, source_title: source.title as string },
   });
   revalidatePath("/board");
   revalidatePath("/list");
-  return { id: (newTask as { id: string }).id };
+  return { id: newId };
 }
 
 export async function reorderTask(
@@ -727,22 +826,7 @@ export async function reorderTask(
   }
   if (role === "member" && !canReorderTask(role, prevTask, user.id)) {
     // Participant check: is this member a responsible person on the task?
-    const { data: myMember } = await supabase
-      .from("workspace_members")
-      .select("id")
-      .eq("user_id", user.id)
-      .eq("workspace_id", prevTask.workspace_id)
-      .maybeSingle();
-    let isParticipant = false;
-    if (myMember?.id) {
-      const { data: comp } = await supabase
-        .from("task_member_completions")
-        .select("id")
-        .eq("task_id", id)
-        .eq("member_id", myMember.id)
-        .maybeSingle();
-      isParticipant = !!comp;
-    }
+    const isParticipant = await isTaskParticipant(supabase, id, prevTask.workspace_id, user.id);
     if (!isParticipant) return { error: "Bu görevi yalnızca sorumlu kişiler veya yöneticiler taşıyabilir." };
   }
 

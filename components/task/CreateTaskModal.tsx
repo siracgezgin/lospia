@@ -231,7 +231,8 @@ export function CreateTaskModal({
             </select>
           </div>
 
-          {/* 4. Sorumlu kişiler — multi-select, filtered by department */}
+          {/* 4. Sorumlu kişiler — multi-select over ALL workspace members
+              (department never filters assignment) */}
           <div>
             <label className={labelCls}>Sorumlu kişiler</label>
             {eligibleMembers.length === 0 ? (

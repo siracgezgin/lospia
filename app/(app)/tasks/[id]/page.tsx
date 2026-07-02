@@ -3,9 +3,10 @@ import { redirect, notFound } from "next/navigation";
 import { TaskDetail } from "@/components/task/TaskDetail";
 import type { Task, TaskActivity, TaskActivityLogWithActor, TimeEntry, CustomFieldDefinition, Profile, WorkspaceContact, WorkspaceDepartment, TaskNoteWithAuthor } from "@/types";
 import { TaskNotesPanel } from "@/components/task/TaskNotesPanel";
-import { TaskParticipantsPanel, type PanelMember, type PanelParticipant } from "@/components/task/TaskParticipantsPanel";
+import { TaskParticipantsPanel, type PanelMember, type PanelContact, type PanelParticipant } from "@/components/task/TaskParticipantsPanel";
 import { TaskEffortPanel } from "@/components/task/TaskEffortPanel";
 import { isEffortSize } from "@/lib/points/effort";
+import { buildAssignablePeople } from "@/lib/people/assignable";
 
 export default async function TaskDetailPage({
   params,
@@ -182,10 +183,38 @@ export default async function TaskDetailPage({
     }
   }
 
-  // Responsible display names for the header card (participants ∪ fallback).
+  // Single source of truth for assignable people: workspace members ∪ CRM
+  // contacts with contact↔user duplicates collapsed — the same builder the
+  // board picker uses, so both UIs always show the SAME people. Contacts that
+  // did not merge into a member stay selectable as an external responsible.
+  const assignablePeople = buildAssignablePeople({
+    members: panelMembers,
+    contacts: contacts.map((c) => ({ id: c.id, name: c.name, email: c.email, user_id: c.user_id })),
+  });
+  const panelContacts: PanelContact[] = assignablePeople
+    .filter((p) => p.type === "contact")
+    .map((p) => ({ contactId: p.contactId as string, name: p.name }));
+
+  // The task's current responsible CRM contact (when it isn't represented by a
+  // member row already) — shown in the panel and removable there.
+  const respContactId = task.responsible_contact_id ?? null;
+  const responsibleContact: PanelContact | null = respContactId
+    ? panelContacts.find((c) => c.contactId === respContactId)
+      ?? (() => {
+        const raw = contacts.find((c) => c.id === respContactId);
+        return raw ? { contactId: raw.id, name: raw.name } : null;
+      })()
+    : null;
+
+  // Responsible display names for the header card (participants ∪ fallbacks —
+  // legacy assignee first, then the responsible CRM contact, mirroring the
+  // board card's avatar logic so the two never disagree).
   const responsiblePeople = panelParticipants
     .map((p) => panelMembers.find((m) => m.memberId === p.memberId)?.name)
     .filter((n): n is string => !!n);
+  if (responsiblePeople.length === 0 && responsibleContact) {
+    responsiblePeople.push(responsibleContact.name);
+  }
 
   // Who may add/remove responsible people — mirrors the server rule in
   // setTaskParticipants: admins always; a member only on tasks they are on.
@@ -215,6 +244,8 @@ export default async function TaskDetailPage({
           taskId={task.id}
           members={panelMembers}
           participants={panelParticipants}
+          contacts={panelContacts}
+          responsibleContact={responsibleContact}
           currentMemberId={currentMemberId}
           isAdmin={canComplete}
           isViewer={isViewer}

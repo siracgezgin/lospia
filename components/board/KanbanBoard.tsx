@@ -57,7 +57,8 @@ import { Badge } from "@/components/ui/Badge";
 import { reorderTask, updateTask, softDeleteTask, archiveTask, duplicateTask } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils/cn";
 import { formatDateTR } from "@/lib/utils/format-date";
-import { getPersonDisplayName, dedupeContactsAgainstProfiles } from "@/lib/utils/person-display";
+import { getPersonDisplayName } from "@/lib/utils/person-display";
+import { buildAssignablePeople } from "@/lib/people/assignable";
 import { buildDeptMeta, type DeptMeta } from "@/lib/utils/departments";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
 import { CsvImportModal } from "@/components/task/CsvImportModal";
@@ -450,12 +451,14 @@ function taskUrgencyRank(t: Task, today: string): number {
   return 3;
 }
 
-// Urgent (Acil) tasks get a single, restrained red emphasis: a thicker red left
-// accent over a soft red wash, plus the "Acil" badge in the card body. This reads
-// as "critical" without shouting — no all-sides ring (that double red border was
-// too loud and fought with the crimson Marka Yönetimi department cards). Applied
-// to every card variant. Kept as plain class strings (no cn()) because
-// tailwind-merge strips arbitrary border-l-* utilities.
+// Urgent (Acil) tasks must read as critical at first glance: a thick red-600
+// left accent over a soft red wash, a thin red ring for separation from the
+// column background, plus the red "Acil" badge (with AlertTriangle) in the card
+// body. Distinct from the crimson Marka Yönetimi department chip because the
+// emphasis lives on the card FRAME (border/ring/wash), never the identity chip.
+// Done cards drop the emphasis (completed urgency is history). Applied to every
+// card variant. Kept as plain class strings (no cn()) because tailwind-merge
+// strips border-l-* utilities.
 function urgentCardStyle(
   task: Task,
   base: { surface: string; border: string; accent: string },
@@ -465,11 +468,11 @@ function urgentCardStyle(
     return { surface: base.surface, border: base.border, accent: base.accent, widthCls: "border-l-[3px]", ring: "", urgent };
   }
   return {
-    surface: "bg-[#fff6f5]",
-    border: "border-[#f1c9c2]",
-    accent: "border-l-[#dc2626]",
-    widthCls: "border-l-[4px]",
-    ring: "",
+    surface: "bg-red-50/60",
+    border: "border-red-200",
+    accent: "border-l-red-600",
+    widthCls: "border-l-4",
+    ring: "ring-1 ring-red-200/80",
     urgent,
   };
 }
@@ -483,6 +486,7 @@ function CardMenu({
   onDelete,
   canArchive = true,
   canDelete = true,
+  canDuplicate = true,
 }: {
   onEdit: () => void;
   onDuplicate: () => void;
@@ -490,6 +494,7 @@ function CardMenu({
   onDelete: () => void;
   canArchive?: boolean;
   canDelete?: boolean;
+  canDuplicate?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -532,12 +537,14 @@ function CardMenu({
           >
             <Pencil size={11} /> Düzenle
           </button>
-          <button
-            onClick={() => { setOpen(false); onDuplicate(); }}
-            className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-1.5"
-          >
-            <Copy size={11} /> Çoğalt
-          </button>
+          {canDuplicate && (
+            <button
+              onClick={() => { setOpen(false); onDuplicate(); }}
+              className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-1.5"
+            >
+              <Copy size={11} /> Çoğalt
+            </button>
+          )}
           {canArchive && (
             <button
               onClick={() => { setOpen(false); onArchive(); }}
@@ -594,6 +601,7 @@ function QuickAssigneeSelect({
   contacts: WorkspaceContact[];
   responsibleNames: Record<string, string>;
 }) {
+  const ctx = useContext(BoardContext);
   const [_p, startTransition] = useTransition();
   const [encoded, setEncoded] = useOptimistic<string>(encodeResponsible(task));
 
@@ -603,29 +611,51 @@ function QuickAssigneeSelect({
     ? responsibleNames[encoded.slice(8)] ?? "—"
     : null;
 
+  // Assignment mirrors the server rule (canManageTaskAssignment): admins any
+  // task; a member only tasks they created / own / are responsible for. Others
+  // get a read-only avatar — no select at all. The server enforces this too;
+  // this just keeps the UI honest instead of pretending the change stuck.
+  const canAssign = ctx?.isResponsible(task) ?? false;
+
   function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const val = e.target.value;
     startTransition(async () => {
       setEncoded(val);
       const assignee_id = val.startsWith("member:") ? val.slice(7) : null;
       const responsible_contact_id = val.startsWith("contact:") ? val.slice(8) : null;
-      await updateTask({ id: task.id, assignee_id, responsible_contact_id });
+      const res = await updateTask({ id: task.id, assignee_id, responsible_contact_id });
+      if (res && "error" in res) {
+        ctx?.showToast(res.error || "Sorumlu kişi değiştirilemedi.");
+      }
     });
   }
 
+  const avatar = currentName ? (
+    // Initials only; neutral until the task is done (never "green by default").
+    <Avatar
+      name={currentName}
+      size="xs"
+      tone={task.status === "done" ? "done" : "neutral"}
+      title={`${currentName} — ${task.status === "done" ? "Tamamladı" : "Tamamlanmadı"}`}
+    />
+  ) : (
+    <span className="text-[10px] text-gray-300 pointer-events-none">—</span>
+  );
+
+  if (!canAssign) {
+    return (
+      <span
+        className="inline-flex items-center ml-auto shrink-0"
+        title="Bu göreve sorumlu kişi atama yetkiniz yok."
+      >
+        {avatar}
+      </span>
+    );
+  }
+
   return (
-    <div className="relative inline-flex items-center gap-1 ml-auto shrink-0">
-      {currentName ? (
-        // Initials only; neutral until the task is done (never "green by default").
-        <Avatar
-          name={currentName}
-          size="xs"
-          tone={task.status === "done" ? "done" : "neutral"}
-          title={`${currentName} — ${task.status === "done" ? "Tamamladı" : "Tamamlanmadı"}`}
-        />
-      ) : (
-        <span className="text-[10px] text-gray-300 pointer-events-none">—</span>
-      )}
+    <div className="relative inline-flex items-center gap-1 ml-auto shrink-0" data-interactive>
+      {avatar}
       <select
         value={encoded}
         onChange={handleChange}
@@ -691,6 +721,9 @@ function CardContent({
   const taskHref = `/tasks/${task.id}${hrefSuffix}`;
   // Per-card delete: members may only delete tasks they created (server-enforced).
   const canDeleteThis = boardCtx ? boardCtx.canDeleteTask(task) : canDeleteCard;
+  // Duplicate mirrors the server rule in duplicateTask: admins any task; a
+  // member only tasks they created / own / are responsible for.
+  const canDuplicateThis = boardCtx ? boardCtx.isResponsible(task) : true;
   const taskDone = task.status === "done";
   // Active member participants (with per-person completion) drive the people chips.
   const participants = useTaskParticipants(task.id);
@@ -746,6 +779,7 @@ function CardContent({
             onDelete={() => onDelete(task.id)}
             canArchive={canArchiveCard}
             canDelete={canDeleteThis}
+            canDuplicate={canDuplicateThis}
           />
         )}
       </div>
@@ -838,7 +872,7 @@ function StaticTaskCard({
   // border (all sides) then border-l accent last so it wins. No cn() — tailwind-merge strips border-l-*.
   const dept = useTaskDept(task);
   const em = urgentCardStyle(task, getTaskCardStyle(task.status, dept?.color));
-  const cardCls = `rounded-lg border ${em.widthCls} p-3 shadow-card transition-all ${em.surface} ${em.border} ${em.accent} ${em.ring}`;
+  const cardCls = `rounded-lg border ${em.widthCls} p-3 shadow-card transition-all cursor-pointer ${em.surface} ${em.border} ${em.accent} ${em.ring}`;
   return (
     <div className={cardCls}>
       <div className="flex items-start gap-1.5">
@@ -882,6 +916,8 @@ function TaskCard({
     id: task.id,
     data: { task },
   });
+  const router = useRouter();
+  const boardCtx = useContext(BoardContext);
   // Department drives the card color; done overrides to the reserved green; urgent
   // overrides both with a red emphasis. No cn() — tailwind-merge strips border-l-*.
   const dept = useTaskDept(task);
@@ -894,8 +930,29 @@ function TaskCard({
   // The WHOLE card is the drag handle (grab anywhere except interactive children,
   // which stop pointer propagation). Grip icon stays as a subtle affordance.
   const canDrag = !disableDrag && !isDragOverlay;
-  const dragCls = canDrag ? "cursor-grab active:cursor-grabbing" : "";
+  const dragCls = canDrag ? "cursor-pointer active:cursor-grabbing" : "cursor-pointer";
   const dragProps = canDrag ? { ...attributes, ...listeners } : {};
+
+  // The WHOLE card opens the task detail — except interactive children (status
+  // chip, assignee select, menu, links) which stop propagation and are filtered
+  // by the closest() guard as a second net. A real drag (PointerSensor fires
+  // only after 5px of movement) must not navigate on release, so we remember
+  // that a drag happened and swallow exactly the click that follows it.
+  const wasDragged = useRef(false);
+  useEffect(() => {
+    if (isDragging) wasDragged.current = true;
+  }, [isDragging]);
+  const taskHref = `/tasks/${task.id}${boardCtx?.taskHrefSuffix ?? ""}`;
+  function openDetail(e: React.MouseEvent | React.KeyboardEvent) {
+    if (isDragOverlay) return;
+    if (wasDragged.current) {
+      wasDragged.current = false;
+      return;
+    }
+    const target = e.target as HTMLElement;
+    if (target.closest("button, a, select, input, textarea, [data-interactive]")) return;
+    router.push(taskHref);
+  }
 
   return (
     <div
@@ -903,6 +960,15 @@ function TaskCard({
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={`rounded-lg border ${em.widthCls} p-3 shadow-card group ${colorCls} ${stateCls} ${dragCls}`}
       {...dragProps}
+      onClick={openDetail}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          openDetail(e);
+        }
+      }}
+      aria-label={`Görev detayını aç: ${task.title}`}
     >
       <div className="flex items-start gap-1.5">
         <span
@@ -960,8 +1026,19 @@ function MobileTaskCard({
   const dept = useTaskDept(task);
   const em = urgentCardStyle(task, getTaskCardStyle(task.status, dept?.color));
   const colorCls = `${em.surface} ${em.border} ${em.accent} ${em.ring}`;
+  const router = useRouter();
+  const boardCtx = useContext(BoardContext);
+  // Whole card opens the detail (same guard as the desktop card; no DnD here).
+  function openDetail(e: React.MouseEvent) {
+    const target = e.target as HTMLElement;
+    if (target.closest("button, a, select, input, textarea, [data-interactive]")) return;
+    router.push(`/tasks/${task.id}${boardCtx?.taskHrefSuffix ?? ""}`);
+  }
   return (
-    <div className={`rounded-xl border ${em.widthCls} p-3.5 shadow-card ${colorCls}`}>
+    <div
+      className={`rounded-xl border ${em.widthCls} p-3.5 shadow-card cursor-pointer ${colorCls}`}
+      onClick={openDetail}
+    >
       <CardContent
         task={task}
         profiles={profiles}
@@ -1247,12 +1324,21 @@ export function KanbanBoard({
     return map;
   }, [profiles, contacts]);
 
-  // Pickers/filters list a contact only when they don't duplicate a member with
-  // the same name (name resolution above still covers every contact id).
-  const pickerContacts = useMemo(
-    () => dedupeContactsAgainstProfiles(contacts, profiles),
-    [contacts, profiles],
-  );
+  // Single source of truth for assignable people: workspace members ∪ CRM
+  // contacts, with contact↔user duplicates collapsed (explicit user_id link or
+  // normalized-name match — the member entry wins). The same builder feeds the
+  // task-detail Sorumlu kişiler panel and the create form, so every assignment
+  // UI shows the SAME people. Department membership never filters this list.
+  const pickerContacts = useMemo(() => {
+    const memberInputs = members.length > 0
+      ? members
+      : profiles.map((p) => ({ memberId: p.id, userId: p.id, name: p.full_name ?? p.email ?? "—" }));
+    const people = buildAssignablePeople({ members: memberInputs, contacts });
+    const soloContactIds = new Set(
+      people.filter((p) => p.type === "contact").map((p) => p.contactId),
+    );
+    return contacts.filter((c) => soloContactIds.has(c.id));
+  }, [members, profiles, contacts]);
 
   function handleAddTask(colId: BoardColId) {
     const col = BOARD_COLUMNS.find((c) => c.id === colId);
@@ -1306,7 +1392,11 @@ export function KanbanBoard({
 
   function handleDuplicateCard(id: string) {
     startTransition(async () => {
-      await duplicateTask(id);
+      const res = await duplicateTask(id);
+      if ("error" in res) {
+        showToast(res.error || "Görev çoğaltılamadı.");
+        return;
+      }
       router.refresh();
       showToast("Görev çoğaltıldı.");
     });

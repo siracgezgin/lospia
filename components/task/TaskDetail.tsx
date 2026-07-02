@@ -52,9 +52,8 @@ interface Props {
   // Display names of the current responsible people (participants ∪ assignee
   // fallback) — shown under the title in the header card.
   responsiblePeople?: string[];
-  // Page-composed panels, positioned by this layout:
-  //   main column → Görev bilgileri, Notlar
-  //   side column → Sorumlu kişiler, Puan & Motivasyon, Aktivite
+  // Page-composed panels, positioned by this layout in a single column:
+  // Görev bilgileri → Sorumlu kişiler → Notlar → Puan & Motivasyon → Aktivite.
   participantsSlot?: React.ReactNode;
   notesSlot?: React.ReactNode;
   effortSlot?: React.ReactNode;
@@ -266,7 +265,7 @@ function TaskEditor({
             <Users size={13} /> Sorumlu:
           </span>
           {responsiblePeople.length === 0 ? (
-            <span className="text-xs text-gray-400 italic">Henüz sorumlu atanmamış</span>
+            <span className="text-xs text-gray-400 italic">Sorumlu atanmadı</span>
           ) : (
             responsiblePeople.map((name) => (
               <span
@@ -310,15 +309,15 @@ function TaskEditor({
         </div>
       </div>
 
-      {/* ── Two-column body ─────────────────────────────────────────────────
-          Desktop: main (Görev bilgileri + Notlar) | side (Sorumlular + Puan +
-          Aktivite). Mobile: single flow in the priority order Bilgiler →
-          Sorumlular → Notlar → Puan → Aktivite (via `contents` + order). */}
-      <div className="mt-5 flex flex-col gap-5 lg:flex-row lg:items-start">
-        <div className="contents lg:flex lg:min-w-0 lg:flex-1 lg:flex-col lg:gap-5">
+      {/* ── Single-column body ──────────────────────────────────────────────
+          One flow on every breakpoint, in the fixed hierarchy: Görev bilgileri
+          → Sorumlu kişiler → Notlar → Puan & Motivasyon → Aktivite. The audit
+          trail is ALWAYS last (never a right sidebar) and notes always sit
+          above it. */}
+      <div className="mt-5 flex flex-col gap-5">
 
           {/* Görev bilgileri */}
-          <div className="order-1 lg:order-none bg-white rounded-xl border border-gray-200 p-5">
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
             <h3 className="text-sm font-semibold text-gray-700 mb-4">Görev bilgileri</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FieldRow label="Açıklama" className="sm:col-span-2">
@@ -454,18 +453,18 @@ function TaskEditor({
             )}
           </div>
 
-          {/* Notlar — the main working area under the task details. */}
-          {notesSlot && <div className="order-3 lg:order-none">{notesSlot}</div>}
-        </div>
+          {/* Sorumlu kişiler — active assignment management, right under the
+              task details (never a passive side card). */}
+          {participantsSlot}
 
-        <div className="contents lg:flex lg:w-[340px] lg:shrink-0 lg:flex-col lg:gap-5">
-          {/* Sorumlu kişiler — assignment management, right next to the details. */}
-          {participantsSlot && <div className="order-2 lg:order-none">{participantsSlot}</div>}
+          {/* Notlar — the main working area. */}
+          {notesSlot}
+
           {/* Puan & Motivasyon — compact, above the audit trail. */}
-          {effortSlot && <div className="order-4 lg:order-none">{effortSlot}</div>}
-          {/* Aktivite — audit trail, intentionally last. */}
-          <div className="order-5 lg:order-none">{activitySlot}</div>
-        </div>
+          {effortSlot}
+
+          {/* Aktivite — audit trail, intentionally the very last block. */}
+          {activitySlot}
       </div>
     </>
   );
@@ -556,7 +555,7 @@ export function TaskDetail({
   const creatorName = creator ? (creator.full_name ?? creator.email ?? null) : null;
 
   return (
-    <div className="max-w-6xl mx-auto py-6 px-4">
+    <div className="max-w-4xl mx-auto py-6 px-4">
       <TaskEditor
         key={version}
         task={task}
