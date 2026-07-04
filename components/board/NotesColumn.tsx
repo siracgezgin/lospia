@@ -336,6 +336,7 @@ export function NotesColumn({
   mobile = false,
   currentUserId,
   isAdmin = false,
+  feed,
 }: {
   notes: WorkspaceNote[];
   workspaceId: string;
@@ -346,6 +347,9 @@ export function NotesColumn({
   // Per-note edit/delete gating: admins manage any note; members only their own.
   currentUserId?: string;
   isAdmin?: boolean;
+  // Haftanın Not Akışı — the primary content of the column (weekly task-note
+  // feed rendered by the board). The sticky "Pano notları" stay below it.
+  feed?: React.ReactNode;
 }) {
   // A note is modifiable by an owner/admin, or by the member who authored it.
   const canModifyNote = (note: WorkspaceNote) =>
@@ -503,11 +507,9 @@ export function NotesColumn({
 
   const noteIds = optimisticNotes.map((n) => n.id);
 
-  const emptyState = optimisticNotes.length === 0 && !adding;
-  const listCls = cn(
-    "flex flex-col gap-2 rounded-lg p-1 min-h-20",
-    emptyState && "border-2 border-dashed border-[#d4cf9e]",
-  );
+  // No dashed placeholder box — an empty sticky-note list renders nothing (the
+  // weekly feed above is the column's primary content).
+  const listCls = "flex flex-col gap-2 rounded-lg p-1";
 
   const handlers: NoteHandlers = {
     onDelete: requestDelete,
@@ -524,6 +526,23 @@ export function NotesColumn({
         <div className="flex items-center gap-2">
           <StickyNote size={13} className="text-[#c8c39e]" />
           <h3 className="text-xs font-bold uppercase tracking-wider text-[#6b6748]">Notlar</h3>
+        </div>
+      </div>
+
+      {/* Haftanın Not Akışı — primary content */}
+      {feed && (
+        <div className="flex flex-col gap-1.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 px-1">
+            Bu haftaki görev notları
+          </p>
+          {feed}
+        </div>
+      )}
+
+      {/* Pano notları (sticky quick notes) — secondary section */}
+      <div className="flex items-center justify-between px-1 mt-1">
+        <div className="flex items-center gap-1.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Pano notları</p>
           <span className="text-[10px] text-[#6b6748] bg-[#f0ece4] rounded-full px-1.5 py-0.5 leading-none">
             {optimisticNotes.length}
           </span>
@@ -532,7 +551,7 @@ export function NotesColumn({
           <button
             onClick={() => setAdding(true)}
             className="p-0.5 text-gray-300 hover:text-[#406775] rounded transition-colors"
-            aria-label="Not ekle"
+            aria-label="Pano notu ekle"
           >
             <Plus size={14} />
           </button>

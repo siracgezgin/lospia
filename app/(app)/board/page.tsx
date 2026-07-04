@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { KanbanBoard } from "@/components/board/KanbanBoard";
-import type { Task, SavedView, Profile, WorkspaceContact, WorkspaceNote, WorkspaceRole, WorkspaceDepartment, TaskParticipant } from "@/types";
+import type { Task, SavedView, Profile, WorkspaceContact, WorkspaceNote, WorkspaceRole, WorkspaceDepartment, TaskParticipant, BoardNoteFeedItem } from "@/types";
+import { asNoteType, asNoteActionStatus } from "@/lib/notes/note-types";
 
 export type BoardRule = { id: string; title: string; category: string | null; updated_at: string };
 export type BoardMember = { memberId: string; userId: string; name: string; isAdmin?: boolean };
@@ -158,6 +159,82 @@ export default async function BoardPage({
     });
   }
 
+  // ── Weekly note feed (Haftanın Not Akışı) ─────────────────────────────────
+  // Latest task notes joined with their task; the client filters by the selected
+  // board week (info notes: creation week only; open action notes carry over).
+  // The tasks!inner join runs under the tasks RLS, so notes of admin_only tasks
+  // never reach a member; we re-assert visibility below as defense-in-depth.
+  // Pre-migration schemas (no note_type column) still return rows — the new
+  // fields are simply absent and default to info/open on the client.
+  type FeedTaskRow = {
+    id: string; title: string; department_id: string | null; due_date: string | null;
+    archived_at: string | null; deleted_at: string | null; visibility: string | null;
+  };
+  type FeedNoteRow = {
+    id: string; task_id: string; author_id: string | null; content: string; created_at: string;
+    note_type?: string; action_status?: string; metadata?: Record<string, unknown> | null;
+    due_date_at_note_time?: string | null;
+    task: FeedTaskRow | FeedTaskRow[] | null;
+    author: Pick<Profile, "id" | "full_name" | "email"> | Pick<Profile, "id" | "full_name" | "email">[] | null;
+  };
+  const { data: feedRows } = await supabase
+    .from("task_notes")
+    .select("*, task:tasks!inner(id, title, department_id, due_date, archived_at, deleted_at, visibility), author:profiles!task_notes_author_id_fkey(id, full_name, email)")
+    .eq("workspace_id", workspaceId)
+    .order("created_at", { ascending: false })
+    .limit(150);
+
+  const nameOfUser = (id: string | null | undefined): string | null => {
+    if (!id) return null;
+    const p = profiles.find((x) => x.id === id);
+    return p?.full_name ?? p?.email ?? null;
+  };
+  const nameOfContact = (id: string): string | null =>
+    contacts.find((c) => c.id === id)?.name ?? null;
+
+  const noteFeed: BoardNoteFeedItem[] = ((feedRows ?? []) as unknown as FeedNoteRow[])
+    .map((row) => {
+      const task = Array.isArray(row.task) ? row.task[0] : row.task;
+      if (!task || task.archived_at || task.deleted_at) return null;
+      if (!isAdmin && task.visibility === "admin_only") return null;
+      const author = Array.isArray(row.author) ? row.author[0] : row.author;
+      const meta = (row.metadata ?? {}) as Record<string, unknown>;
+      const notifyUserIds = Array.isArray(meta.notify_user_ids) ? (meta.notify_user_ids as string[]) : [];
+      const notifyContactIds = Array.isArray(meta.notify_contact_ids) ? (meta.notify_contact_ids as string[]) : [];
+      const notifiedNames = [
+        ...notifyUserIds.map((id) => nameOfUser(id)),
+        ...notifyContactIds.map((id) => nameOfContact(id)),
+      ].filter((n): n is string => !!n);
+      return {
+        id: row.id,
+        taskId: task.id,
+        taskTitle: task.title,
+        taskDueDate: task.due_date ? String(task.due_date).slice(0, 10) : null,
+        departmentId: task.department_id,
+        authorId: row.author_id,
+        authorName: author?.full_name ?? author?.email ?? "Bilinmeyen kullanıcı",
+        content: row.content,
+        noteType: asNoteType(row.note_type),
+        actionStatus: asNoteActionStatus(row.action_status),
+        createdAt: row.created_at,
+        notifiedNames: [...new Set(notifiedNames)],
+        claimedByName: nameOfUser(typeof meta.claimed_by === "string" ? meta.claimed_by : null),
+      } satisfies BoardNoteFeedItem;
+    })
+    .filter((x): x is BoardNoteFeedItem => x !== null);
+
+  // Current user's own receipts (RLS: own rows; admins see all — we only need
+  // "did I see/claim this" on the board). Missing table pre-migration → empty.
+  let noteAcks: { note_id: string; user_id: string; action: string }[] = [];
+  if (noteFeed.length > 0) {
+    const { data: ackRows } = await supabase
+      .from("task_note_acknowledgements")
+      .select("note_id, user_id, action")
+      .eq("workspace_id", workspaceId)
+      .limit(1000);
+    noteAcks = (ackRows ?? []) as { note_id: string; user_id: string; action: string }[];
+  }
+
   const viewSlug = params.view ?? null;
 
   return (
@@ -178,6 +255,8 @@ export default async function BoardPage({
       members={members}
       deptMembers={deptMembers}
       userRole={userRole}
+      noteFeed={noteFeed}
+      noteAcks={noteAcks}
     />
   );
 }

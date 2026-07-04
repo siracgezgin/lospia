@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import { TaskDetail } from "@/components/task/TaskDetail";
 import type { Task, TaskActivity, TaskActivityLogWithActor, TimeEntry, CustomFieldDefinition, Profile, WorkspaceContact, WorkspaceDepartment, TaskNoteWithAuthor } from "@/types";
-import { TaskNotesPanel } from "@/components/task/TaskNotesPanel";
+import { TaskNotesPanel, type NotePerson } from "@/components/task/TaskNotesPanel";
 import { TaskParticipantsPanel, type PanelMember, type PanelContact, type PanelParticipant } from "@/components/task/TaskParticipantsPanel";
 import { TaskEffortPanel } from "@/components/task/TaskEffortPanel";
 import { isEffortSize } from "@/lib/points/effort";
@@ -223,6 +223,27 @@ export default async function TaskDetailPage({
     || (task.created_by ?? null) === user.id
     || (currentMemberId != null && panelParticipants.some((p) => p.memberId === currentMemberId));
 
+  // Note-form inputs: due-date editing mirrors canEditTask (admin / assignee /
+  // creator); the notify picker gets the SAME assignable people as every other
+  // assignment UI; acknowledgements power "Gördüm / Üzerime aldım" states.
+  const canEditDueDate = canComplete
+    || task.assignee_id === user.id
+    || (task.created_by ?? null) === user.id;
+  const notePeople: NotePerson[] = assignablePeople.map((p) => ({
+    id: p.id, name: p.name, type: p.type,
+    userId: p.userId, memberId: p.memberId, contactId: p.contactId,
+  }));
+  // Pre-migration the table doesn't exist — fall back to an empty list, never crash.
+  const noteIds = taskNotes.map((n) => n.id);
+  let noteAcks: { note_id: string; user_id: string; action: string }[] = [];
+  if (noteIds.length > 0) {
+    const { data: ackRows } = await supabase
+      .from("task_note_acknowledgements")
+      .select("note_id, user_id, action")
+      .in("note_id", noteIds);
+    noteAcks = (ackRows ?? []) as { note_id: string; user_id: string; action: string }[];
+  }
+
   return (
     <TaskDetail
       task={task}
@@ -260,6 +281,11 @@ export default async function TaskDetailPage({
           currentUserId={user.id}
           isViewer={isViewer}
           isAdmin={canComplete}
+          taskDueDate={task.due_date}
+          canEditDueDate={canEditDueDate}
+          canManageAssignment={!isViewer && canManageParticipants}
+          people={notePeople}
+          acks={noteAcks}
         />
       }
       effortSlot={

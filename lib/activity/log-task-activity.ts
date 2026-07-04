@@ -34,6 +34,9 @@ export const ACTIVITY_ACTIONS = {
   RESPONSIBLE_REMOVED: "responsible_removed",
   AUTO_MOVED_TO_REVIEW: "auto_moved_to_review",
   NOTE_ADDED: "note_added",
+  NOTE_SEEN: "note_seen",
+  NOTE_ACTION_CLAIMED: "note_action_claimed",
+  TASK_HANDED_OFF: "task_handed_off",
   // Puan & Motivasyon
   POINTS_FINALIZED: "points_finalized",
   POINTS_REVOKED: "points_revoked",

@@ -55,6 +55,20 @@ export function activityMessage(
   const newV = log.new_value;
   const meta = (log.metadata ?? {}) as {
     user_id?: string | null; points?: number; source_title?: string | null;
+    // Operational note workflow metadata
+    note_type?: string | null;
+    due_from?: string | null; due_to?: string | null;
+    notified_user_ids?: string[]; notified_contact_ids?: string[];
+    target_user_ids?: string[];
+  };
+
+  // Resolve a list of person ids to a Turkish name list ("Ali, Ayşe").
+  const namesOf = (ids: unknown): string | null => {
+    if (!Array.isArray(ids)) return null;
+    const names = ids
+      .map((id) => resolveName(typeof id === "string" ? id : null))
+      .filter((n): n is string => !!n);
+    return names.length > 0 ? names.join(", ") : null;
   };
 
   switch (log.action) {
@@ -112,8 +126,39 @@ export function activityMessage(
       return "tamamlamayı geri aldı.";
     case "auto_moved_to_review":
       return "tüm sorumlular tamamladı; görev Kontrol / Onay aşamasına taşındı.";
-    case "note_added":
-      return "not ekledi.";
+    case "note_added": {
+      // Compose: "not ekledi[, teslim tarihini X → Y olarak değiştirdi]
+      //           [ ve NAME kişisine aksiyon bildirdi / onaya gönderdi]."
+      const parts: string[] = ["not ekledi"];
+      if (meta.due_to && meta.due_from !== meta.due_to) {
+        parts.push(`teslim tarihini ${transition(dateLabel(meta.due_from), dateLabel(meta.due_to))} olarak değiştirdi`);
+      }
+      const notified = namesOf(meta.notified_user_ids);
+      if (notified) {
+        if (meta.note_type === "action_required") {
+          parts.push(`${notified} kişisine aksiyon bildirdi`);
+        } else if (meta.note_type === "approval_waiting") {
+          parts.push(`${notified} kişisinin onayına sundu`);
+        } else if (meta.note_type !== "handoff") {
+          // handoff is narrated by the dedicated task_handed_off /
+          // responsible_added entries — don't repeat it here.
+          parts.push(`${notified} kişisini bilgilendirdi`);
+        }
+      }
+      if (parts.length === 1) return "not ekledi.";
+      if (parts.length === 2) return `${parts[0]} ve ${parts[1]}.`;
+      return `${parts[0]}, ${parts.slice(1, -1).join(", ")} ve ${parts[parts.length - 1]}.`;
+    }
+    case "note_seen":
+      return "notu gördü.";
+    case "note_action_claimed":
+      return "nottaki aksiyonu üzerine aldı.";
+    case "task_handed_off": {
+      const names = namesOf(meta.target_user_ids);
+      return names
+        ? `görevi ${names} kişisine devretti.`
+        : "görevi devretti.";
+    }
     case "title_changed":
       return "başlığı değiştirdi.";
     case "description_changed":

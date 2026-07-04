@@ -63,10 +63,11 @@ import { buildDeptMeta, type DeptMeta } from "@/lib/utils/departments";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
 import { CsvImportModal } from "@/components/task/CsvImportModal";
 import { NotesColumn } from "@/components/board/NotesColumn";
+import { WeeklyNoteFeed } from "@/components/board/WeeklyNoteFeed";
 import { BoardRulesPanel } from "@/components/board/BoardRulesPanel";
 import { WorkspaceLiveRefresh } from "@/components/realtime/WorkspaceLiveRefresh";
 import { canCreateTask, canDeleteTask, canArchiveTask, canCompleteTask } from "@/lib/auth/permissions";
-import type { Task, SavedView, TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceNote, WorkspaceRole, WorkspaceDepartment } from "@/types";
+import type { Task, SavedView, TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceNote, WorkspaceRole, WorkspaceDepartment, BoardNoteFeedItem } from "@/types";
 import type { BoardRule, BoardMember } from "@/app/(app)/board/page";
 import type { TaskParticipant } from "@/types";
 
@@ -82,6 +83,11 @@ const ParticipantsContext = createContext<Record<string, TaskParticipant[]>>({})
 function useTaskParticipants(taskId: string): TaskParticipant[] {
   return useContext(ParticipantsContext)[taskId] ?? [];
 }
+
+// Note-workflow signal per task (at most ONE small chip on the card — cards
+// must stay uncluttered and never compete with the Acil frame emphasis).
+type NoteSignal = { label: string; className: string };
+const NoteSignalsContext = createContext<Record<string, NoteSignal>>({});
 
 // Board-wide permission + toast surface, so deep card components can enforce the
 // same rules used by drag/drop and report blocks with a clear toast.
@@ -423,6 +429,9 @@ interface Props {
   userRole?: WorkspaceRole;
   // When set, the board runs as the Yönetici Pano (manager mode).
   adminBoard?: AdminBoardConfig;
+  // Weekly note feed (Haftanın Not Akışı) + the current user's receipts.
+  noteFeed?: BoardNoteFeedItem[];
+  noteAcks?: { note_id: string; user_id: string; action: string }[];
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -740,6 +749,9 @@ function CardContent({
   // State is an OVERLAY only: a chip + due-date color. Never the card color.
   const markers = getTaskStateMarkers(task);
   const showPriority = PRIORITY_SHOW_ON_BOARD[task.priority];
+  // Note-workflow signal (max ONE chip: Aksiyon bekliyor > Onay bekliyor >
+  // Sorumlu değişti > Yeni not > Güncellendi) — never crowds the Acil frame.
+  const noteSignal = useContext(NoteSignalsContext)[task.id];
 
   return (
     <div className="flex-1 min-w-0">
@@ -762,6 +774,11 @@ function CardContent({
             <Badge size="xs" className={cn("shrink-0 inline-flex items-center gap-0.5", PRIORITY_CHIP[task.priority])}>
               {task.priority === "urgent" && <AlertTriangle size={9} strokeWidth={2.5} />}
               {PRIORITY_LABELS[task.priority]}
+            </Badge>
+          )}
+          {noteSignal && (
+            <Badge size="xs" className={cn("shrink-0", noteSignal.className)}>
+              {noteSignal.label}
             </Badge>
           )}
           {/* Admin_only marker. Members never receive these tasks, so this chip
@@ -1208,6 +1225,8 @@ export function KanbanBoard({
   deptMembers = [],
   userRole = "member",
   adminBoard,
+  noteFeed = [],
+  noteAcks = [],
 }: Props) {
   const isAdminBoard = !!adminBoard;
   const deptMeta = useMemo(() => buildDeptMeta(departments), [departments]);
@@ -1597,9 +1616,89 @@ export function KanbanBoard({
     [canComplete, isResponsible, canDeleteTaskFn, taskHrefSuffix], // eslint-disable-line react-hooks/exhaustive-deps -- showToast uses stable setToasts
   );
 
+  // ── Haftanın Not Akışı: week-scoped feed items ────────────────────────────
+  // Info notes belong ONLY to their creation week; action/handoff/approval
+  // notes carry over into later weeks while still open (until claimed/closed),
+  // so a pending action can never silently disappear on a week flip. Note the
+  // task columns' week filter stays due_date-based and untouched — this filter
+  // applies to the note feed only.
+  const claimedNoteIds = useMemo(
+    () => new Set(noteAcks.filter((a) => a.action === "claimed").map((a) => a.note_id)),
+    [noteAcks],
+  );
+  const weekFeedItems = useMemo(() => {
+    const mondayStr = localISO(weekStart);
+    const sunday = new Date(weekStart);
+    sunday.setDate(sunday.getDate() + 6);
+    const sundayStr = localISO(sunday);
+    const dayOf = (iso: string) => localISO(new Date(iso));
+    return noteFeed.filter((n) => {
+      const d = dayOf(n.createdAt);
+      const inWeek = d >= mondayStr && d <= sundayStr;
+      if (n.noteType === "info") return inWeek;
+      const claimed = n.actionStatus === "claimed" || !!n.claimedByName || claimedNoteIds.has(n.id);
+      const open = !claimed && n.actionStatus !== "closed";
+      return inWeek || (open && d <= sundayStr);
+    });
+  }, [noteFeed, weekStart, claimedNoteIds]);
+
+  // ── Per-card note signal (single small chip, priority-ordered) ────────────
+  const noteSignals = useMemo<Record<string, NoteSignal>>(() => {
+    const now = new Date().getTime();
+    const RECENT_NOTE = 48 * 3600 * 1000; // "Yeni not" / "Sorumlu değişti" window
+    const RECENT_UPDATE = 24 * 3600 * 1000; // "Güncellendi" window
+    const seenByMe = new Set(
+      noteAcks.filter((a) => a.user_id === userId && a.action === "seen").map((a) => a.note_id),
+    );
+    const best: Record<string, { rank: number; sig: NoteSignal }> = {};
+    const propose = (taskId: string, rank: number, label: string, className: string) => {
+      const cur = best[taskId];
+      if (!cur || rank < cur.rank) best[taskId] = { rank, sig: { label, className } };
+    };
+    for (const n of noteFeed) {
+      const claimed = n.actionStatus === "claimed" || !!n.claimedByName || claimedNoteIds.has(n.id);
+      const open = !claimed && n.actionStatus !== "closed";
+      const recent = now - new Date(n.createdAt).getTime() < RECENT_NOTE;
+      if (n.noteType === "action_required" && open) {
+        propose(n.taskId, 1, "Aksiyon bekliyor", "bg-amber-50 text-amber-700 border border-amber-200");
+      } else if (n.noteType === "approval_waiting" && open) {
+        propose(n.taskId, 2, "Onay bekliyor", "bg-violet-50 text-violet-700 border border-violet-200");
+      } else if (n.noteType === "handoff" && recent) {
+        propose(n.taskId, 3, "Sorumlu değişti", "bg-sky-50 text-sky-700 border border-sky-200");
+      } else if (recent && n.authorId !== userId && !seenByMe.has(n.id)) {
+        propose(n.taskId, 4, "Yeni not", "bg-blue-50 text-blue-700 border border-blue-200");
+      }
+    }
+    // "Güncellendi" — a recent task edit with no stronger note signal. Done
+    // cards skip it (completed history needs no freshness chip).
+    for (const t of optimisticTasks) {
+      if (best[t.id] || t.status === "done") continue;
+      if (
+        t.updated_at && t.created_at && t.updated_at !== t.created_at &&
+        now - new Date(t.updated_at).getTime() < RECENT_UPDATE
+      ) {
+        propose(t.id, 5, "Güncellendi", "bg-gray-100 text-gray-600 border border-gray-200");
+      }
+    }
+    const out: Record<string, NoteSignal> = {};
+    for (const [k, v] of Object.entries(best)) out[k] = v.sig;
+    return out;
+  }, [noteFeed, noteAcks, claimedNoteIds, userId, optimisticTasks]);
+
+  const feedNode = (
+    <WeeklyNoteFeed
+      items={weekFeedItems}
+      deptMeta={deptMeta}
+      currentUserId={userId}
+      isViewer={isViewer}
+      acks={noteAcks}
+    />
+  );
+
   return (
     <DeptMetaContext.Provider value={deptMeta}>
     <ParticipantsContext.Provider value={participantsByTask}>
+    <NoteSignalsContext.Provider value={noteSignals}>
     <BoardContext.Provider value={boardCtx}>
     {/* Desktop: fixed-height shell with internal column scroll. Mobile (max-md):
         natural height so the rules/week/tabs/filters chrome scrolls away with the
@@ -1867,7 +1966,7 @@ export function KanbanBoard({
             {/* Continuous sticky band behind every column header (no gaps/peek). */}
             <div aria-hidden className="sticky top-0 z-10 h-11 bg-app border-b border-line shadow-[0_4px_10px_-6px_rgba(16,24,40,0.18)]" />
             <div className="flex gap-3 sm:gap-4 px-3 sm:px-4 pb-4 items-start -mt-11">
-              {!isAdminBoard && <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} currentUserId={userId} isAdmin={canComplete} />}
+              {!isAdminBoard && <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} currentUserId={userId} isAdmin={canComplete} feed={feedNode} />}
               {BOARD_COLUMNS.map((col) => (
                 <StaticKanbanColumn
                   key={col.id}
@@ -1896,7 +1995,7 @@ export function KanbanBoard({
               {/* Continuous sticky band behind every column header (no gaps/peek). */}
               <div aria-hidden className="sticky top-0 z-10 h-11 bg-app border-b border-line shadow-[0_4px_10px_-6px_rgba(16,24,40,0.18)]" />
               <div className="flex gap-3 sm:gap-4 px-3 sm:px-4 pb-4 items-start -mt-11">
-                {!isAdminBoard && <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} currentUserId={userId} isAdmin={canComplete} />}
+                {!isAdminBoard && <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} currentUserId={userId} isAdmin={canComplete} feed={feedNode} />}
                 {BOARD_COLUMNS.map((col) => (
                   <KanbanColumn
                     key={col.id}
@@ -1969,7 +2068,7 @@ export function KanbanBoard({
         {/* Single column content — flows into the page scroll (no inner scroll) */}
         <div className="px-3 py-3">
           {!isAdminBoard && mobileSeg === "notes" ? (
-            <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} currentUserId={userId} isAdmin={canComplete} mobile />
+            <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} currentUserId={userId} isAdmin={canComplete} mobile feed={feedNode} />
           ) : (
             (() => {
               const colTasks = tasksByCol[mobileSeg as BoardColId] ?? [];
@@ -2065,6 +2164,7 @@ export function KanbanBoard({
       )}
     </div>
     </BoardContext.Provider>
+    </NoteSignalsContext.Provider>
     </ParticipantsContext.Provider>
     </DeptMetaContext.Provider>
   );

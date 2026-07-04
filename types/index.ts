@@ -241,6 +241,13 @@ export type DepartmentMember = {
 };
 
 // task_notes — user-authored notes on tasks ("Notlar")
+// Workflow fields (note_type … action_status) come from
+// 20240209000000_task_note_workflow.sql; they are optional so the app keeps
+// working (plain-note fallback) when the migration is not applied yet.
+export type TaskNoteType = "info" | "action_required" | "handoff" | "approval_waiting";
+export type TaskNoteActionStatus = "open" | "seen" | "claimed" | "closed";
+export type TaskNoteAcknowledgementAction = "seen" | "claimed";
+
 export type TaskNote = {
   id: string;
   workspace_id: string;
@@ -250,10 +257,46 @@ export type TaskNote = {
   is_pinned: boolean;
   created_at: string;
   updated_at: string;
+  // Operational note workflow (additive; absent pre-migration)
+  note_type?: TaskNoteType;
+  metadata?: Record<string, unknown> | null;
+  due_date_at_note_time?: string | null;
+  action_status?: TaskNoteActionStatus;
 };
 
 export type TaskNoteWithAuthor = TaskNote & {
   author: Pick<Profile, "id" | "full_name" | "email"> | null;
+};
+
+// task_note_acknowledgements — per-user "Gördüm" / "Üzerime aldım" receipts
+export type TaskNoteAcknowledgement = {
+  id: string;
+  workspace_id: string;
+  task_id: string;
+  note_id: string;
+  user_id: string;
+  action: TaskNoteAcknowledgementAction;
+  created_at: string;
+};
+
+// One weekly note-feed entry on the board's left column — a task note joined
+// with just enough task/author context to render a compact feed card.
+export type BoardNoteFeedItem = {
+  id: string;
+  taskId: string;
+  taskTitle: string;
+  taskDueDate: string | null;
+  departmentId: string | null;
+  authorId: string | null;
+  authorName: string;
+  content: string;
+  noteType: TaskNoteType;
+  actionStatus: TaskNoteActionStatus;
+  createdAt: string;
+  /** Resolved display names of the note's notify targets (may be empty). */
+  notifiedNames: string[];
+  /** Who claimed the action ("Üzerine aldı"), when derivable. */
+  claimedByName: string | null;
 };
 
 // Per-person task completion (multi-participant workflow)

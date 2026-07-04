@@ -26,6 +26,9 @@ export type TaskNotificationEvent =
   | "task_responsibility_removed"
   | "points_updated"
   | "task_note_added"
+  | "task_note_action_required"
+  | "task_note_handoff"
+  | "task_note_approval_waiting"
   | "task_waiting_on";
 
 export const NOTIFICATION_EVENTS: Record<
@@ -40,5 +43,10 @@ export const NOTIFICATION_EVENTS: Record<
   task_responsibility_removed:{ dbType: "task_status_changed",  title: "Görev sorumluluğunuz kaldırıldı" },
   points_updated:             { dbType: "task_status_changed",  title: "Puanınız güncellendi" },
   task_note_added:            { dbType: "task_note_added",      title: "Göreve not eklendi" },
+  // Operational note workflow — same enum bucket (task_note_added), the
+  // distinct Turkish title is what the recipient sees and what dedupe keys on.
+  task_note_action_required:  { dbType: "task_note_added",      title: "Sizden aksiyon bekleniyor" },
+  task_note_handoff:          { dbType: "task_note_added",      title: "Görev sorumluluğu size yönlendirildi" },
+  task_note_approval_waiting: { dbType: "task_note_added",      title: "Onayınız bekleniyor" },
   task_waiting_on:            { dbType: "task_waiting_on",      title: "Görev sizi bekliyor" },
 };
