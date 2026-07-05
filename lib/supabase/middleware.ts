@@ -1,6 +1,7 @@
 // Middleware Supabase client — used in middleware.ts to refresh sessions
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isMarketingHost, isMarketingPath } from "@/lib/marketing/host";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -39,7 +40,12 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/api") ||
     pathname === "/favicon.ico";
 
-  if (!isPublicAsset && !isAuthRoute && !user) {
+  // Public Lospia marketing pages — NEVER on the AF Operasyon pilot host.
+  // On operasyon.aslifilinta.com these paths stay auth-gated exactly as before.
+  const isPublicMarketingPage =
+    isMarketingPath(pathname) && isMarketingHost(request.headers.get("host"));
+
+  if (!isPublicAsset && !isAuthRoute && !isPublicMarketingPage && !user) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
