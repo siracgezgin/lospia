@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LOSPIA_LOGO, PRODUCT_NAME } from "@/lib/branding";
 
 // Shared public-site chrome: header + footer around any marketing page.
 // Server component, no client JS — links only. Nav section links point to
@@ -6,10 +7,13 @@ import Link from "next/link";
 
 function Wordmark() {
   return (
-    <Link href="/" className="flex items-baseline gap-1 select-none">
-      <span className="font-serif text-xl font-semibold tracking-tight text-ink">
-        Lospia
-      </span>
+    <Link href="/" className="flex items-center select-none">
+      <img
+        src={LOSPIA_LOGO}
+        alt={PRODUCT_NAME}
+        className="h-7 w-auto"
+        draggable={false}
+      />
     </Link>
   );
 }
@@ -48,8 +52,13 @@ export function MarketingFooter() {
   return (
     <footer className="border-t border-hairline bg-surface">
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-10 sm:px-6 md:flex-row md:items-center md:justify-between">
-        <div className="space-y-1">
-          <p className="font-serif text-lg font-semibold text-ink">Lospia</p>
+        <div className="space-y-2">
+          <img
+            src={LOSPIA_LOGO}
+            alt={PRODUCT_NAME}
+            className="h-7 w-auto"
+            draggable={false}
+          />
           <p className="text-sm text-muted">
             Marka ekipleri için premium operasyon paneli.
           </p>

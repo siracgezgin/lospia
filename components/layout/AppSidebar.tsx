@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Wordmark } from "@/components/ui/Wordmark";
+import { LOSPIA_ICON, LOSPIA_LOGO, PRODUCT_NAME } from "@/lib/branding";
 import { SAVED_VIEW_SLUG_MAP } from "@/lib/utils/task-constants";
 import { quoteForWeek } from "@/lib/utils/weekly-quotes";
 import { canViewDestructivePages, canManageSettings } from "@/lib/auth/permissions";
@@ -86,14 +87,14 @@ export function AppSidebar({
         collapsed ? "w-14" : "w-60",
       )}
     >
-      {/* Brand row — AF icon + workspace wordmark. */}
+      {/* Brand row — Lospia product icon + workspace wordmark. The icon is the
+          product mark (collapsed state shows it alone); the wordmark is the
+          tenant/workspace name and stays a separate concern. */}
       <div className={cn("flex items-center gap-2.5 h-14 border-b border-line", collapsed ? "justify-center px-0" : "px-4")}>
         <img
-          src="/brands/af-icon.png"
-          alt="AF"
-          width={26}
-          height={24}
-          className="h-6 w-auto shrink-0 select-none"
+          src={LOSPIA_ICON}
+          alt={PRODUCT_NAME}
+          className="h-6 w-6 shrink-0 select-none"
           draggable={false}
         />
         {!collapsed && <Wordmark name={wsName} />}
@@ -231,14 +232,14 @@ export function AppSidebar({
             </p>
           </div>
 
-          {/* Aslı Filinta brand lockup — anchors the sidebar with the parent brand. */}
+          {/* Lospia product lockup — anchors the expanded sidebar with the
+              full product logo. Only rendered when expanded (this block is
+              inside the !collapsed branch). */}
           <div className="pt-1.5 flex justify-center">
             <img
-              src="/brands/asli-filinta-logo.png"
-              alt="Aslı Filinta"
-              width={140}
-              height={72}
-              className="h-9 w-auto object-contain opacity-80 select-none"
+              src={LOSPIA_LOGO}
+              alt={PRODUCT_NAME}
+              className="h-7 w-auto object-contain opacity-80 select-none"
               draggable={false}
             />
           </div>
