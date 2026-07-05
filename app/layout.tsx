@@ -2,9 +2,12 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 const SITE_URL = "https://operasyon.aslifilinta.com";
-const SITE_TITLE = "Aslı Filinta Operasyon";
+// Product-level branding — the app's identity is Lospia. Tenant/workspace
+// names (e.g. "Aslı Filinta Operasyon") stay inside the app as workspace data
+// and are rendered from the DB, not from this product metadata.
+const SITE_TITLE = "Lospia";
 const SITE_DESCRIPTION =
-  "Aslı Filinta ekibi için dahili görev ve operasyon yönetim sistemi.";
+  "Lospia; görevler, ekip akışı, onaylar ve operasyon takibi için modern bir çalışma alanı.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
