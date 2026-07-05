@@ -41,6 +41,52 @@
 
 ---
 
+# Phase 2 — Pilot Proof + Sales Assets
+
+## Mevcut production durumu
+
+- AF Operasyon canlıda: `operasyon.aslifilinta.com` — production'a dokunulmuyor.
+- AF production'da `NEXT_PUBLIC_MARKETING_SITE_ENABLED=false`; AF host
+  davranışı korunuyor, marketing bu domainde asla servis edilmez.
+- `request_access_leads` migration'ı prod'a **henüz uygulanmadı**; Lospia
+  domaini ve resmi e-posta **henüz yok**.
+
+## Market-readiness fazında tamamlananlar
+
+- Public marketing sitesi (hostname-gated), `/request-access` lead formu +
+  insert-only RLS'li `request_access_leads` tablosu (migration local'de hazır).
+- Dürüst erken-aşama legal taslakları (`/legal/*`).
+- Satış temel dokümanları: pilot teklifi, SOW şablonu, onboarding checklist,
+  görüşme scriptleri, ilk 100 lead planı (`docs/sales/`).
+
+## Bu fazda eklenen satış dokümanları
+
+| Doküman | Ne sağlıyor |
+|---|---|
+| `docs/sales/AF_PILOT_CASE_STUDY_DRAFT.md` | AF pilotunu güvenli (onay şartlı) case study'ye çevirme taslağı; ölçülecek metrikler, görüşme soruları, onay checklist |
+| `docs/sales/DEMO_SCRIPT_60_SEC.md` | 60 sn demo scripti — kurucu videosu / LinkedIn / cold-outreach Loom versiyonları |
+| `docs/sales/DEMO_SCREENSHOT_CHECKLIST.md` | Demo-safe veri standardı + ekran/kayıt checklist'i; gerçek AF verisi asla kullanılmaz |
+| `docs/sales/FIRST_100_LEADS_PLAN.md` | Niş bazlı lead bulma (arama operatörleri, LinkedIn/IG desenleri), 0-100 skorlama, lead tablosu kolonları |
+| `docs/sales/OUTREACH_MESSAGE_PACK.md` | 12 kullanıma hazır mesaj (WhatsApp/LinkedIn/e-posta/IG/demo takip) — TR + kısa versiyonlar + placeholder'lar |
+| `docs/sales/PUBLIC_LAUNCH_BLOCKERS.md` | Public marketing açılmadan önce zorunlu blocker listesi; private outreach'i engellemeyenler ayrıştırıldı |
+
+## Sıradaki operasyonel adımlar (bu sırayla)
+
+1. **Ekran görüntülerini sanitize et** — demo workspace kur, demo-safe veriyle
+   `DEMO_SCREENSHOT_CHECKLIST.md`'e göre çek.
+2. **60 sn Loom kaydet** — `DEMO_SCRIPT_60_SEC.md` Versiyon A/B.
+3. **İlk 30 sıcak lead'i hazırla** — network; mesaj dilini burada test et.
+4. **İlk 100 cold/warm lead'i hazırla** — `FIRST_100_LEADS_PLAN.md`
+   kolonlarıyla tablo; tek tek elle seçim.
+5. **10 discovery görüşmesi yap** — `DISCOVERY_CALL_SCRIPT.md` ile.
+6. **1 ücretli pilot hedefle** — `PILOT_OFFER.md` şartlarıyla (ücretsiz pilot yok).
+
+> **Kural: 10 discovery görüşmesi tamamlanmadan yeni ürün özelliği
+> geliştirilmez.** Bu fazın çıktısı kod değil; satılabilir paket, görüşme ve
+> pilot.
+
+---
+
 # Arka plan: strateji tartışmasının özeti
 
 Evet, şimdi tartışmanın özeti şu: **araştırmalar tek bir yöne işaret ediyor.** Lospia’yı şu anda “herkes için SaaS” diye piyasaya sürersen batarsın. Doğru rota: **AF Operasyon pilotunu gerçek vaka çalışmasına çevir → marka/e-ticaret/yaratıcı ekipler için productized setup olarak sat → sonra tekrarlanan parçaları SaaS’a standardize et.**
