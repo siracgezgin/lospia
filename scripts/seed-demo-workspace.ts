@@ -12,16 +12,22 @@
  *   npm run seed:demo-workspace -- --demo-only --execute  # apply (asks for
  *                                        typed confirmation CREATE_DEMO_WORKSPACE)
  *
+ * Talks to Postgres DIRECTLY (pg Client) — no Supabase REST/API keys needed.
+ * Default DSN is the local Supabase Postgres
+ * (postgresql://postgres:postgres@127.0.0.1:54322/postgres); override with
+ * SUPABASE_DB_URL. Execute mode runs in ONE transaction — any failure rolls
+ * everything back.
+ *
  * Safety rules (all enforced below — see DEMO_SEED_SCRIPT_PLAN.md §2):
  *   1.  --demo-only is mandatory; without it nothing runs, nothing connects.
  *   2.  Default mode is dry-run; writes require --execute.
- *   3.  Non-local Supabase URL is refused unless BOTH the env var
+ *   3.  Non-local DB URL is refused unless BOTH the env var
  *       DEMO_SEED_ALLOW_REMOTE=true and the flag --allow-remote are present.
  *   4.  No delete/truncate/update path exists in this script — inserts only.
  *   5.  The "AF Operasyon" workspace is never queried, referenced or written.
  *       Every insert carries the workspace id created by this run.
  *   6.  Creates a NEW workspace; stops if "Lospia Demo Operasyon" already exists.
- *   7.  Target Supabase URL and mode are printed before anything happens.
+ *   7.  Target DB URL (password masked) and mode are printed before anything happens.
  *   8.  Execute mode requires typing CREATE_DEMO_WORKSPACE verbatim.
  *   9.  Every created record id is logged to data/demo/seed-log-<ts>.json
  *       (data/ is gitignored).
@@ -38,7 +44,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as readline from "node:readline/promises";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { Client } from "pg";
 import { addDays, format, startOfWeek, subDays } from "date-fns";
 import { generateKeyBetween } from "fractional-indexing";
 
@@ -52,6 +58,7 @@ const DEMO_PASSWORD = "LospiaDemo!2026"; // local-only demo accounts
 const CONFIRMATION_PHRASE = "CREATE_DEMO_WORKSPACE";
 const LOG_DIR = path.join(process.cwd(), "data", "demo");
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost"]);
+const DEFAULT_LOCAL_DB_URL = "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
 
 // ── flags ────────────────────────────────────────────────────────────────────
 
@@ -467,6 +474,22 @@ function isLocalUrl(url: string): boolean {
   }
 }
 
+/** SUPABASE_DB_URL (shell env or .env.local) wins; otherwise local default. */
+function resolveDbUrl(): string {
+  const env = loadDotEnvLocal();
+  return process.env.SUPABASE_DB_URL || env.SUPABASE_DB_URL || DEFAULT_LOCAL_DB_URL;
+}
+
+function maskDbUrl(dbUrl: string): string {
+  try {
+    const u = new URL(dbUrl);
+    if (u.password) u.password = "****";
+    return u.toString();
+  } catch {
+    return dbUrl.replace(/:\/\/([^:@/]+):[^@/]+@/, "://$1:****@");
+  }
+}
+
 function fail(message: string): never {
   console.error(`\n❌  ${message}`);
   process.exit(1);
@@ -496,21 +519,17 @@ async function main(): Promise<void> {
     fail(`"${FORBIDDEN_WORKSPACE_NAME}" workspace'ine dokunulamaz.`);
   }
 
-  const env = loadDotEnvLocal();
-  const url = env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) {
-    fail(".env.local içinde NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY bulunamadı.");
-  }
+  const dbUrl = resolveDbUrl();
+  const maskedDbUrl = maskDbUrl(dbUrl);
 
   // Rule 3: refuse non-local targets unless BOTH remote gates are open.
-  const local = isLocalUrl(url);
+  const local = isLocalUrl(dbUrl);
   if (!local) {
     const envAllows = process.env.DEMO_SEED_ALLOW_REMOTE === "true";
     if (!envAllows || !ALLOW_REMOTE_FLAG) {
       fail(
-        `Hedef Supabase local değil: ${url}\n` +
-          "    Bu script yalnızca local Supabase (http://127.0.0.1:54321) içindir.\n" +
+        `Hedef veritabanı local değil: ${maskedDbUrl}\n` +
+          `    Bu script yalnızca local Supabase Postgres (${DEFAULT_LOCAL_DB_URL}) içindir.\n` +
           "    Uzak hedef için HEM DEMO_SEED_ALLOW_REMOTE=true HEM --allow-remote gerekir (önerilmez).",
       );
     }
@@ -521,7 +540,7 @@ async function main(): Promise<void> {
   // Rule 7: print the target before doing anything.
   const mode = DRY_RUN ? "DRY-RUN (yazma yok)" : "EXECUTE (kayıt oluşturulacak)";
   console.log("──────────────────────────────────────────────────");
-  console.log(`Hedef Supabase : ${url} ${local ? "(local)" : "(REMOTE!)"}`);
+  console.log(`Hedef Postgres : ${maskedDbUrl} ${local ? "(local)" : "(REMOTE!)"}`);
   console.log(`Mod            : ${mode}`);
   console.log(`Workspace      : ${DEMO_WORKSPACE_NAME} · Ekip: ${DEMO_TEAM_NAME}`);
   console.log("──────────────────────────────────────────────────");
@@ -529,37 +548,42 @@ async function main(): Promise<void> {
   const dueDates = computeDueDates(new Date());
   printPlan(dueDates);
 
-  const supabase = createClient(url, key, {
-    auth: { persistSession: false },
-    global: {
-      fetch: (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(10_000) }),
-    },
+  const client = new Client({
+    connectionString: dbUrl,
+    connectionTimeoutMillis: 10_000,
+    // Local Supabase Postgres has no TLS; remote poolers present cert chains
+    // Node doesn't bundle, so don't hard-fail verification.
+    ssl: local ? undefined : { rejectUnauthorized: false },
   });
 
   // Preflight (read-only): existing demo workspace / demo users.
-  // In dry-run an unreachable Supabase only skips these checks; execute aborts.
+  // In dry-run an unreachable DB only skips these checks; execute aborts.
   let existingWs: { id: string; name: string }[] = [];
   let existingProfiles: { id: string; email: string }[] = [];
   let preflightOk = true;
+  let connected = false;
   try {
-    const { data, error: wsErr } = await supabase
-      .from("workspaces")
-      .select("id, name")
-      .eq("name", DEMO_WORKSPACE_NAME);
-    if (wsErr) throw new Error(wsErr.message);
-    existingWs = data ?? [];
+    await client.connect();
+    connected = true;
+    const wsRes = await client.query<{ id: string; name: string }>(
+      `select id, name from public.workspaces where name = $1`,
+      [DEMO_WORKSPACE_NAME],
+    );
+    existingWs = wsRes.rows;
     const demoEmails = Object.values(PEOPLE).map((p) => p.email);
-    const { data: profiles, error: profErr } = await supabase
-      .from("profiles")
-      .select("id, email")
-      .in("email", demoEmails);
-    if (profErr) throw new Error(profErr.message);
-    existingProfiles = profiles ?? [];
+    const profRes = await client.query<{ id: string; email: string }>(
+      `select id, email from public.profiles where email = any($1)`,
+      [demoEmails],
+    );
+    existingProfiles = profRes.rows;
   } catch (err) {
     preflightOk = false;
     const msg = err instanceof Error ? err.message : String(err);
-    if (!DRY_RUN) fail(`Supabase'e bağlanılamadı (supabase start çalışıyor mu?): ${msg}`);
-    console.warn(`\n⚠️  Supabase'e erişilemedi — ön kontroller atlandı (${msg}).`);
+    if (!DRY_RUN) {
+      if (connected) await client.end().catch(() => {});
+      fail(`Veritabanına bağlanılamadı (supabase start çalışıyor mu?): ${msg}`);
+    }
+    console.warn(`\n⚠️  Veritabanına erişilemedi — ön kontroller atlandı (${msg}).`);
     console.warn("    Execute modundan önce `supabase start` ile local stack'i açın.");
   }
 
@@ -580,9 +604,11 @@ async function main(): Promise<void> {
   }
 
   if (DRY_RUN) {
+    if (connected) await client.end().catch(() => {});
     const logFile = writeLog({
       mode: "dry-run",
-      targetUrl: url,
+      targetDb: maskedDbUrl,
+      committed: false,
       dueDates,
       created: [],
       reusedProfiles: existingProfiles,
@@ -600,22 +626,33 @@ async function main(): Promise<void> {
   );
   rl.close();
   if (answer.trim() !== CONFIRMATION_PHRASE) {
+    await client.end().catch(() => {});
     fail("Onay metni eşleşmedi — hiçbir şey yapılmadı.");
   }
 
+  // ONE transaction — any failure rolls the whole run back, nothing persists.
   const created: CreatedRecord[] = [];
+  let committed = false;
   try {
-    await seed(supabase, dueDates, existingProfiles, created);
+    await client.query("begin");
+    await seed(client, dueDates, existingProfiles, created);
+    await client.query("commit");
+    committed = true;
+  } catch (err) {
+    await client.query("rollback").catch(() => {});
+    console.error("\n↩️   ROLLBACK yapıldı — bu çalıştırmada hiçbir kayıt kalıcı olmadı.");
+    throw err;
   } finally {
-    // Log whatever was created even if a later step failed (manual-undo list).
     const logFile = writeLog({
       mode: "execute",
-      targetUrl: url,
+      targetDb: maskedDbUrl,
+      committed,
       dueDates,
       created,
       reusedProfiles: existingProfiles,
     });
     console.log(`\n📄  Seed logu: ${logFile}`);
+    await client.end().catch(() => {});
   }
 }
 
@@ -641,8 +678,56 @@ function printPlan(dueDates: Record<DueKey, string>): void {
   }
 }
 
+/**
+ * Create a demo auth user directly in the local DB (same shape supabase/seed.sql
+ * uses): auth.users + auth.identities; public.profiles comes from the
+ * on_auth_user_created trigger, with an explicit insert as a safety net.
+ */
+async function createDemoUser(
+  client: Client,
+  person: { fullName: string; email: string },
+): Promise<string> {
+  const userRes = await client.query<{ id: string }>(
+    `insert into auth.users (
+       id, instance_id, email, encrypted_password,
+       email_confirmed_at, created_at, updated_at,
+       raw_user_meta_data, raw_app_meta_data,
+       role, aud, is_super_admin, is_sso_user,
+       confirmation_token, recovery_token, email_change_token_new, email_change
+     ) values (
+       gen_random_uuid(), '00000000-0000-0000-0000-000000000000', $1,
+       crypt($2, gen_salt('bf')),
+       now(), now(), now(),
+       jsonb_build_object('full_name', $3::text),
+       '{"provider": "email", "providers": ["email"]}'::jsonb,
+       'authenticated', 'authenticated', false, false,
+       '', '', '', ''
+     ) returning id`,
+    [person.email, DEMO_PASSWORD, person.fullName],
+  );
+  const userId = userRes.rows[0].id;
+  await client.query(
+    `insert into auth.identities (
+       id, user_id, provider_id, identity_data, provider,
+       last_sign_in_at, created_at, updated_at
+     ) values (
+       gen_random_uuid(), $1::uuid, ($1::uuid)::text,
+       jsonb_build_object('sub', ($1::uuid)::text, 'email', $2::text,
+                          'email_verified', true, 'phone_verified', false),
+       'email', now(), now(), now()
+     )`,
+    [userId, person.email],
+  );
+  await client.query(
+    `insert into public.profiles (id, email, full_name)
+     values ($1, $2, $3) on conflict (id) do nothing`,
+    [userId, person.email, person.fullName],
+  );
+  return userId;
+}
+
 async function seed(
-  supabase: SupabaseClient,
+  client: Client,
   dueDates: Record<DueKey, string>,
   existingProfiles: { id: string; email: string }[],
   created: CreatedRecord[],
@@ -658,55 +743,46 @@ async function seed(
       console.log(`↻  Kullanıcı mevcut, yeniden kullanılıyor: ${person.email}`);
       continue;
     }
-    const { data, error } = await supabase.auth.admin.createUser({
-      email: person.email,
-      password: DEMO_PASSWORD,
-      email_confirm: true,
-      user_metadata: { full_name: person.fullName },
-    });
-    if (error || !data.user) fail(`Kullanıcı oluşturulamadı (${person.email}): ${error?.message}`);
-    userIds[personKey] = data.user.id;
-    created.push({ table: "auth.users", id: data.user.id, label: person.email });
+    const userId = await createDemoUser(client, person);
+    userIds[personKey] = userId;
+    created.push({ table: "auth.users", id: userId, label: person.email });
     console.log(`✚  Kullanıcı oluşturuldu: ${person.email}`);
   }
 
   // 2. Workspace — always brand new (preflight guarantees the name is free).
   const slug = `lospia-demo-operasyon-${Date.now().toString(36)}`;
-  const { data: ws, error: wsError } = await supabase
-    .from("workspaces")
-    .insert({ name: DEMO_WORKSPACE_NAME, slug, created_by: userIds.elif })
-    .select("id")
-    .single();
-  if (wsError || !ws) fail(`Workspace oluşturulamadı: ${wsError?.message}`);
-  const workspaceId: string = ws.id;
+  const wsRes = await client.query<{ id: string }>(
+    `insert into public.workspaces (name, slug, created_by)
+     values ($1, $2, $3) returning id`,
+    [DEMO_WORKSPACE_NAME, slug, userIds.elif],
+  );
+  const workspaceId = wsRes.rows[0].id;
   created.push({ table: "workspaces", id: workspaceId, label: DEMO_WORKSPACE_NAME });
   console.log(`✚  Workspace: ${DEMO_WORKSPACE_NAME} (${workspaceId})`);
 
   // 3. Members.
   const memberIds: Record<PersonKey, string> = {} as Record<PersonKey, string>;
   for (const [personKey, person] of Object.entries(PEOPLE) as [PersonKey, (typeof PEOPLE)[PersonKey]][]) {
-    const { data: member, error } = await supabase
-      .from("workspace_members")
-      .insert({ workspace_id: workspaceId, user_id: userIds[personKey], role: person.role })
-      .select("id")
-      .single();
-    if (error || !member) fail(`Üyelik eklenemedi (${person.email}): ${error?.message}`);
-    memberIds[personKey] = member.id;
-    created.push({ table: "workspace_members", id: member.id, label: `${person.email} (${person.role})` });
+    const memberRes = await client.query<{ id: string }>(
+      `insert into public.workspace_members (workspace_id, user_id, role)
+       values ($1, $2, $3) returning id`,
+      [workspaceId, userIds[personKey], person.role],
+    );
+    memberIds[personKey] = memberRes.rows[0].id;
+    created.push({ table: "workspace_members", id: memberRes.rows[0].id, label: `${person.email} (${person.role})` });
   }
   console.log(`✚  ${Object.keys(memberIds).length} üye eklendi`);
 
   // 4. Departments.
   const deptIds = new Map<DeptName, string>();
   for (const [i, dept] of DEPARTMENTS.entries()) {
-    const { data, error } = await supabase
-      .from("workspace_departments")
-      .insert({ workspace_id: workspaceId, name: dept.name, color_key: dept.colorKey, position: i })
-      .select("id")
-      .single();
-    if (error || !data) fail(`Departman eklenemedi (${dept.name}): ${error?.message}`);
-    deptIds.set(dept.name, data.id);
-    created.push({ table: "workspace_departments", id: data.id, label: dept.name });
+    const deptRes = await client.query<{ id: string }>(
+      `insert into public.workspace_departments (workspace_id, name, color_key, position)
+       values ($1, $2, $3, $4) returning id`,
+      [workspaceId, dept.name, dept.colorKey, i],
+    );
+    deptIds.set(dept.name, deptRes.rows[0].id);
+    created.push({ table: "workspace_departments", id: deptRes.rows[0].id, label: dept.name });
   }
   console.log(`✚  ${deptIds.size} departman eklendi`);
 
@@ -718,47 +794,44 @@ async function seed(
     const dueDate = dueDates[task.due];
     const isDone = task.status === "done";
     const isReview = task.status === "review";
-    const { data, error } = await supabase
-      .from("tasks")
-      .insert({
-        workspace_id: workspaceId,
-        title: task.title,
-        description: task.description,
-        status: task.status,
-        priority: task.priority,
-        due_date: dueDate,
-        department_id: deptIds.get(task.department),
-        assignee_id: userIds[task.responsible],
-        created_by: userIds.elif,
-        fractional_index: fracIndex,
-        approval_required: isReview,
-        approval_status: isReview ? "pending" : isDone ? "approved" : "none",
-        completed_at: isDone ? `${dueDate}T15:00:00Z` : null,
-      })
-      .select("id")
-      .single();
-    if (error || !data) fail(`Görev eklenemedi (${task.title}): ${error?.message}`);
-    taskIdByTitle.set(task.title, data.id);
-    created.push({ table: "tasks", id: data.id, label: `${task.title} [${task.status}]` });
+    const completedAt = isDone ? `${dueDate}T15:00:00Z` : null;
+    const taskRes = await client.query<{ id: string }>(
+      `insert into public.tasks (
+         workspace_id, title, description, status, priority, due_date,
+         department_id, assignee_id, created_by, fractional_index,
+         approval_required, approval_status, completed_at
+       ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+       returning id`,
+      [
+        workspaceId,
+        task.title,
+        task.description,
+        task.status,
+        task.priority,
+        dueDate,
+        deptIds.get(task.department),
+        userIds[task.responsible],
+        userIds.elif,
+        fracIndex,
+        isReview,
+        isReview ? "pending" : isDone ? "approved" : "none",
+        completedAt,
+      ],
+    );
+    const taskId = taskRes.rows[0].id;
+    taskIdByTitle.set(task.title, taskId);
+    created.push({ table: "tasks", id: taskId, label: `${task.title} [${task.status}]` });
 
     const responsiblePeople = [task.responsible, ...task.participants];
     for (const personKey of responsiblePeople) {
-      const { data: completion, error: complError } = await supabase
-        .from("task_member_completions")
-        .insert({
-          workspace_id: workspaceId,
-          task_id: data.id,
-          member_id: memberIds[personKey],
-          completed_at: isDone ? `${dueDate}T15:00:00Z` : null,
-        })
-        .select("id")
-        .single();
-      if (complError || !completion) {
-        fail(`Sorumlu eklenemedi (${task.title} → ${PEOPLE[personKey].fullName}): ${complError?.message}`);
-      }
+      const complRes = await client.query<{ id: string }>(
+        `insert into public.task_member_completions (workspace_id, task_id, member_id, completed_at)
+         values ($1, $2, $3, $4) returning id`,
+        [workspaceId, taskId, memberIds[personKey], completedAt],
+      );
       created.push({
         table: "task_member_completions",
-        id: completion.id,
+        id: complRes.rows[0].id,
         label: `${task.title} → ${PEOPLE[personKey].fullName}`,
       });
     }
@@ -769,52 +842,37 @@ async function seed(
   //    (addTaskNoteWorkflow) also fans out notifications, intentionally skipped.
   for (const note of TASK_NOTES) {
     const taskId = taskIdByTitle.get(note.taskTitle);
-    if (!taskId) fail(`Not için görev bulunamadı: ${note.taskTitle}`);
+    if (!taskId) throw new Error(`Not için görev bulunamadı: ${note.taskTitle}`);
     const task = TASKS.find((t) => t.title === note.taskTitle);
-    const { data, error } = await supabase
-      .from("task_notes")
-      .insert({
-        workspace_id: workspaceId,
-        task_id: taskId,
-        author_id: userIds[note.author],
-        content: note.content,
-        note_type: note.noteType,
-        due_date_at_note_time: task ? dueDates[task.due] : null,
-      })
-      .select("id")
-      .single();
-    if (error || !data) fail(`Görev notu eklenemedi (${note.taskTitle}): ${error?.message}`);
-    created.push({ table: "task_notes", id: data.id, label: `${note.taskTitle} · ${note.noteType}` });
+    const noteRes = await client.query<{ id: string }>(
+      `insert into public.task_notes (
+         workspace_id, task_id, author_id, content, note_type, due_date_at_note_time
+       ) values ($1, $2, $3, $4, $5, $6) returning id`,
+      [workspaceId, taskId, userIds[note.author], note.content, note.noteType, task ? dueDates[task.due] : null],
+    );
+    created.push({ table: "task_notes", id: noteRes.rows[0].id, label: `${note.taskTitle} · ${note.noteType}` });
   }
   console.log(`✚  ${TASK_NOTES.length} görev notu eklendi`);
 
   // 7. Rules.
   for (const [i, rule] of RULES.entries()) {
-    const { data, error } = await supabase
-      .from("workspace_rules")
-      .insert({ workspace_id: workspaceId, title: rule, position: i, created_by: userIds.elif })
-      .select("id")
-      .single();
-    if (error || !data) fail(`Kural eklenemedi: ${error?.message}`);
-    created.push({ table: "workspace_rules", id: data.id, label: rule.slice(0, 60) });
+    const ruleRes = await client.query<{ id: string }>(
+      `insert into public.workspace_rules (workspace_id, title, position, created_by)
+       values ($1, $2, $3, $4) returning id`,
+      [workspaceId, rule, i, userIds.elif],
+    );
+    created.push({ table: "workspace_rules", id: ruleRes.rows[0].id, label: rule.slice(0, 60) });
   }
   console.log(`✚  ${RULES.length} kural eklendi`);
 
   // 8. Weekly notes.
   for (const [i, note] of WEEKLY_NOTES.entries()) {
-    const { data, error } = await supabase
-      .from("workspace_notes")
-      .insert({
-        workspace_id: workspaceId,
-        title: note.title,
-        body: note.body,
-        position: i,
-        created_by: userIds.elif,
-      })
-      .select("id")
-      .single();
-    if (error || !data) fail(`Haftalık not eklenemedi: ${error?.message}`);
-    created.push({ table: "workspace_notes", id: data.id, label: note.title });
+    const noteRes = await client.query<{ id: string }>(
+      `insert into public.workspace_notes (workspace_id, title, body, position, created_by)
+       values ($1, $2, $3, $4, $5) returning id`,
+      [workspaceId, note.title, note.body, i, userIds.elif],
+    );
+    created.push({ table: "workspace_notes", id: noteRes.rows[0].id, label: note.title });
   }
   console.log(`✚  ${WEEKLY_NOTES.length} haftalık not eklendi`);
 
@@ -825,7 +883,8 @@ async function seed(
 
 function writeLog(payload: {
   mode: "dry-run" | "execute";
-  targetUrl: string;
+  targetDb: string; // password-masked DSN — never log the raw URL
+  committed: boolean;
   dueDates: Record<DueKey, string>;
   created: CreatedRecord[];
   reusedProfiles: { id: string; email: string }[];
@@ -840,7 +899,8 @@ function writeLog(payload: {
         script: "seed-demo-workspace",
         timestamp: new Date().toISOString(),
         mode: payload.mode,
-        target_url: payload.targetUrl,
+        target_db: payload.targetDb,
+        committed: payload.committed,
         workspace_name: DEMO_WORKSPACE_NAME,
         team_name: DEMO_TEAM_NAME,
         due_dates: payload.dueDates,
