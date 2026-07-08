@@ -6,10 +6,10 @@ import type { Metadata } from "next";
 export const LOSPIA_SITE_NAME = "Lospia";
 
 export const LOSPIA_HOME_TITLE =
-  "Lospia | Marka Ekipleri İçin Premium Operasyon Paneli";
+  "Lospia | Operasyonlarınızı Tek Panelde Yönetin";
 
 export const LOSPIA_HOME_DESCRIPTION =
-  "Lospia, moda, e-ticaret ve yaratıcı ekiplerin Excel ve WhatsApp tabanlı operasyonlarını görevler, sorumlular, onaylar ve haftalık görünürlükle tek panelde yönetmesini sağlar.";
+  "Lospia; marka, e-ticaret, içerik ve operasyon ekiplerinin Excel ve WhatsApp'a dağılmış işlerini görevler, sorumlular, onaylar ve haftalık görünürlükle tek panelde toplar.";
 
 export const LOSPIA_HOME_METADATA: Metadata = {
   title: { absolute: LOSPIA_HOME_TITLE },

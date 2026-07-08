@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { CalendarView } from "@/components/calendar/CalendarView";
 import type { Task, Profile, WorkspaceContact, WorkspaceDepartment } from "@/types";
 
+export const metadata = { title: "Takvim" };
+
 export default async function CalendarPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

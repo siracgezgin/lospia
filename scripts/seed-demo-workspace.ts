@@ -154,7 +154,7 @@ const TASKS: DemoTask[] = [
     responsible: "deniz",
     participants: ["elif"],
     description:
-      "SS26 dönemi kampanya takvimi taslağı hazırlanacak; indirim ve lansman tarihleri tek takvimde toplanacak.",
+      "Dönem kampanya takvimi taslağı hazırlanacak; indirim ve yayın tarihleri tek takvimde toplanacak.",
   },
   {
     title: "Sezon Sonu Stok Analizi",
@@ -202,7 +202,7 @@ const TASKS: DemoTask[] = [
       "Yeni ürünlerin açıklamaları marka diline göre revize edilecek; kumaş ve bakım bilgileri kontrol edilecek.",
   },
   {
-    title: "Beden Tablosu Güncellemesi",
+    title: "Ürün Bilgi Sayfası Güncellemesi",
     department: "E-ticaret",
     status: "ready",
     priority: "low",
@@ -210,7 +210,7 @@ const TASKS: DemoTask[] = [
     responsible: "deniz",
     participants: [],
     description:
-      "Yeni kalıplara göre beden tablosu güncellenecek ve ürün sayfalarına işlenecek.",
+      "Yeni ürünlerin bilgi sayfaları güncellenecek ve site üzerinde yayınlanacak.",
   },
   {
     title: "Paketleme Malzemesi Siparişi",
@@ -225,15 +225,15 @@ const TASKS: DemoTask[] = [
   },
   // Devam Ediyor (5)
   {
-    title: "Lookbook Çekim Planı",
-    department: "Koleksiyon",
+    title: "Kampanya Yayın Hazırlığı",
+    department: "İçerik",
     status: "in_progress",
     priority: "urgent",
     due: "thisWed",
     responsible: "elif",
     participants: ["mert", "zeynep"],
     description:
-      "Yeni sezon lookbook çekimi için mekan, ekip ve ürün listesi netleştirilecek. Çekim gününe kadar tüm ürünler hazır olmalı.",
+      "Kampanya yayın akışı hazırlanıyor; görsel, metin ve yayın tarihi tek karttan takip ediliyor.",
   },
   {
     title: "Kumaş Tedarik Takibi",
@@ -258,15 +258,15 @@ const TASKS: DemoTask[] = [
       "Rötuşu tamamlanan ürün görselleri siteye yüklenecek; eksik açılar için çekim listesi güncellenecek.",
   },
   {
-    title: "Koleksiyon Lansman Hazırlığı",
-    department: "Koleksiyon",
+    title: "Kreatif Onay Akışı",
+    department: "İçerik",
     status: "in_progress",
     priority: "urgent",
     due: "nextMon",
     responsible: "elif",
     participants: ["mert", "zeynep", "deniz"],
     description:
-      "Lansman haftası akışı hazırlanacak: içerik, stok ve site güncellemeleri tek plana bağlanacak.",
+      "Kampanya kreatifleri için onay akışı yürütülüyor; içerik, e-ticaret ve üretim onayları tek plana bağlanıyor.",
   },
   {
     title: "Web Sitesi Banner Güncellemesi",
@@ -357,14 +357,14 @@ const TASKS: DemoTask[] = [
     description: "Kargo ve iade süreç kontrol listesi güncellendi; ekiple paylaşıldı.",
   },
   {
-    title: "Yeni Sezon Moodboard Hazırlığı",
-    department: "Koleksiyon",
+    title: "Haftalık Teslim Kontrolü",
+    department: "Haftalık Kontrol",
     status: "done",
     priority: "medium",
     due: "lastFri",
     responsible: "elif",
     participants: ["mert"],
-    description: "SS26 moodboard'u tamamlandı; koleksiyon planlamasında referans olarak kullanılacak.",
+    description: "Bu haftanın teslimleri kontrol edildi; geciken kalemler ve öncelikler ekiple paylaşıldı.",
   },
 ];
 
@@ -383,10 +383,10 @@ const TASK_NOTES: {
     content: "İkinci revizyon hazır — Elif Hanım'ın onayı bekleniyor.",
   },
   {
-    taskTitle: "Lookbook Çekim Planı",
+    taskTitle: "Kampanya Yayın Hazırlığı",
     author: "mert",
     noteType: "info",
-    content: "Mekan alternatifleri karta eklendi, Çarşamba netleşiyor.",
+    content: "Yayın öncesi görsel ve metinler karta eklendi, Çarşamba netleşiyor.",
   },
   {
     taskTitle: "Kumaş Tedarik Takibi",

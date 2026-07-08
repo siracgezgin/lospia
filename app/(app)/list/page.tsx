@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { TaskListView } from "@/components/list/TaskListView";
 import type { Task, SavedView, Profile, WorkspaceContact, WorkspaceDepartment } from "@/types";
 
+export const metadata = { title: "Liste" };
+
 export default async function ListPage({
   searchParams,
 }: {

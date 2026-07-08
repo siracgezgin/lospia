@@ -48,6 +48,11 @@ supabase/.temp/
 
 # local import data (never commit customer files)
 data/
+# Exempt the demo-video data module: it is generic demo data (no customer /
+# no Aslı Filinta production data) and the Remotion composition imports it, so
+# it must be committed despite the blanket data/ rule above.
+!remotion/data/
+!remotion/data/**
 *.xlsx
 *.xls
 *.csv

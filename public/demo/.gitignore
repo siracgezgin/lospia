@@ -1,0 +1,11 @@
+# Only the shipped demo video + poster belong in git. Everything else in this
+# folder is a local-only build artifact (QA stills, reference screenshots,
+# rejected/archived voice-over) and must never reach production.
+qa-frame-*.png
+/screenshots/
+audio/archive-bad-voice-*/
+
+# Keep the assets the live marketing page actually serves + docs.
+!README.md
+!lospia-demo.mp4
+!lospia-demo-poster.png

@@ -95,8 +95,12 @@ html,
 body {
   /* The app shell owns its own scroll containers; the document itself must never
      scroll sideways. This is the single guard that stops a stray wide child
-     (a kanban row, a table) from producing a horizontal page scroll on mobile. */
+     (a kanban row, a table) from producing a horizontal page scroll on mobile.
+     `clip` (with `hidden` as legacy fallback) clips without turning html/body
+     into scroll containers — `hidden` alone silently disables position:sticky
+     descendants like the marketing header. */
   overflow-x: hidden;
+  overflow-x: clip;
   max-width: 100%;
 }
 

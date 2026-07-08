@@ -40,6 +40,9 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.61.0",
+    "@remotion/bundler": "^4.0.484",
+    "@remotion/cli": "^4.0.484",
+    "@remotion/renderer": "^4.0.484",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20.19.43",
     "@types/pg": "^8.20.0",
@@ -48,6 +51,7 @@
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.2.9",
     "pg": "^8.22.0",
+    "remotion": "^4.0.484",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

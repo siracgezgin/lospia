@@ -1,0 +1,6 @@
+# Generated voice-over is local-only; keep the folder + README, ignore audio.
+*.wav
+*.mp3
+*.flac
+!.gitignore
+!README.md

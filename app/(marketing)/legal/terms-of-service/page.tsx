@@ -5,13 +5,15 @@ export const metadata: Metadata = {
   description: "Lospia kullanım koşulları — erken aşama bilgilendirme taslağı.",
 };
 
-// TODO: hello@lospia.com henüz doğrulanmış bir adres değil — Lospia domaini ve
-// resmi e-posta kesinleştiğinde güncellenmeli (bkz. docs/rota.md).
-const CONTACT_EMAIL = "hello@lospia.com";
+// Public contact channel is intentionally neutral until the official Lospia
+// domain + mailbox are finalized (bkz. docs/rota.md); no unverified email is
+// exposed to visitors.
+const CONTACT_NOTE =
+  "İletişim bilgileri resmi Lospia alan adı kesinleştiğinde güncellenecektir.";
 
 export default function TermsOfServicePage() {
   return (
-    <article className="mx-auto max-w-2xl px-4 py-16 sm:px-6 sm:py-20">
+    <article className="mx-auto my-16 max-w-2xl rounded-2xl border border-slate-200 bg-white px-6 py-12 shadow-sm sm:my-20 sm:px-10 sm:py-14">
       <h1 className="font-serif text-3xl font-semibold tracking-tight text-ink">
         Kullanım Koşulları
       </h1>
@@ -84,10 +86,8 @@ export default function TermsOfServicePage() {
         <section className="space-y-3">
           <h2>İletişim</h2>
           <p>
-            Sorularınız için:{" "}
-            <a href={`mailto:${CONTACT_EMAIL}`} className="text-brand underline">
-              {CONTACT_EMAIL}
-            </a>
+            Sorularınız için kurulum görüşmesi kanalınız üzerinden bize
+            ulaşabilirsiniz. {CONTACT_NOTE}
           </p>
         </section>
       </div>
