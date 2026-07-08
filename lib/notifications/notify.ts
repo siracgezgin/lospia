@@ -18,6 +18,7 @@ import {
   NOTIFICATION_EVENTS,
   type TaskNotificationEvent,
 } from "@/lib/notifications/events";
+import { dispatchTaskAssignedEmails } from "@/lib/notifications/email-events";
 
 type SB = Awaited<ReturnType<typeof createClient>>;
 
@@ -86,4 +87,16 @@ export async function notifyTaskEvent(
     p_user_ids: recipients,
     p_dedupe_seconds: DEDUPE_SECONDS,
   });
+
+  // Best-effort email fan-out over the SAME final recipient list (actor and
+  // admin_only exclusions already applied above). Only task_assigned is wired
+  // for email in this phase; any failure is swallowed so mail can never break
+  // the notification flow.
+  if (event === "task_assigned") {
+    try {
+      await dispatchTaskAssignedEmails({ recipientUserIds: recipients, taskId, taskTitle });
+    } catch {
+      // best-effort — never surface email errors to the caller
+    }
+  }
 }
