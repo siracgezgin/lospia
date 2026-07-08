@@ -5,6 +5,7 @@ import { isMarketingHost } from "@/lib/marketing/host";
 import { MarketingShell } from "@/components/marketing/MarketingShell";
 import {
   LOSPIA_HOME_DESCRIPTION,
+  LOSPIA_HOME_TITLE,
   LOSPIA_SITE_NAME,
 } from "@/components/marketing/seo";
 
@@ -14,8 +15,9 @@ import {
 // users back to the app.
 export const metadata: Metadata = {
   title: {
-    default: LOSPIA_SITE_NAME,
-    template: `%s · ${LOSPIA_SITE_NAME}`,
+    // Never fall back to a bare "Lospia" tab title; use the positioning title.
+    default: LOSPIA_HOME_TITLE,
+    template: `%s | ${LOSPIA_SITE_NAME}`,
   },
   description: LOSPIA_HOME_DESCRIPTION,
   applicationName: LOSPIA_SITE_NAME,

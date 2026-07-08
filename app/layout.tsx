@@ -2,29 +2,35 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 const SITE_URL = "https://operasyon.aslifilinta.com";
-const SITE_TITLE = "Aslı Filinta Operasyon";
+// Product-level branding — the app's identity is Lospia. Tenant/workspace
+// names (e.g. "Aslı Filinta Operasyon") stay inside the app as workspace data
+// and are rendered from the DB, not from this product metadata.
+const SITE_TITLE = "Lospia";
+// App-wide default browser/tab title. Always more specific than bare "Lospia".
+// Per-page titles fill the `%s | Lospia` template (e.g. "Pano | Lospia").
+const SITE_TITLE_DEFAULT = "Lospia | Operasyon Paneli";
 const SITE_DESCRIPTION =
-  "Aslı Filinta ekibi için dahili görev ve operasyon yönetim sistemi.";
+  "Lospia; görevler, ekip akışı, onaylar ve operasyon takibi için modern bir çalışma alanı.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: SITE_TITLE,
-    template: `%s · ${SITE_TITLE}`,
+    default: SITE_TITLE_DEFAULT,
+    template: `%s | ${SITE_TITLE}`,
   },
   description: SITE_DESCRIPTION,
   applicationName: SITE_TITLE,
   openGraph: {
     type: "website",
     siteName: SITE_TITLE,
-    title: SITE_TITLE,
+    title: SITE_TITLE_DEFAULT,
     description: SITE_DESCRIPTION,
     url: SITE_URL,
     locale: "tr_TR",
   },
   twitter: {
     card: "summary_large_image",
-    title: SITE_TITLE,
+    title: SITE_TITLE_DEFAULT,
     description: SITE_DESCRIPTION,
   },
   // Internal operations tool — keep it out of search indexes.

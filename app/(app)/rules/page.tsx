@@ -6,6 +6,8 @@ import type { WorkspaceRule, WorkspaceRole, WorkspaceDepartment } from "@/types"
 
 export const dynamic = "force-dynamic";
 
+export const metadata = { title: "Kurallar" };
+
 export default async function RulesPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

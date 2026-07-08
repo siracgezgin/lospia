@@ -25,6 +25,8 @@ async function officeCount(
   return count ?? 0;
 }
 
+export const metadata = { title: "Operasyon Modülleri" };
+
 export default async function ModulesPage() {
   const { supabase, workspaceId, isAdmin, gate } = await requireModuleAdmin();
   if (gate === "login") redirect("/login");

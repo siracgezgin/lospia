@@ -8,6 +8,8 @@ import {
 } from "@/lib/points/queries";
 import type { TaskStatus, WorkspaceDepartment } from "@/types";
 
+export const metadata = { title: "Gösterge Paneli" };
+
 export default async function DashboardPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

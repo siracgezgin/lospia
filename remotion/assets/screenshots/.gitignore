@@ -1,0 +1,7 @@
+# Reference-only stills captured from the running app by
+# scripts/capture-lospia-screenshots.mjs. The Remotion composition draws the UI
+# natively and never imports these — they are regenerable build artifacts, so
+# keep the docs (README + manifest) but not the heavy PNGs.
+*.png
+!README.md
+!manifest.json
