@@ -63,7 +63,7 @@ function FeedCard({
   }
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-2.5 shadow-sm space-y-1.5">
+    <div className="rounded-card border border-line bg-surface p-2.5 shadow-card transition-shadow hover:shadow-card-hover space-y-1.5">
       {/* Type + department chips */}
       <div className="flex items-center gap-1 flex-wrap">
         <span className={cn("text-[10px] rounded px-1.5 py-0.5 leading-none font-medium", NOTE_TYPE_BADGE[item.noteType])}>
@@ -84,20 +84,20 @@ function FeedCard({
         title={item.taskTitle}
       >
         <span className="line-clamp-2 break-words flex-1 min-w-0">{item.taskTitle}</span>
-        <ArrowUpRight size={11} className="shrink-0 mt-0.5 text-gray-300 group-hover/task:text-brand" />
+        <ArrowUpRight size={11} className="shrink-0 mt-0.5 text-subtle group-hover/task:text-brand" />
       </Link>
 
       {/* Note snippet */}
-      <p className="text-[11px] text-gray-600 leading-relaxed line-clamp-3 break-words whitespace-pre-wrap">
+      <p className="text-[11px] text-muted leading-relaxed line-clamp-3 break-words whitespace-pre-wrap">
         {item.content}
       </p>
 
       {/* Meta: author · due date · targets */}
-      <p className="text-[10px] text-gray-400 leading-snug">
-        <span className="font-medium text-gray-500">{item.authorName}</span>
+      <p className="text-[10px] text-subtle leading-snug">
+        <span className="font-medium text-muted">{item.authorName}</span>
         {item.taskDueDate && <span> · Teslim: {shortDate(item.taskDueDate)}</span>}
         {item.notifiedNames.length > 0 && (
-          <span> · Muhatap: <span className="text-gray-600">{item.notifiedNames.join(", ")}</span></span>
+          <span> · Muhatap: <span className="text-muted">{item.notifiedNames.join(", ")}</span></span>
         )}
       </p>
 
@@ -120,19 +120,19 @@ function FeedCard({
             )
           )}
           {seenByMe ? (
-            <span className="inline-flex items-center gap-1 text-[10px] text-gray-400">
+            <span className="inline-flex items-center gap-1 text-[10px] text-subtle">
               <Eye size={10} /> Görüldü
             </span>
           ) : (
             <button
               onClick={() => handleAck("seen")}
               disabled={pending}
-              className="inline-flex items-center gap-1 text-[10px] font-medium text-gray-500 border border-gray-200 bg-white hover:bg-gray-50 rounded px-1.5 py-0.5 transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1 text-[10px] font-medium text-muted border border-line bg-surface hover:bg-surface-muted rounded px-1.5 py-0.5 transition-colors disabled:opacity-50"
             >
               <Eye size={10} /> Gördüm
             </button>
           )}
-          {error && <span className="text-[10px] text-red-600">{error}</span>}
+          {error && <span className="text-[10px] text-danger">{error}</span>}
         </div>
       )}
     </div>
@@ -160,7 +160,7 @@ export function WeeklyNoteFeed({
 
   if (items.length === 0) {
     return (
-      <p className="text-[11px] text-gray-400 rounded-lg border border-gray-100 bg-white/60 px-3 py-4 text-center">
+      <p className="text-[11px] text-subtle rounded-card border border-dashed border-line bg-surface/60 px-3 py-4 text-center">
         Bu hafta yeni görev notu yok.
       </p>
     );
