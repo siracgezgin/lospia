@@ -88,9 +88,13 @@ function ProfileMenu({
             <Avatar name={displayName} size="md" />
             <div className="min-w-0">
               <p className="text-sm font-semibold text-ink truncate">{displayName}</p>
+              {/* Canonical display e-mail (never a @lospia.local placeholder);
+                  muted fallback when the person has no real address. */}
               <p className="flex items-center gap-1.5 text-[11px] text-subtle truncate">
                 <Mail size={11} className="shrink-0" />
-                <span className="truncate">{email ?? "—"}</span>
+                <span className={email ? "truncate" : "truncate italic text-subtle/80"}>
+                  {email ?? "E-posta eklenmedi"}
+                </span>
               </p>
             </div>
           </div>

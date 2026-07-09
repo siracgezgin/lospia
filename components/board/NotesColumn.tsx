@@ -337,6 +337,7 @@ export function NotesColumn({
   currentUserId,
   isAdmin = false,
   feed,
+  feedLabel = "Bu haftaki görev notları",
 }: {
   notes: WorkspaceNote[];
   workspaceId: string;
@@ -350,6 +351,9 @@ export function NotesColumn({
   // Haftanın Not Akışı — the primary content of the column (weekly task-note
   // feed rendered by the board). The sticky "Pano notları" stay below it.
   feed?: React.ReactNode;
+  // Feed heading — the board overrides it with the selected week's label when
+  // the user is browsing a week other than the current one.
+  feedLabel?: string;
 }) {
   // A note is modifiable by an owner/admin, or by the member who authored it.
   const canModifyNote = (note: WorkspaceNote) =>
@@ -533,7 +537,7 @@ export function NotesColumn({
       {feed && (
         <div className="flex flex-col gap-1.5">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 px-1">
-            Bu haftaki görev notları
+            {feedLabel}
           </p>
           {feed}
         </div>

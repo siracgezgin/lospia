@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Plus, Trash2, UserPlus, UserMinus } from "lucide-react";
+import { Building2, ChevronRight, Plus, Trash2, UserPlus, UserMinus } from "lucide-react";
+import { EmptyState } from "@/components/ui/EmptyState";
 import type { WorkspaceDepartment, DepartmentMember, WorkspaceMember, Profile } from "@/types";
 import { Avatar, AvatarGroup } from "@/components/ui/Avatar";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -42,15 +43,15 @@ function DeptMemberRow({
 }) {
   const name = getPersonDisplayName(dm.profiles ?? dm.member_id.slice(0, 8));
   return (
-    <div className="flex items-center justify-between py-1">
-      <div className="flex items-center gap-1.5 text-sm text-gray-700">
+    <div className="flex items-center justify-between rounded-lg px-1.5 py-1 hover:bg-surface-hover transition-colors">
+      <div className="flex items-center gap-1.5 text-sm text-muted">
         <Avatar name={name} size="xs" />
         <span title={name}>{name}</span>
       </div>
       {canManage && (
         <button
           onClick={() => onRemove(dm.id)}
-          className="p-1 text-gray-400 hover:text-red-500 rounded"
+          className="p-1 text-subtle hover:text-danger hover:bg-danger/10 rounded transition-colors"
           title="Departmandan çıkar"
         >
           <UserMinus size={13} />
@@ -91,7 +92,7 @@ function AddMemberForm({
   }
 
   if (available.length === 0) {
-    return <p className="text-xs text-gray-400 mt-1">Tüm üyeler zaten eklendi.</p>;
+    return <p className="text-xs text-subtle mt-1">Tüm üyeler zaten eklendi.</p>;
   }
 
   return (
@@ -99,7 +100,7 @@ function AddMemberForm({
       <select
         value={selectedId}
         onChange={(e) => setSelectedId(e.target.value)}
-        className="text-xs border border-gray-200 rounded px-2 py-1 text-gray-700"
+        className="text-xs border border-line rounded-lg px-2 py-1 text-muted bg-surface focus:outline-none focus:ring-1 focus:ring-brand-ring"
       >
         <option value="">Üye seç…</option>
         {available.map((m) => (
@@ -109,12 +110,12 @@ function AddMemberForm({
       <button
         onClick={handleAdd}
         disabled={!selectedId || pending}
-        className="text-xs bg-blue-600 text-white px-2.5 py-1 rounded hover:bg-blue-700 disabled:opacity-50"
+        className="text-xs bg-brand text-white px-2.5 py-1 rounded-lg hover:bg-brand-strong disabled:opacity-50 transition-colors"
       >
         {pending ? "Ekleniyor…" : "Ekle"}
       </button>
-      <button onClick={onDone} className="text-xs text-gray-500 hover:text-gray-700 px-1">İptal</button>
-      {err && <p className="text-xs text-red-600 w-full">{err}</p>}
+      <button onClick={onDone} className="text-xs text-muted hover:text-ink px-1 transition-colors">İptal</button>
+      {err && <p className="text-xs text-danger w-full">{err}</p>}
     </div>
   );
 }
@@ -169,14 +170,14 @@ function DeptCard({
   const isTopLevel = dept.parent_id === null;
 
   return (
-    <div className={`border rounded-lg ${isTopLevel ? "border-gray-200 bg-white" : "border-gray-100 bg-gray-50 ml-4"}`}>
+    <div className={`border rounded-lg ${isTopLevel ? "border-line bg-surface shadow-card" : "border-hairline bg-surface-muted ml-4"}`}>
       <div
-        className="flex items-center gap-2 px-4 py-3 cursor-pointer"
+        className="flex items-center gap-2 px-4 py-3 cursor-pointer rounded-lg hover:bg-surface-hover transition-colors"
         onClick={() => setOpen((o) => !o)}
       >
         <ChevronRight
           size={14}
-          className={`text-gray-400 transition-transform shrink-0 ${open ? "rotate-90" : ""}`}
+          className={`text-subtle transition-transform shrink-0 ${open ? "rotate-90" : ""}`}
         />
         <span className={cn("inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-full ring-1", badge.chip, badge.ring)}>
           <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", badge.dot)} />
@@ -185,13 +186,13 @@ function DeptCard({
         {aggregateMembers.length > 0 && (
           <div className="flex items-center gap-1.5 ml-auto">
             <AvatarGroup names={aggregateMembers.map((dm) => getPersonDisplayName(dm.profiles ?? dm.member_id.slice(0, 8)))} max={4} />
-            <span className="text-xs text-gray-400">{aggregateMembers.length} kişi</span>
+            <span className="text-xs text-subtle tabular-nums whitespace-nowrap">{aggregateMembers.length} kişi</span>
           </div>
         )}
         {canManage && (
           <button
             onClick={(e) => { e.stopPropagation(); onDelete(dept.id); }}
-            className="p-1 text-gray-300 hover:text-red-500 rounded ml-1 shrink-0"
+            className="p-1 text-subtle hover:text-danger hover:bg-danger/10 rounded ml-1 shrink-0 transition-colors"
             title="Sil"
           >
             <Trash2 size={12} />
@@ -200,10 +201,10 @@ function DeptCard({
       </div>
 
       {open && (
-        <div className="px-4 pb-3 space-y-1 border-t border-gray-100 pt-2">
+        <div className="px-4 pb-3 space-y-1 border-t border-hairline pt-2">
           {/* Members of this dept */}
           {myMembers.length === 0 && (
-            <p className="text-xs text-gray-400">Henüz üye yok.</p>
+            <p className="text-xs text-subtle">Henüz üye yok.</p>
           )}
           {myMembers.map((dm) => (
             <DeptMemberRow
@@ -218,7 +219,7 @@ function DeptCard({
           {canManage && !showAddMember && (
             <button
               onClick={() => setShowAddMember(true)}
-              className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 mt-1"
+              className="flex items-center gap-1 text-xs text-brand hover:text-brand-strong mt-1 transition-colors"
             >
               <UserPlus size={12} /> Üye ekle
             </button>
@@ -279,17 +280,17 @@ function AddDeptForm({
         onKeyDown={(e) => { if (e.key === "Enter") handleCreate(); if (e.key === "Escape") onDone(); }}
         placeholder="Departman adı…"
         autoFocus
-        className="text-sm border border-gray-300 rounded px-2 py-1 flex-1 min-w-0"
+        className="text-sm border border-line rounded-lg px-2.5 py-1 flex-1 min-w-0 bg-surface focus:outline-none focus:ring-1 focus:ring-brand-ring"
       />
       <button
         onClick={handleCreate}
         disabled={!name.trim() || pending}
-        className="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 disabled:opacity-50"
+        className="text-sm bg-brand text-white px-3 py-1 rounded-lg hover:bg-brand-strong disabled:opacity-50 transition-colors"
       >
         {pending ? "Oluşturuluyor…" : "Oluştur"}
       </button>
-      <button onClick={onDone} className="text-sm text-gray-500 hover:text-gray-700">İptal</button>
-      {err && <p className="text-xs text-red-600 w-full">{err}</p>}
+      <button onClick={onDone} className="text-sm text-muted hover:text-ink transition-colors">İptal</button>
+      {err && <p className="text-xs text-danger w-full">{err}</p>}
     </div>
   );
 }
@@ -375,6 +376,17 @@ export function DepartmentsManager({ departments, deptMembers, workspaceMembers,
         </div>
       )}
 
+      {/* Empty state — nothing to render and nothing to provision (non-managers,
+          or a manager after the provision banner above). Visual only. */}
+      {topLevel.length === 0 && !(canManage && departments.length === 0) && (
+        <EmptyState
+          icon={Building2}
+          title="Henüz departman yok"
+          description="Departmanlar görevleri ekiplere göre gruplamak için kullanılır."
+          className="py-8"
+        />
+      )}
+
       {/* Department tree */}
       <div className="space-y-2">
         {topLevel.map((dept) => (
@@ -410,7 +422,7 @@ export function DepartmentsManager({ departments, deptMembers, workspaceMembers,
                   ) : (
                     <button
                       onClick={() => setShowAddChild(dept.id)}
-                      className="flex items-center gap-1 text-xs text-gray-400 hover:text-blue-600"
+                      className="flex items-center gap-1 text-xs text-subtle hover:text-brand transition-colors"
                     >
                       <Plus size={11} /> Alt alan ekle
                     </button>
@@ -430,7 +442,7 @@ export function DepartmentsManager({ departments, deptMembers, workspaceMembers,
           ) : (
             <button
               onClick={() => setShowAddTop(true)}
-              className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700"
+              className="flex items-center gap-1.5 text-sm text-brand hover:text-brand-strong transition-colors"
             >
               <Plus size={14} /> Departman ekle
             </button>

@@ -7,7 +7,10 @@ import { DepartmentsManager } from "@/components/settings/DepartmentsManager";
 import { canManageSettings, canRenameWorkspace, canManageMembers, canManageWorkspace } from "@/lib/auth/permissions";
 import { roleLabel } from "@/lib/utils/roles";
 import { getDisplayNotificationEmail } from "@/lib/utils/notification-email";
+import { pickDisplayEmail } from "@/lib/utils/display-identity";
 import { Card } from "@/components/ui/Card";
+import { Avatar } from "@/components/ui/Avatar";
+import { Building2, Shield, Users } from "lucide-react";
 import type {
   Workspace, WorkspaceMember, Profile,
   WorkspaceRole, WorkspaceInvite,
@@ -21,7 +24,7 @@ export default async function SettingsPage() {
 
   const { data: memberRows } = await supabase
     .from("workspace_members")
-    .select("workspace_id, role, id")
+    .select("workspace_id, role, id, notification_email")
     .eq("user_id", user.id)
     .limit(1);
   const workspaceId = memberRows?.[0]?.workspace_id;
@@ -89,85 +92,147 @@ export default async function SettingsPage() {
     return { ...r, profiles: prof ?? null } as DepartmentMember & { profiles?: Partial<Profile> | null };
   });
 
+  // Canonical display e-mail — the SAME helper the AppHeader profile menu uses,
+  // so the top-right menu and this card can never disagree. @lospia.local login
+  // placeholders are never shown as the person's address.
+  const displayEmail = pickDisplayEmail({
+    profileEmail: profile?.email ?? null,
+    authEmail: user.email,
+    notificationEmail: memberRows?.[0]?.notification_email ?? null,
+  });
+  const memberCount = (membersResult.data ?? []).length;
+  const profileName = profile?.full_name ?? "—";
+
   return (
-    <div className="max-w-5xl mx-auto py-8 px-4 sm:px-6 lg:px-8 space-y-10">
-      <div>
-        <h1 className="text-2xl font-bold text-ink">Ayarlar</h1>
-        <p className="text-sm text-muted mt-1">
-          Profiliniz, çalışma alanı, departmanlar ve ekip üyelerini buradan yönetin.
-        </p>
+    <div className="max-w-6xl mx-auto p-4 sm:p-6 lg:p-8 space-y-8">
+      {/* Page header: title + summary chips */}
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-ink tracking-tight">Ayarlar</h1>
+          <p className="text-sm text-muted mt-1">
+            Profilinizi, çalışma alanınızı, departmanları ve ekip üyelerini buradan yönetin.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1 text-xs font-medium text-muted shadow-card">
+            <Shield size={12} className="text-brand" />
+            {roleLabel(userRole)}
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1 text-xs font-medium text-muted shadow-card tabular-nums">
+            <Building2 size={12} className="text-brand" />
+            {departments.length} departman
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1 text-xs font-medium text-muted shadow-card tabular-nums">
+            <Users size={12} className="text-brand" />
+            {memberCount} ekip üyesi
+          </span>
+        </div>
       </div>
 
       {/* Profile + Workspace side by side on wider screens */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
         {/* Profile */}
-        <section className="space-y-4">
+        <section className="space-y-3">
           <h2 className="text-base font-semibold text-ink">Profiliniz</h2>
-          <Card className="p-5 space-y-3 h-full">
-            <div>
-              <p className="text-xs text-muted">İsim</p>
-              <p className="text-sm font-medium">{profile?.full_name ?? "—"}</p>
+          <Card className="p-5 h-full space-y-4">
+            <div className="flex items-center gap-3">
+              <Avatar name={profileName} size="md" />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-ink truncate">{profileName}</p>
+                <p className="text-xs text-subtle">{roleLabel(userRole)}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs text-muted">E-posta</p>
-              <p className="text-sm font-medium">{profile?.email}</p>
+            <div className="space-y-3 border-t border-hairline pt-4">
+              <div>
+                <p className="text-xs text-subtle">E-posta</p>
+                <p className={displayEmail ? "text-sm font-medium text-ink" : "text-sm text-subtle italic"}>
+                  {displayEmail ?? "E-posta eklenmedi"}
+                </p>
+              </div>
+              {profile?.username && (
+                <div>
+                  <p className="text-xs text-subtle">Kullanıcı adı</p>
+                  <p className="text-sm font-medium text-ink">@{profile.username}</p>
+                </div>
+              )}
             </div>
           </Card>
         </section>
 
         {/* Workspace */}
-        <section className="space-y-4">
+        <section className="space-y-3">
           <h2 className="text-base font-semibold text-ink">Çalışma alanı</h2>
-          <Card className="p-5 space-y-3 h-full">
+          <Card className="p-5 h-full space-y-4">
             <div>
-              <p className="text-xs text-muted mb-1">İsim</p>
+              <p className="text-xs text-subtle mb-1">İsim</p>
               {isOwner && workspace ? (
                 <WorkspaceNameEditor workspaceId={workspaceId} currentName={workspace.name} />
               ) : (
-                <p className="text-sm font-medium">{workspace?.name}</p>
+                <p className="text-sm font-medium text-ink">{workspace?.name}</p>
               )}
             </div>
-            <div>
-              <p className="text-xs text-muted">Kısa ad</p>
-              <p className="text-sm font-mono text-muted">{workspace?.slug}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted">Rolünüz</p>
-              <p className="text-sm font-medium">{roleLabel(userRole)}</p>
+            <div className="space-y-3 border-t border-hairline pt-4">
+              <div>
+                <p className="text-xs text-subtle">Kısa ad</p>
+                <p className="text-sm font-mono text-muted">{workspace?.slug}</p>
+              </div>
+              <div>
+                <p className="text-xs text-subtle">Rolünüz</p>
+                <p className="text-sm font-medium text-ink">{roleLabel(userRole)}</p>
+              </div>
             </div>
           </Card>
         </section>
       </div>
 
       {/* Departmanlar */}
-      <section className="space-y-4">
-        <h2 className="text-base font-semibold text-ink">Departmanlar</h2>
-        <p className="text-xs text-subtle -mt-2">
-          Görevleri departmanlara atayın. Üyeler birden fazla departmanda yer alabilir.
-        </p>
-        <DepartmentsManager
-          departments={departments}
-          deptMembers={deptMembers}
-          workspaceMembers={
-            (membersResult.data ?? []) as (WorkspaceMember & { profiles?: Partial<Profile> | null })[]
-          }
-          canManage={canManageDepts}
-        />
+      <section className="space-y-3">
+        <Card className="p-5 sm:p-6 space-y-4">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <h2 className="text-base font-semibold text-ink">Departmanlar</h2>
+              <p className="text-xs text-subtle mt-0.5">
+                Görevleri departmanlara atayın. Üyeler birden fazla departmanda yer alabilir.
+              </p>
+            </div>
+            <span className="text-xs text-muted bg-surface-sunken px-2.5 py-1 rounded-full tabular-nums shrink-0">
+              {departments.length} departman
+            </span>
+          </div>
+          <DepartmentsManager
+            departments={departments}
+            deptMembers={deptMembers}
+            workspaceMembers={
+              (membersResult.data ?? []) as (WorkspaceMember & { profiles?: Partial<Profile> | null })[]
+            }
+            canManage={canManageDepts}
+          />
+        </Card>
       </section>
 
       {/* Account creation — admin-created accounts (owner + admin). Replaces the
           old self-signup flow: the person signs in directly with the username +
           password set here. */}
       {canManageDepts && (
-        <section className="space-y-4">
-          <h2 className="text-base font-semibold text-ink">Hesap oluştur</h2>
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-base font-semibold text-ink">Hesap oluştur</h2>
+            <p className="text-xs text-subtle mt-0.5">
+              Yalnızca yöneticiler ve çalışma alanı sahibi yeni hesap oluşturabilir.
+            </p>
+          </div>
           <CreateAccountPanel workspaceId={workspaceId} departments={departments} />
         </section>
       )}
 
       {/* Members */}
-      <section className="space-y-4">
-        <h2 className="text-base font-semibold text-ink">Üyeler</h2>
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-base font-semibold text-ink">Üyeler</h2>
+          <p className="text-xs text-subtle mt-0.5">
+            Ekip üyelerinin rollerini, kullanıcı adlarını ve bildirim e-postalarını yönetin.
+          </p>
+        </div>
         {canManage ? (
           <MembersManager
             workspaceId={workspaceId}

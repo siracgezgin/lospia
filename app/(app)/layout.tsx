@@ -6,6 +6,7 @@ import { AppSidebar } from "@/components/layout/AppSidebar";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { getMemberPointsSummary, startOfMonthISO } from "@/lib/points/queries";
+import { pickDisplayEmail } from "@/lib/utils/display-identity";
 import type { Workspace, SavedView, Notification, WorkspaceRole } from "@/types";
 
 // Co-locate serverless functions with the Supabase project (eu-north-1, Stockholm).
@@ -37,7 +38,7 @@ export default async function AppLayout({
   // Fetch workspace membership
   const { data: memberRows } = await supabase
     .from("workspace_members")
-    .select("workspace_id, role")
+    .select("workspace_id, role, notification_email")
     .eq("user_id", user.id)
     .limit(1);
 
@@ -92,6 +93,12 @@ export default async function AppLayout({
 
   let userName: string | null =
     (user.user_metadata?.full_name as string | undefined) ?? null;
+  // Canonical display e-mail — @lospia.local auth placeholders are never shown
+  // as the user's address; refined below once the profile row is loaded.
+  let displayEmail: string | null = pickDisplayEmail({
+    authEmail: user.email,
+    notificationEmail: memberRows?.[0]?.notification_email ?? null,
+  });
 
   if (workspaceId) {
     const [wsResult, viewsResult, notifResult, profileResult] = await Promise.all([
@@ -114,7 +121,7 @@ export default async function AppLayout({
         .limit(30),
       supabase
         .from("profiles")
-        .select("full_name")
+        .select("full_name, email")
         .eq("id", user.id)
         .maybeSingle(),
     ]);
@@ -145,6 +152,11 @@ export default async function AppLayout({
 
     unreadCount = notifications.filter((n: Notification) => !n.is_read && !isDeadNotif(n)).length;
     userName = profileResult.data?.full_name ?? userName;
+    displayEmail = pickDisplayEmail({
+      profileEmail: profileResult.data?.email ?? null,
+      authEmail: user.email,
+      notificationEmail: memberRows?.[0]?.notification_email ?? null,
+    });
 
     // Personal points summary for everyone. Workspace-wide progress counts are
     // fetched ONLY for admins — a member never receives team totals.
@@ -194,7 +206,7 @@ export default async function AppLayout({
           unreadCount={unreadCount}
           userId={user.id}
           userName={userName}
-          userEmail={user.email ?? null}
+          userEmail={displayEmail}
           notifications={notifications}
           deadTaskIds={deadTaskIds}
           userRole={userRole}
