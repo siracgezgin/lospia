@@ -6,6 +6,12 @@
 // link back into the app.
 
 import type { EmailMessage } from "../types";
+import {
+  renderButton,
+  renderEmailShell,
+  renderHeading,
+  renderParagraph,
+} from "./shared";
 
 export function taskResponsibilityAddedEmail(params: {
   to: string;
@@ -28,9 +34,19 @@ export function taskResponsibilityAddedEmail(params: {
     "Lospia",
   ].join("\n");
 
+  const html = renderEmailShell({
+    title: "Size bir görev sorumluluğu verildi",
+    bodyHtml: [
+      renderHeading("Size bir görev sorumluluğu verildi"),
+      renderParagraph(`Görev: ${taskTitle}`),
+      renderButton(url, "Görevi görüntüle"),
+    ].join("\n"),
+  });
+
   return {
     to,
     subject: `Lospia'da size bir görev sorumluluğu verildi — ${taskTitle}`,
     text,
+    html,
   };
 }

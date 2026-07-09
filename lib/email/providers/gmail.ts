@@ -93,17 +93,55 @@ function resolveFrom(sender: string): string {
 
 // Assemble a minimal RFC 2822 message. The body is base64-encoded so Turkish
 // characters and long lines are transmitted safely regardless of content.
+//
+// Two shapes, chosen by whether the caller supplied an HTML body:
+//   • text only  → a single `text/plain` part (unchanged, backward-compatible).
+//   • text + html → a `multipart/alternative` message carrying both parts, so
+//                    the client renders HTML but plain-text always survives.
 function buildMime(message: EmailMessage, from: string): string {
-  return [
+  const headers = [
     `From: ${from}`,
     `To: ${message.to}`,
     `Subject: ${encodeHeaderWord(message.subject)}`,
     "MIME-Version: 1.0",
+  ];
+
+  // Plain-text only: identical to the original single-part behaviour.
+  if (!message.html) {
+    return [
+      ...headers,
+      'Content-Type: text/plain; charset="UTF-8"',
+      "Content-Transfer-Encoding: base64",
+      "",
+      Buffer.from(message.text, "utf8").toString("base64"),
+    ].join("\r\n");
+  }
+
+  // Multipart/alternative: plain-text part FIRST (lowest fidelity), HTML LAST
+  // (highest fidelity) per RFC 2046 — clients pick the last part they can show.
+  const boundary = `=_lospia_${randomBoundary()}`;
+  return [
+    ...headers,
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    "",
+    `--${boundary}`,
     'Content-Type: text/plain; charset="UTF-8"',
     "Content-Transfer-Encoding: base64",
     "",
     Buffer.from(message.text, "utf8").toString("base64"),
+    `--${boundary}`,
+    'Content-Type: text/html; charset="UTF-8"',
+    "Content-Transfer-Encoding: base64",
+    "",
+    Buffer.from(message.html, "utf8").toString("base64"),
+    `--${boundary}--`,
   ].join("\r\n");
+}
+
+// A collision-proof boundary token. It only uses hex, so it can never appear
+// inside base64-encoded part bodies (which never contain the leading "--").
+function randomBoundary(): string {
+  return `${Date.now().toString(16)}_${Math.random().toString(16).slice(2)}`;
 }
 
 // RFC 2047 encoded-word for header values that contain non-ASCII (Turkish).

@@ -11,8 +11,18 @@ export interface EmailMessage {
   /** Single recipient. We send one mail per person — never CC/BCC others. */
   to: string;
   subject: string;
-  /** Plain-text body (UTF-8). No HTML in the MVP. */
+  /**
+   * Plain-text body (UTF-8). Always required — it is the canonical fallback
+   * for clients that don't render HTML and the first part of every message.
+   */
   text: string;
+  /**
+   * Optional HTML body (UTF-8). When present, the provider sends a
+   * `multipart/alternative` message carrying BOTH `text` and `html`, letting
+   * the client pick. When absent, behaviour is unchanged: a plain `text/plain`
+   * message. This keeps `sendEmail` fully backward-compatible.
+   */
+  html?: string;
 }
 
 export type SendEmailResult =
