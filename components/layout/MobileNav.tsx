@@ -30,7 +30,7 @@ export function MobileNav({ isAdmin = false }: { isAdmin?: boolean }) {
   const items: NavItem[] = isAdmin ? ADMIN_NAV : MEMBER_NAV;
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur border-t border-gray-200 safe-bottom">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface/95 backdrop-blur border-t border-line safe-bottom">
       <div className="flex items-stretch justify-around h-14">
         {items.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
@@ -42,11 +42,11 @@ export function MobileNav({ isAdmin = false }: { isAdmin?: boolean }) {
               className={cn(
                 // 44px+ touch target across the full cell height.
                 "relative flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors",
-                active ? "text-blue-600" : "text-gray-500 active:text-gray-700",
+                active ? "text-brand" : "text-muted active:text-ink",
               )}
             >
               {active && (
-                <span className="absolute top-0 h-0.5 w-8 rounded-b bg-blue-600" />
+                <span className="absolute top-0 h-0.5 w-8 rounded-b bg-brand" />
               )}
               <Icon size={20} strokeWidth={active ? 2.4 : 2} />
               <span>{label}</span>

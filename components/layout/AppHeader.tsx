@@ -145,7 +145,7 @@ function ProfileMenu({
           <form action={signOut}>
             <button
               type="submit"
-              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-muted hover:bg-[#fbeae7] hover:text-[#a83a2c] transition-colors"
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-muted hover:bg-danger/10 hover:text-danger transition-colors"
             >
               <LogOut size={15} className="shrink-0" />
               Çıkış yap

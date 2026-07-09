@@ -18,6 +18,8 @@ import type {
 } from "@/types";
 import { roleLabel, ASSIGNABLE_ROLE_OPTIONS } from "@/lib/utils/roles";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Card } from "@/components/ui/Card";
+import { Input } from "@/components/ui/Input";
 import { buildDeptMeta } from "@/lib/utils/departments";
 import { getDepartmentBadge } from "@/lib/design/semantics";
 import { cn } from "@/lib/utils/cn";
@@ -174,7 +176,7 @@ export function MembersManager({
   return (
     <div className="space-y-4">
       {/* Current members */}
-      <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+      <Card className="divide-y divide-hairline">
         {members.map((m) => {
           const isSelf = m.user_id === currentUserId;
           const isOwnerRow = m.role === "owner";
@@ -186,7 +188,7 @@ export function MembersManager({
               <div className="flex-1 min-w-0">
                 {editingId === m.id ? (
                   <div className="flex items-center gap-1.5">
-                    <input
+                    <Input
                       value={editName}
                       onChange={(e) => setEditName(e.target.value)}
                       onKeyDown={(e) => {
@@ -195,12 +197,12 @@ export function MembersManager({
                       }}
                       autoFocus
                       disabled={isPending}
-                      className="flex-1 min-w-0 rounded-lg border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="flex-1 min-w-0 h-7 px-2"
                     />
                     <button
                       onClick={() => handleSaveName(m.id)}
                       disabled={isPending}
-                      className="p-1 rounded text-green-600 hover:bg-green-50 disabled:opacity-50"
+                      className="p-1 rounded text-success hover:bg-success/10 disabled:opacity-50"
                       aria-label="Kaydet"
                     >
                       <Check size={14} />
@@ -208,20 +210,20 @@ export function MembersManager({
                     <button
                       onClick={() => setEditingId(null)}
                       disabled={isPending}
-                      className="p-1 rounded text-gray-400 hover:bg-gray-100 disabled:opacity-50"
+                      className="p-1 rounded text-subtle hover:bg-surface-muted disabled:opacity-50"
                       aria-label="Vazgeç"
                     >
                       <X size={14} />
                     </button>
                   </div>
                 ) : (
-                  <p className="text-sm font-medium text-gray-900 truncate flex items-center gap-1.5">
+                  <p className="text-sm font-medium text-ink truncate flex items-center gap-1.5">
                     <span className="truncate">{m.profiles?.full_name ?? m.profiles?.email ?? "—"}</span>
-                    {isSelf && <span className="text-[10px] text-gray-400">(siz)</span>}
+                    {isSelf && <span className="text-[10px] text-subtle">(siz)</span>}
                     {isOwner && (
                       <button
                         onClick={() => { setEditingId(m.id); setEditName(m.profiles?.full_name ?? ""); }}
-                        className="p-0.5 rounded text-gray-300 hover:text-gray-600 hover:bg-gray-100 shrink-0"
+                        className="p-0.5 rounded text-subtle hover:text-muted hover:bg-surface-muted shrink-0"
                         aria-label="İsmi düzenle"
                       >
                         <Pencil size={11} />
@@ -231,8 +233,8 @@ export function MembersManager({
                 )}
                 {editingUsernameId === m.id ? (
                   <div className="flex items-center gap-1.5 mt-1">
-                    <span className="text-[11px] text-gray-400">@</span>
-                    <input
+                    <span className="text-[11px] text-subtle">@</span>
+                    <Input
                       value={editUsername}
                       onChange={(e) => setEditUsername(e.target.value)}
                       onKeyDown={(e) => {
@@ -242,12 +244,12 @@ export function MembersManager({
                       autoFocus
                       disabled={isPending}
                       placeholder="kullanici.adi"
-                      className="flex-1 min-w-0 rounded-lg border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="flex-1 min-w-0 h-6 px-2 text-xs"
                     />
                     <button
                       onClick={() => handleSaveUsername(m.id)}
                       disabled={isPending}
-                      className="p-1 rounded text-green-600 hover:bg-green-50 disabled:opacity-50"
+                      className="p-1 rounded text-success hover:bg-success/10 disabled:opacity-50"
                       aria-label="Kaydet"
                     >
                       <Check size={14} />
@@ -255,21 +257,21 @@ export function MembersManager({
                     <button
                       onClick={() => setEditingUsernameId(null)}
                       disabled={isPending}
-                      className="p-1 rounded text-gray-400 hover:bg-gray-100 disabled:opacity-50"
+                      className="p-1 rounded text-subtle hover:bg-surface-muted disabled:opacity-50"
                       aria-label="Vazgeç"
                     >
                       <X size={14} />
                     </button>
                   </div>
                 ) : (
-                  <p className="text-xs text-gray-500 truncate flex items-center gap-1">
+                  <p className="text-xs text-muted truncate flex items-center gap-1">
                     <span className="truncate">
                       {m.profiles?.username ? `@${m.profiles.username}` : "Kullanıcı adı yok"}
                     </span>
                     {isOwner && (
                       <button
                         onClick={() => { setEditingUsernameId(m.id); setEditUsername(m.profiles?.username ?? ""); }}
-                        className="p-0.5 rounded text-gray-300 hover:text-gray-600 hover:bg-gray-100 shrink-0"
+                        className="p-0.5 rounded text-subtle hover:text-muted hover:bg-surface-muted shrink-0"
                         aria-label="Kullanıcı adını düzenle"
                       >
                         <Pencil size={11} />
@@ -279,7 +281,7 @@ export function MembersManager({
                 )}
                 {editingEmailId === m.id ? (
                   <div className="flex items-center gap-1.5 mt-1">
-                    <input
+                    <Input
                       type="email"
                       value={editEmail}
                       onChange={(e) => setEditEmail(e.target.value)}
@@ -290,12 +292,12 @@ export function MembersManager({
                       autoFocus
                       disabled={isPending}
                       placeholder="bildirim@ornek.com"
-                      className="flex-1 min-w-0 rounded-lg border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="flex-1 min-w-0 h-6 px-2 text-xs"
                     />
                     <button
                       onClick={() => handleSaveEmail(m.id)}
                       disabled={isPending}
-                      className="p-1 rounded text-green-600 hover:bg-green-50 disabled:opacity-50"
+                      className="p-1 rounded text-success hover:bg-success/10 disabled:opacity-50"
                       aria-label="Kaydet"
                     >
                       <Check size={14} />
@@ -303,7 +305,7 @@ export function MembersManager({
                     <button
                       onClick={() => setEditingEmailId(null)}
                       disabled={isPending}
-                      className="p-1 rounded text-gray-400 hover:bg-gray-100 disabled:opacity-50"
+                      className="p-1 rounded text-subtle hover:bg-surface-muted disabled:opacity-50"
                       aria-label="Vazgeç"
                     >
                       <X size={14} />
@@ -319,7 +321,7 @@ export function MembersManager({
                       <span
                         className={cn(
                           "truncate",
-                          display.email ? "text-gray-400" : "text-amber-600"
+                          display.email ? "text-subtle" : "text-warning"
                         )}
                       >
                         {display.email ?? "Bildirim e-postası eklenmedi"}
@@ -330,7 +332,7 @@ export function MembersManager({
                             setEditingEmailId(m.id);
                             setEditEmail(m.notification_email ?? "");
                           }}
-                          className="p-0.5 rounded text-gray-300 hover:text-gray-600 hover:bg-gray-100 shrink-0"
+                          className="p-0.5 rounded text-subtle hover:text-muted hover:bg-surface-muted shrink-0"
                           aria-label="Bildirim e-postasını düzenle"
                         >
                           <Pencil size={11} />
@@ -368,13 +370,13 @@ export function MembersManager({
                       value={m.role}
                       onChange={(e) => handleRoleChange(m.id, e.target.value as "admin" | "member" | "viewer")}
                       disabled={isPending}
-                      className="appearance-none text-xs text-gray-600 bg-gray-100 border border-gray-200 rounded-full px-2.5 py-0.5 pr-6 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50"
+                      className="appearance-none text-xs text-muted bg-surface-sunken border border-line rounded-full px-2.5 py-0.5 pr-6 focus:outline-none focus:ring-1 focus:ring-brand-ring disabled:opacity-50"
                     >
                       {ASSIGNABLE_ROLE_OPTIONS.map((r) => (
                         <option key={r.value} value={r.value}>{r.label}</option>
                       ))}
                     </select>
-                    <ChevronDown size={10} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                    <ChevronDown size={10} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-subtle pointer-events-none" />
                   </div>
                   <button
                     onClick={() => setConfirm({
@@ -383,14 +385,14 @@ export function MembersManager({
                       label: m.profiles?.full_name ?? m.profiles?.email ?? "",
                     })}
                     disabled={isPending}
-                    className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-50 transition-colors"
+                    className="p-1 rounded text-subtle hover:text-danger hover:bg-danger/10 disabled:opacity-50 transition-colors"
                     aria-label="Üyeyi kaldır"
                   >
                     <UserMinus size={13} />
                   </button>
                 </div>
               ) : (
-                <span className="text-xs text-gray-500 bg-gray-100 px-2.5 py-0.5 rounded-full shrink-0">
+                <span className="text-xs text-muted bg-surface-sunken px-2.5 py-0.5 rounded-full shrink-0">
                   {roleLabel(m.role)}
                 </span>
               )}
@@ -398,42 +400,42 @@ export function MembersManager({
             </div>
           );
         })}
-      </div>
+      </Card>
 
       {/* Legacy team-access grants. Self-signup is DISABLED — new people are added
           via "Hesap oluştur" above. Any leftover pending grants from the old flow
           are shown here so an owner can revoke them; no new ones can be added. */}
       {isOwner && grants.length > 0 && (
         <div>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Bekleyen eski erişimler</p>
-          <p className="text-xs text-gray-400 mt-1 mb-2">
+          <p className="text-xs font-semibold text-muted uppercase tracking-wider">Bekleyen eski erişimler</p>
+          <p className="text-xs text-subtle mt-1 mb-2">
             Self-signup kapatıldı. Aşağıdaki eski kayıtlar artık kullanılmıyor; kaldırabilirsiniz.
           </p>
-          <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+          <Card className="divide-y divide-hairline">
             {grants.map((g) => (
               <div key={g.id} className="flex items-center justify-between px-5 py-3 gap-3">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-700 truncate">
+                  <p className="text-sm font-medium text-ink truncate">
                     {g.username ? `@${g.username}` : "—"}
                   </p>
-                  <p className="text-xs text-gray-400 truncate">{g.email}</p>
-                  <p className="text-xs text-gray-400">{roleLabel(g.role)} · Kullanılmıyor</p>
+                  <p className="text-xs text-subtle truncate">{g.email}</p>
+                  <p className="text-xs text-subtle">{roleLabel(g.role)} · Kullanılmıyor</p>
                 </div>
                 <button
                   onClick={() => setConfirm({ kind: "grant", id: g.id, label: g.email })}
                   disabled={isPending}
-                  className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-50 transition-colors"
+                  className="p-1 rounded text-subtle hover:text-danger hover:bg-danger/10 disabled:opacity-50 transition-colors"
                   aria-label="Erişimi kaldır"
                 >
                   <X size={14} />
                 </button>
               </div>
             ))}
-          </div>
+          </Card>
         </div>
       )}
 
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      {error && <p className="text-xs text-danger">{error}</p>}
 
       <ConfirmDialog
         open={confirm !== null}
