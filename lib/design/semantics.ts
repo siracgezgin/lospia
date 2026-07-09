@@ -300,8 +300,8 @@ export const STATUS_TEXT_TONE: Record<TaskStatus, string> = {
 // "Kontrol / Onay" (mint) vs "Tamamlandı" (strong green) distinction is defined
 // once and reused by both the live and static Kanban columns.
 export const BOARD_COL_HEADER_TONE: Record<string, string> = {
-  yapilacak:    "text-gray-500",
-  devam_ediyor: "text-gray-500",
+  yapilacak:    "text-muted",
+  devam_ediyor: "text-muted",
   kontrol_onay: "text-[#3fae73]", // mint — pre-completion
   tamamlandi:   "text-[#15703f]", // strong green — finished
 };

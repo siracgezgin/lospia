@@ -151,7 +151,7 @@ function CardStatusChip({ task }: { task: Task }) {
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
 
-  const tone = STATUS_CHIP_TONE[optStatus] ?? "bg-gray-100 text-gray-600";
+  const tone = STATUS_CHIP_TONE[optStatus] ?? "bg-surface-sunken text-muted";
   const chipCls = cn("text-[10px] rounded px-1.5 py-0.5 leading-none font-medium", tone);
   const canDone = ctx?.canComplete ?? false;
   // A done task is locked for non-admins — they can neither change nor reopen it.
@@ -189,7 +189,7 @@ function CardStatusChip({ task }: { task: Task }) {
         <ChevronDown size={9} className="opacity-60" />
       </button>
       {open && (
-        <div className="absolute left-0 top-full mt-1 w-32 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1">
+        <div className="absolute left-0 top-full mt-1 w-32 bg-surface border border-line rounded-lg shadow-pop z-50 py-1">
           {CARD_STATUS_CHOICES.map((o) => {
             const disabled = o.value === "done" && !canDone;
             const active = o.value === optStatus;
@@ -200,8 +200,8 @@ function CardStatusChip({ task }: { task: Task }) {
                 disabled={disabled}
                 onClick={() => choose(o.value)}
                 className={cn(
-                  "w-full text-left px-2.5 py-1 text-[11px] flex items-center gap-1.5 hover:bg-gray-50",
-                  active && "font-semibold text-blue-700",
+                  "w-full text-left px-2.5 py-1 text-[11px] flex items-center gap-1.5 hover:bg-surface-muted transition-colors",
+                  active && "font-semibold text-brand",
                   disabled && "opacity-40 cursor-not-allowed hover:bg-transparent",
                 )}
                 title={disabled ? "Yalnızca yöneticiler tamamlayabilir" : undefined}
@@ -240,7 +240,7 @@ function ParticipantChips({ participants }: { participants: TaskParticipant[] })
         </span>
       ))}
       {overflow > 0 && (
-        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-600 text-[8px] font-semibold ring-1 ring-white">
+        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-surface-sunken text-muted text-[8px] font-semibold ring-1 ring-white">
           +{overflow}
         </span>
       )}
@@ -532,7 +532,7 @@ function CardMenu({
     >
       <button
         onClick={() => { setOpen((o) => !o); setConfirming(false); }}
-        className="p-0.5 rounded text-gray-300 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity"
+        className="p-0.5 rounded text-subtle hover:text-ink opacity-0 group-hover:opacity-100 transition-opacity"
         aria-label="Görev seçenekleri"
         tabIndex={-1}
       >
@@ -540,17 +540,17 @@ function CardMenu({
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1 w-36 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1">
+        <div className="absolute right-0 top-full mt-1 w-36 bg-surface border border-line rounded-lg shadow-pop z-50 py-1">
           <button
             onClick={() => { setOpen(false); onEdit(); }}
-            className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-1.5"
+            className="w-full text-left px-3 py-1.5 text-xs text-muted hover:bg-surface-muted hover:text-ink transition-colors flex items-center gap-1.5"
           >
             <Pencil size={11} /> Düzenle
           </button>
           {canDuplicate && (
             <button
               onClick={() => { setOpen(false); onDuplicate(); }}
-              className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-1.5"
+              className="w-full text-left px-3 py-1.5 text-xs text-muted hover:bg-surface-muted hover:text-ink transition-colors flex items-center gap-1.5"
             >
               <Copy size={11} /> Çoğalt
             </button>
@@ -558,12 +558,12 @@ function CardMenu({
           {canArchive && (
             <button
               onClick={() => { setOpen(false); onArchive(); }}
-              className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-1.5"
+              className="w-full text-left px-3 py-1.5 text-xs text-muted hover:bg-surface-muted hover:text-ink transition-colors flex items-center gap-1.5"
             >
               <Archive size={11} /> Arşivle
             </button>
           )}
-          {canDelete && <div className="my-1 border-t border-gray-100" />}
+          {canDelete && <div className="my-1 border-t border-hairline" />}
           {canDelete && confirming ? (
             <div className="px-2 py-1.5">
               <p className="text-[10px] text-red-600 mb-1.5 leading-snug">Çöp kutusuna taşınsın mı?</p>
@@ -576,7 +576,7 @@ function CardMenu({
                 </button>
                 <button
                   onClick={() => setConfirming(false)}
-                  className="flex-1 text-[10px] bg-gray-100 text-gray-600 rounded px-1.5 py-0.5 hover:bg-gray-200"
+                  className="flex-1 text-[10px] bg-surface-sunken text-muted rounded px-1.5 py-0.5 hover:bg-surface-hover transition-colors"
                 >
                   İptal
                 </button>
@@ -649,7 +649,7 @@ function QuickAssigneeSelect({
       title={`${currentName} — ${task.status === "done" ? "Tamamladı" : "Tamamlanmadı"}`}
     />
   ) : (
-    <span className="text-[10px] text-gray-300 pointer-events-none">—</span>
+    <span className="text-[10px] text-subtle pointer-events-none">—</span>
   );
 
   if (!canAssign) {
@@ -837,7 +837,7 @@ function CardContent({
         {interactive ? (
           <CardStatusChip task={task} />
         ) : (
-          <span className={cn("text-[10px] rounded px-1.5 py-0.5 leading-none font-medium", STATUS_CHIP_TONE[task.status] ?? "bg-gray-100 text-gray-600")}>
+          <span className={cn("text-[10px] rounded px-1.5 py-0.5 leading-none font-medium", STATUS_CHIP_TONE[task.status] ?? "bg-surface-sunken text-muted")}>
             {STATUS_LABELS[task.status]}
           </span>
         )}
@@ -891,11 +891,11 @@ function StaticTaskCard({
   // border (all sides) then border-l accent last so it wins. No cn() — tailwind-merge strips border-l-*.
   const dept = useTaskDept(task);
   const em = urgentCardStyle(task, getTaskCardStyle(task.status, dept?.color));
-  const cardCls = `rounded-lg border ${em.widthCls} p-3 ${em.shadow} transition-all cursor-pointer ${em.surface} ${em.border} ${em.accent} ${em.ring}`;
+  const cardCls = `rounded-card border ${em.widthCls} p-3 ${em.shadow} transition-all cursor-pointer ${em.surface} ${em.border} ${em.accent} ${em.ring}`;
   return (
     <div className={cardCls}>
       <div className="flex items-start gap-1.5">
-        <span className="mt-0.5 p-0.5 shrink-0 text-gray-200"><GripVertical size={13} /></span>
+        <span className="mt-0.5 p-0.5 shrink-0 text-subtle/70"><GripVertical size={13} /></span>
         <CardContent task={task} profiles={profiles} contacts={contacts} responsibleNames={responsibleNames} interactive={false} />
       </div>
     </div>
@@ -944,7 +944,14 @@ function TaskCard({
   const colorCls = `${em.surface} ${em.border} ${em.accent} ${em.ring}`;
   const stateCls = [
     isDragging ? "opacity-40" : "",
-    isDragOverlay ? "shadow-pop rotate-1" : "hover:shadow-pop transition-shadow",
+    // Soft shadow lift only — the card's border stays the department color
+    // (never flattened to a neutral on hover, preserving the colour hierarchy).
+    isDragOverlay
+      ? "shadow-pop rotate-1"
+      : "hover:shadow-card-hover transition-shadow duration-[var(--duration-fast)] ease-standard",
+    // Keyboard focus (the card receives tabIndex from dnd-kit attributes) — a
+    // calm brand ring so drag/enter targets are visible without a mouse.
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring/60 focus-visible:ring-offset-1",
   ].filter(Boolean).join(" ");
   // The WHOLE card is the drag handle (grab anywhere except interactive children,
   // which stop pointer propagation). Grip icon stays as a subtle affordance.
@@ -977,7 +984,7 @@ function TaskCard({
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`rounded-lg border ${em.widthCls} p-3 ${em.shadow} group ${colorCls} ${stateCls} ${dragCls}`}
+      className={`rounded-card border ${em.widthCls} p-3 ${em.shadow} group ${colorCls} ${stateCls} ${dragCls}`}
       {...dragProps}
       onClick={openDetail}
       onKeyDown={(e) => {
@@ -992,7 +999,7 @@ function TaskCard({
       <div className="flex items-start gap-1.5">
         <span
           className={`mt-0.5 p-0.5 shrink-0 transition-opacity ${
-            disableDrag ? "text-transparent" : "text-gray-300 opacity-0 group-hover:opacity-100"
+            disableDrag ? "text-transparent" : "text-subtle/70 opacity-0 group-hover:opacity-100"
           }`}
           aria-hidden
         >
@@ -1055,7 +1062,7 @@ function MobileTaskCard({
   }
   return (
     <div
-      className={`rounded-xl border ${em.widthCls} p-3.5 ${em.shadow} cursor-pointer ${colorCls}`}
+      className={`rounded-card border ${em.widthCls} p-3.5 ${em.shadow} cursor-pointer ${colorCls} transition-transform duration-[var(--duration-fast)] ease-standard active:scale-[0.99]`}
       onClick={openDetail}
     >
       <CardContent
@@ -1111,7 +1118,7 @@ function KanbanColumn({
 }) {
   const taskIds = tasks.map((t) => t.id);
   const { setNodeRef, isOver } = useDroppable({ id: colDef.id });
-  const headerTone = BOARD_COL_HEADER_TONE[colDef.id] ?? "text-gray-500";
+  const headerTone = BOARD_COL_HEADER_TONE[colDef.id] ?? "text-muted";
 
   return (
     <div className="flex flex-col gap-2 w-[80vw] max-w-72 sm:w-72 shrink-0">
@@ -1120,14 +1127,14 @@ function KanbanColumn({
           <h3 className={cn("text-xs font-bold uppercase tracking-wider truncate", headerTone)}>
             {colDef.label}
           </h3>
-          <span className="text-[10px] font-semibold text-gray-500 bg-gray-200/70 rounded-full px-1.5 py-0.5 leading-none shrink-0">
+          <span className="text-[10px] font-semibold text-muted bg-surface-sunken rounded-full px-1.5 py-0.5 leading-none shrink-0 tabular-nums">
             {tasks.length}
           </span>
         </div>
         {!disableDrag && (
           <button
             onClick={() => onAddTask(colDef.id)}
-            className="p-0.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors shrink-0"
+            className="p-0.5 text-subtle hover:text-brand hover:bg-brand-soft rounded transition-colors shrink-0"
             aria-label={`${colDef.label} sütununa görev ekle`}
           >
             <Plus size={14} />
@@ -1139,12 +1146,18 @@ function KanbanColumn({
         <div
           ref={setNodeRef}
           className={cn(
-            "flex flex-col gap-2 rounded-lg p-1 min-h-20 transition-colors",
-            tasks.length === 0 && "border-2 border-dashed border-gray-100",
-            isOver && "bg-blue-50/50 border-blue-200",
+            "flex flex-col gap-2 rounded-card p-1 min-h-20 transition-colors duration-[var(--duration-fast)] ease-standard",
+            tasks.length === 0 && "border border-dashed border-line",
+            isOver && "bg-brand-soft/50 ring-2 ring-inset ring-brand-ring/40",
           )}
           data-col={colDef.id}
         >
+          {tasks.length === 0 && (
+            <div className="flex flex-col items-center justify-center gap-0.5 py-6 text-center pointer-events-none select-none">
+              <p className="text-[11px] font-medium text-subtle">Bu sütunda görev yok</p>
+              <p className="text-[10px] text-subtle/70">Buraya görev sürükleyin</p>
+            </div>
+          )}
           {tasks.map((task) => (
             <TaskCard
               key={task.id}
@@ -1182,16 +1195,16 @@ function StaticKanbanColumn({
   contacts: WorkspaceContact[];
   responsibleNames: Record<string, string>;
 }) {
-  const headerTone = BOARD_COL_HEADER_TONE[colDef.id] ?? "text-gray-500";
+  const headerTone = BOARD_COL_HEADER_TONE[colDef.id] ?? "text-muted";
   return (
     <div className="flex flex-col gap-2 w-[80vw] max-w-72 sm:w-72 shrink-0">
       <div className="sticky top-0 z-20 h-11 flex items-center gap-2">
         <h3 className={cn("text-xs font-bold uppercase tracking-wider truncate", headerTone)}>
           {colDef.label}
         </h3>
-        <span className="text-[10px] font-semibold text-gray-500 bg-gray-200/70 rounded-full px-1.5 py-0.5 leading-none shrink-0">{tasks.length}</span>
+        <span className="text-[10px] font-semibold text-muted bg-surface-sunken rounded-full px-1.5 py-0.5 leading-none shrink-0 tabular-nums">{tasks.length}</span>
       </div>
-      <div className={cn("flex flex-col gap-2 rounded-lg p-1 min-h-20", tasks.length === 0 && "border-2 border-dashed border-gray-100")}>
+      <div className={cn("flex flex-col gap-2 rounded-card p-1 min-h-20", tasks.length === 0 && "border border-dashed border-line")}>
         {tasks.map((task) => (
           <StaticTaskCard key={task.id} task={task} profiles={profiles} contacts={contacts} responsibleNames={responsibleNames} />
         ))}
@@ -1753,12 +1766,12 @@ export function KanbanBoard({
               setWeekStart(monday);
               router.push(`/board?view=${effectiveSlug}&week=${localISO(monday)}`);
             }}
-            className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+            className="p-1 text-muted hover:text-ink hover:bg-surface-muted rounded transition-colors"
             aria-label="Önceki hafta"
           >
             <ChevronLeft size={14} />
           </button>
-          <span className="text-sm font-medium text-gray-700 min-w-32 text-center select-none">
+          <span className="text-sm font-medium text-ink min-w-32 text-center select-none">
             {formatWeekLabel(weekStart)}
           </span>
           <button
@@ -1769,7 +1782,7 @@ export function KanbanBoard({
               setWeekStart(monday);
               router.push(`/board?view=${effectiveSlug}&week=${localISO(monday)}`);
             }}
-            className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+            className="p-1 text-muted hover:text-ink hover:bg-surface-muted rounded transition-colors"
             aria-label="Sonraki hafta"
           >
             <ChevronRight size={14} />
@@ -1781,7 +1794,7 @@ export function KanbanBoard({
                 setWeekStart(monday);
                 router.push(`/board?view=${effectiveSlug}&week=${localISO(monday)}`);
               }}
-              className="ml-1 text-xs text-blue-600 hover:text-blue-700 px-2 py-0.5 rounded hover:bg-blue-50 transition-colors"
+              className="ml-1 text-xs text-brand hover:text-brand-strong px-2 py-0.5 rounded hover:bg-brand-soft transition-colors"
             >
               Bu haftaya dön
             </button>
@@ -1807,8 +1820,8 @@ export function KanbanBoard({
                 className={cn(
                   "px-3 py-2 text-sm border-b-2 whitespace-nowrap transition-colors",
                   isActive
-                    ? "border-blue-600 text-blue-700 font-medium"
-                    : "border-transparent text-gray-500 hover:text-gray-700",
+                    ? "border-brand text-brand font-medium"
+                    : "border-transparent text-muted hover:text-ink",
                 )}
               >
                 {view.name}
@@ -1824,7 +1837,7 @@ export function KanbanBoard({
         {canCreate && (
           <button
             onClick={() => { setModalDefaultStatus("ready"); setModalOpen(true); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-brand text-white text-sm font-medium rounded-lg hover:bg-brand-strong transition-colors"
           >
             <Plus size={14} />
             Görev oluştur
@@ -1834,7 +1847,7 @@ export function KanbanBoard({
         {canComplete && !isAdminBoard && (
           <button
             onClick={() => setImportOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-line text-muted text-sm rounded-lg hover:bg-surface-muted transition-colors"
           >
             <FileSpreadsheet size={14} />
             CSV&apos;den içe aktar
@@ -1849,8 +1862,8 @@ export function KanbanBoard({
             value={departmentFilter}
             onChange={(e) => setDepartmentFilter(e.target.value)}
             className={cn(
-              "text-sm border rounded-lg px-2 py-1.5 bg-white transition-colors cursor-pointer",
-              departmentFilter ? "border-[#406775] text-[#406775]" : "border-gray-200 text-gray-600",
+              "text-sm border rounded-lg px-2 py-1.5 bg-surface transition-colors cursor-pointer",
+              departmentFilter ? "border-brand text-brand" : "border-line text-muted",
             )}
             aria-label="Departmana göre filtrele"
           >
@@ -1866,8 +1879,8 @@ export function KanbanBoard({
               value={adminManager}
               onChange={(e) => { setAdminManager(e.target.value); syncAdminUrl(adminVisibility, e.target.value); }}
               className={cn(
-                "text-sm border rounded-lg px-2 py-1.5 bg-white transition-colors cursor-pointer",
-                adminManager !== "all" ? "border-blue-400 text-blue-700" : "border-gray-200 text-gray-600",
+                "text-sm border rounded-lg px-2 py-1.5 bg-surface transition-colors cursor-pointer",
+                adminManager !== "all" ? "border-brand text-brand" : "border-line text-muted",
               )}
               aria-label="Yöneticiye göre filtrele"
             >
@@ -1881,8 +1894,8 @@ export function KanbanBoard({
               value={personFilter}
               onChange={(e) => setPersonFilter(e.target.value)}
               className={cn(
-                "text-sm border rounded-lg px-2 py-1.5 bg-white transition-colors cursor-pointer",
-                personFilter ? "border-blue-400 text-blue-700" : "border-gray-200 text-gray-600",
+                "text-sm border rounded-lg px-2 py-1.5 bg-surface transition-colors cursor-pointer",
+                personFilter ? "border-brand text-brand" : "border-line text-muted",
               )}
               aria-label="Kişiye göre filtrele"
             >
@@ -1906,15 +1919,15 @@ export function KanbanBoard({
 
           {/* Search */}
           <div className="relative">
-            <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-subtle pointer-events-none" />
             <input
               type="search"
               placeholder="Ara…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className={cn(
-                "text-sm border rounded-lg pl-7 pr-3 py-1.5 bg-white w-40 focus:outline-none focus:ring-1 transition-colors",
-                search ? "border-blue-400 text-blue-700 focus:ring-blue-400" : "border-gray-200 text-gray-700 focus:ring-blue-300",
+                "text-sm border rounded-lg pl-7 pr-3 py-1.5 bg-surface w-40 focus:outline-none focus:ring-1 transition-colors",
+                search ? "border-brand text-brand focus:ring-brand-ring/60" : "border-line text-ink focus:ring-brand-ring/40",
               )}
               aria-label="Görev ara"
             />
@@ -1927,7 +1940,7 @@ export function KanbanBoard({
                 setPersonFilter(""); setDepartmentFilter(""); setSearch("");
                 if (isAdminBoard) { setAdminManager("all"); syncAdminUrl(adminVisibility, "all"); }
               }}
-              className="text-xs text-gray-400 hover:text-gray-700 px-1.5 py-0.5 rounded hover:bg-gray-100 transition-colors whitespace-nowrap"
+              className="text-xs text-subtle hover:text-ink px-1.5 py-0.5 rounded hover:bg-surface-muted transition-colors whitespace-nowrap"
               aria-label="Filtreleri temizle"
             >
               ✕ Temizle
@@ -1938,21 +1951,21 @@ export function KanbanBoard({
 
       {/* ── Person workload summary strip ───────────────────────────────── */}
       {personStats && (
-        <div className="flex items-center gap-4 px-4 py-2 bg-blue-50/50 border-b border-blue-100 text-xs shrink-0 flex-wrap">
-          <span className="font-semibold text-blue-800">{personStats.name}</span>
-          <span className="text-gray-500">
-            <span className="font-medium text-green-600">{personStats.completedThisWeek}</span> bu hafta tamamlandı
+        <div className="flex items-center gap-4 px-4 py-2 bg-brand-soft/40 border-b border-brand-soft text-xs shrink-0 flex-wrap">
+          <span className="font-semibold text-brand-strong">{personStats.name}</span>
+          <span className="text-muted">
+            <span className="font-medium text-success">{personStats.completedThisWeek}</span> bu hafta tamamlandı
           </span>
-          <span className="text-gray-500">
-            <span className="font-medium text-blue-600">{personStats.inProgress}</span> devam ediyor
+          <span className="text-muted">
+            <span className="font-medium text-info">{personStats.inProgress}</span> devam ediyor
           </span>
           {personStats.waiting > 0 && (
-            <span className="text-gray-500">
-              <span className="font-medium text-orange-600">{personStats.waiting}</span> bekliyor
+            <span className="text-muted">
+              <span className="font-medium text-warning">{personStats.waiting}</span> bekliyor
             </span>
           )}
           {personStats.overdue > 0 && (
-            <span className="font-medium text-red-600">
+            <span className="font-medium text-danger">
               ⚠ {personStats.overdue} gecikmiş
             </span>
           )}
@@ -2074,12 +2087,12 @@ export function KanbanBoard({
               const colTasks = tasksByCol[mobileSeg as BoardColId] ?? [];
               if (colTasks.length === 0) {
                 return (
-                  <div className="flex flex-col items-center justify-center text-center gap-2 py-16 text-gray-400">
+                  <div className="flex flex-col items-center justify-center text-center gap-2 py-16 text-subtle">
                     <p className="text-sm">Bu sütunda görev yok.</p>
                     {canCreate && (
                       <button
                         onClick={() => { setModalDefaultStatus("ready"); setModalOpen(true); }}
-                        className="text-sm text-[#2f5d6b] font-medium"
+                        className="text-sm text-brand font-medium"
                       >
                         + Görev oluştur
                       </button>
