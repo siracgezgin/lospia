@@ -7,6 +7,7 @@ import { DepartmentsManager } from "@/components/settings/DepartmentsManager";
 import { canManageSettings, canRenameWorkspace, canManageMembers, canManageWorkspace } from "@/lib/auth/permissions";
 import { roleLabel } from "@/lib/utils/roles";
 import { getDisplayNotificationEmail } from "@/lib/utils/notification-email";
+import { Card } from "@/components/ui/Card";
 import type {
   Workspace, WorkspaceMember, Profile,
   WorkspaceRole, WorkspaceInvite,
@@ -25,12 +26,12 @@ export default async function SettingsPage() {
     .limit(1);
   const workspaceId = memberRows?.[0]?.workspace_id;
   const userRole = (memberRows?.[0]?.role ?? "member") as WorkspaceRole;
-  if (!workspaceId) return <div className="p-8 text-gray-500">Çalışma alanı bulunamadı.</div>;
+  if (!workspaceId) return <div className="p-8 text-muted">Çalışma alanı bulunamadı.</div>;
 
   if (!canManageSettings(userRole)) {
     return (
       <div className="max-w-2xl mx-auto py-8 px-4">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Ayarlar</h1>
+        <h1 className="text-2xl font-bold text-ink mb-6">Ayarlar</h1>
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-sm text-amber-800">
           Bu sayfayı düzenlemek için yetkiniz yok. Yöneticinize başvurun.
         </div>
@@ -91,8 +92,8 @@ export default async function SettingsPage() {
   return (
     <div className="max-w-5xl mx-auto py-8 px-4 sm:px-6 lg:px-8 space-y-10">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Ayarlar</h1>
-        <p className="text-sm text-gray-500 mt-1">
+        <h1 className="text-2xl font-bold text-ink">Ayarlar</h1>
+        <p className="text-sm text-muted mt-1">
           Profiliniz, çalışma alanı, departmanlar ve ekip üyelerini buradan yönetin.
         </p>
       </div>
@@ -101,25 +102,25 @@ export default async function SettingsPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Profile */}
         <section className="space-y-4">
-          <h2 className="text-base font-semibold text-gray-700">Profiliniz</h2>
-          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3 h-full">
+          <h2 className="text-base font-semibold text-ink">Profiliniz</h2>
+          <Card className="p-5 space-y-3 h-full">
             <div>
-              <p className="text-xs text-gray-500">İsim</p>
+              <p className="text-xs text-muted">İsim</p>
               <p className="text-sm font-medium">{profile?.full_name ?? "—"}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500">E-posta</p>
+              <p className="text-xs text-muted">E-posta</p>
               <p className="text-sm font-medium">{profile?.email}</p>
             </div>
-          </div>
+          </Card>
         </section>
 
         {/* Workspace */}
         <section className="space-y-4">
-          <h2 className="text-base font-semibold text-gray-700">Çalışma alanı</h2>
-          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3 h-full">
+          <h2 className="text-base font-semibold text-ink">Çalışma alanı</h2>
+          <Card className="p-5 space-y-3 h-full">
             <div>
-              <p className="text-xs text-gray-500 mb-1">İsim</p>
+              <p className="text-xs text-muted mb-1">İsim</p>
               {isOwner && workspace ? (
                 <WorkspaceNameEditor workspaceId={workspaceId} currentName={workspace.name} />
               ) : (
@@ -127,21 +128,21 @@ export default async function SettingsPage() {
               )}
             </div>
             <div>
-              <p className="text-xs text-gray-500">Kısa ad</p>
-              <p className="text-sm font-mono text-gray-600">{workspace?.slug}</p>
+              <p className="text-xs text-muted">Kısa ad</p>
+              <p className="text-sm font-mono text-muted">{workspace?.slug}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500">Rolünüz</p>
+              <p className="text-xs text-muted">Rolünüz</p>
               <p className="text-sm font-medium">{roleLabel(userRole)}</p>
             </div>
-          </div>
+          </Card>
         </section>
       </div>
 
       {/* Departmanlar */}
       <section className="space-y-4">
-        <h2 className="text-base font-semibold text-gray-700">Departmanlar</h2>
-        <p className="text-xs text-gray-400 -mt-2">
+        <h2 className="text-base font-semibold text-ink">Departmanlar</h2>
+        <p className="text-xs text-subtle -mt-2">
           Görevleri departmanlara atayın. Üyeler birden fazla departmanda yer alabilir.
         </p>
         <DepartmentsManager
@@ -159,14 +160,14 @@ export default async function SettingsPage() {
           password set here. */}
       {canManageDepts && (
         <section className="space-y-4">
-          <h2 className="text-base font-semibold text-gray-700">Hesap oluştur</h2>
+          <h2 className="text-base font-semibold text-ink">Hesap oluştur</h2>
           <CreateAccountPanel workspaceId={workspaceId} departments={departments} />
         </section>
       )}
 
       {/* Members */}
       <section className="space-y-4">
-        <h2 className="text-base font-semibold text-gray-700">Üyeler</h2>
+        <h2 className="text-base font-semibold text-ink">Üyeler</h2>
         {canManage ? (
           <MembersManager
             workspaceId={workspaceId}
@@ -180,7 +181,7 @@ export default async function SettingsPage() {
             deptMembers={deptMembers}
           />
         ) : (
-          <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+          <Card className="divide-y divide-hairline">
             {(membersResult.data ?? []).map(
               (m: WorkspaceMember & { profiles?: Partial<Profile> | null }) => {
                 const display = getDisplayNotificationEmail(m);
@@ -190,18 +191,18 @@ export default async function SettingsPage() {
                     <p className="text-sm font-medium">
                       {m.profiles?.full_name ?? m.profiles?.email ?? "—"}
                     </p>
-                    <p className={display.email ? "text-xs text-gray-400" : "text-xs text-amber-600"}>
+                    <p className={display.email ? "text-xs text-subtle" : "text-xs text-warning"}>
                       {display.email ?? "Bildirim e-postası eklenmedi"}
                     </p>
                   </div>
-                  <span className="text-xs text-gray-500 bg-gray-100 px-2.5 py-0.5 rounded-full">
+                  <span className="text-xs text-muted bg-surface-sunken px-2.5 py-0.5 rounded-full">
                     {roleLabel(m.role)}
                   </span>
                 </div>
                 );
               }
             )}
-          </div>
+          </Card>
         )}
       </section>
     </div>

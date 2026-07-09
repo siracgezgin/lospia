@@ -175,7 +175,7 @@ export default async function AppLayout({
   }
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
+    <div className="flex h-screen bg-app overflow-hidden">
       <AppSidebar
         workspace={workspace}
         savedViews={savedViews}

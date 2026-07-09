@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { Pencil, Check, X } from "lucide-react";
 import { updateWorkspaceName } from "@/lib/actions/workspace";
+import { Input } from "@/components/ui/Input";
 
 interface Props {
   workspaceId: string;
@@ -45,10 +46,10 @@ export function WorkspaceNameEditor({ workspaceId, currentName }: Props) {
   if (!editing) {
     return (
       <div className="flex items-center gap-2 group">
-        <span className="text-sm font-medium text-gray-900">{name}</span>
+        <span className="text-sm font-medium text-ink">{name}</span>
         <button
           onClick={startEdit}
-          className="opacity-0 group-hover:opacity-100 p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all"
+          className="opacity-0 group-hover:opacity-100 p-1 rounded text-subtle hover:text-muted hover:bg-surface-muted transition-all"
           aria-label="Çalışma alanı adını düzenle"
         >
           <Pencil size={13} />
@@ -60,12 +61,12 @@ export function WorkspaceNameEditor({ workspaceId, currentName }: Props) {
   return (
     <div className="space-y-1">
       <div className="flex items-center gap-2">
-        <input
+        <Input
           type="text"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") cancel(); }}
-          className="flex-1 rounded-lg border border-blue-400 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="flex-1 h-8"
           maxLength={100}
           autoFocus
           disabled={isPending}
@@ -73,7 +74,7 @@ export function WorkspaceNameEditor({ workspaceId, currentName }: Props) {
         <button
           onClick={save}
           disabled={isPending || !draft.trim()}
-          className="p-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          className="p-1.5 rounded-lg bg-brand text-white hover:bg-brand-strong disabled:opacity-50 transition-colors"
           aria-label="Kaydet"
         >
           <Check size={14} />
@@ -81,13 +82,13 @@ export function WorkspaceNameEditor({ workspaceId, currentName }: Props) {
         <button
           onClick={cancel}
           disabled={isPending}
-          className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
+          className="p-1.5 rounded-lg text-muted hover:bg-surface-muted transition-colors"
           aria-label="İptal"
         >
           <X size={14} />
         </button>
       </div>
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      {error && <p className="text-xs text-danger">{error}</p>}
     </div>
   );
 }

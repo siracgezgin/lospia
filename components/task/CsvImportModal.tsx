@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { X, Upload, FileText, CheckCircle2, AlertTriangle, CopyX, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { Button } from "@/components/ui/Button";
 import { STATUS_LABELS } from "@/lib/utils/task-constants";
 import {
   previewCsvImport, applyCsvImport,
@@ -85,12 +86,12 @@ export function CsvImportModal({ onClose }: Props) {
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto"
+        className="bg-surface rounded-modal shadow-drawer w-full max-w-3xl max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
-          <h2 className="text-base font-semibold text-gray-900">CSV&apos;den içe aktar</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 rounded-lg p-1 transition-colors">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-hairline sticky top-0 bg-surface z-10">
+          <h2 className="text-base font-semibold text-ink">CSV&apos;den içe aktar</h2>
+          <button onClick={onClose} className="text-subtle hover:text-muted rounded-lg p-1 transition-colors">
             <X size={16} />
           </button>
         </div>
@@ -118,25 +119,20 @@ export function CsvImportModal({ onClose }: Props) {
                 </div>
               )}
               <div className="flex justify-end">
-                <button
-                  onClick={onClose}
-                  className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Kapat
-                </button>
+                <Button onClick={onClose}>Kapat</Button>
               </div>
             </div>
           ) : (
             <>
               {/* ── Step 1: file picker ─────────────────────────────────────── */}
               <div className="space-y-2">
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-muted">
                   AFTeamWork formatındaki CSV dosyasını seçin. Sistem dosyayı önce
                   <span className="font-medium"> önizler</span>; siz onaylamadan hiçbir görev eklenmez.
                 </p>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-subtle">
                   Beklenen kolonlar:{" "}
-                  <span className="font-mono bg-gray-100 px-1 py-0.5 rounded text-[10px]">İŞBİRLİĞİ · HEDEF · KONU · STRATEJİ · AKSİYON · BAŞARI</span>
+                  <span className="font-mono bg-surface-sunken px-1 py-0.5 rounded text-[10px]">İŞBİRLİĞİ · HEDEF · KONU · STRATEJİ · AKSİYON · BAŞARI</span>
                   {" "}— virgül veya noktalı virgül ayraçlı, Türkçe karakter destekli (UTF-8).
                 </p>
                 <input
@@ -150,7 +146,7 @@ export function CsvImportModal({ onClose }: Props) {
                   type="button"
                   onClick={() => fileRef.current?.click()}
                   disabled={pending}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 px-4 py-6 text-sm text-gray-600 hover:border-blue-400 hover:text-blue-700 hover:bg-blue-50/40 transition-colors disabled:opacity-50"
+                  className="w-full flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-line-strong px-4 py-6 text-sm text-muted hover:border-brand-ring hover:text-brand-strong hover:bg-brand-soft/40 transition-colors disabled:opacity-50"
                 >
                   {pending && !preview ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
                   {fileName ? `${fileName} — başka dosya seç` : "CSV dosyası seç"}
@@ -185,35 +181,35 @@ export function CsvImportModal({ onClose }: Props) {
                     )}
                   </div>
 
-                  <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                  <div className="overflow-x-auto border border-line rounded-lg">
                     <table className="w-full text-xs">
-                      <thead className="bg-gray-50 border-b border-gray-200">
+                      <thead className="bg-surface-muted border-b border-line">
                         <tr>
-                          <th className="text-left px-3 py-2 font-semibold text-gray-500">#</th>
-                          <th className="text-left px-3 py-2 font-semibold text-gray-500">Başlık</th>
-                          <th className="text-left px-3 py-2 font-semibold text-gray-500">Departman</th>
-                          <th className="text-left px-3 py-2 font-semibold text-gray-500">Teslim</th>
-                          <th className="text-left px-3 py-2 font-semibold text-gray-500">Durum</th>
-                          <th className="text-left px-3 py-2 font-semibold text-gray-500">Sonuç</th>
+                          <th className="text-left px-3 py-2 font-semibold text-muted">#</th>
+                          <th className="text-left px-3 py-2 font-semibold text-muted">Başlık</th>
+                          <th className="text-left px-3 py-2 font-semibold text-muted">Departman</th>
+                          <th className="text-left px-3 py-2 font-semibold text-muted">Teslim</th>
+                          <th className="text-left px-3 py-2 font-semibold text-muted">Durum</th>
+                          <th className="text-left px-3 py-2 font-semibold text-muted">Sonuç</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-100">
+                      <tbody className="divide-y divide-hairline">
                         {preview.rows.map((row) => {
                           const v = VERDICT_STYLE[row.verdict];
                           return (
                             <tr key={row.rowNumber} className={cn("align-top", row.verdict === "invalid" && "bg-red-50/40")}>
-                              <td className="px-3 py-2 text-gray-400 tabular-nums">{row.rowNumber}</td>
+                              <td className="px-3 py-2 text-subtle tabular-nums">{row.rowNumber}</td>
                               <td className="px-3 py-2 max-w-[220px]">
-                                <p className="font-medium text-gray-900 truncate" title={row.title}>{row.title || "—"}</p>
+                                <p className="font-medium text-ink truncate" title={row.title}>{row.title || "—"}</p>
                                 {row.issues.length > 0 && (
                                   <p className="text-[10px] text-amber-700 mt-0.5 leading-snug">{row.issues.join(" ")}</p>
                                 )}
                               </td>
-                              <td className="px-3 py-2 max-w-[140px] truncate text-gray-500">
+                              <td className="px-3 py-2 max-w-[140px] truncate text-muted">
                                 {row.departmentName ?? (row.category ? `${row.category} (eşleşmedi)` : "—")}
                               </td>
-                              <td className="px-3 py-2 whitespace-nowrap text-gray-500">{row.dueDate ?? "—"}</td>
-                              <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{statusLabel(row.status)}</td>
+                              <td className="px-3 py-2 whitespace-nowrap text-muted">{row.dueDate ?? "—"}</td>
+                              <td className="px-3 py-2 text-muted whitespace-nowrap">{statusLabel(row.status)}</td>
                               <td className="px-3 py-2">
                                 <span className={cn("inline-block px-1.5 py-0.5 rounded border text-[10px] font-medium whitespace-nowrap", v.cls)}>
                                   {v.label}
@@ -227,30 +223,21 @@ export function CsvImportModal({ onClose }: Props) {
                   </div>
 
                   <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
-                    <p className="text-xs text-gray-400">
-                      Onaylamadan hiçbir şey yazılmaz. Yalnızca <span className="font-medium text-gray-600">{counts.new} yeni satır</span> içe aktarılacak.
+                    <p className="text-xs text-subtle">
+                      Onaylamadan hiçbir şey yazılmaz. Yalnızca <span className="font-medium text-muted">{counts.new} yeni satır</span> içe aktarılacak.
                     </p>
                     <div className="flex items-center gap-2 ml-auto">
-                      <button
-                        type="button"
-                        onClick={onClose}
-                        className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                      >
+                      <Button type="button" variant="ghost" onClick={onClose}>
                         İptal
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         onClick={handleImport}
-                        disabled={pending || counts.new === 0}
-                        className={cn(
-                          "flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-colors",
-                          pending || counts.new === 0
-                            ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                            : "bg-blue-600 text-white hover:bg-blue-700",
-                        )}
+                        loading={pending}
+                        disabled={counts.new === 0}
                       >
-                        {pending ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                        {!pending && <Upload size={14} />}
                         {pending ? "İçe aktarılıyor…" : `${counts.new} görevi içe aktar`}
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 </>
