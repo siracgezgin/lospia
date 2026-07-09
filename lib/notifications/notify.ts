@@ -18,9 +18,16 @@ import {
   NOTIFICATION_EVENTS,
   type TaskNotificationEvent,
 } from "@/lib/notifications/events";
-import { dispatchTaskAssignedEmails } from "@/lib/notifications/email-events";
+import { dispatchTaskEmails, type EmailTaskEvent } from "@/lib/notifications/email-events";
 
 type SB = Awaited<ReturnType<typeof createClient>>;
+
+// Events that additionally produce an e-mail. Everything else is in-app only
+// in this phase (notes, status changes, waiting-on, responsibility removed, …).
+const EMAIL_EVENTS: ReadonlySet<TaskNotificationEvent> = new Set<TaskNotificationEvent>([
+  "task_assigned",
+  "task_responsibility_added",
+]);
 
 // A recipient who already received the same (task, type, title) within this
 // window is skipped. Genuinely new events (a task re-entering review the next
@@ -46,15 +53,20 @@ export async function notifyTaskEvent(
 ): Promise<void> {
   const { workspaceId, taskId, event, taskTitle, actorId, bodySuffix } = args;
 
-  let recipients = Array.from(
+  // Base set: deduped, non-null recipient user ids — BEFORE actor exclusion.
+  // The in-app list drops the actor; the email list keeps them (a person who
+  // assigns/adds themselves must still get the mail). The admin_only security
+  // filter below applies to BOTH lists.
+  let baseRecipients = Array.from(
     new Set(args.recipientUserIds.filter((id): id is string => !!id)),
-  ).filter((id) => id !== actorId);
-  if (recipients.length === 0) return;
+  );
+  if (baseRecipients.length === 0) return;
 
   // Admin_only tasks never notify non-admins. RLS already hides such rows from
   // members, but we also refuse to write them — keeping the notifications table
   // free of leaked titles/bodies for hidden tasks. This is the single chokepoint
-  // every task notification flows through.
+  // every task notification flows through. Applied before splitting the lists so
+  // email can never leak a hidden task to a non-admin either.
   if (taskId) {
     const { data: task } = await sb
       .from("tasks")
@@ -66,35 +78,45 @@ export async function notifyTaskEvent(
         .from("workspace_members")
         .select("user_id")
         .eq("workspace_id", workspaceId)
-        .in("user_id", recipients)
+        .in("user_id", baseRecipients)
         .in("role", ["owner", "admin"]);
       const allowed = new Set((admins ?? []).map((a) => a.user_id as string));
-      recipients = recipients.filter((id) => allowed.has(id));
-      if (recipients.length === 0) return;
+      baseRecipients = baseRecipients.filter((id) => allowed.has(id));
+      if (baseRecipients.length === 0) return;
     }
   }
 
-  const { dbType, title } = NOTIFICATION_EVENTS[event];
-  const base = taskTitle ?? "";
-  const body = bodySuffix ? `${base}${bodySuffix}` : base;
+  // In-app notifications: the actor never gets a bell for their own action.
+  const inAppRecipients = baseRecipients.filter((id) => id !== actorId);
+  if (inAppRecipients.length > 0) {
+    const { dbType, title } = NOTIFICATION_EVENTS[event];
+    const base = taskTitle ?? "";
+    const body = bodySuffix ? `${base}${bodySuffix}` : base;
 
-  await sb.rpc("create_task_notifications", {
-    p_workspace_id: workspaceId,
-    p_task_id: taskId,
-    p_type: dbType,
-    p_title: title,
-    p_body: body || null,
-    p_user_ids: recipients,
-    p_dedupe_seconds: DEDUPE_SECONDS,
-  });
+    await sb.rpc("create_task_notifications", {
+      p_workspace_id: workspaceId,
+      p_task_id: taskId,
+      p_type: dbType,
+      p_title: title,
+      p_body: body || null,
+      p_user_ids: inAppRecipients,
+      p_dedupe_seconds: DEDUPE_SECONDS,
+    });
+  }
 
-  // Best-effort email fan-out over the SAME final recipient list (actor and
-  // admin_only exclusions already applied above). Only task_assigned is wired
-  // for email in this phase; any failure is swallowed so mail can never break
-  // the notification flow.
-  if (event === "task_assigned") {
+  // Best-effort email fan-out. Uses the actor-INCLUSIVE list (only the
+  // admin_only security filter has been applied). Whitelisted events only; any
+  // failure is swallowed so mail can never break the notification flow. The
+  // resolver applies notification_email/placeholder/disabled rules.
+  if (EMAIL_EVENTS.has(event)) {
     try {
-      await dispatchTaskAssignedEmails({ recipientUserIds: recipients, taskId, taskTitle });
+      await dispatchTaskEmails({
+        event: event as EmailTaskEvent,
+        workspaceId,
+        recipientUserIds: baseRecipients,
+        taskId,
+        taskTitle,
+      });
     } catch {
       // best-effort — never surface email errors to the caller
     }
