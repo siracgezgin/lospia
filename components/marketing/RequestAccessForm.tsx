@@ -2,21 +2,13 @@
 
 import { useState } from "react";
 import { CheckCircle2, ChevronDown } from "lucide-react";
+import { submitRequestAccess } from "@/lib/actions/leads";
 import {
-  submitRequestAccess,
-  type RequestAccessInput,
-} from "@/lib/actions/leads";
-
-// Must stay in sync with TEAM_SIZES in lib/actions/leads.ts (zod enum) and the
-// pricing bands on the homepage.
-const TEAM_SIZES = ["1-15", "16-50", "51+"] as const;
-const WORKFLOW_TOOLS = [
-  "Excel",
-  "WhatsApp",
-  "Notion",
-  "ClickUp / Monday / Asana",
-  "Diğer",
-] as const;
+  requestAccessSchema,
+  HONEYPOT_FIELD,
+  TEAM_SIZES,
+  WORKFLOW_TOOLS,
+} from "@/lib/validation/request-access";
 
 const inputClass =
   "w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-sm transition-[border-color,box-shadow] duration-200 ease-out placeholder:text-slate-400 hover:border-slate-400 hover:shadow focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40";
@@ -27,10 +19,12 @@ const selectClass = `${inputClass} appearance-none pr-10`;
 function Field({
   label,
   required,
+  error,
   children,
 }: {
   label: string;
   required?: boolean;
+  error?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -40,6 +34,7 @@ function Field({
         {required && <span className="text-rose-500"> *</span>}
       </span>
       {children}
+      {error && <span className="block text-xs text-rose-600">{error}</span>}
     </label>
   );
 }
@@ -64,6 +59,7 @@ function GroupHeading({ children }: { children: React.ReactNode }) {
 export function RequestAccessForm() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [done, setDone] = useState(false);
 
   if (done) {
@@ -83,24 +79,43 @@ export function RequestAccessForm() {
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    setFieldErrors({});
 
     const form = new FormData(e.currentTarget);
-    const payload: RequestAccessInput = {
+    const rawPain = String(form.get("main_operational_pain") ?? "").trim();
+    const payload = {
       name: String(form.get("name") ?? ""),
       email: String(form.get("email") ?? ""),
       company_name: String(form.get("company_name") ?? ""),
       phone: String(form.get("phone") ?? ""),
-      team_size:
-        (form.get("team_size") as RequestAccessInput["team_size"]) || null,
+      team_size: (form.get("team_size") as string) || null,
       current_workflow_tool:
-        (form.get(
-          "current_workflow_tool"
-        ) as RequestAccessInput["current_workflow_tool"]) || null,
-      main_operational_pain: String(form.get("main_operational_pain") ?? ""),
+        (form.get("current_workflow_tool") as string) || null,
+      // Empty optional textarea → null so the "min 5" rule only bites real text.
+      main_operational_pain: rawPain === "" ? null : rawPain,
+      [HONEYPOT_FIELD]: String(form.get(HONEYPOT_FIELD) ?? ""),
     };
 
+    // Client-side gate using the SAME schema the server enforces — surfaces
+    // field-level errors instantly without a round-trip. The server re-parses
+    // regardless, so this is UX, not the security boundary.
+    const check = requestAccessSchema.safeParse(payload);
+    if (!check.success) {
+      const next: Record<string, string> = {};
+      for (const issue of check.error.issues) {
+        const key = String(issue.path[0] ?? "form");
+        if (!next[key]) next[key] = issue.message;
+      }
+      setFieldErrors(next);
+      setError("Lütfen işaretli alanları kontrol edin.");
+      return;
+    }
+
     setSubmitting(true);
-    const result = await submitRequestAccess(payload);
+    const result = await submitRequestAccess({
+      ...check.data,
+      [HONEYPOT_FIELD]: payload[HONEYPOT_FIELD],
+    });
     setSubmitting(false);
 
     if (result.error) {
@@ -119,22 +134,22 @@ export function RequestAccessForm() {
         <GroupHeading>İletişim bilgileri</GroupHeading>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Ad Soyad" required>
+          <Field label="Ad Soyad" required error={fieldErrors.name}>
             <input
               name="name"
               required
-              maxLength={200}
+              maxLength={80}
               className={inputClass}
               placeholder="Adınız Soyadınız"
             />
           </Field>
 
-          <Field label="E-posta" required>
+          <Field label="E-posta" required error={fieldErrors.email}>
             <input
               name="email"
               type="email"
               required
-              maxLength={320}
+              maxLength={255}
               className={inputClass}
               placeholder="ornek@markaniz.com"
             />
@@ -142,22 +157,22 @@ export function RequestAccessForm() {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Şirket / marka adı" required>
+          <Field label="Şirket / marka adı" required error={fieldErrors.company_name}>
             <input
               name="company_name"
               required
-              maxLength={200}
+              maxLength={120}
               className={inputClass}
               placeholder="Markanızın adı"
             />
           </Field>
 
-          <Field label="Telefon" required>
+          <Field label="Telefon" required error={fieldErrors.phone}>
             <input
               name="phone"
               type="tel"
               required
-              maxLength={50}
+              maxLength={30}
               className={inputClass}
               placeholder="05xx xxx xx xx"
             />
@@ -200,15 +215,33 @@ export function RequestAccessForm() {
           </Field>
         </div>
 
-        <Field label="En büyük operasyon problemi nedir?">
+        <Field
+          label="En büyük operasyon problemi nedir?"
+          error={fieldErrors.main_operational_pain}
+        >
           <textarea
             name="main_operational_pain"
             rows={3}
-            maxLength={2000}
+            maxLength={1000}
             className={inputClass}
             placeholder="Örn: Onaylar WhatsApp'ta kayboluyor, teslim tarihlerini takip edemiyoruz…"
           />
         </Field>
+      </div>
+
+      {/* Honeypot — hidden from humans (off-screen, not display:none so some
+          bots still see it), excluded from tab order and a11y tree. A filled
+          value makes the server treat the submit as a bot and drop it. */}
+      <div aria-hidden className="absolute -left-[9999px] top-0 h-0 w-0 overflow-hidden">
+        <label>
+          Web siteniz
+          <input
+            name={HONEYPOT_FIELD}
+            type="text"
+            tabIndex={-1}
+            autoComplete="off"
+          />
+        </label>
       </div>
 
       {error && (

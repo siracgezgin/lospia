@@ -1,62 +1,55 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { z } from "zod";
 import { sendEmail } from "@/lib/email/send-email";
 import { leadReceivedEmail } from "@/lib/email/templates/lead-received";
+import {
+  requestAccessSchema,
+  normalizePhone,
+  HONEYPOT_FIELD,
+  type RequestAccessInput,
+} from "@/lib/validation/request-access";
 
 // Public request-access lead capture — the ONLY unauthenticated mutation in
 // the app. Writes to request_access_leads, which is insert-only under RLS
 // (no select/update/delete policies), so nothing can be read back through
 // the anon key even if this action is abused.
 //
+// Validation is the SERVER's job: whatever the client sent, we re-parse with
+// the shared `requestAccessSchema` (lib/validation/request-access.ts) before
+// touching Supabase. The client form uses the same schema for nicer UX, but
+// this parse is the authoritative gate.
+//
 // After a successful insert it fires a best-effort internal notification mail
 // (see the email dispatch below). Mail is a bonus — lead'ler her durumda
 // Supabase dashboard'dan da takip edilir.
 
-const WORKFLOW_TOOLS = [
-  "Excel",
-  "WhatsApp",
-  "Notion",
-  "ClickUp / Monday / Asana",
-  "Diğer",
-] as const;
+export type { RequestAccessInput };
 
-// Bands mirror the public pricing packages (Başlangıç / Marka Operasyon /
-// Geniş Ekip). Stored as plain text in request_access_leads.team_size.
-const TEAM_SIZES = ["1-15", "16-50", "51+"] as const;
-
-const LeadSchema = z.object({
-  name: z.string().trim().min(1, "İsim gerekli").max(200),
-  email: z
-    .string()
-    .trim()
-    .min(1, "E-posta gerekli")
-    .max(320)
-    .email("Geçerli bir e-posta adresi girin"),
-  company_name: z.string().trim().min(1, "Şirket / marka adı gerekli").max(200),
-  // Phone is captured for the setup call but there is no dedicated column yet
-  // (that would need a migration we deliberately don't run in this phase), so
-  // it is folded into `note` below rather than dropped.
-  phone: z.string().trim().max(50).nullable().optional(),
-  team_size: z.enum(TEAM_SIZES).nullable().optional(),
-  current_workflow_tool: z.enum(WORKFLOW_TOOLS).nullable().optional(),
-  main_operational_pain: z.string().trim().max(2000).nullable().optional(),
-  note: z.string().trim().max(2000).nullable().optional(),
-});
-
-export type RequestAccessInput = z.infer<typeof LeadSchema>;
+/** Extra fields the action accepts beyond the validated schema. */
+export type SubmitRequestAccessInput = RequestAccessInput & {
+  /** Bot honeypot — real users leave this empty. */
+  [HONEYPOT_FIELD]?: string;
+};
 
 export async function submitRequestAccess(
-  input: RequestAccessInput
+  input: SubmitRequestAccessInput
 ): Promise<{ success?: true; error?: string }> {
-  const parsed = LeadSchema.safeParse(input);
+  // Honeypot: a filled hidden field means a bot. Return a benign success so
+  // the bot gets no signal, but persist nothing.
+  const honeypot = (input as Record<string, unknown>)[HONEYPOT_FIELD];
+  if (typeof honeypot === "string" && honeypot.trim() !== "") {
+    return { success: true };
+  }
+
+  const parsed = requestAccessSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
-  // Merge phone into the free-text note column (no `phone` column exists yet).
+  // Merge the normalized phone into the free-text note column (no `phone`
+  // column exists yet — adding one needs a migration we don't run this phase).
   const noteParts: string[] = [];
-  if (parsed.data.phone) noteParts.push(`Telefon: ${parsed.data.phone}`);
-  if (parsed.data.note) noteParts.push(parsed.data.note);
+  const normalizedPhone = parsed.data.phone ? normalizePhone(parsed.data.phone) : null;
+  if (normalizedPhone) noteParts.push(`Telefon: ${normalizedPhone}`);
   const note = noteParts.join("\n") || null;
 
   const supabase = await createClient();

@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Wordmark } from "@/components/ui/Wordmark";
-import { LOSPIA_ICON, LOSPIA_LOGO, PRODUCT_NAME } from "@/lib/branding";
+import { LOSPIA_BRAND, type AppBrand } from "@/lib/branding";
 import { SAVED_VIEW_SLUG_MAP } from "@/lib/utils/task-constants";
 import { quoteForWeek } from "@/lib/utils/weekly-quotes";
 import { canViewDestructivePages, canManageSettings } from "@/lib/auth/permissions";
@@ -58,6 +58,8 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
 interface Props {
   workspace: Workspace | null;
   savedViews: SavedView[];
+  /** Host-aware app-shell brand (Lospia, or AF on the pilot host). */
+  brand?: AppBrand;
   userId: string;
   userRole?: WorkspaceRole;
   // Team totals (admin card)
@@ -70,7 +72,7 @@ interface Props {
 }
 
 export function AppSidebar({
-  workspace, savedViews, userRole = "member",
+  workspace, savedViews, brand = LOSPIA_BRAND, userRole = "member",
   teamDoneThisMonth = 0, teamReviewCount = 0,
   myDoneThisMonth = 0, myReviewCount = 0, myPoints = 0,
 }: Props) {
@@ -87,14 +89,15 @@ export function AppSidebar({
         collapsed ? "w-14" : "w-60",
       )}
     >
-      {/* Brand row — Lospia product icon + workspace wordmark. The icon is the
-          product mark (collapsed state shows it alone); the wordmark is the
-          tenant/workspace name and stays a separate concern. */}
+      {/* Brand row — host-aware product/pilot icon + workspace wordmark. The icon
+          is the brand mark (collapsed state shows it alone); the wordmark is the
+          tenant/workspace name and stays a separate concern. w-auto so a
+          non-square pilot mark (AF) isn't distorted. */}
       <div className={cn("flex items-center gap-2.5 h-14 border-b border-line", collapsed ? "justify-center px-0" : "px-4")}>
         <img
-          src={LOSPIA_ICON}
-          alt={PRODUCT_NAME}
-          className="h-6 w-6 shrink-0 select-none"
+          src={brand.icon}
+          alt={brand.name}
+          className="h-6 w-auto shrink-0 select-none"
           draggable={false}
         />
         {!collapsed && <Wordmark name={wsName} />}
@@ -232,13 +235,13 @@ export function AppSidebar({
             </p>
           </div>
 
-          {/* Lospia product lockup — anchors the expanded sidebar with the
-              full product logo. Only rendered when expanded (this block is
-              inside the !collapsed branch). */}
+          {/* Brand lockup — anchors the expanded sidebar with the full
+              product/pilot logo (host-aware). Only rendered when expanded (this
+              block is inside the !collapsed branch). */}
           <div className="pt-1.5 flex justify-center">
             <img
-              src={LOSPIA_LOGO}
-              alt={PRODUCT_NAME}
+              src={brand.logo}
+              alt={brand.name}
               className="h-7 w-auto object-contain opacity-80 select-none"
               draggable={false}
             />

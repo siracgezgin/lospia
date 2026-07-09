@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { getAppBrandForHost } from "@/lib/branding";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { MobileNav } from "@/components/layout/MobileNav";
@@ -18,6 +20,10 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const supabase = await createClient();
+
+  // Host-aware app-shell brand: the AF Operasyon pilot host keeps its own logo;
+  // everything else is Lospia. Tenant/workspace NAME is separate user data.
+  const brand = getAppBrandForHost((await headers()).get("host"));
 
   // Verify session
   const {
@@ -173,6 +179,7 @@ export default async function AppLayout({
       <AppSidebar
         workspace={workspace}
         savedViews={savedViews}
+        brand={brand}
         userId={user.id}
         userRole={userRole}
         teamDoneThisMonth={teamDoneThisMonth}
