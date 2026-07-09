@@ -44,6 +44,29 @@ export const LOSPIA_ICON_WHITE = "/brand/lospia/icon_white.svg";
 
 import { isAfOperationsHost } from "@/lib/marketing/host";
 
+/**
+ * Host-aware browser/tab metadata. Fed straight into the root layout's
+ * `generateMetadata` so the tab title AND favicon/app icons match the same
+ * host that the UI branding does — no more Lospia favicon leaking onto the AF
+ * pilot host. Icons point at /public assets (the file-convention icons under
+ * app/ were removed on purpose: Next gives those higher priority and they
+ * would override anything set here).
+ */
+export interface AppBrandMetadata {
+  /** <title> used on segments without their own title (e.g. marketing home). */
+  titleDefault: string;
+  /** Template applied to child page titles, e.g. "%s | AF Operasyon". */
+  titleTemplate: string;
+  /** applicationName + OG siteName. */
+  applicationName: string;
+  /** Meta description. */
+  description: string;
+  /** Canonical site origin for this brand (OG url / metadataBase fallback). */
+  siteUrl: string;
+  /** Favicon + apple-touch icon paths, all under /public. */
+  icons: { icon: string; png: string; apple: string };
+}
+
 export interface AppBrand {
   /** Stable key for the resolved brand. */
   key: "lospia" | "af";
@@ -57,6 +80,15 @@ export interface AppBrand {
   loginLogo: string;
   /** Optional pilot/tenant subline on the login card (AF only). */
   loginSubtitle?: string;
+  /**
+   * Sidebar-footer lockup height class. The footer logo is a deliberate brand
+   * sign-off, not a watermark, so it sits larger than the compact header mark.
+   * AF's horizontal wordmark needs more height than the Lospia lockup to read
+   * with equal presence.
+   */
+  footerLogoHeightClass: string;
+  /** Browser/tab metadata (title + favicon/app icons). */
+  metadata: AppBrandMetadata;
 }
 
 export const LOSPIA_BRAND: AppBrand = {
@@ -65,6 +97,22 @@ export const LOSPIA_BRAND: AppBrand = {
   icon: LOSPIA_ICON,
   logo: LOSPIA_LOGO,
   loginLogo: LOSPIA_LOGO,
+  footerLogoHeightClass: "h-9",
+  metadata: {
+    titleDefault: "Lospia | Operasyon Paneli",
+    titleTemplate: "%s | Lospia",
+    applicationName: "Lospia",
+    description:
+      "Lospia; görevler, ekip akışı, onaylar ve operasyon takibi için modern bir çalışma alanı.",
+    siteUrl: "https://lospia.com",
+    // Preserved copies of the former app/ convention icons — byte-identical to
+    // the Lospia favicon that shipped before, just served from /public now.
+    icons: {
+      icon: "/brand/lospia/favicon.ico",
+      png: "/brand/lospia/icon-app.png",
+      apple: "/brand/lospia/apple-icon.png",
+    },
+  },
 };
 
 // AF Operasyon pilot assets — the original pre-Lospia deliverables, still in
@@ -80,6 +128,23 @@ export const AF_BRAND: AppBrand = {
   logo: AF_LOGO,
   loginLogo: AF_LOGIN_LOGO,
   loginSubtitle: "Aslı Filinta Operasyon",
+  // AF's wordmark is a wide horizontal lockup that reads small; give it more
+  // height so the sign-off feels intentional and balanced.
+  footerLogoHeightClass: "h-11",
+  metadata: {
+    titleDefault: "AF Operasyon",
+    titleTemplate: "%s | AF Operasyon",
+    applicationName: "AF Operasyon",
+    description:
+      "Aslı Filinta Operasyon — görev, onay ve haftalık takip paneli.",
+    siteUrl: "https://operasyon.aslifilinta.com",
+    // The AF mark is a single square PNG; reuse it for every icon slot.
+    icons: {
+      icon: "/brands/af-icon.png",
+      png: "/brands/af-icon.png",
+      apple: "/brands/af-icon.png",
+    },
+  },
 };
 
 /**

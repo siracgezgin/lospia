@@ -235,14 +235,20 @@ export function AppSidebar({
             </p>
           </div>
 
-          {/* Brand lockup — anchors the expanded sidebar with the full
-              product/pilot logo (host-aware). Only rendered when expanded (this
+          {/* Brand sign-off — anchors the expanded sidebar with the full
+              product/pilot logo (host-aware). A deliberate lockup, not a
+              watermark: a hairline separates it from the content above, and its
+              height is brand-driven (AF's wide wordmark reads small, so it sits
+              taller than the Lospia lockup). Only rendered when expanded (this
               block is inside the !collapsed branch). */}
-          <div className="pt-1.5 flex justify-center">
+          <div className="mt-1 border-t border-hairline pt-4 pb-1 flex justify-center">
             <img
               src={brand.logo}
               alt={brand.name}
-              className="h-7 w-auto object-contain opacity-80 select-none"
+              className={cn(
+                "w-auto max-w-[75%] object-contain opacity-90 transition-opacity duration-200 hover:opacity-100 select-none",
+                brand.footerLogoHeightClass,
+              )}
               draggable={false}
             />
           </div>
