@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { AlertTriangle } from "lucide-react";
+import { Button } from "@/components/ui/Button";
 
 interface Props {
   open: boolean;
@@ -51,36 +52,31 @@ export function ConfirmDialog({
       aria-modal="true"
     >
       <div
-        className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-5 space-y-4"
+        className="w-full max-w-sm rounded-modal bg-surface shadow-drawer p-5 space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start gap-3">
-          <div className="shrink-0 rounded-full bg-red-50 p-2 text-red-600">
+          <div className="shrink-0 rounded-full bg-[#fbeae7] p-2 text-danger">
             <AlertTriangle size={18} />
           </div>
           <div className="space-y-1">
-            <h2 className="text-sm font-semibold text-gray-900">{title}</h2>
-            <p className="text-sm text-gray-500 leading-relaxed">{message}</p>
+            <h2 className="text-sm font-semibold text-ink">{title}</h2>
+            <p className="text-sm text-muted leading-relaxed">{message}</p>
           </div>
         </div>
         <div className="flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={pending}
-            className="px-3 py-1.5 text-sm font-medium text-gray-600 rounded-lg hover:bg-gray-100 disabled:opacity-50 transition-colors"
-          >
+          <Button variant="ghost" size="sm" onClick={onCancel} disabled={pending}>
             {cancelLabel}
-          </button>
-          <button
+          </Button>
+          <Button
             ref={confirmRef}
-            type="button"
+            variant="destructive"
+            size="sm"
             onClick={onConfirm}
-            disabled={pending}
-            className="px-3 py-1.5 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+            loading={pending}
           >
             {pending ? "Siliniyor…" : confirmLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
