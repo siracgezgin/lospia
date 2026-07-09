@@ -348,8 +348,11 @@ export async function createTask(
     }
   }
 
-  // Notification: task created already assigned to someone else
-  if (taskData.assignee_id && taskData.assignee_id !== user.id) {
+  // Notification: task created with a direct assignee. We fire even when the
+  // creator assigns themselves — notifyTaskEvent drops the actor from the in-app
+  // bell list internally, while email still reaches the assignee (self-assign
+  // included). No call-site self-guard, so the email path is never skipped.
+  if (taskData.assignee_id) {
     await notifyTaskEvent(supabase, {
       workspaceId: taskData.workspace_id,
       taskId: (data as { id: string }).id,
@@ -507,9 +510,12 @@ export async function updateTask(
   );
   await logTaskActivities(supabase, logEntries);
 
-  // Notification: task assigned to a new person
+  // Notification: assignee changed. The `!== task.assignee_id` check means
+  // "the assignee actually changed" (not a self-guard). We intentionally DO NOT
+  // skip when the new assignee is the actor: notifyTaskEvent drops the actor
+  // from the in-app bell, but email must still reach a self-assign.
   const newAssignee = "assignee_id" in updates ? updates.assignee_id : undefined;
-  if (newAssignee && newAssignee !== task.assignee_id && newAssignee !== user.id) {
+  if (newAssignee && newAssignee !== task.assignee_id) {
     await notifyTaskEvent(supabase, {
       workspaceId: task.workspace_id as string,
       taskId: id,
