@@ -12,6 +12,7 @@
   --surface:       #ffffff;   /* cards, panels */
   --surface-muted: #f9fafb;   /* subtle fills, hover rows */
   --surface-sunken:#f2f4f6;   /* wells, inputs at rest */
+  --surface-hover: #f4f6f8;   /* interactive-row hover (between muted and sunken) */
 
   /* Lines — soft. hairline is for internal dividers, line for panel edges */
   --hairline:      #eef0f3;
@@ -31,12 +32,24 @@
 
   /* Semantic state hues (kept here for non-Tailwind use) */
   --danger:        #c8503d;
+  --danger-strong: #b03e2c;   /* destructive hover */
   --warning:       #bd7a2c;
   --hold:          #b08019;
   --approval:      #7257b5;
   --success:       #2c8a61;
+  --info:          #3172ad;   /* calm blue — in-progress / informational */
+  --overdue:       #a83a2c;   /* matches the Gecikti chip text tone */
+  --urgent:        #dc2626;   /* Acil — the only saturated solid red */
 
   --radius:        0.625rem;  /* 10px — default card radius */
+
+  /* Motion — no Tailwind namespace for durations in v4; consume via
+     duration-[var(--duration-fast)] or plain CSS. Easings get utilities
+     (ease-standard / ease-emphasized) through @theme below. */
+  --duration-fast:   120ms;   /* hovers, chips, small state flips */
+  --duration-normal: 180ms;   /* panels, menus, most transitions */
+  --duration-slow:   280ms;   /* drawers, layout shifts */
+
   --background:    var(--app-bg);
   --foreground:    var(--text);
 }
@@ -49,6 +62,7 @@
   --color-surface:       var(--surface);
   --color-surface-muted: var(--surface-muted);
   --color-surface-sunken:var(--surface-sunken);
+  --color-surface-hover: var(--surface-hover);
 
   --color-hairline:      var(--hairline);
   --color-line:          var(--border);
@@ -63,20 +77,33 @@
   --color-brand-soft:    var(--brand-soft);
   --color-brand-ring:    var(--brand-ring);
 
-  --color-danger:   var(--danger);
-  --color-warning:  var(--warning);
-  --color-hold:     var(--hold);
-  --color-approval: var(--approval);
-  --color-success:  var(--success);
+  --color-danger:        var(--danger);
+  --color-danger-strong: var(--danger-strong);
+  --color-warning:       var(--warning);
+  --color-hold:          var(--hold);
+  --color-approval:      var(--approval);
+  --color-success:       var(--success);
+  --color-info:          var(--info);
+  --color-overdue:       var(--overdue);
+  --color-urgent:        var(--urgent);
 
   --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
     Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
 
-  --radius-card: var(--radius);
+  --radius-card:    var(--radius);
+  --radius-control: 0.5rem;   /* buttons, inputs, selects (== rounded-lg today) */
+  --radius-modal:   1rem;     /* dialogs, sheets (== rounded-2xl today) */
 
   /* Soft, premium elevation — never harsh */
   --shadow-card: 0 1px 2px rgba(20, 28, 40, 0.04), 0 1px 3px rgba(20, 28, 40, 0.03);
+  --shadow-card-hover: 0 2px 6px rgba(20, 28, 40, 0.07), 0 1px 3px rgba(20, 28, 40, 0.05);
   --shadow-pop: 0 4px 16px rgba(20, 28, 40, 0.10), 0 1px 3px rgba(20, 28, 40, 0.06);
+  --shadow-drawer: 0 12px 40px rgba(20, 28, 40, 0.16), 0 2px 8px rgba(20, 28, 40, 0.08);
+
+  /* Motion easings — ease-standard for most UI, ease-emphasized for
+     enter/exit of larger surfaces (drawers, sheets). */
+  --ease-standard:   cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 /* Tailwind v4 dropped the v3 default border color. Restore a SOFT default in
@@ -88,6 +115,30 @@
   ::before,
   ::after {
     border-color: var(--color-line);
+  }
+
+  /* Thin, quiet scrollbars everywhere. `scrollbar-width`/`scrollbar-color` only
+     (Firefox, Chrome 121+, Safari 18.2+) — deliberately NOT ::-webkit-scrollbar,
+     which would force always-visible bars on macOS overlay scrollbars. Older
+     engines keep their native bars. .no-scrollbar (utilities layer) still wins
+     on the tab strips that opt out entirely. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+
+  /* Honor the OS reduced-motion preference: collapse transitions/animations to
+     effectively instant. !important intentionally beats inline styles (e.g.
+     dnd-kit drop animations) — instant settle is the accessible behavior. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
