@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Wrench, Loader2, Check } from "lucide-react";
+import { Wrench, Check } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/Button";
 import { repairMissingPoints } from "@/lib/actions/points";
 
 /**
@@ -34,15 +35,17 @@ export function RepairPointsButton() {
 
   return (
     <div className="flex flex-col items-end gap-1">
-      <button
+      <Button
+        variant="secondary"
+        size="sm"
         onClick={run}
-        disabled={pending}
+        loading={pending}
         title="Tamamlanmış ama puan kaydı oluşmamış görevleri güvenli şekilde tamamlar."
-        className="inline-flex items-center gap-1.5 text-xs font-medium text-subtle hover:text-ink border border-line rounded-lg px-2.5 py-1.5 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+        className="text-muted hover:text-ink"
       >
-        {pending ? <Loader2 size={13} className="animate-spin" /> : <Wrench size={13} />}
+        {!pending && <Wrench size={13} />}
         Eksik puan kayıtlarını onar
-      </button>
+      </Button>
       {result && (
         <span className="inline-flex items-center gap-1 text-[11px] text-muted">
           <Check size={11} className="text-[#1c7a52]" /> {result}

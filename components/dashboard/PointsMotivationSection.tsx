@@ -1,6 +1,9 @@
 import { Sparkles, Clock3, RotateCcw, Trophy, Building2, ListTree, CheckCircle2, ClipboardCheck } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { formatDateTimeTR } from "@/lib/utils/format-date";
+import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { DashboardMetricCard } from "@/components/dashboard/DashboardMetricCard";
 import { RepairPointsButton } from "@/components/dashboard/RepairPointsButton";
 import type { AdminPointsData, MemberPointsSummary } from "@/lib/points/queries";
 
@@ -8,27 +11,6 @@ interface Props {
   isAdmin: boolean;
   admin: AdminPointsData | null;
   member: MemberPointsSummary;
-}
-
-function Tile({
-  icon, label, value, tone = "neutral",
-}: { icon: React.ReactNode; label: string; value: number | string; tone?: "neutral" | "brand" | "warning" | "danger" | "success" }) {
-  const toneCls = {
-    neutral: "text-ink",
-    brand: "text-brand",
-    warning: "text-warning",
-    danger: "text-danger",
-    success: "text-[#1c7a52]",
-  }[tone];
-  return (
-    <div className="bg-surface rounded-xl border border-line shadow-card p-4">
-      <div className="flex items-center gap-2 text-subtle">
-        {icon}
-        <span className="text-xs font-medium text-muted">{label}</span>
-      </div>
-      <p className={cn("mt-2 text-3xl font-semibold tabular-nums", toneCls)}>{value}</p>
-    </div>
-  );
 }
 
 const TYPE_LABEL: Record<string, string> = {
@@ -68,12 +50,16 @@ export function PointsMotivationSection({ isAdmin, admin, member }: Props) {
 function MemberPanel({ member }: { member: MemberPointsSummary }) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      <Tile icon={<Sparkles size={15} />} label="Bu ay kazandığım" value={`${member.monthPoints} puan`} tone="brand" />
-      <div title="Görev yönetici tarafından tamamlandığında kesinleşir.">
-        <Tile icon={<Clock3 size={15} />} label="Onay bekleyen puanım" value={`${member.pending} puan`} tone="warning" />
-      </div>
-      <Tile icon={<CheckCircle2 size={15} />} label="Tamamladığım işler" value={member.doneCount} tone="success" />
-      <Tile icon={<ClipboardCheck size={15} />} label="Kontrol bekleyen işlerim" value={member.reviewCount} />
+      <DashboardMetricCard icon={<Sparkles size={15} />} label="Bu ay kazandığım" value={`${member.monthPoints} puan`} tone="brand" />
+      <DashboardMetricCard
+        icon={<Clock3 size={15} />}
+        label="Onay bekleyen puanım"
+        value={`${member.pending} puan`}
+        tone="warning"
+        title="Görev yönetici tarafından tamamlandığında kesinleşir."
+      />
+      <DashboardMetricCard icon={<CheckCircle2 size={15} />} label="Tamamladığım işler" value={member.doneCount} tone="success" />
+      <DashboardMetricCard icon={<ClipboardCheck size={15} />} label="Kontrol bekleyen işlerim" value={member.reviewCount} />
     </div>
   );
 }
@@ -87,19 +73,19 @@ function AdminPanel({ admin }: { admin: AdminPointsData }) {
     <div className="space-y-4">
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-        <Tile icon={<Sparkles size={15} />} label="Bu ay kazanılan" value={`${admin.monthEarned} puan`} tone="success" />
-        <Tile icon={<Clock3 size={15} />} label="Bekleyen toplam" value={`${admin.pendingTotal} puan`} tone="warning" />
-        <Tile icon={<RotateCcw size={15} />} label="Geri alınan" value={admin.revokedCount} tone={admin.revokedCount > 0 ? "danger" : "neutral"} />
+        <DashboardMetricCard icon={<Sparkles size={15} />} label="Bu ay kazanılan" value={`${admin.monthEarned} puan`} tone="success" />
+        <DashboardMetricCard icon={<Clock3 size={15} />} label="Bekleyen toplam" value={`${admin.pendingTotal} puan`} tone="warning" />
+        <DashboardMetricCard icon={<RotateCcw size={15} />} label="Geri alınan" value={admin.revokedCount} tone={admin.revokedCount > 0 ? "danger" : "neutral"} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Contributors */}
-        <div className="bg-surface rounded-xl border border-line shadow-card p-5">
+        <Card className="p-5">
           <h3 className="text-sm font-semibold text-ink mb-4 flex items-center gap-2">
             <Trophy size={15} className="text-subtle" /> En çok katkı sağlayanlar
           </h3>
           {admin.contributors.length === 0 ? (
-            <p className="text-sm text-subtle py-6 text-center">Bu ay henüz puan hareketi yok</p>
+            <EmptyState icon={Trophy} title="Bu ay henüz puan hareketi yok" className="py-6" />
           ) : (
             <div className="space-y-3">
               {admin.contributors.slice(0, 8).map((c) => (
@@ -115,7 +101,7 @@ function AdminPanel({ admin }: { admin: AdminPointsData }) {
                       <span className="font-semibold text-muted tabular-nums">{c.earned}</span>
                     </span>
                   </div>
-                  <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                  <div className="h-1.5 rounded-full bg-surface-sunken overflow-hidden">
                     <div
                       className="h-full rounded-full bg-brand"
                       style={{ width: `${Math.max(4, (Math.max(0, c.earned) / maxContrib) * 100)}%` }}
@@ -125,15 +111,15 @@ function AdminPanel({ admin }: { admin: AdminPointsData }) {
               ))}
             </div>
           )}
-        </div>
+        </Card>
 
         {/* By department */}
-        <div className="bg-surface rounded-xl border border-line shadow-card p-5">
+        <Card className="p-5">
           <h3 className="text-sm font-semibold text-ink mb-4 flex items-center gap-2">
             <Building2 size={15} className="text-subtle" /> Departmana göre puan
           </h3>
           {admin.byDepartment.length === 0 ? (
-            <p className="text-sm text-subtle py-6 text-center">Bu ay departman bazlı puan yok</p>
+            <EmptyState icon={Building2} title="Bu ay departman bazlı puan yok" className="py-6" />
           ) : (
             <div className="space-y-3">
               {admin.byDepartment.map((d) => (
@@ -142,7 +128,7 @@ function AdminPanel({ admin }: { admin: AdminPointsData }) {
                     <span className="text-xs text-ink truncate" title={d.name}>{d.name}</span>
                     <span className="text-xs font-semibold text-muted tabular-nums">{d.points}</span>
                   </div>
-                  <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                  <div className="h-1.5 rounded-full bg-surface-sunken overflow-hidden">
                     <div
                       className="h-full rounded-full bg-[#3a8f63]"
                       style={{ width: `${Math.max(4, (d.points / maxDept) * 100)}%` }}
@@ -152,16 +138,16 @@ function AdminPanel({ admin }: { admin: AdminPointsData }) {
               ))}
             </div>
           )}
-        </div>
+        </Card>
       </div>
 
       {/* Ledger */}
-      <div className="bg-surface rounded-xl border border-line shadow-card p-5">
+      <Card className="p-5">
         <h3 className="text-sm font-semibold text-ink mb-4 flex items-center gap-2">
           <ListTree size={15} className="text-subtle" /> Puan hareketleri
         </h3>
         {admin.ledger.length === 0 ? (
-          <p className="text-sm text-subtle py-6 text-center">Bu ay puan hareketi yok</p>
+          <EmptyState icon={ListTree} title="Bu ay puan hareketi yok" className="py-6" />
         ) : (
           <div className="divide-y divide-hairline">
             {admin.ledger.map((row) => (
@@ -185,7 +171,7 @@ function AdminPanel({ admin }: { admin: AdminPointsData }) {
             ))}
           </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 }
