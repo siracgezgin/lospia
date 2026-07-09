@@ -6,6 +6,7 @@ import { CreateAccountPanel } from "@/components/settings/CreateAccountPanel";
 import { DepartmentsManager } from "@/components/settings/DepartmentsManager";
 import { canManageSettings, canRenameWorkspace, canManageMembers, canManageWorkspace } from "@/lib/auth/permissions";
 import { roleLabel } from "@/lib/utils/roles";
+import { getDisplayNotificationEmail } from "@/lib/utils/notification-email";
 import type {
   Workspace, WorkspaceMember, Profile,
   WorkspaceRole, WorkspaceInvite,
@@ -181,19 +182,24 @@ export default async function SettingsPage() {
         ) : (
           <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
             {(membersResult.data ?? []).map(
-              (m: WorkspaceMember & { profiles?: Partial<Profile> | null }) => (
+              (m: WorkspaceMember & { profiles?: Partial<Profile> | null }) => {
+                const display = getDisplayNotificationEmail(m);
+                return (
                 <div key={m.id} className="flex items-center justify-between px-5 py-3">
                   <div>
                     <p className="text-sm font-medium">
                       {m.profiles?.full_name ?? m.profiles?.email ?? "—"}
                     </p>
-                    <p className="text-xs text-gray-400">{m.profiles?.email}</p>
+                    <p className={display.email ? "text-xs text-gray-400" : "text-xs text-amber-600"}>
+                      {display.email ?? "Bildirim e-postası eklenmedi"}
+                    </p>
                   </div>
                   <span className="text-xs text-gray-500 bg-gray-100 px-2.5 py-0.5 rounded-full">
                     {roleLabel(m.role)}
                   </span>
                 </div>
-              )
+                );
+              }
             )}
           </div>
         )}
