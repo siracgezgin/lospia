@@ -14,7 +14,7 @@ import {
 import { useState, useOptimistic, useTransition, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowUp, ArrowDown, ArrowUpDown, Plus, FileSpreadsheet, Lock } from "lucide-react";
+import { ArrowUp, ArrowDown, ArrowUpDown, Plus, FileSpreadsheet, Lock, ClipboardList } from "lucide-react";
 import { ADMIN_ONLY_CHIP_LABEL } from "@/lib/utils/visibility";
 import type { Task, SavedView, TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceDepartment } from "@/types";
 import {
@@ -29,7 +29,10 @@ import { cn } from "@/lib/utils/cn";
 import { formatDateTR } from "@/lib/utils/format-date";
 import { buildDeptMeta } from "@/lib/utils/departments";
 import { resolvePersonDescriptor, resolvePersonName, taskMatchesPerson } from "@/lib/utils/task-person-match";
-import { getDepartmentBadge, STATUS_CHIP_TONE } from "@/lib/design/semantics";
+import { getDepartmentBadge, STATUS_CHIP_TONE, PRIORITY_CHIP } from "@/lib/design/semantics";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
 import { CsvImportModal } from "@/components/task/CsvImportModal";
 
@@ -136,12 +139,7 @@ function PriorityBadge({ priority }: { priority: TaskPriority }) {
   return (
     <span className={cn(
       "text-[10px] font-medium rounded px-1.5 py-0.5 leading-none whitespace-nowrap",
-      {
-        low:    "bg-gray-100 text-gray-500",
-        medium: "bg-amber-50 text-amber-700",
-        high:   "bg-red-100 text-red-700",
-        urgent: "bg-red-200 text-red-900 font-semibold",
-      }[priority]
+      PRIORITY_CHIP[priority],
     )}>
       {PRIORITY_LABELS[priority]}
     </span>
@@ -172,10 +170,10 @@ function MobileTaskCard({
     <Link
       prefetch={false}
       href={`/tasks/${task.id}`}
-      className="block rounded-xl border border-gray-200 bg-white p-3.5 shadow-card active:bg-gray-50 transition-colors"
+      className="block rounded-card border border-line bg-surface p-3.5 shadow-card active:bg-surface-hover transition-colors duration-[var(--duration-fast)]"
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-semibold text-gray-900 line-clamp-2 leading-snug flex-1 min-w-0">
+        <p className="text-sm font-semibold text-ink line-clamp-2 leading-snug flex-1 min-w-0">
           {task.title}
         </p>
         <span className={cn(
@@ -187,7 +185,7 @@ function MobileTaskCard({
       </div>
 
       {task.description && (
-        <p className="text-xs text-gray-400 mt-1 line-clamp-1">{task.description}</p>
+        <p className="text-xs text-subtle mt-1 line-clamp-1">{task.description}</p>
       )}
 
       <div className="flex items-center gap-2 mt-2.5 flex-wrap">
@@ -202,19 +200,19 @@ function MobileTaskCard({
         )}
         <PriorityBadge priority={task.priority} />
         {task.due_date && (
-          <span className={cn("text-[11px] font-medium whitespace-nowrap", isOverdue ? "text-red-500" : "text-gray-500")}>
+          <span className={cn("text-[11px] font-medium whitespace-nowrap", isOverdue ? "text-danger" : "text-muted")}>
             {isOverdue ? "⚠ " : ""}
             {formatDateTR(task.due_date, { day: "numeric", month: "short" })}
           </span>
         )}
         {responsible && (
-          <span className="ml-auto text-[11px] text-gray-500 truncate max-w-[40%]">{responsible}</span>
+          <span className="ml-auto text-[11px] text-muted truncate max-w-[40%]">{responsible}</span>
         )}
       </div>
 
       {(creatorName || task.created_at) && (
-        <p className="mt-2 text-[10px] text-gray-400 truncate">
-          {creatorName && <span className="font-medium text-gray-500">{creatorName}</span>}
+        <p className="mt-2 text-[10px] text-subtle truncate">
+          {creatorName && <span className="font-medium text-muted">{creatorName}</span>}
           {creatorName && task.created_at && " · "}
           {task.created_at && formatDateTR(task.created_at, { day: "numeric", month: "short" })}
         </p>
@@ -301,7 +299,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
             prefetch={false}
             href={`/tasks/${info.row.original.id}`}
             title={info.getValue()}
-            className="font-medium text-gray-900 hover:text-blue-600 text-sm line-clamp-2 block leading-snug break-words"
+            className="font-medium text-ink hover:text-brand text-sm line-clamp-2 block leading-snug break-words transition-colors duration-[var(--duration-fast)]"
           >
             {info.getValue()}
           </Link>
@@ -313,7 +311,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
           {(info.row.original.tags?.length ?? 0) > 0 && (
             <div className="flex gap-1 mt-1 flex-wrap">
               {[...new Set(info.row.original.tags)].slice(0, 3).map((tag, i) => (
-                <span key={`${info.row.original.id}-tag-${i}`} className="text-[10px] bg-blue-50 text-blue-500 rounded px-1 py-0.5 leading-none">
+                <span key={`${info.row.original.id}-tag-${i}`} className="text-[10px] bg-brand-soft text-brand rounded px-1 py-0.5 leading-none">
                   {tag}
                 </span>
               ))}
@@ -330,8 +328,8 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
       cell: (info) => {
         const val = info.getValue();
         return val
-          ? <span className="text-xs text-gray-400 italic line-clamp-1">{val}</span>
-          : <span className="text-xs text-gray-300">—</span>;
+          ? <span className="text-xs text-subtle italic line-clamp-1">{val}</span>
+          : <span className="text-xs text-subtle">—</span>;
       },
       enableSorting: false,
     }),
@@ -342,7 +340,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
       cell: (info) => {
         const row = info.row.original;
         const meta = row.department_id ? deptMeta[row.department_id] : undefined;
-        if (!meta) return <span className="text-xs text-gray-300">—</span>;
+        if (!meta) return <span className="text-xs text-subtle">—</span>;
         const badge = getDepartmentBadge(meta.color);
         // Soft, ringed pill in the department colour. Long names wrap to a
         // controlled 2 lines instead of clipping mid-word.
@@ -374,7 +372,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
         const val = info.getValue();
         return val
           ? <span className="inline-block text-[11px] bg-[#eef0fb] text-[#4a4d9c] rounded-md px-2 py-0.5 max-w-[12rem] truncate align-middle" title={val}>{val}</span>
-          : <span className="text-xs text-gray-300">—</span>;
+          : <span className="text-xs text-subtle">—</span>;
       },
       sortingFn: (a, b) => {
         const ca = safeCategory(a.original);
@@ -403,11 +401,11 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
       header: FIELD_LABELS.dueDate,
       cell: (info) => {
         const val = info.getValue();
-        if (!val) return <span className="text-xs text-gray-300">—</span>;
+        if (!val) return <span className="text-xs text-subtle">—</span>;
         const today = new Date().toISOString().slice(0, 10);
         const isOverdue = val < today;
         return (
-          <span className={cn("text-xs whitespace-nowrap", isOverdue ? "text-red-500 font-medium" : "text-gray-500")}>
+          <span className={cn("text-xs whitespace-nowrap", isOverdue ? "text-danger font-medium" : "text-muted")}>
             {isOverdue ? "⚠ " : ""}
             {formatDateTR(val as string, { day: "numeric", month: "short" })}
           </span>
@@ -425,7 +423,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
       {
         id: "responsible",
         header: FIELD_LABELS.assignee,
-        cell: (info) => <span className="text-xs text-gray-500">{info.getValue() || "—"}</span>,
+        cell: (info) => <span className="text-xs text-muted">{info.getValue() || "—"}</span>,
         sortingFn: (a, b) => {
           const na = responsibleNames[a.original.assignee_id ?? ""] ?? responsibleNames[(a.original as { responsible_contact_id?: string | null }).responsible_contact_id ?? ""] ?? "";
           const nb = responsibleNames[b.original.assignee_id ?? ""] ?? responsibleNames[(b.original as { responsible_contact_id?: string | null }).responsible_contact_id ?? ""] ?? "";
@@ -451,8 +449,8 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
         cell: (info) => {
           const val = info.getValue();
           return val
-            ? <span className="text-xs text-gray-500">{val}</span>
-            : <span className="text-xs text-gray-300">—</span>;
+            ? <span className="text-xs text-muted">{val}</span>
+            : <span className="text-xs text-subtle">—</span>;
         },
         enableSorting: false,
       }
@@ -466,12 +464,12 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
         cell: (info) => {
           const name = info.getValue();
           const created = info.row.original.created_at;
-          if (!name && !created) return <span className="text-xs text-gray-300">—</span>;
+          if (!name && !created) return <span className="text-xs text-subtle">—</span>;
           return (
             <div className="leading-tight">
-              {name && <span className="text-xs text-gray-600 block">{name}</span>}
+              {name && <span className="text-xs text-muted block">{name}</span>}
               {created && (
-                <span className="text-[10px] text-gray-400 whitespace-nowrap">
+                <span className="text-[10px] text-subtle whitespace-nowrap">
                   {formatDateTR(created as string, { day: "numeric", month: "short" })}
                 </span>
               )}
@@ -489,7 +487,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
       id: "updated_at",
       header: FIELD_LABELS.updatedAt,
       cell: (info) => (
-        <span className="text-xs text-gray-400 whitespace-nowrap">
+        <span className="text-xs text-subtle whitespace-nowrap">
           {formatDateTR(info.getValue() as string, { day: "numeric", month: "short" })}
         </span>
       ),
@@ -538,12 +536,12 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
     <div className="flex flex-col h-full max-md:h-auto max-md:min-h-full">
       {/* Saved views tab strip */}
       {savedViews.length > 0 && (
-        <div className="flex gap-0 px-4 pt-3 border-b border-gray-200 bg-white overflow-x-auto no-scrollbar shrink-0">
+        <div className="flex gap-0 px-4 pt-3 border-b border-line bg-surface overflow-x-auto no-scrollbar shrink-0">
           {savedViews.map((view) => (
             <a
               key={view.id}
               href={`/list?view=${view.id}`}
-              className="px-3 py-2 text-sm border-b-2 border-transparent text-gray-500 hover:text-gray-700 whitespace-nowrap transition-colors"
+              className="px-3 py-2 text-sm border-b-2 border-transparent text-muted hover:text-ink hover:border-brand-ring/40 whitespace-nowrap transition-colors duration-[var(--duration-fast)]"
             >
               {view.name}
             </a>
@@ -552,36 +550,31 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
       )}
 
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-2 px-4 py-3 bg-white border-b border-gray-100 shrink-0">
-        <button
-          onClick={() => setModalOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-        >
+      <div className="flex flex-wrap items-center gap-2 px-4 py-3 bg-surface border-b border-hairline shrink-0">
+        <Button size="sm" onClick={() => setModalOpen(true)}>
           <Plus size={14} />
           Görev oluştur
-        </button>
+        </Button>
         {/* Toplu içe aktarma yönetici işidir — members never see it. */}
         {isAdmin && (
-          <button
-            onClick={() => setImportOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors"
-          >
+          <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
             <FileSpreadsheet size={14} />
             CSV&apos;den içe aktar
-          </button>
+          </Button>
         )}
-        <div className="w-px h-5 bg-gray-200 mx-1" />
-        <input
+        <div className="w-px h-5 bg-line mx-1" />
+        <Input
           type="search"
           placeholder="Görev ara…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm w-52 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          aria-label="Görev ara"
+          className="h-8 w-52"
         />
         <select
           value={filterStatusKey}
           onChange={(e) => setFilterStatusKey(e.target.value as StatusFilterKey)}
-          className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-muted focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40 transition-colors"
         >
           {STATUS_FILTER_OPTIONS.map((o) => (
             <option key={o.key} value={o.key}>{o.label}</option>
@@ -590,7 +583,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
         <select
           value={filterPriority}
           onChange={(e) => setFilterPriority(e.target.value as TaskPriority | "all")}
-          className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-muted focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40 transition-colors"
         >
           <option value="all">Tüm öncelikler</option>
           {TASK_PRIORITIES.map((p) => (
@@ -603,8 +596,8 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
           onChange={(e) => handlePersonChange(e.target.value)}
           aria-label="Kişiye göre filtrele"
           className={cn(
-            "rounded-lg border px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors",
-            personFilter ? "border-blue-400 text-blue-700" : "border-gray-200 text-gray-600",
+            "rounded-lg border bg-surface px-2 py-1.5 text-sm focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40 transition-colors",
+            personFilter ? "border-brand-ring text-brand font-medium" : "border-line text-muted",
           )}
         >
           <option value="">Tüm kişiler</option>
@@ -623,19 +616,19 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
             </optgroup>
           )}
         </select>
-        <span className="ml-auto text-xs text-gray-400 self-center">{totalRows} görev</span>
+        <span className="ml-auto text-xs text-subtle self-center">{totalRows} görev</span>
       </div>
 
       {/* Active person filter banner — makes a deep-link from CRM explicit and
           gives a one-click way to clear it. */}
       {personFilter && (
-        <div className="flex items-center justify-between gap-2 px-4 py-2 bg-blue-50/70 border-b border-blue-100 shrink-0">
-          <span className="text-[13px] text-blue-800">
+        <div className="flex items-center justify-between gap-2 px-4 py-2 bg-brand-soft border-b border-brand-ring/30 shrink-0">
+          <span className="text-[13px] text-brand-strong">
             <span className="font-semibold">{personDisplayName ?? "Seçili kişi"}</span> ile ilişkili görevler
           </span>
           <button
             onClick={() => handlePersonChange("")}
-            className="text-[12px] font-medium text-blue-600 hover:text-blue-800 underline underline-offset-2"
+            className="text-[12px] font-medium text-brand hover:text-brand-strong underline underline-offset-2"
           >
             Filtreyi temizle
           </button>
@@ -643,11 +636,13 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
       )}
 
       {/* Mobile: card list (no horizontal table) — flows into the page scroll */}
-      <div className="md:hidden bg-gray-50/40 px-3 py-3">
+      <div className="md:hidden bg-app px-3 py-3">
         {table.getRowModel().rows.length === 0 ? (
-          <div className="text-center py-16 text-gray-400 text-sm">
-            Geçerli filtrelerle eşleşen görev yok
-          </div>
+          <EmptyState
+            icon={ClipboardList}
+            title="Görev bulunamadı"
+            description="Geçerli filtrelerle eşleşen görev yok."
+          />
         ) : (
           <div className="flex flex-col gap-2.5">
             {table.getRowModel().rows.map((row) => (
@@ -663,17 +658,17 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
       </div>
 
       {/* Table — desktop / tablet */}
-      <div className="hidden md:block flex-1 overflow-auto bg-gray-50/40">
+      <div className="hidden md:block flex-1 overflow-auto bg-app">
         <table className="w-full text-sm border-collapse">
-          <thead className="bg-gray-50/80 border-b border-gray-200 sticky top-0 z-10 backdrop-blur-sm">
+          <thead className="bg-surface-muted/90 border-b border-hairline sticky top-0 z-10 backdrop-blur-sm">
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id}>
                 {hg.headers.map((header) => (
                   <th
                     key={header.id}
                     className={cn(
-                      "text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-500 whitespace-nowrap select-none",
-                      header.column.getCanSort() && "cursor-pointer hover:text-gray-700"
+                      "text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted whitespace-nowrap select-none",
+                      header.column.getCanSort() && "cursor-pointer hover:text-ink transition-colors duration-[var(--duration-fast)]"
                     )}
                     onClick={header.column.getToggleSortingHandler()}
                   >
@@ -686,11 +681,15 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
               </tr>
             ))}
           </thead>
-          <tbody className="divide-y divide-gray-100 bg-white">
+          <tbody className="divide-y divide-hairline bg-surface">
             {table.getRowModel().rows.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className="text-center py-16 text-gray-400 text-sm">
-                  Geçerli filtrelerle eşleşen görev yok
+                <td colSpan={columns.length} className="p-0">
+                  <EmptyState
+                    icon={ClipboardList}
+                    title="Görev bulunamadı"
+                    description="Geçerli filtrelerle eşleşen görev yok."
+                  />
                 </td>
               </tr>
             ) : (
@@ -698,8 +697,8 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
                 <tr
                   key={row.id}
                   className={cn(
-                    "transition-colors",
-                    row.original.status === "done" ? "bg-green-50/50 hover:bg-green-50" : "hover:bg-gray-50"
+                    "transition-colors duration-[var(--duration-fast)]",
+                    row.original.status === "done" ? "bg-green-50/50 hover:bg-green-50" : "hover:bg-surface-hover"
                   )}
                 >
                   {row.getVisibleCells().map((cell) => (
