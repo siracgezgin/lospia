@@ -9,7 +9,9 @@ import {
   removeWorkspaceMemberAccount,
   renameWorkspaceMember,
   setMemberUsername,
+  setMemberNotificationEmail,
 } from "@/lib/actions/workspace";
+import { getDisplayNotificationEmail } from "@/lib/utils/notification-email";
 import type {
   WorkspaceMember, Profile, WorkspaceInvite, WorkspaceRole,
   WorkspaceDepartment, DepartmentMember,
@@ -56,6 +58,11 @@ export function MembersManager({
   // Inline username editing (owner sets/corrects a member's username).
   const [editingUsernameId, setEditingUsernameId] = useState<string | null>(null);
   const [editUsername, setEditUsername] = useState("");
+
+  // Inline notification e-mail editing (workspace_members.notification_email —
+  // the REAL outbound address; the auth/login e-mail is never touched here).
+  const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
+  const [editEmail, setEditEmail] = useState("");
 
   // Pending confirmation for a destructive delete.
   const [confirm, setConfirm] = useState<
@@ -121,6 +128,24 @@ export function MembersManager({
         )
       );
       setEditingUsernameId(null);
+    });
+  }
+
+  function handleSaveEmail(memberId: string) {
+    setError(null);
+    startTransition(async () => {
+      // Empty input clears the address (falls back to profiles.email when real).
+      const result = await setMemberNotificationEmail({
+        memberId,
+        notificationEmail: editEmail.trim() === "" ? null : editEmail,
+      });
+      if ("error" in result) { setError(result.error); return; }
+      setMembers((prev) =>
+        prev.map((m) =>
+          m.id === memberId ? { ...m, notification_email: result.notificationEmail } : m
+        )
+      );
+      setEditingEmailId(null);
     });
   }
 
@@ -252,7 +277,68 @@ export function MembersManager({
                     )}
                   </p>
                 )}
-                <p className="text-xs text-gray-400 truncate">{m.profiles?.email}</p>
+                {editingEmailId === m.id ? (
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <input
+                      type="email"
+                      value={editEmail}
+                      onChange={(e) => setEditEmail(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") { e.preventDefault(); handleSaveEmail(m.id); }
+                        if (e.key === "Escape") setEditingEmailId(null);
+                      }}
+                      autoFocus
+                      disabled={isPending}
+                      placeholder="bildirim@ornek.com"
+                      className="flex-1 min-w-0 rounded-lg border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    <button
+                      onClick={() => handleSaveEmail(m.id)}
+                      disabled={isPending}
+                      className="p-1 rounded text-green-600 hover:bg-green-50 disabled:opacity-50"
+                      aria-label="Kaydet"
+                    >
+                      <Check size={14} />
+                    </button>
+                    <button
+                      onClick={() => setEditingEmailId(null)}
+                      disabled={isPending}
+                      className="p-1 rounded text-gray-400 hover:bg-gray-100 disabled:opacity-50"
+                      aria-label="Vazgeç"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : (() => {
+                  // notification_email → real profiles.email → "not set".
+                  // @lospia.local login placeholders are never shown as a
+                  // notification address.
+                  const display = getDisplayNotificationEmail(m);
+                  return (
+                    <p className="text-xs truncate flex items-center gap-1">
+                      <span
+                        className={cn(
+                          "truncate",
+                          display.email ? "text-gray-400" : "text-amber-600"
+                        )}
+                      >
+                        {display.email ?? "Bildirim e-postası eklenmedi"}
+                      </span>
+                      {isOwner && (
+                        <button
+                          onClick={() => {
+                            setEditingEmailId(m.id);
+                            setEditEmail(m.notification_email ?? "");
+                          }}
+                          className="p-0.5 rounded text-gray-300 hover:text-gray-600 hover:bg-gray-100 shrink-0"
+                          aria-label="Bildirim e-postasını düzenle"
+                        >
+                          <Pencil size={11} />
+                        </button>
+                      )}
+                    </p>
+                  );
+                })()}
                 {(deptsByMember.get(m.id) ?? []).length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1.5">
                     {(deptsByMember.get(m.id) ?? []).map((d) => {

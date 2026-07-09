@@ -6,6 +6,11 @@ import { createClient } from "@/lib/supabase/server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { canRenameWorkspace, canManageMembers, canManageWorkspace, type AppRole } from "@/lib/auth/permissions";
 import { validateUsername } from "@/lib/utils/username";
+import {
+  isPlaceholderEmail,
+  normalizeNotificationEmail,
+  PLACEHOLDER_EMAIL_DOMAIN,
+} from "@/lib/utils/notification-email";
 
 // Admin-created accounts use an internal auth e-mail derived from the username.
 // The person never sees or types this; they sign in with username + password.
@@ -304,6 +309,74 @@ export async function setMemberUsername(
   revalidatePath("/settings");
   revalidatePath("/", "layout");
   return { ok: true };
+}
+
+// ── 4d. Set a member's notification e-mail (owner/admin, or the member themself)
+// Writes workspace_members.notification_email — the REAL address outbound mail
+// goes to. Auth/login e-mail (profiles.email, often `@lospia.local`) is never
+// touched. Unlike profiles, workspace_members RLS already permits owner/admin
+// updates and self-updates, so this writes directly with the user client and
+// RLS stays as the second line of defense.
+const NotificationEmailSchema = z.object({
+  memberId: hexUuid("Geçersiz üye"),
+  // Normalized before parsing; null clears the address.
+  notificationEmail: z.email("Geçersiz e-posta adresi").nullable(),
+  emailNotificationsEnabled: z.boolean().optional(),
+});
+
+export async function setMemberNotificationEmail(input: {
+  memberId: string;
+  notificationEmail: string | null;
+  emailNotificationsEnabled?: boolean;
+}): Promise<{ ok: true; notificationEmail: string | null } | { error: string }> {
+  const normalized = normalizeNotificationEmail(input.notificationEmail);
+  const parsed = NotificationEmailSchema.safeParse({
+    memberId: input.memberId,
+    notificationEmail: normalized,
+    emailNotificationsEnabled: input.emailNotificationsEnabled,
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  // Placeholder addresses can never receive mail — storing one as the
+  // "notification" address would silently re-create the bug this field fixes.
+  if (isPlaceholderEmail(parsed.data.notificationEmail)) {
+    return {
+      error: `@${PLACEHOLDER_EMAIL_DOMAIN} adresleri dahili giriş adresleridir; gerçek bir e-posta adresi girin.`,
+    };
+  }
+
+  const supabase = await createClient();
+  const ctx = await getCallerRole(supabase);
+  if (!ctx) return { error: "Kimlik doğrulama gerekli." };
+
+  const { data: target } = await supabase
+    .from("workspace_members")
+    .select("id, user_id, workspace_id")
+    .eq("id", parsed.data.memberId)
+    .maybeSingle();
+  if (!target || target.workspace_id !== ctx.workspaceId) {
+    return { error: "Üye bulunamadı." };
+  }
+
+  const isSelf = target.user_id === ctx.user.id;
+  if (!isSelf && !canManageWorkspace(ctx.role)) return { error: PERM_DENIED };
+
+  const updates: {
+    notification_email: string | null;
+    email_notifications_enabled?: boolean;
+  } = { notification_email: parsed.data.notificationEmail };
+  if (parsed.data.emailNotificationsEnabled !== undefined) {
+    updates.email_notifications_enabled = parsed.data.emailNotificationsEnabled;
+  }
+
+  const { error } = await supabase
+    .from("workspace_members")
+    .update(updates)
+    .eq("id", parsed.data.memberId);
+  if (error) return { error: "Bildirim e-postası güncellenemedi. Lütfen tekrar deneyin." };
+
+  revalidatePath("/settings");
+  return { ok: true, notificationEmail: parsed.data.notificationEmail };
 }
 
 // ── 5. Remove workspace member (owner only) ───────────────────────────────────

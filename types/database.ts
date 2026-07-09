@@ -1004,25 +1004,31 @@ export type Database = {
       }
       workspace_members: {
         Row: {
+          email_notifications_enabled: boolean
           id: string
           joined_at: string
           last_rules_seen_at: string | null
+          notification_email: string | null
           role: Database["public"]["Enums"]["workspace_role"]
           user_id: string
           workspace_id: string
         }
         Insert: {
+          email_notifications_enabled?: boolean
           id?: string
           joined_at?: string
           last_rules_seen_at?: string | null
+          notification_email?: string | null
           role?: Database["public"]["Enums"]["workspace_role"]
           user_id: string
           workspace_id: string
         }
         Update: {
+          email_notifications_enabled?: boolean
           id?: string
           joined_at?: string
           last_rules_seen_at?: string | null
+          notification_email?: string | null
           role?: Database["public"]["Enums"]["workspace_role"]
           user_id?: string
           workspace_id?: string
