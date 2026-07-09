@@ -32,19 +32,19 @@ export function TaskEffortPanel({ taskId, effortSize, status, participantCount, 
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+    <div className="bg-surface rounded-card border border-line shadow-card p-5 space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
-          <Gauge size={14} /> Puan &amp; Motivasyon
+        <h3 className="text-sm font-semibold text-ink flex items-center gap-1.5">
+          <Gauge size={14} className="text-muted" /> Puan &amp; Motivasyon
         </h3>
-        <span className="text-[11px] font-medium text-gray-500 bg-gray-100 rounded-full px-2 py-0.5">
+        <span className="text-[11px] font-medium text-muted bg-surface-sunken rounded-full px-2 py-0.5">
           {EFFORT_LABELS[effort]} · {points} puan
         </span>
       </div>
 
       {/* Effort selector */}
       <div>
-        <p className="text-xs text-gray-400 mb-1.5">Efor</p>
+        <p className="text-[11px] font-medium uppercase tracking-wide text-subtle mb-1.5">Efor</p>
         <div className="flex gap-2">
           {EFFORT_OPTIONS.map((e) => (
             <button
@@ -55,15 +55,15 @@ export function TaskEffortPanel({ taskId, effortSize, status, participantCount, 
               className={cn(
                 "flex-1 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-60",
                 effort === e
-                  ? "bg-blue-50 border-blue-300 text-blue-700 font-medium"
-                  : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50",
+                  ? "bg-brand-soft border-brand-ring text-brand-strong font-medium"
+                  : "bg-surface border-line text-muted hover:bg-surface-hover",
               )}
             >
-              {EFFORT_LABELS[e]} <span className="text-[11px] text-gray-400">({pointsForEffort(e)})</span>
+              {EFFORT_LABELS[e]} <span className="text-[11px] text-subtle">({pointsForEffort(e)})</span>
             </button>
           ))}
         </div>
-        <p className="text-[11px] text-gray-400 mt-1.5">
+        <p className="text-[11px] text-subtle mt-1.5">
           Puan yalnızca yönetici onayından sonra kesinleşir.
         </p>
       </div>
@@ -96,7 +96,7 @@ export function TaskEffortPanel({ taskId, effortSize, status, participantCount, 
             </ul>
           </div>
         ) : (
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-subtle">
             Bu görevden henüz puan kesinleşmedi (ör. yalnızca kendi onayı nedeniyle atlanmış olabilir).
           </p>
         )

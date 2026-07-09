@@ -90,16 +90,16 @@ function draftFromTask(task: Task): Draft {
 function FieldRow({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
     <div className={className}>
-      <p className="text-xs text-gray-400 mb-1">{label}</p>
+      <p className="text-[11px] font-medium uppercase tracking-wide text-subtle mb-1">{label}</p>
       {children}
     </div>
   );
 }
 
-const inputCls = "w-full text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#406775] disabled:bg-gray-50 disabled:text-gray-400";
+const inputCls = "w-full text-sm text-ink bg-surface border border-line rounded-lg px-2.5 py-1.5 placeholder:text-subtle transition-colors focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40 disabled:bg-surface-sunken disabled:text-subtle";
 // Read-only metadata (Oluşturan, Giriş tarihi) rendered in the same box shape as
 // the editable inputs so every field reads as one consistent UI.
-const readOnlyCls = "block w-full text-sm text-gray-700 bg-gray-50 border border-gray-100 rounded-lg px-2.5 py-1.5 truncate";
+const readOnlyCls = "block w-full text-sm text-muted bg-surface-muted border border-hairline rounded-lg px-2.5 py-1.5 truncate";
 
 // ---- Editor (remounts via key when the server task changes) ----
 
@@ -195,14 +195,14 @@ function TaskEditor({
     <>
       {/* ── Top action bar: back link + explicit Save / Cancel ─────────────── */}
       <div className="sticky top-0 z-30 -mx-4 px-4 py-2 bg-app/90 backdrop-blur border-b border-line/60 flex items-center justify-between gap-3 flex-wrap">
-        <Link href={backHref} className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
+        <Link href={backHref} className="inline-flex items-center gap-1 text-sm text-muted hover:text-ink transition-colors">
           <ArrowLeft size={14} /> {backLabel}
         </Link>
         <div className="flex items-center gap-2 ml-auto">
           {feedback && (
             <span className={cn(
               "hidden sm:inline-flex items-center gap-1 text-xs mr-1",
-              feedback.kind === "ok" ? "text-[#15803d]" : "text-red-600",
+              feedback.kind === "ok" ? "text-success" : "text-danger",
             )}>
               {feedback.kind === "ok" ? <Check size={13} /> : <AlertCircle size={13} />}
               {feedback.msg}
@@ -212,7 +212,7 @@ function TaskEditor({
             <button
               onClick={cancel}
               disabled={saving}
-              className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              className="inline-flex items-center gap-1 text-sm text-muted hover:text-ink px-3 py-1.5 rounded-lg border border-line bg-surface hover:bg-surface-muted disabled:opacity-50 transition-colors"
             >
               <X size={14} /> Vazgeç
             </button>
@@ -224,8 +224,8 @@ function TaskEditor({
             className={cn(
               "inline-flex items-center gap-1.5 text-sm font-medium px-3.5 py-1.5 rounded-lg transition-colors",
               canSave && !saving
-                ? "text-white bg-[#15803d] hover:bg-[#13703a]"
-                : "text-gray-400 bg-gray-100 cursor-not-allowed",
+                ? "text-white bg-brand hover:bg-brand-strong"
+                : "text-subtle bg-surface-sunken cursor-not-allowed",
             )}
           >
             <Save size={14} /> {saving ? "Kaydediliyor…" : "Değişiklikleri Kaydet"}
@@ -234,7 +234,7 @@ function TaskEditor({
       </div>
 
       {/* ── Header card: title + responsible people + state badges ─────────── */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3 mt-5">
+      <div className="bg-surface rounded-card border border-line shadow-card p-5 space-y-3 mt-5">
         <div className="group relative">
           <textarea
             ref={titleRef}
@@ -245,32 +245,32 @@ function TaskEditor({
             placeholder="Görev başlığı"
             aria-label="Görev başlığı"
             className={cn(
-              "w-full resize-none overflow-hidden text-xl sm:text-2xl font-bold text-gray-900 bg-transparent outline-none pr-8 pb-1 leading-tight break-words transition-colors",
+              "w-full resize-none overflow-hidden text-xl sm:text-2xl font-semibold tracking-tight text-ink bg-transparent outline-none pr-8 pb-1 leading-tight break-words transition-colors",
               fieldsDisabled
-                ? "border-b border-transparent text-gray-600"
-                : "border-b border-dashed border-gray-300 hover:border-gray-400 focus:border-solid focus:border-[#406775]",
+                ? "border-b border-transparent text-muted"
+                : "border-b border-dashed border-line hover:border-line-strong focus:border-solid focus:border-brand-ring",
             )}
           />
           {!fieldsDisabled && (
             <Pencil
               size={15}
-              className="absolute right-0 top-2 text-gray-300 group-hover:text-gray-400 group-focus-within:text-[#406775] transition-colors pointer-events-none"
+              className="absolute right-0 top-2 text-subtle group-hover:text-muted group-focus-within:text-brand transition-colors pointer-events-none"
             />
           )}
         </div>
 
         {/* Responsible people — the primary "whose work is this" signal. */}
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-500">
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-muted">
             <Users size={13} /> Sorumlu:
           </span>
           {responsiblePeople.length === 0 ? (
-            <span className="text-xs text-gray-400 italic">Sorumlu atanmadı</span>
+            <span className="text-xs text-subtle italic">Sorumlu atanmadı</span>
           ) : (
             responsiblePeople.map((name) => (
               <span
                 key={name}
-                className="inline-flex items-center gap-1.5 rounded-full bg-gray-50 border border-gray-200 pl-1 pr-2.5 py-0.5 text-xs font-medium text-gray-700"
+                className="inline-flex items-center gap-1.5 rounded-full bg-surface-muted border border-line pl-1 pr-2.5 py-0.5 text-xs font-medium text-ink"
               >
                 <Avatar name={name} size="xs" />
                 {getPersonDisplayName(name)}
@@ -287,17 +287,17 @@ function TaskEditor({
             {PRIORITY_LABELS[draft.priority]}
           </span>
           {draft.due_date && (
-            <span className={cn("inline-flex items-center gap-1 text-[11px] rounded-full px-2 py-0.5 bg-gray-50 border border-gray-100", markers.dueDateClass)}>
+            <span className={cn("inline-flex items-center gap-1 text-[11px] rounded-full px-2 py-0.5 bg-surface-muted border border-hairline", markers.dueDateClass)}>
               <CalendarDays size={11} /> Teslim: {formatDateOnlyTR(draft.due_date)}
             </span>
           )}
           {departmentName && (
-            <span className="inline-flex items-center gap-1 text-[11px] rounded-full px-2 py-0.5 bg-gray-50 border border-gray-100 text-gray-600">
+            <span className="inline-flex items-center gap-1 text-[11px] rounded-full px-2 py-0.5 bg-surface-muted border border-hairline text-muted">
               <Building2 size={11} /> {departmentName}
             </span>
           )}
           {doneLocked && (
-            <span className="inline-flex items-center gap-1 text-[11px] text-gray-500 bg-gray-100 rounded-full px-2 py-0.5">
+            <span className="inline-flex items-center gap-1 text-[11px] text-muted bg-surface-sunken rounded-full px-2 py-0.5">
               <Lock size={11} /> Tamamlandı — yalnızca yönetici değiştirebilir
             </span>
           )}
@@ -317,8 +317,8 @@ function TaskEditor({
       <div className="mt-5 flex flex-col gap-5">
 
           {/* Görev bilgileri */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <h3 className="text-sm font-semibold text-gray-700 mb-4">Görev bilgileri</h3>
+          <div className="bg-surface rounded-card border border-line shadow-card p-5">
+            <h3 className="text-sm font-semibold text-ink mb-4">Görev bilgileri</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FieldRow label="Açıklama" className="sm:col-span-2">
                 <textarea
@@ -416,21 +416,21 @@ function TaskEditor({
                             "text-left rounded-lg border px-3 py-2 transition-colors disabled:opacity-60",
                             on
                               ? "bg-amber-50 border-amber-300"
-                              : "bg-white border-gray-200 hover:bg-gray-50",
+                              : "bg-surface border-line hover:bg-surface-hover",
                           )}
                         >
-                          <span className={cn("flex items-center gap-1.5 text-sm font-medium", on ? "text-amber-800" : "text-gray-700")}>
+                          <span className={cn("flex items-center gap-1.5 text-sm font-medium", on ? "text-amber-800" : "text-ink")}>
                             {v === "admin_only" && <Lock size={12} />}
                             {VISIBILITY_LABELS[v]}
                           </span>
-                          <span className="block text-[11px] text-gray-500 mt-0.5 leading-snug">
+                          <span className="block text-[11px] text-muted mt-0.5 leading-snug">
                             {VISIBILITY_DESCRIPTIONS[v]}
                           </span>
                         </button>
                       );
                     })}
                   </div>
-                  <p className="text-[11px] text-gray-400 mt-1.5">
+                  <p className="text-[11px] text-subtle mt-1.5">
                     Değişiklik &quot;Değişiklikleri Kaydet&quot; ile uygulanır. Yöneticiye özel
                     görevlerde yalnızca yönetici kişiler sorumlu olabilir.
                   </p>
@@ -442,14 +442,14 @@ function TaskEditor({
             {feedback && (
               <p className={cn(
                 "mt-4 inline-flex items-center gap-1.5 text-sm sm:hidden",
-                feedback.kind === "ok" ? "text-[#15803d]" : "text-red-600",
+                feedback.kind === "ok" ? "text-success" : "text-danger",
               )}>
                 {feedback.kind === "ok" ? <Check size={14} /> : <AlertCircle size={14} />}
                 {feedback.msg}
               </p>
             )}
             {!canEdit && !doneLocked && (
-              <p className="mt-4 text-xs text-gray-400">Bu görevi düzenleme yetkiniz yok.</p>
+              <p className="mt-4 text-xs text-subtle">Bu görevi düzenleme yetkiniz yok.</p>
             )}
           </div>
 
@@ -488,13 +488,13 @@ function ActivityLogSection({
   };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
-      <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
-        <History size={14} /> Aktivite
+    <div className="bg-surface rounded-card border border-line shadow-card p-5 space-y-4">
+      <h3 className="text-sm font-semibold text-ink flex items-center gap-1.5">
+        <History size={14} className="text-muted" /> Aktivite
       </h3>
 
       {logs.length === 0 ? (
-        <p className="text-sm text-gray-400">
+        <p className="rounded-lg border border-dashed border-line px-4 py-6 text-center text-sm text-subtle">
           Henüz kayıtlı aktivite yok. Bundan sonraki değişiklikler burada görünecek.
         </p>
       ) : (
@@ -504,15 +504,15 @@ function ActivityLogSection({
               ?? (log.actor_id ? "Bilinmeyen kullanıcı" : "Sistem");
             return (
               <li key={log.id} className="flex gap-3 text-sm">
-                <div className="h-6 w-6 rounded-full bg-gray-100 text-gray-500 text-[11px] font-medium flex items-center justify-center shrink-0 mt-0.5">
+                <div className="h-6 w-6 rounded-full bg-surface-sunken text-muted text-[11px] font-medium flex items-center justify-center shrink-0 mt-0.5">
                   {actorName[0]?.toUpperCase() ?? "?"}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-gray-700 leading-snug">
-                    <span className="font-medium text-gray-900">{actorName}</span>{" "}
+                  <p className="text-muted leading-snug">
+                    <span className="font-medium text-ink">{actorName}</span>{" "}
                     {activityMessage(log, resolveName)}
                   </p>
-                  <p className="text-xs text-gray-400 mt-0.5">
+                  <p className="text-xs text-subtle mt-0.5">
                     {formatDateTimeTR(log.created_at)}
                   </p>
                 </div>

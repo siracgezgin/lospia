@@ -44,6 +44,13 @@ interface Props {
 
 const ACTIONABLE_TYPES: TaskNoteType[] = ["action_required", "handoff", "approval_waiting"];
 
+// Shared class for the compact form controls in the add-note row — token-based
+// (line/surface/brand focus) so they match the Görev bilgileri inputs.
+const noteControlCls =
+  "w-full text-sm text-ink bg-surface border border-line rounded-lg px-2 py-1.5 transition-colors " +
+  "focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40 " +
+  "disabled:bg-surface-sunken disabled:text-subtle";
+
 function shortDate(iso: string | null | undefined): string {
   if (!iso) return "";
   try {
@@ -142,7 +149,7 @@ function NoteItem({
   }
 
   return (
-    <li className={`rounded-lg border p-3 space-y-1.5 ${note.is_pinned ? "border-amber-200 bg-amber-50" : "border-gray-100 bg-gray-50"}`}>
+    <li className={`rounded-lg border p-3 space-y-1.5 ${note.is_pinned ? "border-amber-200 bg-amber-50" : "border-hairline bg-surface-muted"}`}>
       {/* Workflow context row — type badge, delivery date confirmed, targets */}
       {(noteType !== "info" || note.due_date_at_note_time || notifiedNames.length > 0) && (
         <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
@@ -152,13 +159,13 @@ function NoteItem({
             </span>
           )}
           {note.due_date_at_note_time && (
-            <span className="inline-flex items-center gap-0.5 text-gray-400" title="Not eklenirken kontrol edilen teslim tarihi">
+            <span className="inline-flex items-center gap-0.5 text-subtle" title="Not eklenirken kontrol edilen teslim tarihi">
               <CalendarCheck size={10} /> Teslim: {shortDate(note.due_date_at_note_time)}
             </span>
           )}
           {notifiedNames.length > 0 && (
-            <span className="text-gray-400 truncate max-w-full">
-              Muhatap: <span className="text-gray-600 font-medium">{notifiedNames.join(", ")}</span>
+            <span className="text-subtle truncate max-w-full">
+              Muhatap: <span className="text-muted font-medium">{notifiedNames.join(", ")}</span>
             </span>
           )}
         </div>
@@ -177,10 +184,10 @@ function NoteItem({
               }}
               autoFocus
               rows={3}
-              className="w-full text-sm border border-blue-400 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+              className="w-full text-sm text-ink bg-surface border border-brand-ring rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-brand-ring/40 resize-none"
             />
           ) : (
-            <p className="text-sm text-gray-800 whitespace-pre-wrap break-words">{note.content}</p>
+            <p className="text-sm text-ink whitespace-pre-wrap break-words">{note.content}</p>
           )}
         </div>
       </div>
@@ -197,54 +204,54 @@ function NoteItem({
               <button
                 onClick={() => handleAck("claimed")}
                 disabled={pending}
-                className="inline-flex items-center gap-1 text-[11px] font-medium text-teal-700 border border-teal-200 bg-white hover:bg-teal-50 rounded px-2 py-0.5 transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-teal-700 border border-teal-200 bg-surface hover:bg-teal-50 rounded px-2 py-0.5 transition-colors disabled:opacity-50"
               >
                 <HandHelping size={11} /> Üzerime aldım
               </button>
             )
           )}
           {seenByMe ? (
-            <span className="inline-flex items-center gap-1 text-[11px] text-gray-400">
+            <span className="inline-flex items-center gap-1 text-[11px] text-subtle">
               <Eye size={11} /> Görüldü
             </span>
           ) : (
             <button
               onClick={() => handleAck("seen")}
               disabled={pending}
-              className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 border border-gray-200 bg-white hover:bg-gray-50 rounded px-2 py-0.5 transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1 text-[11px] font-medium text-muted border border-line bg-surface hover:bg-surface-hover rounded px-2 py-0.5 transition-colors disabled:opacity-50"
             >
               <Eye size={11} /> Gördüm
             </button>
           )}
-          {ackError && <span className="text-[11px] text-red-600">{ackError}</span>}
+          {ackError && <span className="text-[11px] text-danger">{ackError}</span>}
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-2 text-xs text-gray-400">
+      <div className="flex items-center justify-between gap-2 text-xs text-subtle">
         <span className="flex items-center gap-1.5 min-w-0" title={authorName}>
           <Avatar name={authorName} size="xs" />
-          <span className="font-medium text-gray-600 truncate max-w-[10rem]">{authorName}</span>
-          <span className="text-gray-300 shrink-0">·</span>
+          <span className="font-medium text-muted truncate max-w-[10rem]">{authorName}</span>
+          <span className="text-subtle shrink-0">·</span>
           <span className="shrink-0 whitespace-nowrap">{formatNoteTimeTR(note.created_at)}</span>
         </span>
         <div className="flex items-center gap-1 shrink-0">
           {editing ? (
             <>
-              <button onClick={handleSaveEdit} className="text-blue-600 hover:text-blue-700 font-medium">Kaydet</button>
-              <button onClick={() => { setEditing(false); setEditValue(note.content); }} className="text-gray-500 hover:text-gray-700 ml-1">İptal</button>
+              <button onClick={handleSaveEdit} className="text-brand hover:text-brand-strong font-medium">Kaydet</button>
+              <button onClick={() => { setEditing(false); setEditValue(note.content); }} className="text-muted hover:text-ink ml-1">İptal</button>
             </>
           ) : (
             <>
               {canEdit && (
-                <button onClick={() => setEditing(true)} className="p-1 hover:text-gray-600 rounded" title="Düzenle">
+                <button onClick={() => setEditing(true)} className="p-1 hover:text-muted rounded transition-colors" title="Düzenle">
                   <PencilLine size={12} />
                 </button>
               )}
-              <button onClick={handlePin} className={`p-1 rounded ${note.is_pinned ? "text-amber-500 hover:text-amber-700" : "hover:text-amber-500"}`} title={note.is_pinned ? "Sabitlemeyi kaldır" : "Sabitle"}>
+              <button onClick={handlePin} className={`p-1 rounded transition-colors ${note.is_pinned ? "text-amber-500 hover:text-amber-700" : "hover:text-amber-500"}`} title={note.is_pinned ? "Sabitlemeyi kaldır" : "Sabitle"}>
                 <Pin size={12} />
               </button>
               {canDelete && (
-                <button onClick={handleDelete} className="p-1 hover:text-red-500 rounded" title="Sil">
+                <button onClick={handleDelete} className="p-1 hover:text-danger rounded transition-colors" title="Sil">
                   <Trash2 size={12} />
                 </button>
               )}
@@ -276,37 +283,37 @@ function PeoplePicker({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between gap-1 text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white text-left hover:border-gray-300 transition-colors"
+        className="w-full flex items-center justify-between gap-1 text-sm border border-line rounded-lg px-2.5 py-1.5 bg-surface text-left hover:border-line-strong transition-colors"
       >
-        <span className={`truncate ${selectedNames.length === 0 ? "text-gray-400" : "text-gray-700"}`}>
+        <span className={`truncate ${selectedNames.length === 0 ? "text-subtle" : "text-ink"}`}>
           {selectedNames.length === 0 ? "Kişi seçin…" : selectedNames.join(", ")}
         </span>
-        <ChevronDown size={13} className="text-gray-400 shrink-0" />
+        <ChevronDown size={13} className="text-subtle shrink-0" />
       </button>
       {open && (
         <>
           {/* click-away layer */}
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} aria-hidden />
-          <div className="absolute z-30 mt-1 w-full max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg py-1">
+          <div className="absolute z-30 mt-1 w-full max-h-52 overflow-y-auto rounded-lg border border-line bg-surface shadow-lg py-1">
             {people.length === 0 && (
-              <p className="px-3 py-2 text-xs text-gray-400">Kişi bulunamadı.</p>
+              <p className="px-3 py-2 text-xs text-subtle">Kişi bulunamadı.</p>
             )}
             {people.map((p) => {
               const on = selected.has(p.id);
               return (
                 <label
                   key={p.id}
-                  className="flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50"
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-surface-hover transition-colors"
                 >
                   <input
                     type="checkbox"
                     checked={on}
                     onChange={() => onToggle(p.id)}
-                    className="rounded border-gray-300"
+                    className="rounded border-line accent-brand"
                   />
-                  <span className="flex-1 truncate text-gray-700">{p.name}</span>
+                  <span className="flex-1 truncate text-ink">{p.name}</span>
                   {p.type === "contact" && (
-                    <span className="text-[10px] text-gray-400 shrink-0">kişi</span>
+                    <span className="text-[10px] text-subtle shrink-0">kişi</span>
                   )}
                 </label>
               );
@@ -411,17 +418,17 @@ function AddNoteForm({
         onChange={(e) => setContent(e.target.value)}
         placeholder="Not ekle…"
         rows={2}
-        className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+        className="w-full text-sm text-ink bg-surface border border-line rounded-lg px-3 py-2 placeholder:text-subtle transition-colors focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40 resize-none"
       />
 
       {/* Desktop: single control row; mobile: stacked */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
         <label className="block">
-          <span className="block text-[11px] font-medium text-gray-500 mb-0.5">Not tipi</span>
+          <span className="block text-[11px] font-medium text-muted mb-0.5">Not tipi</span>
           <select
             value={noteType}
             onChange={(e) => setNoteType(e.target.value as TaskNoteType)}
-            className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white"
+            className={noteControlCls}
           >
             {NOTE_TYPES.map((t) => (
               <option key={t} value={t}>{NOTE_TYPE_LABELS[t]}</option>
@@ -430,30 +437,30 @@ function AddNoteForm({
         </label>
 
         <label className="block">
-          <span className="block text-[11px] font-medium text-gray-500 mb-0.5">Teslim tarihi</span>
+          <span className="block text-[11px] font-medium text-muted mb-0.5">Teslim tarihi</span>
           <input
             type="date"
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
             disabled={!canEditDueDate}
             title={!canEditDueDate ? "Teslim tarihini değiştirme yetkiniz yok." : undefined}
-            className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white disabled:bg-gray-50 disabled:text-gray-400"
+            className={noteControlCls}
           />
         </label>
 
         <div className="block">
-          <span className="block text-[11px] font-medium text-gray-500 mb-0.5">Kime bildirilsin?</span>
+          <span className="block text-[11px] font-medium text-muted mb-0.5">Kime bildirilsin?</span>
           <PeoplePicker people={people} selected={selectedPeople} onToggle={togglePerson} />
         </div>
 
         <label className="block">
-          <span className="block text-[11px] font-medium text-gray-500 mb-0.5">Sorumluluk aksiyonu</span>
+          <span className="block text-[11px] font-medium text-muted mb-0.5">Sorumluluk aksiyonu</span>
           <select
             value={assignmentAction}
             onChange={(e) => setAssignmentAction(e.target.value as NoteAssignmentAction)}
             disabled={!canManageAssignment}
             title={!canManageAssignment ? "Bu göreve sorumlu kişi atama yetkiniz yok." : undefined}
-            className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white disabled:bg-gray-50 disabled:text-gray-400"
+            className={noteControlCls}
           >
             {(Object.keys(NOTE_ASSIGNMENT_LABELS) as NoteAssignmentAction[]).map((a) => (
               <option key={a} value={a}>{NOTE_ASSIGNMENT_LABELS[a]}</option>
@@ -463,31 +470,31 @@ function AddNoteForm({
       </div>
 
       <div className="flex items-start justify-between gap-2 flex-wrap">
-        <div className="text-[11px] text-gray-400 space-y-0.5 min-w-0">
+        <div className="text-[11px] text-subtle space-y-0.5 min-w-0">
           <p>Not eklerken teslim tarihini ve gerekiyorsa sıradaki sorumluyu netleştirin.</p>
           {!canManageAssignment && (
-            <p className="text-gray-400">Bu göreve sorumlu kişi atama yetkiniz yok.</p>
+            <p className="text-subtle">Bu göreve sorumlu kişi atama yetkiniz yok.</p>
           )}
           {dueBlocked && (
-            <p className="text-red-600">
+            <p className="text-danger">
               Bu göreve not eklemek için teslim tarihi gerekli. Teslim tarihi belirleme yetkiniz yok.
             </p>
           )}
           {needsPeopleHint && (
-            <p className="text-amber-600">Bu not tipi için muhatap kişi seçmeniz önerilir.</p>
+            <p className="text-warning">Bu not tipi için muhatap kişi seçmeniz önerilir.</p>
           )}
         </div>
         <button
           type="submit"
           disabled={pending || dueBlocked}
-          className="text-sm bg-blue-600 text-white rounded-lg px-3 py-2 hover:bg-blue-700 disabled:opacity-50 transition-colors font-medium whitespace-nowrap shrink-0"
+          className="text-sm bg-brand text-white rounded-lg px-3 py-2 hover:bg-brand-strong disabled:opacity-50 transition-colors font-medium whitespace-nowrap shrink-0"
         >
           {pending ? "…" : "Not ekle"}
         </button>
       </div>
 
-      {error && <p className="text-xs text-red-600">{error}</p>}
-      {warning && <p className="text-xs text-amber-600">{warning}</p>}
+      {error && <p className="text-xs text-danger">{error}</p>}
+      {warning && <p className="text-xs text-warning">{warning}</p>}
     </form>
   );
 }
@@ -511,9 +518,9 @@ export function TaskNotesPanel({
   const sorted = [...pinned, ...rest];
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
-      <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
-        <StickyNote size={14} /> Notlar
+    <div className="bg-surface rounded-card border border-line shadow-card p-5 space-y-4">
+      <h3 className="text-sm font-semibold text-ink flex items-center gap-1.5">
+        <StickyNote size={14} className="text-muted" /> Notlar
       </h3>
 
       {!isViewer && (
@@ -527,7 +534,9 @@ export function TaskNotesPanel({
       )}
 
       {sorted.length === 0 ? (
-        <p className="text-sm text-gray-400">Henüz not eklenmedi.</p>
+        <p className="rounded-lg border border-dashed border-line px-4 py-6 text-center text-sm text-subtle">
+          Henüz not eklenmedi.
+        </p>
       ) : (
         <ol className="space-y-2">
           {sorted.map((note) => (
