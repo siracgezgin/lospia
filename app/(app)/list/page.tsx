@@ -22,7 +22,7 @@ export default async function ListPage({
     .eq("user_id", user.id)
     .limit(1);
   const workspaceId = memberRows?.[0]?.workspace_id;
-  if (!workspaceId) return <div className="p-8 text-gray-500">Çalışma alanı bulunamadı.</div>;
+  if (!workspaceId) return <div className="p-8 text-muted">Çalışma alanı bulunamadı.</div>;
   const isAdmin = memberRows?.[0]?.role === "owner" || memberRows?.[0]?.role === "admin";
 
   // Non-admins never see admin_only tasks (RLS + explicit filter as backstop).
