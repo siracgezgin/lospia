@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils/cn";
 import { Wordmark } from "@/components/ui/Wordmark";
 import { LOSPIA_BRAND, type AppBrand } from "@/lib/branding";
 import { SAVED_VIEW_SLUG_MAP } from "@/lib/utils/task-constants";
-import { quoteForWeek } from "@/lib/utils/weekly-quotes";
+import { getWeeklyQuote } from "@/lib/content/weekly-quotes";
 import { canViewDestructivePages, canManageSettings } from "@/lib/auth/permissions";
 import type { Workspace, SavedView, WorkspaceRole } from "@/types";
 
@@ -80,7 +80,7 @@ export function AppSidebar({
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const wsName = workspace?.name ?? "Operasyon";
-  const weeklyQuote = quoteForWeek().text;
+  const weeklyQuote = getWeeklyQuote();
 
   return (
     <aside
@@ -228,10 +228,19 @@ export function AppSidebar({
               className="absolute -top-1.5 -right-1 text-brand/15 rotate-180"
             />
             <p className="text-[9.5px] font-semibold uppercase tracking-[0.14em] text-brand-strong mb-1.5">
-              Haftanın Sözü
+              {weeklyQuote.uiDisplaySuggestion || "Haftanın Sözü"}
             </p>
-            <p className="relative text-[12px] leading-relaxed text-ink/85 italic font-medium">
-              “{weeklyQuote}”
+            <p
+              className="relative text-[12px] leading-relaxed text-ink/85 italic font-medium line-clamp-5"
+              title={weeklyQuote.quoteTr}
+            >
+              “{weeklyQuote.quoteTr}”
+            </p>
+            <p className="relative mt-2 text-[11px] font-semibold text-ink/70 not-italic">
+              {weeklyQuote.author}
+            </p>
+            <p className="relative text-[10px] italic text-subtle leading-snug">
+              {weeklyQuote.authorRole}
             </p>
           </div>
 
