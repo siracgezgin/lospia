@@ -3,7 +3,10 @@
 import {
   useState, useOptimistic, useTransition, useRef, useEffect,
 } from "react";
-import { Plus, Pencil, Trash2, X, CheckCircle2, Circle, BookOpen, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  Plus, Pencil, Trash2, X, CheckCircle2, Circle, BookOpen, ChevronDown, ChevronUp,
+  Layers, CalendarCheck, ShieldCheck, Info,
+} from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { canManageRules } from "@/lib/auth/permissions";
 import { createRule, updateRule, deleteRule, toggleRule } from "@/lib/actions/rules";
@@ -297,83 +300,159 @@ export function RulesView({
   }, {});
 
   const activeTotal = optimisticRules.filter((r) => r.is_active).length;
+  const categoryCount = Object.keys(grouped).length;
 
   return (
     <div className="flex flex-col h-full">
-      {/* Page header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-white shrink-0">
-        <div className="flex items-center gap-3">
-          <BookOpen size={18} className="text-blue-600" />
-          <div>
-            <h1 className="text-lg font-bold text-gray-900">Kurallar</h1>
-            <p className="text-xs text-gray-400">
-              {activeTotal}/{optimisticRules.length} kural aktif — her gün kontrol et
-            </p>
+      {/* ── Page header: brand well + summary chips ─────────────────────────── */}
+      <div className="border-b border-line bg-surface shrink-0">
+        <div className="max-w-6xl mx-auto w-full px-6 py-5">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="flex items-start gap-3 min-w-0">
+              <div className="grid h-10 w-10 place-items-center rounded-xl bg-brand-soft text-brand shrink-0">
+                <BookOpen size={20} strokeWidth={1.75} />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-xl font-bold text-ink">Kurallar</h1>
+                <p className="text-sm text-muted mt-0.5 max-w-xl leading-relaxed">
+                  Operasyon kuralları, kalite standardını ve günlük kontrol disiplinini korur.
+                </p>
+              </div>
+            </div>
+            {isManager && (
+              <button
+                onClick={() => { setAdding(true); setEditing(null); setActionError(null); }}
+                className="flex items-center gap-1.5 text-sm bg-brand text-white rounded-lg px-3 py-2 hover:bg-brand-strong transition-colors shrink-0 font-medium"
+              >
+                <Plus size={14} /> Kural ekle
+              </button>
+            )}
+          </div>
+
+          {/* Summary chips */}
+          <div className="flex flex-wrap gap-2 mt-4">
+            <SummaryChip icon={CheckCircle2} label="Aktif kural" value={`${activeTotal}/${optimisticRules.length}`} tone="brand" />
+            <SummaryChip icon={Layers} label="Kategori" value={String(categoryCount)} tone="neutral" />
+            <SummaryChip icon={CalendarCheck} label="Günlük kontrol" value="Her gün gözden geçir" tone="neutral" />
           </div>
         </div>
-        {isManager && (
-          <button
-            onClick={() => { setAdding(true); setEditing(null); setActionError(null); }}
-            className="flex items-center gap-1.5 text-sm bg-blue-600 text-white rounded-lg px-3 py-1.5 hover:bg-blue-700 transition-colors"
-          >
-            <Plus size={14} /> Kural ekle
-          </button>
-        )}
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-2xl mx-auto flex flex-col gap-4">
-          {actionError && (
-            <div className="flex items-center justify-between bg-red-50 border border-red-200 rounded-lg px-4 py-2.5 text-sm text-red-700">
-              <span>{actionError}</span>
-              <button onClick={() => setActionError(null)} className="ml-3 text-red-400 hover:text-red-600">
-                <X size={14} />
-              </button>
-            </div>
-          )}
-          {isManager && adding && (
-            <RuleForm
-              workspaceId={workspaceId}
-              ruleCount={optimisticRules.length}
-              departmentNames={departmentNames}
-              onSave={handleAdd}
-              onCancel={() => setAdding(false)}
-            />
-          )}
-
-          {isManager && editing && (
-            <RuleForm
-              initial={editing}
-              workspaceId={workspaceId}
-              ruleCount={optimisticRules.length}
-              departmentNames={departmentNames}
-              onSave={handleUpdate}
-              onCancel={() => setEditing(null)}
-            />
-          )}
-
-          {optimisticRules.length === 0 && !adding ? (
-            <div className="text-center py-16 text-gray-400">
-              <BookOpen size={32} className="mx-auto mb-3 opacity-30" />
-              <p className="text-sm">Henüz kural yok.</p>
-              <p className="text-xs mt-1">Ekip standartlarını buraya ekle.</p>
-            </div>
-          ) : (
-            Object.entries(grouped).map(([cat, catRules]) => (
-              <CategoryGroup
-                key={cat}
-                category={cat}
-                rules={catRules}
-                onToggle={handleToggle}
-                onEdit={(r) => { setEditing(r); setAdding(false); }}
-                onDelete={handleDelete}
-                canManage={isManager}
+      {/* ── Content: rule categories + side discipline panel ─────────────────── */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-6xl mx-auto w-full px-6 py-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_308px] items-start">
+          <div className="flex flex-col gap-4 min-w-0">
+            {actionError && (
+              <div className="flex items-center justify-between bg-red-50 border border-red-200 rounded-lg px-4 py-2.5 text-sm text-red-700">
+                <span>{actionError}</span>
+                <button onClick={() => setActionError(null)} className="ml-3 text-red-400 hover:text-red-600">
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+            {isManager && adding && (
+              <RuleForm
+                workspaceId={workspaceId}
+                ruleCount={optimisticRules.length}
+                departmentNames={departmentNames}
+                onSave={handleAdd}
+                onCancel={() => setAdding(false)}
               />
-            ))
-          )}
+            )}
+
+            {isManager && editing && (
+              <RuleForm
+                initial={editing}
+                workspaceId={workspaceId}
+                ruleCount={optimisticRules.length}
+                departmentNames={departmentNames}
+                onSave={handleUpdate}
+                onCancel={() => setEditing(null)}
+              />
+            )}
+
+            {optimisticRules.length === 0 && !adding ? (
+              <div className="rounded-2xl border border-dashed border-line bg-surface text-center py-16 px-6">
+                <div className="grid h-12 w-12 place-items-center rounded-full bg-surface-sunken text-subtle mx-auto mb-3">
+                  <BookOpen size={22} strokeWidth={1.75} />
+                </div>
+                <p className="text-sm font-semibold text-ink">Henüz kural yok</p>
+                <p className="text-[13px] text-muted mt-1">Ekip standartlarını buraya ekleyin.</p>
+              </div>
+            ) : (
+              Object.entries(grouped).map(([cat, catRules]) => (
+                <CategoryGroup
+                  key={cat}
+                  category={cat}
+                  rules={catRules}
+                  onToggle={handleToggle}
+                  onEdit={(r) => { setEditing(r); setAdding(false); }}
+                  onDelete={handleDelete}
+                  canManage={isManager}
+                />
+              ))
+            )}
+          </div>
+
+          {/* Right rail — control discipline / how-to (static guidance) */}
+          <aside className="flex flex-col gap-4 lg:sticky lg:top-6">
+            <div className="rounded-2xl border border-line bg-surface p-4 shadow-card">
+              <div className="flex items-center gap-2 mb-2.5">
+                <ShieldCheck size={15} className="text-brand" />
+                <h2 className="text-sm font-semibold text-ink">Kontrol disiplini</h2>
+              </div>
+              <p className="text-[13px] text-muted leading-relaxed">
+                Kurallar; her görevin aynı kalite çıtasında teslim edilmesini sağlar.
+                Aktif kurallar günlük kontrolün temelidir — düzenli gözden geçirin.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-line bg-surface p-4 shadow-card">
+              <div className="flex items-center gap-2 mb-2.5">
+                <Info size={15} className="text-brand" />
+                <h2 className="text-sm font-semibold text-ink">Nasıl kullanılır?</h2>
+              </div>
+              <ul className="space-y-2 text-[13px] text-muted leading-relaxed">
+                <li className="flex gap-2">
+                  <CheckCircle2 size={14} className="text-brand shrink-0 mt-0.5" />
+                  <span>Kurallar kategori (departman) bazında gruplanır.</span>
+                </li>
+                <li className="flex gap-2">
+                  <CheckCircle2 size={14} className="text-brand shrink-0 mt-0.5" />
+                  <span>Yuvarlak işareti tıklayarak bir kuralı aktif/pasif yapabilirsiniz.</span>
+                </li>
+                <li className="flex gap-2">
+                  <CheckCircle2 size={14} className="text-brand shrink-0 mt-0.5" />
+                  <span>Pasif kurallar listede kalır ama günlük kontrole dahil edilmez.</span>
+                </li>
+              </ul>
+            </div>
+          </aside>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Summary chip (header stat) ───────────────────────────────────────────────
+function SummaryChip({
+  icon: Icon,
+  label,
+  value,
+  tone = "neutral",
+}: {
+  icon: typeof CheckCircle2;
+  label: string;
+  value: string;
+  tone?: "brand" | "neutral";
+}) {
+  return (
+    <div className={cn(
+      "inline-flex items-center gap-2 rounded-xl border px-3 py-1.5",
+      tone === "brand" ? "border-brand-ring bg-brand-soft" : "border-line bg-surface",
+    )}>
+      <Icon size={15} className={tone === "brand" ? "text-brand" : "text-subtle"} />
+      <span className="text-[13px] text-muted">{label}</span>
+      <span className="text-[13px] font-semibold text-ink tabular-nums">{value}</span>
     </div>
   );
 }

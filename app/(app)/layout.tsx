@@ -17,8 +17,12 @@ export const preferredRegion = "arn1";
 
 export default async function AppLayout({
   children,
+  modal,
 }: {
   children: React.ReactNode;
+  // Parallel @modal slot — hosts the task-detail drawer (intercepting route).
+  // Renders null (via @modal/default.tsx) on every non-intercepted route.
+  modal: React.ReactNode;
 }) {
   const supabase = await createClient();
 
@@ -259,6 +263,8 @@ export default async function AppLayout({
         </main>
       </div>
       <MobileNav isAdmin={isAdmin} />
+      {/* Task-detail drawer slot (intercepting route). Empty on normal routes. */}
+      {modal}
     </div>
   );
 }

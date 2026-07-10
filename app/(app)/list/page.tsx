@@ -12,6 +12,7 @@ export default async function ListPage({
 }) {
   const params = await searchParams;
   const initialPerson = typeof params.person === "string" ? params.person : "";
+  const initialView = typeof params.view === "string" ? params.view : "";
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
@@ -92,6 +93,7 @@ export default async function ListPage({
       deptMembers={deptMembers}
       isAdmin={isAdmin}
       initialPerson={initialPerson}
+      initialView={initialView}
     />
   );
 }

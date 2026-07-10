@@ -32,7 +32,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  GripVertical, Plus, FileSpreadsheet, Search, X, Check, CalendarDays,
+  GripVertical, Plus, FileSpreadsheet, Search, X, Check,
   ChevronLeft, ChevronRight, ChevronDown, MoreVertical, Pencil, Copy, Archive, Trash2, AlertTriangle, Lock, ShieldCheck,
 } from "lucide-react";
 import { ADMIN_ONLY_CHIP_LABEL, asVisibility, VISIBILITY_LABELS, type TaskVisibility } from "@/lib/utils/visibility";
@@ -63,6 +63,7 @@ import { buildDeptMeta, type DeptMeta } from "@/lib/utils/departments";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
 import { CsvImportModal } from "@/components/task/CsvImportModal";
 import { NotesColumn } from "@/components/board/NotesColumn";
+import { ViewTabs, VIEW_META, type ViewTabItem } from "@/components/shared/ViewTabs";
 import { WeeklyNoteFeed } from "@/components/board/WeeklyNoteFeed";
 import { BoardRulesPanel } from "@/components/board/BoardRulesPanel";
 import { WorkspaceLiveRefresh } from "@/components/realtime/WorkspaceLiveRefresh";
@@ -1780,56 +1781,33 @@ export function KanbanBoard({
           description line below the strip. */}
       {!isAdminBoard && savedViews.length > 0 && (
         <div className="px-4 pt-3 pb-2 bg-white border-b border-gray-200 shrink-0 space-y-2">
-          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
-            {savedViews
-              .filter((v) => (SAVED_VIEW_SLUG_MAP[v.name] ?? v.id) !== "this-week")
-              .map((view) => {
+          {/* Shared segmented view tabs (identical language to the List). The
+              general views come first; "Bu hafta" is set apart with a divider +
+              calendar icon because it is the ONLY week-scoped view. Entering it
+              always starts on the CURRENT week. Icons show on every tab so the
+              board reads as a Monday-style toolbar. */}
+          <ViewTabs
+            iconsEverywhere
+            items={savedViews
+              .map((view): ViewTabItem => {
                 const slug = SAVED_VIEW_SLUG_MAP[view.name] ?? view.id;
-                const isActive = effectiveSlug === slug;
-                return (
-                  <a
-                    key={view.id}
-                    href={`/board?view=${slug}`}
-                    className={cn(
-                      "rounded-lg px-3 py-1.5 text-[13px] font-medium whitespace-nowrap border transition-colors",
-                      isActive
-                        ? "bg-brand-soft text-brand-strong border-brand-ring"
-                        : "text-muted border-transparent hover:bg-surface-hover hover:text-ink",
-                    )}
-                    aria-current={isActive ? "page" : undefined}
-                  >
-                    {view.name}
-                  </a>
-                );
-              })}
-            {savedViews.some((v) => (SAVED_VIEW_SLUG_MAP[v.name] ?? v.id) === "this-week") && (
-              <>
-                <span aria-hidden className="mx-1 h-5 w-px bg-line shrink-0" />
-                {savedViews
-                  .filter((v) => (SAVED_VIEW_SLUG_MAP[v.name] ?? v.id) === "this-week")
-                  .map((view) => {
-                    const isActive = effectiveSlug === "this-week";
-                    return (
-                      <a
-                        key={view.id}
-                        // Entering "Bu hafta" always starts on the CURRENT week.
-                        href={`/board?view=this-week&week=${localISO(currentMonday)}`}
-                        className={cn(
-                          "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-medium whitespace-nowrap border transition-colors",
-                          isActive
-                            ? "bg-brand-soft text-brand-strong border-brand-ring"
-                            : "text-muted border-transparent hover:bg-surface-hover hover:text-ink",
-                        )}
-                        aria-current={isActive ? "page" : undefined}
-                      >
-                        <CalendarDays size={13} className="shrink-0" />
-                        {view.name}
-                      </a>
-                    );
-                  })}
-              </>
-            )}
-          </div>
+                return {
+                  slug,
+                  label: view.name,
+                  icon: VIEW_META[slug as keyof typeof VIEW_META]?.icon,
+                  active: effectiveSlug === slug,
+                  dividerBefore: slug === "this-week",
+                };
+              })
+              // Keep the canonical order but ensure "Bu hafta" lands last so its
+              // divider always separates it from the general views.
+              .sort((a, b) => Number(a.slug === "this-week") - Number(b.slug === "this-week"))}
+            getHref={(slug) =>
+              slug === "this-week"
+                ? `/board?view=this-week&week=${localISO(currentMonday)}`
+                : `/board?view=${slug}`
+            }
+          />
 
           {/* Active view description + (Bu hafta only) the week navigator */}
           <div className="flex items-center gap-3 flex-wrap min-h-6">

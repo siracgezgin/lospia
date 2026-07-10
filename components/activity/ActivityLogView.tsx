@@ -81,13 +81,13 @@ function metaFor(action: string): ActionMeta {
 // ── Filters (user-facing groups → action sets) ────────────────────────────────
 type FilterKey = "all" | "created" | "status" | "completed" | "assignment" | "date";
 
-const FILTERS: { key: FilterKey; label: string; actions: string[] }[] = [
-  { key: "all",        label: "Tümü",                actions: [] },
-  { key: "created",    label: "Görev oluşturma",      actions: ["task_created"] },
-  { key: "status",     label: "Durum değişiklikleri", actions: ["status_changed", "auto_moved_to_review"] },
-  { key: "completed",  label: "Tamamlananlar",        actions: ["task_completed", "participant_completed"] },
-  { key: "assignment", label: "Atamalar",             actions: ["assignee_changed", "responsible_contact_changed", "waiting_person_changed"] },
-  { key: "date",       label: "Tarih değişiklikleri", actions: ["due_date_changed"] },
+const FILTERS: { key: FilterKey; label: string; actions: string[]; icon: typeof Plus; tone: Tone }[] = [
+  { key: "all",        label: "Tümü",                 actions: [],                                                                   icon: ActivityIcon, tone: "slate" },
+  { key: "created",    label: "Görev oluşturma",       actions: ["task_created"],                                                    icon: Plus,         tone: "green" },
+  { key: "status",     label: "Durum değişiklikleri",  actions: ["status_changed", "auto_moved_to_review"],                          icon: RefreshCw,    tone: "blue" },
+  { key: "completed",  label: "Tamamlananlar",         actions: ["task_completed", "participant_completed"],                         icon: CheckCircle2, tone: "green" },
+  { key: "assignment", label: "Atamalar",              actions: ["assignee_changed", "responsible_contact_changed", "waiting_person_changed"], icon: Users, tone: "violet" },
+  { key: "date",       label: "Tarih değişiklikleri",  actions: ["due_date_changed"],                                                icon: CalendarClock, tone: "amber" },
 ];
 
 // ── Change-detail extraction (old → new) ──────────────────────────────────────
@@ -168,42 +168,58 @@ export function ActivityLogView({ rows }: { rows: ActivityRow[] }) {
     return out;
   }, [visible]);
 
+  const latest = rows[0]?.created_at ?? null;
+
   return (
-    <div className="max-w-3xl mx-auto py-8 px-4 space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Aktivite Günlüğü</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Çalışma alanındaki son işlemler — kim, ne yaptı, hangi görevde. Yalnızca yöneticiler görür.
-        </p>
+    <div className="max-w-6xl mx-auto py-6 px-4 sm:px-6 space-y-5">
+      {/* ── Page header ─────────────────────────────────────────────────────── */}
+      <div className="flex items-start gap-3">
+        <div className="grid h-10 w-10 place-items-center rounded-xl bg-brand-soft text-brand shrink-0">
+          <ActivityIcon size={20} strokeWidth={1.75} />
+        </div>
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold text-ink">Aktivite Günlüğü</h1>
+          <p className="text-sm text-muted mt-0.5 leading-relaxed">
+            Kim, ne yaptı, hangi görevde — tüm çalışma alanı hareketleri. Yalnızca yöneticiler görür.
+          </p>
+        </div>
       </div>
 
-      {/* Filter chips */}
-      <div className="flex flex-wrap gap-1.5">
+      {/* ── Summary stat cards (double as filters) ──────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
         {FILTERS.map((f) => {
           const active = filter === f.key;
+          const tone = TONE_CLS[f.tone];
+          const Icon = f.icon;
           return (
             <button
               key={f.key}
               onClick={() => setFilter(f.key)}
+              aria-pressed={active}
               className={cn(
-                "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-medium transition-colors",
+                "flex flex-col items-start gap-2 rounded-xl border p-3 text-left transition-all",
                 active
-                  ? "bg-gray-900 text-white border-gray-900"
-                  : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50",
+                  ? "border-brand-ring bg-brand-soft shadow-card"
+                  : "border-line bg-surface hover:bg-surface-hover hover:border-line-strong",
               )}
             >
-              {f.label}
-              <span className={cn("text-[11px] tabular-nums", active ? "text-white/70" : "text-gray-400")}>
-                {counts[f.key]}
-              </span>
+              <div className={cn("grid h-8 w-8 place-items-center rounded-lg shrink-0", tone.icon)}>
+                <Icon size={15} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xl font-bold text-ink tabular-nums leading-none">{counts[f.key]}</p>
+                <p className="text-[11px] text-muted mt-1 leading-tight line-clamp-2">{f.label}</p>
+              </div>
             </button>
           );
         })}
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100 overflow-hidden">
+      {/* ── Timeline + context rail ─────────────────────────────────────────── */}
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px] items-start">
+      <div className="bg-surface rounded-2xl border border-line shadow-card divide-y divide-hairline overflow-hidden">
         {groups.length === 0 ? (
-          <p className="px-5 py-10 text-sm text-gray-400 text-center">Bu filtreyle eşleşen kayıt yok.</p>
+          <p className="px-5 py-14 text-sm text-subtle text-center">Bu filtreyle eşleşen kayıt yok.</p>
         ) : (
           groups.map((g) => {
             const head = g.rows[0];
@@ -291,6 +307,31 @@ export function ActivityLogView({ rows }: { rows: ActivityRow[] }) {
             );
           })
         )}
+      </div>
+
+      {/* Context rail — what the log records + freshness */}
+      <aside className="hidden lg:flex flex-col gap-4 lg:sticky lg:top-6">
+        <div className="rounded-2xl border border-line bg-surface p-4 shadow-card">
+          <div className="flex items-center gap-2 mb-2.5">
+            <Eye size={15} className="text-brand" />
+            <h2 className="text-sm font-semibold text-ink">Denetim merkezi</h2>
+          </div>
+          <p className="text-[13px] text-muted leading-relaxed">
+            Bu günlük; görev oluşturma, durum ve öncelik değişiklikleri, atamalar,
+            tamamlamalar ve tarih güncellemelerini aktörüyle birlikte kaydeder.
+          </p>
+          {latest && (
+            <div className="mt-3 pt-3 border-t border-hairline">
+              <p className="text-[11px] uppercase tracking-wider font-semibold text-subtle">Son hareket</p>
+              <p className="text-[13px] text-ink mt-1 tabular-nums">{formatDateTimeTR(latest)}</p>
+            </div>
+          )}
+          <div className="mt-3 pt-3 border-t border-hairline flex items-center justify-between">
+            <span className="text-[13px] text-muted">Kayıtlı hareket</span>
+            <span className="text-[13px] font-semibold text-ink tabular-nums">{rows.length}</span>
+          </div>
+        </div>
+      </aside>
       </div>
     </div>
   );

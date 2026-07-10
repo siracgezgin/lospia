@@ -22,7 +22,9 @@ import {
   PRIORITY_LABELS,
   PRIORITY_ORDER,
   CARD_STATUS_OPTIONS,
+  SAVED_VIEW_SLUG_MAP,
 } from "@/lib/utils/task-constants";
+import { ViewTabs, VIEW_META, type ViewTabItem } from "@/components/shared/ViewTabs";
 import { FIELD_LABELS } from "@/lib/i18n/tr";
 import { updateTaskStatus } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils/cn";
@@ -49,6 +51,81 @@ interface Props {
   isAdmin?: boolean;
   // Person filter seed from the URL (?person=<member userId | contact id>).
   initialPerson?: string;
+  // View seed from the URL (?view=<slug>) — same vocabulary as the Board.
+  initialView?: string;
+}
+
+// ── Shared view semantics (mirrors the Board's applyViewFilter) ──────────────
+// The List speaks the SAME six views as the Board so switching surfaces never
+// changes what a view means. Kept LOCAL (not in the presentational ViewTabs
+// helper) so filter logic stays with the surface that owns the data. Weekly
+// membership is DUE-DATE-ONLY and applies to EXACTLY "Bu hafta" — every other
+// view is week-independent. Unlike the Board there is no week navigator here,
+// so "Bu hafta" always means the CURRENT Monday–Sunday range.
+function listLocalISO(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+function listMondayOf(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const dow = d.getDay();
+  d.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1));
+  return d;
+}
+
+const LIST_VIEW_DESCRIPTIONS: Record<string, string> = {
+  "all":              "Tüm erişilebilir görevler",
+  "mine":             "Üzerinizdeki tüm görevler — haftadan bağımsız",
+  "this-week":        "Bu haftanın son tarihli görevleri",
+  "overdue":          "Son tarihi geçmiş açık görevler — haftadan bağımsız",
+  "done":             "Tamamlanmış tüm görevler — haftadan bağımsız",
+  "waiting-approval": "Kontrol/onay bekleyen tüm görevler — haftadan bağımsız",
+};
+
+function applyListView(tasks: Task[], slug: string, userId: string): Task[] {
+  const today = listLocalISO(new Date());
+  const monday = listMondayOf(new Date());
+  const sunday = new Date(monday);
+  sunday.setDate(sunday.getDate() + 6);
+  const mondayStr = listLocalISO(monday);
+  const sundayStr = listLocalISO(sunday);
+  const dueDay = (t: Task) => (t.due_date ? t.due_date.slice(0, 10) : null);
+  const live = (t: Task) => t.status !== "archived" && !t.deleted_at && !t.archived_at;
+
+  switch (slug) {
+    case "mine":
+      return tasks.filter((t) => live(t) && t.assignee_id === userId);
+    case "overdue":
+      return tasks.filter((t) => {
+        if (!live(t) || t.status === "done") return false;
+        const d = dueDay(t);
+        return d !== null && d < today;
+      });
+    case "done":
+      return tasks.filter((t) => t.status === "done" && !t.deleted_at && !t.archived_at);
+    case "waiting-approval":
+      return tasks.filter((t) => {
+        if (!live(t) || t.status === "done") return false;
+        return (
+          t.status === "review" ||
+          t.approval_required === true ||
+          t.waiting_on_member_id != null ||
+          t.waiting_on_contact_id != null
+        );
+      });
+    case "this-week":
+      return tasks.filter((t) => {
+        if (!live(t)) return false;
+        const d = dueDay(t);
+        return d !== null && d >= mondayStr && d <= sundayStr;
+      });
+    case "all":
+    default:
+      return tasks;
+  }
 }
 
 // Person matching (assignee / responsible contact / collaborators / original
@@ -223,7 +300,7 @@ function MobileTaskCard({
 
 // ---- Main component ----
 
-export function TaskListView({ tasks, savedViews, workspaceId, profiles, contacts, departments = [], members = [], deptMembers = [], isAdmin = false, initialPerson = "" }: Props) {
+export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles, contacts, departments = [], members = [], deptMembers = [], isAdmin = false, initialPerson = "", initialView = "" }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const deptMeta = useMemo(() => buildDeptMeta(departments), [departments]);
@@ -246,6 +323,12 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
   const [filterStatusKey, setFilterStatusKey] = useState<StatusFilterKey>("all");
   const [filterPriority, setFilterPriority] = useState<TaskPriority | "all">("all");
   const [personFilter, setPersonFilter] = useState(initialPerson);
+  // Active view (same six as the Board). Unknown/legacy values fall back to the
+  // full "Tüm işler" list so the table never opens filtered to nothing.
+  const KNOWN_VIEW_SLUGS = ["all", "mine", "this-week", "overdue", "done", "waiting-approval"];
+  const [viewSlug, setViewSlug] = useState<string>(
+    KNOWN_VIEW_SLUGS.includes(initialView) ? initialView : "all",
+  );
   const [modalOpen, setModalOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
 
@@ -279,13 +362,51 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
     [personFilter, contacts, profiles],
   );
 
-  const filteredTasks = useMemo(() => tasks.filter((t) => {
+  // View lens first (all / mine / this-week / overdue / done / waiting-approval),
+  // then the toolbar filters compose on top — mirrors the Board's filter order.
+  const viewedTasks = useMemo(
+    () => applyListView(tasks, viewSlug, userId),
+    [tasks, viewSlug, userId],
+  );
+
+  const filteredTasks = useMemo(() => viewedTasks.filter((t) => {
     if (allowedStatuses.length > 0 && !allowedStatuses.includes(t.status)) return false;
     if (filterPriority !== "all" && t.priority !== filterPriority) return false;
     if (personDescriptor && !taskMatchesPerson(t, personDescriptor)) return false;
     if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
-  }), [tasks, allowedStatuses, filterPriority, personDescriptor, search]);
+  }), [viewedTasks, allowedStatuses, filterPriority, personDescriptor, search]);
+
+  // Switch view without a full reload: update local state + the URL (?view=…),
+  // preserving the person filter already in the query string.
+  const handleViewChange = useCallback((slug: string) => {
+    setViewSlug(slug);
+    const params = new URLSearchParams(searchParams.toString());
+    if (slug && slug !== "all") params.set("view", slug);
+    else params.delete("view");
+    const qs = params.toString();
+    router.replace(qs ? `/list?${qs}` : "/list", { scroll: false });
+  }, [router, searchParams]);
+
+  // Build the shared view-tab strip from the workspace saved views, mapped to the
+  // canonical slugs. "Bu hafta" is set apart with a divider (as on the Board).
+  const viewTabItems = useMemo<ViewTabItem[]>(() => {
+    const items = savedViews
+      .map((view): ViewTabItem => {
+        const slug = SAVED_VIEW_SLUG_MAP[view.name] ?? view.id;
+        return {
+          slug,
+          label: view.name,
+          icon: VIEW_META[slug as keyof typeof VIEW_META]?.icon,
+          active: viewSlug === slug,
+          dividerBefore: slug === "this-week",
+        };
+      })
+      .filter((it) => KNOWN_VIEW_SLUGS.includes(it.slug));
+    return items.sort(
+      (a, b) => Number(a.slug === "this-week") - Number(b.slug === "this-week"),
+    );
+  }, [savedViews, viewSlug]); // eslint-disable-line react-hooks/exhaustive-deps -- KNOWN_VIEW_SLUGS is a stable literal
 
   // Columns MUST be memoized — recreating the array every render causes TanStack Table
   // to re-derive its internal model on every keystroke/sort click, which freezes the UI.
@@ -534,18 +655,13 @@ export function TaskListView({ tasks, savedViews, workspaceId, profiles, contact
     // Desktop: fixed-height shell, table scrolls internally. Mobile (max-md):
     // natural height so tabs + filters scroll away and the card list flows.
     <div className="flex flex-col h-full max-md:h-auto max-md:min-h-full">
-      {/* Saved views tab strip */}
-      {savedViews.length > 0 && (
-        <div className="flex gap-0 px-4 pt-3 border-b border-line bg-surface overflow-x-auto no-scrollbar shrink-0">
-          {savedViews.map((view) => (
-            <a
-              key={view.id}
-              href={`/list?view=${view.id}`}
-              className="px-3 py-2 text-sm border-b-2 border-transparent text-muted hover:text-ink hover:border-brand-ring/40 whitespace-nowrap transition-colors duration-[var(--duration-fast)]"
-            >
-              {view.name}
-            </a>
-          ))}
+      {/* Shared segmented view tabs — identical vocabulary + styling to the Board
+          (Tüm işler / Bana atananlar / Bu hafta / Gecikenler / Tamamlananlar /
+          Onay bekleyenler). Client-side selection keeps the person filter. */}
+      {viewTabItems.length > 0 && (
+        <div className="px-4 pt-3 pb-2 border-b border-line bg-surface shrink-0 space-y-1.5">
+          <ViewTabs iconsEverywhere items={viewTabItems} onSelect={handleViewChange} />
+          <p className="text-xs text-subtle">{LIST_VIEW_DESCRIPTIONS[viewSlug] ?? ""}</p>
         </div>
       )}
 

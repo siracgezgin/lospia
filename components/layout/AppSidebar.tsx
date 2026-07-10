@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import {
   LayoutDashboard,
@@ -20,11 +20,13 @@ import {
   ArrowRight,
   ShieldCheck,
   LayoutGrid,
+  Bookmark,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Wordmark } from "@/components/ui/Wordmark";
 import { LOSPIA_BRAND, type AppBrand } from "@/lib/branding";
 import { SAVED_VIEW_SLUG_MAP } from "@/lib/utils/task-constants";
+import { VIEW_META } from "@/components/shared/ViewTabs";
 import { getWeeklyQuote } from "@/lib/content/weekly-quotes";
 import { canViewDestructivePages, canManageSettings } from "@/lib/auth/permissions";
 import type { Workspace, SavedView, WorkspaceRole } from "@/types";
@@ -78,6 +80,11 @@ export function AppSidebar({
 }: Props) {
   const isAdmin = canViewDestructivePages(userRole) || canManageSettings(userRole);
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  // The board view currently open (drives saved-view active state). Defaults to
+  // "this-week" — the board's own default when no ?view= is present.
+  const activeBoardView =
+    pathname === "/board" ? searchParams.get("view") ?? "this-week" : null;
   const [collapsed, setCollapsed] = useState(false);
   const wsName = workspace?.name ?? "Operasyon";
   const weeklyQuote = getWeeklyQuote();
@@ -143,22 +150,34 @@ export function AppSidebar({
           );
         })}
 
-        {/* Saved views — compact so they don't dominate the sidebar */}
+        {/* Saved views — proper rows sharing the board/list tab icon vocabulary,
+            with an active state when the matching board view is open. */}
         {!collapsed && savedViews.length > 0 && (
-          <div className="space-y-px">
+          <div className="space-y-0.5">
             <p className="px-2 mb-1 text-[10px] font-semibold uppercase tracking-wider text-subtle">
               Kaydedilen görünümler
             </p>
-            {savedViews.map((view) => (
-              <Link
-                key={view.id}
-                href={`/board?view=${SAVED_VIEW_SLUG_MAP[view.name] ?? view.id}`}
-                className="flex items-center gap-2 rounded-md pl-3 pr-2 py-1 text-[13px] text-muted hover:bg-surface-muted hover:text-ink transition-colors truncate"
-              >
-                <span className="h-1 w-1 rounded-full bg-line-strong shrink-0" />
-                <span className="truncate">{view.name}</span>
-              </Link>
-            ))}
+            {savedViews.map((view) => {
+              const slug = SAVED_VIEW_SLUG_MAP[view.name] ?? view.id;
+              const Icon = VIEW_META[slug as keyof typeof VIEW_META]?.icon ?? Bookmark;
+              const active = activeBoardView === slug;
+              return (
+                <Link
+                  key={view.id}
+                  href={`/board?view=${slug}`}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "group flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] font-medium transition-colors truncate",
+                    active
+                      ? "bg-brand-soft text-brand-strong"
+                      : "text-muted hover:bg-surface-muted hover:text-ink",
+                  )}
+                >
+                  <Icon size={15} className={cn("shrink-0", active ? "text-brand" : "text-subtle group-hover:text-muted")} />
+                  <span className="truncate">{view.name}</span>
+                </Link>
+              );
+            })}
           </div>
         )}
       </nav>
