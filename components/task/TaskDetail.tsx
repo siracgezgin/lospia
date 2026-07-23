@@ -104,11 +104,11 @@ const readOnlyCls = "block w-full text-sm text-muted bg-surface-muted border bor
 // ---- Editor (remounts via key when the server task changes) ----
 
 function TaskEditor({
-  task, departments, canEdit, canComplete, isAdmin, backHref, backLabel, creatorName,
+  task, departments, canEdit, canComplete, isAdmin, backHref, backLabel,
   responsiblePeople, participantsSlot, notesSlot, effortSlot, activitySlot,
 }: {
   task: Task; departments: WorkspaceDepartment[]; canEdit: boolean; canComplete: boolean;
-  isAdmin: boolean; backHref: string; backLabel: string; creatorName: string | null;
+  isAdmin: boolean; backHref: string; backLabel: string;
   responsiblePeople: string[];
   participantsSlot?: React.ReactNode;
   notesSlot?: React.ReactNode;
@@ -393,9 +393,8 @@ function TaskEditor({
                 </select>
               </FieldRow>
 
-              <FieldRow label="Oluşturan">
-                <span className={readOnlyCls}>{creatorName ?? "—"}</span>
-              </FieldRow>
+              {/* "Oluşturan" satırı geri bildirimle kaldırıldı — sorumlu kişiler
+                  aşağıdaki panelde gösterilir. */}
               <FieldRow label="Giriş tarihi">
                 <span className={readOnlyCls}>{formatDateTimeTR(task.created_at)}</span>
               </FieldRow>
@@ -550,10 +549,6 @@ export function TaskDetail({
   // refresh) so the draft resets cleanly — no setState-in-effect needed.
   const version = `${task.id}:${task.updated_at}`;
 
-  // Resolve the creator's display name from the loaded member profiles.
-  const creator = task.created_by ? profiles.find((p) => p.id === task.created_by) : null;
-  const creatorName = creator ? (creator.full_name ?? creator.email ?? null) : null;
-
   return (
     <div className="max-w-4xl mx-auto py-6 px-4">
       <TaskEditor
@@ -565,7 +560,6 @@ export function TaskDetail({
         isAdmin={isAdmin}
         backHref={backHref}
         backLabel={backLabel}
-        creatorName={creatorName}
         responsiblePeople={responsiblePeople}
         participantsSlot={participantsSlot}
         notesSlot={notesSlot}

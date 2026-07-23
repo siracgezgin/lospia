@@ -1355,11 +1355,18 @@ export function KanbanBoard({
     setToasts((p) => p.filter((t) => t.id !== id));
   }
 
-  // Effective slug: null or missing → default to "Bu hafta" so the board opens on
-  // the current week (not an unbounded all-time list).
-  const effectiveSlug = viewSlug ?? "this-week";
+  // Effective slug: null or missing → default to "Tüm işler". Aslı Hanım'ın
+  // isteğiyle haftalık/aylık bölümleme kaldırıldı; giriş yapıldığında bekleyen,
+  // geçmiş ve gelecekteki TÜM işler görünür.
+  const effectiveSlug = viewSlug ?? "all";
   // "Tüm işler" ignores the week entirely; every other view is week-scoped.
   const weekFilterActive = !isAdminBoard && isWeekScopedSlug(effectiveSlug);
+
+  // ── Geri bildirimle şimdilik gizlenen özellikler ─────────────────────────────
+  // Nisa/Aslı Hanım'ın isteğiyle kapatıldı; kod ve veri korunur, tek satırla
+  // geri açılabilir.
+  const RULES_PANEL_ENABLED = false; // Kurallar paneli
+  const CSV_IMPORT_ENABLED = false;  // CSV'den içe aktar
 
   const responsibleNames = useMemo<Record<string, string>>(() => {
     const map: Record<string, string> = {};
@@ -1654,6 +1661,9 @@ export function KanbanBoard({
   // notes column can never suggest those views are week-filtered.
   const feedWeekIso = localISO(effectiveSlug === "this-week" ? weekStart : currentMonday);
   const weekFeedItems = useMemo(() => {
+    // Haftalık bölümleme kaldırıldı: "Bu hafta" dışındaki görünümlerde (artık
+    // varsayılan) not akışı haftaya göre filtrelenmez — son notların tamamı görünür.
+    if (effectiveSlug !== "this-week") return noteFeed;
     const monday = new Date(feedWeekIso + "T00:00:00");
     const mondayStr = feedWeekIso;
     const sunday = new Date(monday);
@@ -1668,7 +1678,7 @@ export function KanbanBoard({
       const open = !claimed && n.actionStatus !== "closed";
       return inWeek || (open && d <= sundayStr);
     });
-  }, [noteFeed, feedWeekIso, claimedNoteIds]);
+  }, [noteFeed, feedWeekIso, claimedNoteIds, effectiveSlug]);
 
   // ── Per-card note signal (single small chip, priority-ordered) ────────────
   const noteSignals = useMemo<Record<string, NoteSignal>>(() => {
@@ -1727,7 +1737,7 @@ export function KanbanBoard({
   const feedLabel =
     effectiveSlug === "this-week" && !isCurrentWeek
       ? `Görev notları · ${formatWeekLabel(weekStart)}`
-      : "Bu haftaki görev notları";
+      : "Görev notları";
 
   return (
     <DeptMetaContext.Provider value={deptMeta}>
@@ -1770,7 +1780,7 @@ export function KanbanBoard({
       )}
 
       {/* ── Rules panel (compact, collapsible) — normal board only ────────── */}
-      {!isAdminBoard && <BoardRulesPanel rules={rules} newCount={newRulesCount} />}
+      {RULES_PANEL_ENABLED && !isAdminBoard && <BoardRulesPanel rules={rules} newCount={newRulesCount} />}
 
       {/* ── View tabs + week navigation — normal board only ───────────────── */}
       {/* Two logical groups in one strip: the general (week-independent) views,
@@ -1788,7 +1798,10 @@ export function KanbanBoard({
               board reads as a Monday-style toolbar. */}
           <ViewTabs
             iconsEverywhere
+            // "Bu hafta" sekmesi gizlendi — haftalık bölümleme kaldırıldı.
+            // (Görünüm mantığı ve saved view verisi korunur; geri alınabilir.)
             items={savedViews
+              .filter((view) => (SAVED_VIEW_SLUG_MAP[view.name] ?? view.id) !== "this-week")
               .map((view): ViewTabItem => {
                 const slug = SAVED_VIEW_SLUG_MAP[view.name] ?? view.id;
                 return {
@@ -1796,17 +1809,10 @@ export function KanbanBoard({
                   label: view.name,
                   icon: VIEW_META[slug as keyof typeof VIEW_META]?.icon,
                   active: effectiveSlug === slug,
-                  dividerBefore: slug === "this-week",
+                  dividerBefore: false,
                 };
-              })
-              // Keep the canonical order but ensure "Bu hafta" lands last so its
-              // divider always separates it from the general views.
-              .sort((a, b) => Number(a.slug === "this-week") - Number(b.slug === "this-week"))}
-            getHref={(slug) =>
-              slug === "this-week"
-                ? `/board?view=this-week&week=${localISO(currentMonday)}`
-                : `/board?view=${slug}`
-            }
+              })}
+            getHref={(slug) => `/board?view=${slug}`}
           />
 
           {/* Active view description + (Bu hafta only) the week navigator */}
@@ -1875,8 +1881,8 @@ export function KanbanBoard({
             Görev oluştur
           </button>
         )}
-        {/* Toplu içe aktarma yönetici işidir — members never see it. */}
-        {canComplete && !isAdminBoard && (
+        {/* CSV içe aktar — geri bildirimle şimdilik gizlendi (kod/action korunur). */}
+        {CSV_IMPORT_ENABLED && canComplete && !isAdminBoard && (
           <button
             onClick={() => setImportOpen(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 border border-line text-muted text-sm rounded-lg hover:bg-surface-muted transition-colors"

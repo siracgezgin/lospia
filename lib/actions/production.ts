@@ -1,0 +1,240 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+import { createClient } from "@/lib/supabase/server";
+import type { AppRole } from "@/lib/auth/permissions";
+import { toActionErrorMessage } from "@/lib/utils/supabase-errors";
+
+// Üretim Föyü — yapısal üretim föyleri (production_sheets). Her ürün bir föy;
+// ekip üyeleri (Gül, Selen) AYNI föye veri girebilir. "Kim girdi" föy düzeyinde:
+// created_by sabit kalır, updated_by her kaydetmede güncellenir. RLS bu izin
+// modelinin DB-katmanı güvencesidir (bkz. 20240212000000_production_sheets.sql).
+
+const AUTH_REQUIRED = "Kimlik doğrulama gerekli.";
+const NOT_FOUND = "Föy bulunamadı.";
+const PERM_DENIED = "Bu işlem için yetkiniz yok.";
+const ADMIN_ROLES: AppRole[] = ["owner", "admin"];
+
+const measurementRow = z.object({
+  no: z.string().max(20).default(""),
+  label: z.string().max(300).default(""),
+  value: z.string().max(120).default(""),
+});
+const deliveredItemRow = z.object({
+  no: z.string().max(20).default(""),
+  label: z.string().max(300).default(""),
+  qty: z.string().max(120).default(""),
+});
+const sizeDistribution = z.object({
+  sizes: z.array(z.string().max(20)).max(12).default([]),
+  rows: z
+    .array(
+      z.object({
+        label: z.string().max(200).default(""),
+        values: z.array(z.string().max(40)).max(12).default([]),
+        total: z.string().max(40).default(""),
+      }),
+    )
+    .max(20)
+    .default([]),
+});
+
+const longText = z.string().max(8000).optional().nullable();
+const shortText = z.string().max(500).optional().nullable();
+
+const SheetSchema = z.object({
+  title: z.string().min(1, "Föy başlığı (ürün adı) gerekli").max(300),
+  status: z.enum(["draft", "active", "archived"]).default("active"),
+  product_code: shortText,
+  product_kind: shortText,
+  producer: shortText,
+  description: longText,
+  season: shortText,
+  production_date: shortText,
+  delivery_date: shortText,
+  meterage: shortText,
+  measurements: z.array(measurementRow).max(60).default([]),
+  delivered_items: z.array(deliveredItemRow).max(60).default([]),
+  size_distribution: sizeDistribution.default({ sizes: [], rows: [] }),
+  photo_refs: z.array(z.string().max(2000)).max(30).default([]),
+  wash_instruction: longText,
+  fabric_lining: longText,
+  fabric_info: longText,
+  accessories_info: longText,
+  embellishments: longText,
+  sewing_instruction: longText,
+  workmanship_notes: longText,
+  qc_revision: longText,
+  revision_notes: longText,
+  production_waste: longText,
+});
+
+export type ProductionSheetInput = z.infer<typeof SheetSchema>;
+
+async function getCtx(supabase: Awaited<ReturnType<typeof createClient>>) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data: member } = await supabase
+    .from("workspace_members")
+    .select("workspace_id, role")
+    .eq("user_id", user.id)
+    .limit(1)
+    .maybeSingle();
+  if (!member) return null;
+  return {
+    userId: user.id,
+    workspaceId: member.workspace_id as string,
+    role: member.role as AppRole,
+  };
+}
+
+type Ctx = NonNullable<Awaited<ReturnType<typeof getCtx>>>;
+const isAdmin = (ctx: Ctx) => ADMIN_ROLES.includes(ctx.role);
+
+/** Boş string → null; trim'li. */
+function nn(s?: string | null): string | null {
+  const t = (s ?? "").trim();
+  return t.length ? t : null;
+}
+
+function normalize(v: ProductionSheetInput) {
+  return {
+    title: v.title.trim(),
+    status: v.status,
+    product_code: nn(v.product_code),
+    product_kind: nn(v.product_kind),
+    producer: nn(v.producer),
+    description: nn(v.description),
+    season: nn(v.season),
+    production_date: nn(v.production_date),
+    delivery_date: nn(v.delivery_date),
+    meterage: nn(v.meterage),
+    measurements: v.measurements,
+    delivered_items: v.delivered_items,
+    size_distribution: v.size_distribution,
+    photo_refs: v.photo_refs.map((p) => p.trim()).filter(Boolean),
+    wash_instruction: nn(v.wash_instruction),
+    fabric_lining: nn(v.fabric_lining),
+    fabric_info: nn(v.fabric_info),
+    accessories_info: nn(v.accessories_info),
+    embellishments: nn(v.embellishments),
+    sewing_instruction: nn(v.sewing_instruction),
+    workmanship_notes: nn(v.workmanship_notes),
+    qc_revision: nn(v.qc_revision),
+    revision_notes: nn(v.revision_notes),
+    production_waste: nn(v.production_waste),
+  };
+}
+
+export async function createProductionSheet(
+  input: ProductionSheetInput,
+): Promise<{ id: string } | { error: string }> {
+  const parsed = SheetSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+
+  const data = normalize(parsed.data);
+  // Non-admin bir üye arşiv statüsüyle föy oluşturamaz.
+  if (!isAdmin(ctx) && data.status === "archived") data.status = "active";
+
+  const { data: row, error } = await supabase
+    .from("production_sheets")
+    .insert({
+      workspace_id: ctx.workspaceId,
+      created_by: ctx.userId,
+      updated_by: ctx.userId,
+      archived_at: data.status === "archived" ? new Date().toISOString() : null,
+      ...data,
+    })
+    .select("id")
+    .single();
+
+  if (error) return { error: toActionErrorMessage(error) };
+  revalidatePath("/production");
+  return { id: (row as { id: string }).id };
+}
+
+export async function updateProductionSheet(
+  sheetId: string,
+  input: ProductionSheetInput,
+): Promise<{ ok: true } | { error: string }> {
+  const parsed = SheetSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+
+  // Föyün var olduğunu ve workspace'e ait olduğunu doğrula (RLS zaten kısıtlar).
+  const { data: existing, error: loadErr } = await supabase
+    .from("production_sheets")
+    .select("id, status")
+    .eq("id", sheetId)
+    .eq("workspace_id", ctx.workspaceId)
+    .maybeSingle();
+  if (loadErr) return { error: toActionErrorMessage(loadErr) };
+  if (!existing) return { error: NOT_FOUND };
+
+  const data = normalize(parsed.data);
+  // Statü/arşiv geçişleri yalnızca admin'e; üye içerik günceller ama statüyü
+  // olduğu gibi bırakır.
+  if (!isAdmin(ctx)) data.status = existing.status as ProductionSheetInput["status"];
+
+  const { error } = await supabase
+    .from("production_sheets")
+    .update({
+      ...data,
+      updated_by: ctx.userId,
+      archived_at: data.status === "archived" ? new Date().toISOString() : null,
+    })
+    .eq("id", sheetId)
+    .eq("workspace_id", ctx.workspaceId);
+
+  if (error) return { error: toActionErrorMessage(error) };
+  revalidatePath("/production");
+  revalidatePath(`/production/${sheetId}`);
+  return { ok: true };
+}
+
+// Arşivle (admin) — hard delete yerine tercih edilir.
+export async function archiveProductionSheet(
+  sheetId: string,
+): Promise<{ ok: true } | { error: string }> {
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+  if (!isAdmin(ctx)) return { error: PERM_DENIED };
+
+  const { error } = await supabase
+    .from("production_sheets")
+    .update({ status: "archived", archived_at: new Date().toISOString(), updated_by: ctx.userId })
+    .eq("id", sheetId)
+    .eq("workspace_id", ctx.workspaceId);
+
+  if (error) return { error: toActionErrorMessage(error) };
+  revalidatePath("/production");
+  return { ok: true };
+}
+
+// Hard delete: admin her şeyi; üye yalnızca kendi draft'ı (RLS de kısıtlar).
+export async function deleteProductionSheet(
+  sheetId: string,
+): Promise<{ ok: true } | { error: string }> {
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+
+  const { error } = await supabase
+    .from("production_sheets")
+    .delete()
+    .eq("id", sheetId)
+    .eq("workspace_id", ctx.workspaceId);
+
+  if (error) return { error: toActionErrorMessage(error) };
+  revalidatePath("/production");
+  return { ok: true };
+}

@@ -13,14 +13,13 @@ import {
   ChevronRight,
   Archive,
   Trash2,
-  BookOpen,
   ScrollText,
   Quote,
   TrendingUp,
-  ArrowRight,
   ShieldCheck,
   LayoutGrid,
   Bookmark,
+  ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Wordmark } from "@/components/ui/Wordmark";
@@ -40,6 +39,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { href: "/board",        label: "Pano",            icon: Kanban,          adminOnly: false },
       { href: "/admin-board",  label: "Yönetici Pano",   icon: ShieldCheck,     adminOnly: true  },
       { href: "/list",         label: "Liste",           icon: List,            adminOnly: false },
+      { href: "/production",   label: "Üretim Föyü",     icon: ClipboardList,   adminOnly: false },
       { href: "/modules",      label: "Operasyon Modülleri", icon: LayoutGrid,  adminOnly: true  },
       { href: "/dashboard", label: "Gösterge Paneli", icon: LayoutDashboard, adminOnly: false },
       { href: "/calendar",  label: "Takvim",          icon: Calendar,        adminOnly: false },
@@ -48,7 +48,8 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   {
     title: "Yönetim",
     items: [
-      { href: "/rules",    label: "Kurallar",         icon: BookOpen,   adminOnly: false },
+      // Kurallar — Nisa Hanım'ın isteğiyle şimdilik gizlendi (route/veri korunur).
+      // { href: "/rules",    label: "Kurallar",         icon: BookOpen,   adminOnly: false },
       { href: "/activity", label: "Aktivite Günlüğü", icon: ScrollText, adminOnly: true  },
       { href: "/archive",  label: "Arşiv",            icon: Archive,    adminOnly: true  },
       { href: "/trash",    label: "Çöp Kutusu",       icon: Trash2,     adminOnly: true  },
@@ -76,15 +77,15 @@ interface Props {
 export function AppSidebar({
   workspace, savedViews, brand = LOSPIA_BRAND, userRole = "member",
   teamDoneThisMonth = 0, teamReviewCount = 0,
-  myDoneThisMonth = 0, myReviewCount = 0, myPoints = 0,
+  myDoneThisMonth = 0, myReviewCount = 0,
 }: Props) {
   const isAdmin = canViewDestructivePages(userRole) || canManageSettings(userRole);
   const pathname = usePathname();
   const searchParams = useSearchParams();
   // The board view currently open (drives saved-view active state). Defaults to
-  // "this-week" — the board's own default when no ?view= is present.
+  // "all" — the board's own default (haftalık bölümleme kaldırıldı).
   const activeBoardView =
-    pathname === "/board" ? searchParams.get("view") ?? "this-week" : null;
+    pathname === "/board" ? searchParams.get("view") ?? "all" : null;
   const [collapsed, setCollapsed] = useState(false);
   const wsName = workspace?.name ?? "Operasyon";
   const weeklyQuote = getWeeklyQuote();
@@ -220,23 +221,14 @@ export function AppSidebar({
                     <span className="text-muted">Kontrol bekleyen işlerim</span>
                     <span className="font-semibold text-ink tabular-nums">{myReviewCount}</span>
                   </div>
-                  <div className="flex items-center justify-between text-[12px]">
-                    <span className="text-muted">Puanım</span>
-                    <span className="font-semibold text-ink tabular-nums">{myPoints}</span>
-                  </div>
+                  {/* Puanım — puan/motivasyon geri bildirimle şimdilik gizlendi. */}
                 </div>
                 <p className="text-[10.5px] leading-relaxed text-subtle mt-2.5">
                   Katkın görünür oldukça süreç güçlenir.
                 </p>
               </>
             )}
-            <Link
-              href="/dashboard#puan-motivasyon"
-              className="mt-2.5 inline-flex items-center gap-1 text-[11px] font-medium text-brand hover:text-brand-strong transition-colors"
-            >
-              Puan özetini gör
-              <ArrowRight size={11} />
-            </Link>
+            {/* "Puan özetini gör" bağlantısı — puan/motivasyon gizlendiği için kaldırıldı. */}
           </div>
 
           {/* Haftanın sözü — weekly rotating editorial brand card. */}

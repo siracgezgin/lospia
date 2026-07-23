@@ -239,7 +239,6 @@ function MobileTaskCard({
     responsibleNames[task.assignee_id ?? ""] ??
     responsibleNames[(task as { responsible_contact_id?: string | null }).responsible_contact_id ?? ""] ??
     "";
-  const creatorName = task.created_by ? responsibleNames[task.created_by] : null;
   const today = new Date().toISOString().slice(0, 10);
   const isOverdue = !!task.due_date && task.due_date < today && task.status !== "done";
 
@@ -282,16 +281,12 @@ function MobileTaskCard({
             {formatDateTR(task.due_date, { day: "numeric", month: "short" })}
           </span>
         )}
-        {responsible && (
-          <span className="ml-auto text-[11px] text-muted truncate max-w-[40%]">{responsible}</span>
-        )}
       </div>
 
-      {(creatorName || task.created_at) && (
-        <p className="mt-2 text-[10px] text-subtle truncate">
-          {creatorName && <span className="font-medium text-muted">{creatorName}</span>}
-          {creatorName && task.created_at && " · "}
-          {task.created_at && formatDateTR(task.created_at, { day: "numeric", month: "short" })}
+      {/* Sorumlu kişi en altta — "görev oluşturan" satırı geri bildirimle kaldırıldı. */}
+      {responsible && (
+        <p className="mt-2 text-[11px] text-subtle truncate">
+          Sorumlu: <span className="font-medium text-muted">{responsible}</span>
         </p>
       )}
     </Link>
@@ -391,7 +386,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
   // Build the shared view-tab strip from the workspace saved views, mapped to the
   // canonical slugs. "Bu hafta" is set apart with a divider (as on the Board).
   const viewTabItems = useMemo<ViewTabItem[]>(() => {
-    const items = savedViews
+    return savedViews
       .map((view): ViewTabItem => {
         const slug = SAVED_VIEW_SLUG_MAP[view.name] ?? view.id;
         return {
@@ -399,13 +394,11 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
           label: view.name,
           icon: VIEW_META[slug as keyof typeof VIEW_META]?.icon,
           active: viewSlug === slug,
-          dividerBefore: slug === "this-week",
+          dividerBefore: false,
         };
       })
-      .filter((it) => KNOWN_VIEW_SLUGS.includes(it.slug));
-    return items.sort(
-      (a, b) => Number(a.slug === "this-week") - Number(b.slug === "this-week"),
-    );
+      // "Bu hafta" sekmesi gizlendi — haftalık bölümleme kaldırıldı (geri alınabilir).
+      .filter((it) => KNOWN_VIEW_SLUGS.includes(it.slug) && it.slug !== "this-week");
   }, [savedViews, viewSlug]); // eslint-disable-line react-hooks/exhaustive-deps -- KNOWN_VIEW_SLUGS is a stable literal
 
   // Columns MUST be memoized — recreating the array every render causes TanStack Table
@@ -576,34 +569,8 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
         enableSorting: false,
       }
     ),
-    // Oluşturan — who created the task + when (mirrors the note/card metadata).
-    columnHelper.accessor(
-      (row) => (row.created_by ? responsibleNames[row.created_by] ?? "" : ""),
-      {
-        id: "creator",
-        header: "Oluşturan",
-        cell: (info) => {
-          const name = info.getValue();
-          const created = info.row.original.created_at;
-          if (!name && !created) return <span className="text-xs text-subtle">—</span>;
-          return (
-            <div className="leading-tight">
-              {name && <span className="text-xs text-muted block">{name}</span>}
-              {created && (
-                <span className="text-[10px] text-subtle whitespace-nowrap">
-                  {formatDateTR(created as string, { day: "numeric", month: "short" })}
-                </span>
-              )}
-            </div>
-          );
-        },
-        sortingFn: (a, b) => {
-          const na = a.original.created_by ? responsibleNames[a.original.created_by] ?? "" : "";
-          const nb = b.original.created_by ? responsibleNames[b.original.created_by] ?? "" : "";
-          return na.localeCompare(nb, "tr", { sensitivity: "base" });
-        },
-      }
-    ),
+    // "Oluşturan" kolonu geri bildirimle kaldırıldı — sorumlu kişi kolonu (üstte
+    // "responsible") görev sahipliğini gösterir.
     columnHelper.accessor("updated_at", {
       id: "updated_at",
       header: FIELD_LABELS.updatedAt,
@@ -671,8 +638,8 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
           <Plus size={14} />
           Görev oluştur
         </Button>
-        {/* Toplu içe aktarma yönetici işidir — members never see it. */}
-        {isAdmin && (
+        {/* CSV içe aktar — geri bildirimle şimdilik gizlendi (kod/action korunur). */}
+        {false && isAdmin && (
           <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
             <FileSpreadsheet size={14} />
             CSV&apos;den içe aktar

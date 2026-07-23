@@ -46,7 +46,8 @@ export function MemberDashboardView({ data, points }: Props) {
         <DashboardMetricCard icon={<CheckCircle2 size={15} />} label="Tamamladığım işler" value={data.done} tone="success" />
       </div>
 
-      {/* Puan & Motivasyon — personal only. No other members, no team totals. */}
+      {/* Puan & Motivasyon — geri bildirimle şimdilik gizlendi (geri alınabilir). */}
+      {false && (
       <section id="puan-motivasyon" className="space-y-4 scroll-mt-6">
         <div>
           <h2 className="text-base font-semibold text-ink flex items-center gap-2">
@@ -70,6 +71,7 @@ export function MemberDashboardView({ data, points }: Props) {
           <DashboardMetricCard icon={<ClipboardCheck size={15} />} label="Kontrol bekleyen işlerim" value={points.reviewCount} tone="review" />
         </div>
       </section>
+      )}
 
       {/* Personal risk list — the member's own overdue + upcoming tasks */}
       <Card className="p-5">

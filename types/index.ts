@@ -182,6 +182,55 @@ export type OperationSpreadsheet = {
   updated_at: string;
 };
 
+// ── Üretim Föyü — production_sheets ──────────────────────────────────────────
+// Hand-written (not from generated database.ts) so the feature ships without a
+// local Supabase type regen. Mirrors 20240212000000_production_sheets.sql.
+export type ProductionSheetStatus = "draft" | "active" | "archived";
+
+/** ÖLÇÜLER tablosunun bir satırı. */
+export type MeasurementRow = { no: string; label: string; value: string };
+/** TESLİM EDİLEN ÜRÜNLER tablosunun bir satırı. */
+export type DeliveredItemRow = { no: string; label: string; qty: string };
+/** BEDEN DAĞILIMI ızgarası — beden başlıkları + varyant satırları. */
+export type SizeDistribution = {
+  sizes: string[];
+  rows: { label: string; values: string[]; total: string }[];
+};
+
+export type ProductionSheet = {
+  id: string;
+  workspace_id: string;
+  title: string;
+  status: ProductionSheetStatus;
+  product_code: string | null;
+  product_kind: string | null;
+  producer: string | null;
+  description: string | null;
+  season: string | null;
+  production_date: string | null;
+  delivery_date: string | null;
+  meterage: string | null;
+  measurements: MeasurementRow[];
+  delivered_items: DeliveredItemRow[];
+  size_distribution: SizeDistribution;
+  photo_refs: string[];
+  wash_instruction: string | null;
+  fabric_lining: string | null;
+  fabric_info: string | null;
+  accessories_info: string | null;
+  embellishments: string | null;
+  sewing_instruction: string | null;
+  workmanship_notes: string | null;
+  qc_revision: string | null;
+  revision_notes: string | null;
+  production_waste: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 // workspace_rules — daily SOPs / checklists
 export type WorkspaceRule = Database["public"]["Tables"]["workspace_rules"]["Row"];
 export type WorkspaceRuleInsert = Database["public"]["Tables"]["workspace_rules"]["Insert"];
