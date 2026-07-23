@@ -9,6 +9,9 @@ import { compressImage } from "@/lib/utils/compress-image";
 import { cn } from "@/lib/utils/cn";
 import type { ProductionImage, ProductionImageSection } from "@/types";
 
+// Orijinal (sıkıştırma öncesi) dosya için üst sınır. UI'de "maks 5 MB" yazıyor.
+const MAX_ORIGINAL_BYTES = 5 * 1024 * 1024;
+
 interface Props {
   sheetId: string; // "new" olabilir
   section: ProductionImageSection;
@@ -37,6 +40,12 @@ export function ImageUploader({
     const added: ProductionImage[] = [];
     try {
       for (const file of Array.from(files)) {
+        // Orijinal dosya boyutu sınırı — sıkıştırma öncesi kontrol (10MB gibi
+        // büyük dosyalar reddedilsin).
+        if (file.size > MAX_ORIGINAL_BYTES) {
+          setErr(`"${file.name}" 5 MB sınırını aşıyor (${(file.size / 1024 / 1024).toFixed(1)} MB). Daha küçük bir görsel seçin.`);
+          continue;
+        }
         // Yüklemeden ÖNCE tarayıcıda sıkıştır — depoda az yer kaplasın ve Server
         // Action gövde limitine takılmasın. Hata olursa orijinal dosyayla dener.
         let toUpload: File = file;
@@ -60,6 +69,9 @@ export function ImageUploader({
   }
 
   async function handleRemove(img: ProductionImage) {
+    // Yanlışlıkla silmeyi önlemek için onay.
+    if (!window.confirm("Bu görseli kaldırmak istediğinize emin misiniz? Bu işlem geri alınamaz.")) return;
+    // Önce yerel state + üst bileşene bildir (üst bileşen DB'yi anında günceller).
     onChange(images.filter((i) => i.path !== img.path));
     // Depodan da sil — best effort.
     await deleteProductionSheetImage(img.path);

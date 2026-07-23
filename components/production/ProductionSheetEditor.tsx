@@ -9,7 +9,7 @@ import {
   ClipboardList, ArrowLeft, Plus, Trash2, Save, User, Clock, Loader2,
 } from "lucide-react";
 import {
-  createProductionSheet, updateProductionSheet,
+  createProductionSheet, updateProductionSheet, updateProductionSheetImages,
   type ProductionSheetInput,
 } from "@/lib/actions/production";
 import { cn } from "@/lib/utils/cn";
@@ -151,6 +151,19 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin }: Props) {
     try { return formatDistanceToNow(new Date(iso), { addSuffix: true, locale: tr }); } catch { return ""; }
   };
 
+  // Görsel ekleme/kaldırma: yerel state'i güncelle VE mevcut föyde DB'yi anında
+  // kaydet (kullanıcı "Kaydet"e basmasa bile depo ile DB tutarlı kalsın —
+  // özellikle silmede). Yeni (kaydedilmemiş) föyde görseller create ile kaydolur.
+  const [imgError, setImgError] = useState<string | null>(null);
+  function handleImagesChange(next: ProductionSheetInput["photo_refs"]) {
+    set("photo_refs", next);
+    if (!isNew && sheet) {
+      updateProductionSheetImages(sheet.id, next).then((res) => {
+        if (res && "error" in res) setImgError(res.error);
+      });
+    }
+  }
+
   // ── Ölçüler ──
   const updateMeasurement = (i: number, patch: Partial<MeasurementRow>) =>
     set("measurements", form.measurements.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
@@ -233,6 +246,9 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin }: Props) {
       {error && (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] text-red-700">{error}</div>
       )}
+      {imgError && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] text-red-700">Görsel kaydedilemedi: {imgError}</div>
+      )}
 
       {/* ── Föy belgesi ── */}
       <div className="space-y-3 rounded-xl border border-line-strong bg-surface p-4 shadow-card sm:p-5">
@@ -284,7 +300,7 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin }: Props) {
           </Section>
 
           <Section title="Teknik Çizim">
-            <ImageUploader sheetId={sheetId} section="technical_drawing" images={form.photo_refs} onChange={(next) => set("photo_refs", next)} variant="drawing" />
+            <ImageUploader sheetId={sheetId} section="technical_drawing" images={form.photo_refs} onChange={handleImagesChange} variant="drawing" />
           </Section>
         </div>
 
@@ -349,7 +365,7 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin }: Props) {
         <Section title="Kumaş / Astar">
           <TextArea value={form.fabric_lining ?? ""} onChange={(v) => set("fabric_lining", v)} rows={2} />
           <div className="mt-3">
-            <ImageUploader sheetId={sheetId} section="fabric" images={form.photo_refs} onChange={(next) => set("photo_refs", next)} label="Kumaş / astar fotoğrafları" />
+            <ImageUploader sheetId={sheetId} section="fabric" images={form.photo_refs} onChange={handleImagesChange} label="Kumaş / astar fotoğrafları" />
           </div>
         </Section>
 
@@ -364,7 +380,7 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin }: Props) {
             <TextArea value={form.accessories_info ?? ""} onChange={(v) => set("accessories_info", v)} rows={2} />
           </label>
           <div className="mt-3">
-            <ImageUploader sheetId={sheetId} section="accessories" images={form.photo_refs} onChange={(next) => set("photo_refs", next)} label="Aksesuar fotoğrafları" />
+            <ImageUploader sheetId={sheetId} section="accessories" images={form.photo_refs} onChange={handleImagesChange} label="Aksesuar fotoğrafları" />
           </div>
         </Section>
 
@@ -372,7 +388,7 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin }: Props) {
         <Section title="Süslemeler ve Aksesuar Açıklaması">
           <TextArea value={form.embellishments ?? ""} onChange={(v) => set("embellishments", v)} rows={2} />
           <div className="mt-3">
-            <ImageUploader sheetId={sheetId} section="embellishments" images={form.photo_refs} onChange={(next) => set("photo_refs", next)} label="Süsleme / etiket fotoğrafları" />
+            <ImageUploader sheetId={sheetId} section="embellishments" images={form.photo_refs} onChange={handleImagesChange} label="Süsleme / etiket fotoğrafları" />
           </div>
         </Section>
 
@@ -380,7 +396,7 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin }: Props) {
         <Section title="Dikiş Talimatı">
           <TextArea value={form.sewing_instruction ?? ""} onChange={(v) => set("sewing_instruction", v)} rows={4} />
           <div className="mt-3">
-            <ImageUploader sheetId={sheetId} section="sewing" images={form.photo_refs} onChange={(next) => set("photo_refs", next)} label="Dikiş / numune fotoğrafları" />
+            <ImageUploader sheetId={sheetId} section="sewing" images={form.photo_refs} onChange={handleImagesChange} label="Dikiş / numune fotoğrafları" />
           </div>
         </Section>
 

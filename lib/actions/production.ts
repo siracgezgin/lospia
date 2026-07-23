@@ -248,6 +248,31 @@ export async function deleteProductionSheet(
   return { ok: true };
 }
 
+// Yalnızca görselleri (photo_refs) anında kaydeder — kullanıcı bir görsel
+// ekleyip/kaldırınca "Kaydet"i beklemeden DB ile depo tutarlı kalsın diye.
+export async function updateProductionSheetImages(
+  sheetId: string,
+  images: unknown,
+): Promise<{ ok: true } | { error: string }> {
+  const parsed = z.array(productionImage).max(60).safeParse(images);
+  if (!parsed.success) return { error: "Görsel listesi okunamadı." };
+
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+
+  const { error } = await supabase
+    .from("production_sheets")
+    .update({ photo_refs: parsed.data, updated_by: ctx.userId })
+    .eq("id", sheetId)
+    .eq("workspace_id", ctx.workspaceId);
+
+  if (error) return { error: toActionErrorMessage(error) };
+  revalidatePath("/production");
+  revalidatePath(`/production/${sheetId}`);
+  return { ok: true };
+}
+
 // ── Görsel yükleme (Supabase Storage: production-sheets bucket) ───────────────
 // Yol: production-sheets/{workspace_id}/{sheet_id}/{uuid}. Public bucket → render
 // publicUrl ile. Yükleme/silme RLS ile workspace üyesine kısıtlı.
