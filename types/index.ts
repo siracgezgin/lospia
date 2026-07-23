@@ -197,6 +197,17 @@ export type SizeDistribution = {
   rows: { label: string; values: string[]; total: string }[];
 };
 
+/** Föye eklenen görsellerin bağlı olduğu bölüm. */
+export type ProductionImageSection =
+  | "technical_drawing" | "fabric" | "accessories" | "embellishments" | "sewing" | "general";
+/** Supabase Storage'da tutulan föy görseli (public URL + silme için path). */
+export type ProductionImage = {
+  url: string;
+  path: string;
+  section: ProductionImageSection;
+  caption?: string;
+};
+
 export type ProductionSheet = {
   id: string;
   workspace_id: string;
@@ -213,7 +224,7 @@ export type ProductionSheet = {
   measurements: MeasurementRow[];
   delivered_items: DeliveredItemRow[];
   size_distribution: SizeDistribution;
-  photo_refs: string[];
+  photo_refs: ProductionImage[];
   wash_instruction: string | null;
   fabric_lining: string | null;
   fabric_info: string | null;

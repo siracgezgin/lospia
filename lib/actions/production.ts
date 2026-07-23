@@ -40,6 +40,15 @@ const sizeDistribution = z.object({
     .default([]),
 });
 
+const productionImage = z.object({
+  url: z.string().max(2000),
+  path: z.string().max(500),
+  section: z.enum([
+    "technical_drawing", "fabric", "accessories", "embellishments", "sewing", "general",
+  ]),
+  caption: z.string().max(300).optional(),
+});
+
 const longText = z.string().max(8000).optional().nullable();
 const shortText = z.string().max(500).optional().nullable();
 
@@ -57,7 +66,7 @@ const SheetSchema = z.object({
   measurements: z.array(measurementRow).max(60).default([]),
   delivered_items: z.array(deliveredItemRow).max(60).default([]),
   size_distribution: sizeDistribution.default({ sizes: [], rows: [] }),
-  photo_refs: z.array(z.string().max(2000)).max(30).default([]),
+  photo_refs: z.array(productionImage).max(60).default([]),
   wash_instruction: longText,
   fabric_lining: longText,
   fabric_info: longText,
@@ -113,7 +122,7 @@ function normalize(v: ProductionSheetInput) {
     measurements: v.measurements,
     delivered_items: v.delivered_items,
     size_distribution: v.size_distribution,
-    photo_refs: v.photo_refs.map((p) => p.trim()).filter(Boolean),
+    photo_refs: v.photo_refs,
     wash_instruction: nn(v.wash_instruction),
     fabric_lining: nn(v.fabric_lining),
     fabric_info: nn(v.fabric_info),
@@ -236,5 +245,55 @@ export async function deleteProductionSheet(
 
   if (error) return { error: toActionErrorMessage(error) };
   revalidatePath("/production");
+  return { ok: true };
+}
+
+// ── Görsel yükleme (Supabase Storage: production-sheets bucket) ───────────────
+// Yol: production-sheets/{workspace_id}/{sheet_id}/{uuid}. Public bucket → render
+// publicUrl ile. Yükleme/silme RLS ile workspace üyesine kısıtlı.
+const IMAGE_BUCKET = "production-sheets";
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
+const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif"];
+
+export async function uploadProductionSheetImage(
+  sheetId: string,
+  formData: FormData,
+): Promise<{ url: string; path: string } | { error: string }> {
+  const file = formData.get("file");
+  if (!(file instanceof File)) return { error: "Dosya bulunamadı." };
+  if (file.size > MAX_IMAGE_BYTES) return { error: "Görsel 5 MB sınırını aşıyor." };
+  if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+    return { error: "Yalnızca görsel dosyaları (PNG, JPG, WEBP) yüklenebilir." };
+  }
+
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+
+  // "new" föy için henüz id yok — geçici klasör kullan (kaydedince URL taşınır değil,
+  // sadece referans photo_refs içinde tutulur; dosya yerinde kalır).
+  const scope = sheetId && sheetId !== "new" ? sheetId : "unassigned";
+  const path = `${ctx.workspaceId}/${scope}/${crypto.randomUUID()}`;
+
+  const { error: upErr } = await supabase.storage
+    .from(IMAGE_BUCKET)
+    .upload(path, file, { contentType: file.type, upsert: false });
+  if (upErr) return { error: upErr.message };
+
+  const { data: { publicUrl } } = supabase.storage.from(IMAGE_BUCKET).getPublicUrl(path);
+  return { url: publicUrl, path };
+}
+
+export async function deleteProductionSheetImage(
+  path: string,
+): Promise<{ ok: true } | { error: string }> {
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+  // Path her zaman {workspace_id}/... ile başlar — kendi workspace'i dışına silme yok.
+  if (!path.startsWith(`${ctx.workspaceId}/`)) return { error: PERM_DENIED };
+
+  const { error } = await supabase.storage.from(IMAGE_BUCKET).remove([path]);
+  if (error) return { error: error.message };
   return { ok: true };
 }
