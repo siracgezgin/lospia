@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 // detay/düzenleyici sayfasına bırakılır ki liste büyük veri taşımasın.
 const LIST_COLUMNS =
   "id, workspace_id, title, status, product_code, product_kind, producer, " +
-  "delivery_date, season, created_by, updated_by, archived_at, created_at, updated_at";
+  "delivery_date, season, photo_refs, created_by, updated_by, archived_at, created_at, updated_at";
 
 export default async function ProductionPage() {
   const { supabase, user, workspaceId, isAdmin, gate } = await requireModuleMember();

@@ -17,9 +17,16 @@ import type { ProductionSheet } from "@/types";
 export type ProductionListItem = Pick<
   ProductionSheet,
   | "id" | "workspace_id" | "title" | "status" | "product_code" | "product_kind"
-  | "producer" | "delivery_date" | "season" | "created_by" | "updated_by"
+  | "producer" | "delivery_date" | "season" | "photo_refs" | "created_by" | "updated_by"
   | "archived_at" | "created_at" | "updated_at"
 >;
+
+/** Kapak görseli — önce teknik çizim, yoksa ilk görsel. */
+function coverImage(s: ProductionListItem): string | null {
+  const imgs = Array.isArray(s.photo_refs) ? s.photo_refs : [];
+  const drawing = imgs.find((i) => i?.section === "technical_drawing" && i?.url);
+  return (drawing ?? imgs.find((i) => i?.url))?.url ?? null;
+}
 
 interface Props {
   sheets: ProductionListItem[];
@@ -161,17 +168,32 @@ export function ProductionSheetsView({ sheets, memberNames, isAdmin }: Props) {
                 )}
               </div>
 
-              <Link href={`/production/${s.id}`} className="min-w-0">
-                <h3 className="flex items-start justify-between gap-2 text-[14px] font-medium leading-snug text-ink transition-colors group-hover:text-brand-strong">
-                  <span className="min-w-0">{s.title}</span>
-                  <ArrowUpRight size={14} className="mt-0.5 shrink-0 text-subtle opacity-0 transition-opacity group-hover:opacity-100" />
-                </h3>
+              <Link href={`/production/${s.id}`} className="flex min-w-0 items-start gap-3">
+                {/* Kapak görseli — hızlı görsel tanıma için küçük önizleme */}
+                {coverImage(s) ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={coverImage(s)!}
+                    alt=""
+                    className="h-14 w-14 shrink-0 rounded-lg border border-line object-cover"
+                  />
+                ) : (
+                  <div className="grid h-14 w-14 shrink-0 place-items-center rounded-lg border border-dashed border-line bg-surface-muted text-subtle">
+                    <ClipboardList size={18} />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <h3 className="flex items-start justify-between gap-2 text-[14px] font-medium leading-snug text-ink transition-colors group-hover:text-brand-strong">
+                    <span className="min-w-0">{s.title}</span>
+                    <ArrowUpRight size={14} className="mt-0.5 shrink-0 text-subtle opacity-0 transition-opacity group-hover:opacity-100" />
+                  </h3>
+                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11.5px] text-subtle">
+                    {s.product_code && <span>Kod: {s.product_code}</span>}
+                    {s.producer && <span>Üretici: {s.producer}</span>}
+                    {s.delivery_date && <span>Teslim: {s.delivery_date}</span>}
+                  </div>
+                </div>
               </Link>
-              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11.5px] text-subtle">
-                {s.product_code && <span>Kod: {s.product_code}</span>}
-                {s.producer && <span>Üretici: {s.producer}</span>}
-                {s.delivery_date && <span>Teslim: {s.delivery_date}</span>}
-              </div>
 
               {/* Kim girdi — föy düzeyi iz */}
               <div className="mt-3 space-y-1 border-t border-line/60 pt-2.5 text-[11px] text-subtle">
