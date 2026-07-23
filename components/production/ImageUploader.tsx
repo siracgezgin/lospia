@@ -5,6 +5,7 @@ import { ImagePlus, Loader2, Trash2, X } from "lucide-react";
 import {
   uploadProductionSheetImage, deleteProductionSheetImage,
 } from "@/lib/actions/production";
+import { compressImage } from "@/lib/utils/compress-image";
 import { cn } from "@/lib/utils/cn";
 import type { ProductionImage, ProductionImageSection } from "@/types";
 
@@ -34,16 +35,28 @@ export function ImageUploader({
     setErr(null);
     setBusy(true);
     const added: ProductionImage[] = [];
-    for (const file of Array.from(files)) {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await uploadProductionSheetImage(sheetId, fd);
-      if ("error" in res) { setErr(res.error); continue; }
-      added.push({ url: res.url, path: res.path, section });
+    try {
+      for (const file of Array.from(files)) {
+        // Yüklemeden ÖNCE tarayıcıda sıkıştır — depoda az yer kaplasın ve Server
+        // Action gövde limitine takılmasın. Hata olursa orijinal dosyayla dener.
+        let toUpload: File = file;
+        try {
+          toUpload = await compressImage(file, { maxDim: 1600, quality: 0.72 });
+        } catch { /* sıkıştırma başarısız → orijinal */ }
+
+        const fd = new FormData();
+        fd.append("file", toUpload);
+        const res = await uploadProductionSheetImage(sheetId, fd);
+        if ("error" in res) { setErr(res.error); continue; }
+        added.push({ url: res.url, path: res.path, section });
+      }
+      if (added.length) onChange([...images, ...added]);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Görsel yüklenemedi. Lütfen tekrar deneyin.");
+    } finally {
+      setBusy(false);
+      if (inputRef.current) inputRef.current.value = "";
     }
-    if (added.length) onChange([...images, ...added]);
-    setBusy(false);
-    if (inputRef.current) inputRef.current.value = "";
   }
 
   async function handleRemove(img: ProductionImage) {
