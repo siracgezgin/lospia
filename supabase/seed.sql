@@ -509,4 +509,59 @@ begin
    'Her hafta üretim aşamasından fotoğraf çekilerek dosyalanmalıdır.',
    'Üretim', true, 0, v_alice_id);
 
+  -- -------------------------------------------------------------------------
+  -- Üretim Föyleri — gerçek Aslı Filinta föyleri (21 Temmuz 2026 Excel'inden)
+  -- Her ürün bir föy; created_by/updated_by farklı üyeler → "kim girdi" izi.
+  -- -------------------------------------------------------------------------
+  insert into public.production_sheets
+    (id, workspace_id, title, status, product_kind, producer, description,
+     season, delivery_date, meterage,
+     measurements, delivered_items, size_distribution,
+     wash_instruction, fabric_lining, fabric_info, embellishments,
+     sewing_instruction, workmanship_notes, qc_revision, revision_notes, production_waste,
+     created_by, updated_by)
+  values
+  ('00000000-0000-0000-0000-0000000000f1', v_ws_id,
+   'Beyaz Dantel Etek', 'active', 'Etek', 'Hakan Günaydın', 'Beyaz Dantel Etek',
+   '2026 RESORT', '21.07.2026', '1.60 CM',
+   $j$[{"no":"1","label":"Etek kemer kalınlığı","value":"3 cm"},{"no":"2","label":"Medium Bel","value":"74 cm"},{"no":"3","label":"Asimetrik Etek uzunluk yan","value":""},{"no":"4","label":"Asimetrik Etek uzunluk ön","value":""},{"no":"5","label":"Arka görünüşü","value":""},{"no":"6","label":"Fermuar yeri","value":""}]$j$::jsonb,
+   $j$[{"no":"1","label":"Karton Etiket","qty":""},{"no":"2","label":"Kalın Siyah Marka Etiketi","qty":""},{"no":"3","label":"40 cm Ekru fermuar","qty":""},{"no":"4","label":"Gold Düğme","qty":""},{"no":"5","label":"Naylon Poşet","qty":""}]$j$::jsonb,
+   $j${"sizes":["XS","S","M","L","XL","XXL"],"rows":[{"label":"Beden etiketi","values":["1","","2","","3",""],"total":""},{"label":"Üretim adeti","values":["18","","18","","10",""],"total":"46"}]}$j$::jsonb,
+   $t$% 100 Polyester Dry Clean Only. Beden etiketine dikilmeyecek, yan dikişe yıkama talimatı dikilecek, üzerine beden etiketini takılacak.$t$,
+   $t$yıkama talimatı üstüne beden foto$t$,
+   $t$Kumaş 1: Beyaz Dantel. Astar 1: Bedene takılı astarı yok, ayrı şort astarı olacak.$t$,
+   $t$20 cm YKK Ekru Fermuar. Gold Agraf. AF Büyük marka etiketi, siyah renk. Önemli not: Beden etiketi yıkama talimatına takılacak.$t$,
+   $t$Etek kemeri 3cm olacak. Eteklerin kemer kısımlarına 1 kat tela yapıştırılacak. Etek ucu son çalışılan numunedeki gibi ince kıvrılacak. İç dikişler bluzda kullanılan dikiş yapılacak. İki modelde de astar çalışması yapılmayacak. Dantel eteğin kemerinde fermuarın üstüne gold agraf takılacak sonra, gizli fermuar agraftan yarım cm aşağıya dikilecek. Dantel eteğin fermuar çevresi 30/1 ince beyaz şile bezinden artan kumaşlar ile biye yapılıp çevrilecek.$t$,
+   $t$Overlok kullanılmayacak. İngiliz dikişi ile kapatılacak. Etek kıvırımları çok sağlam ve yarım cm'den daha kalın olmayacak.$t$,
+   $t$21 Temmuz 2026 Salı günü 13:00 — Meral Öztürk$t$,
+   $t$Dikişler genel olarak iyi bulundu. Eteğin arka fermuarına zigzag atılması eklendi.$t$,
+   $t$Kumaş kesimde ve dikimde fire payı belirtilecek: 40 metre kumaş arttı.$t$,
+   v_bob_id, v_nisa_id),
+  ('00000000-0000-0000-0000-0000000000f2', v_ws_id,
+   'Beyaz Dantel Şalvar', 'active', 'Şalvar', 'Hakan Günaydın', 'Beyaz Dantel Şalvar',
+   '2026 RESORT', '21.07.2026', '1.20 CM',
+   $j$[{"no":"1","label":"Medium Bel","value":"74 cm"}]$j$::jsonb,
+   $j$[{"no":"1","label":"Karton Etiket","qty":"34"},{"no":"2","label":"Kalın Siyah Marka Etiketi","qty":"34"},{"no":"3","label":"40 cm Ekru fermuar","qty":"34"},{"no":"4","label":"Naylon Poşet","qty":"34"}]$j$::jsonb,
+   $j${"sizes":["XS","S","M","L","XL","XXL"],"rows":[{"label":"Beden etiketi","values":["0","5","12","12","5","0"],"total":""},{"label":"Üretim adeti","values":["0","5","12","12","5","0"],"total":"34"}]}$j$::jsonb,
+   $t$% 100 Polyester Dry Clean Only. Beden etiketine dikilmeyecek, yan dikişe yıkama talimatı dikilecek, üzerine beden etiketini takılacak.$t$,
+   $t$yıkama talimatı üstüne beden foto$t$,
+   $t$Kumaş 1: Beyaz Dantel. Astar 1: Bedene takılı astarı yok, ayrı şort astarı olacak.$t$,
+   $t$20 cm YKK Ekru Fermuar. AF Büyük marka etiketi, siyah renk. Önemli not: Beden etiketi yıkama talimatına takılacak.$t$,
+   null, null, null, null, null,
+   v_bob_id, v_bob_id),
+  ('00000000-0000-0000-0000-0000000000f3', v_ws_id,
+   'Beyaz Dantel Bluz', 'active', 'Bluz', 'Hakan Günaydın', 'Beyaz Dantel Bluz',
+   '2026 RESORT', '21.07.2026', null,
+   $j$[{"no":"1","label":"Kol Ağzı Bitmişi","value":"30 cm"},{"no":"2","label":"XS-S Kemerin Bitmişi","value":"72 cm"},{"no":"3","label":"M-L Kemer","value":"74 cm"},{"no":"4","label":"XL Kemer","value":"76 cm"}]$j$::jsonb,
+   $j$[{"no":"1","label":"Karton Etiket","qty":""},{"no":"2","label":"Kalın Siyah Marka Etiketi","qty":""},{"no":"3","label":"2,5 cm Gold Düğme","qty":"65 adet"}]$j$::jsonb,
+   $j${"sizes":["XS-S","M-L","XL"],"rows":[{"label":"Üretim adeti","values":["20","20","16"],"total":"56"}]}$j$::jsonb,
+   $t$% 100 Polyester Dry Clean Only$t$,
+   null,
+   $t$Kumaş 1: Beyaz Dantel$t$,
+   $t$2,5 cm Gold Düğme$t$,
+   $t$Bluz kemeri 2 cm daraltılacak. İngiliz dikişi yapılsın, yaka pervazında temiz dikiş yapılacak, beldeki ön kemerine 2.5 cm gold düğme dikilecek, ekru büyük etiket dikilecek. Beden etiketi yıkama talimatına takılacak. Kalıp aynı, marşet değişmeyecek. Yaka uçları eşit ve düzgün dışarıya çevrilecek. Pervaz dikişi 30/1 ince şile beziyle biye yapılacak.$t$,
+   null, null, null, null,
+   v_nisa_id, v_nisa_id)
+  on conflict (id) do nothing;
+
 end $$;

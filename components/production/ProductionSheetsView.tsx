@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 import {
-  Plus, Search, ClipboardList, Archive, ArrowUpRight, User, Clock,
+  Plus, Search, ClipboardList, Archive, ArrowUpRight, User, Clock, FileDown,
 } from "lucide-react";
 import { archiveProductionSheet } from "@/lib/actions/production";
 import { cn } from "@/lib/utils/cn";
@@ -156,16 +156,26 @@ export function ProductionSheetsView({ sheets, memberNames, isAdmin }: Props) {
                     {STATUS_LABEL[s.status]}
                   </span>
                 </div>
-                {isAdmin && s.status !== "archived" && (
-                  <button
-                    onClick={() => handleArchive(s)}
-                    disabled={isArchiving}
-                    className="shrink-0 rounded-md p-1 text-subtle transition-colors hover:bg-surface-muted hover:text-ink"
-                    title="Arşivle"
+                <div className="flex shrink-0 items-center gap-0.5">
+                  <a
+                    href={`/production/${s.id}/export`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="rounded-md p-1 text-subtle transition-colors hover:bg-surface-muted hover:text-ink"
+                    title="Föyü Excel (.xlsx) olarak indir"
                   >
-                    <Archive size={13} />
-                  </button>
-                )}
+                    <FileDown size={13} />
+                  </a>
+                  {isAdmin && s.status !== "archived" && (
+                    <button
+                      onClick={() => handleArchive(s)}
+                      disabled={isArchiving}
+                      className="rounded-md p-1 text-subtle transition-colors hover:bg-surface-muted hover:text-ink"
+                      title="Arşivle"
+                    >
+                      <Archive size={13} />
+                    </button>
+                  )}
+                </div>
               </div>
 
               <Link href={`/production/${s.id}`} className="flex min-w-0 items-start gap-3">

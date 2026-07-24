@@ -107,7 +107,9 @@ function ProfileMenu({
             </div>
           </div>
 
-          {/* Kişisel puan özeti — yalnızca kendi puanınız. Başka kimsenin puanı görünmez. */}
+          {/* Kişisel puan özeti — puan/motivasyon geri bildirimle şimdilik gizlendi
+              (geri alınabilir: {false && ...} kaldırılınca döner). */}
+          {false && (
           <div className="px-4 py-3 border-b border-line space-y-2">
             <div className="flex items-center justify-between">
               <span className="flex items-center gap-2 text-[12px] text-muted">
@@ -131,6 +133,7 @@ function ProfileMenu({
               </span>
             </div>
           </div>
+          )}
 
           {/* Ayarlar — admin-only. On mobile the bottom nav no longer carries
               Ayarlar (it shows Yönetici Pano), so this is its primary phone entry. */}

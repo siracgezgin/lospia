@@ -187,8 +187,9 @@ export function AppSidebar({
           (Logout now lives in the top-right profile menu.) */}
       {!collapsed && (
         <div className="px-3 pt-2 pb-3 mt-auto space-y-2.5">
-          {/* İlerleme kartı — admin sees the team total; a member sees ONLY their
-              own progress (no team figures, so there's no competitive framing). */}
+          {/* İlerleme kartı — puan/motivasyon geri bildirimle şimdilik gizlendi
+              (Aslı/Nisa: "puan motive kalksın"). Geri almak için {false &&} kaldır. */}
+          {false && (
           <div className="rounded-2xl border border-line bg-surface px-4 pt-3 pb-3.5 shadow-card">
             <p className="text-[9.5px] font-semibold uppercase tracking-[0.14em] text-subtle mb-2 flex items-center gap-1.5">
               <TrendingUp size={12} className="text-brand" />
@@ -230,6 +231,7 @@ export function AppSidebar({
             )}
             {/* "Puan özetini gör" bağlantısı — puan/motivasyon gizlendiği için kaldırıldı. */}
           </div>
+          )}
 
           {/* Haftanın sözü — weekly rotating editorial brand card. */}
           <div className="relative rounded-2xl border border-brand-soft bg-gradient-to-br from-[#f7ede9] via-brand-soft/40 to-surface px-4 pt-3.5 pb-4 overflow-hidden shadow-card">

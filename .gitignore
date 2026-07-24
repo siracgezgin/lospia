@@ -75,3 +75,7 @@ asli_filinta_logo_transparent.png
 
 # local utility scripts not for production
 scripts/import-*.ts
+
+# üretim föyü kaynak Excel/PDF dosyaları — uygulamaya seed edildi, repo'ya girmez
+uretim_foyu/
+gemini.md

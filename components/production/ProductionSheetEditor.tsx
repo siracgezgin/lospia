@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 import {
-  ClipboardList, ArrowLeft, Plus, Trash2, Save, User, Clock, Loader2,
+  ClipboardList, ArrowLeft, Plus, Trash2, Save, User, Clock, Loader2, FileDown,
 } from "lucide-react";
 import {
   createProductionSheet, updateProductionSheet, updateProductionSheetImages,
@@ -240,7 +240,18 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin }: Props) {
             </div>
           )}
         </div>
-        {SaveBtn}
+        <div className="flex shrink-0 items-center gap-2">
+          {!isNew && sheet && (
+            <a
+              href={`/production/${sheet.id}/export`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-muted transition-colors hover:bg-surface-muted hover:text-ink"
+              title="Föyü Excel (.xlsx) olarak indir"
+            >
+              <FileDown size={15} /> Excel indir
+            </a>
+          )}
+          {SaveBtn}
+        </div>
       </div>
 
       {error && (
