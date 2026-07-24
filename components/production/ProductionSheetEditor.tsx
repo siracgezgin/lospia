@@ -7,9 +7,11 @@ import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 import {
   ClipboardList, ArrowLeft, Plus, Trash2, Save, User, Clock, Loader2, FileDown,
+  CheckCircle2,
 } from "lucide-react";
 import {
   createProductionSheet, updateProductionSheet, updateProductionSheetImages,
+  deleteProductionSheet,
   type ProductionSheetInput,
 } from "@/lib/actions/production";
 import { cn } from "@/lib/utils/cn";
@@ -22,6 +24,7 @@ interface Props {
   sheet: ProductionSheet | null;
   memberNames: Record<string, string>;
   isAdmin: boolean;
+  currentUserId: string;
 }
 
 const DEFAULT_SIZES = ["XS", "S", "M", "L", "XL", "XXL"];
@@ -135,14 +138,18 @@ function Section({ title, children, className }: { title: string; children: Reac
   );
 }
 
-export function ProductionSheetEditor({ sheet, memberNames, isAdmin }: Props) {
+export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUserId }: Props) {
   const router = useRouter();
   const [form, setForm] = useState<ProductionSheetInput>(() => (sheet ? fromSheet(sheet) : emptyState()));
   const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
   const [isSaving, startSave] = useTransition();
+  const [isDeleting, startDelete] = useTransition();
 
   const isNew = sheet === null;
   const sheetId = sheet?.id ?? "new";
+  // Silme: admin her föyü; üye kendi oluşturduğu föyü siler (RLS de bunu uygular).
+  const canDelete = !isNew && !!sheet && (isAdmin || sheet.created_by === currentUserId);
   const set = <K extends keyof ProductionSheetInput>(key: K, value: ProductionSheetInput[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
@@ -201,19 +208,37 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin }: Props) {
 
   function handleSave() {
     setError(null);
+    setSaved(false);
     if (!form.title.trim()) { setError("Föy başlığı (ürün adı) gerekli."); return; }
     startSave(async () => {
       const res = isNew ? await createProductionSheet(form) : await updateProductionSheet(sheet!.id, form);
       if ("error" in res) { setError(res.error); return; }
-      if (isNew && "id" in res) router.replace(`/production/${res.id}`);
-      else router.refresh();
+      if (isNew && "id" in res) {
+        router.replace(`/production/${res.id}`);
+      } else {
+        setSaved(true);
+        window.setTimeout(() => setSaved(false), 2600);
+        router.refresh();
+      }
+    });
+  }
+
+  function handleDelete() {
+    if (!sheet) return;
+    if (!confirm(`"${sheet.title}" föyünü kalıcı olarak silmek istiyor musunuz? Bu işlem geri alınamaz.`)) return;
+    setError(null);
+    startDelete(async () => {
+      const res = await deleteProductionSheet(sheet.id);
+      if ("error" in res) { setError(res.error); return; }
+      router.push("/production");
+      router.refresh();
     });
   }
 
   const SaveBtn = (
     <button
       onClick={handleSave}
-      disabled={isSaving}
+      disabled={isSaving || isDeleting}
       className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand-strong disabled:opacity-60"
     >
       {isSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
@@ -222,15 +247,26 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin }: Props) {
   );
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
-      {/* Üst bar */}
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+    <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+      {/* Kaydedildi bildirimi (toast) */}
+      <div
+        aria-live="polite"
+        className={cn(
+          "pointer-events-none fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-lg bg-ink px-4 py-2.5 text-[13px] font-medium text-white shadow-drawer transition-all duration-300",
+          saved ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
+        )}
+      >
+        <CheckCircle2 size={16} className="text-emerald-400" /> Değişiklikler kaydedildi
+      </div>
+
+      {/* Üst bar — eylemler sabit kalır (sticky) ki uzun föyde her zaman erişilebilir */}
+      <div className="sticky top-0 z-20 -mx-4 mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-line bg-app/85 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
         <div className="min-w-0">
-          <Link href="/production" className="mb-2 inline-flex items-center gap-1 text-[12.5px] text-subtle hover:text-ink">
+          <Link href="/production" className="mb-1 inline-flex items-center gap-1 text-[12.5px] text-subtle transition-colors hover:text-ink">
             <ArrowLeft size={13} /> Üretim Föyleri
           </Link>
           {!isNew && sheet && (
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11.5px] text-subtle">
+            <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[11.5px] text-subtle">
               <span className="flex items-center gap-1">
                 <User size={11} /> Oluşturan: <span className="font-medium text-muted">{nameOf(sheet.created_by)}</span>
               </span>
@@ -241,13 +277,24 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin }: Props) {
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {canDelete && (
+            <button
+              onClick={handleDelete}
+              disabled={isDeleting || isSaving}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-[13px] font-medium text-muted transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-700 disabled:opacity-60"
+              title="Föyü sil"
+            >
+              {isDeleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+              <span className="hidden sm:inline">Sil</span>
+            </button>
+          )}
           {!isNew && sheet && (
             <a
               href={`/production/${sheet.id}/export`}
               className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-muted transition-colors hover:bg-surface-muted hover:text-ink"
               title="Föyü Excel (.xlsx) olarak indir"
             >
-              <FileDown size={15} /> Excel indir
+              <FileDown size={15} /> <span className="hidden sm:inline">Excel indir</span>
             </a>
           )}
           {SaveBtn}
@@ -262,14 +309,19 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin }: Props) {
       )}
 
       {/* ── Föy belgesi ── */}
-      <div className="space-y-3 rounded-xl border border-line-strong bg-surface p-4 shadow-card sm:p-5">
-        {/* Başlık şeridi */}
-        <div className="flex items-center justify-between gap-3 rounded-lg bg-ink px-4 py-2.5">
-          <div className="flex items-center gap-2 text-white">
-            <ClipboardList size={18} />
+      <div className="space-y-3 rounded-2xl border border-line-strong bg-surface p-4 shadow-card sm:p-6">
+        {/* Başlık şeridi — solda başlık, sağda AF logosu (koyu band → beyaz logo) */}
+        <div className="flex items-center justify-between gap-3 rounded-xl bg-ink px-5 py-3">
+          <div className="flex items-center gap-2.5 text-white">
+            <ClipboardList size={19} />
             <span className="text-[15px] font-bold uppercase tracking-[0.18em]">Üretim Föyü</span>
           </div>
-          <span className="text-[12px] font-medium text-white/70">aslıfilinta</span>
+          <img
+            src="/brands/asli-filinta-logo.png"
+            alt="Aslı Filinta"
+            className="h-5 w-auto select-none object-contain opacity-90 [filter:brightness(0)_invert(1)]"
+            draggable={false}
+          />
         </div>
 
         {/* Ürün bilgileri — 2 kolon (Excel'deki gibi) */}

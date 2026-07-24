@@ -32,7 +32,7 @@ export default async function ProductionSheetPage({
   // "new" → boş föy oluşturma modu.
   if (id === "new") {
     return (
-      <ProductionSheetEditor sheet={null} memberNames={memberNames} isAdmin={isAdmin} />
+      <ProductionSheetEditor sheet={null} memberNames={memberNames} isAdmin={isAdmin} currentUserId={user.id} />
     );
   }
 
@@ -52,6 +52,7 @@ export default async function ProductionSheetPage({
       sheet={data as unknown as ProductionSheet}
       memberNames={memberNames}
       isAdmin={isAdmin}
+      currentUserId={user.id}
     />
   );
 }
