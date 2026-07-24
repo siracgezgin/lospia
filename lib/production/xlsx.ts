@@ -23,15 +23,35 @@ function estimateLines(text: string, charsPerLine: number): number {
   return lines;
 }
 
-/** Föyü tek sayfalık, biçimli bir çalışma kitabı olarak üretir. */
-export async function buildProductionSheetWorkbook(
-  sheet: ProductionSheet,
-  memberNames: Record<string, string>,
-): Promise<Buffer> {
+function newWorkbook(): ExcelJS.Workbook {
   const wb = new ExcelJS.Workbook();
   wb.creator = "Lospia — Aslı Filinta Operasyon";
   wb.created = new Date();
-  const ws = wb.addWorksheet(sheet.title.slice(0, 31) || "Föy", {
+  return wb;
+}
+
+/** Geçerli, benzersiz sekme adı (Excel: ≤31 karakter, : \ / ? * [ ] yasak). */
+function uniqueSheetName(title: string, used: Set<string>): string {
+  const base = (title || "Föy").replace(/[:\\/?*[\]]/g, " ").trim().slice(0, 31) || "Föy";
+  let name = base;
+  let i = 2;
+  while (used.has(name.toLowerCase())) {
+    const suffix = ` (${i})`;
+    name = base.slice(0, 31 - suffix.length) + suffix;
+    i++;
+  }
+  used.add(name.toLowerCase());
+  return name;
+}
+
+/** Bir föyü verilen çalışma kitabına yeni bir sekme olarak ekler. */
+async function addProductionSheet(
+  wb: ExcelJS.Workbook,
+  sheet: ProductionSheet,
+  memberNames: Record<string, string>,
+  usedNames: Set<string>,
+): Promise<void> {
+  const ws = wb.addWorksheet(uniqueSheetName(sheet.title, usedNames), {
     views: [{ showGridLines: false }],
     pageSetup: { paperSize: 9, orientation: "portrait", fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.3, footer: 0.3 } },
   });
@@ -285,7 +305,28 @@ export async function buildProductionSheetWorkbook(
   foot.font = { size: 9, italic: true, color: { argb: "FF9CA3AF" } };
   foot.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
   ws.getRow(r).height = 18;
+}
 
-  const buf = await wb.xlsx.writeBuffer();
-  return Buffer.from(buf);
+/** Tek föyü biçimli bir çalışma kitabı olarak üretir. */
+export async function buildProductionSheetWorkbook(
+  sheet: ProductionSheet,
+  memberNames: Record<string, string>,
+): Promise<Buffer> {
+  const wb = newWorkbook();
+  await addProductionSheet(wb, sheet, memberNames, new Set());
+  return Buffer.from(await wb.xlsx.writeBuffer());
+}
+
+/** Tüm föyleri TEK dosyada, her föy ayrı sekme olacak şekilde üretir. */
+export async function buildAllProductionSheetsWorkbook(
+  sheets: ProductionSheet[],
+  memberNames: Record<string, string>,
+): Promise<Buffer> {
+  const wb = newWorkbook();
+  const used = new Set<string>();
+  // Sekmeler başlığa göre sıralı; görsel indirmeleri sekme sekme sıralı işlenir.
+  for (const sheet of sheets) {
+    await addProductionSheet(wb, sheet, memberNames, used);
+  }
+  return Buffer.from(await wb.xlsx.writeBuffer());
 }

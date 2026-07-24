@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 import {
-  Plus, Search, ClipboardList, Archive, ArrowUpRight, User, Clock, FileDown,
+  Plus, Search, ClipboardList, Archive, ArrowUpRight, User, Clock, FileDown, FileSpreadsheet,
 } from "lucide-react";
 import { archiveProductionSheet } from "@/lib/actions/production";
 import { cn } from "@/lib/utils/cn";
@@ -96,13 +96,25 @@ export function ProductionSheetsView({ sheets, memberNames, isAdmin }: Props) {
         icon={ClipboardList}
         secondaryBackHref="/board"
         rightSlot={
-          <Link
-            href="/production/new"
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-3.5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand-strong"
-          >
-            <Plus size={15} />
-            Yeni föy
-          </Link>
+          <div className="flex shrink-0 items-center gap-2">
+            {sheets.some((s) => s.status !== "archived") && (
+              <a
+                href="/production/export-all"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-muted transition-colors hover:bg-surface-muted hover:text-ink"
+                title="Tüm föyleri tek Excel dosyası olarak indir (her föy ayrı sekme)"
+              >
+                <FileSpreadsheet size={15} />
+                Tümünü indir
+              </a>
+            )}
+            <Link
+              href="/production/new"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3.5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand-strong"
+            >
+              <Plus size={15} />
+              Yeni föy
+            </Link>
+          </div>
         }
       />
 
