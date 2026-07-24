@@ -225,6 +225,58 @@ export async function buildProductionSheetWorkbook(
   textSection("Revizyon Notları", sheet.revision_notes);
   textSection("Üretim Fire Payı", sheet.production_waste);
 
+  // ── Görseller — föye eklenen fotoğraflar (teknik çizim, kumaş, detay) ────────
+  const photos = Array.isArray(sheet.photo_refs) ? sheet.photo_refs.filter((p) => p?.url) : [];
+  if (photos.length) {
+    // Görselleri paralel indir (başarısız olan atlanır — export yine üretilir).
+    const SECTION_TR: Record<string, string> = {
+      technical_drawing: "Teknik çizim", fabric: "Kumaş / astar",
+      accessories: "Aksesuar", embellishments: "Süsleme", sewing: "Dikiş / numune",
+      general: "Görsel",
+    };
+    const fetched = await Promise.all(
+      photos.map(async (p) => {
+        try {
+          const res = await fetch(p.url);
+          if (!res.ok) return null;
+          const buf = Buffer.from(await res.arrayBuffer());
+          const lower = (p.path || p.url).toLowerCase();
+          const ext: "jpeg" | "png" | "gif" =
+            lower.endsWith(".png") ? "png" : lower.endsWith(".gif") ? "gif" : "jpeg";
+          return { buf, ext, section: p.section };
+        } catch {
+          return null;
+        }
+      }),
+    );
+    const ok = fetched.filter((f): f is NonNullable<typeof f> => f !== null);
+    if (ok.length) {
+      sectionBand("Görseller");
+      const startRow = r; // 1-tabanlı
+      const perRow = 2;
+      const imgW = 300, imgH = 210;
+      const gapRows = 16; // ~16*14px ≈ 224px > imgH
+      ok.forEach((img, i) => {
+        const rb = Math.floor(i / perRow);
+        const cb = i % perRow;
+        const imageId = wb.addImage({ buffer: img.buf as unknown as ExcelJS.Buffer, extension: img.ext });
+        // Bölüm etiketi (görselin üstünde)
+        const labelRow = startRow + rb * gapRows;
+        const labelCell = ws.getCell(labelRow, cb === 0 ? 1 : 5);
+        labelCell.value = SECTION_TR[img.section] ?? "Görsel";
+        labelCell.font = { size: 9, italic: true, color: { argb: "FF9CA3AF" } };
+        ws.addImage(imageId, {
+          tl: { col: cb === 0 ? 0.1 : 4.55, row: labelRow + 0.05 } as ExcelJS.Anchor,
+          ext: { width: imgW, height: imgH },
+          editAs: "oneCell",
+        });
+      });
+      const blockRows = Math.ceil(ok.length / perRow) * gapRows;
+      for (let k = startRow; k < startRow + blockRows; k++) ws.getRow(k).height = 14;
+      r = startRow + blockRows + 1;
+    }
+  }
+
   // ── Alt bilgi — kim girdi izi ────────────────────────────────────────────────
   ws.mergeCells(`A${r}:I${r}`);
   const foot = ws.getCell(`A${r}`);

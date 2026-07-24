@@ -77,6 +77,13 @@ create index if not exists production_sheets_workspace_idx
 create index if not exists production_sheets_status_idx
   on public.production_sheets(workspace_id, status);
 
+-- Rol ayrıcalıkları — Supabase'de erişim RLS ile yönetilir ama roller önce
+-- tablo GRANT'ine sahip olmalı. (migration up ile sonradan eklenen tablolar
+-- default privileges'i almayabiliyor; bu yüzden AÇIKÇA veriyoruz.) service_role
+-- RLS'i baypas eder; anon/authenticated yine RLS politikalarına tabidir.
+grant select, insert, update, delete on public.production_sheets
+  to anon, authenticated, service_role;
+
 alter table public.production_sheets enable row level security;
 
 -- SELECT: workspace'in her üyesi tüm föyleri görür (arşiv dahil; UI filtreler).
