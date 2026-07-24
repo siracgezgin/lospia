@@ -319,7 +319,7 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
           <img
             src="/brands/asli-filinta-logo.png"
             alt="Aslı Filinta"
-            className="h-5 w-auto select-none object-contain opacity-90 [filter:brightness(0)_invert(1)]"
+            className="h-9 w-auto select-none object-contain opacity-95 [filter:brightness(0)_invert(1)]"
             draggable={false}
           />
         </div>
