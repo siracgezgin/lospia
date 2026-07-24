@@ -300,6 +300,35 @@ def main():
         print("HATA: SERVICE_ROLE_KEY gerekli.", file=sys.stderr)
         sys.exit(1)
 
+    # WORKSPACE_ID / CREATED_BY verilmediyse otomatik tespit (canlıda kolaylık —
+    # Supabase bulutunda service_role tam erişime sahiptir). Başarısız olursa
+    # açık env vermeye yönlendirir.
+    global WS, CREATED_BY, UPDATED_BY
+    if not os.environ.get("WORKSPACE_ID"):
+        try:
+            _, body = http("GET", "/rest/v1/workspaces?select=id,name&limit=2")
+            wss = json.loads(body)
+            assert wss
+            WS = wss[0]["id"]
+            note = f" ({wss[0].get('name','')})" + (
+                f"  [DİKKAT: birden fazla workspace var, ilki seçildi — doğruysa devam, değilse WORKSPACE_ID verin]"
+                if len(wss) > 1 else "")
+            print(f"Otomatik workspace: {WS}{note}")
+        except Exception as e:
+            print(f"HATA: workspace otomatik bulunamadı ({e}). WORKSPACE_ID env verin.", file=sys.stderr)
+            sys.exit(1)
+    if not os.environ.get("CREATED_BY"):
+        try:
+            _, body = http("GET", f"/rest/v1/workspace_members?workspace_id=eq.{WS}&order=role.asc&select=user_id,role&limit=1")
+            mem = json.loads(body)
+            assert mem
+            CREATED_BY = mem[0]["user_id"]
+            UPDATED_BY = CREATED_BY
+            print(f"Otomatik created_by: {CREATED_BY} (rol: {mem[0].get('role')})")
+        except Exception as e:
+            print(f"HATA: workspace üyesi otomatik bulunamadı ({e}). CREATED_BY env verin.", file=sys.stderr)
+            sys.exit(1)
+
     for f in foys:
         images = f.pop("_images")
         title = f["title"]
