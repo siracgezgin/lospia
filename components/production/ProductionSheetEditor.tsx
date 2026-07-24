@@ -247,7 +247,7 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
   );
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+    <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
       {/* Kaydedildi bildirimi (toast) */}
       <div
         aria-live="polite"
@@ -324,11 +324,6 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
           />
         </div>
 
-        {/* İki sütun: solda form, sağda sabit görsel paneli (lg+); mobilde tek sütun */}
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-          {/* ── SOL: form ── */}
-          <div className="min-w-0 space-y-3">
-
         {/* Ürün bilgileri — 2 kolon (Excel'deki gibi) */}
         <div className="grid grid-cols-1 gap-x-5 gap-y-2 rounded-lg border border-line-strong p-3 md:grid-cols-2">
           <div className="space-y-2">
@@ -349,22 +344,28 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
           </label>
         </div>
 
-        {/* ÖLÇÜLER */}
-        <Section title="Ölçüler (cm)">
-          <div className="space-y-1.5">
-            {form.measurements.map((row, i) => (
-              <div key={i} className="flex items-center gap-1.5">
-                <input className={cn(inputCls, "w-10 px-1 text-center")} value={row.no} onChange={(e) => updateMeasurement(i, { no: e.target.value })} />
-                <input className={cn(inputCls, "flex-1")} value={row.label} onChange={(e) => updateMeasurement(i, { label: e.target.value })} placeholder="Ölçü adı" />
-                <input className={cn(inputCls, "w-20 text-center")} value={row.value} onChange={(e) => updateMeasurement(i, { value: e.target.value })} placeholder="cm" />
-                <button onClick={() => removeMeasurement(i)} className="shrink-0 rounded p-1 text-subtle hover:text-red-600" title="Sil"><Trash2 size={13} /></button>
-              </div>
-            ))}
-          </div>
-          <button onClick={addMeasurement} className="mt-2 inline-flex items-center gap-1 text-[12px] font-medium text-brand hover:text-brand-strong">
-            <Plus size={12} /> Satır ekle
-          </button>
-        </Section>
+        {/* ÖLÇÜLER (sol) + TEKNİK ÇİZİM (sağ) — Excel'deki gibi yan yana */}
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <Section title="Ölçüler (cm)">
+            <div className="space-y-1.5">
+              {form.measurements.map((row, i) => (
+                <div key={i} className="flex items-center gap-1.5">
+                  <input className={cn(inputCls, "w-10 px-1 text-center")} value={row.no} onChange={(e) => updateMeasurement(i, { no: e.target.value })} />
+                  <input className={cn(inputCls, "flex-1")} value={row.label} onChange={(e) => updateMeasurement(i, { label: e.target.value })} placeholder="Ölçü adı" />
+                  <input className={cn(inputCls, "w-20 text-center")} value={row.value} onChange={(e) => updateMeasurement(i, { value: e.target.value })} placeholder="cm" />
+                  <button onClick={() => removeMeasurement(i)} className="shrink-0 rounded p-1 text-subtle hover:text-red-600" title="Sil"><Trash2 size={13} /></button>
+                </div>
+              ))}
+            </div>
+            <button onClick={addMeasurement} className="mt-2 inline-flex items-center gap-1 text-[12px] font-medium text-brand hover:text-brand-strong">
+              <Plus size={12} /> Satır ekle
+            </button>
+          </Section>
+
+          <Section title="Teknik Çizim">
+            <ImageUploader sheetId={sheetId} section="technical_drawing" images={form.photo_refs} onChange={handleImagesChange} variant="drawing" />
+          </Section>
+        </div>
 
         {/* TESLİM EDİLEN ÜRÜNLER */}
         <Section title="Teslim Edilen Ürünler">
@@ -423,9 +424,12 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
           <TextArea value={form.wash_instruction ?? ""} onChange={(v) => set("wash_instruction", v)} rows={2} placeholder="% 100 Polyester Dry Clean Only…" />
         </Section>
 
-        {/* KUMAŞ / ASTAR */}
+        {/* KUMAŞ / ASTAR — metin + foto */}
         <Section title="Kumaş / Astar">
           <TextArea value={form.fabric_lining ?? ""} onChange={(v) => set("fabric_lining", v)} rows={2} />
+          <div className="mt-3">
+            <ImageUploader sheetId={sheetId} section="fabric" images={form.photo_refs} onChange={handleImagesChange} label="Kumaş / astar fotoğrafları" />
+          </div>
         </Section>
 
         {/* KUMAŞ BİLGİSİ + AKSESUAR BİLGİSİ */}
@@ -438,16 +442,25 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
             <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">Aksesuarlar bilgisi (çıtçıt, düğme, kopça, taş, boncuk, etiket…)</span>
             <TextArea value={form.accessories_info ?? ""} onChange={(v) => set("accessories_info", v)} rows={2} />
           </label>
+          <div className="mt-3">
+            <ImageUploader sheetId={sheetId} section="accessories" images={form.photo_refs} onChange={handleImagesChange} label="Aksesuar fotoğrafları" />
+          </div>
         </Section>
 
         {/* SÜSLEMELER */}
         <Section title="Süslemeler ve Aksesuar Açıklaması">
           <TextArea value={form.embellishments ?? ""} onChange={(v) => set("embellishments", v)} rows={2} />
+          <div className="mt-3">
+            <ImageUploader sheetId={sheetId} section="embellishments" images={form.photo_refs} onChange={handleImagesChange} label="Süsleme / etiket fotoğrafları" />
+          </div>
         </Section>
 
         {/* DİKİŞ TALİMATI */}
         <Section title="Dikiş Talimatı">
           <TextArea value={form.sewing_instruction ?? ""} onChange={(v) => set("sewing_instruction", v)} rows={4} />
+          <div className="mt-3">
+            <ImageUploader sheetId={sheetId} section="sewing" images={form.photo_refs} onChange={handleImagesChange} label="Dikiş / numune fotoğrafları" />
+          </div>
         </Section>
 
         {/* ÖZEL İŞÇİLİK & KALİTE KONTROL */}
@@ -472,6 +485,13 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
           </div>
         </Section>
 
+        {/* DİĞER GÖRSELLER — bölümlere atanmamış (genel) görseller için güvenlik ağı */}
+        {form.photo_refs.some((p) => p.section === "general") && (
+          <Section title="Diğer Görseller">
+            <ImageUploader sheetId={sheetId} section="general" images={form.photo_refs} onChange={handleImagesChange} label="Genel fotoğraflar" />
+          </Section>
+        )}
+
         {isAdmin && !isNew && (
           <Section title="Durum">
             <label className="block max-w-xs">
@@ -487,36 +507,6 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
             </label>
           </Section>
         )}
-          </div>
-
-          {/* ── SAĞ: sabit görsel paneli (lg+ sticky) ── */}
-          <aside className="h-fit space-y-3 self-start lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:pr-0.5">
-            <Section title="Görseller">
-              <div className="space-y-4">
-                <div>
-                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted">Teknik çizim</p>
-                  <ImageUploader sheetId={sheetId} section="technical_drawing" images={form.photo_refs} onChange={handleImagesChange} variant="drawing" />
-                </div>
-                <div className="border-t border-line/60 pt-4">
-                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted">Kumaş / astar</p>
-                  <ImageUploader sheetId={sheetId} section="fabric" images={form.photo_refs} onChange={handleImagesChange} />
-                </div>
-                <div className="border-t border-line/60 pt-4">
-                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted">Aksesuar</p>
-                  <ImageUploader sheetId={sheetId} section="accessories" images={form.photo_refs} onChange={handleImagesChange} />
-                </div>
-                <div className="border-t border-line/60 pt-4">
-                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted">Süsleme / etiket</p>
-                  <ImageUploader sheetId={sheetId} section="embellishments" images={form.photo_refs} onChange={handleImagesChange} />
-                </div>
-                <div className="border-t border-line/60 pt-4">
-                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted">Dikiş / numune</p>
-                  <ImageUploader sheetId={sheetId} section="sewing" images={form.photo_refs} onChange={handleImagesChange} />
-                </div>
-              </div>
-            </Section>
-          </aside>
-        </div>
       </div>
     </div>
   );

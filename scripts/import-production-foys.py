@@ -231,6 +231,45 @@ def is_foy(grid):
     return False
 
 
+def section_for_text(t):
+    """Bir satır metnini editör bölüm enum'una eşler (öncelik sırası önemli)."""
+    t = t.upper()
+    if "TEKNİK ÇİZİM" in t or "ÖLÇÜLER" in t:
+        return "technical_drawing"
+    if "SÜSLEME" in t:                      # SÜSLEMELER (VE AKSESUAR) → süsleme
+        return "embellishments"
+    if "AKSESUAR" in t:                     # AKSESUARLAR BİLGİSİ → aksesuar
+        return "accessories"
+    if "DİKİŞ TALİMATI" in t or "NOTLAR" in t:
+        return "sewing"
+    if "KUMAŞ" in t or "ASTAR" in t or "YIKAMA" in t:  # kumaş/astar + beden foto
+        return "fabric"
+    return None
+
+
+def build_section_markers(grid):
+    """(1-tabanlı satır, bölüm) işaretlerini sıralı döndürür."""
+    markers = []
+    for i, row in enumerate(grid):
+        joined = " ".join(c for c in row if c)
+        sec = section_for_text(joined)
+        if sec:
+            markers.append((i + 1, sec))
+    markers.sort(key=lambda m: m[0])
+    return markers
+
+
+def assign_section(markers, img_row):
+    """Görselin bulunduğu satırın ÜSTÜNDEKİ en yakın bölüm başlığına ata."""
+    chosen = "technical_drawing"  # ilk başlığın da üstündeyse teknik çizim alanı
+    for row, sec in markers:
+        if row <= img_row:
+            chosen = sec
+        else:
+            break
+    return chosen
+
+
 def http(method, path, body=None, headers=None, raw=False):
     url = URL + path
     h = {"apikey": KEY, "Authorization": f"Bearer {KEY}"}
@@ -246,14 +285,11 @@ def http(method, path, body=None, headers=None, raw=False):
 
 def main():
     wb = openpyxl.load_workbook(XLSX)
-    # Görselleri sayfa bazında TEK KEZ oku, sonra ortak/logo hash'lerini bul.
+    # Görselleri sayfa bazında TEK KEZ oku (openpyxl _data() ikinci okumada kapanır).
+    # NOT: Artık hash-dedup YOK — tekrar eden gerçek fotoğraflar (ör. AF marka
+    # etiketi birden fazla föyde) korunur. Yalnızca en üstteki (satır ≤ 2) logo
+    # atlanır; bölüm ataması Excel'deki en yakın başlığa göre yapılır.
     sheet_imgs = {name: read_sheet_images(wb[name]) for name in wb.sheetnames}
-    counter = Counter()
-    for lst in sheet_imgs.values():
-        for im in lst:
-            counter[im["hash"]] += 1
-    skip_hashes = {h for h, c in counter.items() if c >= 5}
-    print(f"Ortak/logo görseller atlanacak (>=5 tekrar): {sorted(skip_hashes)}")
 
     foys = []
     seen_titles = {}
@@ -273,14 +309,16 @@ def main():
             title = clean_sheet or f"{title} ({name})"
         seen_titles[title] = True
         parsed["title"] = title
-        # Görselleri filtrele + bölüm ata.
+        # Görselleri: en üstteki logoyu (satır ≤ 2) atla; bölümü en yakın
+        # başlığa göre ata (Excel'deki gibi ilgili başlığın altına düşer).
+        markers = build_section_markers(grid)
         imgs = []
         for im in sheet_imgs.get(name, []):
-            if im["hash"] in skip_hashes:
+            if im["row"] <= 2:  # başlık şeridindeki AF logosu
                 continue
             imgs.append({
                 "data": im["data"], "ext": im["ext"],
-                "section": "technical_drawing" if im["row"] <= 15 else "general",
+                "section": assign_section(markers, im["row"]),
             })
         parsed["_images"] = imgs
         foys.append(parsed)
