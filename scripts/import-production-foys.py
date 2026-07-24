@@ -337,6 +337,17 @@ def main():
     if not KEY:
         print("HATA: SERVICE_ROLE_KEY gerekli.", file=sys.stderr)
         sys.exit(1)
+    # Anahtar geçerli mi? (Sık hata: örnek metnin '<...>' aynen yapıştırılması.)
+    if not KEY.isascii() or "<" in KEY or " " in KEY:
+        print(
+            "HATA: SERVICE_ROLE_KEY geçersiz görünüyor. Örnek metni değil, "
+            "GERÇEK anahtarı yapıştırın.\n"
+            "  Supabase paneli > Project Settings > API > Project API keys > "
+            "'service_role' (secret) anahtarını kopyalayın.\n"
+            "  Örn: export SERVICE_ROLE_KEY=\"eyJhbGci...\"  (uzun bir dizedir)",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     # WORKSPACE_ID / CREATED_BY verilmediyse otomatik tespit (canlıda kolaylık —
     # Supabase bulutunda service_role tam erişime sahiptir). Başarısız olursa
