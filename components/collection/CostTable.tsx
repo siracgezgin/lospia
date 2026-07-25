@@ -12,6 +12,7 @@ import {
 } from "@/lib/actions/production";
 import {
   totalQuantity, quantityBySize, orderSizes, withSizeQty, parseMoney, formatMoney,
+  STANDARD_SIZES,
 } from "@/lib/collection/cost";
 import type { ProductionSheet, ProductionPricing, SizeDistribution } from "@/types";
 
@@ -47,15 +48,12 @@ export function CostTable({ rows }: Props) {
   const [savedId, setSavedId] = useState<string | null>(null);
   const [, startSave] = useTransition();
 
-  // Yalnızca adedi olan beden kolonlarını göster (standart set 13 kolon; boşları
-  // gizle ki tablo kalabalık olmasın). Föyde tüm bedenler her zaman var.
+  // Tüm standart bedenler her zaman görünür (föy Beden Dağılımı ile aynı) +
+  // veride olan standart-dışı bedenler sona eklenir. Kişi hangisine isterse girer.
   const sizes = useMemo(() => {
-    const totals: Record<string, number> = {};
-    for (const r of rows) {
-      const qbs = quantityBySize(dist[r.id]);
-      for (const [s, q] of Object.entries(qbs)) totals[s] = (totals[s] ?? 0) + q;
-    }
-    return orderSizes(Object.keys(totals).filter((s) => totals[s] > 0));
+    const set = new Set<string>(STANDARD_SIZES);
+    for (const r of rows) Object.keys(quantityBySize(dist[r.id])).forEach((s) => set.add(s));
+    return orderSizes([...set]);
   }, [rows, dist]);
 
   const flash = (id: string) => {
