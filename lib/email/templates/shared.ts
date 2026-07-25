@@ -36,6 +36,13 @@ const COLORS = {
 const FONT_STACK =
   "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 
+// Brand line shown at the top of every email and referenced in the footer.
+// Single source of truth so the header, footer, subjects and signatures never
+// drift. `EMAIL_BRAND_NAME` is the top banner; `EMAIL_BRAND_FOOTER_NAME` is the
+// plain product name used in the footer note, subjects and signatures.
+export const EMAIL_BRAND_NAME = "AF-Operasyon Notifications";
+export const EMAIL_BRAND_FOOTER_NAME = "AF Operasyon";
+
 /**
  * A single call-to-action button. `label` is treated as trusted UI copy (we
  * never pass user input as a button label), but `href` is escaped for the
@@ -75,7 +82,7 @@ export function renderDetailRow(label: string, value: string): string {
 
 /**
  * Wrap template body HTML in the shared branded shell: light-grey page, a
- * centred white card (max 600px), a small "Lospia" brand line at the top and a
+ * centred white card (max 600px), a small brand line at the top and a
  * muted footer. `bodyHtml` is expected to already be safe HTML (built from
  * escaped fragments by the caller).
  */
@@ -98,7 +105,7 @@ export function renderEmailShell(params: { title: string; bodyHtml: string }): s
           <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width: 100%; max-width: 600px;">
             <tr>
               <td style="padding: 0 4px 12px; font-family: ${FONT_STACK}; font-size: 13px; font-weight: 600; letter-spacing: 0.3px; color: ${COLORS.muted}; text-transform: uppercase;">
-                Lospia Notifications
+                ${EMAIL_BRAND_NAME}
               </td>
             </tr>
             <tr>
@@ -108,7 +115,7 @@ export function renderEmailShell(params: { title: string; bodyHtml: string }): s
             </tr>
             <tr>
               <td style="padding: 16px 4px 0; font-family: ${FONT_STACK}; font-size: 12px; line-height: 1.5; color: ${COLORS.muted};">
-                Bu e-posta Lospia tarafından otomatik gönderildi. Yanıtlamanız gerekmez.
+                Bu e-posta ${EMAIL_BRAND_FOOTER_NAME} tarafından otomatik gönderildi. Yanıtlamanız gerekmez.
               </td>
             </tr>
           </table>

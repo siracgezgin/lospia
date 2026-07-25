@@ -6,6 +6,7 @@
 
 import type { EmailMessage } from "../types";
 import {
+  EMAIL_BRAND_FOOTER_NAME,
   renderButton,
   renderEmailShell,
   renderHeading,
@@ -29,7 +30,7 @@ export function taskAssignedEmail(params: {
     `Görevi görüntüle: ${url}`,
     "",
     "—",
-    "Lospia",
+    EMAIL_BRAND_FOOTER_NAME,
   ].join("\n");
 
   const html = renderEmailShell({
@@ -43,7 +44,7 @@ export function taskAssignedEmail(params: {
 
   return {
     to,
-    subject: `Lospia'da size yeni bir görev atandı — ${taskTitle}`,
+    subject: `${EMAIL_BRAND_FOOTER_NAME}'da size yeni bir görev atandı — ${taskTitle}`,
     text,
     html,
   };
