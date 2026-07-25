@@ -52,6 +52,14 @@ const productionImage = z.object({
 const longText = z.string().max(8000).optional().nullable();
 const shortText = z.string().max(500).optional().nullable();
 
+const pricing = z.object({
+  unit_price: z.string().max(40).optional().default(""),
+  purchase_cost: z.string().max(40).optional().default(""),
+  web_sale_price: z.string().max(40).optional().default(""),
+  currency: z.string().max(10).optional().default("TL"),
+  notes: z.string().max(500).optional().default(""),
+});
+
 const SheetSchema = z.object({
   title: z.string().min(1, "Föy başlığı (ürün adı) gerekli").max(300),
   status: z.enum(["draft", "active", "archived"]).default("active"),
@@ -77,6 +85,9 @@ const SheetSchema = z.object({
   qc_revision: longText,
   revision_notes: longText,
   production_waste: longText,
+  category: z.enum(["one_of_a_kind", "ready_to_wear", "shoes", "accessories"]).nullable().optional(),
+  subcategory: shortText,
+  pricing: pricing.default({ unit_price: "", purchase_cost: "", web_sale_price: "", currency: "TL", notes: "" }),
 });
 
 export type ProductionSheetInput = z.infer<typeof SheetSchema>;
@@ -133,6 +144,9 @@ function normalize(v: ProductionSheetInput) {
     qc_revision: nn(v.qc_revision),
     revision_notes: nn(v.revision_notes),
     production_waste: nn(v.production_waste),
+    category: v.category ?? null,
+    subcategory: nn(v.subcategory),
+    pricing: v.pricing ?? {},
   };
 }
 
@@ -164,6 +178,7 @@ export async function createProductionSheet(
 
   if (error) return { error: toActionErrorMessage(error) };
   revalidatePath("/production");
+  revalidatePath("/collection");
   return { id: (row as { id: string }).id };
 }
 
@@ -205,6 +220,43 @@ export async function updateProductionSheet(
 
   if (error) return { error: toActionErrorMessage(error) };
   revalidatePath("/production");
+  revalidatePath("/collection");
+  revalidatePath(`/production/${sheetId}`);
+  return { ok: true };
+}
+
+// Yalnızca fiyat güncelle — Koleksiyon → Maliyet tablosundan hızlı geri yazma.
+// Föyün geri kalanını dokunmadan bırakır (tek kaynak: pricing alanı hem föyde
+// hem maliyet tablosunda aynı satırı okur/yazar).
+export async function updateProductionSheetPricing(
+  sheetId: string,
+  input: z.infer<typeof pricing>,
+): Promise<{ ok: true } | { error: string }> {
+  const parsed = pricing.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+
+  const { data: existing, error: loadErr } = await supabase
+    .from("production_sheets")
+    .select("id")
+    .eq("id", sheetId)
+    .eq("workspace_id", ctx.workspaceId)
+    .maybeSingle();
+  if (loadErr) return { error: toActionErrorMessage(loadErr) };
+  if (!existing) return { error: NOT_FOUND };
+
+  const { error } = await supabase
+    .from("production_sheets")
+    .update({ pricing: parsed.data, updated_by: ctx.userId })
+    .eq("id", sheetId)
+    .eq("workspace_id", ctx.workspaceId);
+
+  if (error) return { error: toActionErrorMessage(error) };
+  revalidatePath("/collection");
+  revalidatePath("/collection/maliyet");
   revalidatePath(`/production/${sheetId}`);
   return { ok: true };
 }

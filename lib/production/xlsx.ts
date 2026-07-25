@@ -5,6 +5,8 @@
 // uzun metin). Salt-yazım; kullanıcı verisi güvenli.
 import ExcelJS from "exceljs";
 import type { ProductionSheet } from "@/types";
+import { categoryLabel, subcategoryLabel } from "@/lib/collection/taxonomy";
+import { costOfSheet, totalQuantity, parseMoney, formatMoney } from "@/lib/collection/cost";
 
 const COLS = 9; // A–I
 const INK = "FF1F2937"; // koyu başlık şeridi
@@ -113,6 +115,10 @@ async function addProductionSheet(
   infoRow("ÜRÜN KODU", sheet.product_code ?? "", "ÜRETİM TARİHİ", sheet.production_date ?? "");
   infoRow("ÜRÜN CİNSİ", sheet.product_kind ?? "", "TESLİM TARİHİ", sheet.delivery_date ?? "");
   infoRow("ÜRETİCİ", sheet.producer ?? "", "SEZON", sheet.season ?? "");
+  infoRow(
+    "KATEGORİ", sheet.category ? categoryLabel(sheet.category) : "",
+    "ALT KATEGORİ", subcategoryLabel(sheet.category, sheet.subcategory),
+  );
   infoRow("AÇIKLAMA", sheet.description ?? "", "1 ÜRÜNE METRAJ", sheet.meterage ?? "");
   r++; // boşluk
 
@@ -216,6 +222,60 @@ async function addProductionSheet(
       r++;
     }
     r++;
+  }
+
+  // ── MALİYET / FİYAT ──────────────────────────────────────────────────────────
+  const cost = costOfSheet(sheet);
+  const hasPricing =
+    cost.unitPrice > 0 || cost.purchaseCost > 0 || cost.webSalePrice > 0 ||
+    (sheet.pricing?.notes ?? "").trim().length > 0;
+  if (hasPricing) {
+    sectionBand("Maliyet / Fiyat");
+    const money = (n: number) => (n > 0 ? formatMoney(n, cost.currency) : "");
+    const priceRow = (leftLabel: string, leftVal: string, rightLabel: string, rightVal: string) => {
+      const ll = ws.getCell(`A${r}`); ws.mergeCells(`A${r}:B${r}`);
+      ll.value = leftLabel; ll.font = { bold: true, size: 10, color: { argb: "FF6B7280" } };
+      ll.alignment = { vertical: "middle" };
+      const lv = ws.getCell(`C${r}`); ws.mergeCells(`C${r}:D${r}`);
+      lv.value = leftVal; lv.font = { size: 11, color: { argb: INK } };
+      lv.alignment = { vertical: "middle" };
+      const rl = ws.getCell(`E${r}`);
+      rl.value = rightLabel; rl.font = { bold: true, size: 10, color: { argb: "FF6B7280" } };
+      rl.alignment = { vertical: "middle" };
+      const rv = ws.getCell(`F${r}`); ws.mergeCells(`F${r}:I${r}`);
+      rv.value = rightVal; rv.font = { size: 11, color: { argb: INK } };
+      rv.alignment = { vertical: "middle" };
+      ws.getRow(r).height = 18;
+      r++;
+    };
+    priceRow("BİRİM FİYAT", money(cost.unitPrice), "SATIN ALMA MALİYETİ", money(cost.purchaseCost));
+    priceRow("WEB SATIŞ FİYATI", money(cost.webSalePrice), "TOPLAM ADET", cost.qty ? String(cost.qty) : "");
+    // Üretim maliyeti — vurgulu satır (adet × birim)
+    ws.mergeCells(`A${r}:E${r}`);
+    const lbl = ws.getCell(`A${r}`);
+    lbl.value = "ÜRETİM MALİYETİ (adet × birim)";
+    lbl.font = { bold: true, size: 10.5, color: { argb: INK } };
+    lbl.alignment = { vertical: "middle", indent: 1 };
+    ws.mergeCells(`F${r}:I${r}`);
+    const val = ws.getCell(`F${r}`);
+    val.value = money(cost.lineTotal) || "—";
+    val.font = { bold: true, size: 12, color: { argb: INK } };
+    val.alignment = { vertical: "middle", horizontal: "right", indent: 1 };
+    for (let i = 1; i <= COLS; i++) {
+      ws.getCell(r, i).fill = { type: "pattern", pattern: "solid", fgColor: { argb: TH } };
+      ws.getCell(r, i).border = { top: thin, bottom: thin };
+    }
+    ws.getRow(r).height = 20;
+    r++;
+    if ((sheet.pricing?.notes ?? "").trim()) {
+      ws.mergeCells(`A${r}:I${r}`);
+      const n = ws.getCell(`A${r}`);
+      n.value = `Not: ${sheet.pricing!.notes!.trim()}`;
+      n.font = { size: 9.5, italic: true, color: { argb: "FF6B7280" } };
+      n.alignment = { vertical: "middle", indent: 1 };
+      r++;
+    }
+    r++; // boşluk
   }
 
   // ── Uzun metin bölümleri ─────────────────────────────────────────────────────
@@ -329,4 +389,127 @@ export async function buildAllProductionSheetsWorkbook(
     await addProductionSheet(wb, sheet, memberNames, used);
   }
   return Buffer.from(await wb.xlsx.writeBuffer());
+}
+
+// ── Maliyet tablosu → Excel (Aslı'nın "Üretim Adetleri" sayfası karşılığı) ──────
+type CostRow = Pick<
+  ProductionSheet,
+  "id" | "title" | "product_kind" | "category" | "subcategory" | "pricing" | "size_distribution"
+>;
+
+/** Tüm ürünlerin maliyetini kategori gruplu tek sayfa Excel olarak üretir. */
+export function buildCostWorkbook(rows: CostRow[]): Promise<Buffer> {
+  const wb = newWorkbook();
+  const ws = wb.addWorksheet("Maliyet", {
+    views: [{ showGridLines: false }],
+    pageSetup: { paperSize: 9, orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+  });
+  const CCOLS = 6; // A–F
+  ws.columns = [
+    { width: 34 }, { width: 20 }, { width: 10 }, { width: 14 }, { width: 14 }, { width: 16 },
+  ];
+  let r = 1;
+
+  // Başlık şeridi
+  ws.mergeCells(`A${r}:F${r}`);
+  const title = ws.getCell(`A${r}`);
+  title.value = "MALİYET — ÜRETİM ADETLERİ";
+  title.font = { bold: true, size: 14, color: { argb: "FFFFFFFF" } };
+  title.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+  for (let c = 1; c <= CCOLS; c++) {
+    ws.getCell(r, c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: INK } };
+  }
+  ws.getRow(r).height = 26;
+  r++;
+  r++;
+
+  // Tablo başlığı
+  const headers = ["ÜRÜN", "CİNS", "ADET", "BİRİM FİYAT", "WEB SATIŞ", "TOPLAM"];
+  headers.forEach((h, i) => {
+    const cell = ws.getCell(r, i + 1);
+    cell.value = h;
+    cell.font = { bold: true, size: 10, color: { argb: "FF374151" } };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: TH } };
+    cell.border = border;
+    cell.alignment = { vertical: "middle", horizontal: i <= 1 ? "left" : "right", indent: 1 };
+  });
+  ws.getRow(r).height = 18;
+  r++;
+
+  // Kategoriye göre grupla
+  const UNCAT = "__uncat__";
+  const byCat = new Map<string, CostRow[]>();
+  for (const row of rows) {
+    const c = row.category ?? UNCAT;
+    if (!byCat.has(c)) byCat.set(c, []);
+    byCat.get(c)!.push(row);
+  }
+
+  const money = (n: number) => (n > 0 ? formatMoney(n) : "");
+  let grand = 0;
+
+  for (const [cat, catRows] of byCat) {
+    // Kategori bandı
+    ws.mergeCells(`A${r}:F${r}`);
+    const band = ws.getCell(`A${r}`);
+    band.value = cat === UNCAT ? "Kategorisiz" : categoryLabel(cat);
+    band.font = { bold: true, size: 10, color: { argb: INK } };
+    band.alignment = { vertical: "middle", indent: 1 };
+    for (let i = 1; i <= CCOLS; i++) {
+      ws.getCell(r, i).fill = { type: "pattern", pattern: "solid", fgColor: { argb: BAND } };
+      ws.getCell(r, i).border = { bottom: thin };
+    }
+    ws.getRow(r).height = 18;
+    r++;
+
+    let catTotal = 0;
+    for (const row of catRows) {
+      const qty = totalQuantity(row.size_distribution);
+      const unit = parseMoney(row.pricing?.unit_price);
+      const web = parseMoney(row.pricing?.web_sale_price);
+      const lineTotal = qty * unit;
+      catTotal += lineTotal;
+      const values = [row.title, row.product_kind ?? "", qty || "", money(unit), money(web), money(lineTotal)];
+      values.forEach((v, i) => {
+        const cell = ws.getCell(r, i + 1);
+        cell.value = v;
+        cell.border = border;
+        cell.font = { size: 10.5, bold: i === 5 };
+        cell.alignment = { vertical: "middle", horizontal: i <= 1 ? "left" : "right", indent: 1 };
+      });
+      ws.getRow(r).height = 16;
+      r++;
+    }
+    grand += catTotal;
+    // Kategori ara toplam
+    ws.mergeCells(`A${r}:E${r}`);
+    const st = ws.getCell(`A${r}`);
+    st.value = `${cat === UNCAT ? "Kategorisiz" : categoryLabel(cat)} ara toplam`;
+    st.font = { size: 10, italic: true, color: { argb: "FF6B7280" } };
+    st.alignment = { vertical: "middle", horizontal: "right", indent: 1 };
+    const stv = ws.getCell(r, 6);
+    stv.value = money(catTotal);
+    stv.font = { size: 10.5, bold: true, color: { argb: "FF374151" } };
+    stv.alignment = { vertical: "middle", horizontal: "right", indent: 1 };
+    ws.getRow(r).height = 16;
+    r++;
+  }
+
+  // Genel toplam
+  ws.mergeCells(`A${r}:E${r}`);
+  const gt = ws.getCell(`A${r}`);
+  gt.value = "GENEL TOPLAM (KDV hariç)";
+  gt.font = { bold: true, size: 12, color: { argb: INK } };
+  gt.alignment = { vertical: "middle", horizontal: "right", indent: 1 };
+  const gtv = ws.getCell(r, 6);
+  gtv.value = formatMoney(grand);
+  gtv.font = { bold: true, size: 13, color: { argb: INK } };
+  gtv.alignment = { vertical: "middle", horizontal: "right", indent: 1 };
+  for (let i = 1; i <= CCOLS; i++) {
+    ws.getCell(r, i).fill = { type: "pattern", pattern: "solid", fgColor: { argb: TH } };
+    ws.getCell(r, i).border = { top: { style: "medium", color: { argb: LINE } } };
+  }
+  ws.getRow(r).height = 24;
+
+  return wb.xlsx.writeBuffer().then((b) => Buffer.from(b));
 }

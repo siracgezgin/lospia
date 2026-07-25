@@ -16,8 +16,10 @@ import {
 } from "@/lib/actions/production";
 import { cn } from "@/lib/utils/cn";
 import { ImageUploader } from "./ImageUploader";
+import { COLLECTION_TAXONOMY, subcategoriesOf } from "@/lib/collection/taxonomy";
+import { totalQuantity, parseMoney, formatMoney } from "@/lib/collection/cost";
 import type {
-  ProductionSheet, MeasurementRow, DeliveredItemRow, SizeDistribution,
+  ProductionSheet, MeasurementRow, DeliveredItemRow, SizeDistribution, ProductionCategory,
 } from "@/types";
 
 interface Props {
@@ -61,6 +63,9 @@ function emptyState(): ProductionSheetInput {
     qc_revision: "",
     revision_notes: "",
     production_waste: "",
+    category: null,
+    subcategory: "",
+    pricing: { unit_price: "", purchase_cost: "", web_sale_price: "", currency: "TL", notes: "" },
   };
 }
 
@@ -94,6 +99,15 @@ function fromSheet(s: ProductionSheet): ProductionSheetInput {
     qc_revision: s.qc_revision ?? "",
     revision_notes: s.revision_notes ?? "",
     production_waste: s.production_waste ?? "",
+    category: s.category ?? null,
+    subcategory: s.subcategory ?? "",
+    pricing: {
+      unit_price: s.pricing?.unit_price ?? "",
+      purchase_cost: s.pricing?.purchase_cost ?? "",
+      web_sale_price: s.pricing?.web_sale_price ?? "",
+      currency: s.pricing?.currency ?? "TL",
+      notes: s.pricing?.notes ?? "",
+    },
   };
 }
 
@@ -205,6 +219,15 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
     set("size_distribution", { ...sd, rows: [...sd.rows, { label: "", values: sd.sizes.map(() => ""), total: "" }] });
   const removeDistRow = (rowIdx: number) =>
     set("size_distribution", { ...sd, rows: sd.rows.filter((_, ri) => ri !== rowIdx) });
+  // Beden seti preset'i — satır değerlerini yeni kolon sayısına hizalar (kırpar/doldurur).
+  const applySizePreset = (sizes: string[]) =>
+    set("size_distribution", {
+      sizes,
+      rows: sd.rows.map((r) => ({
+        ...r,
+        values: sizes.map((_, ci) => r.values[ci] ?? ""),
+      })),
+    });
 
   function handleSave() {
     setError(null);
@@ -262,8 +285,8 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
       {/* Üst bar — eylemler sabit kalır (sticky) ki uzun föyde her zaman erişilebilir */}
       <div className="sticky top-0 z-20 -mx-4 mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-line bg-app/85 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
         <div className="min-w-0">
-          <Link href="/production" className="mb-1 inline-flex items-center gap-1 text-[12.5px] text-subtle transition-colors hover:text-ink">
-            <ArrowLeft size={13} /> Üretim Föyleri
+          <Link href="/collection" className="mb-1 inline-flex items-center gap-1 text-[12.5px] text-subtle transition-colors hover:text-ink">
+            <ArrowLeft size={13} /> Koleksiyon
           </Link>
           {!isNew && sheet && (
             <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[11.5px] text-subtle">
@@ -338,6 +361,43 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
             <LabeledField label="Sezon" value={form.season ?? ""} onChange={(v) => set("season", v)} placeholder="2026 RESORT" />
             <LabeledField label="1 ürüne giden metraj" value={form.meterage ?? ""} onChange={(v) => set("meterage", v)} placeholder="1.60 CM" />
           </div>
+          {/* Koleksiyon kategorisi — web nav yapısı (One-of-a-Kind / Ready to Wear …) */}
+          <label className="flex items-center gap-2">
+            <span className="w-40 shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted">Kategori</span>
+            <select
+              className={inputCls}
+              value={form.category ?? ""}
+              onChange={(e) => {
+                const next = (e.target.value || null) as ProductionCategory | null;
+                // Kategori değişince geçersiz alt kategoriyi temizle.
+                const validSubs = subcategoriesOf(next).map((s) => s.key);
+                setForm((f) => ({
+                  ...f,
+                  category: next,
+                  subcategory: validSubs.includes(f.subcategory ?? "") ? f.subcategory : "",
+                }));
+              }}
+            >
+              <option value="">Seçiniz…</option>
+              {COLLECTION_TAXONOMY.map((c) => (
+                <option key={c.key} value={c.key}>{c.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-2">
+            <span className="w-40 shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted">Alt kategori</span>
+            <select
+              className={cn(inputCls, subcategoriesOf(form.category).length === 0 && "opacity-50")}
+              value={form.subcategory ?? ""}
+              onChange={(e) => set("subcategory", e.target.value)}
+              disabled={subcategoriesOf(form.category).length === 0}
+            >
+              <option value="">{subcategoriesOf(form.category).length === 0 ? "—" : "Seçiniz…"}</option>
+              {subcategoriesOf(form.category).map((s) => (
+                <option key={s.key} value={s.key}>{s.label}</option>
+              ))}
+            </select>
+          </label>
           <label className="md:col-span-2 flex items-start gap-2">
             <span className="w-40 shrink-0 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted">Ürünün açıklaması</span>
             <TextArea value={form.description ?? ""} onChange={(v) => set("description", v)} rows={2} />
@@ -386,6 +446,33 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
 
         {/* BEDEN DAĞILIMI */}
         <Section title="Beden Dağılımı">
+          {/* Hızlı beden seti — XS→XXL, +oversize, tek beden */}
+          <div className="mb-2.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+            <span className="mr-0.5 font-semibold uppercase tracking-wide text-subtle">Beden seti:</span>
+            {[
+              { label: "XS–XXL", sizes: ["XS", "S", "M", "L", "XL", "XXL"] },
+              { label: "XS–XXL + Oversize", sizes: ["XS", "S", "M", "L", "XL", "XXL", "Oversize"] },
+              { label: "S–XL", sizes: ["S", "M", "L", "XL"] },
+              { label: "Tek beden", sizes: ["Tek Beden"] },
+            ].map((preset) => {
+              const active = sd.sizes.join("|") === preset.sizes.join("|");
+              return (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => applySizePreset(preset.sizes)}
+                  className={cn(
+                    "rounded-md border px-2 py-1 font-medium transition-colors",
+                    active
+                      ? "border-brand bg-brand/10 text-brand-strong"
+                      : "border-line bg-surface text-muted hover:bg-surface-muted hover:text-ink",
+                  )}
+                >
+                  {preset.label}
+                </button>
+              );
+            })}
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-[12.5px]">
               <thead>
@@ -417,6 +504,40 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
           <button onClick={addDistRow} className="mt-2 inline-flex items-center gap-1 text-[12px] font-medium text-brand hover:text-brand-strong">
             <Plus size={12} /> Satır ekle
           </button>
+        </Section>
+
+        {/* MALİYET / FİYAT — her föy tek ürün; toplam adet beden dağılımından gelir */}
+        <Section title="Maliyet / Fiyat">
+          {(() => {
+            const p = form.pricing;
+            const qty = totalQuantity(form.size_distribution);
+            const lineTotal = qty * parseMoney(p.unit_price);
+            const setP = (patch: Partial<typeof p>) => set("pricing", { ...p, ...patch });
+            return (
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 gap-x-5 gap-y-2 sm:grid-cols-2">
+                  <LabeledField label="Birim fiyat (₺)" value={p.unit_price ?? ""} onChange={(v) => setP({ unit_price: v })} placeholder="500" />
+                  <LabeledField label="Satın alma maliyeti (₺)" value={p.purchase_cost ?? ""} onChange={(v) => setP({ purchase_cost: v })} placeholder="birim malzeme maliyeti" />
+                  <LabeledField label="Web satış fiyatı (₺)" value={p.web_sale_price ?? ""} onChange={(v) => setP({ web_sale_price: v })} placeholder="sitedeki satış fiyatı" />
+                  <LabeledField label="Not" value={p.notes ?? ""} onChange={(v) => setP({ notes: v })} placeholder="KDV hariç, kargo vb." />
+                </div>
+                {/* Otomatik toplam üretim maliyeti — beden dağılımı toplam adedi × birim fiyat */}
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line-strong bg-surface-muted px-3 py-2 text-[12.5px]">
+                  <span className="text-muted">
+                    Toplam adet: <span className="font-semibold text-ink">{qty || "—"}</span>
+                    <span className="mx-1.5 text-subtle">×</span>
+                    Birim: <span className="font-semibold text-ink">{formatMoney(parseMoney(p.unit_price))}</span>
+                  </span>
+                  <span className="font-bold text-ink">
+                    Üretim maliyeti: {formatMoney(lineTotal)}
+                  </span>
+                </div>
+                <p className="text-[11px] text-subtle">
+                  Bu fiyatlar Koleksiyon → Maliyet bölümünde de görünür; oradan değiştirilirse burada da güncellenir (tek kaynak).
+                </p>
+              </div>
+            );
+          })()}
         </Section>
 
         {/* YIKAMA TALİMATI */}

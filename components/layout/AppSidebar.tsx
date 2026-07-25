@@ -20,6 +20,8 @@ import {
   LayoutGrid,
   Bookmark,
   ClipboardList,
+  Boxes,
+  Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Wordmark } from "@/components/ui/Wordmark";
@@ -30,7 +32,13 @@ import { getWeeklyQuote } from "@/lib/content/weekly-quotes";
 import { canViewDestructivePages, canManageSettings } from "@/lib/auth/permissions";
 import type { Workspace, SavedView, WorkspaceRole } from "@/types";
 
-type NavItem = { href: string; label: string; icon: typeof Kanban; adminOnly: boolean };
+type NavItem = {
+  href: string;
+  label: string;
+  icon: typeof Kanban;
+  adminOnly: boolean;
+  children?: NavItem[];
+};
 
 const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   {
@@ -39,7 +47,13 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { href: "/board",        label: "Pano",            icon: Kanban,          adminOnly: false },
       { href: "/admin-board",  label: "Yönetici Pano",   icon: ShieldCheck,     adminOnly: true  },
       { href: "/list",         label: "Liste",           icon: List,            adminOnly: false },
-      { href: "/production",   label: "Üretim Föyü",     icon: ClipboardList,   adminOnly: false },
+      {
+        href: "/collection", label: "Koleksiyon", icon: Boxes, adminOnly: false,
+        children: [
+          { href: "/collection",         label: "Üretim Föyleri", icon: ClipboardList, adminOnly: false },
+          { href: "/collection/maliyet", label: "Maliyet",        icon: Wallet,        adminOnly: false },
+        ],
+      },
       { href: "/modules",      label: "Operasyon Modülleri", icon: LayoutGrid,  adminOnly: true  },
       { href: "/dashboard", label: "Gösterge Paneli", icon: LayoutDashboard, adminOnly: false },
       { href: "/calendar",  label: "Takvim",          icon: Calendar,        adminOnly: false },
@@ -123,28 +137,57 @@ export function AppSidebar({
                   {group.title}
                 </p>
               )}
-              {items.map(({ href, label, icon: Icon }) => {
+              {items.map(({ href, label, icon: Icon, children }) => {
                 const active = pathname === href || pathname.startsWith(href + "/");
+                const kids = (children ?? []).filter((c) => !c.adminOnly || isAdmin);
+                // Alt linkleri, bu bölümdeyken (parent veya çocuk aktif) ve panel
+                // açıkken göster (web nav'daki gibi kategori açılımı).
+                const showKids = kids.length > 0 && !collapsed && active;
                 return (
-                  <Link
-                    key={href}
-                    href={href}
-                    aria-current={active ? "page" : undefined}
-                    className={cn(
-                      "group relative flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm font-medium transition-colors",
-                      active
-                        ? "bg-brand-soft text-brand-strong"
-                        : "text-muted hover:bg-surface-muted hover:text-ink",
-                      collapsed && "justify-center px-2",
+                  <div key={href}>
+                    <Link
+                      href={href}
+                      aria-current={active ? "page" : undefined}
+                      className={cn(
+                        "group relative flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm font-medium transition-colors",
+                        active
+                          ? "bg-brand-soft text-brand-strong"
+                          : "text-muted hover:bg-surface-muted hover:text-ink",
+                        collapsed && "justify-center px-2",
+                      )}
+                      title={collapsed ? label : undefined}
+                    >
+                      {active && !collapsed && (
+                        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r bg-brand" />
+                      )}
+                      <Icon size={16} className="shrink-0" />
+                      {!collapsed && <span>{label}</span>}
+                    </Link>
+                    {showKids && (
+                      <div className="ml-4 mt-0.5 space-y-0.5 border-l border-line pl-2">
+                        {kids.map(({ href: kHref, label: kLabel, icon: KIcon }) => {
+                          // Tam eşleşme — /collection çocuğu /collection/maliyet'te aktif kalmasın.
+                          const kActive = pathname === kHref;
+                          return (
+                            <Link
+                              key={kHref}
+                              href={kHref}
+                              aria-current={kActive ? "page" : undefined}
+                              className={cn(
+                                "flex items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] font-medium transition-colors",
+                                kActive
+                                  ? "bg-brand-soft text-brand-strong"
+                                  : "text-muted hover:bg-surface-muted hover:text-ink",
+                              )}
+                            >
+                              <KIcon size={14} className="shrink-0" />
+                              <span>{kLabel}</span>
+                            </Link>
+                          );
+                        })}
+                      </div>
                     )}
-                    title={collapsed ? label : undefined}
-                  >
-                    {active && !collapsed && (
-                      <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r bg-brand" />
-                    )}
-                    <Icon size={16} className="shrink-0" />
-                    {!collapsed && <span>{label}</span>}
-                  </Link>
+                  </div>
                 );
               })}
             </div>

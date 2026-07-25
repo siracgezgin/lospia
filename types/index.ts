@@ -237,9 +237,68 @@ export type ProductionSheet = {
   production_waste: string | null;
   created_by: string | null;
   updated_by: string | null;
+  // Kategori taksonomisi (web nav yapısı) + fiyat — 20240217 migration
+  category: ProductionCategory | null;
+  subcategory: string | null;
+  pricing: ProductionPricing;
   archived_at: string | null;
   created_at: string;
   updated_at: string;
+};
+
+/** Web nav ana kategorileri (aslifilinta.com). */
+export type ProductionCategory =
+  | "one_of_a_kind" | "ready_to_wear" | "shoes" | "accessories";
+
+/** Föy fiyat bilgisi — her föy tek ürün. Toplam adet beden dağılımından gelir. */
+export type ProductionPricing = {
+  unit_price?: string;      // birim (üretim) fiyatı
+  purchase_cost?: string;   // satın alma / malzeme maliyeti
+  web_sale_price?: string;  // web sitesi satış fiyatı
+  currency?: string;        // varsayılan "TL"
+  notes?: string;
+};
+
+// ── Planlama Modülü — Haftalık Toplantı Takvimi (20240216 migration) ─────────
+/** Toplantı kategorisi → ızgarada renk paterni. */
+export type PlanningCategory =
+  | "uretim" | "ai" | "sales" | "marketing" | "finance" | "external" | "system" | "other";
+
+/** Izgaradaki renkli "toplantı kutusu" (gün + saat). */
+export type PlanningMeeting = {
+  id: string;
+  workspace_id: string;
+  meeting_date: string;        // "YYYY-MM-DD" (sütun = gün)
+  time_slot: string;           // "09:00" (satır = saat)
+  category: PlanningCategory;
+  title: string | null;
+  content: string | null;
+  participant_ids: string[];   // "Kim"
+  position: number;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Toplantı altındaki "Konu" (max 5). Konu = gerçek görev (task_id). */
+export type PlanningTopic = {
+  id: string;
+  meeting_id: string;
+  workspace_id: string;
+  position: number;
+  text: string | null;
+  task_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Toplantı + konuları (ve konu görevlerinin özet bilgisi) birlikte. */
+export type PlanningMeetingWithTopics = PlanningMeeting & {
+  topics: (PlanningTopic & {
+    task: { id: string; title: string; assignee_id: string | null; due_date: string | null; status: string } | null;
+  })[];
 };
 
 // workspace_rules — daily SOPs / checklists
