@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { format, parseISO, addDays, subDays } from "date-fns";
 import { tr } from "date-fns/locale";
 import {
-  CalendarRange, ChevronLeft, ChevronRight, Plus, Pencil, ChevronDown,
+  CalendarRange, ChevronLeft, ChevronRight, Plus, Pencil,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
@@ -30,14 +30,6 @@ export function PlanningBoard({ meetings, weekDays, weekStart, members, memberNa
   const [editor, setEditor] = useState<
     { meeting: PlanningMeetingWithTopics | null; day: string; slot: string; dayLabel: string } | null
   >(null);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-
-  const toggleExpand = (id: string) =>
-    setExpanded((s) => {
-      const n = new Set(s);
-      n.has(id) ? n.delete(id) : n.add(id);
-      return n;
-    });
 
   // Saat blokları: varsayılan + veride olanlar.
   const slots = useMemo(() => {
@@ -118,39 +110,30 @@ export function PlanningBoard({ meetings, weekDays, weekStart, members, memberNa
                     <div className="space-y-1.5">
                       {cell.map((m) => {
                         const meta = categoryMeta(m.category);
-                        const isOpen = expanded.has(m.id);
-                        const topicCount = m.topics.length;
                         return (
-                          <div key={m.id} className={cn("group rounded-lg border p-2 text-left", meta.cell)}>
+                          <div
+                            key={m.id}
+                            onClick={() => setEditor({ meeting: m, day: iso, slot, dayLabel: dayLabelOf(iso, i) })}
+                            className={cn("group cursor-pointer rounded-lg border p-2 text-left transition-shadow hover:shadow-sm", meta.cell)}
+                          >
                             <div className="flex items-start justify-between gap-1">
-                              <button onClick={() => topicCount > 0 && toggleExpand(m.id)} className="min-w-0 flex-1 text-left">
+                              <div className="min-w-0 flex-1">
                                 <div className={cn("text-[12px] font-bold leading-snug", meta.title)}>
                                   {meta.label}{m.title ? ` / ${m.title}` : ""}
                                 </div>
                                 {m.content && <p className="mt-0.5 whitespace-pre-line text-[11px] leading-snug text-ink/80">{m.content}</p>}
-                              </button>
-                              <button
-                                onClick={() => setEditor({ meeting: m, day: iso, slot, dayLabel: dayLabelOf(iso, i) })}
-                                className="shrink-0 rounded p-0.5 text-ink/40 opacity-0 transition-opacity hover:bg-black/5 hover:text-ink group-hover:opacity-100"
-                                title="Düzenle"
-                              >
-                                <Pencil size={12} />
-                              </button>
+                              </div>
+                              <Pencil size={12} className="shrink-0 text-ink/40 opacity-0 transition-opacity group-hover:opacity-100" />
                             </div>
-                            <div className="mt-1 flex items-center gap-2">
-                              {m.participant_ids?.length > 0 && (
+                            {m.participant_ids?.length > 0 && (
+                              <div className="mt-1">
                                 <span className="inline-flex items-center gap-1 rounded bg-black/5 px-1.5 py-0.5">
                                   <MemberInitials ids={m.participant_ids} memberNames={memberNames} />
                                 </span>
-                              )}
-                              {topicCount > 0 && (
-                                <button onClick={() => toggleExpand(m.id)} className="inline-flex items-center gap-0.5 text-[10px] font-medium text-ink/60 hover:text-ink">
-                                  <ChevronDown size={11} className={cn("transition-transform", isOpen && "rotate-180")} />
-                                  {topicCount} konu
-                                </button>
-                              )}
-                            </div>
-                            {isOpen && topicCount > 0 && (
+                              </div>
+                            )}
+                            {/* Konular — Excel gibi hep görünür, satır satır */}
+                            {m.topics.length > 0 && (
                               <ul className="mt-1.5 space-y-1 border-t border-black/10 pt-1.5">
                                 {m.topics.map((t, ti) => (
                                   <li key={t.id} className="flex items-start gap-1.5 text-[11px] text-ink/85">
