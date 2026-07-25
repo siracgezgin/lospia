@@ -20,6 +20,7 @@ import {
   LayoutGrid,
   Bookmark,
   Boxes,
+  CalendarRange,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Wordmark } from "@/components/ui/Wordmark";
@@ -46,6 +47,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { href: "/admin-board",  label: "Yönetici Pano",   icon: ShieldCheck,     adminOnly: true  },
       { href: "/list",         label: "Liste",           icon: List,            adminOnly: false },
       { href: "/collection",  label: "Koleksiyon",      icon: Boxes,           adminOnly: false },
+      { href: "/planning",     label: "Planlama",        icon: CalendarRange,   adminOnly: false },
       { href: "/modules",      label: "Operasyon Modülleri", icon: LayoutGrid,  adminOnly: true  },
       { href: "/dashboard", label: "Gösterge Paneli", icon: LayoutDashboard, adminOnly: false },
       { href: "/calendar",  label: "Takvim",          icon: Calendar,        adminOnly: false },

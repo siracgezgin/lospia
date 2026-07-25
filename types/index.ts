@@ -273,7 +273,8 @@ export type PlanningMeeting = {
   category: PlanningCategory;
   title: string | null;
   content: string | null;
-  participant_ids: string[];   // "Kim"
+  kim: string | null;          // "Kim" — serbest metin (SE, ND…)
+  participant_ids: string[];   // ileride yapısal katılımcı
   position: number;
   created_by: string | null;
   updated_by: string | null;
@@ -288,17 +289,16 @@ export type PlanningTopic = {
   workspace_id: string;
   position: number;
   text: string | null;
+  kim: string | null;          // konu bazlı "Kim"
   task_id: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
 };
 
-/** Toplantı + konuları (ve konu görevlerinin özet bilgisi) birlikte. */
+/** Toplantı + konuları birlikte. */
 export type PlanningMeetingWithTopics = PlanningMeeting & {
-  topics: (PlanningTopic & {
-    task: { id: string; title: string; assignee_id: string | null; due_date: string | null; status: string } | null;
-  })[];
+  topics: PlanningTopic[];
 };
 
 // workspace_rules — daily SOPs / checklists
