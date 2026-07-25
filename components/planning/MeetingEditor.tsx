@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { X, Plus, Trash2, Loader2, Save } from "lucide-react";
+import { X, Plus, Trash2, Loader2, Save, Send, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import {
-  createMeeting, updateMeeting, deleteMeeting, saveMeetingTopics,
+  createMeeting, updateMeeting, deleteMeeting, saveMeetingTopics, assignTopicAsTask,
 } from "@/lib/actions/planning";
 import { PLANNING_CATEGORIES } from "@/lib/planning/categories";
 import { MemberMultiSelect, type Member } from "./MemberMultiSelect";
@@ -20,7 +20,13 @@ interface Props {
   onSaved: () => void;
 }
 
-type TopicDraft = { text: string; participant_ids: string[] };
+type TopicDraft = {
+  id?: string;
+  text: string;
+  participant_ids: string[];
+  due_date: string;      // "yyyy-MM-dd" | ""
+  task_id?: string | null;
+};
 
 const inputCls =
   "w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-[13px] text-ink placeholder:text-subtle focus:outline-none focus:ring-2 focus:ring-brand-ring focus:border-brand-ring";
@@ -32,39 +38,75 @@ export function MeetingEditor({ meeting, day, slot, dayLabel, members, onClose, 
   const [content, setContent] = useState(meeting?.content ?? "");
   const [participantIds, setParticipantIds] = useState<string[]>(meeting?.participant_ids ?? []);
   const [topics, setTopics] = useState<TopicDraft[]>(() => {
-    const existing = (meeting?.topics ?? []).map((t) => ({ text: t.text ?? "", participant_ids: t.participant_ids ?? [] }));
-    // En az 3 boş satır göster (Konu girişini davet et).
-    while (existing.length < 3) existing.push({ text: "", participant_ids: [] });
+    const existing: TopicDraft[] = (meeting?.topics ?? []).map((t) => ({
+      id: t.id, text: t.text ?? "", participant_ids: t.participant_ids ?? [],
+      due_date: t.due_date ?? "", task_id: t.task_id,
+    }));
+    while (existing.length < 3) existing.push({ text: "", participant_ids: [], due_date: "" });
     return existing;
   });
   const [error, setError] = useState<string | null>(null);
   const [isSaving, startSave] = useTransition();
   const [isDeleting, startDelete] = useTransition();
+  const [assigningIdx, setAssigningIdx] = useState<number | null>(null);
+  const [assignedMsg, setAssignedMsg] = useState<string | null>(null);
 
   const setTopic = (i: number, patch: Partial<TopicDraft>) =>
     setTopics((ts) => ts.map((t, idx) => (idx === i ? { ...t, ...patch } : t)));
-  const addTopic = () => setTopics((ts) => [...ts, { text: "", participant_ids: [] }]);
+  const addTopic = () => setTopics((ts) => [...ts, { text: "", participant_ids: [], due_date: "" }]);
   const removeTopic = (i: number) => setTopics((ts) => ts.filter((_, idx) => idx !== i));
+
+  // Toplantı + konuları kaydeder; konu id'lerini geri yazar (Ata & bildir için).
+  async function persist(): Promise<{ meetingId: string; posToId: Record<number, string> } | { error: string }> {
+    const payload = { meeting_date: day, time_slot: slot, category, title, content, participant_ids: participantIds };
+    let meetingId = meeting?.id;
+    if (!meetingId) {
+      const res = await createMeeting(payload);
+      if ("error" in res) return { error: res.error };
+      meetingId = res.id;
+    } else {
+      const res = await updateMeeting(meetingId, payload);
+      if ("error" in res) return { error: res.error };
+    }
+    const tRes = await saveMeetingTopics(
+      meetingId,
+      topics.map((t, i) => ({
+        id: t.id, position: i, text: t.text, participant_ids: t.participant_ids,
+        due_date: t.due_date || null,
+      })),
+    );
+    if ("error" in tRes) return { error: tRes.error };
+    const posToId: Record<number, string> = {};
+    for (const { position, id } of tRes.topics) posToId[position] = id;
+    // Yerel taslaklara id'leri yaz (yeni satırlar için).
+    setTopics((ts) => ts.map((t, i) => (posToId[i] ? { ...t, id: posToId[i] } : t)));
+    return { meetingId, posToId };
+  }
 
   function handleSave() {
     setError(null);
-    const payload = { meeting_date: day, time_slot: slot, category, title, content, participant_ids: participantIds };
     startSave(async () => {
-      let meetingId = meeting?.id;
-      if (isNew) {
-        const res = await createMeeting(payload);
-        if ("error" in res) { setError(res.error); return; }
-        meetingId = res.id;
-      } else {
-        const res = await updateMeeting(meeting!.id, payload);
-        if ("error" in res) { setError(res.error); return; }
-      }
-      const tRes = await saveMeetingTopics(
-        meetingId!,
-        topics.map((t, i) => ({ position: i, text: t.text, participant_ids: t.participant_ids })),
-      );
-      if ("error" in tRes) { setError(tRes.error); return; }
+      const res = await persist();
+      if ("error" in res) { setError(res.error); return; }
       onSaved();
+    });
+  }
+
+  function handleAssign(i: number) {
+    setError(null);
+    setAssignedMsg(null);
+    if (topics[i].participant_ids.length === 0) { setError(`Konu ${i + 1} için önce kişi seçin.`); return; }
+    setAssigningIdx(i);
+    startSave(async () => {
+      const res = await persist();
+      if ("error" in res) { setAssigningIdx(null); setError(res.error); return; }
+      const topicId = res.posToId[i];
+      if (!topicId) { setAssigningIdx(null); setError("Konu kaydedilemedi."); return; }
+      const aRes = await assignTopicAsTask(topicId, { dueDate: topics[i].due_date || null });
+      setAssigningIdx(null);
+      if ("error" in aRes) { setError(aRes.error); return; }
+      setTopics((ts) => ts.map((t, idx) => (idx === i ? { ...t, task_id: aRes.taskId } : t)));
+      setAssignedMsg(`Konu ${i + 1} göreve atandı, atananlara bildirim/mail gönderildi.`);
     });
   }
 
@@ -82,7 +124,7 @@ export function MeetingEditor({ meeting, day, slot, dayLabel, members, onClose, 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:p-8" onClick={onClose}>
       <div
-        className="w-full max-w-xl rounded-2xl border border-line bg-surface shadow-drawer"
+        className="w-full max-w-3xl rounded-2xl border border-line bg-surface shadow-drawer"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Başlık */}
@@ -135,15 +177,44 @@ export function MeetingEditor({ meeting, day, slot, dayLabel, members, onClose, 
 
           {/* Konular */}
           <div>
-            <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-muted">Konular</span>
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">Konular</span>
+              <span className="text-[10.5px] text-subtle">Kişi seç · tarih ver · “Ata &amp; bildir” ile göreve dönüştür</span>
+            </div>
+            {assignedMsg && (
+              <div className="mb-2 flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[12px] text-emerald-800">
+                <CheckCircle2 size={14} /> {assignedMsg}
+              </div>
+            )}
             <div className="space-y-1.5">
               {topics.map((t, i) => (
                 <div key={i} className="flex items-center gap-1.5">
-                  <span className="w-6 shrink-0 text-center text-[11px] font-medium text-subtle">{i + 1}</span>
-                  <input className={cn(inputCls, "flex-1")} value={t.text} onChange={(e) => setTopic(i, { text: e.target.value })} placeholder={`Konu ${i + 1}`} />
-                  <div className="w-32 shrink-0">
+                  <span className="w-5 shrink-0 text-center text-[11px] font-medium text-subtle">{i + 1}</span>
+                  <input className={cn(inputCls, "min-w-0 flex-1")} value={t.text} onChange={(e) => setTopic(i, { text: e.target.value })} placeholder={`Konu ${i + 1}`} />
+                  <div className="w-24 shrink-0">
                     <MemberMultiSelect members={members} selected={t.participant_ids} onChange={(ids) => setTopic(i, { participant_ids: ids })} placeholder="Kim" compact />
                   </div>
+                  <input
+                    type="date"
+                    className={cn(inputCls, "w-[130px] shrink-0")}
+                    value={t.due_date}
+                    onChange={(e) => setTopic(i, { due_date: e.target.value })}
+                    title="Teslim tarihi (deadline)"
+                  />
+                  <button
+                    onClick={() => handleAssign(i)}
+                    disabled={isSaving || isDeleting}
+                    className={cn(
+                      "inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1.5 text-[11.5px] font-medium transition-colors disabled:opacity-60",
+                      t.task_id
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                        : "border-line bg-surface text-muted hover:border-brand hover:text-brand",
+                    )}
+                    title={t.task_id ? "Görev oluşturuldu — güncelle & tekrar bildir" : "Konuyu göreve ata ve atananlara bildir"}
+                  >
+                    {assigningIdx === i ? <Loader2 size={13} className="animate-spin" /> : t.task_id ? <CheckCircle2 size={13} /> : <Send size={13} />}
+                    <span className="hidden sm:inline">{t.task_id ? "Atandı" : "Ata & bildir"}</span>
+                  </button>
                   <button onClick={() => removeTopic(i)} className="shrink-0 rounded p-1 text-subtle hover:text-red-600" title="Sil"><Trash2 size={13} /></button>
                 </div>
               ))}

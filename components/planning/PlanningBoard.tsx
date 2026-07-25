@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { format, parseISO, addDays, subDays } from "date-fns";
 import { tr } from "date-fns/locale";
 import {
-  CalendarRange, ChevronLeft, ChevronRight, Plus, Pencil,
+  CalendarRange, ChevronLeft, ChevronRight, Plus, Pencil, CheckCircle2,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
@@ -138,7 +138,10 @@ export function PlanningBoard({ meetings, weekDays, weekStart, members, memberNa
                                 {m.topics.map((t, ti) => (
                                   <li key={t.id} className="flex items-start gap-1.5 text-[11px] text-ink/85">
                                     <span className="mt-px shrink-0 font-semibold text-ink/50">{ti + 1}.</span>
-                                    <span className="min-w-0 flex-1">{t.text}</span>
+                                    <span className="min-w-0 flex-1">
+                                      {t.text}
+                                      {t.task_id && <CheckCircle2 size={10} className="ml-1 inline text-emerald-600" aria-label="Göreve atandı" />}
+                                    </span>
                                     {t.participant_ids?.length > 0 && (
                                       <MemberInitials ids={t.participant_ids} memberNames={memberNames} className="shrink-0" />
                                     )}

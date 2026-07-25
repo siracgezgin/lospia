@@ -291,7 +291,8 @@ export type PlanningTopic = {
   text: string | null;
   kim: string | null;              // eski serbest metin (geri uyum)
   participant_ids: string[];       // konu bazlı "Kim" — üye id'leri
-  task_id: string | null;
+  due_date: string | null;         // konu teslim tarihi (deadline)
+  task_id: string | null;          // göreve dönüştürüldüyse ilgili görev
   created_by: string | null;
   created_at: string;
   updated_at: string;
