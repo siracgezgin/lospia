@@ -19,9 +19,7 @@ import {
   ShieldCheck,
   LayoutGrid,
   Bookmark,
-  ClipboardList,
   Boxes,
-  Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Wordmark } from "@/components/ui/Wordmark";
@@ -47,13 +45,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { href: "/board",        label: "Pano",            icon: Kanban,          adminOnly: false },
       { href: "/admin-board",  label: "Yönetici Pano",   icon: ShieldCheck,     adminOnly: true  },
       { href: "/list",         label: "Liste",           icon: List,            adminOnly: false },
-      {
-        href: "/collection", label: "Koleksiyon", icon: Boxes, adminOnly: false,
-        children: [
-          { href: "/collection",         label: "Üretim Föyleri", icon: ClipboardList, adminOnly: false },
-          { href: "/collection/maliyet", label: "Maliyet",        icon: Wallet,        adminOnly: false },
-        ],
-      },
+      { href: "/collection",  label: "Koleksiyon",      icon: Boxes,           adminOnly: false },
       { href: "/modules",      label: "Operasyon Modülleri", icon: LayoutGrid,  adminOnly: true  },
       { href: "/dashboard", label: "Gösterge Paneli", icon: LayoutDashboard, adminOnly: false },
       { href: "/calendar",  label: "Takvim",          icon: Calendar,        adminOnly: false },

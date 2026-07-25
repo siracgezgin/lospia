@@ -3,13 +3,12 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  Boxes, Plus, Search, ChevronRight, ChevronDown, ArrowUpRight, FileDown,
-  FileSpreadsheet, Wallet, ClipboardList, Tag,
+  Boxes, Plus, Search, ChevronRight, ChevronDown, FileDown,
+  FileSpreadsheet, ClipboardList, Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { COLLECTION_TAXONOMY, categoryLabel, subcategoryLabel } from "@/lib/collection/taxonomy";
-import { costOfSheet, formatMoney } from "@/lib/collection/cost";
 import type { ProductionSheet } from "@/types";
 
 /** Tarayıcı yalnızca meta + kategori + fiyat + beden dağılımı taşır. */
@@ -251,61 +250,41 @@ export function CollectionBrowser({ sheets }: Props) {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {filtered.map((s) => {
-                const cost = costOfSheet(s);
-                return (
-                  <div key={s.id} className="group flex flex-col rounded-2xl border border-line bg-surface p-4 shadow-card transition-shadow hover:shadow-pop">
-                    <div className="mb-2 flex items-start justify-between gap-2">
-                      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                        {s.category && (
-                          <span className="inline-flex items-center gap-1 rounded-md bg-surface-muted px-2 py-0.5 text-[10.5px] font-medium text-muted">
-                            <Tag size={10} />
-                            {categoryLabel(s.category)}
-                            {s.subcategory && <span className="text-subtle">· {subcategoryLabel(s.category, s.subcategory)}</span>}
-                          </span>
-                        )}
-                      </div>
-                      <a
-                        href={`/production/${s.id}/export`}
-                        onClick={(e) => e.stopPropagation()}
-                        className="shrink-0 rounded-md p-1 text-subtle transition-colors hover:bg-surface-muted hover:text-ink"
-                        title="Föyü Excel olarak indir"
-                      >
-                        <FileDown size={13} />
-                      </a>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+              {filtered.map((s) => (
+                <Link
+                  key={s.id}
+                  href={`/production/${s.id}`}
+                  className="group relative flex flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-card transition-shadow hover:shadow-pop"
+                >
+                  {/* Görsel — sade ürün kartı (basit görünüm) */}
+                  {coverImage(s) ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={coverImage(s)!} alt="" className="aspect-square w-full object-cover" />
+                  ) : (
+                    <div className="grid aspect-square w-full place-items-center bg-surface-muted text-subtle">
+                      <ClipboardList size={24} />
                     </div>
-
-                    <Link href={`/production/${s.id}`} className="flex min-w-0 items-start gap-3">
-                      {coverImage(s) ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={coverImage(s)!} alt="" className="h-16 w-16 shrink-0 rounded-lg border border-line object-cover" />
-                      ) : (
-                        <div className="grid h-16 w-16 shrink-0 place-items-center rounded-lg border border-dashed border-line bg-surface-muted text-subtle">
-                          <ClipboardList size={18} />
-                        </div>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <h3 className="flex items-start justify-between gap-2 text-[14px] font-medium leading-snug text-ink transition-colors group-hover:text-brand-strong">
-                          <span className="min-w-0">{s.title}</span>
-                          <ArrowUpRight size={14} className="mt-0.5 shrink-0 text-subtle opacity-0 transition-opacity group-hover:opacity-100" />
-                        </h3>
-                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11.5px] text-subtle">
-                          {s.product_kind && <span>{s.product_kind}</span>}
-                          {s.producer && <span>Üretici: {s.producer}</span>}
-                        </div>
-                      </div>
-                    </Link>
-
-                    {/* Maliyet özeti — föy pricing + beden dağılımı toplamından */}
-                    <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line/60 pt-2.5 text-[11.5px]">
-                      <span className="text-subtle">Adet: <span className="font-semibold text-ink">{cost.qty || "—"}</span></span>
-                      <span className="text-subtle">Birim: <span className="font-semibold text-ink">{cost.unitPrice ? formatMoney(cost.unitPrice) : "—"}</span></span>
-                      <span className="ml-auto font-bold text-ink">{cost.lineTotal ? formatMoney(cost.lineTotal) : "—"}</span>
-                    </div>
+                  )}
+                  {/* İndir — yalnızca hover'da, köşede sade */}
+                  <a
+                    href={`/production/${s.id}/export`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute right-2 top-2 rounded-md bg-surface/90 p-1.5 text-subtle opacity-0 shadow-sm backdrop-blur transition-opacity hover:text-ink group-hover:opacity-100"
+                    title="Föyü Excel olarak indir"
+                  >
+                    <FileDown size={13} />
+                  </a>
+                  <div className="p-3">
+                    <h3 className="truncate text-[13.5px] font-medium text-ink transition-colors group-hover:text-brand-strong">
+                      {s.title}
+                    </h3>
+                    {s.product_kind && (
+                      <p className="mt-0.5 truncate text-[11.5px] text-subtle">{s.product_kind}</p>
+                    )}
                   </div>
-                );
-              })}
+                </Link>
+              ))}
             </div>
           )}
 

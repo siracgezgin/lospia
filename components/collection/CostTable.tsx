@@ -3,25 +3,25 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import {
-  Wallet, ClipboardList, ExternalLink, Check, Loader2, Info, FileSpreadsheet,
+  Wallet, ClipboardList, Check, Loader2, Info, FileSpreadsheet,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { updateProductionSheetPricing } from "@/lib/actions/production";
-import { categoryLabel } from "@/lib/collection/taxonomy";
-import { totalQuantity, parseMoney, formatMoney } from "@/lib/collection/cost";
+import {
+  totalQuantity, quantityBySize, orderSizes, parseMoney, formatMoney,
+} from "@/lib/collection/cost";
 import type { ProductionSheet, ProductionPricing } from "@/types";
 
 type Row = Pick<
   ProductionSheet,
-  "id" | "title" | "product_kind" | "category" | "subcategory" | "pricing" | "size_distribution" | "status"
+  "id" | "title" | "product_kind" | "category" | "subcategory" | "pricing" | "size_distribution"
 >;
 
 interface Props {
   rows: Row[];
 }
 
-const UNCAT = "__uncat__";
 const inputCls =
   "w-full rounded-md border border-line bg-surface px-2 py-1 text-[12.5px] text-ink text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-brand-ring focus:border-brand-ring";
 
@@ -36,14 +36,22 @@ export function CostTable({ rows }: Props) {
   const [savedId, setSavedId] = useState<string | null>(null);
   const [, startSave] = useTransition();
 
-  const qtyOf = useMemo(() => {
-    const m: Record<string, number> = {};
-    for (const r of rows) m[r.id] = totalQuantity(r.size_distribution);
-    return m;
+  // Her ürünün beden→adet haritası + tüm ürünlerdeki beden kolonlarının birleşimi.
+  const perRow = useMemo(() => {
+    const map: Record<string, { qtyBySize: Record<string, number>; total: number }> = {};
+    const sizeSet = new Set<string>();
+    for (const r of rows) {
+      const qbs = quantityBySize(r.size_distribution);
+      Object.keys(qbs).forEach((s) => sizeSet.add(s));
+      map[r.id] = { qtyBySize: qbs, total: totalQuantity(r.size_distribution) };
+    }
+    return { map, sizes: orderSizes([...sizeSet]) };
   }, [rows]);
 
-  const setField = (id: string, field: keyof ProductionPricing, value: string) =>
-    setPricing((p) => ({ ...p, [id]: { ...p[id], [field]: value } }));
+  const sizes = perRow.sizes;
+
+  const setUnit = (id: string, value: string) =>
+    setPricing((p) => ({ ...p, [id]: { ...p[id], unit_price: value } }));
 
   function save(id: string) {
     setSavingId(id);
@@ -63,25 +71,14 @@ export function CostTable({ rows }: Props) {
     });
   }
 
-  // Kategoriye göre grupla (Excel'deki gibi bölümlü) — genel toplam en altta.
-  const groups = useMemo(() => {
-    const byCat = new Map<string, Row[]>();
-    for (const r of rows) {
-      const c = r.category ?? UNCAT;
-      if (!byCat.has(c)) byCat.set(c, []);
-      byCat.get(c)!.push(r);
-    }
-    return Array.from(byCat.entries());
-  }, [rows]);
-
-  const lineTotal = (id: string) => qtyOf[id] * parseMoney(pricing[id]?.unit_price);
+  const lineTotal = (id: string) => (perRow.map[id]?.total ?? 0) * parseMoney(pricing[id]?.unit_price);
   const grandTotal = rows.reduce((acc, r) => acc + lineTotal(r.id), 0);
 
   return (
-    <div className="mx-auto w-full max-w-[1200px] px-4 py-6 sm:px-6 lg:px-8">
+    <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8">
       <ModulePageHeader
         title="Maliyet"
-        description="Tüm ürünlerin maliyeti tek tabloda. Bir fiyatı değiştirdiğinizde ürünün föyünde de otomatik güncellenir."
+        description="Tüm ürünlerin maliyeti tek tabloda. Birim fiyatı değiştirince ürünün föyünde de otomatik güncellenir."
         icon={Wallet}
         secondaryBackHref="/collection"
         rightSlot={
@@ -121,37 +118,62 @@ export function CostTable({ rows }: Props) {
               <thead>
                 <tr className="border-b border-line-strong bg-surface-muted text-[11px] font-semibold uppercase tracking-wide text-muted">
                   <th className="px-3 py-2.5 text-left">Ürün</th>
-                  <th className="px-2 py-2.5 text-right">Adet</th>
-                  <th className="px-2 py-2.5 text-right">Birim (₺)</th>
-                  <th className="px-2 py-2.5 text-right">Satın alma (₺)</th>
-                  <th className="px-2 py-2.5 text-right">Web satış (₺)</th>
+                  {sizes.map((s) => (
+                    <th key={s} className="px-2 py-2.5 text-center">{s}</th>
+                  ))}
+                  <th className="px-2 py-2.5 text-right">Toplam Adet</th>
+                  <th className="px-2 py-2.5 text-right">Birim Fiyat</th>
                   <th className="px-3 py-2.5 text-right">Toplam</th>
                   <th className="w-8 px-2 py-2.5" />
                 </tr>
               </thead>
               <tbody>
-                {groups.map(([cat, catRows]) => {
-                  const catTotal = catRows.reduce((acc, r) => acc + lineTotal(r.id), 0);
+                {rows.map((r) => {
+                  const info = perRow.map[r.id];
                   return (
-                    <GroupRows
-                      key={cat}
-                      catLabel={cat === UNCAT ? "Kategorisiz" : categoryLabel(cat)}
-                      catRows={catRows}
-                      catTotal={catTotal}
-                      qtyOf={qtyOf}
-                      pricing={pricing}
-                      setField={setField}
-                      save={save}
-                      lineTotal={lineTotal}
-                      savingId={savingId}
-                      savedId={savedId}
-                    />
+                    <tr key={r.id} className="border-b border-line/60 last:border-0 hover:bg-surface-muted/40">
+                      <td className="px-3 py-2">
+                        <Link href={`/production/${r.id}`} className="font-medium text-ink hover:text-brand-strong">
+                          {r.title}
+                        </Link>
+                        {r.product_kind && <span className="ml-2 text-[11px] text-subtle">{r.product_kind}</span>}
+                      </td>
+                      {sizes.map((s) => {
+                        const q = info?.qtyBySize[s] ?? 0;
+                        return (
+                          <td key={s} className="px-2 py-2 text-center tabular-nums text-muted">
+                            {q || <span className="text-subtle/50">·</span>}
+                          </td>
+                        );
+                      })}
+                      <td className="px-2 py-2 text-right font-medium tabular-nums text-ink">{info?.total || "—"}</td>
+                      <td className="px-2 py-2">
+                        <input
+                          className={inputCls}
+                          value={pricing[r.id]?.unit_price ?? ""}
+                          onChange={(e) => setUnit(r.id, e.target.value)}
+                          onBlur={() => save(r.id)}
+                          placeholder="0"
+                          inputMode="decimal"
+                        />
+                      </td>
+                      <td className="px-3 py-2 text-right font-semibold tabular-nums text-ink">
+                        {lineTotal(r.id) ? formatMoney(lineTotal(r.id)) : "—"}
+                      </td>
+                      <td className="px-2 py-2 text-center">
+                        {savingId === r.id ? (
+                          <Loader2 size={14} className="mx-auto animate-spin text-subtle" />
+                        ) : savedId === r.id ? (
+                          <Check size={14} className="mx-auto text-emerald-600" />
+                        ) : null}
+                      </td>
+                    </tr>
                   );
                 })}
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-line-strong bg-surface-muted">
-                  <td className="px-3 py-3 text-[13px] font-bold uppercase tracking-wide text-ink" colSpan={5}>
+                  <td className="px-3 py-3 text-[13px] font-bold uppercase tracking-wide text-ink" colSpan={sizes.length + 3}>
                     Genel Toplam
                   </td>
                   <td className="px-3 py-3 text-right text-[15px] font-bold tabular-nums text-ink">
@@ -166,95 +188,8 @@ export function CostTable({ rows }: Props) {
       )}
 
       <p className="mt-3 flex items-center gap-1.5 px-1 text-[12px] text-subtle">
-        <Info size={13} /> Fiyatlar tek kaynaktan gelir: burada değiştirince ürünün föyünde, föyde değiştirince burada güncellenir. Adet, föydeki beden dağılımından hesaplanır. Genel toplam KDV hariçtir.
+        <Info size={13} /> Beden adetleri föydeki beden dağılımından gelir. Birim fiyatı burada değiştirince ürünün föyünde de güncellenir (tek kaynak). Genel toplam KDV hariçtir.
       </p>
     </div>
-  );
-}
-
-// ── Kategori bölümü + satırları ──────────────────────────────────────────────
-function GroupRows({
-  catLabel, catRows, catTotal, qtyOf, pricing, setField, save, lineTotal, savingId, savedId,
-}: {
-  catLabel: string;
-  catRows: Row[];
-  catTotal: number;
-  qtyOf: Record<string, number>;
-  pricing: Record<string, ProductionPricing>;
-  setField: (_id: string, _field: keyof ProductionPricing, _value: string) => void;
-  save: (_id: string) => void;
-  lineTotal: (_id: string) => number;
-  savingId: string | null;
-  savedId: string | null;
-}) {
-  return (
-    <>
-      <tr className="border-b border-line bg-app/40">
-        <td colSpan={7} className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-subtle">
-          {catLabel} <span className="font-normal text-subtle/70">· {catRows.length} ürün</span>
-        </td>
-      </tr>
-      {catRows.map((r) => (
-        <tr key={r.id} className="border-b border-line/60 last:border-0 hover:bg-surface-muted/40">
-          <td className="px-3 py-2">
-            <Link href={`/production/${r.id}`} className="group inline-flex items-center gap-1.5 font-medium text-ink hover:text-brand-strong">
-              <span className="min-w-0">{r.title}</span>
-              <ExternalLink size={12} className="shrink-0 text-subtle opacity-0 transition-opacity group-hover:opacity-100" />
-            </Link>
-            {r.product_kind && <span className="ml-2 text-[11px] text-subtle">{r.product_kind}</span>}
-          </td>
-          <td className="px-2 py-2 text-right tabular-nums text-muted">{qtyOf[r.id] || "—"}</td>
-          <td className="px-2 py-2">
-            <input
-              className={inputCls}
-              value={pricing[r.id]?.unit_price ?? ""}
-              onChange={(e) => setField(r.id, "unit_price", e.target.value)}
-              onBlur={() => save(r.id)}
-              placeholder="0"
-              inputMode="decimal"
-            />
-          </td>
-          <td className="px-2 py-2">
-            <input
-              className={inputCls}
-              value={pricing[r.id]?.purchase_cost ?? ""}
-              onChange={(e) => setField(r.id, "purchase_cost", e.target.value)}
-              onBlur={() => save(r.id)}
-              placeholder="0"
-              inputMode="decimal"
-            />
-          </td>
-          <td className="px-2 py-2">
-            <input
-              className={inputCls}
-              value={pricing[r.id]?.web_sale_price ?? ""}
-              onChange={(e) => setField(r.id, "web_sale_price", e.target.value)}
-              onBlur={() => save(r.id)}
-              placeholder="0"
-              inputMode="decimal"
-            />
-          </td>
-          <td className="px-3 py-2 text-right font-semibold tabular-nums text-ink">
-            {lineTotal(r.id) ? formatMoney(lineTotal(r.id)) : "—"}
-          </td>
-          <td className="px-2 py-2 text-center">
-            {savingId === r.id ? (
-              <Loader2 size={14} className="mx-auto animate-spin text-subtle" />
-            ) : savedId === r.id ? (
-              <Check size={14} className="mx-auto text-emerald-600" />
-            ) : null}
-          </td>
-        </tr>
-      ))}
-      <tr className="border-b border-line bg-app/20">
-        <td colSpan={5} className="px-3 py-1.5 text-right text-[11.5px] font-medium text-subtle">
-          {catLabel} ara toplam
-        </td>
-        <td className="px-3 py-1.5 text-right text-[12.5px] font-semibold tabular-nums text-muted">
-          {formatMoney(catTotal)}
-        </td>
-        <td />
-      </tr>
-    </>
   );
 }
