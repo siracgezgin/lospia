@@ -78,11 +78,31 @@ export default async function PlanningPage({
     topics: byMeeting.get(m.id) ?? [],
   }));
 
+  // Sistemdeki üyeler — "Kim" seçimi + baş-harf gösterimi için.
+  const membersRes = await supabase
+    .from("workspace_members")
+    .select("user_id, profiles(id, full_name, email)")
+    .eq("workspace_id", workspaceId);
+  const members: { id: string; name: string }[] = [];
+  const memberNames: Record<string, string> = {};
+  for (const m of membersRes.data ?? []) {
+    const p = (Array.isArray(m.profiles) ? m.profiles[0] : m.profiles) as
+      | { id: string; full_name: string | null; email: string | null }
+      | null;
+    if (p) {
+      const name = p.full_name || p.email || "—";
+      members.push({ id: m.user_id as string, name });
+      memberNames[m.user_id as string] = name;
+    }
+  }
+
   return (
     <PlanningBoard
       meetings={withTopics}
       weekDays={isoDays}
       weekStart={weekStart}
+      members={members}
+      memberNames={memberNames}
     />
   );
 }

@@ -14,20 +14,22 @@ const NOT_FOUND = "Toplantı bulunamadı.";
 
 const CATEGORIES = ["uretim", "ai", "sales", "marketing", "finance", "external", "system", "other"] as const;
 
+const memberIds = z.array(z.string().max(64)).max(50).default([]);
+
 const MeetingSchema = z.object({
   meeting_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Geçersiz tarih"),
   time_slot: z.string().min(1).max(10).default("09:00"),
   category: z.enum(CATEGORIES).default("uretim"),
   title: z.string().max(300).optional().nullable(),
   content: z.string().max(4000).optional().nullable(),
-  kim: z.string().max(300).optional().nullable(),
+  participant_ids: memberIds,
 });
 export type MeetingInput = z.infer<typeof MeetingSchema>;
 
 const TopicSchema = z.object({
   position: z.number().int().min(0).max(50),
   text: z.string().max(2000).optional().nullable(),
-  kim: z.string().max(300).optional().nullable(),
+  participant_ids: memberIds,
 });
 
 async function getCtx(supabase: Awaited<ReturnType<typeof createClient>>) {
@@ -67,7 +69,7 @@ export async function createMeeting(
       category: v.category,
       title: nn(v.title),
       content: nn(v.content),
-      kim: nn(v.kim),
+      participant_ids: v.participant_ids,
       created_by: ctx.userId,
       updated_by: ctx.userId,
     })
@@ -97,7 +99,7 @@ export async function updateMeeting(
       category: v.category,
       title: nn(v.title),
       content: nn(v.content),
-      kim: nn(v.kim),
+      participant_ids: v.participant_ids,
       updated_by: ctx.userId,
     })
     .eq("id", meetingId)
@@ -148,13 +150,13 @@ export async function saveMeetingTopics(
   if (!meeting) return { error: NOT_FOUND };
 
   const rows = parsed.data
-    .filter((t) => nn(t.text) || nn(t.kim))
+    .filter((t) => nn(t.text) || (t.participant_ids?.length ?? 0) > 0)
     .map((t, i) => ({
       meeting_id: meetingId,
       workspace_id: ctx.workspaceId,
       position: i,
       text: nn(t.text),
-      kim: nn(t.kim),
+      participant_ids: t.participant_ids ?? [],
       created_by: ctx.userId,
     }));
 

@@ -7,6 +7,7 @@ import {
   createMeeting, updateMeeting, deleteMeeting, saveMeetingTopics,
 } from "@/lib/actions/planning";
 import { PLANNING_CATEGORIES } from "@/lib/planning/categories";
+import { MemberMultiSelect, type Member } from "./MemberMultiSelect";
 import type { PlanningCategory, PlanningMeetingWithTopics } from "@/types";
 
 interface Props {
@@ -14,25 +15,26 @@ interface Props {
   day: string;       // yyyy-MM-dd
   slot: string;      // "09:00"
   dayLabel: string;  // "Pazartesi 27 Tem"
+  members: Member[];
   onClose: () => void;
   onSaved: () => void;
 }
 
-type TopicDraft = { text: string; kim: string };
+type TopicDraft = { text: string; participant_ids: string[] };
 
 const inputCls =
   "w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-[13px] text-ink placeholder:text-subtle focus:outline-none focus:ring-2 focus:ring-brand-ring focus:border-brand-ring";
 
-export function MeetingEditor({ meeting, day, slot, dayLabel, onClose, onSaved }: Props) {
+export function MeetingEditor({ meeting, day, slot, dayLabel, members, onClose, onSaved }: Props) {
   const isNew = meeting === null;
   const [category, setCategory] = useState<PlanningCategory>(meeting?.category ?? "uretim");
   const [title, setTitle] = useState(meeting?.title ?? "");
   const [content, setContent] = useState(meeting?.content ?? "");
-  const [kim, setKim] = useState(meeting?.kim ?? "");
+  const [participantIds, setParticipantIds] = useState<string[]>(meeting?.participant_ids ?? []);
   const [topics, setTopics] = useState<TopicDraft[]>(() => {
-    const existing = (meeting?.topics ?? []).map((t) => ({ text: t.text ?? "", kim: t.kim ?? "" }));
+    const existing = (meeting?.topics ?? []).map((t) => ({ text: t.text ?? "", participant_ids: t.participant_ids ?? [] }));
     // En az 3 boş satır göster (Konu girişini davet et).
-    while (existing.length < 3) existing.push({ text: "", kim: "" });
+    while (existing.length < 3) existing.push({ text: "", participant_ids: [] });
     return existing;
   });
   const [error, setError] = useState<string | null>(null);
@@ -41,12 +43,12 @@ export function MeetingEditor({ meeting, day, slot, dayLabel, onClose, onSaved }
 
   const setTopic = (i: number, patch: Partial<TopicDraft>) =>
     setTopics((ts) => ts.map((t, idx) => (idx === i ? { ...t, ...patch } : t)));
-  const addTopic = () => setTopics((ts) => [...ts, { text: "", kim: "" }]);
+  const addTopic = () => setTopics((ts) => [...ts, { text: "", participant_ids: [] }]);
   const removeTopic = (i: number) => setTopics((ts) => ts.filter((_, idx) => idx !== i));
 
   function handleSave() {
     setError(null);
-    const payload = { meeting_date: day, time_slot: slot, category, title, content, kim };
+    const payload = { meeting_date: day, time_slot: slot, category, title, content, participant_ids: participantIds };
     startSave(async () => {
       let meetingId = meeting?.id;
       if (isNew) {
@@ -59,7 +61,7 @@ export function MeetingEditor({ meeting, day, slot, dayLabel, onClose, onSaved }
       }
       const tRes = await saveMeetingTopics(
         meetingId!,
-        topics.map((t, i) => ({ position: i, text: t.text, kim: t.kim })),
+        topics.map((t, i) => ({ position: i, text: t.text, participant_ids: t.participant_ids })),
       );
       if ("error" in tRes) { setError(tRes.error); return; }
       onSaved();
@@ -126,10 +128,10 @@ export function MeetingEditor({ meeting, day, slot, dayLabel, onClose, onSaved }
             <textarea className={cn(inputCls, "resize-y leading-relaxed")} rows={2} value={content} onChange={(e) => setContent(e.target.value)} placeholder="Toplantı içeriği…" />
           </label>
 
-          <label className="block">
+          <div>
             <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">Kim</span>
-            <input className={inputCls} value={kim} onChange={(e) => setKim(e.target.value)} placeholder="SE, ND, SG…" />
-          </label>
+            <MemberMultiSelect members={members} selected={participantIds} onChange={setParticipantIds} placeholder="Üye seç…" />
+          </div>
 
           {/* Konular */}
           <div>
@@ -139,7 +141,9 @@ export function MeetingEditor({ meeting, day, slot, dayLabel, onClose, onSaved }
                 <div key={i} className="flex items-center gap-1.5">
                   <span className="w-6 shrink-0 text-center text-[11px] font-medium text-subtle">{i + 1}</span>
                   <input className={cn(inputCls, "flex-1")} value={t.text} onChange={(e) => setTopic(i, { text: e.target.value })} placeholder={`Konu ${i + 1}`} />
-                  <input className={cn(inputCls, "w-28")} value={t.kim} onChange={(e) => setTopic(i, { kim: e.target.value })} placeholder="Kim" />
+                  <div className="w-32 shrink-0">
+                    <MemberMultiSelect members={members} selected={t.participant_ids} onChange={(ids) => setTopic(i, { participant_ids: ids })} placeholder="Kim" compact />
+                  </div>
                   <button onClick={() => removeTopic(i)} className="shrink-0 rounded p-1 text-subtle hover:text-red-600" title="Sil"><Trash2 size={13} /></button>
                 </div>
               ))}

@@ -5,24 +5,27 @@ import { useRouter } from "next/navigation";
 import { format, parseISO, addDays, subDays } from "date-fns";
 import { tr } from "date-fns/locale";
 import {
-  CalendarRange, ChevronLeft, ChevronRight, Plus, Pencil, ChevronDown, Users,
+  CalendarRange, ChevronLeft, ChevronRight, Plus, Pencil, ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { PLANNING_CATEGORIES, categoryMeta } from "@/lib/planning/categories";
 import { MeetingEditor } from "./MeetingEditor";
+import { MemberInitials, type Member } from "./MemberMultiSelect";
 import type { PlanningMeetingWithTopics } from "@/types";
 
 interface Props {
   meetings: PlanningMeetingWithTopics[];
   weekDays: string[];   // 7 × yyyy-MM-dd (Pzt→Paz)
   weekStart: string;    // Pazartesi yyyy-MM-dd
+  members: Member[];
+  memberNames: Record<string, string>;
 }
 
 const DAY_LABELS = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
 const DEFAULT_SLOTS = ["09:00", "10:00", "11:00", "12:00"];
 
-export function PlanningBoard({ meetings, weekDays, weekStart }: Props) {
+export function PlanningBoard({ meetings, weekDays, weekStart, members, memberNames }: Props) {
   const router = useRouter();
   const [editor, setEditor] = useState<
     { meeting: PlanningMeetingWithTopics | null; day: string; slot: string; dayLabel: string } | null
@@ -135,9 +138,9 @@ export function PlanningBoard({ meetings, weekDays, weekStart }: Props) {
                               </button>
                             </div>
                             <div className="mt-1 flex items-center gap-2">
-                              {m.kim && (
-                                <span className="inline-flex items-center gap-1 rounded bg-black/5 px-1.5 py-0.5 text-[10px] font-medium text-ink/70">
-                                  <Users size={9} /> {m.kim}
+                              {m.participant_ids?.length > 0 && (
+                                <span className="inline-flex items-center gap-1 rounded bg-black/5 px-1.5 py-0.5">
+                                  <MemberInitials ids={m.participant_ids} memberNames={memberNames} />
                                 </span>
                               )}
                               {topicCount > 0 && (
@@ -153,7 +156,9 @@ export function PlanningBoard({ meetings, weekDays, weekStart }: Props) {
                                   <li key={t.id} className="flex items-start gap-1.5 text-[11px] text-ink/85">
                                     <span className="mt-px shrink-0 font-semibold text-ink/50">{ti + 1}.</span>
                                     <span className="min-w-0 flex-1">{t.text}</span>
-                                    {t.kim && <span className="shrink-0 rounded bg-black/5 px-1 text-[9.5px] text-ink/60">{t.kim}</span>}
+                                    {t.participant_ids?.length > 0 && (
+                                      <MemberInitials ids={t.participant_ids} memberNames={memberNames} className="shrink-0" />
+                                    )}
                                   </li>
                                 ))}
                               </ul>
@@ -190,6 +195,7 @@ export function PlanningBoard({ meetings, weekDays, weekStart }: Props) {
           day={editor.day}
           slot={editor.slot}
           dayLabel={editor.dayLabel}
+          members={members}
           onClose={() => setEditor(null)}
           onSaved={() => { setEditor(null); router.refresh(); }}
         />

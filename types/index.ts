@@ -289,7 +289,8 @@ export type PlanningTopic = {
   workspace_id: string;
   position: number;
   text: string | null;
-  kim: string | null;          // konu bazlı "Kim"
+  kim: string | null;              // eski serbest metin (geri uyum)
+  participant_ids: string[];       // konu bazlı "Kim" — üye id'leri
   task_id: string | null;
   created_by: string | null;
   created_at: string;
