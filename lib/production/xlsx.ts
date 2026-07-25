@@ -407,10 +407,14 @@ export function buildCostWorkbook(rows: CostRow[]): Promise<Buffer> {
     pageSetup: { paperSize: 9, orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
   });
 
-  // Beden kolonları — tüm ürünlerdeki bedenlerin birleşimi (Excel gibi sıralı).
-  const sizeSet = new Set<string>();
-  for (const row of rows) Object.keys(quantityBySize(row.size_distribution)).forEach((s) => sizeSet.add(s));
-  const sizes = orderSizes([...sizeSet]);
+  // Beden kolonları — yalnızca adedi olan bedenler (Excel gibi sıralı; boşlar gizli).
+  const sizeTotals: Record<string, number> = {};
+  for (const row of rows) {
+    for (const [s, q] of Object.entries(quantityBySize(row.size_distribution))) {
+      sizeTotals[s] = (sizeTotals[s] ?? 0) + q;
+    }
+  }
+  const sizes = orderSizes(Object.keys(sizeTotals).filter((s) => sizeTotals[s] > 0));
 
   // Kolonlar: Ürün | {beden} | TOPLAM ADET | BİRİM FİYAT | TOPLAM
   const nCols = 1 + sizes.length + 3;

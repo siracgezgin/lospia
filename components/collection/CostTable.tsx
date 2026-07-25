@@ -47,11 +47,15 @@ export function CostTable({ rows }: Props) {
   const [savedId, setSavedId] = useState<string | null>(null);
   const [, startSave] = useTransition();
 
-  // Tüm ürünlerdeki beden kolonlarının birleşimi (yerel duruma göre — yeni eklenen görünür).
+  // Yalnızca adedi olan beden kolonlarını göster (standart set 13 kolon; boşları
+  // gizle ki tablo kalabalık olmasın). Föyde tüm bedenler her zaman var.
   const sizes = useMemo(() => {
-    const set = new Set<string>();
-    for (const r of rows) Object.keys(quantityBySize(dist[r.id])).forEach((s) => set.add(s));
-    return orderSizes([...set]);
+    const totals: Record<string, number> = {};
+    for (const r of rows) {
+      const qbs = quantityBySize(dist[r.id]);
+      for (const [s, q] of Object.entries(qbs)) totals[s] = (totals[s] ?? 0) + q;
+    }
+    return orderSizes(Object.keys(totals).filter((s) => totals[s] > 0));
   }, [rows, dist]);
 
   const flash = (id: string) => {

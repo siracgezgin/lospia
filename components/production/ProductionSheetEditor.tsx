@@ -17,7 +17,9 @@ import {
 import { cn } from "@/lib/utils/cn";
 import { ImageUploader } from "./ImageUploader";
 import { COLLECTION_TAXONOMY, subcategoriesOf } from "@/lib/collection/taxonomy";
-import { totalQuantity, parseMoney, formatMoney } from "@/lib/collection/cost";
+import {
+  totalQuantity, parseMoney, formatMoney, STANDARD_SIZES, normalizeToStandardSizes,
+} from "@/lib/collection/cost";
 import type {
   ProductionSheet, MeasurementRow, DeliveredItemRow, SizeDistribution, ProductionCategory,
 } from "@/types";
@@ -29,7 +31,7 @@ interface Props {
   currentUserId: string;
 }
 
-const DEFAULT_SIZES = ["XS", "S", "M", "L", "XL", "XXL"];
+// Beden kolonları artık her föyde sabit standart set (bkz. STANDARD_SIZES).
 
 function emptyState(): ProductionSheetInput {
   return {
@@ -46,10 +48,9 @@ function emptyState(): ProductionSheetInput {
     measurements: Array.from({ length: 4 }, (_, i) => ({ no: String(i + 1), label: "", value: "" })),
     delivered_items: Array.from({ length: 3 }, (_, i) => ({ no: String(i + 1), label: "", qty: "" })),
     size_distribution: {
-      sizes: [...DEFAULT_SIZES],
+      sizes: [...STANDARD_SIZES],
       rows: [
-        { label: "Beden etiketi", values: DEFAULT_SIZES.map(() => ""), total: "" },
-        { label: "Üretim adeti", values: DEFAULT_SIZES.map(() => ""), total: "" },
+        { label: "Üretim adeti", values: STANDARD_SIZES.map(() => ""), total: "" },
       ],
     },
     photo_refs: [],
@@ -70,10 +71,9 @@ function emptyState(): ProductionSheetInput {
 }
 
 function fromSheet(s: ProductionSheet): ProductionSheetInput {
-  const sd: SizeDistribution =
-    s.size_distribution && Array.isArray(s.size_distribution.sizes) && s.size_distribution.sizes.length
-      ? s.size_distribution
-      : { sizes: [...DEFAULT_SIZES], rows: [] };
+  // Mevcut föyleri de sabit standart beden setine getir (değerler ada göre eşlenir).
+  const sd: SizeDistribution = normalizeToStandardSizes(s.size_distribution);
+  if (!sd.rows.length) sd.rows = [{ label: "Üretim adeti", values: sd.sizes.map(() => ""), total: "" }];
   return {
     title: s.title ?? "",
     status: s.status,
@@ -201,10 +201,8 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
   const removeDelivered = (i: number) =>
     set("delivered_items", form.delivered_items.filter((_, idx) => idx !== i));
 
-  // ── Beden dağılımı ──
+  // ── Beden dağılımı ── (kolonlar sabit standart set; başlıklar düzenlenmez)
   const sd = form.size_distribution;
-  const setSizeHeader = (i: number, v: string) =>
-    set("size_distribution", { ...sd, sizes: sd.sizes.map((s, idx) => (idx === i ? v : s)) });
   const setDistCell = (rowIdx: number, colIdx: number, v: string) =>
     set("size_distribution", {
       ...sd,
@@ -219,15 +217,6 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
     set("size_distribution", { ...sd, rows: [...sd.rows, { label: "", values: sd.sizes.map(() => ""), total: "" }] });
   const removeDistRow = (rowIdx: number) =>
     set("size_distribution", { ...sd, rows: sd.rows.filter((_, ri) => ri !== rowIdx) });
-  // Beden seti preset'i — satır değerlerini yeni kolon sayısına hizalar (kırpar/doldurur).
-  const applySizePreset = (sizes: string[]) =>
-    set("size_distribution", {
-      sizes,
-      rows: sd.rows.map((r) => ({
-        ...r,
-        values: sizes.map((_, ci) => r.values[ci] ?? ""),
-      })),
-    });
 
   function handleSave() {
     setError(null);
@@ -444,38 +433,14 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
           </button>
         </Section>
 
-        {/* BEDEN DAĞILIMI */}
+        {/* BEDEN DAĞILIMI — sabit standart beden kolonları; hangisine istersen gir */}
         <Section title="Beden Dağılımı">
-          {/* Hızlı beden seti — XS→XXL, +oversize, tek beden */}
-          <div className="mb-2.5 flex flex-wrap items-center gap-1.5 text-[11px]">
-            <span className="mr-0.5 font-semibold uppercase tracking-wide text-subtle">Beden seti:</span>
-            {[
-              { label: "XS–XXL", sizes: ["XS", "S", "M", "L", "XL", "XXL"] },
-              { label: "XS–XXL + Oversize", sizes: ["XS", "S", "M", "L", "XL", "XXL", "Oversize"] },
-              { label: "S–XL", sizes: ["S", "M", "L", "XL"] },
-              { label: "Tek beden", sizes: ["Tek Beden"] },
-            ].map((preset) => {
-              const active = sd.sizes.join("|") === preset.sizes.join("|");
-              return (
-                <button
-                  key={preset.label}
-                  type="button"
-                  onClick={() => applySizePreset(preset.sizes)}
-                  className={cn(
-                    "rounded-md border px-2 py-1 font-medium transition-colors",
-                    active
-                      ? "border-brand bg-brand/10 text-brand-strong"
-                      : "border-line bg-surface text-muted hover:bg-surface-muted hover:text-ink",
-                  )}
-                >
-                  {preset.label}
-                </button>
-              );
-            })}
-          </div>
-          {/* Hizalı, çizgili ızgara — başlık bedenleri + eşit genişlikte kutucuklar */}
+          <p className="mb-2.5 text-[11.5px] text-subtle">
+            Tüm bedenler her zaman burada; yalnızca ürünün olan bedenlerine adet girin.
+          </p>
+          {/* Hizalı, çizgili ızgara — sabit başlıklar + eşit genişlikte kutucuklar */}
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[520px] table-fixed border-collapse overflow-hidden rounded-lg text-[12.5px]">
+            <table className="w-full min-w-[720px] table-fixed border-collapse overflow-hidden rounded-lg text-[12.5px]">
               <colgroup>
                 <col className="w-36" />
                 {sd.sizes.map((_, i) => <col key={i} />)}
@@ -486,12 +451,8 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
                 <tr className="bg-surface-muted">
                   <th className="border border-line-strong px-2 py-1.5 text-left text-[10.5px] font-bold uppercase tracking-wide text-subtle">Satır</th>
                   {sd.sizes.map((s, i) => (
-                    <th key={i} className="border border-line-strong p-0">
-                      <input
-                        className="w-full bg-transparent px-1 py-1.5 text-center text-[12px] font-bold text-ink focus:bg-surface focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-ring"
-                        value={s}
-                        onChange={(e) => setSizeHeader(i, e.target.value)}
-                      />
+                    <th key={i} className="border border-line-strong px-1 py-1.5 text-center text-[11.5px] font-bold text-ink">
+                      {s}
                     </th>
                   ))}
                   <th className="border border-line-strong px-1 py-1.5 text-center text-[10.5px] font-bold uppercase tracking-wide text-subtle">Toplam</th>

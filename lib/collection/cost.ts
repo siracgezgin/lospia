@@ -99,8 +99,43 @@ export function withSizeQty(
   return base;
 }
 
-/** Beden kolonlarının Excel'deki gibi kanonik sırası. Bilinmeyenler sona eklenir. */
-const SIZE_ORDER = ["XS", "S", "M", "L", "XL", "XXL", "Oversize", "Tek Beden", "One Size", "ONE SIZE"];
+/**
+ * Standart beden seti — her üretim föyünde HEP bu kolonlar görünür (kişi
+ * hangisine girmek isterse ona girer). Önce tekli bedenler, sonra ikili
+ * kombinasyonlar, sonra özel bedenler. Profesyonel, sabit set.
+ */
+export const STANDARD_SIZES = [
+  "XS", "S", "M", "L", "XL", "XXL",
+  "XS-S", "S-M", "M-L", "L-XL", "XL-XXL",
+  "Oversize", "Tek Beden",
+];
+
+/**
+ * Bir föyün beden dağılımını standart kolon setine getirir: değerleri beden
+ * adına göre eşleştirir (büyük/küçük harf duyarsız), standartta olmayan eski
+ * bedenleri sona ekler (veri kaybı olmasın).
+ */
+export function normalizeToStandardSizes(
+  sd: SizeDistribution | null | undefined,
+): SizeDistribution {
+  const existing = sd?.sizes ?? [];
+  const extras = existing.filter(
+    (s) => s && !STANDARD_SIZES.some((std) => std.toLowerCase() === s.toLowerCase()),
+  );
+  const target = [...STANDARD_SIZES, ...extras];
+  const rows = (sd?.rows ?? []).map((r) => ({
+    label: r.label,
+    total: r.total,
+    values: target.map((size) => {
+      const i = existing.findIndex((e) => e.toLowerCase() === size.toLowerCase());
+      return i >= 0 ? (r.values?.[i] ?? "") : "";
+    }),
+  }));
+  return { sizes: target, rows };
+}
+
+/** Beden kolonlarının kanonik sırası (standart set + eski tek-beden varyantları). */
+const SIZE_ORDER = [...STANDARD_SIZES, "One Size", "ONE SIZE"];
 export function orderSizes(sizes: string[]): string[] {
   const uniq = Array.from(new Set(sizes.filter(Boolean)));
   const rank = (s: string) => {
