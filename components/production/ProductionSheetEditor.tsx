@@ -473,29 +473,48 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
               );
             })}
           </div>
+          {/* Hizalı, çizgili ızgara — başlık bedenleri + eşit genişlikte kutucuklar */}
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-[12.5px]">
+            <table className="w-full min-w-[520px] table-fixed border-collapse overflow-hidden rounded-lg text-[12.5px]">
+              <colgroup>
+                <col className="w-36" />
+                {sd.sizes.map((_, i) => <col key={i} />)}
+                <col className="w-16" />
+                <col className="w-9" />
+              </colgroup>
               <thead>
-                <tr>
-                  <th className="min-w-[130px] p-1 text-left" />
+                <tr className="bg-surface-muted">
+                  <th className="border border-line-strong px-2 py-1.5 text-left text-[10.5px] font-bold uppercase tracking-wide text-subtle">Satır</th>
                   {sd.sizes.map((s, i) => (
-                    <th key={i} className="p-1">
-                      <input className={cn(inputCls, "w-12 px-1 text-center font-semibold")} value={s} onChange={(e) => setSizeHeader(i, e.target.value)} />
+                    <th key={i} className="border border-line-strong p-0">
+                      <input
+                        className="w-full bg-transparent px-1 py-1.5 text-center text-[12px] font-bold text-ink focus:bg-surface focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-ring"
+                        value={s}
+                        onChange={(e) => setSizeHeader(i, e.target.value)}
+                      />
                     </th>
                   ))}
-                  <th className="p-1"><span className="block w-16 text-center text-[10.5px] font-bold uppercase text-subtle">Toplam</span></th>
-                  <th className="w-7 p-1" />
+                  <th className="border border-line-strong px-1 py-1.5 text-center text-[10.5px] font-bold uppercase tracking-wide text-subtle">Toplam</th>
+                  <th className="w-9" />
                 </tr>
               </thead>
               <tbody>
                 {sd.rows.map((row, ri) => (
                   <tr key={ri}>
-                    <td className="p-1"><input className={cn(inputCls, "px-2")} value={row.label} onChange={(e) => setDistLabel(ri, e.target.value)} placeholder="Satır adı" /></td>
+                    <td className="border border-line p-0">
+                      <input className="w-full bg-transparent px-2 py-1.5 text-[12.5px] font-medium text-ink focus:bg-surface focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-ring" value={row.label} onChange={(e) => setDistLabel(ri, e.target.value)} placeholder="Satır adı" />
+                    </td>
                     {sd.sizes.map((_, ci) => (
-                      <td key={ci} className="p-1"><input className={cn(inputCls, "w-12 px-1 text-center")} value={row.values[ci] ?? ""} onChange={(e) => setDistCell(ri, ci, e.target.value)} /></td>
+                      <td key={ci} className="border border-line p-0">
+                        <input className="w-full bg-transparent px-1 py-1.5 text-center tabular-nums text-ink focus:bg-surface focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-ring" value={row.values[ci] ?? ""} onChange={(e) => setDistCell(ri, ci, e.target.value)} inputMode="numeric" />
+                      </td>
                     ))}
-                    <td className="p-1"><input className={cn(inputCls, "w-16 px-1 text-center font-medium")} value={row.total} onChange={(e) => setDistTotal(ri, e.target.value)} /></td>
-                    <td className="p-1"><button onClick={() => removeDistRow(ri)} className="rounded p-1 text-subtle hover:text-red-600" title="Sil"><Trash2 size={12} /></button></td>
+                    <td className="border border-line p-0">
+                      <input className="w-full bg-transparent px-1 py-1.5 text-center font-semibold tabular-nums text-ink focus:bg-surface focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-ring" value={row.total} onChange={(e) => setDistTotal(ri, e.target.value)} placeholder="—" inputMode="numeric" />
+                    </td>
+                    <td className="text-center align-middle">
+                      <button onClick={() => removeDistRow(ri)} className="rounded p-1 text-subtle hover:text-red-600" title="Satırı sil"><Trash2 size={12} /></button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

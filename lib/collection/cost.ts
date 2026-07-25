@@ -62,6 +62,43 @@ export function quantityBySize(sd: SizeDistribution | null | undefined): Record<
   return out;
 }
 
+/**
+ * Beden dağılımının üretim satırında bir bedenin adedini ayarlar; beden yoksa
+ * kolonu ekler; üretim satırı yoksa oluşturur. Maliyet tablosundan hücre
+ * düzenlemesi için (tek kaynak, föye geri yazılır).
+ */
+export function withSizeQty(
+  sd: SizeDistribution | null | undefined,
+  size: string,
+  value: string,
+): SizeDistribution {
+  const base: SizeDistribution = sd && Array.isArray(sd.sizes)
+    ? { sizes: [...sd.sizes], rows: sd.rows.map((r) => ({ ...r, values: [...(r.values ?? [])] })) }
+    : { sizes: [], rows: [] };
+
+  let idx = base.sizes.findIndex((s) => s.toLowerCase() === size.toLowerCase());
+  if (idx === -1) { base.sizes.push(size); idx = base.sizes.length - 1; }
+
+  if (base.rows.length === 0) {
+    base.rows.push({ label: "Üretim adeti", values: [], total: "" });
+  }
+  // Tüm satırların değerlerini kolon sayısına hizala.
+  base.rows = base.rows.map((r) => {
+    const v = [...r.values];
+    while (v.length < base.sizes.length) v.push("");
+    return { ...r, values: v };
+  });
+
+  let prodIdx = base.rows.findIndex((r) => norm(r.label ?? "").includes("uretim adet"));
+  if (prodIdx === -1) prodIdx = base.rows.findIndex((r) => !norm(r.label ?? "").includes("beden etiket"));
+  if (prodIdx === -1) prodIdx = 0;
+
+  base.rows[prodIdx].values[idx] = value;
+  // total alanını temizle ki toplam değerlerden hesaplansın.
+  base.rows[prodIdx].total = "";
+  return base;
+}
+
 /** Beden kolonlarının Excel'deki gibi kanonik sırası. Bilinmeyenler sona eklenir. */
 const SIZE_ORDER = ["XS", "S", "M", "L", "XL", "XXL", "Oversize", "Tek Beden", "One Size", "ONE SIZE"];
 export function orderSizes(sizes: string[]): string[] {

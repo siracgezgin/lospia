@@ -261,6 +261,41 @@ export async function updateProductionSheetPricing(
   return { ok: true };
 }
 
+// Yalnızca beden dağılımı güncelle — Maliyet tablosundan beden adedi girişi.
+// Adet (beden dağılımı) da tek kaynak: maliyette değişince föyde de değişir.
+export async function updateProductionSheetSizeDistribution(
+  sheetId: string,
+  input: z.infer<typeof sizeDistribution>,
+): Promise<{ ok: true } | { error: string }> {
+  const parsed = sizeDistribution.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+
+  const { data: existing, error: loadErr } = await supabase
+    .from("production_sheets")
+    .select("id")
+    .eq("id", sheetId)
+    .eq("workspace_id", ctx.workspaceId)
+    .maybeSingle();
+  if (loadErr) return { error: toActionErrorMessage(loadErr) };
+  if (!existing) return { error: NOT_FOUND };
+
+  const { error } = await supabase
+    .from("production_sheets")
+    .update({ size_distribution: parsed.data, updated_by: ctx.userId })
+    .eq("id", sheetId)
+    .eq("workspace_id", ctx.workspaceId);
+
+  if (error) return { error: toActionErrorMessage(error) };
+  revalidatePath("/collection");
+  revalidatePath("/collection/maliyet");
+  revalidatePath(`/production/${sheetId}`);
+  return { ok: true };
+}
+
 // Arşivle (admin) — hard delete yerine tercih edilir.
 export async function archiveProductionSheet(
   sheetId: string,
