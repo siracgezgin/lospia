@@ -272,7 +272,7 @@ function AddDeptForm({
   }
 
   return (
-    <div className="flex flex-wrap gap-2 items-center">
+    <div className="anim-fade flex flex-wrap gap-2 items-center">
       <input
         type="text"
         value={name}
@@ -280,17 +280,17 @@ function AddDeptForm({
         onKeyDown={(e) => { if (e.key === "Enter") handleCreate(); if (e.key === "Escape") onDone(); }}
         placeholder="Departman adı…"
         autoFocus
-        className="text-sm border border-line rounded-lg px-2.5 py-1 flex-1 min-w-0 bg-surface focus:outline-none focus:ring-1 focus:ring-brand-ring"
+        className="text-sm border border-line rounded-lg px-2.5 py-1 flex-1 min-w-0 bg-surface placeholder:text-subtle transition-colors duration-150 hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40"
       />
       <button
         onClick={handleCreate}
         disabled={!name.trim() || pending}
-        className="text-sm bg-brand text-white px-3 py-1 rounded-lg hover:bg-brand-strong disabled:opacity-50 transition-colors"
+        className="text-sm font-medium bg-brand text-white px-3 py-1 rounded-lg hover:bg-brand-strong active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 transition-colors duration-150"
       >
         {pending ? "Oluşturuluyor…" : "Oluştur"}
       </button>
-      <button onClick={onDone} className="text-sm text-muted hover:text-ink transition-colors">İptal</button>
-      {err && <p className="text-xs text-danger w-full">{err}</p>}
+      <button onClick={onDone} className="text-sm text-muted hover:text-ink rounded transition-colors duration-150">İptal</button>
+      {err && <p role="alert" className="anim-fade-down text-xs text-danger w-full">{err}</p>}
     </div>
   );
 }
@@ -360,19 +360,19 @@ export function DepartmentsManager({ departments, deptMembers, workspaceMembers,
     <div className="space-y-4">
       {/* Provision AF departments button */}
       {canManage && departments.length === 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+        <div className="anim-fade-up bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
           <p className="text-sm text-amber-800">
             AF Operasyon departman ağacı henüz yüklenmemiş.
           </p>
           <button
             onClick={handleProvision}
             disabled={provisioning}
-            className="text-sm bg-amber-700 text-white px-4 py-1.5 rounded-lg hover:bg-amber-800 disabled:opacity-50"
+            className="text-sm font-medium bg-amber-700 text-white px-4 py-1.5 rounded-lg hover:bg-amber-800 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 transition-colors duration-150"
           >
             {provisioning ? "Eşitleniyor…" : "AF departman yapısını eşitle"}
           </button>
-          {provisionErr && <p className="text-xs text-red-600">{provisionErr}</p>}
-          {provisionOk && <p className="text-xs text-green-700">Departman yapısı eşitlendi.</p>}
+          {provisionErr && <p role="alert" className="anim-fade-down text-xs text-danger">{provisionErr}</p>}
+          {provisionOk && <p className="anim-fade-down text-xs text-success">Departman yapısı eşitlendi.</p>}
         </div>
       )}
 
@@ -388,7 +388,7 @@ export function DepartmentsManager({ departments, deptMembers, workspaceMembers,
       )}
 
       {/* Department tree */}
-      <div className="space-y-2">
+      <div className="stagger-children space-y-2">
         {topLevel.map((dept) => (
           <div key={dept.id}>
             <DeptCard
@@ -422,7 +422,7 @@ export function DepartmentsManager({ departments, deptMembers, workspaceMembers,
                   ) : (
                     <button
                       onClick={() => setShowAddChild(dept.id)}
-                      className="flex items-center gap-1 text-xs text-subtle hover:text-brand transition-colors"
+                      className="flex items-center gap-1 text-xs text-subtle hover:text-brand rounded transition-colors duration-150"
                     >
                       <Plus size={11} /> Alt alan ekle
                     </button>
@@ -442,7 +442,7 @@ export function DepartmentsManager({ departments, deptMembers, workspaceMembers,
           ) : (
             <button
               onClick={() => setShowAddTop(true)}
-              className="flex items-center gap-1.5 text-sm text-brand hover:text-brand-strong transition-colors"
+              className="flex items-center gap-1.5 text-sm font-medium text-brand hover:text-brand-strong rounded transition-colors duration-150"
             >
               <Plus size={14} /> Departman ekle
             </button>
