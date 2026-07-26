@@ -33,7 +33,7 @@ export function MemberDashboardView({ data, points }: Props) {
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto space-y-5">
       <div>
-        <h1 className="text-xl font-semibold text-ink">Gösterge Paneli</h1>
+        <h1 className="text-xl font-semibold text-ink">Raporlar</h1>
         <p className="text-sm text-muted mt-0.5">Size atanan işlerin anlık durumu ve kişisel özetiniz</p>
       </div>
 

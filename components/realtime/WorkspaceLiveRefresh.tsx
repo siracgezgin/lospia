@@ -15,9 +15,11 @@ const WATCHED_TABLES = [
   "notifications",
 ] as const;
 
-// Polling cadence for the fallback path. Long enough to be cheap, short enough
-// that a teammate's change shows up within a few seconds.
-const POLL_MS = 15_000;
+// Polling cadence for the fallback path. Her refresh, layout + sayfanın TÜM
+// server sorgularını yeniden çalıştırır; 15sn'lik tempo uygulamayı sürekli
+// meşgul edip "donma" hissi yaratıyordu. 60sn: değişiklik yine kendiliğinden
+// gelir, etkileşim akıcı kalır. (Anlık senkron istenirse REALTIME_ENABLED aç.)
+const POLL_MS = 60_000;
 
 /**
  * Keeps a workspace-scoped view fresh without a manual reload.

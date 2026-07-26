@@ -3,7 +3,7 @@
 export const NAV_LABELS = {
   board: "Pano",
   list: "Liste",
-  dashboard: "Gösterge Paneli",
+  dashboard: "Raporlar",
   calendar: "Takvim",
   settings: "Ayarlar",
   signOut: "Çıkış yap",

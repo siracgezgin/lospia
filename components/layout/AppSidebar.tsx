@@ -15,7 +15,6 @@ import {
   Trash2,
   ScrollText,
   Quote,
-  TrendingUp,
   ShieldCheck,
   LayoutGrid,
   Bookmark,
@@ -40,20 +39,30 @@ type NavItem = {
   children?: NavItem[];
 };
 
+// Bilgi mimarisi — Jira/DevOps netliği: üç grup, her grubun tek işi var.
+//   Çalışma  → günlük ritim ve iş takibi (herkes)
+//   Ürün     → koleksiyon/föy çekirdeği (herkes; Maliyet sekmesi sayfanın içinde)
+//   Yönetim  → yalnız yöneticinin gördüğü her şey (modül kapısı dahil)
+// Kural: bir ekran tek yerden erişilir; ikincil modüllerin kapısı Operasyon
+// Modülleri hub'ıdır — sidebar'a yeni başlık eklemeden önce hub'ı düşün.
 const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   {
-    title: "Çalışma alanı",
+    title: "Çalışma",
     items: [
       // Sıra operasyonun ritmini izler: haftalık takvim (Planlama) en üstte —
-      // "ilk panon buna dönecek"; ardından iş akışı ve ürün çekirdeği.
-      { href: "/planning",     label: "Planlama",        icon: CalendarRange,   adminOnly: false },
-      { href: "/board",        label: "Pano",            icon: Kanban,          adminOnly: false },
-      { href: "/admin-board",  label: "Yönetici Pano",   icon: ShieldCheck,     adminOnly: true  },
-      { href: "/list",         label: "Liste",           icon: List,            adminOnly: false },
-      { href: "/collection",  label: "Koleksiyon",      icon: Boxes,           adminOnly: false },
-      { href: "/modules",      label: "Operasyon Modülleri", icon: LayoutGrid,  adminOnly: true  },
-      { href: "/dashboard", label: "Gösterge Paneli", icon: LayoutDashboard, adminOnly: false },
-      { href: "/calendar",  label: "Takvim",          icon: Calendar,        adminOnly: false },
+      // "ilk panon buna dönecek"; ardından iş akışı ekranları.
+      { href: "/planning",    label: "Planlama",       icon: CalendarRange,   adminOnly: false },
+      { href: "/board",       label: "Pano",           icon: Kanban,          adminOnly: false },
+      { href: "/admin-board", label: "Yönetici Pano",  icon: ShieldCheck,     adminOnly: true  },
+      { href: "/list",        label: "Liste",          icon: List,            adminOnly: false },
+      { href: "/calendar",    label: "Görev Takvimi",  icon: Calendar,        adminOnly: false },
+      { href: "/dashboard",   label: "Raporlar",       icon: LayoutDashboard, adminOnly: false },
+    ],
+  },
+  {
+    title: "Ürün",
+    items: [
+      { href: "/collection", label: "Koleksiyon", icon: Boxes, adminOnly: false },
     ],
   },
   {
@@ -61,6 +70,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     items: [
       // Kurallar — Nisa Hanım'ın isteğiyle şimdilik gizlendi (route/veri korunur).
       // { href: "/rules",    label: "Kurallar",         icon: BookOpen,   adminOnly: false },
+      { href: "/modules",  label: "Operasyon Modülleri", icon: LayoutGrid, adminOnly: true },
       { href: "/finance",  label: "Finans",           icon: Wallet,     adminOnly: true  },
       { href: "/activity", label: "Aktivite Günlüğü", icon: ScrollText, adminOnly: true  },
       { href: "/archive",  label: "Arşiv",            icon: Archive,    adminOnly: true  },
@@ -77,19 +87,10 @@ interface Props {
   brand?: AppBrand;
   userId: string;
   userRole?: WorkspaceRole;
-  // Team totals (admin card)
-  teamDoneThisMonth?: number;
-  teamReviewCount?: number;
-  // Personal totals (member card)
-  myDoneThisMonth?: number;
-  myReviewCount?: number;
-  myPoints?: number;
 }
 
 export function AppSidebar({
   workspace, savedViews, brand = LOSPIA_BRAND, userRole = "member",
-  teamDoneThisMonth = 0, teamReviewCount = 0,
-  myDoneThisMonth = 0, myReviewCount = 0,
 }: Props) {
   const isAdmin = canViewDestructivePages(userRole) || canManageSettings(userRole);
   const pathname = usePathname();
@@ -224,56 +225,11 @@ export function AppSidebar({
         )}
       </nav>
 
-      {/* Bottom stack: team progress (non-competitive) + weekly quote.
-          (Logout now lives in the top-right profile menu.) */}
+      {/* Bottom stack: weekly quote. (Logout lives in the top-right profile
+          menu.) İlerleme/puan kartı kaldırıldı — puan sistemi Aslı/Nisa
+          isteğiyle gizli; verisi de artık layout'ta sorgulanmıyor. */}
       {!collapsed && (
         <div className="px-3 pt-2 pb-3 mt-auto space-y-2.5">
-          {/* İlerleme kartı — puan/motivasyon geri bildirimle şimdilik gizlendi
-              (Aslı/Nisa: "puan motive kalksın"). Geri almak için {false &&} kaldır. */}
-          {false && (
-          <div className="rounded-2xl border border-line bg-surface px-4 pt-3 pb-3.5 shadow-card">
-            <p className="text-[9.5px] font-semibold uppercase tracking-[0.14em] text-subtle mb-2 flex items-center gap-1.5">
-              <TrendingUp size={12} className="text-brand" />
-              {isAdmin ? "Bu Ayın İlerlemesi" : "Bu Ayki İlerlemem"}
-            </p>
-            {isAdmin ? (
-              <>
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-[12px]">
-                    <span className="text-muted">Ekipçe tamamlanan</span>
-                    <span className="font-semibold text-ink tabular-nums">{teamDoneThisMonth}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-[12px]">
-                    <span className="text-muted">Kontrol bekleyen</span>
-                    <span className="font-semibold text-ink tabular-nums">{teamReviewCount}</span>
-                  </div>
-                </div>
-                <p className="text-[10.5px] leading-relaxed text-subtle mt-2.5">
-                  Katkılar görünür oldukça ekip güçlenir.
-                </p>
-              </>
-            ) : (
-              <>
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-[12px]">
-                    <span className="text-muted">Tamamladığım işler</span>
-                    <span className="font-semibold text-ink tabular-nums">{myDoneThisMonth}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-[12px]">
-                    <span className="text-muted">Kontrol bekleyen işlerim</span>
-                    <span className="font-semibold text-ink tabular-nums">{myReviewCount}</span>
-                  </div>
-                  {/* Puanım — puan/motivasyon geri bildirimle şimdilik gizlendi. */}
-                </div>
-                <p className="text-[10.5px] leading-relaxed text-subtle mt-2.5">
-                  Katkın görünür oldukça süreç güçlenir.
-                </p>
-              </>
-            )}
-            {/* "Puan özetini gör" bağlantısı — puan/motivasyon gizlendiği için kaldırıldı. */}
-          </div>
-          )}
-
           {/* Haftanın sözü — weekly rotating editorial brand card. */}
           <div className="relative rounded-2xl border border-brand-soft bg-gradient-to-br from-[#f7ede9] via-brand-soft/40 to-surface px-4 pt-3.5 pb-4 overflow-hidden shadow-card">
             <Quote

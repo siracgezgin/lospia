@@ -78,11 +78,11 @@ export const DEPARTMENT_MODULES: DepartmentModule[] = [
     departmentName: "Satış & Ticaret",
     title: "Satış & Ticaret",
     description:
-      "Müşteri ilişkileri ve satış görünümü — hareket verisi Gösterge Paneli'nde.",
+      "Müşteri ilişkileri ve satış görünümü — hareket verisi Raporlar ekranında.",
     colorKey: "blue",
     links: [
       { label: "CRM / Müşteriler", href: "/crm", readiness: "ready" },
-      { label: "Gösterge Paneli", href: "/dashboard", readiness: "ready" },
+      { label: "Raporlar", href: "/dashboard", readiness: "ready" },
     ],
   },
   {
@@ -95,7 +95,7 @@ export const DEPARTMENT_MODULES: DepartmentModule[] = [
     links: [
       { label: "Ödeme Takibi", href: "/finance", readiness: "ready", adminOnly: true },
       { label: "Maliyet Tablosu", href: "/collection/maliyet", readiness: "ready" },
-      { label: "Gösterge Paneli", href: "/dashboard", readiness: "ready" },
+      { label: "Raporlar", href: "/dashboard", readiness: "ready" },
     ],
   },
   {

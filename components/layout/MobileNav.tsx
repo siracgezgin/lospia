@@ -23,7 +23,7 @@ const ADMIN_NAV: NavItem[] = [
   { href: "/planning",    label: "Planlama",  icon: CalendarRange },
   { href: "/collection",  label: "Koleksiyon", icon: Shirt        },
   { href: "/admin-board", label: "Yönetici",  icon: ShieldCheck   },
-  { href: "/dashboard",   label: "Rapor",     icon: LayoutDashboard },
+  { href: "/dashboard",   label: "Raporlar",  icon: LayoutDashboard },
 ];
 
 export function MobileNav({ isAdmin = false }: { isAdmin?: boolean }) {

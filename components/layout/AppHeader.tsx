@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
-import { ChevronDown, LogOut, Mail, Shield, Sparkles, Clock3, Settings } from "lucide-react";
+import { ChevronDown, LogOut, Mail, Shield, Settings } from "lucide-react";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { Avatar } from "@/components/ui/Avatar";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
@@ -21,17 +21,20 @@ interface Props {
   notifications?: Notification[];
   deadTaskIds?: string[];
   userRole?: WorkspaceRole;
-  pointsThisMonth?: number;
-  pendingPoints?: number;
 }
 
 // Page-context titles. Header shows WHERE you are; the sidebar owns brand/workspace.
+// Adlar sidebar etiketleriyle BİREBİR aynı olmalı (tek terminoloji kuralı).
 const PAGE_TITLES: { match: (p: string) => boolean; title: string }[] = [
   { match: (p) => p.startsWith("/admin-board"), title: "Yönetici Pano" },
   { match: (p) => p.startsWith("/board"), title: "Pano" },
+  { match: (p) => p.startsWith("/planning"), title: "Planlama" },
   { match: (p) => p.startsWith("/list"), title: "Liste" },
-  { match: (p) => p.startsWith("/dashboard"), title: "Gösterge Paneli" },
-  { match: (p) => p.startsWith("/calendar"), title: "Takvim" },
+  { match: (p) => p.startsWith("/dashboard"), title: "Raporlar" },
+  { match: (p) => p.startsWith("/calendar"), title: "Görev Takvimi" },
+  { match: (p) => p.startsWith("/collection"), title: "Koleksiyon" },
+  { match: (p) => p.startsWith("/finance"), title: "Finans" },
+  { match: (p) => p.startsWith("/modules"), title: "Operasyon Modülleri" },
   { match: (p) => p.startsWith("/rules"), title: "Kurallar" },
   { match: (p) => p.startsWith("/archive"), title: "Arşiv" },
   { match: (p) => p.startsWith("/trash"), title: "Çöp Kutusu" },
@@ -43,14 +46,10 @@ function ProfileMenu({
   displayName,
   email,
   role,
-  pointsThisMonth,
-  pendingPoints,
 }: {
   displayName: string;
   email: string | null;
   role: WorkspaceRole;
-  pointsThisMonth: number;
-  pendingPoints: number;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -107,33 +106,9 @@ function ProfileMenu({
             </div>
           </div>
 
-          {/* Kişisel puan özeti — puan/motivasyon geri bildirimle şimdilik gizlendi
-              (geri alınabilir: {false && ...} kaldırılınca döner). */}
-          {false && (
-          <div className="px-4 py-3 border-b border-line space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-2 text-[12px] text-muted">
-                <Sparkles size={13} className="text-brand shrink-0" />
-                Bu ay
-              </span>
-              <span className="text-[12px] font-semibold text-ink tabular-nums">
-                {pointsThisMonth} puan
-              </span>
-            </div>
-            <div
-              className="flex items-center justify-between"
-              title="Görev yönetici tarafından tamamlandığında kesinleşir."
-            >
-              <span className="flex items-center gap-2 text-[12px] text-muted">
-                <Clock3 size={13} className="text-subtle shrink-0" />
-                Onay bekleyen
-              </span>
-              <span className="text-[12px] font-medium text-muted tabular-nums">
-                {pendingPoints} puan
-              </span>
-            </div>
-          </div>
-          )}
+          {/* Kişisel puan özeti kaldırıldı — puan sistemi Aslı/Nisa isteğiyle
+              gizli; verisi de artık layout'ta sorgulanmıyor (performans).
+              Geri istenirse veriyi burada değil Profil sayfasında göster. */}
 
           {/* Ayarlar — admin-only. On mobile the bottom nav no longer carries
               Ayarlar (it shows Yönetici Pano), so this is its primary phone entry. */}
@@ -166,7 +141,6 @@ function ProfileMenu({
 
 export function AppHeader({
   unreadCount, userId, userName, userEmail, notifications = [], deadTaskIds = [], userRole = "member",
-  pointsThisMonth = 0, pendingPoints = 0,
 }: Props) {
   const pathname = usePathname();
   const title = PAGE_TITLES.find((t) => t.match(pathname))?.title ?? "";
@@ -193,8 +167,6 @@ export function AppHeader({
             displayName={displayName}
             email={userEmail ?? null}
             role={userRole}
-            pointsThisMonth={pointsThisMonth}
-            pendingPoints={pendingPoints}
           />
         </div>
       </div>

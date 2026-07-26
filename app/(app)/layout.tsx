@@ -5,7 +5,6 @@ import { getAppBrandForHost } from "@/lib/branding";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { MobileNav } from "@/components/layout/MobileNav";
-import { getMemberPointsSummary, startOfMonthISO } from "@/lib/points/queries";
 import { pickDisplayEmail } from "@/lib/utils/display-identity";
 import type { Workspace, SavedView, Notification, WorkspaceRole } from "@/types";
 
@@ -87,13 +86,6 @@ export default async function AppLayout({
   let notifications: Notification[] = [];
   // task_ids whose task is soft-deleted or gone → their notifications are passive.
   let deadTaskIds: string[] = [];
-  // Puan & Motivasyon — personal summary (profile menu) + team progress (sidebar)
-  let pointsThisMonth = 0;
-  let pendingPoints = 0;
-  let myDoneCount = 0;
-  let myReviewCount = 0;
-  let teamDoneThisMonth = 0;
-  let teamReviewCount = 0;
 
   let userName: string | null =
     (user.user_metadata?.full_name as string | undefined) ?? null;
@@ -162,32 +154,12 @@ export default async function AppLayout({
       notificationEmail: memberRows?.[0]?.notification_email ?? null,
     });
 
-    // Personal points summary for everyone. Workspace-wide progress counts are
-    // fetched ONLY for admins — a member never receives team totals.
-    const monthStart = startOfMonthISO();
-    const summary = await getMemberPointsSummary(supabase, workspaceId, user.id);
-    pointsThisMonth = summary.monthPoints;
-    pendingPoints = summary.pending;
-    myDoneCount = summary.doneCount;
-    myReviewCount = summary.reviewCount;
-
-    if (isAdmin) {
-      const [doneRes, reviewRes] = await Promise.all([
-        supabase
-          .from("tasks")
-          .select("id", { count: "exact", head: true })
-          .eq("workspace_id", workspaceId)
-          .eq("status", "done")
-          .gte("updated_at", monthStart),
-        supabase
-          .from("tasks")
-          .select("id", { count: "exact", head: true })
-          .eq("workspace_id", workspaceId)
-          .eq("status", "review"),
-      ]);
-      teamDoneThisMonth = doneRes.count ?? 0;
-      teamReviewCount = reviewRes.count ?? 0;
-    }
+    // NOT: puan/takım özet sorguları buradan bilinçli olarak KALDIRILDI —
+    // tek tüketicileri sidebar/header'daki {false && ...} ile gizlenmiş puan
+    // kartlarıydı (Aslı/Nisa: "puan motive kalksın"). Kabuk her gezinmede
+    // çalıştığı için bu 5-6 sorgu tüm sayfaları yavaşlatıyordu. Puan verisi
+    // artık yalnız kendi sayfalarında (Profil, Gösterge Paneli) yüklenir;
+    // kartlar geri istenirse veriyi orada değil, ilgili sayfada topla.
   }
 
   return (
@@ -198,11 +170,6 @@ export default async function AppLayout({
         brand={brand}
         userId={user.id}
         userRole={userRole}
-        teamDoneThisMonth={teamDoneThisMonth}
-        teamReviewCount={teamReviewCount}
-        myDoneThisMonth={myDoneCount}
-        myReviewCount={myReviewCount}
-        myPoints={pointsThisMonth}
       />
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <AppHeader
@@ -214,8 +181,6 @@ export default async function AppLayout({
           notifications={notifications}
           deadTaskIds={deadTaskIds}
           userRole={userRole}
-          pointsThisMonth={pointsThisMonth}
-          pendingPoints={pendingPoints}
         />
         {/* pb-bottom-nav keeps content clear of the fixed mobile bottom nav (incl.
             iOS safe-area inset); overflow-x-hidden stops stray wide children from

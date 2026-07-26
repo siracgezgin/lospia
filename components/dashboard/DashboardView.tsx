@@ -124,7 +124,7 @@ export function DashboardView({
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-5">
       <div>
-        <h1 className="text-xl font-semibold text-ink">Gösterge Paneli</h1>
+        <h1 className="text-xl font-semibold text-ink">Raporlar</h1>
         <p className="text-sm text-muted mt-0.5">Ekip operasyonunun anlık durumu, riskler ve haftanın odağı</p>
       </div>
 
