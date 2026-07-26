@@ -10,12 +10,15 @@
 -- İzin modeli: office-center pattern (production_sheets ile aynı). Tüm üyeler
 -- okur/yazar; silme admin veya oluşturana açık. is_workspace_member /
 -- is_workspace_admin yardımcıları 20240207_office_center_foundation'dan gelir.
+--
+-- Idempotent: prod'a elle (SQL Editor) uygulanan ortamlarda güvenle tekrar
+-- çalıştırılabilir — create if not exists / drop-if-exists + create.
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
 -- 1. planning_meetings — ızgaradaki renkli kutu
 -- ---------------------------------------------------------------------------
-create table public.planning_meetings (
+create table if not exists public.planning_meetings (
   id              uuid primary key default gen_random_uuid(),
   workspace_id    uuid not null references public.workspaces(id) on delete cascade,
   meeting_date    date not null,                       -- o haftanın günü (sütun)
@@ -34,19 +37,20 @@ create table public.planning_meetings (
   updated_at      timestamptz not null default now()
 );
 
+drop trigger if exists set_planning_meetings_updated_at on public.planning_meetings;
 create trigger set_planning_meetings_updated_at
   before update on public.planning_meetings
   for each row execute function set_updated_at();
 
-create index planning_meetings_workspace_date_idx
+create index if not exists planning_meetings_workspace_date_idx
   on public.planning_meetings(workspace_id, meeting_date);
-create index planning_meetings_workspace_cat_idx
+create index if not exists planning_meetings_workspace_cat_idx
   on public.planning_meetings(workspace_id, category);
 
 -- ---------------------------------------------------------------------------
 -- 2. planning_topics — toplantı altındaki "Konu" (max 5); Konu = gerçek görev
 -- ---------------------------------------------------------------------------
-create table public.planning_topics (
+create table if not exists public.planning_topics (
   id           uuid primary key default gen_random_uuid(),
   meeting_id   uuid not null references public.planning_meetings(id) on delete cascade,
   workspace_id uuid not null references public.workspaces(id) on delete cascade, -- RLS için denormalize
@@ -58,12 +62,13 @@ create table public.planning_topics (
   updated_at   timestamptz not null default now()
 );
 
+drop trigger if exists set_planning_topics_updated_at on public.planning_topics;
 create trigger set_planning_topics_updated_at
   before update on public.planning_topics
   for each row execute function set_updated_at();
 
-create index planning_topics_meeting_idx on public.planning_topics(meeting_id, position);
-create index planning_topics_task_idx    on public.planning_topics(task_id);
+create index if not exists planning_topics_meeting_idx on public.planning_topics(meeting_id, position);
+create index if not exists planning_topics_task_idx    on public.planning_topics(task_id);
 
 -- ---------------------------------------------------------------------------
 -- 3. RLS
@@ -72,19 +77,23 @@ alter table public.planning_meetings enable row level security;
 alter table public.planning_topics   enable row level security;
 
 -- planning_meetings
+drop policy if exists "planning_meetings: members read all" on public.planning_meetings;
 create policy "planning_meetings: members read all"
   on public.planning_meetings for select
   using (is_workspace_member(workspace_id));
+drop policy if exists "planning_meetings: members insert" on public.planning_meetings;
 create policy "planning_meetings: members insert"
   on public.planning_meetings for insert
   with check (
     is_workspace_member(workspace_id)
     and (created_by is null or created_by = auth.uid())
   );
+drop policy if exists "planning_meetings: members update" on public.planning_meetings;
 create policy "planning_meetings: members update"
   on public.planning_meetings for update
   using (is_workspace_member(workspace_id))
   with check (is_workspace_member(workspace_id));
+drop policy if exists "planning_meetings: admin or author delete" on public.planning_meetings;
 create policy "planning_meetings: admin or author delete"
   on public.planning_meetings for delete
   using (
@@ -93,19 +102,23 @@ create policy "planning_meetings: admin or author delete"
   );
 
 -- planning_topics
+drop policy if exists "planning_topics: members read all" on public.planning_topics;
 create policy "planning_topics: members read all"
   on public.planning_topics for select
   using (is_workspace_member(workspace_id));
+drop policy if exists "planning_topics: members insert" on public.planning_topics;
 create policy "planning_topics: members insert"
   on public.planning_topics for insert
   with check (
     is_workspace_member(workspace_id)
     and (created_by is null or created_by = auth.uid())
   );
+drop policy if exists "planning_topics: members update" on public.planning_topics;
 create policy "planning_topics: members update"
   on public.planning_topics for update
   using (is_workspace_member(workspace_id))
   with check (is_workspace_member(workspace_id));
+drop policy if exists "planning_topics: admin or author delete" on public.planning_topics;
 create policy "planning_topics: admin or author delete"
   on public.planning_topics for delete
   using (

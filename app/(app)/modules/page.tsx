@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
-import { LayoutGrid, FolderOpen, FileText, Table2, Palette } from "lucide-react";
+import {
+  LayoutGrid, FolderOpen, FileText, Table2, Palette, CalendarRange, Shirt, Calculator, Wallet,
+} from "lucide-react";
 import { requireModuleAdmin } from "@/lib/modules/context";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { DEPARTMENT_MODULES } from "@/lib/modules/registry";
@@ -23,6 +25,34 @@ async function officeCount(
     .neq("status", "archived");
   if (error) return null;
   return count ?? 0;
+}
+
+// Count for tables without a status column (planlama, finans). Extra eq
+// filters are applied verbatim; null again means "table not migrated yet".
+async function plainCount(
+  supabase: Awaited<ReturnType<typeof requireModuleAdmin>>["supabase"],
+  table: string,
+  workspaceId: string,
+  filters: Record<string, string> = {},
+  gte?: { column: string; value: string },
+): Promise<number | null> {
+  let q = supabase
+    .from(table)
+    .select("id", { count: "exact", head: true })
+    .eq("workspace_id", workspaceId);
+  for (const [col, val] of Object.entries(filters)) q = q.eq(col, val);
+  if (gte) q = q.gte(gte.column, gte.value);
+  const { count, error } = await q;
+  if (error) return null;
+  return count ?? 0;
+}
+
+/** Bu haftanın pazartesi günü (yyyy-MM-dd) — planlama sayacı için. */
+function mondayOfThisWeek(): string {
+  const now = new Date();
+  const day = (now.getDay() + 6) % 7; // 0=Pazartesi
+  now.setDate(now.getDate() - day);
+  return now.toISOString().slice(0, 10);
 }
 
 export const metadata = { title: "Operasyon Modülleri" };
@@ -74,17 +104,69 @@ export default async function ModulesPage() {
     officeCount(supabase, "creative_assets", workspaceId),
   ]);
 
+  // Çekirdek operasyon sayaçları — haftanın toplantıları, aktif föyler,
+  // bekleyen ödemeler. null → tablo migrate edilmemiş ("Kurulum bekleniyor").
+  const [weekMeetingCount, sheetCount2, pendingPaymentCount] = await Promise.all([
+    plainCount(supabase, "planning_meetings", workspaceId, {}, {
+      column: "meeting_date", value: mondayOfThisWeek(),
+    }),
+    officeCount(supabase, "production_sheets", workspaceId),
+    plainCount(supabase, "finance_payments", workspaceId, { status: "bekliyor" }),
+  ]);
+
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
       {/* Page header */}
       <ModulePageHeader
         title="Operasyon Modülleri"
-        description="Departmanlara ve çalışma alanlarına buradan ulaşın. Bazı modüller hazırlık aşamasındadır."
+        description="Tüm çalışma alanları tek yerde — her kart çalışan bir modüle gider."
         icon={LayoutGrid}
         badge="Yönetici operasyon alanı"
         backHref="/board"
         backLabel="Panoya dön"
       />
+
+      {/* Bölüm 0: Çekirdek Operasyon — haftalık ritim + ürün + para akışı.
+          Toplantıdaki üç ana başlığın (planlama, üretim, finans) giriş kapısı. */}
+      <div className="mb-3">
+        <h2 className="text-[13px] font-semibold uppercase tracking-wide text-subtle">
+          Çekirdek Operasyon
+        </h2>
+      </div>
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <OfficeCenterCard
+          title="Planlama Takvimi"
+          description="Haftalık toplantı ritmi — renkli bloklar, konular, kişiler ve görevler."
+          href="/planning"
+          icon={CalendarRange}
+          count={weekMeetingCount}
+          countLabel="toplantı bu hafta"
+        />
+        <OfficeCenterCard
+          title="Koleksiyon & Üretim"
+          description="Üretim föyleri, kategoriler, ölçüler ve fotoğraflar — ürünün tek doğru kaynağı."
+          href="/collection"
+          icon={Shirt}
+          count={sheetCount2}
+          countLabel="föy"
+        />
+        <OfficeCenterCard
+          title="Maliyet Tablosu"
+          description="Föy bazlı maliyet ve fiyat tablosu; Excel çıktısı tek tıkla."
+          href="/collection/maliyet"
+          icon={Calculator}
+          count={sheetCount2}
+          countLabel="kayıt"
+        />
+        <OfficeCenterCard
+          title="Finans — Ödeme Takibi"
+          description="Kime, ne kadar, ne zaman — bekleyen ve ödenen ödemeler (yalnız yönetici)."
+          href="/finance"
+          icon={Wallet}
+          count={pendingPaymentCount}
+          countLabel="bekleyen ödeme"
+        />
+      </div>
 
       {/* Bölüm 1: Departman Modülleri */}
       <div className="mb-3">

@@ -1,18 +1,21 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { format, parseISO, addDays, subDays } from "date-fns";
 import { tr } from "date-fns/locale";
 import {
   CalendarRange, ChevronLeft, ChevronRight, Plus, Pencil, CheckCircle2,
+  CalendarPlus, CopyPlus, Settings2, Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { PLANNING_CATEGORIES, categoryMeta } from "@/lib/planning/categories";
+import { applyTemplatesToWeek, copyPreviousWeek } from "@/lib/actions/planning";
 import { MeetingEditor } from "./MeetingEditor";
+import { TemplateManager } from "./TemplateManager";
 import { MemberInitials, type Member } from "./MemberMultiSelect";
-import type { PlanningMeetingWithTopics } from "@/types";
+import type { PlanningMeetingWithTopics, PlanningTemplate } from "@/types";
 
 interface Props {
   meetings: PlanningMeetingWithTopics[];
@@ -20,16 +23,54 @@ interface Props {
   weekStart: string;    // Pazartesi yyyy-MM-dd
   members: Member[];
   memberNames: Record<string, string>;
+  templates: PlanningTemplate[];
+  isAdmin: boolean;
 }
 
 const DAY_LABELS = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
 const DEFAULT_SLOTS = ["09:00", "10:00", "11:00", "12:00"];
+const TOPIC_LIMIT = 5; // Aslı Hanım'ın sınırı: bir toplantıda en çok 5 konu
 
-export function PlanningBoard({ meetings, weekDays, weekStart, members, memberNames }: Props) {
+export function PlanningBoard({
+  meetings, weekDays, weekStart, members, memberNames, templates, isAdmin,
+}: Props) {
   const router = useRouter();
   const [editor, setEditor] = useState<
     { meeting: PlanningMeetingWithTopics | null; day: string; slot: string; dayLabel: string } | null
   >(null);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [notice, setNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  const [isWorking, startWork] = useTransition();
+
+  function handleApplyTemplates() {
+    setNotice(null);
+    startWork(async () => {
+      const res = await applyTemplatesToWeek(weekStart);
+      if ("error" in res) { setNotice({ kind: "error", text: res.error }); return; }
+      setNotice({
+        kind: "ok",
+        text: res.created > 0
+          ? `${res.created} toplantı şablondan kuruldu.`
+          : "Hafta zaten kurulu — yeni eklenen olmadı.",
+      });
+      router.refresh();
+    });
+  }
+
+  function handleCopyPrevious() {
+    setNotice(null);
+    startWork(async () => {
+      const res = await copyPreviousWeek(weekStart);
+      if ("error" in res) { setNotice({ kind: "error", text: res.error }); return; }
+      setNotice({
+        kind: "ok",
+        text: res.created > 0
+          ? `${res.created} toplantı geçen haftadan kopyalandı.`
+          : "Kopyalanacak yeni toplantı yok — hafta zaten dolu.",
+      });
+      router.refresh();
+    });
+  }
 
   // Saat blokları: varsayılan + veride olanlar.
   const slots = useMemo(() => {
@@ -62,7 +103,34 @@ export function PlanningBoard({ meetings, weekDays, weekStart, members, memberNa
         icon={CalendarRange}
         secondaryBackHref="/board"
         rightSlot={
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+            <button
+              onClick={handleApplyTemplates}
+              disabled={isWorking}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-2 text-[12.5px] font-medium text-white transition-colors hover:bg-brand-strong disabled:opacity-60"
+              title="Aktif şablonlardan bu haftanın toplantılarını kur"
+            >
+              {isWorking ? <Loader2 size={14} className="animate-spin" /> : <CalendarPlus size={14} />}
+              Haftayı kur
+            </button>
+            <button
+              onClick={handleCopyPrevious}
+              disabled={isWorking}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-[12.5px] font-medium text-muted transition-colors hover:bg-surface-muted hover:text-ink disabled:opacity-60"
+              title="Geçen haftanın toplantılarını (konular hariç) bu haftaya kopyala"
+            >
+              <CopyPlus size={14} /> Geçen haftadan
+            </button>
+            {isAdmin && (
+              <button
+                onClick={() => setShowTemplates(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-[12.5px] font-medium text-muted transition-colors hover:bg-surface-muted hover:text-ink"
+                title="Haftanın tekrar eden ritmini tanımla"
+              >
+                <Settings2 size={14} /> Şablonlar
+              </button>
+            )}
+            <span className="mx-0.5 hidden h-6 w-px bg-line sm:block" />
             <button onClick={() => gotoWeek(format(subDays(parseISO(weekStart), 7), "yyyy-MM-dd"))} className="rounded-lg border border-line bg-surface p-2 text-muted hover:bg-surface-muted hover:text-ink" title="Önceki hafta">
               <ChevronLeft size={16} />
             </button>
@@ -75,6 +143,19 @@ export function PlanningBoard({ meetings, weekDays, weekStart, members, memberNa
           </div>
         }
       />
+
+      {notice && (
+        <div
+          className={cn(
+            "mb-3 rounded-lg border px-3 py-2 text-[12.5px]",
+            notice.kind === "ok"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+              : "border-red-200 bg-red-50 text-red-700",
+          )}
+        >
+          {notice.text}
+        </div>
+      )}
 
       {/* Kategori açıklaması (legend) */}
       <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
@@ -123,7 +204,19 @@ export function PlanningBoard({ meetings, weekDays, weekStart, members, memberNa
                                 </div>
                                 {m.content && <p className="mt-0.5 whitespace-pre-line text-[11px] leading-snug text-ink/80">{m.content}</p>}
                               </div>
-                              <Pencil size={12} className="shrink-0 text-ink/40 opacity-0 transition-opacity group-hover:opacity-100" />
+                              <span className="flex shrink-0 items-center gap-1">
+                                {/* Konu doluluk göstergesi — 5 sınırı görselleşir */}
+                                <span
+                                  className={cn(
+                                    "rounded px-1 text-[9.5px] font-semibold tabular-nums",
+                                    m.topics.length >= TOPIC_LIMIT ? "bg-ink/15 text-ink/70" : "bg-black/5 text-ink/50",
+                                  )}
+                                  title={`Konu: ${m.topics.length}/${TOPIC_LIMIT}`}
+                                >
+                                  {m.topics.length}/{TOPIC_LIMIT}
+                                </span>
+                                <Pencil size={12} className="text-ink/40 opacity-0 transition-opacity group-hover:opacity-100" />
+                              </span>
                             </div>
                             {m.participant_ids?.length > 0 && (
                               <div className="mt-1">
@@ -184,6 +277,16 @@ export function PlanningBoard({ meetings, weekDays, weekStart, members, memberNa
           members={members}
           onClose={() => setEditor(null)}
           onSaved={() => { setEditor(null); router.refresh(); }}
+        />
+      )}
+
+      {showTemplates && (
+        <TemplateManager
+          templates={templates}
+          members={members}
+          memberNames={memberNames}
+          onClose={() => setShowTemplates(false)}
+          onChanged={() => router.refresh()}
         />
       )}
     </div>

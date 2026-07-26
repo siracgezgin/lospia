@@ -2,27 +2,28 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Kanban, List, Calendar, LayoutDashboard, User, ShieldCheck } from "lucide-react";
+import { Kanban, List, LayoutDashboard, User, ShieldCheck, CalendarRange, Shirt } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
 type NavItem = { href: string; label: string; icon: typeof Kanban };
 
-// A member's tabs end in their own profile; an admin trades that slot for the
-// Yönetici Pano (Ayarlar moves to the top-right profile menu on mobile).
+// Mobil sekmeler operasyonun ritmini izler: Planlama (haftalık takvim) ve
+// Koleksiyon (üretim föyleri) telefonda da bir dokunuş uzaklıkta — Aslı Hanım
+// takvimi telefondan açar. Ay takvimi ve ikincil ekranlar masaüstünde kalır.
 const MEMBER_NAV: NavItem[] = [
-  { href: "/board",     label: "Pano",   icon: Kanban          },
-  { href: "/list",      label: "Liste",  icon: List            },
-  { href: "/calendar",  label: "Takvim", icon: Calendar        },
-  { href: "/dashboard", label: "Rapor",  icon: LayoutDashboard },
-  { href: "/profile",   label: "Profil", icon: User            },
+  { href: "/board",      label: "Pano",      icon: Kanban        },
+  { href: "/planning",   label: "Planlama",  icon: CalendarRange },
+  { href: "/collection", label: "Koleksiyon", icon: Shirt        },
+  { href: "/list",       label: "Liste",     icon: List          },
+  { href: "/profile",    label: "Profil",    icon: User          },
 ];
 
 const ADMIN_NAV: NavItem[] = [
-  { href: "/board",       label: "Pano",     icon: Kanban          },
-  { href: "/admin-board", label: "Yönetici", icon: ShieldCheck     },
-  { href: "/list",        label: "Liste",    icon: List            },
-  { href: "/calendar",    label: "Takvim",   icon: Calendar        },
-  { href: "/dashboard",   label: "Rapor",    icon: LayoutDashboard },
+  { href: "/board",       label: "Pano",      icon: Kanban        },
+  { href: "/planning",    label: "Planlama",  icon: CalendarRange },
+  { href: "/collection",  label: "Koleksiyon", icon: Shirt        },
+  { href: "/admin-board", label: "Yönetici",  icon: ShieldCheck   },
+  { href: "/dashboard",   label: "Rapor",     icon: LayoutDashboard },
 ];
 
 export function MobileNav({ isAdmin = false }: { isAdmin?: boolean }) {

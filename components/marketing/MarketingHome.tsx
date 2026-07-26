@@ -411,7 +411,7 @@ export function MarketingHome() {
             {/* Organized side */}
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.25)] sm:p-8">
               <p className="mb-5 text-xs font-semibold uppercase tracking-widest text-indigo-600">
-                Lospia'da · sahipli ve görünür
+                Lospia&apos;da · sahipli ve görünür
               </p>
               <div className="space-y-3">
                 {ORGANIZED.map((row) => (

@@ -1,7 +1,16 @@
 import Link from "next/link";
 import { Sparkles, ArrowUpRight, Wrench } from "lucide-react";
 import { ModulePageHeader } from "./ModulePageHeader";
-import type { ModuleShell } from "@/lib/modules/registry";
+
+// Artık aktif kullanıcısı yok: isim-only modüller kaldırıldı (stub rotalar
+// gerçek ekranlara redirect ediyor). Bileşen, ileride bilinçli bir "yakında"
+// sayfası gerekirse diye duruyor; tipi kendi içinde taşır.
+export interface ModuleShell {
+  slug: string;
+  title: string;
+  summary: string;
+  purpose: string[];
+}
 
 /** Quick links to the live screens a "hazırlık" module relates to. */
 const RELATED_LINKS: { label: string; href: string }[] = [

@@ -7,7 +7,9 @@ import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { SetupRequiredNotice } from "@/components/modules/SetupRequiredNotice";
 import { maybeDatabaseSetupRequired } from "@/lib/utils/supabase-errors";
 import { PlanningBoard } from "@/components/planning/PlanningBoard";
-import type { PlanningMeeting, PlanningTopic, PlanningMeetingWithTopics } from "@/types";
+import type {
+  PlanningMeeting, PlanningTopic, PlanningMeetingWithTopics, PlanningTemplate,
+} from "@/types";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +18,7 @@ export default async function PlanningPage({
 }: {
   searchParams: Promise<{ week?: string }>;
 }) {
-  const { supabase, user, workspaceId, gate } = await requireModuleMember();
+  const { supabase, user, workspaceId, isAdmin, gate } = await requireModuleMember();
   if (gate === "login") redirect("/login");
   if (gate !== "ok" || !workspaceId || !user) return <AccessDenied />;
 
@@ -78,6 +80,17 @@ export default async function PlanningPage({
     topics: byMeeting.get(m.id) ?? [],
   }));
 
+  // Hafta şablonları — "Haftayı kur" + Şablonlar yöneticisi için. Tablo henüz
+  // migrate edilmediyse boş liste (sayfa çalışmaya devam eder).
+  const templatesRes = await supabase
+    .from("planning_templates")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .order("weekday", { ascending: true })
+    .order("time_slot", { ascending: true })
+    .order("position", { ascending: true });
+  const templates = (templatesRes.data ?? []) as unknown as PlanningTemplate[];
+
   // Sistemdeki üyeler — "Kim" seçimi + baş-harf gösterimi için.
   const membersRes = await supabase
     .from("workspace_members")
@@ -103,6 +116,8 @@ export default async function PlanningPage({
       weekStart={weekStart}
       members={members}
       memberNames={memberNames}
+      templates={templates}
+      isAdmin={isAdmin}
     />
   );
 }

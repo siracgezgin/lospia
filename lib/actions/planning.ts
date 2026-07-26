@@ -265,6 +265,34 @@ export async function assignTopicAsTask(
     .update({ task_id: taskId, due_date: dueDate })
     .eq("id", topicId);
 
+  // Konudaki HERKES görevin sorumlusu olur — ilk kişi assignee kalır, tümü
+  // katılımcı modeline (task_member_completions) yazılır. user id →
+  // workspace_members.id eşlenir; mevcut sorumlular korunur, eksikler eklenir.
+  // Yazma, setTaskParticipants ile aynı nedenle service-role ile yapılır
+  // (kısıtlı RLS başkasını ekleyen üyeyi reddeder); anahtar yoksa RLS'e düşer.
+  const { data: wm } = await supabase
+    .from("workspace_members")
+    .select("id, user_id")
+    .eq("workspace_id", ctx.workspaceId)
+    .in("user_id", assignees);
+  const participantMemberIds = (wm ?? []).map((m) => m.id as string);
+  if (participantMemberIds.length) {
+    const { data: existingComps } = await supabase
+      .from("task_member_completions")
+      .select("member_id")
+      .eq("task_id", taskId);
+    const have = new Set((existingComps ?? []).map((r) => r.member_id as string));
+    const toAdd = participantMemberIds
+      .filter((id) => !have.has(id))
+      .map((member_id) => ({ workspace_id: ctx.workspaceId, task_id: taskId, member_id }));
+    if (toAdd.length) {
+      const { getAdminClient } = await import("@/lib/supabase/admin");
+      const writer = getAdminClient() ?? supabase;
+      const { error: partErr } = await writer.from("task_member_completions").insert(toAdd);
+      if (partErr) return { error: toActionErrorMessage(partErr) };
+    }
+  }
+
   // Bildirim + mail (task_assigned e-posta üretir; actor hariç). Atananların
   // hepsine gönder — dedupe RPC tekrarı önler.
   const { notifyTaskEvent } = await import("@/lib/notifications/notify");
@@ -281,4 +309,218 @@ export async function assignTopicAsTask(
   revalidatePath("/board");
   revalidatePath("/list");
   return { ok: true, taskId };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Şablonlar — haftanın iskeleti ("her gün aynı saatte üretim" ritmi)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const ADMIN_ONLY = "Bu işlem yalnız yöneticilere açık.";
+const isAdminRole = (r: AppRole) => r === "owner" || r === "admin";
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+const TemplateSchema = z.object({
+  id: z.string().max(64).optional().nullable(),
+  weekday: z.number().int().min(0).max(6), // 0=Pazartesi … 6=Pazar
+  time_slot: z.string().min(1).max(10).default("09:00"),
+  category: z.enum(CATEGORIES).default("uretim"),
+  title: z.string().max(300).optional().nullable(),
+  content: z.string().max(4000).optional().nullable(),
+  participant_ids: memberIds,
+  active: z.boolean().default(true),
+});
+export type TemplateInput = z.infer<typeof TemplateSchema>;
+
+/** Şablon ekle/güncelle (admin). */
+export async function saveTemplate(
+  input: TemplateInput,
+): Promise<{ id: string } | { error: string }> {
+  const parsed = TemplateSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+  if (!isAdminRole(ctx.role)) return { error: ADMIN_ONLY };
+
+  const v = parsed.data;
+  const payload = {
+    weekday: v.weekday,
+    time_slot: v.time_slot,
+    category: v.category,
+    title: nn(v.title),
+    content: nn(v.content),
+    participant_ids: v.participant_ids,
+    active: v.active,
+    updated_by: ctx.userId,
+  };
+  if (v.id) {
+    const { error } = await supabase
+      .from("planning_templates")
+      .update(payload)
+      .eq("id", v.id)
+      .eq("workspace_id", ctx.workspaceId);
+    if (error) return { error: toActionErrorMessage(error) };
+    revalidatePath("/planning");
+    return { id: v.id };
+  }
+  const { data, error } = await supabase
+    .from("planning_templates")
+    .insert({ ...payload, workspace_id: ctx.workspaceId, created_by: ctx.userId })
+    .select("id")
+    .single();
+  if (error) return { error: toActionErrorMessage(error) };
+  revalidatePath("/planning");
+  return { id: (data as { id: string }).id };
+}
+
+/** Şablon sil (admin). Şablondan kurulmuş toplantılar silinmez (template_id → null). */
+export async function deleteTemplate(
+  templateId: string,
+): Promise<{ ok: true } | { error: string }> {
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+  if (!isAdminRole(ctx.role)) return { error: ADMIN_ONLY };
+  const { error } = await supabase
+    .from("planning_templates")
+    .delete()
+    .eq("id", templateId)
+    .eq("workspace_id", ctx.workspaceId);
+  if (error) return { error: toActionErrorMessage(error) };
+  revalidatePath("/planning");
+  return { ok: true };
+}
+
+/** yyyy-MM-dd + n gün (saat dilimi oynamasın diye UTC üzerinden). */
+function addDaysIso(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Haftayı şablondan kurar: aktif her şablon için o haftanın gününe bir toplantı
+ * açar. Zaten kurulmuş şablonlar (template_id) ve aynı gün+saatte aynı
+ * kategori+başlıkla elle açılmış toplantılar atlanır — buton kaç kez basılırsa
+ * basılsın hafta ikinci kez şişmez.
+ */
+export async function applyTemplatesToWeek(
+  weekStart: string,
+): Promise<{ ok: true; created: number } | { error: string }> {
+  if (!DATE_RE.test(weekStart)) return { error: "Geçersiz hafta başlangıcı." };
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+
+  const { data: templates, error: tErr } = await supabase
+    .from("planning_templates")
+    .select("*")
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("active", true)
+    .order("weekday", { ascending: true })
+    .order("time_slot", { ascending: true })
+    .order("position", { ascending: true });
+  if (tErr) return { error: toActionErrorMessage(tErr) };
+  if (!templates?.length) return { error: "Aktif şablon yok. Önce “Şablonlar”dan haftanın ritmini tanımlayın." };
+
+  const weekEnd = addDaysIso(weekStart, 6);
+  const { data: existing, error: eErr } = await supabase
+    .from("planning_meetings")
+    .select("meeting_date, time_slot, category, title, template_id")
+    .eq("workspace_id", ctx.workspaceId)
+    .gte("meeting_date", weekStart)
+    .lte("meeting_date", weekEnd);
+  if (eErr) return { error: toActionErrorMessage(eErr) };
+
+  const usedTemplateIds = new Set((existing ?? []).map((m) => m.template_id).filter(Boolean));
+  const manualKeys = new Set(
+    (existing ?? []).map((m) => `${m.meeting_date}|${m.time_slot}|${m.category}|${m.title ?? ""}`),
+  );
+
+  const rows: Record<string, unknown>[] = [];
+  for (const t of templates) {
+    if (usedTemplateIds.has(t.id)) continue;
+    const date = addDaysIso(weekStart, t.weekday as number);
+    if (manualKeys.has(`${date}|${t.time_slot}|${t.category}|${t.title ?? ""}`)) continue;
+    rows.push({
+      workspace_id: ctx.workspaceId,
+      meeting_date: date,
+      time_slot: t.time_slot,
+      category: t.category,
+      title: t.title,
+      content: t.content,
+      participant_ids: t.participant_ids ?? [],
+      position: t.position ?? 0,
+      template_id: t.id,
+      created_by: ctx.userId,
+      updated_by: ctx.userId,
+    });
+  }
+  if (rows.length) {
+    const { error } = await supabase.from("planning_meetings").insert(rows);
+    if (error) return { error: toActionErrorMessage(error) };
+  }
+  revalidatePath("/planning");
+  return { ok: true, created: rows.length };
+}
+
+/**
+ * Geçen haftanın toplantılarını (konular hariç — konular o haftanın işidir)
+ * bu haftaya kopyalar. Çakışanlar atlanır.
+ */
+export async function copyPreviousWeek(
+  weekStart: string,
+): Promise<{ ok: true; created: number } | { error: string }> {
+  if (!DATE_RE.test(weekStart)) return { error: "Geçersiz hafta başlangıcı." };
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+
+  const prevStart = addDaysIso(weekStart, -7);
+  const prevEnd = addDaysIso(weekStart, -1);
+  const { data: prev, error: pErr } = await supabase
+    .from("planning_meetings")
+    .select("meeting_date, time_slot, category, title, content, participant_ids, position, template_id")
+    .eq("workspace_id", ctx.workspaceId)
+    .gte("meeting_date", prevStart)
+    .lte("meeting_date", prevEnd);
+  if (pErr) return { error: toActionErrorMessage(pErr) };
+  if (!prev?.length) return { error: "Geçen haftada kopyalanacak toplantı yok." };
+
+  const weekEnd = addDaysIso(weekStart, 6);
+  const { data: existing, error: eErr } = await supabase
+    .from("planning_meetings")
+    .select("meeting_date, time_slot, category, title")
+    .eq("workspace_id", ctx.workspaceId)
+    .gte("meeting_date", weekStart)
+    .lte("meeting_date", weekEnd);
+  if (eErr) return { error: toActionErrorMessage(eErr) };
+  const taken = new Set(
+    (existing ?? []).map((m) => `${m.meeting_date}|${m.time_slot}|${m.category}|${m.title ?? ""}`),
+  );
+
+  const rows: Record<string, unknown>[] = [];
+  for (const m of prev) {
+    const date = addDaysIso(m.meeting_date as string, 7);
+    if (taken.has(`${date}|${m.time_slot}|${m.category}|${m.title ?? ""}`)) continue;
+    rows.push({
+      workspace_id: ctx.workspaceId,
+      meeting_date: date,
+      time_slot: m.time_slot,
+      category: m.category,
+      title: m.title,
+      content: m.content,
+      participant_ids: m.participant_ids ?? [],
+      position: m.position ?? 0,
+      template_id: m.template_id ?? null,
+      created_by: ctx.userId,
+      updated_by: ctx.userId,
+    });
+  }
+  if (rows.length) {
+    const { error } = await supabase.from("planning_meetings").insert(rows);
+    if (error) return { error: toActionErrorMessage(error) };
+  }
+  revalidatePath("/planning");
+  return { ok: true, created: rows.length };
 }

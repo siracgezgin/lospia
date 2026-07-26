@@ -1,14 +1,8 @@
 import { redirect } from "next/navigation";
-import { ModuleShellView } from "@/components/modules/ModuleShellView";
-import { AccessDenied } from "@/components/modules/AccessDenied";
-import { MODULE_SHELLS } from "@/lib/modules/registry";
-import { requireModuleAdmin } from "@/lib/modules/context";
 
-export const dynamic = "force-dynamic";
-
-export default async function SalesPage() {
-  const { gate } = await requireModuleAdmin();
-  if (gate === "login") redirect("/login");
-  if (gate !== "ok") return <AccessDenied />;
-  return <ModuleShellView shell={MODULE_SHELLS.sales} />;
+// Satış/konsinye ilişkileri bugün CRM'de yaşıyor; ayrı bir satış vitrini yok.
+// Satış hareketi modülü veri ihtiyacı doğduğunda açılır (isim-only modül
+// bırakmama kararı).
+export default function SalesPage() {
+  redirect("/crm");
 }

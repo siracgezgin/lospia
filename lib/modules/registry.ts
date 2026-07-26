@@ -1,13 +1,14 @@
 /**
  * Operasyon Modülleri — the department hub definition.
  *
- * Single source of truth for the /modules screen and the placeholder module
- * shells. Each department maps to an AF colour family (see lib/design/semantics)
- * and lists the operational areas a user can jump into. Route targets that are
- * not fully built yet ("hazırlık") point at safe placeholder shells, so nothing
- * ever 404s.
+ * Single source of truth for the /modules screen. Each department maps to an
+ * AF colour family (see lib/design/semantics) and lists the operational areas
+ * a user can jump into.
  *
- * UI is Turkish; there are no technical enum values here that reach the user.
+ * KURAL: isim-only başlık yok. Her link çalışan bir modüle gider; hazır
+ * olmayan bir alan burada hiç listelenmez (veri ihtiyacı doğunca gerçek
+ * modülüyle birlikte eklenir). UI is Turkish; there are no technical enum
+ * values here that reach the user.
  */
 
 export type ModuleReadiness = "ready" | "prep";
@@ -51,11 +52,11 @@ export const DEPARTMENT_MODULES: DepartmentModule[] = [
     departmentName: "Üretim & Tedarik Zinciri",
     title: "Üretim & Tedarik Zinciri",
     description:
-      "Koleksiyon, kumaş/stok görünürlüğü ve tedarikçi takibi.",
+      "Üretim föyleri, koleksiyon, maliyet ve tedarikçi takibi.",
     colorKey: "orange",
     links: [
-      { label: "Koleksiyon & Üretim", href: "/collection", readiness: "ready" },
-      { label: "Stok / Kumaş", href: "/inventory", readiness: "prep" },
+      { label: "Koleksiyon & Üretim Föyleri", href: "/collection", readiness: "ready" },
+      { label: "Maliyet Tablosu", href: "/collection/maliyet", readiness: "ready" },
       { label: "Tedarikçiler", href: "/crm?segment=tedarikci", readiness: "ready" },
     ],
   },
@@ -64,12 +65,12 @@ export const DEPARTMENT_MODULES: DepartmentModule[] = [
     departmentName: "Tasarım & Yaratıcı Yön",
     title: "Tasarım & Yaratıcı Yön",
     description:
-      "Kreatif referanslar, Canva/Drive bağlantıları ve lookbook düzeni.",
+      "Kreatif referanslar, Canva/Drive bağlantıları ve koleksiyon görselleri.",
     colorKey: "purple",
     links: [
       { label: "Kreatif Linkler", href: "/creative", readiness: "ready" },
       { label: "Canva / Drive Bağlantıları", href: "/creative?provider=canva", readiness: "ready" },
-      { label: "Lookbook / Katalog", href: "/creative", readiness: "prep" },
+      { label: "Koleksiyon Görselleri", href: "/collection", readiness: "ready" },
     ],
   },
   {
@@ -77,12 +78,11 @@ export const DEPARTMENT_MODULES: DepartmentModule[] = [
     departmentName: "Satış & Ticaret",
     title: "Satış & Ticaret",
     description:
-      "Müşteri ilişkileri, satış/konsinye takibi ve satış raporları.",
+      "Müşteri ilişkileri ve satış görünümü — hareket verisi Gösterge Paneli'nde.",
     colorKey: "blue",
     links: [
       { label: "CRM / Müşteriler", href: "/crm", readiness: "ready" },
-      { label: "Satış & Konsinye", href: "/sales", readiness: "prep" },
-      { label: "Raporlar", href: "/reports", readiness: "prep" },
+      { label: "Gösterge Paneli", href: "/dashboard", readiness: "ready" },
     ],
   },
   {
@@ -90,11 +90,12 @@ export const DEPARTMENT_MODULES: DepartmentModule[] = [
     departmentName: "Finans & Operasyon",
     title: "Finans & Operasyon",
     description:
-      "Maliyet, fatura hazırlığı ve operasyon raporlarının toplandığı alan.",
+      "Ödeme takibi ve maliyet — hassas alanlar yalnız yönetici görür.",
     colorKey: "brown",
     links: [
-      { label: "Raporlar", href: "/reports", readiness: "prep" },
-      { label: "Maliyet / Fatura Hazırlık", href: "/finance", readiness: "prep" },
+      { label: "Ödeme Takibi", href: "/finance", readiness: "ready", adminOnly: true },
+      { label: "Maliyet Tablosu", href: "/collection/maliyet", readiness: "ready" },
+      { label: "Gösterge Paneli", href: "/dashboard", readiness: "ready" },
     ],
   },
   {
@@ -102,74 +103,12 @@ export const DEPARTMENT_MODULES: DepartmentModule[] = [
     departmentName: "Marka Yönetimi / CEO Katmanı",
     title: "Marka Yönetimi / CEO Katmanı",
     description:
-      "Yönetici görünümü, kurallar ve markanın genel durum raporları.",
+      "Haftalık ritim, yönetici görünümü ve markanın genel durum raporları.",
     colorKey: "red",
     links: [
+      { label: "Planlama Takvimi", href: "/planning", readiness: "ready" },
       { label: "Yönetici Görünümü", href: "/admin-board", readiness: "ready", adminOnly: true },
       { label: "Kurallar", href: "/rules", readiness: "ready" },
-      { label: "Raporlar", href: "/reports", readiness: "prep" },
     ],
   },
 ];
-
-// ── Placeholder module shells (Faz 1'de sadece hazırlık) ──────────────────────
-
-export interface ModuleShell {
-  slug: string;
-  title: string;
-  summary: string;
-  purpose: string[];
-}
-
-export const MODULE_SHELLS: Record<string, ModuleShell> = {
-  inventory: {
-    slug: "inventory",
-    title: "Stok / Kumaş",
-    summary: "Kumaş ve stok görünürlüğü bu alanda toplanacak.",
-    purpose: [
-      "Kumaş, aksesuar ve ürün stoklarının tek yerden görünürlüğü.",
-      "Şimdilik veriler Koleksiyon & Üretim ekranında salt okunur gösteriliyor.",
-      "Kalıcı stok hareketi bu fazda yazılmıyor; önce sistematik oturuyor.",
-    ],
-  },
-  production: {
-    slug: "production",
-    title: "Üretim Planlama",
-    summary: "Numune, üretim planı ve kalite kontrol akışı için hazırlık.",
-    purpose: [
-      "Numune onayı, üretim planı ve kalite kontrol adımlarının takibi.",
-      "İş takibi bugün Pano ve Liste üzerinden yürüyor.",
-      "Detaylı üretim modülü sonraki fazda açılacak.",
-    ],
-  },
-  reports: {
-    slug: "reports",
-    title: "Raporlar",
-    summary: "Departman ve marka geneli raporların toplanacağı alan.",
-    purpose: [
-      "Satış, üretim ve operasyon özetleri tek ekranda toplanacak.",
-      "Şimdilik Gösterge Paneli temel özetleri sağlıyor.",
-      "Gelişmiş raporlar kontrollü şekilde eklenecek.",
-    ],
-  },
-  sales: {
-    slug: "sales",
-    title: "Satış & Konsinye",
-    summary: "Toptan, perakende ve konsinye takibi için hazırlık.",
-    purpose: [
-      "Toptan/perakende satış ve konsinye noktalarının takibi.",
-      "Müşteri ilişkileri şimdiden CRM ekranında tutuluyor.",
-      "Satış hareketleri sonraki fazda kontrollü açılacak.",
-    ],
-  },
-  finance: {
-    slug: "finance",
-    title: "Maliyet / Fatura Hazırlık",
-    summary: "Maliyetlendirme ve fatura hazırlık alanı için hazırlık.",
-    purpose: [
-      "Maliyet ve fatura hazırlığı için düzenli bir çalışma alanı.",
-      "Hassas finansal alanlar ileride ayrı yetki ile korunacak.",
-      "Bu fazda hesaplama/entegrasyon yazılmıyor.",
-    ],
-  },
-};

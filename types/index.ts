@@ -276,6 +276,7 @@ export type PlanningMeeting = {
   kim: string | null;          // "Kim" — serbest metin (SE, ND…)
   participant_ids: string[];   // ileride yapısal katılımcı
   position: number;
+  template_id?: string | null; // şablondan kurulduysa kaynağı (20240222)
   created_by: string | null;
   updated_by: string | null;
   created_at: string;
@@ -301,6 +302,46 @@ export type PlanningTopic = {
 /** Toplantı + konuları birlikte. */
 export type PlanningMeetingWithTopics = PlanningMeeting & {
   topics: PlanningTopic[];
+};
+
+/** Haftanın iskeleti: tekrar eden toplantı bloğu (20240222 migration).
+ *  "Her gün aynı saatte üretim" ritmini tek yerden tanımlar. */
+export type PlanningTemplate = {
+  id: string;
+  workspace_id: string;
+  weekday: number;             // 0=Pazartesi … 6=Pazar
+  time_slot: string;           // "09:00"
+  category: PlanningCategory;
+  title: string | null;
+  content: string | null;
+  participant_ids: string[];   // varsayılan katılımcılar (user id)
+  position: number;
+  active: boolean;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+// ── Finans — Ödeme Takibi (20240223 migration; admin-only) ───────────────────
+export type FinancePaymentStatus = "bekliyor" | "odendi";
+
+export type FinancePayment = {
+  id: string;
+  workspace_id: string;
+  title: string;
+  payee: string | null;
+  amount: number | null;
+  currency: string;
+  status: FinancePaymentStatus;
+  due_date: string | null;
+  paid_at: string | null;
+  category: string | null;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 // workspace_rules — daily SOPs / checklists

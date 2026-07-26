@@ -21,6 +21,7 @@ import {
   Bookmark,
   Boxes,
   CalendarRange,
+  Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Wordmark } from "@/components/ui/Wordmark";
@@ -43,11 +44,13 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   {
     title: "Çalışma alanı",
     items: [
+      // Sıra operasyonun ritmini izler: haftalık takvim (Planlama) en üstte —
+      // "ilk panon buna dönecek"; ardından iş akışı ve ürün çekirdeği.
+      { href: "/planning",     label: "Planlama",        icon: CalendarRange,   adminOnly: false },
       { href: "/board",        label: "Pano",            icon: Kanban,          adminOnly: false },
       { href: "/admin-board",  label: "Yönetici Pano",   icon: ShieldCheck,     adminOnly: true  },
       { href: "/list",         label: "Liste",           icon: List,            adminOnly: false },
       { href: "/collection",  label: "Koleksiyon",      icon: Boxes,           adminOnly: false },
-      { href: "/planning",     label: "Planlama",        icon: CalendarRange,   adminOnly: false },
       { href: "/modules",      label: "Operasyon Modülleri", icon: LayoutGrid,  adminOnly: true  },
       { href: "/dashboard", label: "Gösterge Paneli", icon: LayoutDashboard, adminOnly: false },
       { href: "/calendar",  label: "Takvim",          icon: Calendar,        adminOnly: false },
@@ -58,6 +61,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     items: [
       // Kurallar — Nisa Hanım'ın isteğiyle şimdilik gizlendi (route/veri korunur).
       // { href: "/rules",    label: "Kurallar",         icon: BookOpen,   adminOnly: false },
+      { href: "/finance",  label: "Finans",           icon: Wallet,     adminOnly: true  },
       { href: "/activity", label: "Aktivite Günlüğü", icon: ScrollText, adminOnly: true  },
       { href: "/archive",  label: "Arşiv",            icon: Archive,    adminOnly: true  },
       { href: "/trash",    label: "Çöp Kutusu",       icon: Trash2,     adminOnly: true  },
