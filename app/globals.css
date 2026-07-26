@@ -15,14 +15,15 @@
   --surface-hover: #f4f6f8;   /* interactive-row hover (between muted and sunken) */
 
   /* Lines — soft. hairline is for internal dividers, line for panel edges */
-  --hairline:      #eef0f3;
-  --border:        #e6e9ee;
-  --border-strong: #d6dae1;
+  --hairline:      #eceef2;
+  --border:        #dfe3e9;
+  --border-strong: #c9cfd8;
 
-  /* Text */
-  --text:          #1d2127;   /* primary */
-  --text-muted:    #5f6772;   /* secondary */
-  --text-subtle:   #9aa2ac;   /* tertiary / placeholder */
+  /* Text — Manrope ince kurulduğu için tonlar bir kademe koyu tutulur;
+     hiyerarşi korunur (primary > muted > subtle) ama hepsi net okunur. */
+  --text:          #15191f;   /* primary */
+  --text-muted:    #495160;   /* secondary */
+  --text-subtle:   #7b8494;   /* tertiary / placeholder */
 
   /* Brand — calm teal, signals trust without shouting */
   --brand:         #2f5d6b;
@@ -90,6 +91,12 @@
   --font-sans: var(--font-manrope), ui-sans-serif, -apple-system,
     BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
     "Noto Sans", sans-serif;
+
+  /* Manrope variable ekseni: taban 460'ın üstünde hiyerarşi net kalsın diye
+     medium/semibold/bold bir kademe dolgun (560/640/740). */
+  --font-weight-medium:   560;
+  --font-weight-semibold: 640;
+  --font-weight-bold:     740;
 
   --radius-card:    var(--radius);
   --radius-control: 0.5rem;   /* buttons, inputs, selects (== rounded-lg today) */
@@ -160,9 +167,10 @@ body {
   background: var(--app-bg);
   color: var(--text);
   font-family: var(--font-sans);
-  /* Manrope küçük boyutlarda hafif geniş kurulur; -0.008em UI yoğunluğunda
-     dengeli okunurluk verir. Başlıklar bileşen düzeyinde tracking alır. */
-  letter-spacing: -0.008em;
+  /* Manrope 400 sistem fontundan ince görünür: variable eksende 460 taban —
+     gövde metni dolgun, font-medium(500)/semibold(600) hiyerarşisi korunur. */
+  font-weight: 460;
+  letter-spacing: -0.004em;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
