@@ -79,3 +79,10 @@ scripts/import-*.ts
 # üretim föyü kaynak Excel/PDF dosyaları — uygulamaya seed edildi, repo'ya girmez
 uretim_foyu/
 gemini.md
+
+# kök dizindeki çalışma artefaktları — ekran görüntüleri, toplantı kayıtları,
+# lookbook/pdf kaynakları repo'ya girmez (veri: sistemde; tasarım: Canva'da)
+/Ekran Resmi*.png
+/*.pdf
+/toplanti_transkript*.md
+/veri/

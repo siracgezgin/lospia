@@ -27,45 +27,53 @@ supabase gen types typescript --local > types/database.ts
 
 ## Project structure
 ```
+proxy.ts                auth gate (Next 16: middleware renamed → proxy)
 app/
-  (auth)/login/         sign-in / sign-up
-  (app)/                authenticated area (middleware-protected)
-    board/              Kanban view
+  (auth)/login/         sign-in
+  (marketing)/          Lospia public site (host-gated; AF host never serves it)
+  (app)/                authenticated area (proxy-protected)
+    planning/           haftalık toplantı takvimi (admin ana ekranı; üye salt-okur)
+    board/ admin-board/ Kanban (+ yönetici görünümü)
     list/               table view
-    tasks/[id]/         task detail
-    dashboard/          analytics tiles
-    calendar/           month grid
-    settings/           workspace settings
-  api/
-    inbound-email/      email-to-task webhook (feature-flagged)
-components/
-  ui/                   shared primitives
-  board/                Kanban-specific Client components
-  list/                 TanStack Table components
-  task/                 task card, form, detail panels
-  layout/               sidebar, nav, header
-  notifications/        bell + popover
-  calendar/             month grid
-  dashboard/            chart tiles
+    tasks/[id]/         task detail (+ @modal intercepted drawer)
+    calendar/           month grid ("Görev Takvimi")
+    dashboard/          analytics ("Raporlar")
+    collection/         Koleksiyon: föy tarayıcı + maliyet (/collection/maliyet)
+    production/[id]/    Üretim Föyü editörü (+ XLSX export routes)
+    finance/            ödeme takibi (admin-only, RLS dahil)
+    modules/            Operasyon Modülleri hub (Çekirdek + departman kartları)
+    crm/ creative/      contacts + kreatif link registry (admin)
+    documents/ templates/ sheets/   Ofis Merkezi
+    activity/ archive/ trash/ settings/ profile/ rules/
+  api/inbound-email/    email-to-task webhook (feature-flagged)
+components/             alan başına klasör (ui/ = paylaşılan primitifler;
+                        planning/ board/ task/ collection/ production/ finance/
+                        modules/ layout/ dashboard/ …)
 lib/
   supabase/             browser | server | middleware clients
   actions/              server actions (all mutations live here)
+  planning/ collection/ production/  alan yardımcıları (kategoriler, maliyet, xlsx)
+  modules/registry.ts   hub tanımı — KURAL: isim-only başlık yok
+  notifications/        notifyTaskEvent (tek bildirim kapısı — asla direkt insert)
   utils/                cn(), formatters, feature-flag helpers
-modules/
-  uploads/              Supabase Storage (UPLOADS_ENABLED)
-  slack/                webhook sender + HMAC verifier (SLACK_ENABLED)
-  email-to-task/        inbound email handler (EMAIL_TO_TASK_ENABLED)
-  ai/                   summarizeTask action (AI_ENABLED)
-  realtime/             task-detail subscription (REALTIME_ENABLED)
-supabase/
-  migrations/           all SQL migrations
-  seed.sql              dev seed data
+modules/                feature-flag'li entegrasyonlar (uploads/slack/email/ai/realtime)
+supabase/migrations/    all SQL — İDEMPOTENT yaz (if not exists / drop-if-exists
+                        + create) ve yeni tabloya AÇIK GRANT ver (authenticated,
+                        service_role); prod'a push'u kullanıcı elle çalıştırır
 types/
-  database.ts           generated from Supabase schema (Phase 14)
+  database.ts           generated from Supabase schema
   index.ts              re-exports + app-specific types
-scripts/
-  mock-inbound-email.ts local email-to-task test script
 ```
+
+## UI kuralları
+- Sidebar 3 sabit grup (Çalışma / Ürün / Yönetim); yeni modülün kapısı /modules
+  hub'ıdır — sidebar'a başlık eklemek kullanıcı onayı ister.
+- Tek terminoloji: aynı ekran her yerde aynı adla (AppHeader PAGE_TITLES ↔ sidebar).
+- `app/(app)/layout.tsx`'e sorgu EKLEME — kabuk her gezinmede çalışır.
+- Font Manrope (variable); hizalı rakamlar `tabular-nums`. Animasyonlar
+  globals.css'teki `anim-*`/`stagger-children` sınıflarıyla (yeni bağımlılık yok).
+- tailwind-merge cn() içindeki border-l renklerini yutar → renkli sol kenarı
+  cn() dışında ver ya da absolute 3px bar kullan.
 
 ## Feature flags
 All default to `false`. Set in `.env.local`:

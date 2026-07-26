@@ -7,9 +7,11 @@ import type { AppRole } from "@/lib/auth/permissions";
 import { toActionErrorMessage } from "@/lib/utils/supabase-errors";
 
 // Planlama — Haftalık Toplantı Takvimi. Toplantı (renkli kutu) + altında Konu'lar.
-// Tüm üyeler okur/yazar (office-center RLS). "Kim" serbest metin.
+// İzin modeli (2026-07-26): üyeler OKUR, yazma yalnız yönetici — hem burada
+// (isAdminRole guard) hem RLS'te (20240226 migration) uygulanır.
 
 const AUTH_REQUIRED = "Kimlik doğrulama gerekli.";
+const PLANNING_ADMIN_ONLY = "Planlamayı yalnız yöneticiler düzenleyebilir.";
 const NOT_FOUND = "Toplantı bulunamadı.";
 
 const CATEGORIES = ["uretim", "ai", "sales", "marketing", "finance", "external", "system", "other"] as const;
@@ -60,6 +62,7 @@ export async function createMeeting(
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
+  if (!isAdminRole(ctx.role)) return { error: PLANNING_ADMIN_ONLY };
 
   const v = parsed.data;
   const { data, error } = await supabase
@@ -91,6 +94,7 @@ export async function updateMeeting(
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
+  if (!isAdminRole(ctx.role)) return { error: PLANNING_ADMIN_ONLY };
 
   const v = parsed.data;
   const { error } = await supabase
@@ -117,6 +121,7 @@ export async function deleteMeeting(
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
+  if (!isAdminRole(ctx.role)) return { error: PLANNING_ADMIN_ONLY };
   const { error } = await supabase
     .from("planning_meetings")
     .delete()
@@ -141,6 +146,7 @@ export async function saveMeetingTopics(
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
+  if (!isAdminRole(ctx.role)) return { error: PLANNING_ADMIN_ONLY };
 
   const { data: meeting } = await supabase
     .from("planning_meetings")
@@ -206,6 +212,7 @@ export async function assignTopicAsTask(
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
+  if (!isAdminRole(ctx.role)) return { error: PLANNING_ADMIN_ONLY };
 
   const { data: topic } = await supabase
     .from("planning_topics")
@@ -411,6 +418,7 @@ export async function applyTemplatesToWeek(
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
+  if (!isAdminRole(ctx.role)) return { error: PLANNING_ADMIN_ONLY };
 
   const { data: templates, error: tErr } = await supabase
     .from("planning_templates")
@@ -475,6 +483,7 @@ export async function copyPreviousWeek(
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
+  if (!isAdminRole(ctx.role)) return { error: PLANNING_ADMIN_ONLY };
 
   const prevStart = addDaysIso(weekStart, -7);
   const prevEnd = addDaysIso(weekStart, -1);

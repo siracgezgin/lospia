@@ -99,28 +99,36 @@ export function PlanningBoard({
     <div className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
       <ModulePageHeader
         title="Planlama"
-        description="Haftalık toplantı takvimi — her gün ve saat için toplantılar, altında konular. Renkler kategoriyi gösterir."
+        description={
+          isAdmin
+            ? "Haftalık toplantı takvimi — her gün ve saat için toplantılar, altında konular. Renkler kategoriyi gösterir."
+            : "Haftalık toplantı takvimi — planlamayı yöneticiler düzenler; size atanan işler Pano'da görünür."
+        }
         icon={CalendarRange}
         secondaryBackHref="/board"
         rightSlot={
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-            <button
-              onClick={handleApplyTemplates}
-              disabled={isWorking}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-2 text-[12.5px] font-medium text-white transition-all duration-150 hover:bg-brand-strong active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60"
-              title="Aktif şablonlardan bu haftanın toplantılarını kur"
-            >
-              {isWorking ? <Loader2 size={14} className="animate-spin" /> : <CalendarPlus size={14} />}
-              Haftayı kur
-            </button>
-            <button
-              onClick={handleCopyPrevious}
-              disabled={isWorking}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-[12.5px] font-medium text-muted transition-all duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60"
-              title="Geçen haftanın toplantılarını (konular hariç) bu haftaya kopyala"
-            >
-              <CopyPlus size={14} /> Geçen haftadan
-            </button>
+            {isAdmin && (
+              <>
+                <button
+                  onClick={handleApplyTemplates}
+                  disabled={isWorking}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-2 text-[12.5px] font-medium text-white transition-all duration-150 hover:bg-brand-strong active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60"
+                  title="Aktif şablonlardan bu haftanın toplantılarını kur"
+                >
+                  {isWorking ? <Loader2 size={14} className="animate-spin" /> : <CalendarPlus size={14} />}
+                  Haftayı kur
+                </button>
+                <button
+                  onClick={handleCopyPrevious}
+                  disabled={isWorking}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-[12.5px] font-medium text-muted transition-all duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60"
+                  title="Geçen haftanın toplantılarını (konular hariç) bu haftaya kopyala"
+                >
+                  <CopyPlus size={14} /> Geçen haftadan
+                </button>
+              </>
+            )}
             {isAdmin && (
               <button
                 onClick={() => setShowTemplates(true)}
@@ -197,8 +205,12 @@ export function PlanningBoard({
                             return (
                               <div
                                 key={m.id}
-                                onClick={() => setEditor({ meeting: m, day: iso, slot, dayLabel: dayLabelOf(iso, i) })}
-                                className={cn("group relative cursor-pointer overflow-hidden rounded-lg border p-2 pl-3 text-left shadow-card transition-[transform,box-shadow] duration-200 ease-standard hover:-translate-y-px hover:shadow-card-hover active:translate-y-0 active:shadow-card", meta.cell)}
+                                onClick={isAdmin ? () => setEditor({ meeting: m, day: iso, slot, dayLabel: dayLabelOf(iso, i) }) : undefined}
+                                className={cn(
+                                  "group relative overflow-hidden rounded-lg border p-2 pl-3 text-left shadow-card transition-[transform,box-shadow] duration-200 ease-standard",
+                                  isAdmin && "cursor-pointer hover:-translate-y-px hover:shadow-card-hover active:translate-y-0 active:shadow-card",
+                                  meta.cell,
+                                )}
                               >
                                 {/* Kategori rayı — 3px, cn() dışında (tailwind-merge border-l/renk yutma hatasına karşı) */}
                                 <span aria-hidden className={"absolute inset-y-0 left-0 w-[3px] " + meta.dot} />
@@ -220,7 +232,9 @@ export function PlanningBoard({
                                     >
                                       {m.topics.length}/{TOPIC_LIMIT}
                                     </span>
-                                    <Pencil size={12} className="text-ink/40 opacity-0 transition-opacity duration-150 group-hover:opacity-100" />
+                                    {isAdmin && (
+                                      <Pencil size={12} className="text-ink/40 opacity-0 transition-opacity duration-150 group-hover:opacity-100" />
+                                    )}
                                   </span>
                                 </div>
                                 {m.participant_ids?.length > 0 && (
@@ -252,16 +266,18 @@ export function PlanningBoard({
                           })}
                         </div>
                       )}
-                      <button
-                        onClick={() => setEditor({ meeting: null, day: iso, slot, dayLabel: dayLabelOf(iso, i) })}
-                        className={cn(
-                          "flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-line py-1.5 text-[11px] font-medium text-subtle transition-all duration-150 hover:border-brand-ring hover:bg-brand-soft/40 hover:text-brand active:scale-[0.99]",
-                          cell.length === 0 ? "opacity-100" : "opacity-0 focus-visible:opacity-100 group-hover/cell:opacity-100",
-                        )}
-                        title="Toplantı ekle"
-                      >
-                        <Plus size={12} /> Ekle
-                      </button>
+                      {isAdmin && (
+                        <button
+                          onClick={() => setEditor({ meeting: null, day: iso, slot, dayLabel: dayLabelOf(iso, i) })}
+                          className={cn(
+                            "flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-line py-1.5 text-[11px] font-medium text-subtle transition-all duration-150 hover:border-brand-ring hover:bg-brand-soft/40 hover:text-brand active:scale-[0.99]",
+                            cell.length === 0 ? "opacity-100" : "opacity-0 focus-visible:opacity-100 group-hover/cell:opacity-100",
+                          )}
+                          title="Toplantı ekle"
+                        >
+                          <Plus size={12} /> Ekle
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -272,7 +288,9 @@ export function PlanningBoard({
       </div>
 
       <p className="mt-3 px-1 text-[12px] text-subtle">
-        Bir kutuya tıklayınca konular açılır · kalem simgesiyle düzenle · boş hücrede “Ekle”.
+        {isAdmin
+          ? "Bir kutuya tıklayınca konular açılır · kalem simgesiyle düzenle · boş hücrede “Ekle”."
+          : "Takvim salt görüntüleme — konular ve kişiler kutuların içinde listelenir."}
       </p>
 
       {editor && (
