@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  Boxes, Plus, Search, ChevronRight, ChevronDown, FileDown,
+  Boxes, Plus, Search, ChevronRight, FileDown,
   FileSpreadsheet, ClipboardList, Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
@@ -108,7 +108,7 @@ export function CollectionBrowser({ sheets }: Props) {
             {visible.length > 0 && (
               <a
                 href="/production/export-all"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-muted transition-colors hover:bg-surface-muted hover:text-ink"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-muted transition-[background-color,border-color,color,transform] duration-150 ease-standard hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
                 title="Tüm föyleri tek Excel dosyası olarak indir"
               >
                 <FileSpreadsheet size={15} /> Tümünü indir
@@ -116,7 +116,7 @@ export function CollectionBrowser({ sheets }: Props) {
             )}
             <Link
               href="/production/new"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3.5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand-strong"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3.5 py-2 text-[13px] font-medium text-white transition-[background-color,transform] duration-150 ease-standard hover:bg-brand-strong active:scale-[0.98]"
             >
               <Plus size={15} /> Yeni föy
             </Link>
@@ -131,7 +131,7 @@ export function CollectionBrowser({ sheets }: Props) {
         </span>
         <Link
           href="/collection/maliyet"
-          className="flex items-center gap-1.5 border-b-2 border-transparent px-3 py-2 text-[13px] font-medium text-muted transition-colors hover:text-ink"
+          className="flex items-center gap-1.5 border-b-2 border-transparent px-3 py-2 text-[13px] font-medium text-muted transition-colors duration-150 hover:border-line-strong hover:text-ink"
         >
           <Wallet size={15} /> Maliyet
         </Link>
@@ -144,12 +144,12 @@ export function CollectionBrowser({ sheets }: Props) {
             <button
               onClick={selectAll}
               className={cn(
-                "flex w-full items-center justify-between rounded-lg px-3 py-2 text-[13px] font-medium transition-colors",
-                !selCat ? "bg-brand/10 text-brand-strong" : "text-muted hover:bg-surface-muted hover:text-ink",
+                "flex w-full items-center justify-between rounded-lg px-3 py-2 text-[13px] font-medium transition-colors duration-150",
+                !selCat ? "bg-brand-soft text-brand-strong" : "text-muted hover:bg-surface-muted hover:text-ink",
               )}
             >
               <span>Tüm ürünler</span>
-              <span className="text-[11px] text-subtle">{visible.length}</span>
+              <span className={cn("text-[11px] tabular-nums", !selCat ? "text-brand" : "text-subtle")}>{visible.length}</span>
             </button>
 
             <div className="mt-1 space-y-0.5">
@@ -162,17 +162,20 @@ export function CollectionBrowser({ sheets }: Props) {
                   <div key={c.key}>
                     <div
                       className={cn(
-                        "flex items-center rounded-lg text-[13px] transition-colors",
-                        active && !selSub ? "bg-brand/10 text-brand-strong" : "text-muted hover:bg-surface-muted",
+                        "flex items-center rounded-lg text-[13px] transition-colors duration-150",
+                        active && !selSub ? "bg-brand-soft text-brand-strong" : "text-muted hover:bg-surface-muted",
                       )}
                     >
                       {hasSubs ? (
                         <button
                           onClick={() => toggleOpen(c.key)}
-                          className="shrink-0 rounded-l-lg p-2 text-subtle hover:text-ink"
+                          className="shrink-0 rounded-l-lg p-2 text-subtle transition-colors duration-150 hover:text-ink"
                           aria-label={open ? "Kapat" : "Aç"}
                         >
-                          {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                          <ChevronRight
+                            size={14}
+                            className={cn("transition-transform duration-200 ease-standard", open && "rotate-90")}
+                          />
                         </button>
                       ) : (
                         <span className="w-[30px] shrink-0" />
@@ -182,11 +185,11 @@ export function CollectionBrowser({ sheets }: Props) {
                         className="flex flex-1 items-center justify-between py-2 pr-3 text-left font-medium"
                       >
                         <span>{c.label}</span>
-                        <span className="text-[11px] text-subtle">{count}</span>
+                        <span className={cn("text-[11px] tabular-nums", active && !selSub ? "text-brand" : "text-subtle")}>{count}</span>
                       </button>
                     </div>
                     {hasSubs && open && (
-                      <div className="ml-4 space-y-0.5 border-l border-line pl-1.5">
+                      <div className="anim-fade-down ml-4 space-y-0.5 border-l border-line pl-1.5">
                         {c.subcategories.map((sub) => {
                           const sc = counts.sub[`${c.key}/${sub.key}`] ?? 0;
                           const subActive = selCat === c.key && selSub === sub.key;
@@ -195,12 +198,12 @@ export function CollectionBrowser({ sheets }: Props) {
                               key={sub.key}
                               onClick={() => selectSub(c.key, sub.key)}
                               className={cn(
-                                "flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-[12.5px] transition-colors",
-                                subActive ? "bg-brand/10 font-medium text-brand-strong" : "text-muted hover:bg-surface-muted hover:text-ink",
+                                "flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-[12.5px] transition-colors duration-150",
+                                subActive ? "bg-brand-soft font-medium text-brand-strong" : "text-muted hover:bg-surface-muted hover:text-ink",
                               )}
                             >
                               <span>{sub.label}</span>
-                              <span className="text-[10.5px] text-subtle">{sc || ""}</span>
+                              <span className={cn("text-[10.5px] tabular-nums", subActive ? "text-brand" : "text-subtle")}>{sc || ""}</span>
                             </button>
                           );
                         })}
@@ -214,12 +217,12 @@ export function CollectionBrowser({ sheets }: Props) {
                 <button
                   onClick={() => selectCat(UNCAT)}
                   className={cn(
-                    "flex w-full items-center justify-between rounded-lg px-3 py-2 text-[13px] transition-colors",
-                    selCat === UNCAT ? "bg-brand/10 font-medium text-brand-strong" : "text-muted hover:bg-surface-muted hover:text-ink",
+                    "flex w-full items-center justify-between rounded-lg px-3 py-2 text-[13px] transition-colors duration-150",
+                    selCat === UNCAT ? "bg-brand-soft font-medium text-brand-strong" : "text-muted hover:bg-surface-muted hover:text-ink",
                   )}
                 >
                   <span className="pl-[30px]">Kategorisiz</span>
-                  <span className="text-[11px] text-subtle">{counts.cat[UNCAT]}</span>
+                  <span className={cn("text-[11px] tabular-nums", selCat === UNCAT ? "text-brand" : "text-subtle")}>{counts.cat[UNCAT]}</span>
                 </button>
               )}
             </div>
@@ -229,20 +232,23 @@ export function CollectionBrowser({ sheets }: Props) {
         {/* Sağ — föy kartları */}
         <div className="min-w-0 flex-1">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-[15px] font-semibold text-ink">{headingLabel}</h2>
+            <h2 className="text-[15px] font-semibold tracking-tight text-ink">{headingLabel}</h2>
             <div className="relative min-w-[200px]">
               <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-subtle" />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Ürün ara…"
-                className="w-full rounded-lg border border-line bg-surface py-2 pl-9 pr-3 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-ring focus:border-brand-ring"
+                className="w-full rounded-lg border border-line bg-surface py-2 pl-9 pr-3 text-sm text-ink placeholder:text-subtle transition-[border-color,box-shadow] duration-150 hover:border-line-strong focus:outline-none focus:ring-2 focus:ring-brand-ring focus:border-brand-ring"
               />
             </div>
           </div>
 
           {filtered.length === 0 ? (
-            <div className="rounded-2xl border border-line bg-surface px-6 py-14 text-center shadow-card">
+            <div className="anim-fade-up rounded-2xl border border-line bg-surface px-6 py-14 text-center shadow-card">
+              <div className="mx-auto mb-3 grid size-11 place-items-center rounded-full bg-surface-sunken text-subtle">
+                <Boxes size={20} />
+              </div>
               <p className="text-[13.5px] text-subtle">
                 {visible.length === 0
                   ? "Henüz ürün eklenmedi. İlk föyü oluşturun."
@@ -250,33 +256,39 @@ export function CollectionBrowser({ sheets }: Props) {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+            <div className="stagger-children grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
               {filtered.map((s) => (
                 <Link
                   key={s.id}
                   href={`/production/${s.id}`}
-                  className="group relative flex flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-card transition-shadow hover:shadow-pop"
+                  className="group relative flex flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-card transition-[box-shadow,transform,border-color] duration-200 ease-standard hover:-translate-y-px hover:border-line-strong hover:shadow-card-hover"
                 >
-                  {/* Görsel — sade ürün kartı (basit görünüm) */}
-                  {coverImage(s) ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={coverImage(s)!} alt="" className="aspect-square w-full object-cover" />
-                  ) : (
-                    <div className="grid aspect-square w-full place-items-center bg-surface-muted text-subtle">
-                      <ClipboardList size={24} />
-                    </div>
-                  )}
+                  {/* Görsel — katalog hissi: hover'da yumuşak zoom, kart içinde kırpılır */}
+                  <div className="aspect-square w-full overflow-hidden bg-surface-muted">
+                    {coverImage(s) ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={coverImage(s)!}
+                        alt=""
+                        className="h-full w-full object-cover transition-transform duration-300 ease-standard group-hover:scale-[1.03]"
+                      />
+                    ) : (
+                      <div className="grid h-full w-full place-items-center text-subtle">
+                        <ClipboardList size={24} strokeWidth={1.75} />
+                      </div>
+                    )}
+                  </div>
                   {/* İndir — yalnızca hover'da, köşede sade */}
                   <a
                     href={`/production/${s.id}/export`}
                     onClick={(e) => e.stopPropagation()}
-                    className="absolute right-2 top-2 rounded-md bg-surface/90 p-1.5 text-subtle opacity-0 shadow-sm backdrop-blur transition-opacity hover:text-ink group-hover:opacity-100"
+                    className="absolute right-2 top-2 rounded-md bg-surface/90 p-1.5 text-subtle opacity-0 shadow-sm backdrop-blur transition-[opacity,color,transform] duration-150 hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 active:scale-95"
                     title="Föyü Excel olarak indir"
                   >
                     <FileDown size={13} />
                   </a>
-                  <div className="p-3">
-                    <h3 className="truncate text-[13.5px] font-medium text-ink transition-colors group-hover:text-brand-strong">
+                  <div className="border-t border-hairline p-3">
+                    <h3 className="truncate text-[13.5px] font-medium tracking-tight text-ink transition-colors duration-150 group-hover:text-brand-strong">
                       {s.title}
                     </h3>
                     {s.product_kind && (
@@ -288,7 +300,7 @@ export function CollectionBrowser({ sheets }: Props) {
             </div>
           )}
 
-          <p className="mt-3 px-1 text-[12px] text-subtle">{filtered.length} ürün gösteriliyor</p>
+          <p className="mt-3 px-1 text-[12px] tabular-nums text-subtle">{filtered.length} ürün gösteriliyor</p>
         </div>
       </div>
     </div>

@@ -20,14 +20,28 @@ export default async function LoginPage({
   const brand = getAppBrandForHost((await headers()).get("host"));
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-app px-4">
-      <div className="w-full max-w-sm space-y-7 p-8 bg-surface rounded-2xl shadow-sm border border-line">
+    <main className="relative min-h-screen flex items-center justify-center bg-app px-4 py-12">
+      {/* Sakin, kurumsal arka plan vurgusu — üstte hafif brand-soft radyal ışıma,
+          köşede daha da soluk bir denge lekesi. Dekoratif; etkileşim almaz. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(44rem 30rem at 50% -8rem, var(--brand-soft) 0%, transparent 68%), radial-gradient(30rem 22rem at 106% 108%, var(--brand-soft) 0%, transparent 72%)",
+        }}
+      />
+
+      <div className="anim-fade-up relative w-full max-w-sm space-y-6 rounded-2xl border border-line bg-surface p-8 shadow-pop">
         {/* Brand — the resolved product/pilot logo leads, then a single generic
             supporting line. Logo width is capped so it reads as a confident
             brand mark without overflowing the card. The pilot subline (AF only)
             is the one exception where a tenant name appears pre-auth, matching
             the original AF Operasyon login. */}
-        <div className="flex flex-col items-center text-center space-y-4">
+        <div
+          className="anim-fade-up flex flex-col items-center text-center space-y-4"
+          style={{ animationDelay: "60ms" }}
+        >
           <img
             src={brand.loginLogo}
             alt={brand.name}
@@ -43,6 +57,13 @@ export default async function LoginPage({
             )}
           </div>
         </div>
+
+        <div
+          aria-hidden
+          className="anim-fade border-t border-hairline"
+          style={{ animationDelay: "120ms" }}
+        />
+
         <LoginForm initialEmail={initialEmail} />
       </div>
     </main>

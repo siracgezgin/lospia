@@ -90,13 +90,13 @@ function draftFromTask(task: Task): Draft {
 function FieldRow({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
     <div className={className}>
-      <p className="text-[11px] font-medium uppercase tracking-wide text-subtle mb-1">{label}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-subtle mb-1">{label}</p>
       {children}
     </div>
   );
 }
 
-const inputCls = "w-full text-sm text-ink bg-surface border border-line rounded-lg px-2.5 py-1.5 placeholder:text-subtle transition-colors focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40 disabled:bg-surface-sunken disabled:text-subtle";
+const inputCls = "w-full text-sm text-ink bg-surface border border-line rounded-lg px-2.5 py-1.5 placeholder:text-subtle transition-[color,background-color,border-color,box-shadow] duration-150 ease-standard hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40 disabled:bg-surface-sunken disabled:text-subtle disabled:hover:border-line";
 // Read-only metadata (Oluşturan, Giriş tarihi) rendered in the same box shape as
 // the editable inputs so every field reads as one consistent UI.
 const readOnlyCls = "block w-full text-sm text-muted bg-surface-muted border border-hairline rounded-lg px-2.5 py-1.5 truncate";
@@ -195,13 +195,13 @@ function TaskEditor({
     <>
       {/* ── Top action bar: back link + explicit Save / Cancel ─────────────── */}
       <div className="sticky top-0 z-30 -mx-4 px-4 py-2 bg-app/90 backdrop-blur border-b border-line/60 flex items-center justify-between gap-3 flex-wrap">
-        <Link href={backHref} className="inline-flex items-center gap-1 text-sm text-muted hover:text-ink transition-colors">
-          <ArrowLeft size={14} /> {backLabel}
+        <Link href={backHref} className="group inline-flex items-center gap-1 text-sm text-muted hover:text-ink transition-colors duration-150">
+          <ArrowLeft size={14} className="transition-transform duration-150 ease-standard group-hover:-translate-x-0.5" /> {backLabel}
         </Link>
         <div className="flex items-center gap-2 ml-auto">
           {feedback && (
             <span className={cn(
-              "hidden sm:inline-flex items-center gap-1 text-xs mr-1",
+              "anim-fade hidden sm:inline-flex items-center gap-1 text-xs mr-1",
               feedback.kind === "ok" ? "text-success" : "text-danger",
             )}>
               {feedback.kind === "ok" ? <Check size={13} /> : <AlertCircle size={13} />}
@@ -212,7 +212,7 @@ function TaskEditor({
             <button
               onClick={cancel}
               disabled={saving}
-              className="inline-flex items-center gap-1 text-sm text-muted hover:text-ink px-3 py-1.5 rounded-lg border border-line bg-surface hover:bg-surface-muted disabled:opacity-50 transition-colors"
+              className="anim-fade inline-flex items-center gap-1 text-sm font-medium text-muted hover:text-ink px-3 py-1.5 rounded-lg border border-line bg-surface shadow-xs hover:bg-surface-muted hover:border-line-strong active:scale-[0.98] disabled:opacity-60 disabled:pointer-events-none transition-all duration-150"
             >
               <X size={14} /> Vazgeç
             </button>
@@ -222,9 +222,9 @@ function TaskEditor({
             disabled={!canSave || saving}
             title={!canEdit ? "Düzenleme yetkiniz yok" : doneLocked ? "Tamamlanmış görevi yalnızca yönetici değiştirebilir" : undefined}
             className={cn(
-              "inline-flex items-center gap-1.5 text-sm font-medium px-3.5 py-1.5 rounded-lg transition-colors",
+              "inline-flex items-center gap-1.5 text-sm font-medium px-3.5 py-1.5 rounded-lg transition-all duration-150",
               canSave && !saving
-                ? "text-white bg-brand hover:bg-brand-strong"
+                ? "text-white bg-brand shadow-xs hover:bg-brand-strong active:scale-[0.98]"
                 : "text-subtle bg-surface-sunken cursor-not-allowed",
             )}
           >
@@ -287,7 +287,7 @@ function TaskEditor({
             {PRIORITY_LABELS[draft.priority]}
           </span>
           {draft.due_date && (
-            <span className={cn("inline-flex items-center gap-1 text-[11px] rounded-full px-2 py-0.5 bg-surface-muted border border-hairline", markers.dueDateClass)}>
+            <span className={cn("inline-flex items-center gap-1 text-[11px] rounded-full px-2 py-0.5 bg-surface-muted border border-hairline tabular-nums", markers.dueDateClass)}>
               <CalendarDays size={11} /> Teslim: {formatDateOnlyTR(draft.due_date)}
             </span>
           )}
@@ -318,7 +318,7 @@ function TaskEditor({
 
           {/* Görev bilgileri */}
           <div className="bg-surface rounded-card border border-line shadow-card p-5">
-            <h3 className="text-sm font-semibold text-ink mb-4">Görev bilgileri</h3>
+            <h3 className="text-sm font-semibold tracking-tight text-ink mb-4">Görev bilgileri</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FieldRow label="Açıklama" className="sm:col-span-2">
                 <textarea
@@ -396,7 +396,7 @@ function TaskEditor({
               {/* "Oluşturan" satırı geri bildirimle kaldırıldı — sorumlu kişiler
                   aşağıdaki panelde gösterilir. */}
               <FieldRow label="Giriş tarihi">
-                <span className={readOnlyCls}>{formatDateTimeTR(task.created_at)}</span>
+                <span className={cn(readOnlyCls, "tabular-nums")}>{formatDateTimeTR(task.created_at)}</span>
               </FieldRow>
 
               {/* Görünürlük — admin-only. Members never see or edit this. */}
@@ -412,10 +412,10 @@ function TaskEditor({
                           onClick={() => set("visibility", v)}
                           disabled={!canEdit}
                           className={cn(
-                            "text-left rounded-lg border px-3 py-2 transition-colors disabled:opacity-60",
+                            "text-left rounded-lg border px-3 py-2 transition-colors duration-150 disabled:opacity-60 disabled:pointer-events-none",
                             on
                               ? "bg-amber-50 border-amber-300"
-                              : "bg-surface border-line hover:bg-surface-hover",
+                              : "bg-surface border-line hover:bg-surface-hover hover:border-line-strong",
                           )}
                         >
                           <span className={cn("flex items-center gap-1.5 text-sm font-medium", on ? "text-amber-800" : "text-ink")}>
@@ -440,7 +440,7 @@ function TaskEditor({
             {/* Inline feedback (also visible on mobile, where the top bar hides it). */}
             {feedback && (
               <p className={cn(
-                "mt-4 inline-flex items-center gap-1.5 text-sm sm:hidden",
+                "anim-fade-down mt-4 inline-flex items-center gap-1.5 text-sm sm:hidden",
                 feedback.kind === "ok" ? "text-success" : "text-danger",
               )}>
                 {feedback.kind === "ok" ? <Check size={14} /> : <AlertCircle size={14} />}
@@ -488,22 +488,22 @@ function ActivityLogSection({
 
   return (
     <div className="bg-surface rounded-card border border-line shadow-card p-5 space-y-4">
-      <h3 className="text-sm font-semibold text-ink flex items-center gap-1.5">
+      <h3 className="text-sm font-semibold tracking-tight text-ink flex items-center gap-1.5">
         <History size={14} className="text-muted" /> Aktivite
       </h3>
 
       {logs.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-line px-4 py-6 text-center text-sm text-subtle">
+        <p className="rounded-lg border border-dashed border-line bg-surface-muted/40 px-4 py-6 text-center text-sm text-subtle">
           Henüz kayıtlı aktivite yok. Bundan sonraki değişiklikler burada görünecek.
         </p>
       ) : (
-        <ol className="space-y-3">
+        <ol className="-mx-2">
           {logs.map((log) => {
             const actorName = log.actor?.full_name ?? log.actor?.email
               ?? (log.actor_id ? "Bilinmeyen kullanıcı" : "Sistem");
             return (
-              <li key={log.id} className="flex gap-3 text-sm">
-                <div className="h-6 w-6 rounded-full bg-surface-sunken text-muted text-[11px] font-medium flex items-center justify-center shrink-0 mt-0.5">
+              <li key={log.id} className="flex gap-3 text-sm rounded-lg px-2 py-1.5 hover:bg-surface-hover transition-colors duration-150">
+                <div className="h-6 w-6 rounded-full bg-surface-sunken ring-1 ring-hairline text-muted text-[11px] font-medium flex items-center justify-center shrink-0 mt-0.5">
                   {actorName[0]?.toUpperCase() ?? "?"}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -511,7 +511,7 @@ function ActivityLogSection({
                     <span className="font-medium text-ink">{actorName}</span>{" "}
                     {activityMessage(log, resolveName)}
                   </p>
-                  <p className="text-xs text-subtle mt-0.5">
+                  <p className="text-xs text-subtle mt-0.5 tabular-nums">
                     {formatDateTimeTR(log.created_at)}
                   </p>
                 </div>

@@ -63,7 +63,7 @@ function FeedCard({
   }
 
   return (
-    <div className="rounded-card border border-line bg-surface p-2.5 shadow-card transition-shadow hover:shadow-card-hover space-y-1.5">
+    <div className="rounded-card border border-line bg-surface p-2.5 shadow-card transition-[transform,box-shadow] duration-200 ease-standard hover:shadow-card-hover hover:-translate-y-px space-y-1.5">
       {/* Type + department chips */}
       <div className="flex items-center gap-1 flex-wrap">
         <span className={cn("text-[10px] rounded px-1.5 py-0.5 leading-none font-medium", NOTE_TYPE_BADGE[item.noteType])}>
@@ -80,11 +80,14 @@ function FeedCard({
       <Link
         prefetch={false}
         href={`/tasks/${item.taskId}`}
-        className="group/task flex items-start gap-1 text-[12px] font-semibold text-ink hover:text-brand leading-snug"
+        className="group/task flex items-start gap-1 text-[12px] font-semibold tracking-tight text-ink hover:text-brand leading-snug transition-colors duration-150"
         title={item.taskTitle}
       >
         <span className="line-clamp-2 break-words flex-1 min-w-0">{item.taskTitle}</span>
-        <ArrowUpRight size={11} className="shrink-0 mt-0.5 text-subtle group-hover/task:text-brand" />
+        <ArrowUpRight
+          size={11}
+          className="shrink-0 mt-0.5 text-subtle transition-[color,transform] duration-150 ease-standard group-hover/task:text-brand group-hover/task:translate-x-px group-hover/task:-translate-y-px"
+        />
       </Link>
 
       {/* Note snippet */}
@@ -113,7 +116,7 @@ function FeedCard({
               <button
                 onClick={() => handleAck("claimed")}
                 disabled={pending}
-                className="inline-flex items-center gap-1 text-[10px] font-medium text-teal-700 border border-teal-200 bg-white hover:bg-teal-50 rounded px-1.5 py-0.5 transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-1 text-[10px] font-medium text-teal-700 border border-teal-200 bg-white hover:bg-teal-50 hover:border-teal-300 rounded px-1.5 py-1 transition-colors duration-150 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none"
               >
                 <HandHelping size={10} /> Üzerime aldım
               </button>
@@ -127,7 +130,7 @@ function FeedCard({
             <button
               onClick={() => handleAck("seen")}
               disabled={pending}
-              className="inline-flex items-center gap-1 text-[10px] font-medium text-muted border border-line bg-surface hover:bg-surface-muted rounded px-1.5 py-0.5 transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1 text-[10px] font-medium text-muted border border-line bg-surface hover:bg-surface-muted hover:border-line-strong hover:text-ink rounded px-1.5 py-1 transition-colors duration-150 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none"
             >
               <Eye size={10} /> Gördüm
             </button>
@@ -160,7 +163,7 @@ export function WeeklyNoteFeed({
 
   if (items.length === 0) {
     return (
-      <p className="text-[11px] text-subtle rounded-card border border-dashed border-line bg-surface/60 px-3 py-4 text-center">
+      <p className="anim-fade text-[11px] text-subtle rounded-card border border-dashed border-line bg-surface/60 px-3 py-4 text-center">
         Bu hafta yeni görev notu yok.
       </p>
     );
@@ -181,7 +184,7 @@ export function WeeklyNoteFeed({
       {items.length > VISIBLE_LIMIT && (
         <button
           onClick={() => setShowAll((v) => !v)}
-          className="text-[11px] text-brand hover:underline text-left px-1"
+          className="text-[11px] font-medium text-brand hover:text-brand-strong hover:underline underline-offset-2 transition-colors duration-150 text-left px-1 py-0.5 rounded"
         >
           {showAll ? "Daha az göster" : `Tüm notları gör (${items.length})`}
         </button>

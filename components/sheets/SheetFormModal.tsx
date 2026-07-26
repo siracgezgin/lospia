@@ -31,7 +31,7 @@ interface Props {
 }
 
 const inputCls =
-  "w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-ring focus:border-brand-ring disabled:opacity-60";
+  "w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-subtle transition-colors duration-150 hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40 disabled:opacity-60 disabled:bg-surface-sunken";
 const labelCls = "block text-[12px] font-medium text-muted mb-1";
 
 export function SheetFormModal({
@@ -110,16 +110,16 @@ export function SheetFormModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    <div className="anim-fade fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose} role="dialog" aria-modal="true">
       <div
-        className="w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-2xl bg-surface shadow-pop"
+        className="anim-scale-in w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-2xl bg-surface shadow-drawer"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-surface px-5 py-3.5">
-          <h2 className="text-[15px] font-semibold text-ink">
+          <h2 className="text-[15px] font-semibold tracking-tight text-ink">
             {readOnly ? "Tablo detayı" : isEdit ? "Tablo bilgilerini düzenle" : "Yeni tablo oluştur"}
           </h2>
-          <button onClick={onClose} className="rounded-lg p-1 text-subtle transition-colors hover:text-ink">
+          <button onClick={onClose} aria-label="Kapat" className="rounded-lg p-1.5 text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-95">
             <X size={16} />
           </button>
         </div>
@@ -218,15 +218,15 @@ export function SheetFormModal({
                 }}
               />
               {importInfo ? (
-                <div className="flex items-center justify-between gap-2 rounded-lg border border-[#bfe0cd] bg-[#dcf0e6] px-3 py-2 text-[12.5px] text-[#1f6e4d]">
+                <div className="anim-fade-down flex items-center justify-between gap-2 rounded-lg border border-[#bfe0cd] bg-[#dcf0e6] px-3 py-2 text-[12.5px] text-[#1f6e4d]">
                   <span className="flex min-w-0 items-center gap-1.5">
                     <Check size={14} className="shrink-0" />
                     <span className="truncate">{importInfo.name}</span>
-                    <span className="shrink-0">— {importInfo.rows} satır · {importInfo.cols} sütun</span>
+                    <span className="shrink-0 tabular-nums">— {importInfo.rows} satır · {importInfo.cols} sütun</span>
                   </span>
                   <button
                     onClick={() => { setImportInfo(null); setImportedSnapshotJson(null); }}
-                    className="shrink-0 text-[12px] font-medium underline-offset-2 hover:underline"
+                    className="shrink-0 rounded text-[12px] font-medium underline-offset-2 transition-colors duration-150 hover:underline"
                   >
                     Kaldır
                   </button>
@@ -234,7 +234,7 @@ export function SheetFormModal({
               ) : (
                 <button
                   onClick={() => fileRef.current?.click()}
-                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-line-strong px-3 py-2.5 text-[12.5px] text-muted transition-colors hover:border-brand hover:text-brand"
+                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-line-strong bg-surface-muted/40 px-3 py-2.5 text-[12.5px] text-muted transition-colors duration-150 hover:border-brand hover:bg-brand-soft/40 hover:text-brand active:scale-[0.99]"
                 >
                   <FileUp size={14} />
                   CSV dosyası seçin — Excel&apos;deki düzeniniz tabloya aktarılır
@@ -244,7 +244,7 @@ export function SheetFormModal({
           )}
 
           {error && (
-            <div className="flex items-start gap-2 rounded-lg border border-[#f1c3bb] bg-[#fdeae7] px-3 py-2.5 text-[12.5px] leading-relaxed text-[#971f12]">
+            <div className="anim-fade-down flex items-start gap-2 rounded-lg border border-[#f1c3bb] bg-[#fdeae7] px-3 py-2.5 text-[12.5px] leading-relaxed text-[#971f12]">
               <AlertCircle size={15} className="mt-0.5 shrink-0" />
               <span className="min-w-0 break-words">{error}</span>
             </div>
@@ -252,7 +252,7 @@ export function SheetFormModal({
         </div>
 
         <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-line bg-surface px-5 py-3">
-          <button onClick={onClose} className="rounded-lg px-3.5 py-2 text-[13px] text-muted transition-colors hover:bg-surface-muted">
+          <button onClick={onClose} className="rounded-lg px-3.5 py-2 text-[13px] font-medium text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-[0.98]">
             {readOnly ? "Kapat" : "İptal"}
           </button>
           {!readOnly && (
@@ -260,7 +260,7 @@ export function SheetFormModal({
               onClick={handleSave}
               disabled={isPending}
               className={cn(
-                "rounded-lg px-4 py-2 text-[13px] font-medium text-white transition-colors",
+                "rounded-lg px-4 py-2 text-[13px] font-medium text-white transition-colors duration-150 active:scale-[0.98]",
                 isPending ? "bg-brand/60 cursor-not-allowed" : "bg-brand hover:bg-brand-strong",
               )}
             >

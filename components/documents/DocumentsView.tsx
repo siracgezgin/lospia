@@ -12,6 +12,7 @@ import {
 } from "@/lib/office/constants";
 import { formatDateOnlyTR } from "@/lib/utils/format-date";
 import { cn } from "@/lib/utils/cn";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { DocumentFormModal } from "./DocumentFormModal";
 import type { OperationDocument, WorkspaceDepartment } from "@/types";
@@ -91,7 +92,7 @@ export function DocumentsView({
   }
 
   const selectCls =
-    "rounded-lg border border-line bg-surface px-3 py-2 text-sm text-muted focus:outline-none focus:ring-2 focus:ring-brand-ring";
+    "h-9 rounded-lg border border-line bg-surface px-3 text-sm text-muted transition-colors duration-150 hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40";
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -103,7 +104,7 @@ export function DocumentsView({
         rightSlot={
           <button
             onClick={openNew}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-3.5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand-strong"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-3.5 py-2 text-[13px] font-medium text-white transition-colors duration-150 hover:bg-brand-strong active:scale-[0.98]"
           >
             <Plus size={15} />
             Yeni doküman ekle
@@ -119,7 +120,7 @@ export function DocumentsView({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Başlık, açıklama veya etiket ara…"
-            className="w-full rounded-lg border border-line bg-surface py-2 pl-9 pr-3 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-ring focus:border-brand-ring"
+            className="h-9 w-full rounded-lg border border-line bg-surface pl-9 pr-3 text-sm text-ink placeholder:text-subtle transition-colors duration-150 hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40"
           />
         </div>
         <select value={docType} onChange={(e) => setDocType(e.target.value)} className={selectCls}>
@@ -140,40 +141,43 @@ export function DocumentsView({
             {allTags.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
         )}
-        <label className="flex items-center gap-1.5 text-[12.5px] text-muted">
-          <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} className="accent-brand" />
+        <label className="flex h-9 cursor-pointer select-none items-center gap-1.5 rounded-lg px-2 text-[12.5px] text-muted transition-colors duration-150 hover:text-ink">
+          <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} className="h-3.5 w-3.5 accent-brand" />
           Arşivi göster
         </label>
       </div>
 
       {/* Table */}
       {filtered.length === 0 ? (
-        <div className="rounded-2xl border border-line bg-surface px-6 py-14 text-center shadow-card">
-          <p className="text-[13.5px] text-subtle">
-            {documents.length === 0
-              ? "Henüz kayıtlı doküman yok. İlk dokümanı ekleyin."
-              : "Filtreye uyan doküman bulunamadı."}
-          </p>
+        <div className="anim-fade-up rounded-2xl border border-line bg-surface shadow-card">
+          <EmptyState
+            icon={documents.length === 0 ? FolderOpen : Search}
+            title={
+              documents.length === 0
+                ? "Henüz kayıtlı doküman yok. İlk dokümanı ekleyin."
+                : "Filtreye uyan doküman bulunamadı."
+            }
+          />
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-line bg-surface shadow-card">
+        <div className="anim-fade-up overflow-x-auto rounded-2xl border border-line bg-surface shadow-card">
           <table className="w-full min-w-[960px] text-left text-[13px]">
             <thead>
-              <tr className="border-b border-line text-[11.5px] uppercase tracking-wide text-subtle">
-                <th className="px-4 py-3 font-medium">Başlık</th>
-                <th className="px-3 py-3 font-medium">Tür</th>
-                <th className="px-3 py-3 font-medium">Departman</th>
-                <th className="px-3 py-3 font-medium">İlgili görev</th>
-                <th className="px-3 py-3 font-medium">İlgili kişi</th>
-                <th className="px-3 py-3 font-medium">Durum</th>
-                <th className="px-3 py-3 font-medium">Sahip</th>
-                <th className="px-3 py-3 font-medium">Güncellenme</th>
-                <th className="px-3 py-3 text-right font-medium">Aç</th>
+              <tr className="select-none border-b border-line text-[11px] uppercase tracking-wider text-subtle">
+                <th className="px-4 py-3 font-semibold">Başlık</th>
+                <th className="px-3 py-3 font-semibold">Tür</th>
+                <th className="px-3 py-3 font-semibold">Departman</th>
+                <th className="px-3 py-3 font-semibold">İlgili görev</th>
+                <th className="px-3 py-3 font-semibold">İlgili kişi</th>
+                <th className="px-3 py-3 font-semibold">Durum</th>
+                <th className="px-3 py-3 font-semibold">Sahip</th>
+                <th className="px-3 py-3 font-semibold">Güncellenme</th>
+                <th className="px-3 py-3 text-right font-semibold">Aç</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((d) => (
-                <tr key={d.id} className="border-b border-line/60 last:border-b-0 hover:bg-surface-muted/50">
+                <tr key={d.id} className="border-b border-line/60 last:border-b-0 transition-colors duration-150 hover:bg-surface-hover">
                   <td className="px-4 py-3">
                     <div className="font-medium leading-snug text-ink">{d.title}</div>
                     {d.description && (
@@ -182,7 +186,7 @@ export function DocumentsView({
                     {(d.tags ?? []).length > 0 && (
                       <div className="mt-1 flex flex-wrap gap-1">
                         {d.tags.map((t) => (
-                          <span key={t} className="rounded bg-surface-muted px-1.5 py-0.5 text-[10.5px] text-muted">
+                          <span key={t} className="rounded-md border border-hairline bg-surface-muted px-1.5 py-0.5 text-[10.5px] font-medium text-muted">
                             {t}
                           </span>
                         ))}
@@ -223,7 +227,7 @@ export function DocumentsView({
                           href={d.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-[12px] font-medium text-brand transition-colors hover:bg-brand-soft"
+                          className="inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-[12px] font-medium text-brand transition-colors duration-150 hover:bg-brand-soft active:scale-[0.98]"
                           title="Bağlantıyı yeni sekmede aç"
                         >
                           Bağlantıyı aç <ExternalLink size={12} />
@@ -231,19 +235,19 @@ export function DocumentsView({
                       ) : (
                         <button
                           onClick={() => openEdit(d)}
-                          className="inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-[12px] font-medium text-muted transition-colors hover:bg-surface-muted hover:text-ink"
+                          className="inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-[12px] font-medium text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
                           title="Detayı görüntüle"
                         >
                           <StickyNote size={12} /> Detay
                         </button>
                       )}
                       {canMutate(d) && (
-                        <button onClick={() => openEdit(d)} className="rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-muted hover:text-ink" title="Düzenle">
+                        <button onClick={() => openEdit(d)} className="rounded-md p-1.5 text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-95" title="Düzenle">
                           <Pencil size={13} />
                         </button>
                       )}
                       {isAdmin && d.status !== "archived" && (
-                        <button onClick={() => handleArchive(d)} disabled={isArchiving} className="rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-muted hover:text-ink" title="Arşivle">
+                        <button onClick={() => handleArchive(d)} disabled={isArchiving} className="rounded-md p-1.5 text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-95 disabled:pointer-events-none disabled:opacity-50" title="Arşivle">
                           <Archive size={13} />
                         </button>
                       )}
@@ -256,7 +260,7 @@ export function DocumentsView({
         </div>
       )}
 
-      <p className="mt-3 px-1 text-[12px] text-subtle">{filtered.length} doküman gösteriliyor</p>
+      <p className="mt-3 px-1 text-[12px] tabular-nums text-subtle">{filtered.length} doküman gösteriliyor</p>
 
       {modalOpen && (
         <DocumentFormModal

@@ -107,7 +107,7 @@ export function PlanningBoard({
             <button
               onClick={handleApplyTemplates}
               disabled={isWorking}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-2 text-[12.5px] font-medium text-white transition-colors hover:bg-brand-strong disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-2 text-[12.5px] font-medium text-white transition-all duration-150 hover:bg-brand-strong active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60"
               title="Aktif şablonlardan bu haftanın toplantılarını kur"
             >
               {isWorking ? <Loader2 size={14} className="animate-spin" /> : <CalendarPlus size={14} />}
@@ -116,7 +116,7 @@ export function PlanningBoard({
             <button
               onClick={handleCopyPrevious}
               disabled={isWorking}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-[12.5px] font-medium text-muted transition-colors hover:bg-surface-muted hover:text-ink disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-[12.5px] font-medium text-muted transition-all duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60"
               title="Geçen haftanın toplantılarını (konular hariç) bu haftaya kopyala"
             >
               <CopyPlus size={14} /> Geçen haftadan
@@ -124,20 +124,20 @@ export function PlanningBoard({
             {isAdmin && (
               <button
                 onClick={() => setShowTemplates(true)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-[12.5px] font-medium text-muted transition-colors hover:bg-surface-muted hover:text-ink"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-[12.5px] font-medium text-muted transition-all duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
                 title="Haftanın tekrar eden ritmini tanımla"
               >
                 <Settings2 size={14} /> Şablonlar
               </button>
             )}
             <span className="mx-0.5 hidden h-6 w-px bg-line sm:block" />
-            <button onClick={() => gotoWeek(format(subDays(parseISO(weekStart), 7), "yyyy-MM-dd"))} className="rounded-lg border border-line bg-surface p-2 text-muted hover:bg-surface-muted hover:text-ink" title="Önceki hafta">
+            <button onClick={() => gotoWeek(format(subDays(parseISO(weekStart), 7), "yyyy-MM-dd"))} className="rounded-lg border border-line bg-surface p-2 text-muted transition-all duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-95" title="Önceki hafta">
               <ChevronLeft size={16} />
             </button>
-            <button onClick={() => gotoWeek(format(new Date(), "yyyy-MM-dd"))} className="rounded-lg border border-line bg-surface px-3 py-2 text-[13px] font-medium text-muted hover:bg-surface-muted hover:text-ink">
+            <button onClick={() => gotoWeek(format(new Date(), "yyyy-MM-dd"))} className="rounded-lg border border-line bg-surface px-3 py-2 text-[13px] font-medium text-muted transition-all duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]">
               Bu hafta
             </button>
-            <button onClick={() => gotoWeek(format(addDays(parseISO(weekStart), 7), "yyyy-MM-dd"))} className="rounded-lg border border-line bg-surface p-2 text-muted hover:bg-surface-muted hover:text-ink" title="Sonraki hafta">
+            <button onClick={() => gotoWeek(format(addDays(parseISO(weekStart), 7), "yyyy-MM-dd"))} className="rounded-lg border border-line bg-surface p-2 text-muted transition-all duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-95" title="Sonraki hafta">
               <ChevronRight size={16} />
             </button>
           </div>
@@ -147,7 +147,7 @@ export function PlanningBoard({
       {notice && (
         <div
           className={cn(
-            "mb-3 rounded-lg border px-3 py-2 text-[12.5px]",
+            "anim-fade-down mb-3 rounded-lg border px-3 py-2 text-[12.5px] font-medium shadow-card",
             notice.kind === "ok"
               ? "border-emerald-200 bg-emerald-50 text-emerald-800"
               : "border-red-200 bg-red-50 text-red-700",
@@ -160,8 +160,8 @@ export function PlanningBoard({
       {/* Kategori açıklaması (legend) */}
       <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
         {PLANNING_CATEGORIES.filter((c) => c.key !== "other").map((c) => (
-          <span key={c.key} className="inline-flex items-center gap-1.5 text-[11.5px] text-muted">
-            <span className={cn("h-2.5 w-2.5 rounded-sm", c.dot)} /> {c.label}
+          <span key={c.key} className="inline-flex items-center gap-1.5 text-[11.5px] font-medium text-muted">
+            <span className={cn("h-2.5 w-2.5 rounded-sm ring-1 ring-inset ring-black/10", c.dot)} /> {c.label}
           </span>
         ))}
       </div>
@@ -171,85 +171,92 @@ export function PlanningBoard({
         <div className="min-w-[1100px]">
           {/* Başlık satırı */}
           <div className="grid border-b border-line-strong bg-surface-muted" style={{ gridTemplateColumns: "72px repeat(7, minmax(0, 1fr))" }}>
-            <div className="border-r border-line px-2 py-2 text-[11px] font-semibold uppercase tracking-wide text-subtle">Saat</div>
+            <div className="border-r border-hairline px-2 py-2 text-[11px] font-semibold uppercase tracking-wider text-subtle">Saat</div>
             {weekDays.map((iso, i) => (
-              <div key={iso} className={cn("border-r border-line px-2 py-2 text-center last:border-r-0", iso === todayIso && "bg-brand-soft")}>
-                <div className="text-[12px] font-semibold text-ink">{DAY_LABELS[i]}</div>
-                <div className="text-[11px] text-subtle">{format(parseISO(iso), "d MMM", { locale: tr })}</div>
+              <div key={iso} className={cn("relative border-r border-hairline px-2 py-2 text-center last:border-r-0", iso === todayIso && "bg-brand-soft")}>
+                {iso === todayIso && <span aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-brand" />}
+                <div className={cn("text-[12px] font-semibold tracking-tight", iso === todayIso ? "text-brand-strong" : "text-ink")}>{DAY_LABELS[i]}</div>
+                <div className={cn("text-[11px] tabular-nums", iso === todayIso ? "text-brand" : "text-subtle")}>{format(parseISO(iso), "d MMM", { locale: tr })}</div>
               </div>
             ))}
           </div>
 
           {/* Saat satırları */}
           {slots.map((slot) => (
-            <div key={slot} className="grid border-b border-line last:border-b-0" style={{ gridTemplateColumns: "72px repeat(7, minmax(0, 1fr))" }}>
-              <div className="border-r border-line px-2 py-2 text-[12px] font-semibold text-muted">{slot}</div>
+            <div key={slot} className="grid border-b border-hairline last:border-b-0" style={{ gridTemplateColumns: "72px repeat(7, minmax(0, 1fr))" }}>
+              <div className="border-r border-hairline px-2 py-2 text-[12px] font-semibold tabular-nums text-muted">{slot}</div>
               {weekDays.map((iso, i) => {
                 const cell = byCell.get(`${iso}|${slot}`) ?? [];
                 return (
-                  <div key={iso} className="group/cell min-h-[84px] border-r border-line p-1.5 last:border-r-0">
+                  <div key={iso} className={cn("group/cell min-h-[84px] border-r border-hairline p-1.5 last:border-r-0", iso === todayIso && "bg-brand-soft/40")}>
                     <div className="space-y-1.5">
-                      {cell.map((m) => {
-                        const meta = categoryMeta(m.category);
-                        return (
-                          <div
-                            key={m.id}
-                            onClick={() => setEditor({ meeting: m, day: iso, slot, dayLabel: dayLabelOf(iso, i) })}
-                            className={cn("group cursor-pointer rounded-lg border p-2 text-left transition-shadow hover:shadow-sm", meta.cell)}
-                          >
-                            <div className="flex items-start justify-between gap-1">
-                              <div className="min-w-0 flex-1">
-                                <div className={cn("text-[12px] font-bold leading-snug", meta.title)}>
-                                  {meta.label}{m.title ? ` / ${m.title}` : ""}
-                                </div>
-                                {m.content && <p className="mt-0.5 whitespace-pre-line text-[11px] leading-snug text-ink/80">{m.content}</p>}
-                              </div>
-                              <span className="flex shrink-0 items-center gap-1">
-                                {/* Konu doluluk göstergesi — 5 sınırı görselleşir */}
-                                <span
-                                  className={cn(
-                                    "rounded px-1 text-[9.5px] font-semibold tabular-nums",
-                                    m.topics.length >= TOPIC_LIMIT ? "bg-ink/15 text-ink/70" : "bg-black/5 text-ink/50",
-                                  )}
-                                  title={`Konu: ${m.topics.length}/${TOPIC_LIMIT}`}
-                                >
-                                  {m.topics.length}/{TOPIC_LIMIT}
-                                </span>
-                                <Pencil size={12} className="text-ink/40 opacity-0 transition-opacity group-hover:opacity-100" />
-                              </span>
-                            </div>
-                            {m.participant_ids?.length > 0 && (
-                              <div className="mt-1">
-                                <span className="inline-flex items-center gap-1 rounded bg-black/5 px-1.5 py-0.5">
-                                  <MemberInitials ids={m.participant_ids} memberNames={memberNames} />
-                                </span>
-                              </div>
-                            )}
-                            {/* Konular — Excel gibi hep görünür, satır satır */}
-                            {m.topics.length > 0 && (
-                              <ul className="mt-1.5 space-y-1 border-t border-black/10 pt-1.5">
-                                {m.topics.map((t, ti) => (
-                                  <li key={t.id} className="flex items-start gap-1.5 text-[11px] text-ink/85">
-                                    <span className="mt-px shrink-0 font-semibold text-ink/50">{ti + 1}.</span>
-                                    <span className="min-w-0 flex-1">
-                                      {t.text}
-                                      {t.task_id && <CheckCircle2 size={10} className="ml-1 inline text-emerald-600" aria-label="Göreve atandı" />}
+                      {cell.length > 0 && (
+                        <div className="stagger-children space-y-1.5">
+                          {cell.map((m) => {
+                            const meta = categoryMeta(m.category);
+                            return (
+                              <div
+                                key={m.id}
+                                onClick={() => setEditor({ meeting: m, day: iso, slot, dayLabel: dayLabelOf(iso, i) })}
+                                className={cn("group relative cursor-pointer overflow-hidden rounded-lg border p-2 pl-3 text-left shadow-card transition-[transform,box-shadow] duration-200 ease-standard hover:-translate-y-px hover:shadow-card-hover active:translate-y-0 active:shadow-card", meta.cell)}
+                              >
+                                {/* Kategori rayı — 3px, cn() dışında (tailwind-merge border-l/renk yutma hatasına karşı) */}
+                                <span aria-hidden className={"absolute inset-y-0 left-0 w-[3px] " + meta.dot} />
+                                <div className="flex items-start justify-between gap-1">
+                                  <div className="min-w-0 flex-1">
+                                    <div className={cn("text-[12px] font-bold leading-snug tracking-tight", meta.title)}>
+                                      {meta.label}{m.title ? ` / ${m.title}` : ""}
+                                    </div>
+                                    {m.content && <p className="mt-0.5 whitespace-pre-line text-[11px] leading-snug text-ink/80">{m.content}</p>}
+                                  </div>
+                                  <span className="flex shrink-0 items-center gap-1">
+                                    {/* Konu doluluk göstergesi — 5 sınırı görselleşir */}
+                                    <span
+                                      className={cn(
+                                        "rounded-md px-1.5 py-px text-[9.5px] font-semibold tabular-nums",
+                                        m.topics.length >= TOPIC_LIMIT ? "bg-ink/15 text-ink/70" : "bg-black/5 text-ink/50",
+                                      )}
+                                      title={`Konu: ${m.topics.length}/${TOPIC_LIMIT}`}
+                                    >
+                                      {m.topics.length}/{TOPIC_LIMIT}
                                     </span>
-                                    {t.participant_ids?.length > 0 && (
-                                      <MemberInitials ids={t.participant_ids} memberNames={memberNames} className="shrink-0" />
-                                    )}
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                          </div>
-                        );
-                      })}
+                                    <Pencil size={12} className="text-ink/40 opacity-0 transition-opacity duration-150 group-hover:opacity-100" />
+                                  </span>
+                                </div>
+                                {m.participant_ids?.length > 0 && (
+                                  <div className="mt-1">
+                                    <span className="inline-flex items-center gap-1 rounded-md bg-black/5 px-1.5 py-0.5">
+                                      <MemberInitials ids={m.participant_ids} memberNames={memberNames} />
+                                    </span>
+                                  </div>
+                                )}
+                                {/* Konular — Excel gibi hep görünür, satır satır */}
+                                {m.topics.length > 0 && (
+                                  <ul className="mt-1.5 space-y-1 border-t border-black/10 pt-1.5">
+                                    {m.topics.map((t, ti) => (
+                                      <li key={t.id} className="flex items-start gap-1.5 text-[11px] leading-snug text-ink/85">
+                                        <span className="mt-px shrink-0 font-semibold tabular-nums text-ink/50">{ti + 1}.</span>
+                                        <span className="min-w-0 flex-1">
+                                          {t.text}
+                                          {t.task_id && <CheckCircle2 size={10} className="ml-1 inline text-emerald-600" aria-label="Göreve atandı" />}
+                                        </span>
+                                        {t.participant_ids?.length > 0 && (
+                                          <MemberInitials ids={t.participant_ids} memberNames={memberNames} className="shrink-0" />
+                                        )}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                       <button
                         onClick={() => setEditor({ meeting: null, day: iso, slot, dayLabel: dayLabelOf(iso, i) })}
                         className={cn(
-                          "flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-line py-1 text-[11px] text-subtle transition-opacity hover:border-brand hover:text-brand",
-                          cell.length === 0 ? "opacity-100" : "opacity-0 group-hover/cell:opacity-100",
+                          "flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-line py-1.5 text-[11px] font-medium text-subtle transition-all duration-150 hover:border-brand-ring hover:bg-brand-soft/40 hover:text-brand active:scale-[0.99]",
+                          cell.length === 0 ? "opacity-100" : "opacity-0 focus-visible:opacity-100 group-hover/cell:opacity-100",
                         )}
                         title="Toplantı ekle"
                       >

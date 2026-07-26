@@ -29,7 +29,7 @@ type TopicDraft = {
 };
 
 const inputCls =
-  "w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-[13px] text-ink placeholder:text-subtle focus:outline-none focus:ring-2 focus:ring-brand-ring focus:border-brand-ring";
+  "w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[13px] text-ink placeholder:text-subtle transition-[border-color,box-shadow] duration-150 hover:border-line-strong focus:outline-none focus:ring-2 focus:ring-brand-ring focus:border-brand-ring";
 
 export function MeetingEditor({ meeting, day, slot, dayLabel, members, onClose, onSaved }: Props) {
   const isNew = meeting === null;
@@ -122,26 +122,26 @@ export function MeetingEditor({ meeting, day, slot, dayLabel, members, onClose, 
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:p-8" onClick={onClose}>
+    <div className="anim-fade fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-[2px] sm:p-8" onClick={onClose}>
       <div
-        className="w-full max-w-3xl rounded-2xl border border-line bg-surface shadow-drawer"
+        className="anim-scale-in w-full max-w-3xl rounded-2xl border border-line bg-surface shadow-drawer"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Başlık */}
         <div className="flex items-center justify-between border-b border-line px-5 py-3">
           <div>
-            <h2 className="text-[15px] font-semibold text-ink">{isNew ? "Yeni toplantı" : "Toplantıyı düzenle"}</h2>
-            <p className="text-[12px] text-subtle">{dayLabel} · {slot}</p>
+            <h2 className="text-[15px] font-semibold tracking-tight text-ink">{isNew ? "Yeni toplantı" : "Toplantıyı düzenle"}</h2>
+            <p className="text-[12px] tabular-nums text-subtle">{dayLabel} · {slot}</p>
           </div>
-          <button onClick={onClose} className="rounded-md p-1.5 text-subtle hover:bg-surface-muted hover:text-ink"><X size={17} /></button>
+          <button onClick={onClose} className="rounded-md p-1.5 text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-95" aria-label="Kapat"><X size={17} /></button>
         </div>
 
         <div className="max-h-[70vh] space-y-4 overflow-y-auto px-5 py-4">
-          {error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] text-red-700">{error}</div>}
+          {error && <div className="anim-fade-down rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] font-medium text-red-700">{error}</div>}
 
           {/* Kategori seçici */}
           <div>
-            <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-muted">Kategori</span>
+            <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted">Kategori</span>
             <div className="flex flex-wrap gap-1.5">
               {PLANNING_CATEGORIES.map((c) => (
                 <button
@@ -149,11 +149,14 @@ export function MeetingEditor({ meeting, day, slot, dayLabel, members, onClose, 
                   type="button"
                   onClick={() => setCategory(c.key)}
                   className={cn(
-                    "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-medium transition",
-                    category === c.key ? cn(c.chip, "ring-2 ring-offset-1 ring-ink/20") : "bg-surface-muted text-muted hover:text-ink",
+                    "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-medium transition-all duration-150 ease-standard active:scale-[0.97]",
+                    category === c.key
+                      ? cn(c.chip, "font-semibold shadow-sm ring-1 ring-black/10")
+                      : "bg-surface-muted text-muted hover:bg-surface-hover hover:text-ink",
                   )}
+                  aria-pressed={category === c.key}
                 >
-                  <span className={cn("h-2 w-2 rounded-full", c.dot)} />
+                  <span className={cn("h-2 w-2 rounded-full ring-1 ring-inset ring-black/10 transition-transform duration-150", category === c.key && "scale-110", c.dot)} />
                   {c.label}
                 </button>
               ))}
@@ -182,8 +185,8 @@ export function MeetingEditor({ meeting, day, slot, dayLabel, members, onClose, 
               <span className="text-[10.5px] text-subtle">Kişi seç · tarih ver · “Ata &amp; bildir” ile göreve dönüştür</span>
             </div>
             {assignedMsg && (
-              <div className="mb-2 flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[12px] text-emerald-800">
-                <CheckCircle2 size={14} /> {assignedMsg}
+              <div className="anim-fade-down mb-2 flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[12px] font-medium text-emerald-800">
+                <CheckCircle2 size={14} className="shrink-0" /> {assignedMsg}
               </div>
             )}
             <div className="space-y-1.5">

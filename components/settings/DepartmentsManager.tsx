@@ -43,7 +43,7 @@ function DeptMemberRow({
 }) {
   const name = getPersonDisplayName(dm.profiles ?? dm.member_id.slice(0, 8));
   return (
-    <div className="flex items-center justify-between rounded-lg px-1.5 py-1 hover:bg-surface-hover transition-colors">
+    <div className="flex items-center justify-between rounded-lg px-1.5 py-1 hover:bg-surface-hover transition-colors duration-150">
       <div className="flex items-center gap-1.5 text-sm text-muted">
         <Avatar name={name} size="xs" />
         <span title={name}>{name}</span>
@@ -51,7 +51,7 @@ function DeptMemberRow({
       {canManage && (
         <button
           onClick={() => onRemove(dm.id)}
-          className="p-1 text-subtle hover:text-danger hover:bg-danger/10 rounded transition-colors"
+          className="p-1 text-subtle hover:text-danger hover:bg-danger/10 rounded-md active:scale-95 transition-colors duration-150"
           title="Departmandan çıkar"
         >
           <UserMinus size={13} />
@@ -100,7 +100,7 @@ function AddMemberForm({
       <select
         value={selectedId}
         onChange={(e) => setSelectedId(e.target.value)}
-        className="text-xs border border-line rounded-lg px-2 py-1 text-muted bg-surface focus:outline-none focus:ring-1 focus:ring-brand-ring"
+        className="text-xs border border-line rounded-lg px-2 py-1 text-muted bg-surface transition-colors duration-150 hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40"
       >
         <option value="">Üye seç…</option>
         {available.map((m) => (
@@ -110,12 +110,12 @@ function AddMemberForm({
       <button
         onClick={handleAdd}
         disabled={!selectedId || pending}
-        className="text-xs bg-brand text-white px-2.5 py-1 rounded-lg hover:bg-brand-strong disabled:opacity-50 transition-colors"
+        className="text-xs font-medium bg-brand text-white px-2.5 py-1 rounded-lg hover:bg-brand-strong active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 transition-colors duration-150"
       >
         {pending ? "Ekleniyor…" : "Ekle"}
       </button>
-      <button onClick={onDone} className="text-xs text-muted hover:text-ink px-1 transition-colors">İptal</button>
-      {err && <p className="text-xs text-danger w-full">{err}</p>}
+      <button onClick={onDone} className="text-xs text-muted hover:text-ink px-1 rounded transition-colors duration-150">İptal</button>
+      {err && <p role="alert" className="anim-fade-down text-xs text-danger w-full">{err}</p>}
     </div>
   );
 }
@@ -170,14 +170,14 @@ function DeptCard({
   const isTopLevel = dept.parent_id === null;
 
   return (
-    <div className={`border rounded-lg ${isTopLevel ? "border-line bg-surface shadow-card" : "border-hairline bg-surface-muted ml-4"}`}>
+    <div className={`border rounded-lg transition-shadow duration-200 ease-standard ${isTopLevel ? "border-line bg-surface shadow-card hover:shadow-card-hover" : "border-hairline bg-surface-muted ml-4"}`}>
       <div
-        className="flex items-center gap-2 px-4 py-3 cursor-pointer rounded-lg hover:bg-surface-hover transition-colors"
+        className="flex items-center gap-2 px-4 py-3 cursor-pointer select-none rounded-lg hover:bg-surface-hover transition-colors duration-150"
         onClick={() => setOpen((o) => !o)}
       >
         <ChevronRight
           size={14}
-          className={`text-subtle transition-transform shrink-0 ${open ? "rotate-90" : ""}`}
+          className={`text-subtle transition-transform duration-200 ease-standard shrink-0 ${open ? "rotate-90" : ""}`}
         />
         <span className={cn("inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-full ring-1", badge.chip, badge.ring)}>
           <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", badge.dot)} />
@@ -192,7 +192,7 @@ function DeptCard({
         {canManage && (
           <button
             onClick={(e) => { e.stopPropagation(); onDelete(dept.id); }}
-            className="p-1 text-subtle hover:text-danger hover:bg-danger/10 rounded ml-1 shrink-0 transition-colors"
+            className="p-1 text-subtle hover:text-danger hover:bg-danger/10 rounded-md ml-1 shrink-0 active:scale-95 transition-colors duration-150"
             title="Sil"
           >
             <Trash2 size={12} />
@@ -201,7 +201,7 @@ function DeptCard({
       </div>
 
       {open && (
-        <div className="px-4 pb-3 space-y-1 border-t border-hairline pt-2">
+        <div className="anim-fade px-4 pb-3 space-y-1 border-t border-hairline pt-2">
           {/* Members of this dept */}
           {myMembers.length === 0 && (
             <p className="text-xs text-subtle">Henüz üye yok.</p>
@@ -219,7 +219,7 @@ function DeptCard({
           {canManage && !showAddMember && (
             <button
               onClick={() => setShowAddMember(true)}
-              className="flex items-center gap-1 text-xs text-brand hover:text-brand-strong mt-1 transition-colors"
+              className="flex items-center gap-1 text-xs font-medium text-brand hover:text-brand-strong mt-1 rounded transition-colors duration-150"
             >
               <UserPlus size={12} /> Üye ekle
             </button>

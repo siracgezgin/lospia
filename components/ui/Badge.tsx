@@ -18,8 +18,8 @@ export function Badge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-md font-medium leading-none whitespace-nowrap",
-        size === "xs" ? "text-[10px] px-1.5 py-0.5" : "text-[11px] px-2 py-0.5",
+        "inline-flex items-center gap-1 rounded-md font-medium leading-none whitespace-nowrap tabular-nums",
+        size === "xs" ? "h-[18px] px-1.5 text-[10px]" : "h-5 px-2 text-[11px]",
         className,
       )}
     >

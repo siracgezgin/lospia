@@ -63,9 +63,11 @@ export function CreateAccountPanel({ workspaceId, departments = [] }: Props) {
 
   return (
     <form onSubmit={handleSubmit} className="rounded-card border border-line bg-surface shadow-card p-5 space-y-3">
-      <div className="flex items-center gap-2">
-        <UserPlus size={15} className="text-brand" />
-        <h3 className="text-sm font-semibold text-ink">Kullanıcı Hesabı Oluştur</h3>
+      <div className="flex items-center gap-2.5">
+        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand">
+          <UserPlus size={15} />
+        </span>
+        <h3 className="text-sm font-semibold tracking-tight text-ink">Kullanıcı Hesabı Oluştur</h3>
       </div>
       <p className="text-xs text-subtle leading-relaxed">
         Kişi adına hesap oluşturun. Oluşturulan kullanıcı, kaydolmadan doğrudan verilen kullanıcı
@@ -141,10 +143,10 @@ export function CreateAccountPanel({ workspaceId, departments = [] }: Props) {
         )}
       </div>
 
-      {error && <p className="text-xs text-danger">{error}</p>}
+      {error && <p role="alert" className="anim-fade-down text-xs text-danger">{error}</p>}
       {created && (
-        <p className="text-xs text-success bg-success/10 border border-success/20 rounded-lg px-3 py-2 inline-flex items-center gap-1.5">
-          <Check size={13} /> <span><strong>@{created}</strong> hesabı oluşturuldu. Kişi bu kullanıcı adı ve şifre ile giriş yapabilir.</span>
+        <p className="anim-fade-down text-xs text-success bg-success/10 border border-success/20 rounded-lg px-3 py-2 inline-flex items-center gap-1.5">
+          <Check size={13} className="shrink-0" /> <span><strong>@{created}</strong> hesabı oluşturuldu. Kişi bu kullanıcı adı ve şifre ile giriş yapabilir.</span>
         </p>
       )}
 

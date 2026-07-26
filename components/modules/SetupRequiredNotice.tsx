@@ -32,7 +32,7 @@ export function SetupRequiredNotice({
   return (
     <div
       className={
-        "flex items-start gap-2.5 rounded-xl border border-[#e7d3ab] bg-[#fbf3e3] text-[#7a561c]" +
+        "anim-fade-down flex items-start gap-2.5 rounded-xl border border-[#e7d3ab] bg-[#fbf3e3] text-[#7a561c]" +
         (isBlock ? " px-5 py-4" : " px-4 py-3")
       }
     >
@@ -50,16 +50,17 @@ export function SetupRequiredNotice({
             <button
               type="button"
               onClick={() => setShowDetail((s) => !s)}
-              className="inline-flex items-center gap-1 text-[11.5px] font-medium text-[#a05f1c] transition-colors hover:text-[#7a561c]"
+              aria-expanded={showDetail}
+              className="inline-flex items-center gap-1 text-[11.5px] font-medium text-[#a05f1c] transition-colors duration-150 hover:text-[#7a561c]"
             >
               <ChevronDown
                 size={12}
-                className={"transition-transform" + (showDetail ? " rotate-180" : "")}
+                className={"transition-transform duration-200 ease-standard" + (showDetail ? " rotate-180" : "")}
               />
               Teknik detay
             </button>
             {showDetail && (
-              <p className="mt-1 break-words rounded-md bg-[#f4e6c9] px-2.5 py-1.5 font-mono text-[11px] leading-relaxed text-[#7a561c]">
+              <p className="anim-fade-down mt-1 break-words rounded-md bg-[#f4e6c9] px-2.5 py-1.5 font-mono text-[11px] leading-relaxed text-[#7a561c]">
                 {technicalDetail}
               </p>
             )}

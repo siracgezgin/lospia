@@ -42,15 +42,28 @@ export function MobileNav({ isAdmin = false }: { isAdmin?: boolean }) {
               aria-current={active ? "page" : undefined}
               className={cn(
                 // 44px+ touch target across the full cell height.
-                "relative flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors",
-                active ? "text-brand" : "text-muted active:text-ink",
+                "group relative flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors duration-150",
+                active ? "text-brand-strong" : "text-muted active:text-ink",
               )}
             >
-              {active && (
-                <span className="absolute top-0 h-0.5 w-8 rounded-b bg-brand" />
-              )}
-              <Icon size={20} strokeWidth={active ? 2.4 : 2} />
-              <span>{label}</span>
+              {/* Aktif sekme — üst çubuk yerine ikonun arkasında yumuşak pill;
+                  basılı tutunca hafifçe küçülür (dokunsal geri bildirim). */}
+              <span
+                className={cn(
+                  "grid h-7 w-12 place-items-center rounded-full transition-[background-color,scale] duration-200 ease-standard group-active:scale-95",
+                  active ? "bg-brand-soft" : "bg-transparent",
+                )}
+              >
+                <Icon
+                  size={20}
+                  strokeWidth={active ? 2.2 : 2}
+                  className={cn(
+                    "transition-transform duration-200 ease-standard",
+                    active ? "scale-110 text-brand" : "scale-100",
+                  )}
+                />
+              </span>
+              <span className={cn(active && "font-semibold")}>{label}</span>
             </Link>
           );
         })}

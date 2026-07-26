@@ -60,15 +60,15 @@ export function ModuleShellView({ shell }: { shell: ModuleShell }) {
         <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-subtle">
           İlgili ekranlar
         </p>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <div className="stagger-children grid grid-cols-2 gap-2 sm:grid-cols-3">
           {RELATED_LINKS.map((l) => (
             <Link
               key={l.href}
               href={l.href}
-              className="group flex items-center justify-between rounded-xl border border-line bg-surface px-3 py-2.5 text-[13px] font-medium text-muted shadow-card transition-colors hover:border-line-strong hover:text-ink"
+              className="group flex items-center justify-between rounded-xl border border-line bg-surface px-3 py-2.5 text-[13px] font-medium text-muted shadow-card transition-[color,border-color,box-shadow] duration-200 ease-standard hover:border-line-strong hover:text-ink hover:shadow-card-hover"
             >
               {l.label}
-              <ArrowUpRight size={14} className="text-subtle opacity-0 transition-opacity group-hover:opacity-100" />
+              <ArrowUpRight size={14} className="shrink-0 text-subtle opacity-0 -translate-x-0.5 translate-y-0.5 transition-[opacity,transform] duration-150 ease-standard group-hover:opacity-100 group-hover:translate-x-0 group-hover:translate-y-0" />
             </Link>
           ))}
         </div>

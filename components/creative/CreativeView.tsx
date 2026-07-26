@@ -13,6 +13,7 @@ import {
   CREATIVE_STATUS_TONE,
 } from "@/lib/creative/constants";
 import { cn } from "@/lib/utils/cn";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { CreativeLinkModal } from "./CreativeLinkModal";
 import type { CreativeAsset, WorkspaceDepartment } from "@/types";
@@ -87,7 +88,7 @@ export function CreativeView({
         rightSlot={
           <button
             onClick={openNew}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-3.5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand-strong"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-3.5 py-2 text-[13px] font-medium text-white transition-colors duration-150 hover:bg-brand-strong active:scale-[0.98]"
           >
             <Plus size={15} />
             Yeni link ekle
@@ -103,36 +104,39 @@ export function CreativeView({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Başlık veya not ara…"
-            className="w-full rounded-lg border border-line bg-surface py-2 pl-9 pr-3 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-ring focus:border-brand-ring"
+            className="h-9 w-full rounded-lg border border-line bg-surface pl-9 pr-3 text-sm text-ink placeholder:text-subtle transition-colors duration-150 hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40"
           />
         </div>
-        <select value={provider} onChange={(e) => setProvider(e.target.value)} className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-muted focus:outline-none focus:ring-2 focus:ring-brand-ring">
+        <select value={provider} onChange={(e) => setProvider(e.target.value)} className="h-9 rounded-lg border border-line bg-surface px-3 text-sm text-muted transition-colors duration-150 hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40">
           <option value="">Tüm kaynaklar</option>
           {CREATIVE_PROVIDERS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
         </select>
-        <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-muted focus:outline-none focus:ring-2 focus:ring-brand-ring">
+        <select value={status} onChange={(e) => setStatus(e.target.value)} className="h-9 rounded-lg border border-line bg-surface px-3 text-sm text-muted transition-colors duration-150 hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40">
           <option value="">Tüm durumlar</option>
           {CREATIVE_STATUSES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
         </select>
-        <label className="flex items-center gap-1.5 text-[12.5px] text-muted">
-          <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} className="accent-brand" />
+        <label className="flex h-9 cursor-pointer select-none items-center gap-1.5 rounded-lg px-2 text-[12.5px] text-muted transition-colors duration-150 hover:text-ink">
+          <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} className="h-3.5 w-3.5 accent-brand" />
           Arşivi göster
         </label>
       </div>
 
       {/* Grid */}
       {filtered.length === 0 ? (
-        <div className="rounded-2xl border border-line bg-surface px-6 py-14 text-center shadow-card">
-          <p className="text-[13.5px] text-subtle">
-            {assets.length === 0
-              ? "Henüz kayıtlı bağlantı yok. İlk bağlantıyı ekleyin."
-              : "Filtreye uyan bağlantı bulunamadı."}
-          </p>
+        <div className="anim-fade-up rounded-2xl border border-line bg-surface shadow-card">
+          <EmptyState
+            icon={assets.length === 0 ? Link2 : Search}
+            title={
+              assets.length === 0
+                ? "Henüz kayıtlı bağlantı yok. İlk bağlantıyı ekleyin."
+                : "Filtreye uyan bağlantı bulunamadı."
+            }
+          />
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="stagger-children grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((a) => (
-            <div key={a.id} className="flex flex-col rounded-2xl border border-line bg-surface p-4 shadow-card">
+            <div key={a.id} className="group flex flex-col rounded-2xl border border-line bg-surface p-4 shadow-card transition-all duration-200 ease-standard hover:-translate-y-0.5 hover:border-line-strong hover:shadow-card-hover">
               <div className="mb-2 flex items-start justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className={cn("rounded-md px-2 py-0.5 text-[10.5px] font-medium", PROVIDER_TONE[a.provider])}>
@@ -144,11 +148,11 @@ export function CreativeView({
                 </div>
                 {canMutate(a) && (
                   <div className="flex shrink-0 items-center gap-0.5">
-                    <button onClick={() => openEdit(a)} className="rounded-md p-1 text-subtle transition-colors hover:bg-surface-muted hover:text-ink" title="Düzenle">
+                    <button onClick={() => openEdit(a)} className="rounded-md p-1.5 text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-95" title="Düzenle">
                       <Pencil size={13} />
                     </button>
                     {a.status !== "archived" && (
-                      <button onClick={() => handleArchive(a)} disabled={isArchiving} className="rounded-md p-1 text-subtle transition-colors hover:bg-surface-muted hover:text-ink" title="Arşivle">
+                      <button onClick={() => handleArchive(a)} disabled={isArchiving} className="rounded-md p-1.5 text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-95 disabled:pointer-events-none disabled:opacity-50" title="Arşivle">
                         <Archive size={13} />
                       </button>
                     )}
@@ -166,7 +170,7 @@ export function CreativeView({
                 href={a.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-3 inline-flex items-center gap-1 text-[12.5px] font-medium text-brand hover:text-brand-strong"
+                className="mt-3 inline-flex items-center gap-1 self-start rounded-md text-[12.5px] font-medium text-brand transition-colors duration-150 hover:text-brand-strong"
               >
                 Bağlantıyı aç <ExternalLink size={12} />
               </a>
@@ -175,7 +179,7 @@ export function CreativeView({
         </div>
       )}
 
-      <p className="mt-3 px-1 text-[12px] text-subtle">{filtered.length} bağlantı gösteriliyor</p>
+      <p className="mt-3 px-1 text-[12px] tabular-nums text-subtle">{filtered.length} bağlantı gösteriliyor</p>
 
       {modalOpen && (
         <CreativeLinkModal

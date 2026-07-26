@@ -47,9 +47,10 @@ const ACTIONABLE_TYPES: TaskNoteType[] = ["action_required", "handoff", "approva
 // Shared class for the compact form controls in the add-note row — token-based
 // (line/surface/brand focus) so they match the Görev bilgileri inputs.
 const noteControlCls =
-  "w-full text-sm text-ink bg-surface border border-line rounded-lg px-2 py-1.5 transition-colors " +
+  "w-full text-sm text-ink bg-surface border border-line rounded-lg px-2 py-1.5 " +
+  "transition-[color,background-color,border-color,box-shadow] duration-150 ease-standard hover:border-line-strong " +
   "focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40 " +
-  "disabled:bg-surface-sunken disabled:text-subtle";
+  "disabled:bg-surface-sunken disabled:text-subtle disabled:hover:border-line";
 
 function shortDate(iso: string | null | undefined): string {
   if (!iso) return "";
@@ -149,7 +150,7 @@ function NoteItem({
   }
 
   return (
-    <li className={`rounded-lg border p-3 space-y-1.5 ${note.is_pinned ? "border-amber-200 bg-amber-50" : "border-hairline bg-surface-muted"}`}>
+    <li className={`rounded-lg border p-3 space-y-1.5 transition-colors duration-150 ${note.is_pinned ? "border-amber-200 bg-amber-50" : "border-hairline bg-surface-muted hover:border-line hover:bg-surface-hover"}`}>
       {/* Workflow context row — type badge, delivery date confirmed, targets */}
       {(noteType !== "info" || note.due_date_at_note_time || notifiedNames.length > 0) && (
         <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
@@ -196,7 +197,7 @@ function NoteItem({
       {isActionable && !editing && (
         <div className="flex items-center gap-2 flex-wrap">
           {isClaimed ? (
-            <span className="inline-flex items-center gap-1 text-[11px] text-teal-700 bg-teal-50 border border-teal-200 rounded px-1.5 py-0.5 font-medium">
+            <span className="anim-fade inline-flex items-center gap-1 text-[11px] text-teal-700 bg-teal-50 border border-teal-200 rounded px-1.5 py-0.5 font-medium">
               <Check size={11} /> Üzerine alındı{claimedByName ? ` · ${claimedByName}` : ""}
             </span>
           ) : (
@@ -204,26 +205,26 @@ function NoteItem({
               <button
                 onClick={() => handleAck("claimed")}
                 disabled={pending}
-                className="inline-flex items-center gap-1 text-[11px] font-medium text-teal-700 border border-teal-200 bg-surface hover:bg-teal-50 rounded px-2 py-0.5 transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-teal-700 border border-teal-200 bg-surface hover:bg-teal-50 active:scale-[0.98] rounded px-2 py-0.5 transition-colors duration-150 disabled:opacity-60 disabled:pointer-events-none"
               >
                 <HandHelping size={11} /> Üzerime aldım
               </button>
             )
           )}
           {seenByMe ? (
-            <span className="inline-flex items-center gap-1 text-[11px] text-subtle">
+            <span className="anim-fade inline-flex items-center gap-1 text-[11px] text-subtle">
               <Eye size={11} /> Görüldü
             </span>
           ) : (
             <button
               onClick={() => handleAck("seen")}
               disabled={pending}
-              className="inline-flex items-center gap-1 text-[11px] font-medium text-muted border border-line bg-surface hover:bg-surface-hover rounded px-2 py-0.5 transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1 text-[11px] font-medium text-muted border border-line bg-surface hover:bg-surface-hover hover:border-line-strong active:scale-[0.98] rounded px-2 py-0.5 transition-colors duration-150 disabled:opacity-60 disabled:pointer-events-none"
             >
               <Eye size={11} /> Gördüm
             </button>
           )}
-          {ackError && <span className="text-[11px] text-danger">{ackError}</span>}
+          {ackError && <span className="anim-fade-down text-[11px] text-danger">{ackError}</span>}
         </div>
       )}
 
@@ -232,26 +233,26 @@ function NoteItem({
           <Avatar name={authorName} size="xs" />
           <span className="font-medium text-muted truncate max-w-[10rem]">{authorName}</span>
           <span className="text-subtle shrink-0">·</span>
-          <span className="shrink-0 whitespace-nowrap">{formatNoteTimeTR(note.created_at)}</span>
+          <span className="shrink-0 whitespace-nowrap tabular-nums">{formatNoteTimeTR(note.created_at)}</span>
         </span>
         <div className="flex items-center gap-1 shrink-0">
           {editing ? (
             <>
-              <button onClick={handleSaveEdit} className="text-brand hover:text-brand-strong font-medium">Kaydet</button>
-              <button onClick={() => { setEditing(false); setEditValue(note.content); }} className="text-muted hover:text-ink ml-1">İptal</button>
+              <button onClick={handleSaveEdit} className="text-brand hover:text-brand-strong font-medium transition-colors duration-150">Kaydet</button>
+              <button onClick={() => { setEditing(false); setEditValue(note.content); }} className="text-muted hover:text-ink ml-1 transition-colors duration-150">İptal</button>
             </>
           ) : (
             <>
               {canEdit && (
-                <button onClick={() => setEditing(true)} className="p-1 hover:text-muted rounded transition-colors" title="Düzenle">
+                <button onClick={() => setEditing(true)} className="p-1 rounded-md text-subtle hover:text-ink hover:bg-surface-sunken active:scale-[0.98] transition-colors duration-150" title="Düzenle">
                   <PencilLine size={12} />
                 </button>
               )}
-              <button onClick={handlePin} className={`p-1 rounded transition-colors ${note.is_pinned ? "text-amber-500 hover:text-amber-700" : "hover:text-amber-500"}`} title={note.is_pinned ? "Sabitlemeyi kaldır" : "Sabitle"}>
+              <button onClick={handlePin} className={`p-1 rounded-md active:scale-[0.98] transition-colors duration-150 ${note.is_pinned ? "text-amber-500 hover:text-amber-700 hover:bg-amber-100/60" : "text-subtle hover:text-amber-500 hover:bg-surface-sunken"}`} title={note.is_pinned ? "Sabitlemeyi kaldır" : "Sabitle"}>
                 <Pin size={12} />
               </button>
               {canDelete && (
-                <button onClick={handleDelete} className="p-1 hover:text-danger rounded transition-colors" title="Sil">
+                <button onClick={handleDelete} className="p-1 rounded-md text-subtle hover:text-danger hover:bg-danger/10 active:scale-[0.98] transition-colors duration-150" title="Sil">
                   <Trash2 size={12} />
                 </button>
               )}
@@ -283,18 +284,20 @@ function PeoplePicker({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between gap-1 text-sm border border-line rounded-lg px-2.5 py-1.5 bg-surface text-left hover:border-line-strong transition-colors"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className="w-full flex items-center justify-between gap-1 text-sm border border-line rounded-lg px-2.5 py-1.5 bg-surface text-left hover:border-line-strong transition-colors duration-150"
       >
         <span className={`truncate ${selectedNames.length === 0 ? "text-subtle" : "text-ink"}`}>
           {selectedNames.length === 0 ? "Kişi seçin…" : selectedNames.join(", ")}
         </span>
-        <ChevronDown size={13} className="text-subtle shrink-0" />
+        <ChevronDown size={13} className={`text-subtle shrink-0 transition-transform duration-200 ease-standard ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
         <>
           {/* click-away layer */}
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} aria-hidden />
-          <div className="absolute z-30 mt-1 w-full max-h-52 overflow-y-auto rounded-lg border border-line bg-surface shadow-lg py-1">
+          <div className="anim-fade-down absolute z-30 mt-1 w-full max-h-52 overflow-y-auto rounded-lg border border-line bg-surface shadow-pop py-1">
             {people.length === 0 && (
               <p className="px-3 py-2 text-xs text-subtle">Kişi bulunamadı.</p>
             )}
@@ -303,7 +306,7 @@ function PeoplePicker({
               return (
                 <label
                   key={p.id}
-                  className="flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-surface-hover transition-colors"
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-surface-hover transition-colors duration-150"
                 >
                   <input
                     type="checkbox"
@@ -487,14 +490,14 @@ function AddNoteForm({
         <button
           type="submit"
           disabled={pending || dueBlocked}
-          className="text-sm bg-brand text-white rounded-lg px-3 py-2 hover:bg-brand-strong disabled:opacity-50 transition-colors font-medium whitespace-nowrap shrink-0"
+          className="text-sm bg-brand text-white shadow-xs rounded-lg px-3 py-2 hover:bg-brand-strong active:scale-[0.98] disabled:opacity-60 disabled:pointer-events-none disabled:shadow-none transition-all duration-150 font-medium whitespace-nowrap shrink-0"
         >
           {pending ? "…" : "Not ekle"}
         </button>
       </div>
 
-      {error && <p className="text-xs text-danger">{error}</p>}
-      {warning && <p className="text-xs text-warning">{warning}</p>}
+      {error && <p role="alert" className="anim-fade-down text-xs text-danger">{error}</p>}
+      {warning && <p className="anim-fade-down text-xs text-warning">{warning}</p>}
     </form>
   );
 }
@@ -519,7 +522,7 @@ export function TaskNotesPanel({
 
   return (
     <div className="bg-surface rounded-card border border-line shadow-card p-5 space-y-4">
-      <h3 className="text-sm font-semibold text-ink flex items-center gap-1.5">
+      <h3 className="text-sm font-semibold tracking-tight text-ink flex items-center gap-1.5">
         <StickyNote size={14} className="text-muted" /> Notlar
       </h3>
 
@@ -534,7 +537,7 @@ export function TaskNotesPanel({
       )}
 
       {sorted.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-line px-4 py-6 text-center text-sm text-subtle">
+        <p className="rounded-lg border border-dashed border-line bg-surface-muted/40 px-4 py-6 text-center text-sm text-subtle">
           Henüz not eklenmedi.
         </p>
       ) : (

@@ -23,7 +23,7 @@ export function Wordmark({
 }) {
   if (compact) {
     return (
-      <span className={cn("text-xs font-semibold tracking-tight text-muted select-none", className)}>
+      <span className={cn("text-xs font-bold tracking-wide text-muted select-none", className)}>
         {initials(name)}
       </span>
     );

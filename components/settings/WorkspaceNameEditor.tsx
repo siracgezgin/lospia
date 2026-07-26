@@ -49,7 +49,7 @@ export function WorkspaceNameEditor({ workspaceId, currentName }: Props) {
         <span className="text-sm font-medium text-ink">{name}</span>
         <button
           onClick={startEdit}
-          className="opacity-0 group-hover:opacity-100 p-1 rounded text-subtle hover:text-muted hover:bg-surface-muted transition-all"
+          className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 p-1 rounded-md text-subtle hover:text-ink hover:bg-surface-muted active:scale-95 transition-all duration-150"
           aria-label="Çalışma alanı adını düzenle"
         >
           <Pencil size={13} />
@@ -74,7 +74,7 @@ export function WorkspaceNameEditor({ workspaceId, currentName }: Props) {
         <button
           onClick={save}
           disabled={isPending || !draft.trim()}
-          className="p-1.5 rounded-lg bg-brand text-white hover:bg-brand-strong disabled:opacity-50 transition-colors"
+          className="p-1.5 rounded-lg bg-brand text-white hover:bg-brand-strong active:scale-95 transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50"
           aria-label="Kaydet"
         >
           <Check size={14} />
@@ -82,13 +82,13 @@ export function WorkspaceNameEditor({ workspaceId, currentName }: Props) {
         <button
           onClick={cancel}
           disabled={isPending}
-          className="p-1.5 rounded-lg text-muted hover:bg-surface-muted transition-colors"
+          className="p-1.5 rounded-lg text-muted hover:bg-surface-muted hover:text-ink active:scale-95 transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50"
           aria-label="İptal"
         >
           <X size={14} />
         </button>
       </div>
-      {error && <p className="text-xs text-danger">{error}</p>}
+      {error && <p role="alert" className="anim-fade-down text-xs text-danger">{error}</p>}
     </div>
   );
 }

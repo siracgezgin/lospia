@@ -183,7 +183,7 @@ export function MembersManager({
           const canManage = isOwner && !isSelf && !isOwnerRow;
 
           return (
-            <div key={m.id} className="px-5 py-3">
+            <div key={m.id} className="px-5 py-3 transition-colors duration-150 hover:bg-surface-hover">
             <div className="flex items-center justify-between gap-3">
               <div className="flex-1 min-w-0">
                 {editingId === m.id ? (
@@ -202,7 +202,7 @@ export function MembersManager({
                     <button
                       onClick={() => handleSaveName(m.id)}
                       disabled={isPending}
-                      className="p-1 rounded text-success hover:bg-success/10 disabled:opacity-50"
+                      className="p-1 rounded-md text-success hover:bg-success/10 active:scale-95 transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50"
                       aria-label="Kaydet"
                     >
                       <Check size={14} />
@@ -210,7 +210,7 @@ export function MembersManager({
                     <button
                       onClick={() => setEditingId(null)}
                       disabled={isPending}
-                      className="p-1 rounded text-subtle hover:bg-surface-muted disabled:opacity-50"
+                      className="p-1 rounded-md text-subtle hover:bg-surface-muted hover:text-ink active:scale-95 transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50"
                       aria-label="Vazgeç"
                     >
                       <X size={14} />
@@ -223,7 +223,7 @@ export function MembersManager({
                     {isOwner && (
                       <button
                         onClick={() => { setEditingId(m.id); setEditName(m.profiles?.full_name ?? ""); }}
-                        className="p-0.5 rounded text-subtle hover:text-muted hover:bg-surface-muted shrink-0"
+                        className="p-0.5 rounded text-subtle hover:text-ink hover:bg-surface-muted active:scale-95 transition-colors duration-150 shrink-0"
                         aria-label="İsmi düzenle"
                       >
                         <Pencil size={11} />
@@ -249,7 +249,7 @@ export function MembersManager({
                     <button
                       onClick={() => handleSaveUsername(m.id)}
                       disabled={isPending}
-                      className="p-1 rounded text-success hover:bg-success/10 disabled:opacity-50"
+                      className="p-1 rounded-md text-success hover:bg-success/10 active:scale-95 transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50"
                       aria-label="Kaydet"
                     >
                       <Check size={14} />
@@ -257,7 +257,7 @@ export function MembersManager({
                     <button
                       onClick={() => setEditingUsernameId(null)}
                       disabled={isPending}
-                      className="p-1 rounded text-subtle hover:bg-surface-muted disabled:opacity-50"
+                      className="p-1 rounded-md text-subtle hover:bg-surface-muted hover:text-ink active:scale-95 transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50"
                       aria-label="Vazgeç"
                     >
                       <X size={14} />
@@ -271,7 +271,7 @@ export function MembersManager({
                     {isOwner && (
                       <button
                         onClick={() => { setEditingUsernameId(m.id); setEditUsername(m.profiles?.username ?? ""); }}
-                        className="p-0.5 rounded text-subtle hover:text-muted hover:bg-surface-muted shrink-0"
+                        className="p-0.5 rounded text-subtle hover:text-ink hover:bg-surface-muted active:scale-95 transition-colors duration-150 shrink-0"
                         aria-label="Kullanıcı adını düzenle"
                       >
                         <Pencil size={11} />
@@ -297,7 +297,7 @@ export function MembersManager({
                     <button
                       onClick={() => handleSaveEmail(m.id)}
                       disabled={isPending}
-                      className="p-1 rounded text-success hover:bg-success/10 disabled:opacity-50"
+                      className="p-1 rounded-md text-success hover:bg-success/10 active:scale-95 transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50"
                       aria-label="Kaydet"
                     >
                       <Check size={14} />
@@ -305,7 +305,7 @@ export function MembersManager({
                     <button
                       onClick={() => setEditingEmailId(null)}
                       disabled={isPending}
-                      className="p-1 rounded text-subtle hover:bg-surface-muted disabled:opacity-50"
+                      className="p-1 rounded-md text-subtle hover:bg-surface-muted hover:text-ink active:scale-95 transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50"
                       aria-label="Vazgeç"
                     >
                       <X size={14} />
@@ -332,7 +332,7 @@ export function MembersManager({
                             setEditingEmailId(m.id);
                             setEditEmail(m.notification_email ?? "");
                           }}
-                          className="p-0.5 rounded text-subtle hover:text-muted hover:bg-surface-muted shrink-0"
+                          className="p-0.5 rounded text-subtle hover:text-ink hover:bg-surface-muted active:scale-95 transition-colors duration-150 shrink-0"
                           aria-label="Bildirim e-postasını düzenle"
                         >
                           <Pencil size={11} />
@@ -370,7 +370,7 @@ export function MembersManager({
                       value={m.role}
                       onChange={(e) => handleRoleChange(m.id, e.target.value as "admin" | "member" | "viewer")}
                       disabled={isPending}
-                      className="appearance-none text-xs text-muted bg-surface-sunken border border-line rounded-full px-2.5 py-0.5 pr-6 focus:outline-none focus:ring-1 focus:ring-brand-ring disabled:opacity-50"
+                      className="appearance-none text-xs text-muted bg-surface-sunken border border-line rounded-full px-2.5 py-0.5 pr-6 transition-colors duration-150 hover:border-line-strong focus:outline-none focus:ring-2 focus:ring-brand-ring/40 focus:border-brand-ring disabled:opacity-50"
                     >
                       {ASSIGNABLE_ROLE_OPTIONS.map((r) => (
                         <option key={r.value} value={r.value}>{r.label}</option>
@@ -385,7 +385,7 @@ export function MembersManager({
                       label: m.profiles?.full_name ?? m.profiles?.email ?? "",
                     })}
                     disabled={isPending}
-                    className="p-1 rounded text-subtle hover:text-danger hover:bg-danger/10 disabled:opacity-50 transition-colors"
+                    className="p-1 rounded-md text-subtle hover:text-danger hover:bg-danger/10 active:scale-95 disabled:pointer-events-none disabled:opacity-50 transition-colors duration-150"
                     aria-label="Üyeyi kaldır"
                   >
                     <UserMinus size={13} />
@@ -407,13 +407,13 @@ export function MembersManager({
           are shown here so an owner can revoke them; no new ones can be added. */}
       {isOwner && grants.length > 0 && (
         <div>
-          <p className="text-xs font-semibold text-muted uppercase tracking-wider">Bekleyen eski erişimler</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-subtle">Bekleyen eski erişimler</p>
           <p className="text-xs text-subtle mt-1 mb-2">
             Self-signup kapatıldı. Aşağıdaki eski kayıtlar artık kullanılmıyor; kaldırabilirsiniz.
           </p>
           <Card className="divide-y divide-hairline">
             {grants.map((g) => (
-              <div key={g.id} className="flex items-center justify-between px-5 py-3 gap-3">
+              <div key={g.id} className="flex items-center justify-between px-5 py-3 gap-3 transition-colors duration-150 hover:bg-surface-hover">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-ink truncate">
                     {g.username ? `@${g.username}` : "—"}
@@ -424,7 +424,7 @@ export function MembersManager({
                 <button
                   onClick={() => setConfirm({ kind: "grant", id: g.id, label: g.email })}
                   disabled={isPending}
-                  className="p-1 rounded text-subtle hover:text-danger hover:bg-danger/10 disabled:opacity-50 transition-colors"
+                  className="p-1 rounded-md text-subtle hover:text-danger hover:bg-danger/10 active:scale-95 disabled:pointer-events-none disabled:opacity-50 transition-colors duration-150"
                   aria-label="Erişimi kaldır"
                 >
                   <X size={14} />
@@ -435,7 +435,7 @@ export function MembersManager({
         </div>
       )}
 
-      {error && <p className="text-xs text-danger">{error}</p>}
+      {error && <p role="alert" className="anim-fade-down text-xs text-danger">{error}</p>}
 
       <ConfirmDialog
         open={confirm !== null}

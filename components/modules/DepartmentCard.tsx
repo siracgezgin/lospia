@@ -23,24 +23,24 @@ export function DepartmentCard({ department, activeCount, overdueCount, isAdmin 
   const links = department.links.filter((l) => !l.adminOnly || isAdmin);
 
   return (
-    <div className="relative flex flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
+    <div className="relative flex flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-card transition-[box-shadow,transform,border-color] duration-200 ease-standard hover:-translate-y-px hover:border-line-strong hover:shadow-card-hover">
       {/* Left department colour strip (dot bg applied directly — no cn merge). */}
       <span className={`absolute left-0 top-0 h-full w-1.5 ${style.dot}`} aria-hidden />
 
       <div className="flex flex-col gap-3 p-5 pl-6">
         {/* Header */}
         <div className="space-y-1">
-          <h3 className="text-[15px] font-semibold text-ink leading-snug">{department.title}</h3>
+          <h3 className="text-[15px] font-semibold tracking-tight text-ink leading-snug">{department.title}</h3>
           <p className="text-[12.5px] leading-relaxed text-muted">{department.description}</p>
         </div>
 
         {/* Light summaries */}
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className={cn("inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium", style.chip)}>
+          <span className={cn("inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium tabular-nums", style.chip)}>
             {activeCount} aktif iş
           </span>
           {overdueCount > 0 && (
-            <span className="inline-flex items-center gap-1 rounded-md bg-[#fbe6e2] px-2 py-0.5 text-[11px] font-medium text-[#a83a2c]">
+            <span className="inline-flex items-center gap-1 rounded-md bg-[#fbe6e2] px-2 py-0.5 text-[11px] font-medium tabular-nums text-[#a83a2c]">
               <Clock size={11} />
               {overdueCount} geciken
             </span>
@@ -53,7 +53,7 @@ export function DepartmentCard({ department, activeCount, overdueCount, isAdmin 
             <li key={`${department.key}-${link.label}`}>
               <Link
                 href={link.href}
-                className="group flex items-center justify-between rounded-lg px-2 py-1.5 -mx-1 text-[13px] text-muted transition-colors hover:bg-surface-muted hover:text-ink"
+                className="group flex items-center justify-between rounded-lg px-2 py-1.5 -mx-1 text-[13px] text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
               >
                 <span className="flex items-center gap-2 truncate">
                   <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", style.dot)} />
@@ -64,7 +64,7 @@ export function DepartmentCard({ department, activeCount, overdueCount, isAdmin 
                     </span>
                   )}
                 </span>
-                <ArrowUpRight size={14} className="shrink-0 text-subtle opacity-0 transition-opacity group-hover:opacity-100" />
+                <ArrowUpRight size={14} className="shrink-0 text-subtle opacity-0 -translate-x-0.5 translate-y-0.5 transition-[opacity,transform] duration-150 ease-standard group-hover:opacity-100 group-hover:translate-x-0 group-hover:translate-y-0" />
               </Link>
             </li>
           ))}

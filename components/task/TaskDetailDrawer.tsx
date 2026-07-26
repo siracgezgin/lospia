@@ -12,24 +12,19 @@ import { X } from "lucide-react";
  * it too). A direct hit on /tasks/[id] never reaches here — it renders the full
  * page instead.
  *
- * No new dependency: pure Tailwind + a CSS transform transition.
+ * Motion: entry uses the shared anim-drawer-in / anim-fade utilities; exit swaps
+ * to a CSS transition (animation classes removed → transform transitions out).
+ * No new dependency: pure Tailwind + CSS.
  */
 export function TaskDetailDrawer({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-
-  // Enter animation: mount closed (off-screen), then flip to open on the next
-  // frame so the transform transition runs.
-  useEffect(() => {
-    const raf = requestAnimationFrame(() => setOpen(true));
-    return () => cancelAnimationFrame(raf);
-  }, []);
+  const [closing, setClosing] = useState(false);
 
   // Close = animate out briefly, then pop the intercepted route.
   const close = useCallback(() => {
-    setOpen(false);
-    // Match the CSS duration so the panel finishes sliding before we unmount.
-    setTimeout(() => router.back(), 200);
+    setClosing(true);
+    // Match the exit transition so the panel finishes sliding before unmount.
+    setTimeout(() => router.back(), 240);
   }, [router]);
 
   // Escape closes (native, no dependency).
@@ -46,20 +41,24 @@ export function TaskDetailDrawer({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Görev detayı">
-      {/* Backdrop */}
+      {/* Backdrop — fades in via anim-fade, transitions out on close. */}
       <button
         type="button"
         aria-label="Kapat"
         onClick={close}
-        className={`absolute inset-0 bg-ink/25 transition-opacity duration-200 ${
-          open ? "opacity-100" : "opacity-0"
+        className={`absolute inset-0 bg-ink/25 ${
+          closing
+            ? "opacity-0 transition-opacity duration-200 ease-standard"
+            : "anim-fade"
         }`}
       />
 
       {/* Right panel — full width on mobile, a fixed-max sheet on desktop. */}
       <div
-        className={`absolute inset-y-0 right-0 flex w-full flex-col bg-surface border-l border-line shadow-[var(--shadow-drawer)] transition-transform duration-200 ease-out will-change-transform sm:w-[min(720px,100vw)] lg:w-[min(760px,calc(100vw-260px))] ${
-          open ? "translate-x-0" : "translate-x-full"
+        className={`absolute inset-y-0 right-0 flex w-full flex-col bg-surface border-l border-line shadow-[var(--shadow-drawer)] will-change-transform sm:w-[min(720px,100vw)] lg:w-[min(760px,calc(100vw-260px))] ${
+          closing
+            ? "translate-x-full transition-transform duration-[240ms] ease-emphasized"
+            : "anim-drawer-in"
         }`}
       >
         {/* Close affordance — pinned; TaskDetail keeps its own "Panoya dön" link. */}
@@ -67,7 +66,7 @@ export function TaskDetailDrawer({ children }: { children: React.ReactNode }) {
           type="button"
           onClick={close}
           aria-label="Kapat"
-          className="absolute right-3 top-3 z-10 grid h-8 w-8 place-items-center rounded-full bg-surface/90 backdrop-blur text-muted hover:text-ink hover:bg-surface-muted border border-line shadow-card transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring/60"
+          className="absolute right-3 top-3 z-10 grid h-8 w-8 place-items-center rounded-full bg-surface/90 backdrop-blur text-muted border border-line shadow-card transition-all duration-150 ease-standard hover:text-ink hover:bg-surface-muted hover:border-line-strong active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring/60"
         >
           <X size={16} />
         </button>

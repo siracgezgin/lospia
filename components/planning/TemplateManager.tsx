@@ -30,7 +30,7 @@ type Draft = {
 const DAY_LABELS = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
 
 const inputCls =
-  "w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-[13px] text-ink placeholder:text-subtle focus:outline-none focus:ring-2 focus:ring-brand-ring focus:border-brand-ring";
+  "w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[13px] text-ink placeholder:text-subtle transition-[border-color,box-shadow] duration-150 hover:border-line-strong focus:outline-none focus:ring-2 focus:ring-brand-ring focus:border-brand-ring";
 
 const EMPTY: Draft = {
   weekday: 0, time_slot: "09:00", category: "uretim",
@@ -109,25 +109,25 @@ export function TemplateManager({ templates, members, memberNames, onClose, onCh
   for (const t of templates) byDay[t.weekday]?.push(t);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:p-8" onClick={onClose}>
-      <div className="w-full max-w-3xl rounded-2xl border border-line bg-surface shadow-drawer" onClick={(e) => e.stopPropagation()}>
+    <div className="anim-fade fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-[2px] sm:p-8" onClick={onClose}>
+      <div className="anim-scale-in w-full max-w-3xl rounded-2xl border border-line bg-surface shadow-drawer" onClick={(e) => e.stopPropagation()}>
         {/* Başlık */}
         <div className="flex items-center justify-between border-b border-line px-5 py-3">
           <div>
-            <h2 className="text-[15px] font-semibold text-ink">Hafta Şablonları</h2>
+            <h2 className="text-[15px] font-semibold tracking-tight text-ink">Hafta Şablonları</h2>
             <p className="text-[12px] text-subtle">
               Tekrar eden ritim: gün + saat + kategori. “Haftayı şablondan kur” bu listeden toplantı üretir.
             </p>
           </div>
-          <button onClick={onClose} className="rounded-md p-1.5 text-subtle hover:bg-surface-muted hover:text-ink"><X size={17} /></button>
+          <button onClick={onClose} className="rounded-md p-1.5 text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-95" aria-label="Kapat"><X size={17} /></button>
         </div>
 
         <div className="max-h-[70vh] space-y-4 overflow-y-auto px-5 py-4">
-          {error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] text-red-700">{error}</div>}
+          {error && <div className="anim-fade-down rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] font-medium text-red-700">{error}</div>}
 
           {/* Düzenleyici */}
           {draft && (
-            <div className="rounded-xl border border-line-strong bg-surface-muted/40 p-3">
+            <div className="anim-fade-down rounded-xl border border-line-strong bg-surface-muted/40 p-3.5">
               <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
                 <label className="block">
                   <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">Gün</span>
@@ -153,11 +153,14 @@ export function TemplateManager({ templates, members, memberNames, onClose, onCh
                       type="button"
                       onClick={() => setDraft({ ...draft, category: c.key })}
                       className={cn(
-                        "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-medium transition",
-                        draft.category === c.key ? cn(c.chip, "ring-2 ring-offset-1 ring-ink/20") : "bg-surface-muted text-muted hover:text-ink",
+                        "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-medium transition-all duration-150 ease-standard active:scale-[0.97]",
+                        draft.category === c.key
+                          ? cn(c.chip, "font-semibold shadow-sm ring-1 ring-black/10")
+                          : "bg-surface-muted text-muted hover:bg-surface-hover hover:text-ink",
                       )}
+                      aria-pressed={draft.category === c.key}
                     >
-                      <span className={cn("h-2 w-2 rounded-full", c.dot)} />
+                      <span className={cn("h-2 w-2 rounded-full ring-1 ring-inset ring-black/10 transition-transform duration-150", draft.category === c.key && "scale-110", c.dot)} />
                       {c.label}
                     </button>
                   ))}
@@ -174,16 +177,16 @@ export function TemplateManager({ templates, members, memberNames, onClose, onCh
                 </label>
               </div>
               <div className="mt-3 flex items-center justify-between">
-                <label className="inline-flex cursor-pointer items-center gap-2 text-[12.5px] text-muted">
-                  <input type="checkbox" checked={draft.active} onChange={(e) => setDraft({ ...draft, active: e.target.checked })} className="h-3.5 w-3.5 accent-current" />
+                <label className="inline-flex cursor-pointer select-none items-center gap-2 text-[12.5px] text-muted transition-colors duration-150 hover:text-ink">
+                  <input type="checkbox" checked={draft.active} onChange={(e) => setDraft({ ...draft, active: e.target.checked })} className="h-3.5 w-3.5 accent-brand" />
                   Aktif (haftaya kurulur)
                 </label>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => setDraft(null)} className="rounded-lg px-3 py-1.5 text-[12.5px] font-medium text-muted hover:text-ink">Vazgeç</button>
+                  <button onClick={() => setDraft(null)} className="rounded-lg px-3 py-1.5 text-[12.5px] font-medium text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-[0.98]">Vazgeç</button>
                   <button
                     onClick={handleSave}
                     disabled={isSaving}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3.5 py-1.5 text-[12.5px] font-medium text-white transition-colors hover:bg-brand-strong disabled:opacity-60"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3.5 py-1.5 text-[12.5px] font-medium text-white shadow-xs transition-all duration-150 hover:bg-brand-strong active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60"
                   >
                     {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Kaydet
                   </button>
@@ -194,7 +197,7 @@ export function TemplateManager({ templates, members, memberNames, onClose, onCh
 
           {/* Liste — güne göre */}
           {templates.length === 0 && !draft && (
-            <p className="rounded-lg border border-dashed border-line px-3 py-6 text-center text-[13px] text-subtle">
+            <p className="anim-fade-up rounded-xl border border-dashed border-line-strong bg-surface-muted/30 px-4 py-8 text-center text-[13px] leading-relaxed text-subtle">
               Henüz şablon yok. Aslı Hanım&apos;ın ritmini kurun: örn. her gün 09:00 <b>Üretim</b>,
               Pzt/Çar/Cum 10:00 <b>AI</b>, her gün 11:00 <b>Sales</b>, 12:00 <b>Sistem</b>.
             </p>
@@ -202,12 +205,16 @@ export function TemplateManager({ templates, members, memberNames, onClose, onCh
           {byDay.map((list, day) =>
             list.length === 0 ? null : (
               <div key={day}>
-                <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-subtle">{DAY_LABELS[day]}</h3>
+                <h3 className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-subtle">
+                  <span className="shrink-0">{DAY_LABELS[day]}</span>
+                  <span className="rounded-full bg-surface-sunken px-1.5 py-px text-[10px] font-semibold tabular-nums text-subtle">{list.length}</span>
+                  <span className="h-px min-w-4 flex-1 bg-hairline" aria-hidden="true" />
+                </h3>
                 <div className="space-y-1.5">
                   {list.map((t) => {
                     const meta = categoryMeta(t.category);
                     return (
-                      <div key={t.id} className={cn("flex items-center gap-2 rounded-lg border px-2.5 py-2", meta.cell, !t.active && "opacity-50")}>
+                      <div key={t.id} className={cn("flex items-center gap-2 rounded-lg border px-2.5 py-2 shadow-xs transition-all duration-200 ease-standard hover:-translate-y-px hover:shadow-card-hover", meta.cell, !t.active && "opacity-50 hover:opacity-75")}>
                         <span className="w-12 shrink-0 text-[12px] font-semibold tabular-nums text-ink/70">{t.time_slot}</span>
                         <span className={cn("min-w-0 flex-1 truncate text-[12.5px] font-semibold", meta.title)}>
                           {meta.label}{t.title ? ` / ${t.title}` : ""}
@@ -217,11 +224,11 @@ export function TemplateManager({ templates, members, memberNames, onClose, onCh
                           <MemberInitials ids={t.participant_ids} memberNames={memberNames} className="shrink-0" />
                         )}
                         <div className="flex shrink-0 items-center gap-0.5">
-                          <button onClick={() => handleToggleActive(t)} className="rounded p-1 text-ink/50 hover:text-ink" title={t.active ? "Pasifleştir" : "Aktifleştir"}>
+                          <button onClick={() => handleToggleActive(t)} className="rounded-md p-1 text-ink/50 transition-all duration-150 hover:bg-black/5 hover:text-ink active:scale-95" title={t.active ? "Pasifleştir" : "Aktifleştir"}>
                             {busyId === t.id && isSaving ? <Loader2 size={13} className="animate-spin" /> : <Power size={13} />}
                           </button>
-                          <button onClick={() => openEdit(t)} className="rounded p-1 text-ink/50 hover:text-ink" title="Düzenle"><Pencil size={13} /></button>
-                          <button onClick={() => handleDelete(t)} className="rounded p-1 text-ink/50 hover:text-red-600" title="Sil"><Trash2 size={13} /></button>
+                          <button onClick={() => openEdit(t)} className="rounded-md p-1 text-ink/50 transition-all duration-150 hover:bg-black/5 hover:text-ink active:scale-95" title="Düzenle"><Pencil size={13} /></button>
+                          <button onClick={() => handleDelete(t)} className="rounded-md p-1 text-ink/50 transition-all duration-150 hover:bg-red-500/10 hover:text-red-600 active:scale-95" title="Sil"><Trash2 size={13} /></button>
                         </div>
                       </div>
                     );
@@ -234,10 +241,10 @@ export function TemplateManager({ templates, members, memberNames, onClose, onCh
 
         {/* Alt bar */}
         <div className="flex items-center justify-between border-t border-line px-5 py-3">
-          <button onClick={openNew} className="inline-flex items-center gap-1 text-[13px] font-medium text-brand hover:text-brand-strong">
+          <button onClick={openNew} className="-ml-2 inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[13px] font-medium text-brand transition-all duration-150 hover:bg-brand-soft hover:text-brand-strong active:scale-[0.98]">
             <Plus size={14} /> Şablon ekle
           </button>
-          <button onClick={onClose} className="rounded-lg border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-muted hover:text-ink">
+          <button onClick={onClose} className="rounded-lg border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-muted shadow-xs transition-all duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]">
             Kapat
           </button>
         </div>

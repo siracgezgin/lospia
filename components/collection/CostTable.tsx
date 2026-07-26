@@ -26,11 +26,14 @@ interface Props {
 }
 
 const cellInput =
-  "w-full min-w-0 rounded-md border border-transparent bg-transparent px-1.5 py-1 text-[12.5px] text-ink text-center tabular-nums hover:border-line focus:border-brand-ring focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand-ring";
+  "w-full min-w-0 rounded-md border border-transparent bg-transparent px-1.5 py-1 text-[12.5px] text-ink text-center tabular-nums transition-[border-color,background-color,box-shadow] duration-150 hover:border-line focus:border-brand-ring focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand-ring";
 const priceInput =
-  "w-full rounded-md border border-line bg-surface px-2 py-1 text-[12.5px] text-ink text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-brand-ring focus:border-brand-ring";
+  "w-full rounded-md border border-line bg-surface px-2 py-1 text-[12.5px] text-ink text-right tabular-nums transition-[border-color,box-shadow] duration-150 hover:border-line-strong focus:outline-none focus:ring-2 focus:ring-brand-ring focus:border-brand-ring";
 // Hücreler arası dikey çizgi
 const colBorder = "border-l border-line/70";
+// Sticky başlık/dip hücreleri — tablo border-separate olduğundan çizgiler hücrede yaşar.
+const thSticky = "sticky top-0 z-10 border-b-2 border-line-strong bg-surface-muted";
+const tfSticky = "sticky bottom-0 z-10 border-t-2 border-line-strong bg-surface-muted";
 
 export function CostTable({ rows }: Props) {
   // Fiyat + beden dağılımı yerel kopyaları — blur'da föye geri yazılır (tek kaynak).
@@ -107,7 +110,7 @@ export function CostTable({ rows }: Props) {
           rows.length > 0 ? (
             <a
               href="/collection/maliyet/export"
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-muted transition-colors hover:bg-surface-muted hover:text-ink"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-muted transition-[background-color,border-color,color,transform] duration-150 ease-standard hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
               title="Maliyet tablosunu Excel olarak indir"
             >
               <FileSpreadsheet size={15} /> Excel indir
@@ -120,7 +123,7 @@ export function CostTable({ rows }: Props) {
       <div className="mb-4 flex items-center gap-1 border-b border-line">
         <Link
           href="/collection"
-          className="flex items-center gap-1.5 border-b-2 border-transparent px-3 py-2 text-[13px] font-medium text-muted transition-colors hover:text-ink"
+          className="flex items-center gap-1.5 border-b-2 border-transparent px-3 py-2 text-[13px] font-medium text-muted transition-colors duration-150 hover:border-line-strong hover:text-ink"
         >
           <ClipboardList size={15} /> Üretim Föyleri
         </Link>
@@ -130,32 +133,37 @@ export function CostTable({ rows }: Props) {
       </div>
 
       {rows.length === 0 ? (
-        <div className="rounded-2xl border border-line bg-surface px-6 py-14 text-center shadow-card">
+        <div className="anim-fade-up rounded-2xl border border-line bg-surface px-6 py-14 text-center shadow-card">
+          <div className="mx-auto mb-3 grid size-11 place-items-center rounded-full bg-surface-sunken text-subtle">
+            <Wallet size={20} />
+          </div>
           <p className="text-[13.5px] text-subtle">Henüz ürün yok. Koleksiyona föy ekleyin.</p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-line-strong bg-surface shadow-card">
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-[13px]">
+        <div className="anim-fade-up overflow-hidden rounded-2xl border border-line-strong bg-surface shadow-card">
+          {/* border-separate: sticky başlık/dip hücrelerinde çizgilerin kayarken
+              kaybolmaması için (border-collapse sticky ile çizgiyi geride bırakır). */}
+          <div className="max-h-[70vh] overflow-auto">
+            <table className="w-full border-separate border-spacing-0 text-[13px]">
               <thead>
-                <tr className="border-b-2 border-line-strong bg-surface-muted text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  <th className="px-3 py-2.5 text-left">Ürün</th>
+                <tr className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+                  <th className={cn(thSticky, "px-3 py-2.5 text-left")}>Ürün</th>
                   {sizes.map((s) => (
-                    <th key={s} className={cn("w-14 px-1 py-2.5 text-center", colBorder)}>{s}</th>
+                    <th key={s} className={cn(thSticky, "w-14 px-1 py-2.5 text-center", colBorder)}>{s}</th>
                   ))}
-                  <th className={cn("px-2 py-2.5 text-right", colBorder)}>Toplam Adet</th>
-                  <th className={cn("w-32 px-2 py-2.5 text-right", colBorder)}>Birim Fiyat</th>
-                  <th className={cn("px-3 py-2.5 text-right", colBorder)}>Toplam</th>
-                  <th className="w-8 px-2 py-2.5" />
+                  <th className={cn(thSticky, "px-2 py-2.5 text-right", colBorder)}>Toplam Adet</th>
+                  <th className={cn(thSticky, "w-32 px-2 py-2.5 text-right", colBorder)}>Birim Fiyat</th>
+                  <th className={cn(thSticky, "px-3 py-2.5 text-right", colBorder)}>Toplam</th>
+                  <th className={cn(thSticky, "w-8 px-2 py-2.5")} />
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="[&>tr:last-child>td]:border-b-0 [&>tr>td]:border-b [&>tr>td]:border-b-hairline">
                 {rows.map((r) => {
                   const qbs = qtyBySizeOf(r.id);
                   return (
-                    <tr key={r.id} className="border-b border-line/60 last:border-0 hover:bg-surface-muted/30">
+                    <tr key={r.id} className="transition-colors duration-150 hover:bg-surface-hover/60">
                       <td className="px-3 py-1.5">
-                        <Link href={`/production/${r.id}`} className="font-medium text-ink hover:text-brand-strong">
+                        <Link href={`/production/${r.id}`} className="font-medium text-ink transition-colors duration-150 hover:text-brand-strong">
                           {r.title}
                         </Link>
                         {r.product_kind && <span className="ml-2 text-[11px] text-subtle">{r.product_kind}</span>}
@@ -192,7 +200,7 @@ export function CostTable({ rows }: Props) {
                         {savingId === r.id ? (
                           <Loader2 size={14} className="mx-auto animate-spin text-subtle" />
                         ) : savedId === r.id ? (
-                          <Check size={14} className="mx-auto text-emerald-600" />
+                          <Check size={14} className="anim-scale-in mx-auto text-success" />
                         ) : null}
                       </td>
                     </tr>
@@ -200,14 +208,14 @@ export function CostTable({ rows }: Props) {
                 })}
               </tbody>
               <tfoot>
-                <tr className="border-t-2 border-line-strong bg-surface-muted">
-                  <td className="px-3 py-3 text-[13px] font-bold uppercase tracking-wide text-ink" colSpan={sizes.length + 3}>
+                <tr>
+                  <td className={cn(tfSticky, "px-3 py-3 text-[12px] font-bold uppercase tracking-wider text-ink")} colSpan={sizes.length + 3}>
                     Genel Toplam
                   </td>
-                  <td className={cn("px-3 py-3 text-right text-[15px] font-bold tabular-nums text-ink", colBorder)}>
+                  <td className={cn(tfSticky, "px-3 py-3 text-right text-[15px] font-bold tabular-nums tracking-tight text-ink", colBorder)}>
                     {formatMoney(grandTotal)}
                   </td>
-                  <td />
+                  <td className={tfSticky} />
                 </tr>
               </tfoot>
             </table>

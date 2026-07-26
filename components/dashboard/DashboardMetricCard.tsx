@@ -40,9 +40,9 @@ export function DashboardMetricCard({
     <>
       <div className="flex items-center gap-2 text-subtle">
         {icon}
-        <span className="text-xs font-medium text-muted">{label}</span>
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted truncate">{label}</span>
       </div>
-      <p className={cn("mt-2 text-3xl font-semibold tabular-nums", TONE_TEXT[tone])}>{value}</p>
+      <p className={cn("mt-2.5 text-3xl font-bold tracking-tight tabular-nums leading-none", TONE_TEXT[tone])}>{value}</p>
     </>
   );
   const base = "block rounded-card border border-line bg-surface shadow-card p-4";
@@ -52,8 +52,8 @@ export function DashboardMetricCard({
       title={title}
       className={cn(
         base,
-        "transition-[border-color,background-color,box-shadow] duration-[var(--duration-fast)] ease-standard",
-        "hover:border-line-strong hover:bg-surface-hover hover:shadow-card-hover",
+        "transition-[border-color,background-color,box-shadow,transform] duration-200 ease-standard",
+        "hover:border-line-strong hover:shadow-card-hover hover:-translate-y-px active:translate-y-0 active:shadow-card",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring/40 focus-visible:ring-offset-1",
       )}
     >

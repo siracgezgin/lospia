@@ -113,7 +113,9 @@ function fromSheet(s: ProductionSheet): ProductionSheetInput {
 
 // ── Field primitives ─────────────────────────────────────────────────────────
 const inputCls =
-  "w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-[13px] text-ink placeholder:text-subtle focus:outline-none focus:ring-2 focus:ring-brand-ring focus:border-brand-ring";
+  "w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[13px] text-ink placeholder:text-subtle " +
+  "transition-[color,background-color,border-color,box-shadow] duration-150 ease-standard " +
+  "hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40";
 
 function LabeledField({
   label, value, onChange, placeholder,
@@ -143,9 +145,10 @@ function TextArea({
 /** Föy bölümü — çerçeveli, üstte başlık şeridi (Excel föyü hissi). */
 function Section({ title, children, className }: { title: string; children: React.ReactNode; className?: string }) {
   return (
-    <section className={cn("overflow-hidden rounded-lg border border-line-strong bg-surface", className)}>
-      <div className="border-b border-line-strong bg-surface-muted px-3 py-1.5">
-        <h2 className="text-[12px] font-bold uppercase tracking-wide text-ink">{title}</h2>
+    <section className={cn("overflow-hidden rounded-lg border border-line bg-surface shadow-card transition-shadow duration-200 ease-standard", className)}>
+      <div className="flex items-center gap-2 border-b border-line bg-surface-muted px-3 py-2">
+        <span aria-hidden className="h-3.5 w-[3px] shrink-0 rounded-full bg-brand" />
+        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted">{title}</h2>
       </div>
       <div className="p-3">{children}</div>
     </section>
@@ -251,7 +254,7 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
     <button
       onClick={handleSave}
       disabled={isSaving || isDeleting}
-      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand-strong disabled:opacity-60"
+      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-[13px] font-medium text-white shadow-xs transition-all duration-150 hover:bg-brand-strong active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60 disabled:shadow-none"
     >
       {isSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
       {isNew ? "Föyü oluştur" : "Kaydet"}
@@ -272,9 +275,9 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
       </div>
 
       {/* Üst bar — eylemler sabit kalır (sticky) ki uzun föyde her zaman erişilebilir */}
-      <div className="sticky top-0 z-20 -mx-4 mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-line bg-app/85 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+      <div className="sticky top-0 z-20 -mx-4 mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-line bg-app/85 px-4 py-3 shadow-pop backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
         <div className="min-w-0">
-          <Link href="/collection" className="mb-1 inline-flex items-center gap-1 text-[12.5px] text-subtle transition-colors hover:text-ink">
+          <Link href="/collection" className="mb-1 inline-flex items-center gap-1 rounded-md text-[12.5px] text-subtle transition-colors duration-150 hover:text-ink">
             <ArrowLeft size={13} /> Koleksiyon
           </Link>
           {!isNew && sheet && (
@@ -293,7 +296,7 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
             <button
               onClick={handleDelete}
               disabled={isDeleting || isSaving}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-[13px] font-medium text-muted transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-700 disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-[13px] font-medium text-muted shadow-xs transition-all duration-150 hover:border-danger/40 hover:bg-danger/10 hover:text-danger active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60"
               title="Föyü sil"
             >
               {isDeleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
@@ -303,7 +306,7 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
           {!isNew && sheet && (
             <a
               href={`/production/${sheet.id}/export`}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-muted transition-colors hover:bg-surface-muted hover:text-ink"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-muted shadow-xs transition-all duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
               title="Föyü Excel (.xlsx) olarak indir"
             >
               <FileDown size={15} /> <span className="hidden sm:inline">Excel indir</span>
@@ -314,14 +317,14 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
       </div>
 
       {error && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] text-red-700">{error}</div>
+        <div className="anim-fade-down mb-4 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-[12.5px] font-medium text-danger">{error}</div>
       )}
       {imgError && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] text-red-700">Görsel kaydedilemedi: {imgError}</div>
+        <div className="anim-fade-down mb-4 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-[12.5px] font-medium text-danger">Görsel kaydedilemedi: {imgError}</div>
       )}
 
       {/* ── Föy belgesi ── */}
-      <div className="space-y-3 rounded-2xl border border-line-strong bg-surface p-4 shadow-card sm:p-6">
+      <div className="stagger-children space-y-3 rounded-2xl border border-line-strong bg-surface p-4 shadow-card sm:p-6">
         {/* Başlık şeridi — solda başlık, sağda AF logosu (koyu band → beyaz logo) */}
         <div className="flex items-center justify-between gap-3 rounded-xl bg-ink px-5 py-3">
           <div className="flex items-center gap-2.5 text-white">
@@ -337,7 +340,7 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
         </div>
 
         {/* Ürün bilgileri — 2 kolon (Excel'deki gibi) */}
-        <div className="grid grid-cols-1 gap-x-5 gap-y-2 rounded-lg border border-line-strong p-3 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-x-5 gap-y-2 rounded-lg border border-line p-3 md:grid-cols-2">
           <div className="space-y-2">
             <LabeledField label="Föy başlığı *" value={form.title} onChange={(v) => set("title", v)} placeholder="Beyaz Dantel Etek" />
             <LabeledField label="Ürün kodu" value={form.product_code ?? ""} onChange={(v) => set("product_code", v)} />
@@ -399,14 +402,14 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
             <div className="space-y-1.5">
               {form.measurements.map((row, i) => (
                 <div key={i} className="flex items-center gap-1.5">
-                  <input className={cn(inputCls, "w-10 px-1 text-center")} value={row.no} onChange={(e) => updateMeasurement(i, { no: e.target.value })} />
+                  <input className={cn(inputCls, "w-10 px-1 text-center tabular-nums")} value={row.no} onChange={(e) => updateMeasurement(i, { no: e.target.value })} />
                   <input className={cn(inputCls, "flex-1")} value={row.label} onChange={(e) => updateMeasurement(i, { label: e.target.value })} placeholder="Ölçü adı" />
-                  <input className={cn(inputCls, "w-20 text-center")} value={row.value} onChange={(e) => updateMeasurement(i, { value: e.target.value })} placeholder="cm" />
-                  <button onClick={() => removeMeasurement(i)} className="shrink-0 rounded p-1 text-subtle hover:text-red-600" title="Sil"><Trash2 size={13} /></button>
+                  <input className={cn(inputCls, "w-20 text-center tabular-nums")} value={row.value} onChange={(e) => updateMeasurement(i, { value: e.target.value })} placeholder="cm" />
+                  <button onClick={() => removeMeasurement(i)} className="shrink-0 rounded-md p-1 text-subtle transition-colors duration-150 hover:bg-danger/10 hover:text-danger" title="Sil"><Trash2 size={13} /></button>
                 </div>
               ))}
             </div>
-            <button onClick={addMeasurement} className="mt-2 inline-flex items-center gap-1 text-[12px] font-medium text-brand hover:text-brand-strong">
+            <button onClick={addMeasurement} className="mt-2 -ml-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[12px] font-medium text-brand transition-colors duration-150 hover:bg-brand-soft hover:text-brand-strong">
               <Plus size={12} /> Satır ekle
             </button>
           </Section>
@@ -421,14 +424,14 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
           <div className="space-y-1.5">
             {form.delivered_items.map((row, i) => (
               <div key={i} className="flex items-center gap-1.5">
-                <input className={cn(inputCls, "w-10 px-1 text-center")} value={row.no} onChange={(e) => updateDelivered(i, { no: e.target.value })} />
+                <input className={cn(inputCls, "w-10 px-1 text-center tabular-nums")} value={row.no} onChange={(e) => updateDelivered(i, { no: e.target.value })} />
                 <input className={cn(inputCls, "flex-1")} value={row.label} onChange={(e) => updateDelivered(i, { label: e.target.value })} placeholder="Ürün (ör. Karton Etiket)" />
-                <input className={cn(inputCls, "w-24 text-center")} value={row.qty} onChange={(e) => updateDelivered(i, { qty: e.target.value })} placeholder="Adet" />
-                <button onClick={() => removeDelivered(i)} className="shrink-0 rounded p-1 text-subtle hover:text-red-600" title="Sil"><Trash2 size={13} /></button>
+                <input className={cn(inputCls, "w-24 text-center tabular-nums")} value={row.qty} onChange={(e) => updateDelivered(i, { qty: e.target.value })} placeholder="Adet" />
+                <button onClick={() => removeDelivered(i)} className="shrink-0 rounded-md p-1 text-subtle transition-colors duration-150 hover:bg-danger/10 hover:text-danger" title="Sil"><Trash2 size={13} /></button>
               </div>
             ))}
           </div>
-          <button onClick={addDelivered} className="mt-2 inline-flex items-center gap-1 text-[12px] font-medium text-brand hover:text-brand-strong">
+          <button onClick={addDelivered} className="mt-2 -ml-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[12px] font-medium text-brand transition-colors duration-150 hover:bg-brand-soft hover:text-brand-strong">
             <Plus size={12} /> Satır ekle
           </button>
         </Section>
@@ -449,13 +452,13 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
               </colgroup>
               <thead>
                 <tr className="bg-surface-muted">
-                  <th className="border border-line-strong px-2 py-1.5 text-left text-[10.5px] font-bold uppercase tracking-wide text-subtle">Satır</th>
+                  <th className="border border-line-strong px-2 py-1.5 text-left text-[10.5px] font-semibold uppercase tracking-wider text-subtle">Satır</th>
                   {sd.sizes.map((s, i) => (
-                    <th key={i} className="border border-line-strong px-1 py-1.5 text-center text-[11.5px] font-bold text-ink">
+                    <th key={i} className="border border-line-strong px-1 py-1.5 text-center text-[11.5px] font-semibold text-ink">
                       {s}
                     </th>
                   ))}
-                  <th className="border border-line-strong px-1 py-1.5 text-center text-[10.5px] font-bold uppercase tracking-wide text-subtle">Toplam</th>
+                  <th className="border border-line-strong px-1 py-1.5 text-center text-[10.5px] font-semibold uppercase tracking-wider text-subtle">Toplam</th>
                   <th className="w-9" />
                 </tr>
               </thead>
@@ -474,14 +477,14 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
                       <input className="w-full bg-transparent px-1 py-1.5 text-center font-semibold tabular-nums text-ink focus:bg-surface focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-ring" value={row.total} onChange={(e) => setDistTotal(ri, e.target.value)} placeholder="—" inputMode="numeric" />
                     </td>
                     <td className="text-center align-middle">
-                      <button onClick={() => removeDistRow(ri)} className="rounded p-1 text-subtle hover:text-red-600" title="Satırı sil"><Trash2 size={12} /></button>
+                      <button onClick={() => removeDistRow(ri)} className="rounded-md p-1 text-subtle transition-colors duration-150 hover:bg-danger/10 hover:text-danger" title="Satırı sil"><Trash2 size={12} /></button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <button onClick={addDistRow} className="mt-2 inline-flex items-center gap-1 text-[12px] font-medium text-brand hover:text-brand-strong">
+          <button onClick={addDistRow} className="mt-2 -ml-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[12px] font-medium text-brand transition-colors duration-150 hover:bg-brand-soft hover:text-brand-strong">
             <Plus size={12} /> Satır ekle
           </button>
         </Section>
@@ -502,13 +505,13 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
                   <LabeledField label="Not" value={p.notes ?? ""} onChange={(v) => setP({ notes: v })} placeholder="KDV hariç, kargo vb." />
                 </div>
                 {/* Otomatik toplam üretim maliyeti — beden dağılımı toplam adedi × birim fiyat */}
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line-strong bg-surface-muted px-3 py-2 text-[12.5px]">
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-surface-muted px-3 py-2 text-[12.5px]">
                   <span className="text-muted">
-                    Toplam adet: <span className="font-semibold text-ink">{qty || "—"}</span>
+                    Toplam adet: <span className="font-semibold text-ink tabular-nums">{qty || "—"}</span>
                     <span className="mx-1.5 text-subtle">×</span>
-                    Birim: <span className="font-semibold text-ink">{formatMoney(parseMoney(p.unit_price))}</span>
+                    Birim: <span className="font-semibold text-ink tabular-nums">{formatMoney(parseMoney(p.unit_price))}</span>
                   </span>
-                  <span className="font-bold text-ink">
+                  <span className="font-bold text-ink tabular-nums">
                     Üretim maliyeti: {formatMoney(lineTotal)}
                   </span>
                 </div>

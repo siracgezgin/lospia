@@ -186,7 +186,7 @@ export function CrmView({
           if (!d) return <span className="text-subtle">—</span>;
           const overdue = d < new Date().toISOString().slice(0, 10);
           return (
-            <span className={cn("text-[12.5px]", overdue ? "font-medium text-danger" : "text-muted")}>
+            <span className={cn("text-[12.5px] tabular-nums whitespace-nowrap", overdue ? "font-medium text-danger" : "text-muted")}>
               {formatDateOnlyTR(d)}
             </span>
           );
@@ -201,7 +201,7 @@ export function CrmView({
           return (
             <Link
               href={`/list?person=${info.row.original.id}`}
-              className="inline-flex items-center gap-1 text-[12.5px] font-medium text-brand hover:text-brand-strong"
+              className="inline-flex items-center gap-1 text-[12.5px] font-medium tabular-nums text-brand transition-colors duration-150 hover:text-brand-strong"
             >
               {n} ilişkili görev <ExternalLink size={11} />
             </Link>
@@ -217,7 +217,7 @@ export function CrmView({
                 <div className="flex items-center justify-end gap-1">
                   <button
                     onClick={() => openEdit(info.row.original)}
-                    className="rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-muted hover:text-ink"
+                    className="rounded-md p-1.5 text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-95"
                     title="Düzenle"
                   >
                     <Pencil size={14} />
@@ -225,7 +225,7 @@ export function CrmView({
                   <button
                     onClick={() => handleDelete(info.row.original)}
                     disabled={isDeleting}
-                    className="rounded-md p-1.5 text-subtle transition-colors hover:bg-[#fbe6e2] hover:text-danger"
+                    className="rounded-md p-1.5 text-subtle transition-colors duration-150 hover:bg-[#fbe6e2] hover:text-danger active:scale-95 disabled:pointer-events-none disabled:opacity-50"
                     title="Sil"
                   >
                     <Trash2 size={14} />
@@ -267,12 +267,12 @@ export function CrmView({
                     : undefined
                 }
                 className={cn(
-                  "inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-medium transition-colors",
+                  "inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-medium transition-colors duration-150 active:scale-[0.98]",
                   setupRequired
                     ? "cursor-not-allowed border-line bg-surface-sunken text-subtle"
                     : showMatching
                       ? "border-brand-ring bg-brand-soft text-brand-strong"
-                      : "border-line text-muted hover:bg-surface-muted",
+                      : "border-line text-muted hover:border-line-strong hover:bg-surface-muted hover:text-ink",
                 )}
               >
                 <LinkIcon size={14} />
@@ -290,7 +290,7 @@ export function CrmView({
                     : undefined
                 }
                 className={cn(
-                  "inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[13px] font-medium transition-colors",
+                  "inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[13px] font-medium transition-colors duration-150 active:scale-[0.98]",
                   setupRequired
                     ? "cursor-not-allowed bg-brand/40 text-white"
                     : "bg-brand text-white hover:bg-brand-strong",
@@ -328,13 +328,13 @@ export function CrmView({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="İsim, kurum, e-posta ara…"
-            className="w-full rounded-lg border border-line bg-surface py-2 pl-9 pr-3 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-ring focus:border-brand-ring"
+            className="h-9 w-full rounded-lg border border-line bg-surface pl-9 pr-3 text-sm text-ink placeholder:text-subtle transition-colors duration-150 hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40"
           />
         </div>
         <select
           value={segment}
           onChange={(e) => setSegment(e.target.value)}
-          className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-muted focus:outline-none focus:ring-2 focus:ring-brand-ring"
+          className="h-9 rounded-lg border border-line bg-surface px-3 text-sm text-muted transition-colors duration-150 hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40"
         >
           <option value="">Tüm segmentler</option>
           {CRM_SEGMENTS.map((s) => (
@@ -344,22 +344,22 @@ export function CrmView({
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto rounded-2xl border border-line bg-surface shadow-card">
+      <div className="anim-fade-up overflow-x-auto rounded-2xl border border-line bg-surface shadow-card">
         <table className="w-full min-w-[820px] text-sm">
           <thead>
             {table.getHeaderGroups().map((hg) => (
-              <tr key={hg.id} className="border-b border-line bg-surface-muted">
+              <tr key={hg.id} className="select-none border-b border-line bg-surface-muted">
                 {hg.headers.map((header) => {
                   const canSort = header.column.getCanSort();
                   return (
                     <th
                       key={header.id}
-                      className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-subtle whitespace-nowrap"
+                      className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-subtle whitespace-nowrap"
                     >
                       {header.isPlaceholder ? null : canSort ? (
                         <button
                           onClick={header.column.getToggleSortingHandler()}
-                          className="inline-flex items-center gap-1 hover:text-muted"
+                          className="inline-flex items-center gap-1 transition-colors duration-150 hover:text-muted"
                         >
                           {flexRender(header.column.columnDef.header, header.getContext())}
                           <ArrowUpDown size={11} className="opacity-50" />
@@ -376,15 +376,22 @@ export function CrmView({
           <tbody className="divide-y divide-hairline">
             {table.getRowModel().rows.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className="px-3 py-12 text-center text-[13px] text-subtle">
-                  {contacts.length === 0
-                    ? "Henüz bir ilişki kaydı yok."
-                    : "Filtreye uyan kayıt bulunamadı."}
+                <td colSpan={columns.length} className="px-3 py-14 text-center">
+                  <span className="anim-fade-up inline-flex flex-col items-center gap-2">
+                    <span className="grid h-10 w-10 place-items-center rounded-full bg-surface-sunken text-subtle">
+                      {contacts.length === 0 ? <Users size={18} strokeWidth={1.75} /> : <Search size={17} strokeWidth={1.75} />}
+                    </span>
+                    <span className="text-[13px] text-subtle">
+                      {contacts.length === 0
+                        ? "Henüz bir ilişki kaydı yok."
+                        : "Filtreye uyan kayıt bulunamadı."}
+                    </span>
+                  </span>
                 </td>
               </tr>
             ) : (
               table.getRowModel().rows.map((row) => (
-                <tr key={row.id} className="transition-colors hover:bg-surface-muted">
+                <tr key={row.id} className="transition-colors duration-150 hover:bg-surface-hover">
                   {row.getVisibleCells().map((cell) => (
                     <td key={cell.id} className="px-3 py-2.5 align-middle">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -397,7 +404,7 @@ export function CrmView({
         </table>
       </div>
 
-      <p className="mt-2 px-1 text-[12px] text-subtle">{filtered.length} kayıt gösteriliyor</p>
+      <p className="mt-2 px-1 text-[12px] tabular-nums text-subtle">{filtered.length} kayıt gösteriliyor</p>
 
       {modalOpen && (
         <CrmContactModal

@@ -29,6 +29,8 @@ export function ImageUploader({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<string | null>(null);
+  // Sürükle-bırak görsel durumu — kesikli çerçeve brand'e döner.
+  const [dragOver, setDragOver] = useState(false);
 
   // Bu bölüme ait görseller.
   const mine = images.filter((i) => i.section === section);
@@ -79,8 +81,24 @@ export function ImageUploader({
 
   const pick = () => inputRef.current?.click();
 
+  // Sürükle-bırak: mevcut yükleme akışını (handleFiles) aynen kullanır.
+  function onDragOver(e: React.DragEvent<HTMLDivElement>) {
+    if (!e.dataTransfer.types.includes("Files")) return;
+    e.preventDefault();
+    if (!busy && !dragOver) setDragOver(true);
+  }
+  function onDragLeave(e: React.DragEvent<HTMLDivElement>) {
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setDragOver(false);
+  }
+  function onDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setDragOver(false);
+    if (!busy) handleFiles(e.dataTransfer.files);
+  }
+
   return (
-    <div>
+    <div onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
       {label && (
         <span className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-subtle">{label}</span>
       )}
@@ -91,7 +109,7 @@ export function ImageUploader({
           {mine.length > 0 ? (
             <div className="space-y-2">
               {mine.map((img) => (
-                <div key={img.path} className="group relative overflow-hidden rounded-lg border border-line bg-surface-muted">
+                <div key={img.path} className="group relative overflow-hidden rounded-lg border border-line bg-surface-muted shadow-card transition-all duration-200 ease-standard hover:border-line-strong hover:shadow-card-hover">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={img.url}
@@ -101,14 +119,14 @@ export function ImageUploader({
                   />
                   <button
                     onClick={() => handleRemove(img)}
-                    className="absolute right-2 top-2 rounded-md bg-white/90 p-1.5 text-subtle shadow-card opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100"
+                    className="absolute right-2 top-2 rounded-md bg-white/90 p-1.5 text-subtle shadow-card opacity-0 transition-[opacity,color] duration-150 hover:text-danger focus-visible:opacity-100 group-hover:opacity-100"
                     title="Görseli sil"
                   >
                     <Trash2 size={14} />
                   </button>
                 </div>
               ))}
-              <button onClick={pick} disabled={busy} className="text-[12.5px] font-medium text-brand hover:text-brand-strong">
+              <button onClick={pick} disabled={busy} className="rounded-md text-[12.5px] font-medium text-brand transition-colors duration-150 hover:text-brand-strong disabled:pointer-events-none disabled:opacity-60">
                 {busy ? "Yükleniyor…" : "+ Başka görsel ekle"}
               </button>
             </div>
@@ -116,7 +134,13 @@ export function ImageUploader({
             <button
               onClick={pick}
               disabled={busy}
-              className="flex min-h-[220px] w-full flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-line bg-surface-muted/40 text-subtle transition-colors hover:border-brand-ring hover:text-muted"
+              className={cn(
+                "flex min-h-[220px] w-full flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed transition-all duration-200 ease-standard disabled:pointer-events-none",
+                dragOver
+                  ? "border-brand bg-brand-soft/70 text-brand-strong"
+                  : "border-line bg-surface-muted/40 text-subtle hover:border-brand-ring hover:bg-brand-soft/30 hover:text-muted",
+                busy && "anim-shimmer border-solid border-line bg-gradient-to-r from-surface-sunken via-surface-muted to-surface-sunken",
+              )}
             >
               {busy ? <Loader2 size={26} className="animate-spin" /> : <ImagePlus size={26} />}
               <span className="text-[12.5px] font-medium">Teknik çizim / görsel yükle</span>
@@ -128,17 +152,17 @@ export function ImageUploader({
         // Galeri: küçük kareler + ekle butonu.
         <div className="flex flex-wrap gap-2">
           {mine.map((img) => (
-            <div key={img.path} className="group relative h-20 w-20 overflow-hidden rounded-lg border border-line bg-surface-muted">
+            <div key={img.path} className="group relative h-20 w-20 overflow-hidden rounded-lg border border-line bg-surface-muted shadow-card transition-all duration-200 ease-standard hover:border-line-strong hover:shadow-card-hover">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={img.url}
                 alt=""
-                className="h-full w-full cursor-zoom-in object-cover"
+                className="h-full w-full cursor-zoom-in object-cover transition-transform duration-200 ease-standard group-hover:scale-[1.04]"
                 onClick={() => setLightbox(img.url)}
               />
               <button
                 onClick={() => handleRemove(img)}
-                className="absolute right-0.5 top-0.5 rounded bg-white/90 p-1 text-subtle opacity-0 shadow-card transition-opacity hover:text-red-600 group-hover:opacity-100"
+                className="absolute right-0.5 top-0.5 rounded bg-white/90 p-1 text-subtle opacity-0 shadow-card transition-[opacity,color] duration-150 hover:text-danger focus-visible:opacity-100 group-hover:opacity-100"
                 title="Görseli sil"
               >
                 <Trash2 size={11} />
@@ -148,7 +172,13 @@ export function ImageUploader({
           <button
             onClick={pick}
             disabled={busy}
-            className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-line text-subtle transition-colors hover:border-brand-ring hover:text-muted"
+            className={cn(
+              "flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed transition-all duration-200 ease-standard disabled:pointer-events-none",
+              dragOver
+                ? "border-brand bg-brand-soft/70 text-brand-strong"
+                : "border-line text-subtle hover:border-brand-ring hover:bg-brand-soft/40 hover:text-muted",
+              busy && "anim-shimmer border-solid border-line bg-gradient-to-r from-surface-sunken via-surface-muted to-surface-sunken",
+            )}
             title="Görsel ekle"
           >
             {busy ? <Loader2 size={18} className="animate-spin" /> : <ImagePlus size={18} />}
@@ -157,7 +187,7 @@ export function ImageUploader({
         </div>
       )}
 
-      {err && <p className="mt-1 text-[11.5px] text-red-600">{err}</p>}
+      {err && <p className="anim-fade-down mt-1 text-[11.5px] font-medium text-danger">{err}</p>}
 
       <input
         ref={inputRef}
@@ -171,14 +201,14 @@ export function ImageUploader({
       {/* Lightbox */}
       {lightbox && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6"
+          className="anim-fade fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6 backdrop-blur-[2px]"
           onClick={() => setLightbox(null)}
         >
-          <button className="absolute right-4 top-4 rounded-full bg-white/90 p-2 text-ink" onClick={() => setLightbox(null)}>
+          <button className="absolute right-4 top-4 rounded-full bg-white/90 p-2 text-ink shadow-pop transition-all duration-150 hover:bg-white active:scale-95" onClick={() => setLightbox(null)}>
             <X size={18} />
           </button>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={lightbox} alt="" className={cn("max-h-[90vh] max-w-[90vw] rounded-lg object-contain")} />
+          <img src={lightbox} alt="" className={cn("anim-scale-in max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-drawer")} />
         </div>
       )}
     </div>

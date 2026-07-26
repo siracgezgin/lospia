@@ -85,7 +85,7 @@ export function SheetDetailView({
             {canEditMeta && (
               <button
                 onClick={() => setMetaOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-[13px] font-medium text-muted transition-colors hover:bg-surface-muted hover:text-ink"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-[13px] font-medium text-muted transition-colors duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
               >
                 <Pencil size={13} />
                 Bilgileri düzenle
@@ -96,7 +96,7 @@ export function SheetDetailView({
                 onClick={handleSave}
                 disabled={isSaving || !dirty}
                 className={cn(
-                  "inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[13px] font-medium text-white transition-colors",
+                  "inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[13px] font-medium text-white transition-colors duration-150 active:scale-[0.98]",
                   isSaving || !dirty ? "bg-brand/50 cursor-not-allowed" : "bg-brand hover:bg-brand-strong",
                 )}
               >
@@ -125,7 +125,7 @@ export function SheetDetailView({
       </div>
 
       {readOnly && (
-        <div className="mb-3 flex items-start gap-2 rounded-xl border border-line bg-surface-muted/60 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-muted">
+        <div className="anim-fade-up mb-3 flex items-start gap-2 rounded-xl border border-line bg-surface-muted/60 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-muted">
           <Info size={14} className="mt-0.5 shrink-0" />
           {contentLocked
             ? sheet.status === "locked"
@@ -144,8 +144,9 @@ export function SheetDetailView({
 
       {message && (
         <div
+          role="status"
           className={cn(
-            "fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-full px-4 py-2 text-[12.5px] font-medium shadow-pop",
+            "anim-fade fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-full px-4 py-2 text-[12.5px] font-medium shadow-pop",
             message.kind === "ok" ? "bg-ink text-white" : "bg-[#971f12] text-white",
           )}
         >

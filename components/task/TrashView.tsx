@@ -4,7 +4,7 @@ import { useState, useTransition, useOptimistic } from "react";
 import Link from "next/link";
 import { Trash2, RotateCcw, X } from "lucide-react";
 import { restoreTask, permanentDeleteTask } from "@/lib/actions/tasks";
-import { cn } from "@/lib/utils/cn";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { formatDateTR } from "@/lib/utils/format-date";
 import type { Task } from "@/types";
 
@@ -29,37 +29,40 @@ function TrashRow({
   const [confirming, setConfirming] = useState(false);
 
   return (
-    <div className="flex items-center justify-between gap-3 py-2 px-3 rounded-lg hover:bg-gray-50 group">
+    <div className="flex items-center justify-between gap-3 py-2.5 px-4 hover:bg-surface-hover transition-colors duration-150 group">
       <div className="flex-1 min-w-0">
-        <Link href={`/tasks/${task.id}`} className="text-sm font-medium text-gray-500 hover:text-blue-600 truncate block line-through decoration-gray-300">
+        <Link
+          href={`/tasks/${task.id}`}
+          className="text-sm font-medium text-muted hover:text-ink transition-colors duration-150 truncate block line-through decoration-line-strong"
+        >
           {task.title}
         </Link>
-        <p className="text-xs text-gray-400 mt-0.5">
+        <p className="text-xs text-subtle mt-0.5 tabular-nums">
           Silindi: {formatDate(task.deleted_at)}
         </p>
       </div>
 
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-150 shrink-0">
         <button
           onClick={() => startTransition(async () => { await restoreTask(task.id); onRemove(task.id); })}
-          className="flex items-center gap-1 text-xs text-gray-500 hover:text-blue-600 px-2 py-1 rounded hover:bg-blue-50"
+          className="flex items-center gap-1 text-xs font-medium text-muted hover:text-brand-strong px-2 py-1 rounded-md hover:bg-brand-soft active:scale-[0.98] transition-colors duration-150"
           title="Geri yükle"
         >
-          <RotateCcw size={12} /> Geri yükle
+          <RotateCcw size={13} /> Geri yükle
         </button>
 
         {confirming ? (
-          <div className="flex items-center gap-1">
-            <span className="text-[10px] text-red-600">Kalıcı silinsin mi?</span>
+          <div className="anim-fade flex items-center gap-1.5">
+            <span className="text-[10px] font-medium text-danger">Kalıcı silinsin mi?</span>
             <button
               onClick={() => startTransition(async () => { await permanentDeleteTask(task.id); onRemove(task.id); })}
-              className="text-[10px] bg-red-600 text-white rounded px-1.5 py-0.5 hover:bg-red-700"
+              className="text-[10px] font-medium bg-danger text-white rounded-md px-1.5 py-0.5 hover:bg-danger-strong active:scale-[0.98] transition-colors duration-150"
             >
               Evet
             </button>
             <button
               onClick={() => setConfirming(false)}
-              className="text-[10px] bg-gray-100 text-gray-600 rounded px-1.5 py-0.5 hover:bg-gray-200"
+              className="text-[10px] font-medium bg-surface-sunken text-muted rounded-md px-1.5 py-0.5 hover:bg-surface-hover hover:text-ink active:scale-[0.98] transition-colors duration-150"
             >
               İptal
             </button>
@@ -67,10 +70,10 @@ function TrashRow({
         ) : (
           <button
             onClick={() => setConfirming(true)}
-            className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50"
+            className="flex items-center gap-1 text-xs font-medium text-danger hover:text-danger-strong px-2 py-1 rounded-md hover:bg-danger/10 active:scale-[0.98] transition-colors duration-150"
             title="Kalıcı olarak sil"
           >
-            <X size={12} /> Kalıcı sil
+            <X size={13} /> Kalıcı sil
           </button>
         )}
       </div>
@@ -90,27 +93,30 @@ export function TrashView({ tasks: initialTasks }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-6 py-4 border-b border-gray-200 bg-white shrink-0">
-        <div className="flex items-center gap-2">
-          <Trash2 size={18} className="text-gray-400" />
-          <h1 className="text-lg font-semibold text-gray-900">Çöp Kutusu</h1>
-          <span className="text-sm text-gray-400">({tasks.length} görev)</span>
+      <div className="px-6 py-4 border-b border-line bg-surface shrink-0">
+        <div className="flex items-center gap-2.5">
+          <div className="grid h-8 w-8 place-items-center rounded-lg bg-surface-sunken text-muted shrink-0">
+            <Trash2 size={16} strokeWidth={1.75} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-baseline gap-2">
+              <h1 className="text-lg font-semibold tracking-tight text-ink">Çöp Kutusu</h1>
+              <span className="text-sm text-subtle tabular-nums">({tasks.length} görev)</span>
+            </div>
+            <p className="text-xs text-subtle">Silinen görevler burada tutulur. Geri yükleyebilir veya kalıcı olarak silebilirsiniz.</p>
+          </div>
         </div>
-        <p className="text-xs text-gray-400 mt-1">Silinen görevler burada tutulur. Geri yükleyebilir veya kalıcı olarak silebilirsiniz.</p>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6">
         {tasks.length > 0 ? (
-          <div className={cn("bg-white border border-gray-200 rounded-lg divide-y divide-gray-100")}>
+          <div className="anim-fade-up bg-surface border border-line rounded-card shadow-card divide-y divide-hairline overflow-hidden">
             {tasks.map((task) => (
               <TrashRow key={task.id} task={task} onRemove={handleRemove} />
             ))}
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <Trash2 size={32} className="text-gray-200 mb-3" />
-            <p className="text-gray-400 text-sm">Çöp kutusu boş</p>
-          </div>
+          <EmptyState icon={Trash2} title="Çöp kutusu boş" className="py-20" />
         )}
       </div>
     </div>

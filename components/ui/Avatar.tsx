@@ -48,7 +48,7 @@ export function Avatar({
     : "w-7 h-7 text-xs";
   const toneClass =
     tone === "neutral"
-      ? "bg-white border border-slate-300 text-slate-600"
+      ? "bg-surface border border-line-strong text-muted"
       : tone === "done"
         ? "bg-green-500 border border-green-600 text-white"
         : cn("text-white", colorFor(name));
@@ -79,10 +79,10 @@ export function AvatarGroup({
   return (
     <div className="flex items-center -space-x-1">
       {visible.map((name, i) => (
-        <Avatar key={i} name={name} size="xs" className="ring-1 ring-white" />
+        <Avatar key={i} name={name} size="xs" className="ring-1 ring-surface" />
       ))}
       {overflow > 0 && (
-        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-600 text-[8px] font-semibold ring-1 ring-white">
+        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-surface-sunken text-muted text-[8px] font-semibold tabular-nums ring-1 ring-surface">
           +{overflow}
         </span>
       )}

@@ -101,7 +101,7 @@ function NoteCardContent({
     return (
       <div
         className={cn(
-          "rounded-lg border-2 p-2.5 shadow-sm flex flex-col gap-1.5",
+          "rounded-lg border-2 p-2.5 shadow-card flex flex-col gap-1.5 anim-scale-in",
           editColors.bg, editColors.border,
         )}
       >
@@ -111,9 +111,9 @@ function NoteCardContent({
               key={c}
               onClick={() => setColor(c)}
               className={cn(
-                "w-3.5 h-3.5 rounded-full transition-transform",
+                "w-3.5 h-3.5 rounded-full transition-[transform,opacity] duration-150 ease-standard",
                 NOTE_COLORS[c].dot,
-                color === c ? "ring-2 ring-offset-1 ring-gray-400 scale-110" : "opacity-60 hover:opacity-100",
+                color === c ? "ring-2 ring-offset-1 ring-gray-400 scale-110" : "opacity-60 hover:opacity-100 hover:scale-105",
               )}
               aria-label={c}
             />
@@ -137,8 +137,8 @@ function NoteCardContent({
           maxLength={5000}
         />
         <div className="flex gap-1 justify-end">
-          <button onClick={handleCancel} className="p-1 text-gray-400 hover:text-gray-600 rounded"><X size={12} /></button>
-          <button onClick={handleSave} className="p-1 text-green-600 hover:text-green-700 rounded"><Check size={12} /></button>
+          <button onClick={handleCancel} className="p-1 text-gray-400 hover:text-gray-600 hover:bg-black/5 rounded transition-colors duration-150 active:scale-95" aria-label="Vazgeç"><X size={12} /></button>
+          <button onClick={handleSave} className="p-1 text-green-600 hover:text-green-700 hover:bg-green-600/10 rounded transition-colors duration-150 active:scale-95" aria-label="Kaydet"><Check size={12} /></button>
         </div>
       </div>
     );
@@ -149,16 +149,16 @@ function NoteCardContent({
       ref={containerRef}
       style={containerStyle}
       className={cn(
-        "rounded-lg border p-2.5 shadow-sm group",
+        "rounded-lg border p-2.5 shadow-card group transition-shadow duration-200 ease-standard hover:shadow-card-hover",
         colors.bg, colors.border,
-        isDragging && "opacity-50 shadow-lg",
+        isDragging && "opacity-40 shadow-pop",
       )}
     >
       <div className="flex items-start gap-1">
         {!readOnly ? (
           <button
             {...dragHandleProps}
-            className="mt-0.5 p-0.5 rounded text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+            className="mt-0.5 p-0.5 rounded text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity duration-150 shrink-0"
             aria-label="Sürükle"
             tabIndex={-1}
           >
@@ -173,10 +173,10 @@ function NoteCardContent({
               {note.title}
             </p>
             {!readOnly && canModify && (
-            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150 shrink-0">
               <button
                 onClick={() => onConvertToTask(note.id, note.title, note.body ?? "")}
-                className="p-0.5 text-gray-300 hover:text-[#406775] rounded"
+                className="p-0.5 text-gray-400 hover:text-[#406775] hover:bg-black/5 rounded transition-colors duration-150 active:scale-95"
                 aria-label="Göreve dönüştür"
                 title="Göreve dönüştür"
               >
@@ -184,14 +184,14 @@ function NoteCardContent({
               </button>
               <button
                 onClick={() => setEditing(true)}
-                className="p-0.5 text-gray-300 hover:text-gray-600 rounded"
+                className="p-0.5 text-gray-400 hover:text-gray-600 hover:bg-black/5 rounded transition-colors duration-150 active:scale-95"
                 aria-label="Notu düzenle"
               >
                 <Pencil size={11} />
               </button>
               <button
                 onClick={() => onDelete(note.id)}
-                className="p-0.5 text-gray-300 hover:text-red-500 rounded"
+                className="p-0.5 text-gray-400 hover:text-red-500 hover:bg-red-500/10 rounded transition-colors duration-150 active:scale-95"
                 aria-label="Notu sil"
               >
                 <Trash2 size={11} />

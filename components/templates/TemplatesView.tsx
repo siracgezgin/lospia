@@ -13,6 +13,7 @@ import {
 } from "@/lib/office/constants";
 import { copyPlainText, copyRichText } from "@/lib/utils/clipboard";
 import { cn } from "@/lib/utils/cn";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { TemplateFormModal } from "./TemplateFormModal";
 import type { DocumentTemplate, WorkspaceDepartment } from "@/types";
@@ -105,7 +106,7 @@ export function TemplatesView({
   }
 
   const selectCls =
-    "rounded-lg border border-line bg-surface px-3 py-2 text-sm text-muted focus:outline-none focus:ring-2 focus:ring-brand-ring";
+    "h-9 rounded-lg border border-line bg-surface px-3 text-sm text-muted transition-colors duration-150 hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40";
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -117,7 +118,7 @@ export function TemplatesView({
         rightSlot={
           <button
             onClick={openNew}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-3.5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand-strong"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-3.5 py-2 text-[13px] font-medium text-white transition-colors duration-150 hover:bg-brand-strong active:scale-[0.98]"
           >
             <Plus size={15} />
             Yeni şablon ekle
@@ -133,7 +134,7 @@ export function TemplatesView({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Başlık veya içerik ara…"
-            className="w-full rounded-lg border border-line bg-surface py-2 pl-9 pr-3 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-ring focus:border-brand-ring"
+            className="h-9 w-full rounded-lg border border-line bg-surface pl-9 pr-3 text-sm text-ink placeholder:text-subtle transition-colors duration-150 hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40"
           />
         </div>
         <select value={category} onChange={(e) => setCategory(e.target.value)} className={selectCls}>
@@ -152,25 +153,28 @@ export function TemplatesView({
           <option value="">Tüm departmanlar</option>
           {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
         </select>
-        <label className="flex items-center gap-1.5 text-[12.5px] text-muted">
-          <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} className="accent-brand" />
+        <label className="flex h-9 cursor-pointer select-none items-center gap-1.5 rounded-lg px-2 text-[12.5px] text-muted transition-colors duration-150 hover:text-ink">
+          <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} className="h-3.5 w-3.5 accent-brand" />
           Arşivi göster
         </label>
       </div>
 
       {/* Cards */}
       {filtered.length === 0 ? (
-        <div className="rounded-2xl border border-line bg-surface px-6 py-14 text-center shadow-card">
-          <p className="text-[13.5px] text-subtle">
-            {templates.length === 0
-              ? "Henüz kayıtlı şablon yok. İlk şablonu ekleyin."
-              : "Filtreye uyan şablon bulunamadı."}
-          </p>
+        <div className="anim-fade-up rounded-2xl border border-line bg-surface shadow-card">
+          <EmptyState
+            icon={templates.length === 0 ? FileText : Search}
+            title={
+              templates.length === 0
+                ? "Henüz kayıtlı şablon yok. İlk şablonu ekleyin."
+                : "Filtreye uyan şablon bulunamadı."
+            }
+          />
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="stagger-children grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((t) => (
-            <div key={t.id} className="flex flex-col rounded-2xl border border-line bg-surface p-4 shadow-card">
+            <div key={t.id} className="flex flex-col rounded-2xl border border-line bg-surface p-4 shadow-card transition-[transform,box-shadow] duration-200 ease-standard hover:-translate-y-px hover:shadow-card-hover">
               <div className="mb-2 flex items-start justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className={cn("rounded-md px-2 py-0.5 text-[10.5px] font-medium", TEMPLATE_CHANNEL_TONE[t.channel])}>
@@ -184,23 +188,23 @@ export function TemplatesView({
                   </span>
                 </div>
                 <div className="flex shrink-0 items-center gap-0.5">
-                  <button onClick={() => openView(t)} className="rounded-md p-1 text-subtle transition-colors hover:bg-surface-muted hover:text-ink" title="Görüntüle">
+                  <button onClick={() => openView(t)} className="rounded-md p-1.5 text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-95" title="Görüntüle">
                     <Eye size={13} />
                   </button>
                   {canMutate(t) && (
-                    <button onClick={() => openEdit(t)} className="rounded-md p-1 text-subtle transition-colors hover:bg-surface-muted hover:text-ink" title="Düzenle">
+                    <button onClick={() => openEdit(t)} className="rounded-md p-1.5 text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-95" title="Düzenle">
                       <Pencil size={13} />
                     </button>
                   )}
                   {isAdmin && t.status !== "archived" && (
-                    <button onClick={() => handleArchive(t)} disabled={isArchiving} className="rounded-md p-1 text-subtle transition-colors hover:bg-surface-muted hover:text-ink" title="Arşivle">
+                    <button onClick={() => handleArchive(t)} disabled={isArchiving} className="rounded-md p-1.5 text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-95 disabled:pointer-events-none disabled:opacity-50" title="Arşivle">
                       <Archive size={13} />
                     </button>
                   )}
                 </div>
               </div>
 
-              <h3 className="text-[14px] font-medium leading-snug text-ink">{t.title}</h3>
+              <h3 className="text-[14px] font-semibold leading-snug tracking-tight text-ink">{t.title}</h3>
               {t.department_id && deptName.get(t.department_id) && (
                 <p className="mt-0.5 text-[11.5px] text-subtle">{deptName.get(t.department_id)}</p>
               )}
@@ -213,17 +217,21 @@ export function TemplatesView({
               {(t.variables ?? []).length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">
                   {t.variables.map((v) => (
-                    <span key={v} className="rounded bg-surface-muted px-1.5 py-0.5 font-mono text-[10px] text-muted">
+                    <span key={v} className="rounded-md border border-hairline bg-surface-sunken px-1.5 py-0.5 font-mono text-[10px] text-muted">
                       {v}
                     </span>
                   ))}
                 </div>
               )}
 
-              <div className="mt-3 flex items-center gap-1.5 border-t border-line/60 pt-2.5">
+              <div className="h-3 flex-1" />
+              <div className="flex items-center gap-1.5 border-t border-hairline pt-2.5">
                 <button
                   onClick={() => handleCopyPlain(t)}
-                  className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] font-medium text-brand transition-colors hover:bg-brand-soft"
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] font-medium transition-colors duration-150 active:scale-[0.98]",
+                    copiedId === t.id ? "bg-brand-soft text-brand-strong" : "text-brand hover:bg-brand-soft",
+                  )}
                   title="Düz metin olarak panoya kopyala"
                 >
                   {copiedId === t.id ? <Check size={12} /> : <Copy size={12} />}
@@ -231,7 +239,7 @@ export function TemplatesView({
                 </button>
                 <button
                   onClick={() => handleCopyRich(t)}
-                  className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] font-medium text-muted transition-colors hover:bg-surface-muted hover:text-ink"
+                  className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] font-medium text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
                   title="Biçimli metin olarak panoya kopyala (Gmail/Word)"
                 >
                   <ClipboardType size={12} />
@@ -243,7 +251,7 @@ export function TemplatesView({
         </div>
       )}
 
-      <p className="mt-3 px-1 text-[12px] text-subtle">{filtered.length} şablon gösteriliyor</p>
+      <p className="mt-3 px-1 text-[12px] tabular-nums text-subtle">{filtered.length} şablon gösteriliyor</p>
 
       {modalOpen && (
         <TemplateFormModal
@@ -260,8 +268,10 @@ export function TemplatesView({
 
       {/* Toast */}
       {toast && (
-        <div className="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-full bg-ink px-4 py-2 text-[12.5px] font-medium text-white shadow-pop">
-          {toast}
+        <div className="pointer-events-none fixed inset-x-0 bottom-6 z-[60] flex justify-center">
+          <div className="anim-slide-up rounded-full bg-ink px-4 py-2 text-[12.5px] font-medium text-white shadow-pop">
+            {toast}
+          </div>
         </div>
       )}
     </div>

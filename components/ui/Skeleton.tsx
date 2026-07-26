@@ -9,7 +9,10 @@ export function Skeleton({ className }: { className?: string }) {
   return (
     <span
       aria-hidden="true"
-      className={cn("block animate-pulse rounded-md bg-surface-sunken", className)}
+      className={cn(
+        "block rounded-md anim-shimmer bg-gradient-to-r from-surface-sunken via-surface-muted to-surface-sunken",
+        className,
+      )}
     />
   );
 }

@@ -1,7 +1,9 @@
 "use client";
 
 import { useActionState } from "react";
+import { AlertCircle, Loader2 } from "lucide-react";
 import { signIn, type AuthFormState } from "@/lib/actions/auth";
+import { Input } from "@/components/ui/Input";
 
 // Sign-in only. Public self-signup has been removed — accounts are created by an
 // owner/admin in Settings → "Hesap oluştur". The person signs in directly with
@@ -10,13 +12,19 @@ export function LoginForm({ initialEmail = "" }: { initialEmail?: string }) {
   const [state, action, pending] = useActionState<AuthFormState, FormData>(signIn, null);
 
   return (
-    <div className="space-y-4">
-      <form action={action} className="space-y-3">
-        <div>
-          <label htmlFor="identifier" className="block text-sm font-medium text-gray-700 mb-1">
+    <div className="space-y-5">
+      <form action={action} className="space-y-4">
+        <div
+          className="anim-fade-up space-y-1.5"
+          style={{ animationDelay: "140ms" }}
+        >
+          <label
+            htmlFor="identifier"
+            className="block text-[12.5px] font-medium text-muted"
+          >
             Kullanıcı adı
           </label>
-          <input
+          <Input
             id="identifier"
             name="identifier"
             type="text"
@@ -24,41 +32,58 @@ export function LoginForm({ initialEmail = "" }: { initialEmail?: string }) {
             required
             defaultValue={initialEmail}
             placeholder="Kullanıcı adı"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="h-10"
           />
         </div>
 
-        <div>
-          <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+        <div
+          className="anim-fade-up space-y-1.5"
+          style={{ animationDelay: "190ms" }}
+        >
+          <label
+            htmlFor="password"
+            className="block text-[12.5px] font-medium text-muted"
+          >
             Şifre
           </label>
-          <input
+          <Input
             id="password"
             name="password"
             type="password"
             autoComplete="current-password"
             required
             placeholder="Şifre"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="h-10"
           />
         </div>
 
         {state?.error != null && (
-          <p className="text-sm bg-red-50 border border-red-200 px-3 py-2 rounded-lg" style={{ color: "#b91c1c" }}>
-            {state.error || "Giriş yapılamadı. Lütfen tekrar deneyin."}
-          </p>
+          <div
+            role="alert"
+            className="anim-fade-down flex items-start gap-2 rounded-lg border border-danger/30 bg-danger/[0.05] px-3 py-2.5 text-[12.5px] leading-relaxed text-danger"
+          >
+            <AlertCircle size={14} strokeWidth={2} className="mt-0.5 shrink-0" />
+            <span>{state.error || "Giriş yapılamadı. Lütfen tekrar deneyin."}</span>
+          </div>
         )}
 
         <button
           type="submit"
           disabled={pending}
-          className="w-full rounded-lg bg-blue-600 py-2 text-sm font-semibold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="anim-fade-up inline-flex h-10 w-full select-none items-center justify-center gap-2 rounded-lg bg-brand text-sm font-semibold text-white shadow-card transition-[background-color,transform,box-shadow] duration-200 ease-standard hover:bg-brand-strong hover:shadow-card-hover active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60"
+          style={{ animationDelay: "240ms" }}
         >
+          {pending && (
+            <Loader2 size={15} strokeWidth={2} className="animate-spin shrink-0" />
+          )}
           {pending ? "Giriş yapılıyor…" : "Giriş yap"}
         </button>
       </form>
 
-      <p className="text-xs text-center text-gray-400">
+      <p
+        className="anim-fade text-xs text-center text-subtle"
+        style={{ animationDelay: "320ms" }}
+      >
         Hesabınız yoksa yöneticinize başvurun.
       </p>
     </div>

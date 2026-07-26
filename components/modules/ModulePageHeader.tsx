@@ -42,9 +42,9 @@ export function ModulePageHeader({
       <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
         <Link
           href={backHref}
-          className="inline-flex items-center gap-1.5 text-muted transition-colors hover:text-ink"
+          className="group inline-flex items-center gap-1.5 text-muted transition-colors duration-150 hover:text-ink"
         >
-          <ArrowLeft size={14} className="shrink-0" />
+          <ArrowLeft size={14} className="shrink-0 transition-transform duration-150 ease-standard group-hover:-translate-x-0.5" />
           {backLabel}
         </Link>
         {secondaryBackHref && (
@@ -52,7 +52,7 @@ export function ModulePageHeader({
             <span className="text-subtle">·</span>
             <Link
               href={secondaryBackHref}
-              className="text-subtle transition-colors hover:text-ink"
+              className="text-subtle transition-colors duration-150 hover:text-ink"
             >
               {secondaryBackLabel}
             </Link>
@@ -70,7 +70,7 @@ export function ModulePageHeader({
           )}
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-lg font-semibold text-ink">{title}</h1>
+              <h1 className="text-lg font-semibold tracking-tight text-ink">{title}</h1>
               {badge && (
                 <span className="rounded-full bg-brand-soft px-2 py-0.5 text-[10.5px] font-medium text-brand-strong">
                   {badge}

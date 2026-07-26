@@ -63,7 +63,7 @@ function MatchRow({ contact, members }: { contact: WorkspaceContact; members: Cr
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2.5">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2.5 transition-colors duration-150 hover:bg-surface-hover">
       {/* Contact identity */}
       <div className="min-w-[160px] flex-1">
         <div className="truncate text-[13px] font-medium text-ink">{contact.name}</div>
@@ -80,7 +80,7 @@ function MatchRow({ contact, members }: { contact: WorkspaceContact; members: Cr
           <button
             onClick={doUnlink}
             disabled={isPending}
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] text-muted transition-colors hover:bg-surface-muted hover:text-danger"
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] font-medium text-muted transition-colors duration-150 hover:bg-[#fbe6e2] hover:text-danger active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
           >
             <X size={13} /> Eşleşmeyi kaldır
           </button>
@@ -99,7 +99,7 @@ function MatchRow({ contact, members }: { contact: WorkspaceContact; members: Cr
           <select
             value={selected}
             onChange={(e) => setSelected(e.target.value)}
-            className="rounded-md border border-line bg-surface px-2 py-1 text-[12.5px] text-muted focus:outline-none focus:ring-2 focus:ring-brand-ring"
+            className="rounded-md border border-line bg-surface px-2 py-1 text-[12.5px] text-muted transition-colors duration-150 hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40"
           >
             <option value="">Sistem hesabı seç…</option>
             {members.map((m) => (
@@ -110,7 +110,7 @@ function MatchRow({ contact, members }: { contact: WorkspaceContact; members: Cr
             onClick={() => doLink(selected)}
             disabled={isPending || !selected}
             className={cn(
-              "inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[12.5px] font-medium transition-colors",
+              "inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[12.5px] font-medium transition-colors duration-150 active:scale-[0.98]",
               !selected || isPending
                 ? "bg-surface-sunken text-subtle cursor-not-allowed"
                 : "bg-brand text-white hover:bg-brand-strong",
@@ -121,7 +121,7 @@ function MatchRow({ contact, members }: { contact: WorkspaceContact; members: Cr
         </div>
       )}
 
-      {error && <p className="w-full text-[12px] text-danger">{error}</p>}
+      {error && <p role="alert" className="anim-fade-down w-full text-[12px] text-danger">{error}</p>}
     </div>
   );
 }
@@ -135,11 +135,11 @@ export function ContactMatchingPanel({ contacts, members }: Props) {
   const unlinked = contacts.filter((c) => !c.user_id).length;
 
   return (
-    <div className="mb-4 overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
+    <div className="anim-fade-up mb-4 overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
       <div className="flex items-center gap-2 border-b border-hairline bg-surface-muted px-4 py-2.5">
         <UserPlus size={15} className="text-brand" />
-        <h2 className="text-[13px] font-semibold text-ink">Kişi eşleştirme</h2>
-        <span className="text-[12px] text-subtle">
+        <h2 className="text-[13px] font-semibold tracking-tight text-ink">Kişi eşleştirme</h2>
+        <span className="text-[12px] tabular-nums text-subtle">
           {contacts.length - unlinked}/{contacts.length} eşleşti
         </span>
       </div>

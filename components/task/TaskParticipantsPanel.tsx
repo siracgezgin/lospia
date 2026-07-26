@@ -90,10 +90,10 @@ export function TaskParticipantsPanel({
   return (
     <div className="bg-surface rounded-card border border-line shadow-card p-5 space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-ink flex items-center gap-1.5">
+        <h3 className="text-sm font-semibold tracking-tight text-ink flex items-center gap-1.5">
           <Users size={14} className="text-muted" /> Sorumlu kişiler
           {participants.length > 0 && (
-            <span className="text-[11px] font-normal text-subtle">
+            <span className="text-[11px] font-normal text-subtle tabular-nums">
               · {participants.filter((p) => p.completed).length}/{participants.length} tamamlandı
             </span>
           )}
@@ -101,7 +101,8 @@ export function TaskParticipantsPanel({
         {!isViewer && canManage && (
           <button
             onClick={() => setEditing((v) => !v)}
-            className="flex items-center gap-1 text-xs text-brand hover:text-brand-strong transition-colors"
+            aria-expanded={editing}
+            className="flex items-center gap-1 text-xs font-medium text-brand hover:text-brand-strong hover:bg-brand-soft/60 active:scale-[0.98] rounded-md px-1.5 py-1 transition-colors duration-150"
           >
             <UserPlus size={13} /> {editing ? "Bitir" : "Kişi ekle / çıkar"}
           </button>
@@ -110,12 +111,15 @@ export function TaskParticipantsPanel({
 
       {/* Current responsible people with completion state */}
       {!hasAnyResponsible ? (
-        <div className="rounded-lg border border-dashed border-line px-4 py-6 text-center space-y-2">
+        <div className="rounded-lg border border-dashed border-line bg-surface-muted/40 px-4 py-6 text-center space-y-2">
+          <div className="mx-auto grid h-9 w-9 place-items-center rounded-full bg-brand-soft text-brand ring-4 ring-brand-soft/35">
+            <Users size={15} strokeWidth={1.75} />
+          </div>
           <p className="text-sm text-subtle">Henüz sorumlu kişi atanmadı.</p>
           {!isViewer && canManage && !editing && (
             <button
               onClick={() => setEditing(true)}
-              className="inline-flex items-center gap-1.5 text-sm text-brand hover:text-brand-strong font-medium transition-colors"
+              className="inline-flex items-center gap-1.5 text-sm text-brand hover:text-brand-strong active:scale-[0.98] font-medium transition-colors duration-150"
             >
               <UserPlus size={14} /> Sorumlu kişi ekle
             </button>
@@ -130,11 +134,11 @@ export function TaskParticipantsPanel({
               <li
                 key={p.memberId}
                 className={cn(
-                  "flex items-center gap-2.5 px-3 py-2.5 text-sm",
-                  p.completed ? "bg-green-50/40" : "bg-surface",
+                  "flex items-center gap-2.5 px-3 py-2.5 text-sm transition-colors duration-150",
+                  p.completed ? "bg-green-50/40 hover:bg-green-50/70" : "bg-surface hover:bg-surface-hover",
                 )}
               >
-                <Avatar name={name} size="sm" className={p.completed ? "ring-2 ring-green-500" : ""} />
+                <Avatar name={name} size="sm" className={p.completed ? "ring-2 ring-success" : ""} />
                 <div className="min-w-0 flex-1">
                   <p className="text-ink truncate">
                     {name}
@@ -142,7 +146,7 @@ export function TaskParticipantsPanel({
                     {p.isAssigneeFallback && <span className="ml-1 text-[10px] text-subtle">(atanan)</span>}
                   </p>
                   {p.completed && p.completedAt && (
-                    <p className="text-[10px] text-subtle">{formatDateTimeTR(p.completedAt)}</p>
+                    <p className="text-[10px] text-subtle tabular-nums">{formatDateTimeTR(p.completedAt)}</p>
                   )}
                 </div>
                 {p.completed ? (
@@ -161,7 +165,7 @@ export function TaskParticipantsPanel({
                     onClick={() => run(() =>
                       isMe ? toggleMyCompletion(taskId) : setParticipantCompletion(taskId, p.memberId, !p.completed),
                     )}
-                    className="text-xs text-brand hover:text-brand-strong disabled:opacity-50 shrink-0 transition-colors"
+                    className="text-xs font-medium text-brand hover:text-brand-strong hover:bg-brand-soft/60 active:scale-[0.98] rounded-md px-1.5 py-0.5 disabled:opacity-60 disabled:pointer-events-none shrink-0 transition-colors duration-150"
                   >
                     {p.completed ? "Geri al" : "İşaretle"}
                   </button>
@@ -170,7 +174,7 @@ export function TaskParticipantsPanel({
             );
           })}
           {responsibleContact && (
-            <li className="flex items-center gap-2.5 px-3 py-2.5 text-sm bg-surface">
+            <li className="flex items-center gap-2.5 px-3 py-2.5 text-sm bg-surface hover:bg-surface-hover transition-colors duration-150">
               <Avatar name={responsibleContact.name} size="sm" />
               <div className="min-w-0 flex-1">
                 <p className="text-ink truncate">
@@ -182,7 +186,7 @@ export function TaskParticipantsPanel({
                 <button
                   disabled={pending}
                   onClick={() => toggleContact(responsibleContact.contactId)}
-                  className="text-xs text-subtle hover:text-danger disabled:opacity-50 shrink-0 transition-colors"
+                  className="p-1 rounded-md text-subtle hover:text-danger hover:bg-danger/10 active:scale-[0.98] disabled:opacity-60 disabled:pointer-events-none shrink-0 transition-colors duration-150"
                   aria-label="Sorumlu kişiyi kaldır"
                 >
                   <X size={13} />
@@ -198,7 +202,7 @@ export function TaskParticipantsPanel({
         <p className="text-xs text-subtle">{ASSIGN_DENIED_NOTE}</p>
       )}
 
-      {error && <p className="text-xs text-danger">{error}</p>}
+      {error && <p role="alert" className="anim-fade-down text-xs text-danger">{error}</p>}
 
       {/* "Benim işim tamam" — only the responsible participant can mark their own
           work done. Non-participants see a clear notice instead (admins manage
@@ -207,7 +211,7 @@ export function TaskParticipantsPanel({
         <button
           disabled={pending}
           onClick={() => run(() => toggleMyCompletion(taskId))}
-          className="w-full mt-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-green-600 text-white text-sm font-medium py-2 hover:bg-green-700 disabled:opacity-50"
+          className="w-full mt-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-green-600 text-white text-sm font-medium py-2 shadow-xs hover:bg-green-700 active:scale-[0.98] disabled:opacity-60 disabled:pointer-events-none disabled:shadow-none transition-all duration-150"
         >
           {pending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
           {mine.completed ? "İşimi geri al" : "Benim işim tamam"}
@@ -222,7 +226,7 @@ export function TaskParticipantsPanel({
       {/* Assignment editor: EVERY workspace member (and unmatched CRM contact)
           is selectable — the shared assignable-people list, no department filter. */}
       {editing && !isViewer && canManage && (
-        <div className="border-t border-hairline pt-3 space-y-1.5">
+        <div className="anim-fade-up border-t border-hairline pt-3 space-y-1.5">
           <p className="text-xs text-muted">
             Bu görevin sorumlularını seçin — tüm ekip üyeleri seçilebilir:
           </p>
@@ -234,8 +238,9 @@ export function TaskParticipantsPanel({
                   key={m.memberId}
                   disabled={pending}
                   onClick={() => toggleParticipant(m.memberId)}
-                  className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs border transition-colors disabled:opacity-50 ${
-                    on ? "bg-brand-soft border-brand-ring text-brand-strong" : "bg-surface border-line text-muted hover:bg-surface-hover"
+                  aria-pressed={on}
+                  className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs border transition-colors duration-150 active:scale-[0.98] disabled:opacity-60 disabled:pointer-events-none ${
+                    on ? "bg-brand-soft border-brand-ring text-brand-strong font-medium" : "bg-surface border-line text-muted hover:bg-surface-hover hover:border-line-strong"
                   }`}
                 >
                   <Avatar name={m.name} size="xs" />
@@ -261,8 +266,9 @@ export function TaskParticipantsPanel({
                       key={c.contactId}
                       disabled={pending}
                       onClick={() => toggleContact(c.contactId)}
-                      className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs border transition-colors disabled:opacity-50 ${
-                        on ? "bg-brand-soft border-brand-ring text-brand-strong" : "bg-surface border-line text-muted hover:bg-surface-hover"
+                      aria-pressed={on}
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs border transition-colors duration-150 active:scale-[0.98] disabled:opacity-60 disabled:pointer-events-none ${
+                        on ? "bg-brand-soft border-brand-ring text-brand-strong font-medium" : "bg-surface border-line text-muted hover:bg-surface-hover hover:border-line-strong"
                       }`}
                     >
                       <Avatar name={c.name} size="xs" />

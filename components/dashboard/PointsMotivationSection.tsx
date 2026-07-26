@@ -24,7 +24,7 @@ export function PointsMotivationSection({ isAdmin, admin, member }: Props) {
     <section id="puan-motivasyon" className="space-y-4 scroll-mt-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-ink flex items-center gap-2">
+          <h2 className="text-base font-semibold tracking-tight text-ink flex items-center gap-2">
             <Sparkles size={16} className="text-brand" />
             Puan &amp; Motivasyon
           </h2>
@@ -49,7 +49,7 @@ export function PointsMotivationSection({ isAdmin, admin, member }: Props) {
 // --- Member: only their own figures. No ranking, no other members' data. ---
 function MemberPanel({ member }: { member: MemberPointsSummary }) {
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 stagger-children">
       <DashboardMetricCard icon={<Sparkles size={15} />} label="Bu ay kazandığım" value={`${member.monthPoints} puan`} tone="brand" />
       <DashboardMetricCard
         icon={<Clock3 size={15} />}
@@ -72,7 +72,7 @@ function AdminPanel({ admin }: { admin: AdminPointsData }) {
   return (
     <div className="space-y-4">
       {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 stagger-children">
         <DashboardMetricCard icon={<Sparkles size={15} />} label="Bu ay kazanılan" value={`${admin.monthEarned} puan`} tone="success" />
         <DashboardMetricCard icon={<Clock3 size={15} />} label="Bekleyen toplam" value={`${admin.pendingTotal} puan`} tone="warning" />
         <DashboardMetricCard icon={<RotateCcw size={15} />} label="Geri alınan" value={admin.revokedCount} tone={admin.revokedCount > 0 ? "danger" : "neutral"} />
@@ -103,7 +103,7 @@ function AdminPanel({ admin }: { admin: AdminPointsData }) {
                   </div>
                   <div className="h-1.5 rounded-full bg-surface-sunken overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-brand"
+                      className="h-full rounded-full bg-brand transition-[width] duration-500 ease-standard"
                       style={{ width: `${Math.max(4, (Math.max(0, c.earned) / maxContrib) * 100)}%` }}
                     />
                   </div>
@@ -130,7 +130,7 @@ function AdminPanel({ admin }: { admin: AdminPointsData }) {
                   </div>
                   <div className="h-1.5 rounded-full bg-surface-sunken overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-[#3a8f63]"
+                      className="h-full rounded-full bg-[#3a8f63] transition-[width] duration-500 ease-standard"
                       style={{ width: `${Math.max(4, (d.points / maxDept) * 100)}%` }}
                     />
                   </div>
@@ -151,7 +151,7 @@ function AdminPanel({ admin }: { admin: AdminPointsData }) {
         ) : (
           <div className="divide-y divide-hairline">
             {admin.ledger.map((row) => (
-              <div key={row.id} className="flex items-center justify-between gap-3 py-2.5">
+              <div key={row.id} className="flex items-center justify-between gap-3 py-2.5 -mx-2 px-2 rounded-lg transition-colors duration-150 ease-standard hover:bg-surface-hover">
                 <div className="min-w-0">
                   <p className="text-sm text-ink truncate">
                     <span className="font-medium">{row.userName}</span>

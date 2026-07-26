@@ -106,7 +106,7 @@ export function AppSidebar({
   return (
     <aside
       className={cn(
-        "relative hidden md:flex flex-col bg-surface border-r border-line transition-all duration-200 shrink-0",
+        "relative hidden md:flex flex-col bg-surface border-r border-line transition-[width] duration-200 ease-standard shrink-0",
         collapsed ? "w-14" : "w-60",
       )}
     >
@@ -126,13 +126,19 @@ export function AppSidebar({
 
       {/* Nav groups */}
       <nav className="flex-1 px-2 py-3 space-y-4 overflow-y-auto">
-        {NAV_GROUPS.map((group) => {
+        {NAV_GROUPS.map((group, groupIndex) => {
           const items = group.items.filter((i) => !i.adminOnly || isAdmin);
           if (items.length === 0) return null;
           return (
             <div key={group.title} className="space-y-0.5">
-              {!collapsed && (
-                <p className="px-2 mb-1 text-[10px] font-semibold uppercase tracking-wider text-subtle">
+              {collapsed ? (
+                // Daraltıldığında başlık yerine sessiz bir ayraç — gruplar
+                // ikon sütununda da okunur kalır.
+                groupIndex > 0 && (
+                  <div className="mx-2.5 mb-2 border-t border-hairline" aria-hidden />
+                )
+              ) : (
+                <p className="px-2 mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-subtle select-none">
                   {group.title}
                 </p>
               )}
@@ -148,7 +154,7 @@ export function AppSidebar({
                       href={href}
                       aria-current={active ? "page" : undefined}
                       className={cn(
-                        "group relative flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm font-medium transition-colors",
+                        "group relative flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm font-medium transition-colors duration-150",
                         active
                           ? "bg-brand-soft text-brand-strong"
                           : "text-muted hover:bg-surface-muted hover:text-ink",
@@ -156,14 +162,23 @@ export function AppSidebar({
                       )}
                       title={collapsed ? label : undefined}
                     >
-                      {active && !collapsed && (
-                        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r bg-brand" />
+                      {active && (
+                        <span
+                          aria-hidden
+                          className="absolute left-0 top-1/2 -translate-y-1/2 h-4 w-[3px] rounded-full bg-brand anim-fade"
+                        />
                       )}
-                      <Icon size={16} className="shrink-0" />
-                      {!collapsed && <span>{label}</span>}
+                      <Icon
+                        size={16}
+                        className={cn(
+                          "shrink-0 transition-colors duration-150",
+                          active ? "text-brand" : "text-subtle group-hover:text-muted",
+                        )}
+                      />
+                      {!collapsed && <span className="truncate">{label}</span>}
                     </Link>
                     {showKids && (
-                      <div className="ml-4 mt-0.5 space-y-0.5 border-l border-line pl-2">
+                      <div className="ml-4 mt-0.5 space-y-0.5 border-l border-line pl-2 anim-fade-down">
                         {kids.map(({ href: kHref, label: kLabel, icon: KIcon }) => {
                           // Tam eşleşme — /collection çocuğu /collection/maliyet'te aktif kalmasın.
                           const kActive = pathname === kHref;
@@ -173,14 +188,20 @@ export function AppSidebar({
                               href={kHref}
                               aria-current={kActive ? "page" : undefined}
                               className={cn(
-                                "flex items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] font-medium transition-colors",
+                                "group flex items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] font-medium transition-colors duration-150",
                                 kActive
                                   ? "bg-brand-soft text-brand-strong"
                                   : "text-muted hover:bg-surface-muted hover:text-ink",
                               )}
                             >
-                              <KIcon size={14} className="shrink-0" />
-                              <span>{kLabel}</span>
+                              <KIcon
+                                size={14}
+                                className={cn(
+                                  "shrink-0 transition-colors duration-150",
+                                  kActive ? "text-brand" : "text-subtle group-hover:text-muted",
+                                )}
+                              />
+                              <span className="truncate">{kLabel}</span>
                             </Link>
                           );
                         })}
@@ -197,7 +218,7 @@ export function AppSidebar({
             with an active state when the matching board view is open. */}
         {!collapsed && savedViews.length > 0 && (
           <div className="space-y-0.5">
-            <p className="px-2 mb-1 text-[10px] font-semibold uppercase tracking-wider text-subtle">
+            <p className="px-2 mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-subtle select-none">
               Kaydedilen görünümler
             </p>
             {savedViews.map((view) => {
@@ -210,13 +231,25 @@ export function AppSidebar({
                   href={`/board?view=${slug}`}
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "group flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] font-medium transition-colors truncate",
+                    "group relative flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] font-medium transition-colors duration-150 truncate",
                     active
                       ? "bg-brand-soft text-brand-strong"
                       : "text-muted hover:bg-surface-muted hover:text-ink",
                   )}
                 >
-                  <Icon size={15} className={cn("shrink-0", active ? "text-brand" : "text-subtle group-hover:text-muted")} />
+                  {active && (
+                    <span
+                      aria-hidden
+                      className="absolute left-0 top-1/2 -translate-y-1/2 h-3.5 w-[3px] rounded-full bg-brand anim-fade"
+                    />
+                  )}
+                  <Icon
+                    size={15}
+                    className={cn(
+                      "shrink-0 transition-colors duration-150",
+                      active ? "text-brand" : "text-subtle group-hover:text-muted",
+                    )}
+                  />
                   <span className="truncate">{view.name}</span>
                 </Link>
               );
@@ -231,22 +264,24 @@ export function AppSidebar({
       {!collapsed && (
         <div className="px-3 pt-2 pb-3 mt-auto space-y-2.5">
           {/* Haftanın sözü — weekly rotating editorial brand card. */}
-          <div className="relative rounded-2xl border border-brand-soft bg-gradient-to-br from-[#f7ede9] via-brand-soft/40 to-surface px-4 pt-3.5 pb-4 overflow-hidden shadow-card">
+          <div className="group relative rounded-2xl border border-brand-soft bg-gradient-to-br from-[#f7ede9] via-brand-soft/40 to-surface px-4 pt-3.5 pb-4 overflow-hidden shadow-card transition-shadow duration-200 ease-standard hover:shadow-card-hover">
             <Quote
               size={40}
               strokeWidth={1.5}
-              className="absolute -top-1.5 -right-1 text-brand/15 rotate-180"
+              className="absolute -top-1.5 -right-1 text-brand/15 rotate-180 transition-colors duration-300 ease-standard group-hover:text-brand/25"
             />
-            <p className="text-[9.5px] font-semibold uppercase tracking-[0.14em] text-brand-strong mb-1.5">
+            <p className="text-[9.5px] font-semibold uppercase tracking-[0.16em] text-brand-strong select-none">
               {weeklyQuote.uiDisplaySuggestion || "Haftanın Sözü"}
             </p>
+            {/* Editoryal ayraç — etiketle alıntı arasında kısa bir marka çizgisi. */}
+            <span aria-hidden className="mt-1.5 mb-2 block h-px w-8 rounded-full bg-brand/20" />
             <p
-              className="relative text-[12px] leading-relaxed text-ink/85 italic font-medium line-clamp-5"
+              className="relative text-[12px] leading-[1.7] text-ink/85 italic font-medium line-clamp-5"
               title={weeklyQuote.quoteTr}
             >
               “{weeklyQuote.quoteTr}”
             </p>
-            <p className="relative mt-2 text-[11px] font-semibold text-ink/70 not-italic">
+            <p className="relative mt-2.5 text-[11px] font-semibold tracking-tight text-ink/70 not-italic">
               {weeklyQuote.author}
             </p>
             <p className="relative text-[10px] italic text-subtle leading-snug">
@@ -279,7 +314,7 @@ export function AppSidebar({
           sidebar's right edge so it tracks the width transition with no jump. */}
       <button
         onClick={() => setCollapsed((c) => !c)}
-        className="absolute top-1/2 -right-3 -translate-y-1/2 z-20 grid h-6 w-6 place-items-center rounded-full bg-surface border border-line shadow-card text-subtle opacity-60 hover:opacity-100 hover:text-muted hover:border-line-strong transition-all"
+        className="absolute top-1/2 -right-3 -translate-y-1/2 z-20 grid h-6 w-6 place-items-center rounded-full bg-surface border border-line shadow-card text-subtle opacity-60 hover:opacity-100 hover:text-muted hover:border-line-strong hover:shadow-card-hover active:scale-95 transition-all duration-150 ease-standard"
         aria-label={collapsed ? "Kenar çubuğunu genişlet" : "Kenar çubuğunu daralt"}
         title={collapsed ? "Genişlet" : "Daralt"}
       >

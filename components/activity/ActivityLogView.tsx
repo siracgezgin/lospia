@@ -178,7 +178,7 @@ export function ActivityLogView({ rows }: { rows: ActivityRow[] }) {
           <ActivityIcon size={20} strokeWidth={1.75} />
         </div>
         <div className="min-w-0">
-          <h1 className="text-xl font-bold text-ink">Aktivite Günlüğü</h1>
+          <h1 className="text-xl font-semibold tracking-tight text-ink">Aktivite Günlüğü</h1>
           <p className="text-sm text-muted mt-0.5 leading-relaxed">
             Kim, ne yaptı, hangi görevde — tüm çalışma alanı hareketleri. Yalnızca yöneticiler görür.
           </p>
@@ -186,7 +186,7 @@ export function ActivityLogView({ rows }: { rows: ActivityRow[] }) {
       </div>
 
       {/* ── Summary stat cards (double as filters) ──────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+      <div className="stagger-children grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
         {FILTERS.map((f) => {
           const active = filter === f.key;
           const tone = TONE_CLS[f.tone];
@@ -197,17 +197,17 @@ export function ActivityLogView({ rows }: { rows: ActivityRow[] }) {
               onClick={() => setFilter(f.key)}
               aria-pressed={active}
               className={cn(
-                "flex flex-col items-start gap-2 rounded-xl border p-3 text-left transition-all",
+                "flex flex-col items-start gap-2 rounded-xl border p-3 text-left transition-all duration-200 ease-standard active:scale-[0.98]",
                 active
                   ? "border-brand-ring bg-brand-soft shadow-card"
-                  : "border-line bg-surface hover:bg-surface-hover hover:border-line-strong",
+                  : "border-line bg-surface shadow-card hover:shadow-card-hover hover:bg-surface-hover hover:border-line-strong",
               )}
             >
               <div className={cn("grid h-8 w-8 place-items-center rounded-lg shrink-0", tone.icon)}>
                 <Icon size={15} />
               </div>
               <div className="min-w-0">
-                <p className="text-xl font-bold text-ink tabular-nums leading-none">{counts[f.key]}</p>
+                <p className="text-xl font-semibold tracking-tight text-ink tabular-nums leading-none">{counts[f.key]}</p>
                 <p className="text-[11px] text-muted mt-1 leading-tight line-clamp-2">{f.label}</p>
               </div>
             </button>
@@ -217,7 +217,7 @@ export function ActivityLogView({ rows }: { rows: ActivityRow[] }) {
 
       {/* ── Timeline + context rail ─────────────────────────────────────────── */}
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px] items-start">
-      <div className="bg-surface rounded-2xl border border-line shadow-card divide-y divide-hairline overflow-hidden">
+      <div key={filter} className="anim-fade bg-surface rounded-2xl border border-line shadow-card divide-y divide-hairline overflow-hidden">
         {groups.length === 0 ? (
           <p className="px-5 py-14 text-sm text-subtle text-center">Bu filtreyle eşleşen kayıt yok.</p>
         ) : (
@@ -230,17 +230,17 @@ export function ActivityLogView({ rows }: { rows: ActivityRow[] }) {
             const isGroup = g.rows.length > 1;
 
             return (
-              <div key={g.key} className="flex items-start gap-3 px-4 py-3.5 hover:bg-gray-50/60 transition-colors">
+              <div key={g.key} className="flex items-start gap-3 px-4 py-3.5 hover:bg-surface-hover transition-colors duration-150">
                 <div className={cn("mt-0.5 grid h-8 w-8 place-items-center rounded-full shrink-0", headTone.icon)}>
                   <HeadIcon size={15} />
                 </div>
                 <div className="flex-1 min-w-0">
                   {/* Header: actor + task (once per group) + latest time */}
                   <div className="flex items-start justify-between gap-3">
-                    <p className="text-sm text-gray-600 leading-snug">
-                      <span className="font-semibold text-gray-900">{actorName}</span>{" "}
+                    <p className="text-sm text-muted leading-snug">
+                      <span className="font-semibold text-ink">{actorName}</span>{" "}
                       {isGroup ? (
-                        <span className="text-gray-500">{g.rows.length} değişiklik yaptı</span>
+                        <span className="text-muted tabular-nums">{g.rows.length} değişiklik yaptı</span>
                       ) : (
                         headMeta.verb
                       )}
@@ -250,14 +250,14 @@ export function ActivityLogView({ rows }: { rows: ActivityRow[] }) {
                           <Link
                             href={`/tasks/${head.task_id}`}
                             prefetch={false}
-                            className="font-medium text-gray-900 hover:text-blue-600 hover:underline underline-offset-2 break-words"
+                            className="font-medium text-ink hover:text-brand hover:underline underline-offset-2 break-words transition-colors duration-150"
                           >
                             {head.task_title}
                           </Link>
                         </>
                       )}
                     </p>
-                    <span className="text-xs text-gray-400 shrink-0 text-right tabular-nums">
+                    <span className="text-xs text-subtle shrink-0 text-right tabular-nums">
                       {formatDateTimeTR(head.created_at)}
                     </span>
                   </div>
@@ -273,13 +273,13 @@ export function ActivityLogView({ rows }: { rows: ActivityRow[] }) {
                             <span className={cn("inline-flex items-center rounded-md border px-1.5 py-0.5 font-medium", TONE_CLS[m.tone].chip)}>
                               {m.label}
                             </span>
-                            <span className="text-gray-500">{m.verb}</span>
+                            <span className="text-muted">{m.verb}</span>
                             {detail && (
-                              <span className="text-gray-500">
+                              <span className="text-muted">
                                 {detail.label}:{" "}
-                                <span className="text-gray-400">{detail.from}</span>
-                                <span className="mx-1 text-gray-300">→</span>
-                                <span className="text-gray-700 font-medium">{detail.to}</span>
+                                <span className="text-subtle">{detail.from}</span>
+                                <span className="mx-1 text-subtle/60">→</span>
+                                <span className="text-ink font-medium">{detail.to}</span>
                               </span>
                             )}
                           </li>
@@ -293,11 +293,11 @@ export function ActivityLogView({ rows }: { rows: ActivityRow[] }) {
                         {headMeta.label}
                       </span>
                       {changeDetail(head) && (
-                        <span className="text-[11px] text-gray-500">
+                        <span className="text-[11px] text-muted">
                           {changeDetail(head)!.label}:{" "}
-                          <span className="text-gray-400">{changeDetail(head)!.from}</span>
-                          <span className="mx-1 text-gray-300">→</span>
-                          <span className="text-gray-700 font-medium">{changeDetail(head)!.to}</span>
+                          <span className="text-subtle">{changeDetail(head)!.from}</span>
+                          <span className="mx-1 text-subtle/60">→</span>
+                          <span className="text-ink font-medium">{changeDetail(head)!.to}</span>
                         </span>
                       )}
                     </div>

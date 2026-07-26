@@ -47,7 +47,7 @@ interface Props {
   isAdmin?: boolean;
 }
 
-const DONE_CLS = "line-through text-gray-400";
+const DONE_CLS = "line-through text-subtle";
 
 // Mount detection via useSyncExternalStore — tells client from server render
 // without a setState-in-effect (which the lint rules reject).
@@ -119,7 +119,7 @@ function MonthYearPicker({ value, onChange }: { value: Date; onChange: (d: Date)
         type="button"
         data-testid="calendar-month-picker-button"
         onClick={toggle}
-        className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 w-40 justify-center border-x border-gray-200 py-1.5 capitalize select-none cursor-pointer transition-colors hover:bg-gray-100 active:bg-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
+        className="flex items-center gap-1.5 text-sm font-semibold tracking-tight text-ink w-40 justify-center border-x border-line py-1.5 capitalize select-none cursor-pointer transition-colors duration-150 hover:bg-surface-hover active:bg-surface-sunken focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-ring"
         aria-label="Ay ve yıl seç"
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -127,7 +127,7 @@ function MonthYearPicker({ value, onChange }: { value: Date; onChange: (d: Date)
         {format(value, "MMMM yyyy", { locale: tr })}
         <ChevronDown
           size={14}
-          className={cn("text-gray-400 shrink-0 transition-transform duration-200", open && "rotate-180 text-gray-600")}
+          className={cn("text-subtle shrink-0 transition-transform duration-200 ease-standard", open && "rotate-180 text-muted")}
         />
       </button>
       {open && (
@@ -135,23 +135,23 @@ function MonthYearPicker({ value, onChange }: { value: Date; onChange: (d: Date)
           role="dialog"
           aria-label="Ay ve yıl seçici"
           data-testid="calendar-month-picker-popover"
-          className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-50 w-80 rounded-xl border border-gray-200 bg-white shadow-xl p-4"
+          className="anim-fade-down absolute left-1/2 -translate-x-1/2 top-full mt-2 z-50 w-80 rounded-xl border border-line bg-surface shadow-pop p-4"
         >
           {/* Year navigation */}
           <div className="flex items-center justify-between mb-3">
             <button
               type="button"
               onClick={() => setViewYear((y) => y - 1)}
-              className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 active:bg-gray-200 transition-colors"
+              className="p-1.5 rounded-lg text-muted hover:bg-surface-hover hover:text-ink active:bg-surface-sunken transition-colors duration-150"
               aria-label="Önceki yıl"
             >
               <ChevronLeft size={18} />
             </button>
-            <span className="text-base font-bold text-gray-900 tabular-nums" aria-live="polite">{viewYear}</span>
+            <span className="text-base font-semibold tracking-tight text-ink tabular-nums" aria-live="polite">{viewYear}</span>
             <button
               type="button"
               onClick={() => setViewYear((y) => y + 1)}
-              className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 active:bg-gray-200 transition-colors"
+              className="p-1.5 rounded-lg text-muted hover:bg-surface-hover hover:text-ink active:bg-surface-sunken transition-colors duration-150"
               aria-label="Sonraki yıl"
             >
               <ChevronRight size={18} />
@@ -168,12 +168,12 @@ function MonthYearPicker({ value, onChange }: { value: Date; onChange: (d: Date)
                   type="button"
                   onClick={() => pick(i)}
                   className={cn(
-                    "text-sm py-2 rounded-lg transition-colors font-medium",
+                    "text-sm py-2 rounded-lg transition-colors duration-150 font-medium",
                     isSelected
-                      ? "bg-blue-600 text-white"
+                      ? "bg-brand text-white shadow-xs"
                       : isCurrent
-                        ? "bg-blue-50 text-blue-700 ring-1 ring-blue-200 hover:bg-blue-100"
-                        : "text-gray-600 hover:bg-gray-100 active:bg-gray-200",
+                        ? "bg-brand-soft text-brand-strong ring-1 ring-brand-ring/50 hover:ring-brand-ring"
+                        : "text-muted hover:bg-surface-hover hover:text-ink active:bg-surface-sunken",
                   )}
                 >
                   {m}
@@ -190,7 +190,7 @@ function MonthYearPicker({ value, onChange }: { value: Date; onChange: (d: Date)
 export function CalendarView({ tasks, workspaceId, profiles, contacts, departments = [], members = [], deptMembers = [], isAdmin = false }: Props) {
   const deptMeta = buildDeptMeta(departments);
   const dotFor = (t: CalTask) => {
-    if (t.status === "done") return "bg-[#2e9367]";
+    if (t.status === "done") return "bg-success";
     const color = t.department_id ? deptMeta[t.department_id]?.color : null;
     return getDepartmentCardStyle(color).dot;
   };
@@ -239,9 +239,9 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
     return (
       <div className="p-4 sm:p-6 h-full flex flex-col gap-4">
         <div className="flex items-center gap-3 shrink-0">
-          <h1 className="text-2xl font-bold text-gray-900">Takvim</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-ink">Takvim</h1>
         </div>
-        <div className="flex-1 min-h-0 bg-white rounded-xl border border-gray-200 shadow-sm animate-pulse" />
+        <div className="flex-1 min-h-0 rounded-xl border border-line anim-shimmer bg-gradient-to-r from-surface-sunken via-surface-muted to-surface-sunken" />
       </div>
     );
   }
@@ -251,16 +251,16 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
       {/* Header — a single month/year control next to the title (no duplicates).
           The month label itself opens the month/year picker for jumping ahead. */}
       <div className="flex items-center gap-3 flex-wrap shrink-0">
-        <h1 className="text-2xl font-bold text-gray-900">Takvim</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-ink">Takvim</h1>
 
         {/* Prev · clickable month/year picker · next.
             NOTE: no `overflow-hidden` here — it would clip the picker popover
             (rendered at top-full, outside this box) and the picker would appear
             to "do nothing" on click. End buttons are rounded individually. */}
-        <div className="flex items-center rounded-lg border border-gray-200 bg-white">
+        <div className="flex items-center rounded-lg border border-line bg-surface shadow-xs">
           <button
             onClick={() => setCurrent((d) => subMonths(d, 1))}
-            className="p-1.5 rounded-l-lg hover:bg-gray-100 active:bg-gray-200 text-gray-500 transition-colors"
+            className="p-1.5 rounded-l-lg text-muted hover:bg-surface-hover hover:text-ink active:bg-surface-sunken transition-colors duration-150"
             aria-label="Önceki ay"
           >
             <ChevronLeft size={18} />
@@ -268,7 +268,7 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
           <MonthYearPicker value={current} onChange={(d) => setCurrent(isValid(d) ? d : new Date())} />
           <button
             onClick={() => setCurrent((d) => addMonths(d, 1))}
-            className="p-1.5 rounded-r-lg hover:bg-gray-100 active:bg-gray-200 text-gray-500 transition-colors"
+            className="p-1.5 rounded-r-lg text-muted hover:bg-surface-hover hover:text-ink active:bg-surface-sunken transition-colors duration-150"
             aria-label="Sonraki ay"
           >
             <ChevronRight size={18} />
@@ -279,10 +279,10 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
           onClick={() => { setCurrent(new Date()); setSelectedDay(new Date()); }}
           aria-pressed={!viewingToday}
           className={cn(
-            "text-sm px-3 py-1.5 rounded-lg font-medium border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1",
+            "text-sm px-3 py-1.5 rounded-lg font-medium border transition-all duration-150 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring focus-visible:ring-offset-1",
             viewingToday
-              ? "bg-white border-gray-200 text-gray-400 hover:bg-gray-50 active:bg-gray-100"
-              : "bg-blue-600 border-blue-600 text-white shadow-sm hover:bg-blue-700",
+              ? "bg-surface border-line text-subtle hover:bg-surface-muted hover:text-muted"
+              : "bg-brand border-brand text-white shadow-xs hover:bg-brand-strong",
           )}
         >
           Bugün
@@ -292,11 +292,11 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
       {/* Body: calendar grid + agenda side panel */}
       <div className="flex gap-4 flex-1 min-h-0">
         {/* Calendar */}
-        <div className="flex-1 min-w-0 flex flex-col bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="flex-1 min-w-0 flex flex-col bg-surface rounded-xl border border-line shadow-card overflow-hidden">
           {/* Day-of-week headers */}
-          <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50/60 shrink-0">
+          <div className="grid grid-cols-7 border-b border-line bg-surface-muted/60 shrink-0">
             {["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"].map((d) => (
-              <div key={d} className="text-center text-[11px] font-semibold text-gray-400 py-2 uppercase tracking-wide">{d}</div>
+              <div key={d} className="text-center text-[11px] font-semibold text-subtle py-2 uppercase tracking-wider">{d}</div>
             ))}
           </div>
 
@@ -319,25 +319,25 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
                   aria-current={isToday ? "date" : undefined}
                   aria-pressed={isSelected}
                   className={cn(
-                    "relative border-r border-b border-gray-100 p-1.5 text-left transition-colors flex flex-col gap-1 min-h-0 overflow-hidden",
-                    !inMonth && "bg-gray-50/60",
+                    "relative border-r border-b border-hairline p-1.5 text-left transition-colors duration-150 flex flex-col gap-1 min-h-0 overflow-hidden",
+                    !inMonth && "bg-surface-muted/60",
                     // Selected wins; today (unselected) keeps a soft persistent tint;
                     // everything else gets a clear hover affordance.
                     isToday && isSelected
-                      ? "bg-blue-100/70 ring-2 ring-inset ring-blue-500"
+                      ? "bg-brand-soft ring-2 ring-inset ring-brand"
                       : isSelected
-                        ? "ring-2 ring-inset ring-blue-400 bg-blue-50/50"
+                        ? "ring-2 ring-inset ring-brand-ring bg-brand-soft/50"
                         : isToday
-                          ? "bg-blue-50/70 ring-1 ring-inset ring-blue-200 hover:bg-blue-100/60"
-                          : inMonth && "hover:bg-blue-50/50",
+                          ? "bg-brand-soft/60 ring-1 ring-inset ring-brand-ring/70 hover:bg-brand-soft"
+                          : inMonth && "hover:bg-surface-hover",
                   )}
                 >
                   <span className={cn(
-                    "text-xs font-medium h-6 w-6 flex items-center justify-center rounded-full shrink-0 transition-colors",
-                    isToday && "bg-blue-600 text-white font-semibold shadow-sm",
-                    !isToday && isSelected && "bg-blue-600/10 text-blue-700 font-semibold ring-1 ring-blue-300",
-                    !isToday && !isSelected && inMonth && "text-gray-700",
-                    !isToday && !isSelected && !inMonth && "text-gray-300",
+                    "text-xs font-medium tabular-nums h-6 w-6 flex items-center justify-center rounded-full shrink-0 transition-colors duration-150",
+                    isToday && "bg-brand text-white font-semibold shadow-xs",
+                    !isToday && isSelected && "bg-brand-soft text-brand-strong font-semibold ring-1 ring-brand-ring/60",
+                    !isToday && !isSelected && inMonth && "text-muted",
+                    !isToday && !isSelected && !inMonth && "text-subtle/60",
                   )}>
                     {format(day, "d")}
                   </span>
@@ -346,17 +346,17 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
                       <span
                         key={task.id}
                         className={cn(
-                          "flex items-center gap-1 text-[11px] leading-tight rounded px-1.5 py-0.5 bg-gray-50 border border-gray-100",
+                          "flex items-center gap-1 text-[11px] leading-tight rounded-md px-1.5 py-0.5 bg-surface-muted border border-hairline",
                           task.status === "done" && DONE_CLS,
                         )}
                       >
                         <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", dotFor(task))} />
-                        {task.visibility === "admin_only" && <Lock size={9} className="shrink-0 text-amber-600" />}
-                        <span className="truncate text-gray-700">{task.title}</span>
+                        {task.visibility === "admin_only" && <Lock size={9} className="shrink-0 text-warning" />}
+                        <span className="truncate text-muted">{task.title}</span>
                       </span>
                     ))}
                     {dayTasks.length > MAX_SHOWN && (
-                      <span className="self-start text-[10px] text-blue-700 font-semibold bg-blue-50 rounded px-1.5 py-0.5 leading-none">
+                      <span className="self-start text-[10px] text-brand-strong font-semibold tabular-nums bg-brand-soft rounded-md px-1.5 py-0.5 leading-none">
                         +{dayTasks.length - MAX_SHOWN} daha
                       </span>
                     )}
@@ -368,21 +368,21 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
         </div>
 
         {/* Agenda side panel (lg+) */}
-        <aside className="w-80 shrink-0 hidden lg:flex flex-col bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 shrink-0">
-            <CalendarDays size={15} className="text-blue-600" />
-            <h2 className="text-sm font-semibold text-gray-900 capitalize">
+        <aside className="w-80 shrink-0 hidden lg:flex flex-col bg-surface rounded-xl border border-line shadow-card overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-hairline shrink-0">
+            <CalendarDays size={15} className="text-brand" />
+            <h2 className="text-sm font-semibold tracking-tight text-ink capitalize">
               {format(selectedDay, "d MMMM EEEE", { locale: tr })}
             </h2>
             {dfnsIsToday(selectedDay) && (
-              <span className="text-[10px] bg-blue-50 text-blue-600 rounded-full px-2 py-0.5 font-medium">Bugün</span>
+              <span className="text-[10px] bg-brand-soft text-brand-strong rounded-full px-2 py-0.5 font-medium">Bugün</span>
             )}
           </div>
           <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1.5">
             {selectedDayTasks.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-center gap-1 py-10">
-                <CalendarDays size={28} className="text-gray-200" />
-                <p className="text-sm text-gray-400">Bu tarihte iş yok.</p>
+              <div className="h-full flex flex-col items-center justify-center text-center gap-1 py-10 anim-fade">
+                <CalendarDays size={28} className="text-subtle/40" />
+                <p className="text-sm text-subtle">Bu tarihte iş yok.</p>
               </div>
             ) : (
               selectedDayTasks.map((task) => (
@@ -391,15 +391,15 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
                   prefetch={false}
                   href={`/tasks/${task.id}`}
                   className={cn(
-                    "flex items-center gap-2.5 p-2.5 rounded-lg border border-gray-100 hover:border-gray-200 hover:bg-gray-50 transition-colors group",
+                    "flex items-center gap-2.5 p-2.5 rounded-lg border border-hairline hover:border-line hover:bg-surface-hover transition-colors duration-150 group",
                     task.status === "done" && "opacity-60",
                   )}
                 >
                   <span className={cn("h-2.5 w-2.5 rounded-full shrink-0", dotFor(task))} />
-                  {task.visibility === "admin_only" && <Lock size={12} className="shrink-0 text-amber-600" />}
+                  {task.visibility === "admin_only" && <Lock size={12} className="shrink-0 text-warning" />}
                   <span className={cn(
-                    "text-sm text-gray-800 group-hover:text-blue-600 flex-1 truncate",
-                    task.status === "done" && "line-through text-gray-400",
+                    "text-sm text-ink group-hover:text-brand-strong flex-1 truncate",
+                    task.status === "done" && "line-through text-subtle",
                   )}>
                     {task.title}
                   </span>
@@ -407,10 +407,10 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
               ))
             )}
           </div>
-          <div className="px-3 py-3 border-t border-gray-100 shrink-0">
+          <div className="px-3 py-3 border-t border-hairline shrink-0">
             <button
               onClick={() => setCreateModalDate(format(selectedDay, "yyyy-MM-dd"))}
-              className="flex items-center justify-center gap-2 w-full px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+              className="flex items-center justify-center gap-2 w-full px-3 py-2 bg-brand text-white text-sm font-medium rounded-lg shadow-xs hover:bg-brand-strong active:scale-[0.98] transition-all duration-150"
             >
               <Plus size={14} />
               Bu güne görev ekle
@@ -425,23 +425,23 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
           only peeks through when the sheet is dragged. dvh (not vh) keeps the
           height correct against the mobile browser's dynamic toolbar. */}
       {showMobilePanel && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 lg:hidden" onClick={() => setShowMobilePanel(false)}>
+        <div className="anim-fade fixed inset-0 z-50 flex items-end justify-center bg-black/30 lg:hidden" onClick={() => setShowMobilePanel(false)}>
           <div
-            className="bg-white rounded-t-2xl shadow-2xl w-full max-h-[85dvh] flex flex-col"
+            className="anim-slide-up bg-surface rounded-t-2xl shadow-drawer w-full max-h-[85dvh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <h2 className="text-sm font-semibold text-gray-900 capitalize">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-hairline">
+              <h2 className="text-sm font-semibold tracking-tight text-ink capitalize">
                 {format(selectedDay, "d MMMM EEEE", { locale: tr })}
               </h2>
-              <button onClick={() => setShowMobilePanel(false)} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg">
+              <button onClick={() => setShowMobilePanel(false)} className="text-subtle hover:text-ink hover:bg-surface-muted p-1 rounded-lg transition-colors duration-150">
                 <X size={16} />
               </button>
             </div>
             {/* Scrollable list — min-h-0 lets it shrink so the footer stays put */}
             <div className="flex-1 min-h-0 overflow-y-auto px-5 py-3 space-y-2">
               {selectedDayTasks.length === 0 ? (
-                <p className="text-sm text-gray-400 py-6 text-center">Bu tarihte iş yok.</p>
+                <p className="text-sm text-subtle py-6 text-center">Bu tarihte iş yok.</p>
               ) : (
                 selectedDayTasks.map((task) => (
                   <Link
@@ -450,13 +450,13 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
                     href={`/tasks/${task.id}`}
                     onClick={() => setShowMobilePanel(false)}
                     className={cn(
-                      "flex items-center gap-2 p-2.5 rounded-lg hover:bg-gray-50 transition-colors group",
+                      "flex items-center gap-2 p-2.5 rounded-lg hover:bg-surface-hover transition-colors duration-150 group",
                       task.status === "done" && "opacity-60",
                     )}
                   >
                     <span className={cn("h-2.5 w-2.5 rounded-full shrink-0", dotFor(task))} />
-                    {task.visibility === "admin_only" && <Lock size={12} className="shrink-0 text-amber-600" />}
-                    <span className={cn("text-sm text-gray-800 group-hover:text-blue-600 flex-1 truncate", task.status === "done" && "line-through")}>
+                    {task.visibility === "admin_only" && <Lock size={12} className="shrink-0 text-warning" />}
+                    <span className={cn("text-sm text-ink group-hover:text-brand-strong flex-1 truncate", task.status === "done" && "line-through")}>
                       {task.title}
                     </span>
                   </Link>
@@ -465,13 +465,13 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
             </div>
             {/* Sticky footer — always visible the moment the sheet opens. Extra
                 bottom padding clears the iOS home-indicator safe area. */}
-            <div className="shrink-0 px-5 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] border-t border-gray-100">
+            <div className="shrink-0 px-5 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] border-t border-hairline">
               <button
                 onClick={() => {
                   setCreateModalDate(format(selectedDay, "yyyy-MM-dd"));
                   setShowMobilePanel(false);
                 }}
-                className="flex items-center justify-center gap-2 w-full px-3 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 active:bg-blue-800 transition-colors"
+                className="flex items-center justify-center gap-2 w-full px-3 py-2.5 bg-brand text-white text-sm font-medium rounded-lg shadow-xs hover:bg-brand-strong active:scale-[0.98] transition-all duration-150"
               >
                 <Plus size={14} />
                 Bu güne görev ekle

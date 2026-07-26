@@ -87,8 +87,9 @@
   --color-overdue:       var(--overdue);
   --color-urgent:        var(--urgent);
 
-  --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --font-sans: var(--font-manrope), ui-sans-serif, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    "Noto Sans", sans-serif;
 
   --radius-card:    var(--radius);
   --radius-control: 0.5rem;   /* buttons, inputs, selects (== rounded-lg today) */
@@ -159,6 +160,9 @@ body {
   background: var(--app-bg);
   color: var(--text);
   font-family: var(--font-sans);
+  /* Manrope küçük boyutlarda hafif geniş kurulur; -0.008em UI yoğunluğunda
+     dengeli okunurluk verir. Başlıklar bileşen düzeyinde tracking alır. */
+  letter-spacing: -0.008em;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -217,4 +221,52 @@ body {
 /* Hairline divider helper for lists/rows */
 .divide-hairline > :not([hidden]) ~ :not([hidden]) {
   border-color: var(--hairline);
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Hareket sistemi — CSS-only giriş animasyonları ve mikro-etkileşim yardımcıları.
+   Kurallar:
+     • anim-*        → BİR kez oynayan giriş animasyonları (mount'ta)
+     • stagger-*     → kart/satır gridlerinde kademeli giriş (max 12 çocuk)
+     • hover/active  → bileşen düzeyinde Tailwind (duration-150 + ease-standard)
+   prefers-reduced-motion base katmandaki global kuralla anında biter.
+   ────────────────────────────────────────────────────────────────────────── */
+@keyframes anim-fade      { from { opacity: 0 } to { opacity: 1 } }
+@keyframes anim-fade-up   { from { opacity: 0; transform: translateY(6px) }  to { opacity: 1; transform: none } }
+@keyframes anim-fade-down { from { opacity: 0; transform: translateY(-4px) } to { opacity: 1; transform: none } }
+@keyframes anim-scale-in  { from { opacity: 0; transform: scale(0.97) }      to { opacity: 1; transform: none } }
+@keyframes anim-drawer-in { from { opacity: 0; transform: translateX(24px) } to { opacity: 1; transform: none } }
+@keyframes anim-slide-up  { from { opacity: 0; transform: translateY(20px) } to { opacity: 1; transform: none } }
+@keyframes anim-shimmer   { from { background-position: 200% 0 } to { background-position: -200% 0 } }
+
+@layer utilities {
+  .anim-fade      { animation: anim-fade      var(--duration-normal) var(--ease-standard) both; }
+  .anim-fade-up   { animation: anim-fade-up   240ms var(--ease-standard) both; }
+  .anim-fade-down { animation: anim-fade-down 200ms var(--ease-standard) both; }   /* menüler, popover */
+  .anim-scale-in  { animation: anim-scale-in  160ms var(--ease-emphasized) both; } /* modal/diyalog */
+  .anim-drawer-in { animation: anim-drawer-in 280ms var(--ease-emphasized) both; } /* sağ çekmece */
+  .anim-slide-up  { animation: anim-slide-up  260ms var(--ease-emphasized) both; } /* mobil sheet */
+
+  /* Yükleme iskeletleri — bileşen bg-gradient verir, bu sınıf hareket ettirir. */
+  .anim-shimmer {
+    background-size: 200% 100%;
+    animation: anim-shimmer 1.6s linear infinite;
+  }
+
+  /* Kart/satır gridlerinde kademeli giriş: ebeveyne .stagger-children ver,
+     çocuklar 35ms arayla yukarı süzülür. 12'den sonrası gecikmesiz gelir —
+     uzun listelerde bekletme hissi yaratmaz. */
+  .stagger-children > * { animation: anim-fade-up 240ms var(--ease-standard) both; }
+  .stagger-children > :nth-child(1)  { animation-delay: 0ms }
+  .stagger-children > :nth-child(2)  { animation-delay: 35ms }
+  .stagger-children > :nth-child(3)  { animation-delay: 70ms }
+  .stagger-children > :nth-child(4)  { animation-delay: 105ms }
+  .stagger-children > :nth-child(5)  { animation-delay: 140ms }
+  .stagger-children > :nth-child(6)  { animation-delay: 175ms }
+  .stagger-children > :nth-child(7)  { animation-delay: 210ms }
+  .stagger-children > :nth-child(8)  { animation-delay: 245ms }
+  .stagger-children > :nth-child(9)  { animation-delay: 280ms }
+  .stagger-children > :nth-child(10) { animation-delay: 315ms }
+  .stagger-children > :nth-child(11) { animation-delay: 350ms }
+  .stagger-children > :nth-child(12) { animation-delay: 385ms }
 }

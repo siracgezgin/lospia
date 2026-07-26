@@ -34,7 +34,9 @@ const EMPTY: Draft = {
 };
 
 const inputCls =
-  "w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-[13px] text-ink placeholder:text-subtle focus:outline-none focus:ring-2 focus:ring-brand-ring focus:border-brand-ring";
+  "w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[13px] text-ink placeholder:text-subtle " +
+  "transition-[color,background-color,border-color,box-shadow] duration-150 ease-standard hover:border-line-strong " +
+  "focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40";
 
 function fmtAmount(amount: number | null, currency: string) {
   if (amount == null) return "—";
@@ -132,7 +134,7 @@ export function FinanceView({ payments }: Props) {
         rightSlot={
           <button
             onClick={openNew}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-3.5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand-strong"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-3.5 py-2 text-[13px] font-medium text-white shadow-xs transition-[background-color,box-shadow,transform] duration-150 ease-standard hover:bg-brand-strong active:scale-[0.98]"
           >
             <Plus size={15} /> Yeni ödeme
           </button>
@@ -140,48 +142,58 @@ export function FinanceView({ payments }: Props) {
       />
 
       {/* Özet kutuları */}
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div className="flex items-center gap-3 rounded-2xl border border-line bg-surface px-4 py-3 shadow-card">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-100 text-amber-700"><Clock3 size={17} /></span>
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-subtle">Bekleyen</p>
-            <p className="text-[15px] font-bold text-ink tabular-nums">{totals.pending}</p>
+      <div className="stagger-children mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="flex items-center gap-3.5 rounded-2xl border border-line bg-surface px-4 py-3.5 shadow-card">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-100 text-amber-700"><Clock3 size={18} /></span>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-subtle">Bekleyen</p>
+            <p className="truncate text-lg font-bold tracking-tight text-ink tabular-nums">{totals.pending}</p>
           </div>
         </div>
-        <div className="flex items-center gap-3 rounded-2xl border border-line bg-surface px-4 py-3 shadow-card">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-100 text-emerald-700"><CircleDollarSign size={17} /></span>
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-subtle">Ödenen</p>
-            <p className="text-[15px] font-bold text-ink tabular-nums">{totals.paid}</p>
+        <div className="flex items-center gap-3.5 rounded-2xl border border-line bg-surface px-4 py-3.5 shadow-card">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-100 text-emerald-700"><CircleDollarSign size={18} /></span>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-subtle">Ödenen</p>
+            <p className="truncate text-lg font-bold tracking-tight text-ink tabular-nums">{totals.paid}</p>
           </div>
         </div>
       </div>
 
-      {error && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] text-red-700">{error}</div>}
+      {error && (
+        <div role="alert" className="anim-fade-down mb-3 rounded-lg border border-danger/25 bg-danger/10 px-3 py-2 text-[12.5px] font-medium text-danger">
+          {error}
+        </div>
+      )}
 
       {/* Ekle / düzenle paneli */}
       {draft && (
-        <div className="mb-4 rounded-2xl border border-line-strong bg-surface p-4 shadow-card">
+        <div className="anim-fade-down mb-4 rounded-2xl border border-line-strong bg-surface p-4 shadow-card">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-[14px] font-semibold text-ink">{draft.id ? "Ödemeyi düzenle" : "Yeni ödeme"}</h2>
-            <button onClick={() => setDraft(null)} className="rounded-md p-1 text-subtle hover:bg-surface-muted hover:text-ink"><X size={16} /></button>
+            <h2 className="text-[14px] font-semibold tracking-tight text-ink">{draft.id ? "Ödemeyi düzenle" : "Yeni ödeme"}</h2>
+            <button
+              onClick={() => setDraft(null)}
+              aria-label="Kapat"
+              className="rounded-md p-1.5 text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:bg-surface-sunken"
+            >
+              <X size={16} />
+            </button>
           </div>
           <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
             <label className="block sm:col-span-2 lg:col-span-1">
-              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">Başlık *</span>
+              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted">Başlık *</span>
               <input className={inputCls} value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} placeholder="Ruki ödeme / Sri Lanka kumaş…" />
             </label>
             <label className="block">
-              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">Kime</span>
+              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted">Kime</span>
               <input className={inputCls} value={draft.payee} onChange={(e) => setDraft({ ...draft, payee: e.target.value })} placeholder="Kişi / tedarikçi" />
             </label>
             <div className="flex gap-2">
               <label className="block min-w-0 flex-1">
-                <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">Tutar</span>
+                <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted">Tutar</span>
                 <input className={inputCls} inputMode="decimal" value={draft.amount} onChange={(e) => setDraft({ ...draft, amount: e.target.value })} placeholder="0,00" />
               </label>
               <label className="block w-20 shrink-0">
-                <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">Birim</span>
+                <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted">Birim</span>
                 <select className={inputCls} value={draft.currency} onChange={(e) => setDraft({ ...draft, currency: e.target.value })}>
                   <option value="TRY">₺ TRY</option>
                   <option value="USD">$ USD</option>
@@ -190,31 +202,36 @@ export function FinanceView({ payments }: Props) {
               </label>
             </div>
             <label className="block">
-              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">Vade</span>
+              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted">Vade</span>
               <input type="date" className={inputCls} value={draft.due_date} onChange={(e) => setDraft({ ...draft, due_date: e.target.value })} />
             </label>
             <label className="block">
-              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">Etiket</span>
+              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted">Etiket</span>
               <input className={inputCls} value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })} placeholder="üretim / hoca / kumaş…" />
             </label>
             <label className="block">
-              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">Durum</span>
+              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted">Durum</span>
               <select className={inputCls} value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value as Draft["status"] })}>
                 <option value="bekliyor">Bekliyor</option>
                 <option value="odendi">Ödendi</option>
               </select>
             </label>
             <label className="block sm:col-span-2 lg:col-span-3">
-              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">Not</span>
+              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted">Not</span>
               <input className={inputCls} value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} placeholder="Opsiyonel not…" />
             </label>
           </div>
           <div className="mt-3 flex justify-end gap-2">
-            <button onClick={() => setDraft(null)} className="rounded-lg px-3 py-2 text-[13px] font-medium text-muted hover:text-ink">İptal</button>
+            <button
+              onClick={() => setDraft(null)}
+              className="rounded-lg px-3 py-2 text-[13px] font-medium text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:bg-surface-sunken"
+            >
+              İptal
+            </button>
             <button
               onClick={handleSave}
               disabled={isSaving}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand-strong disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-[13px] font-medium text-white shadow-xs transition-[background-color,box-shadow,transform] duration-150 ease-standard hover:bg-brand-strong active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60"
             >
               {isSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} Kaydet
             </button>
@@ -226,7 +243,7 @@ export function FinanceView({ payments }: Props) {
       <div className="overflow-x-auto rounded-2xl border border-line-strong bg-surface shadow-card">
         <table className="w-full min-w-[720px] text-left text-[13px]">
           <thead>
-            <tr className="border-b border-line-strong bg-surface-muted text-[11px] font-semibold uppercase tracking-wide text-subtle">
+            <tr className="border-b border-line-strong bg-surface-muted text-[11px] font-semibold uppercase tracking-wider text-subtle">
               <th className="px-3 py-2.5">Başlık</th>
               <th className="px-3 py-2.5">Kime</th>
               <th className="px-3 py-2.5 text-right">Tutar</th>
@@ -238,13 +255,20 @@ export function FinanceView({ payments }: Props) {
           <tbody>
             {payments.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-8 text-center text-[13px] text-subtle">
-                  Henüz ödeme kaydı yok. “Yeni ödeme” ile ilk kaydı ekleyin.
+                <td colSpan={6} className="px-3 py-10 text-center">
+                  <div className="anim-fade mx-auto flex max-w-xs flex-col items-center gap-2.5">
+                    <span className="grid h-10 w-10 place-items-center rounded-xl bg-surface-sunken text-subtle">
+                      <Wallet size={18} />
+                    </span>
+                    <p className="text-[13px] leading-relaxed text-subtle">
+                      Henüz ödeme kaydı yok. “Yeni ödeme” ile ilk kaydı ekleyin.
+                    </p>
+                  </div>
                 </td>
               </tr>
             )}
             {payments.map((p) => (
-              <tr key={p.id} className="border-b border-line last:border-b-0 hover:bg-surface-muted/50">
+              <tr key={p.id} className="border-b border-line last:border-b-0 transition-colors duration-150 hover:bg-surface-hover">
                 <td className="px-3 py-2.5">
                   <span className="font-medium text-ink">{p.title}</span>
                   {p.category && <span className="ml-2 rounded bg-surface-muted px-1.5 py-0.5 text-[10.5px] text-muted">{p.category}</span>}
@@ -252,7 +276,7 @@ export function FinanceView({ payments }: Props) {
                 </td>
                 <td className="px-3 py-2.5 text-muted">{p.payee ?? "—"}</td>
                 <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-ink">{fmtAmount(p.amount, p.currency)}</td>
-                <td className="px-3 py-2.5 text-muted">
+                <td className="px-3 py-2.5 text-muted tabular-nums">
                   {p.due_date ? format(parseISO(p.due_date), "d MMM yyyy", { locale: tr }) : "—"}
                 </td>
                 <td className="px-3 py-2.5">
@@ -260,10 +284,12 @@ export function FinanceView({ payments }: Props) {
                     onClick={() => handleToggle(p)}
                     disabled={isSaving && busyId === p.id}
                     className={cn(
-                      "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11.5px] font-semibold transition-colors",
+                      "inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-[11.5px] font-semibold tabular-nums ring-1 ring-inset",
+                      "transition-[background-color,color,box-shadow,transform] duration-150 ease-standard active:scale-[0.97]",
+                      "disabled:pointer-events-none disabled:opacity-60",
                       p.status === "odendi"
-                        ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
-                        : "bg-amber-100 text-amber-800 hover:bg-amber-200",
+                        ? "bg-emerald-100 text-emerald-800 ring-emerald-600/20 hover:bg-emerald-200"
+                        : "bg-amber-100 text-amber-800 ring-amber-600/20 hover:bg-amber-200",
                     )}
                     title="Durumu değiştir"
                   >
@@ -275,8 +301,22 @@ export function FinanceView({ payments }: Props) {
                 </td>
                 <td className="px-3 py-2.5">
                   <div className="flex items-center justify-end gap-1">
-                    <button onClick={() => openEdit(p)} className="rounded-md p-1.5 text-subtle hover:bg-surface-muted hover:text-ink" title="Düzenle"><Pencil size={14} /></button>
-                    <button onClick={() => handleDelete(p)} className="rounded-md p-1.5 text-subtle hover:bg-red-50 hover:text-red-600" title="Sil"><Trash2 size={14} /></button>
+                    <button
+                      onClick={() => openEdit(p)}
+                      aria-label="Düzenle"
+                      title="Düzenle"
+                      className="rounded-md p-1.5 text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:bg-surface-sunken"
+                    >
+                      <Pencil size={14} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(p)}
+                      aria-label="Sil"
+                      title="Sil"
+                      className="rounded-md p-1.5 text-subtle transition-colors duration-150 hover:bg-danger/10 hover:text-danger active:bg-danger/15"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                 </td>
               </tr>

@@ -8,9 +8,11 @@ import { cn } from "@/lib/utils/cn";
 
 const CONTROL =
   "w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink " +
-  "placeholder:text-subtle transition-colors " +
+  "placeholder:text-subtle " +
+  "transition-[color,background-color,border-color,box-shadow] duration-150 ease-standard " +
+  "hover:border-line-strong " +
   "focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40 " +
-  "disabled:opacity-50 disabled:bg-surface-sunken";
+  "disabled:opacity-50 disabled:bg-surface-sunken disabled:cursor-not-allowed disabled:hover:border-line";
 
 const CONTROL_ERROR =
   "border-danger focus:border-danger focus:ring-danger/25";
@@ -86,7 +88,7 @@ export function Field({
       </label>
       {children}
       {error ? (
-        <p className="text-[11.5px] text-danger">{error}</p>
+        <p role="alert" className="anim-fade-down text-[11.5px] text-danger">{error}</p>
       ) : helper ? (
         <p className="text-[11.5px] text-subtle">{helper}</p>
       ) : null}

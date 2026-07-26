@@ -1,7 +1,17 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
+import { Manrope } from "next/font/google";
 import { getAppBrandForHost } from "@/lib/branding";
 import "./globals.css";
+
+// Ürün yazı yüzü — Manrope (variable). Geometrik-hümanist, Türkçe (latin-ext)
+// tam destekli, tabular rakamları güçlü; sistem fontuna göre belirgin karakter
+// kazandırır. next/font self-host eder: harici istek yok, CLS yok.
+const manrope = Manrope({
+  subsets: ["latin", "latin-ext"],
+  variable: "--font-manrope",
+  display: "swap",
+});
 
 // Metadata is HOST-AWARE. The whole app is already dynamically rendered (the
 // root `/` reads the host to route marketing-vs-app), so resolving metadata
@@ -62,7 +72,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="tr" className="h-full antialiased" suppressHydrationWarning>
+    <html lang="tr" className={`h-full antialiased ${manrope.variable}`} suppressHydrationWarning>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );

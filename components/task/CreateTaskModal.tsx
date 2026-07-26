@@ -163,22 +163,32 @@ export function CreateTaskModal({
     });
   }
 
-  const inputCls = "w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
-  const selectCls = "w-full rounded-lg border border-gray-200 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
-  const labelCls = "block text-xs font-medium text-gray-600 mb-1";
+  const inputCls =
+    "w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-subtle " +
+    "transition-[color,background-color,border-color,box-shadow] duration-150 ease-standard " +
+    "hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40";
+  const selectCls =
+    "w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-ink " +
+    "transition-[color,background-color,border-color,box-shadow] duration-150 ease-standard " +
+    "hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40";
+  const labelCls = "block text-[12px] font-medium text-muted mb-1";
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="anim-fade fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-[2px] p-4"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[92vh] overflow-y-auto"
+        className="anim-scale-in bg-surface rounded-modal border border-line shadow-drawer w-full max-w-lg max-h-[92vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
-          <h2 className="text-base font-semibold text-gray-900">Görev oluştur</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 rounded-lg p-1 transition-colors">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-hairline sticky top-0 bg-surface z-10">
+          <h2 className="text-base font-semibold tracking-tight text-ink">Görev oluştur</h2>
+          <button
+            onClick={onClose}
+            aria-label="Kapat"
+            className="text-subtle hover:text-ink hover:bg-surface-muted active:scale-[0.98] rounded-lg p-1.5 transition-colors duration-150"
+          >
             <X size={16} />
           </button>
         </div>
@@ -186,7 +196,7 @@ export function CreateTaskModal({
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
           {/* 1. İş başlığı */}
           <div>
-            <label className={labelCls}>İş başlığı <span className="text-red-500">*</span></label>
+            <label className={labelCls}>İş başlığı <span className="text-danger">*</span></label>
             <input
               type="text"
               value={title}
@@ -235,7 +245,7 @@ export function CreateTaskModal({
           <div>
             <label className={labelCls}>Sorumlu kişiler</label>
             {eligibleMembers.length === 0 ? (
-              <p className="text-xs text-gray-500 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
+              <p className="text-xs text-subtle bg-surface-muted border border-hairline rounded-lg px-3 py-2">
                 Çalışma alanında üye yok.
               </p>
             ) : (
@@ -248,11 +258,12 @@ export function CreateTaskModal({
                         key={m.memberId}
                         type="button"
                         onClick={() => toggleResponsible(m.memberId)}
+                        aria-pressed={on}
                         className={cn(
-                          "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs border transition-colors",
+                          "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs border transition-colors duration-150 active:scale-[0.98]",
                           on
-                            ? "bg-blue-50 border-blue-300 text-blue-700"
-                            : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50",
+                            ? "bg-brand-soft border-brand-ring text-brand-strong font-medium"
+                            : "bg-surface border-line text-muted hover:bg-surface-hover hover:border-line-strong",
                         )}
                       >
                         <Avatar name={m.name} size="xs" />
@@ -269,29 +280,29 @@ export function CreateTaskModal({
           {/* 6 + 7. Başlangıç tarihi + Teslim tarihi — both mandatory */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelCls}>Başlangıç tarihi <span className="text-red-500">*</span></label>
+              <label className={labelCls}>Başlangıç tarihi <span className="text-danger">*</span></label>
               <input
                 type="date"
                 value={startDate}
                 required
                 onChange={(e) => setStartDate(e.target.value)}
-                className={selectCls}
+                className={cn(selectCls, "tabular-nums")}
               />
             </div>
             <div>
-              <label className={labelCls}>Teslim tarihi <span className="text-red-500">*</span></label>
+              <label className={labelCls}>Teslim tarihi <span className="text-danger">*</span></label>
               <input
                 type="date"
                 value={dueDate}
                 min={startDate || undefined}
                 required
                 onChange={(e) => setDueDate(e.target.value)}
-                className={selectCls}
+                className={cn(selectCls, "tabular-nums")}
               />
             </div>
           </div>
           {dateOrderInvalid && (
-            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            <p className="anim-fade-down text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
               Başlangıç tarihi teslim tarihinden sonra olamaz.
             </p>
           )}
@@ -334,18 +345,19 @@ export function CreateTaskModal({
                     key={e}
                     type="button"
                     onClick={() => setEffort(e)}
+                    aria-pressed={effort === e}
                     className={cn(
-                      "flex-1 rounded-lg border px-3 py-2 text-sm transition-colors",
+                      "flex-1 rounded-lg border px-3 py-2 text-sm transition-colors duration-150 active:scale-[0.98]",
                       effort === e
-                        ? "bg-blue-50 border-blue-300 text-blue-700 font-medium"
-                        : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50",
+                        ? "bg-brand-soft border-brand-ring text-brand-strong font-medium"
+                        : "bg-surface border-line text-muted hover:bg-surface-hover hover:border-line-strong",
                     )}
                   >
                     {EFFORT_LABELS[e]}
                   </button>
                 ))}
               </div>
-              <p className="text-[11px] text-gray-400 mt-1.5">
+              <p className="text-[11px] text-subtle mt-1.5">
                 Puan yalnızca yönetici onayından sonra kesinleşir.
               </p>
             </div>
@@ -363,18 +375,19 @@ export function CreateTaskModal({
                       key={v}
                       type="button"
                       onClick={() => handleVisibilityChange(v)}
+                      aria-pressed={on}
                       className={cn(
-                        "text-left rounded-lg border px-3 py-2 transition-colors",
+                        "text-left rounded-lg border px-3 py-2 transition-colors duration-150",
                         on
                           ? "bg-amber-50 border-amber-300"
-                          : "bg-white border-gray-200 hover:bg-gray-50",
+                          : "bg-surface border-line hover:bg-surface-hover hover:border-line-strong",
                       )}
                     >
-                      <span className={cn("flex items-center gap-1.5 text-sm font-medium", on ? "text-amber-800" : "text-gray-700")}>
+                      <span className={cn("flex items-center gap-1.5 text-sm font-medium", on ? "text-amber-800" : "text-ink")}>
                         {v === "admin_only" && <Lock size={12} />}
                         {VISIBILITY_LABELS[v]}
                       </span>
-                      <span className="block text-[11px] text-gray-500 mt-0.5 leading-snug">
+                      <span className="block text-[11px] text-muted mt-0.5 leading-snug">
                         {VISIBILITY_DESCRIPTIONS[v]}
                       </span>
                     </button>
@@ -382,7 +395,7 @@ export function CreateTaskModal({
                 })}
               </div>
               {visibility === "admin_only" && (
-                <p className="text-[11px] text-amber-700 mt-1.5">
+                <p className="anim-fade-down text-[11px] text-amber-700 mt-1.5">
                   Bu görevde yalnızca yönetici kişiler sorumlu olarak seçilebilir.
                 </p>
               )}
@@ -396,14 +409,14 @@ export function CreateTaskModal({
           )}
 
           {error && (
-            <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
+            <p role="alert" className="anim-fade-down text-xs text-danger bg-danger/10 border border-danger/20 rounded-lg px-3 py-2">{error}</p>
           )}
 
           <div className="flex items-center justify-end gap-2 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              className="px-4 py-2 text-sm font-medium text-muted hover:text-ink hover:bg-surface-muted active:scale-[0.98] rounded-lg transition-colors duration-150"
             >
               İptal
             </button>
@@ -411,10 +424,10 @@ export function CreateTaskModal({
               type="submit"
               disabled={isPending || !title.trim() || workspaceIdMissing || datesMissing || dateOrderInvalid}
               className={cn(
-                "px-4 py-2 text-sm font-medium rounded-lg transition-colors",
+                "px-4 py-2 text-sm font-medium rounded-lg transition-all duration-150",
                 isPending || !title.trim() || workspaceIdMissing || datesMissing || dateOrderInvalid
-                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                  : "bg-blue-600 text-white hover:bg-blue-700",
+                  ? "bg-surface-sunken text-subtle cursor-not-allowed"
+                  : "bg-brand text-white shadow-xs hover:bg-brand-strong active:scale-[0.98]",
               )}
             >
               {isPending ? "Oluşturuluyor…" : "Görev oluştur"}

@@ -101,7 +101,7 @@ function ToolbarButton({
       onClick={onClick}
       title={title}
       className={cn(
-        "rounded-md p-1.5 transition-colors",
+        "rounded-md p-1.5 transition-colors duration-150 active:scale-95",
         active ? "bg-brand-soft text-brand-strong" : "text-muted hover:bg-surface-muted hover:text-ink",
       )}
     >
@@ -215,15 +215,15 @@ function Toolbar({ variableSuggestions }: { variableSuggestions: string[] }) {
         </ToolbarButton>
       </div>
       {variableSuggestions.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1 border-t border-line/60 px-2 py-1.5">
-          <span className="mr-1 text-[10.5px] text-subtle">Değişken ekle:</span>
+        <div className="flex flex-wrap items-center gap-1 border-t border-hairline px-2 py-1.5">
+          <span className="mr-1 text-[10.5px] font-medium uppercase tracking-wider text-subtle">Değişken ekle:</span>
           {variableSuggestions.map((v) => (
             <button
               key={v}
               type="button"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => insertToken(v)}
-              className="rounded bg-surface px-1.5 py-0.5 font-mono text-[10.5px] text-muted transition-colors hover:bg-brand-soft hover:text-brand-strong"
+              className="rounded-md border border-hairline bg-surface px-1.5 py-0.5 font-mono text-[10.5px] text-muted transition-colors duration-150 hover:border-brand-ring/40 hover:bg-brand-soft hover:text-brand-strong active:scale-95"
             >
               {v}
             </button>
@@ -288,7 +288,7 @@ export function LexicalTemplateEditor({
   );
 
   return (
-    <div className="overflow-hidden rounded-lg border border-line bg-surface">
+    <div className="overflow-hidden rounded-lg border border-line bg-surface transition-colors duration-150 focus-within:border-brand-ring">
       <LexicalComposer initialConfig={initialConfig}>
         {!readOnly && <Toolbar variableSuggestions={variableSuggestions} />}
         <div className="relative">

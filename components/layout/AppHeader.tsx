@@ -67,7 +67,7 @@ function ProfileMenu({
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 pl-3 border-l border-line rounded-lg py-1 pr-1 hover:bg-surface-muted transition-colors"
+        className="flex items-center gap-2 pl-3 border-l border-line rounded-lg py-1 pr-1 hover:bg-surface-muted active:bg-surface-sunken transition-colors duration-150"
         aria-haspopup="menu"
         aria-expanded={open}
         title={`${displayName} · ${ROLE_LABELS[role]}`}
@@ -77,11 +77,14 @@ function ProfileMenu({
           <span className="text-xs font-medium text-ink truncate max-w-[140px]">{displayName}</span>
           <span className="text-[10px] text-subtle">{ROLE_LABELS[role]}</span>
         </div>
-        <ChevronDown size={13} className={`text-subtle transition-transform ${open ? "rotate-180" : ""}`} />
+        <ChevronDown
+          size={13}
+          className={`text-subtle transition-transform duration-200 ease-standard ${open ? "rotate-180" : ""}`}
+        />
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-64 bg-surface border border-line rounded-xl shadow-pop z-50 overflow-hidden">
+        <div className="absolute right-0 top-full mt-2 w-64 origin-top-right bg-surface border border-line rounded-xl shadow-pop z-50 overflow-hidden anim-fade-down">
           {/* Identity card — name + email (role lives once, in Details below) */}
           <div className="flex items-center gap-3 px-4 py-3.5 bg-surface-muted/60 border-b border-line">
             <Avatar name={displayName} size="md" />
@@ -116,7 +119,7 @@ function ProfileMenu({
             <Link
               href="/settings"
               onClick={() => setOpen(false)}
-              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-muted hover:bg-surface-muted hover:text-ink transition-colors border-b border-line"
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-muted hover:bg-surface-muted hover:text-ink transition-colors duration-150 border-b border-line"
             >
               <Settings size={15} className="shrink-0" />
               Ayarlar
@@ -127,7 +130,7 @@ function ProfileMenu({
           <form action={signOut}>
             <button
               type="submit"
-              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-muted hover:bg-danger/10 hover:text-danger transition-colors"
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-muted hover:bg-danger/10 hover:text-danger transition-colors duration-150"
             >
               <LogOut size={15} className="shrink-0" />
               Çıkış yap
@@ -157,7 +160,13 @@ export function AppHeader({
   return (
     <header className="relative z-30 h-14 bg-surface border-b border-line flex items-center justify-between px-5 shrink-0">
       <div className="flex items-center gap-2.5 min-w-0">
-        <h1 className="text-[15px] font-semibold text-ink truncate">{title}</h1>
+        {/* key={pathname} — rota değişince başlık yumuşakça belirir. */}
+        <h1
+          key={pathname}
+          className="text-[15px] font-semibold tracking-tight text-ink truncate anim-fade"
+        >
+          {title}
+        </h1>
       </div>
 
       <div className="flex items-center gap-3">

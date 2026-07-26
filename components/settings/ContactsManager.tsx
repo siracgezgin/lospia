@@ -75,11 +75,11 @@ export function ContactsManager({ workspaceId, initialContacts }: Props) {
         <EmptyState icon={Users} title="Henüz kişi eklenmemiş." className="py-8" />
       ) : (
         contacts.map((c) => (
-          <div key={c.id} className="flex items-center justify-between px-5 py-3">
-            <div>
-              <p className="text-sm font-medium text-ink">{c.name}</p>
+          <div key={c.id} className="flex items-center justify-between gap-3 px-5 py-3 transition-colors duration-150 hover:bg-surface-hover">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-ink truncate">{c.name}</p>
               {(c.email || c.role_label) && (
-                <p className="text-xs text-subtle">
+                <p className="text-xs text-subtle truncate">
                   {[c.role_label, c.email].filter(Boolean).join(" · ")}
                 </p>
               )}
@@ -87,7 +87,7 @@ export function ContactsManager({ workspaceId, initialContacts }: Props) {
             <button
               onClick={() => handleDelete(c.id)}
               disabled={isPending}
-              className="text-subtle hover:text-danger hover:bg-danger/10 p-1.5 rounded transition-colors disabled:opacity-50"
+              className="shrink-0 text-subtle hover:text-danger hover:bg-danger/10 p-1.5 rounded-md transition-colors duration-150 active:scale-95 disabled:pointer-events-none disabled:opacity-50"
               aria-label={`${c.name} kişisini sil`}
             >
               <Trash2 size={14} />
@@ -97,7 +97,7 @@ export function ContactsManager({ workspaceId, initialContacts }: Props) {
       )}
 
       <form onSubmit={handleAdd} className="px-5 py-4 space-y-3">
-        <p className="text-xs font-semibold text-muted uppercase tracking-wider">Kişi ekle</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-subtle">Kişi ekle</p>
         <div className="flex flex-wrap gap-2">
           <Input
             type="text"
@@ -126,7 +126,7 @@ export function ContactsManager({ workspaceId, initialContacts }: Props) {
             Ekle
           </Button>
         </div>
-        {error && <p className="text-xs text-danger">{error}</p>}
+        {error && <p role="alert" className="anim-fade-down text-xs text-danger">{error}</p>}
       </form>
     </Card>
   );

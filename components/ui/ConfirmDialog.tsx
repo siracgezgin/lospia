@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
@@ -31,6 +31,8 @@ export function ConfirmDialog({
   onCancel,
 }: Props) {
   const confirmRef = useRef<HTMLButtonElement>(null);
+  const titleId = useId();
+  const messageId = useId();
 
   useEffect(() => {
     if (!open) return;
@@ -46,22 +48,24 @@ export function ConfirmDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="anim-fade fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-[2px] p-4"
       onClick={onCancel}
       role="dialog"
       aria-modal="true"
+      aria-labelledby={titleId}
+      aria-describedby={messageId}
     >
       <div
-        className="w-full max-w-sm rounded-modal bg-surface shadow-drawer p-5 space-y-4"
+        className="anim-scale-in w-full max-w-sm rounded-modal border border-line bg-surface shadow-drawer p-5 space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start gap-3">
-          <div className="shrink-0 rounded-full bg-[#fbeae7] p-2 text-danger">
-            <AlertTriangle size={18} />
+          <div className="shrink-0 rounded-full bg-danger/10 p-2 text-danger ring-4 ring-danger/5">
+            <AlertTriangle size={18} strokeWidth={1.75} />
           </div>
           <div className="space-y-1">
-            <h2 className="text-sm font-semibold text-ink">{title}</h2>
-            <p className="text-sm text-muted leading-relaxed">{message}</p>
+            <h2 id={titleId} className="text-sm font-semibold tracking-tight text-ink">{title}</h2>
+            <p id={messageId} className="text-sm text-muted leading-relaxed">{message}</p>
           </div>
         </div>
         <div className="flex items-center justify-end gap-2">

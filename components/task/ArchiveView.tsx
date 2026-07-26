@@ -4,7 +4,7 @@ import { useTransition, useOptimistic } from "react";
 import Link from "next/link";
 import { Archive, RotateCcw } from "lucide-react";
 import { unarchiveTask } from "@/lib/actions/tasks";
-import { cn } from "@/lib/utils/cn";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { formatDateTR } from "@/lib/utils/format-date";
 import type { Task } from "@/types";
 
@@ -22,12 +22,15 @@ function formatDate(iso: string | null) {
 function TaskRow({ task, onUnarchive }: { task: Task; onUnarchive: (id: string) => void }) {
   const [_p, startTransition] = useTransition();
   return (
-    <div className="flex items-center justify-between gap-3 py-2 px-3 rounded-lg hover:bg-gray-50 group">
+    <div className="flex items-center justify-between gap-3 py-2.5 px-4 hover:bg-surface-hover transition-colors duration-150 group">
       <div className="flex-1 min-w-0">
-        <Link href={`/tasks/${task.id}`} className="text-sm font-medium text-gray-800 hover:text-blue-600 truncate block">
+        <Link
+          href={`/tasks/${task.id}`}
+          className="text-sm font-medium text-ink hover:text-brand transition-colors duration-150 truncate block"
+        >
           {task.title}
         </Link>
-        <p className="text-xs text-gray-400 mt-0.5">
+        <p className="text-xs text-subtle mt-0.5 tabular-nums">
           {task.archived_at
             ? `Arşivlendi: ${formatDate(task.archived_at)}`
             : `Tamamlandı: ${formatDate(task.completed_at)}`}
@@ -36,10 +39,10 @@ function TaskRow({ task, onUnarchive }: { task: Task; onUnarchive: (id: string) 
       {task.archived_at && (
         <button
           onClick={() => startTransition(async () => { await unarchiveTask(task.id); onUnarchive(task.id); })}
-          className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-xs text-gray-500 hover:text-blue-600 px-2 py-1 rounded hover:bg-blue-50"
+          className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-all duration-150 flex items-center gap-1 text-xs font-medium text-muted hover:text-brand-strong px-2 py-1 rounded-md hover:bg-brand-soft active:scale-[0.98] shrink-0"
           title="Arşivden çıkar"
         >
-          <RotateCcw size={12} /> Geri al
+          <RotateCcw size={13} /> Geri al
         </button>
       )}
     </div>
@@ -60,22 +63,28 @@ export function ArchiveView({ manuallyArchived, oldCompleted }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-6 py-4 border-b border-gray-200 bg-white shrink-0">
-        <div className="flex items-center gap-2">
-          <Archive size={18} className="text-gray-400" />
-          <h1 className="text-lg font-semibold text-gray-900">Arşiv</h1>
-          <span className="text-sm text-gray-400">({totalCount} görev)</span>
+      <div className="px-6 py-4 border-b border-line bg-surface shrink-0">
+        <div className="flex items-center gap-2.5">
+          <div className="grid h-8 w-8 place-items-center rounded-lg bg-surface-sunken text-muted shrink-0">
+            <Archive size={16} strokeWidth={1.75} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-baseline gap-2">
+              <h1 className="text-lg font-semibold tracking-tight text-ink">Arşiv</h1>
+              <span className="text-sm text-subtle tabular-nums">({totalCount} görev)</span>
+            </div>
+            <p className="text-xs text-subtle">Manuel arşivlenenler ve önceki haftalarda tamamlananlar</p>
+          </div>
         </div>
-        <p className="text-xs text-gray-400 mt-1">Manuel arşivlenenler ve önceki haftalarda tamamlananlar</p>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {archived.length > 0 && (
-          <section>
-            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+          <section className="anim-fade-up">
+            <h2 className="text-[11px] font-semibold uppercase tracking-wider text-subtle mb-2 tabular-nums">
               Manuel arşivlenenler ({archived.length})
             </h2>
-            <div className={cn("bg-white border border-gray-200 rounded-lg divide-y divide-gray-100")}>
+            <div className="bg-surface border border-line rounded-card shadow-card divide-y divide-hairline overflow-hidden">
               {archived.map((task) => (
                 <TaskRow key={task.id} task={task} onUnarchive={handleUnarchive} />
               ))}
@@ -84,11 +93,11 @@ export function ArchiveView({ manuallyArchived, oldCompleted }: Props) {
         )}
 
         {oldCompleted.length > 0 && (
-          <section>
-            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+          <section className="anim-fade-up">
+            <h2 className="text-[11px] font-semibold uppercase tracking-wider text-subtle mb-2 tabular-nums">
               Önceki haftalarda tamamlananlar ({oldCompleted.length})
             </h2>
-            <div className={cn("bg-white border border-gray-200 rounded-lg divide-y divide-gray-100")}>
+            <div className="bg-surface border border-line rounded-card shadow-card divide-y divide-hairline overflow-hidden">
               {oldCompleted.map((task) => (
                 <TaskRow key={task.id} task={task} onUnarchive={() => {}} />
               ))}
@@ -97,10 +106,7 @@ export function ArchiveView({ manuallyArchived, oldCompleted }: Props) {
         )}
 
         {totalCount === 0 && (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <Archive size={32} className="text-gray-200 mb-3" />
-            <p className="text-gray-400 text-sm">Arşiv boş</p>
-          </div>
+          <EmptyState icon={Archive} title="Arşiv boş" className="py-20" />
         )}
       </div>
     </div>

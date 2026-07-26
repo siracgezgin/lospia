@@ -14,7 +14,7 @@ import {
 import { useState, useOptimistic, useTransition, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowUp, ArrowDown, ArrowUpDown, Plus, FileSpreadsheet, Lock, ClipboardList } from "lucide-react";
+import { ArrowUp, ArrowDown, ArrowUpDown, ChevronDown, Plus, FileSpreadsheet, Lock, ClipboardList } from "lucide-react";
 import { ADMIN_ONLY_CHIP_LABEL } from "@/lib/utils/visibility";
 import type { Task, SavedView, TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceDepartment } from "@/types";
 import {
@@ -189,12 +189,17 @@ function StatusBadge({ task }: { task: Task }) {
   }
 
   return (
-    <div className="relative inline-flex items-center">
+    <div className="group/status relative inline-flex items-center">
       <span className={cn(
-        "text-[11px] font-medium rounded-full px-2 py-0.5 pr-5 whitespace-nowrap pointer-events-none",
+        "inline-flex items-center gap-1 text-[11px] font-medium rounded-full pl-2 pr-1.5 py-0.5 whitespace-nowrap pointer-events-none",
         STATUS_CHIP_TONE[optimisticStatus],
       )}>
         {SIMPLIFIED_STATUS_LABEL[optimisticStatus]}
+        <ChevronDown
+          size={10}
+          strokeWidth={2.5}
+          className="shrink-0 opacity-50 transition-opacity duration-150 group-hover/status:opacity-90"
+        />
       </span>
       <select
         value={optimisticStatus}

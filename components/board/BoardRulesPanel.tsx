@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ScrollText, ChevronDown, ChevronRight, ArrowRight } from "lucide-react";
+import { ScrollText, ChevronRight, ArrowRight } from "lucide-react";
 import type { BoardRule } from "@/app/(app)/board/page";
 import { cn } from "@/lib/utils/cn";
 
@@ -36,31 +36,38 @@ export function BoardRulesPanel({
     <div className="border-b border-[#e7e2c9] bg-[#fdfaf0] shrink-0">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center gap-2 px-4 py-2 text-left"
+        aria-expanded={open}
+        className="w-full flex items-center gap-2 px-4 py-2 text-left transition-colors duration-150 hover:bg-[#faf5df]"
       >
-        {open ? <ChevronDown size={14} className="text-[#9a915f]" /> : <ChevronRight size={14} className="text-[#9a915f]" />}
-        <ScrollText size={14} className="text-[#9a915f]" />
-        <span className="text-sm font-medium text-[#6b6748]">Kurallar</span>
-        <span className="text-xs text-[#9a915f]">({rules.length})</span>
+        <ChevronRight
+          size={14}
+          className={cn(
+            "text-[#9a915f] shrink-0 transition-transform duration-200 ease-standard",
+            open && "rotate-90",
+          )}
+        />
+        <ScrollText size={14} className="text-[#9a915f] shrink-0" />
+        <span className="text-sm font-semibold tracking-tight text-[#6b6748]">Kurallar</span>
+        <span className="text-xs text-[#9a915f] tabular-nums">({rules.length})</span>
         {newCount > 0 && (
-          <span className="ml-1 text-[10px] font-semibold bg-[#d4cf9e] text-[#5b5733] px-1.5 py-0.5 rounded-full">
+          <span className="ml-1 text-[10px] font-semibold bg-[#d4cf9e] text-[#5b5733] px-1.5 py-0.5 rounded-full tabular-nums">
             {newCount} yeni
           </span>
         )}
         <Link
           href="/rules"
           onClick={(e) => e.stopPropagation()}
-          className="ml-auto text-xs font-medium text-[#406775] hover:underline"
+          className="ml-auto text-xs font-medium text-[#406775] hover:text-[#2f5d6b] hover:underline underline-offset-2 transition-colors duration-150"
         >
           Tümünü yönet →
         </Link>
       </button>
 
       {open && (
-        <div className="px-4 pb-2.5">
+        <div className="px-4 pb-2.5 anim-fade-down">
           <ul className="space-y-1">
             {latest.map((r) => (
-              <li key={r.id} className="flex items-center gap-2 text-sm text-[#6b6748]">
+              <li key={r.id} className="flex items-center gap-2 text-sm text-[#6b6748] leading-snug">
                 <span className="h-1.5 w-1.5 rounded-full bg-[#bdb678] shrink-0" />
                 <span className={cn("truncate")}>{r.title}</span>
                 {r.category && (
@@ -74,9 +81,10 @@ export function BoardRulesPanel({
           {hasMore && (
             <Link
               href="/rules"
-              className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-[#406775] hover:underline"
+              className="group mt-2 inline-flex items-center gap-1 text-xs font-medium text-[#406775] hover:text-[#2f5d6b] hover:underline underline-offset-2 transition-colors duration-150"
             >
-              Tüm kuralları gör ({rules.length}) <ArrowRight size={12} />
+              Tüm kuralları gör ({rules.length})
+              <ArrowRight size={12} className="transition-transform duration-150 ease-standard group-hover:translate-x-0.5" />
             </Link>
           )}
         </div>

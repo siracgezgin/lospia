@@ -11,6 +11,7 @@ import {
   SHEET_TYPES, SHEET_STATUSES, sheetTypeLabel, sheetStatusLabel, SHEET_STATUS_TONE,
 } from "@/lib/office/constants";
 import { cn } from "@/lib/utils/cn";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { SheetFormModal } from "./SheetFormModal";
 import type { OperationSpreadsheet, WorkspaceDepartment } from "@/types";
@@ -86,7 +87,7 @@ export function SheetsView({
   }
 
   const selectCls =
-    "rounded-lg border border-line bg-surface px-3 py-2 text-sm text-muted focus:outline-none focus:ring-2 focus:ring-brand-ring";
+    "h-9 rounded-lg border border-line bg-surface px-3 text-sm text-muted transition-colors duration-150 hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40";
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -98,7 +99,7 @@ export function SheetsView({
         rightSlot={
           <button
             onClick={openNew}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-3.5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand-strong"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-3.5 py-2 text-[13px] font-medium text-white transition-colors duration-150 hover:bg-brand-strong active:scale-[0.98]"
           >
             <Plus size={15} />
             Yeni tablo
@@ -114,7 +115,7 @@ export function SheetsView({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Tablo adı veya etiket ara…"
-            className="w-full rounded-lg border border-line bg-surface py-2 pl-9 pr-3 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-ring focus:border-brand-ring"
+            className="h-9 w-full rounded-lg border border-line bg-surface pl-9 pr-3 text-sm text-ink placeholder:text-subtle transition-colors duration-150 hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40"
           />
         </div>
         <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className={selectCls}>
@@ -129,34 +130,39 @@ export function SheetsView({
           <option value="">Tüm departmanlar</option>
           {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
         </select>
-        <label className="flex items-center gap-1.5 text-[12.5px] text-muted">
-          <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} className="accent-brand" />
+        <label className="flex h-9 cursor-pointer select-none items-center gap-1.5 rounded-lg px-2 text-[12.5px] text-muted transition-colors duration-150 hover:text-ink">
+          <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} className="h-3.5 w-3.5 accent-brand" />
           Arşivi göster
         </label>
       </div>
 
       {/* Cards */}
       {filtered.length === 0 ? (
-        <div className="rounded-2xl border border-line bg-surface px-6 py-14 text-center shadow-card">
-          <p className="text-[13.5px] text-subtle">
-            {sheets.length === 0
-              ? "Henüz tablo eklenmedi. Stok, koleksiyon ve operasyon tablolarınızı buradan takip edebilirsiniz."
-              : "Filtreye uyan tablo bulunamadı."}
-          </p>
-          {sheets.length === 0 && (
-            <button
-              onClick={openNew}
-              className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-brand px-3.5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand-strong"
-            >
-              <Plus size={15} />
-              İlk tabloyu oluştur
-            </button>
-          )}
+        <div className="anim-fade-up rounded-2xl border border-line bg-surface shadow-card">
+          <EmptyState
+            icon={sheets.length === 0 ? Table2 : Search}
+            title={
+              sheets.length === 0
+                ? "Henüz tablo eklenmedi. Stok, koleksiyon ve operasyon tablolarınızı buradan takip edebilirsiniz."
+                : "Filtreye uyan tablo bulunamadı."
+            }
+            action={
+              sheets.length === 0 ? (
+                <button
+                  onClick={openNew}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3.5 py-2 text-[13px] font-medium text-white transition-colors duration-150 hover:bg-brand-strong active:scale-[0.98]"
+                >
+                  <Plus size={15} />
+                  İlk tabloyu oluştur
+                </button>
+              ) : undefined
+            }
+          />
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="stagger-children grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((s) => (
-            <div key={s.id} className="group flex flex-col rounded-2xl border border-line bg-surface p-4 shadow-card transition-shadow hover:shadow-pop">
+            <div key={s.id} className="group flex flex-col rounded-2xl border border-line bg-surface p-4 shadow-card transition-all duration-200 ease-standard hover:-translate-y-0.5 hover:border-line-strong hover:shadow-card-hover">
               <div className="mb-2 flex items-start justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="rounded-md bg-surface-muted px-2 py-0.5 text-[10.5px] font-medium text-muted">
@@ -169,12 +175,12 @@ export function SheetsView({
                 </div>
                 <div className="flex shrink-0 items-center gap-0.5">
                   {canMutate(s) && (
-                    <button onClick={() => openEdit(s)} className="rounded-md p-1 text-subtle transition-colors hover:bg-surface-muted hover:text-ink" title="Bilgileri düzenle">
+                    <button onClick={() => openEdit(s)} className="rounded-md p-1.5 text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-95" title="Bilgileri düzenle">
                       <Pencil size={13} />
                     </button>
                   )}
                   {isAdmin && s.status !== "archived" && (
-                    <button onClick={() => handleArchive(s)} disabled={isArchiving} className="rounded-md p-1 text-subtle transition-colors hover:bg-surface-muted hover:text-ink" title="Arşivle">
+                    <button onClick={() => handleArchive(s)} disabled={isArchiving} className="rounded-md p-1.5 text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-95 disabled:pointer-events-none disabled:opacity-50" title="Arşivle">
                       <Archive size={13} />
                     </button>
                   )}
@@ -182,9 +188,9 @@ export function SheetsView({
               </div>
 
               <Link href={`/sheets/${s.id}`} className="min-w-0">
-                <h3 className="flex items-start justify-between gap-2 text-[14px] font-medium leading-snug text-ink transition-colors group-hover:text-brand-strong">
+                <h3 className="flex items-start justify-between gap-2 text-[14px] font-medium leading-snug text-ink transition-colors duration-150 group-hover:text-brand-strong">
                   <span className="min-w-0">{s.title}</span>
-                  <ArrowUpRight size={14} className="mt-0.5 shrink-0 text-subtle opacity-0 transition-opacity group-hover:opacity-100" />
+                  <ArrowUpRight size={14} className="mt-0.5 shrink-0 text-subtle opacity-0 transition-opacity duration-150 group-hover:opacity-100" />
                 </h3>
               </Link>
               {s.department_id && deptName.get(s.department_id) && (
@@ -201,11 +207,11 @@ export function SheetsView({
                 </div>
               )}
 
-              <div className="mt-3 flex items-center justify-between border-t border-line/60 pt-2.5 text-[11px] text-subtle">
-                <span>
+              <div className="mt-3 flex items-center justify-between border-t border-hairline pt-2.5 text-[11px] text-subtle">
+                <span className="truncate">
                   {s.created_by && memberNames[s.created_by] ? memberNames[s.created_by] : "—"}
                 </span>
-                <span>
+                <span className="shrink-0 tabular-nums">
                   {new Date(s.updated_at).toLocaleDateString("tr-TR", { day: "numeric", month: "short", year: "numeric" })}
                 </span>
               </div>
@@ -214,7 +220,7 @@ export function SheetsView({
         </div>
       )}
 
-      <p className="mt-3 px-1 text-[12px] text-subtle">{filtered.length} tablo gösteriliyor</p>
+      <p className="mt-3 px-1 text-[12px] tabular-nums text-subtle">{filtered.length} tablo gösteriliyor</p>
 
       {modalOpen && (
         <SheetFormModal

@@ -151,7 +151,7 @@ export function LightSheetEditor({ initialSnapshot, readOnly = false, onReady, o
                     {!readOnly && grid.columns.length > 1 && (
                       <button
                         onClick={() => removeColumn(c)}
-                        className="mr-1 hidden rounded p-0.5 text-subtle transition-colors hover:text-[#971f12] group-hover:block"
+                        className="mr-1 hidden rounded p-0.5 text-subtle transition-colors duration-150 hover:bg-[#fbe6e2] hover:text-danger active:scale-95 group-hover:block"
                         title="Sütunu sil"
                         tabIndex={-1}
                       >
@@ -165,7 +165,7 @@ export function LightSheetEditor({ initialSnapshot, readOnly = false, onReady, o
                 <th className="sticky top-0 z-10 w-9 border-b border-line bg-surface-muted/80 p-0">
                   <button
                     onClick={addColumn}
-                    className="grid h-full w-9 place-items-center py-1.5 text-subtle transition-colors hover:text-brand"
+                    className="grid h-full w-9 place-items-center py-1.5 text-subtle transition-colors duration-150 hover:bg-brand-soft hover:text-brand active:scale-95"
                     title="Sütun ekle"
                   >
                     <Plus size={13} />
@@ -177,12 +177,12 @@ export function LightSheetEditor({ initialSnapshot, readOnly = false, onReady, o
           <tbody>
             {grid.rows.map((row, r) => (
               <tr key={r} className="group/row">
-                <td className="border-b border-r border-line/70 bg-surface-muted/40 px-1 py-1 text-center text-[10.5px] text-subtle">
+                <td className="border-b border-r border-line/70 bg-surface-muted/40 px-1 py-1 text-center text-[10.5px] tabular-nums text-subtle">
                   <span className="group-hover/row:hidden">{r + 1}</span>
                   {!readOnly && grid.rows.length > 1 && (
                     <button
                       onClick={() => removeRow(r)}
-                      className="hidden rounded p-0.5 text-subtle transition-colors hover:text-[#971f12] group-hover/row:inline-block"
+                      className="hidden rounded p-0.5 text-subtle transition-colors duration-150 hover:bg-[#fbe6e2] hover:text-danger active:scale-95 group-hover/row:inline-block"
                       title="Satırı sil"
                       tabIndex={-1}
                     >
@@ -209,15 +209,15 @@ export function LightSheetEditor({ initialSnapshot, readOnly = false, onReady, o
         </table>
       </div>
       {!readOnly && (
-        <div className="flex items-center gap-2 border-t border-line px-3 py-2">
+        <div className="flex items-center gap-2 border-t border-line bg-surface-muted/40 px-3 py-2">
           <button
             onClick={addRow}
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] font-medium text-muted transition-colors hover:bg-surface-muted hover:text-ink"
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] font-medium text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
           >
             <Plus size={13} /> Satır ekle
           </button>
           <span className="text-[11px] text-subtle">
-            {grid.rows.length} satır · {grid.columns.length} sütun — Excel’den kopyalanan alanı doğrudan hücreye yapıştırabilirsiniz.
+            <span className="tabular-nums">{grid.rows.length} satır · {grid.columns.length} sütun</span> — Excel’den kopyalanan alanı doğrudan hücreye yapıştırabilirsiniz.
           </span>
         </div>
       )}
