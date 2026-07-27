@@ -78,7 +78,7 @@ export function CreativeView({
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+    <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
       {/* Header */}
       <ModulePageHeader
         title="Kreatif Linkler"
@@ -134,15 +134,15 @@ export function CreativeView({
           />
         </div>
       ) : (
-        <div className="stagger-children grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="stagger-children grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
           {filtered.map((a) => (
             <div key={a.id} className="group flex flex-col rounded-2xl border border-line bg-surface p-4 shadow-card transition-all duration-200 ease-standard hover:-translate-y-0.5 hover:border-line-strong hover:shadow-card-hover">
               <div className="mb-2 flex items-start justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <span className={cn("rounded-md px-2 py-0.5 text-[10.5px] font-medium", PROVIDER_TONE[a.provider])}>
+                  <span className={cn("rounded-md px-2 py-0.5 text-[12px] font-medium", PROVIDER_TONE[a.provider])}>
                     {providerLabel(a.provider)}
                   </span>
-                  <span className={cn("rounded-md px-2 py-0.5 text-[10.5px] font-medium", CREATIVE_STATUS_TONE[a.status])}>
+                  <span className={cn("rounded-md px-2 py-0.5 text-[12px] font-medium", CREATIVE_STATUS_TONE[a.status])}>
                     {creativeStatusLabel(a.status)}
                   </span>
                 </div>
@@ -160,17 +160,17 @@ export function CreativeView({
                 )}
               </div>
 
-              <h3 className="text-[14px] font-medium leading-snug text-ink">{a.title}</h3>
+              <h3 className="text-sm font-medium leading-snug text-ink">{a.title}</h3>
               {a.department_id && deptName.get(a.department_id) && (
-                <p className="mt-0.5 text-[11.5px] text-subtle">{deptName.get(a.department_id)}</p>
+                <p className="mt-0.5 text-[12px] text-subtle">{deptName.get(a.department_id)}</p>
               )}
-              {a.notes && <p className="mt-1.5 line-clamp-2 text-[12px] text-muted">{a.notes}</p>}
+              {a.notes && <p className="mt-1.5 line-clamp-2 text-[12.5px] text-muted">{a.notes}</p>}
 
               <a
                 href={a.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-3 inline-flex items-center gap-1 self-start rounded-md text-[12.5px] font-medium text-brand transition-colors duration-150 hover:text-brand-strong"
+                className="mt-3 inline-flex items-center gap-1 self-start rounded-md text-[13px] font-medium text-brand transition-colors duration-150 hover:text-brand-strong"
               >
                 Bağlantıyı aç <ExternalLink size={12} />
               </a>

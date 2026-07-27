@@ -123,14 +123,14 @@ export function DashboardView({
   const maxDeptActive = Math.max(1, ...departmentStats.map((d) => d.active));
 
   return (
-    <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-5">
+    <div className="p-4 sm:p-6 w-full space-y-5">
       <div>
         <h1 className="text-xl font-bold tracking-tight text-ink">Raporlar</h1>
         <p className="text-sm text-muted mt-0.5">Ekip operasyonunun anlık durumu, riskler ve haftanın odağı</p>
       </div>
 
       {/* Headline KPIs — decision-support, not vanity */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 stagger-children">
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3 stagger-children">
         <DashboardMetricCard icon={<ListTodo size={15} />} label="Aktif görev" value={activeTotal} />
         <DashboardMetricCard icon={<AlertTriangle size={15} />} label="Geciken" value={overdue.length} tone={overdue.length > 0 ? "danger" : "neutral"} href="/board?view=overdue" />
         <DashboardMetricCard icon={<CalendarClock size={15} />} label="Bu hafta teslim" value={dueThisWeek.length} tone={dueThisWeek.length > 0 ? "warning" : "neutral"} />
@@ -151,7 +151,7 @@ export function DashboardView({
             <QuickAction href="/board?view=waiting-approval" label="Onay bekleyenler" tone="review" />
           </div>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4 stagger-children">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 stagger-children">
           <FocusTile label="Bugün teslim" value={dueToday.length} tone="warning" />
           <FocusTile label="Bu hafta teslim" value={dueThisWeek.length} tone="warning" />
           <FocusTile label="Onay kuyruğu" value={reviewTotal} tone="review" />
@@ -170,15 +170,15 @@ export function DashboardView({
           {chartData.length === 0 ? (
             <EmptyState title="Henüz görev yok" className="py-8" />
           ) : (
-            <ResponsiveContainer width="100%" height={180}>
-              <BarChart data={chartData} margin={{ top: 4, right: 0, left: -20, bottom: 0 }} barCategoryGap="28%">
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={chartData} margin={{ top: 4, right: 0, left: -12, bottom: 0 }} barCategoryGap="28%">
                 {/* Recessive guides: horizontal hairlines only, axes silent. */}
                 <CartesianGrid vertical={false} stroke="#eef0f3" strokeWidth={1} />
-                <XAxis dataKey="status" tick={{ fontSize: 10, fill: "#9aa2ac" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: "#9aa2ac" }} axisLine={false} tickLine={false} allowDecimals={false} width={32} />
+                <XAxis dataKey="status" tick={{ fontSize: 12, fill: "#5f6772" }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 12, fill: "#5f6772" }} axisLine={false} tickLine={false} allowDecimals={false} width={36} />
                 <Tooltip
                   contentStyle={{
-                    fontSize: 12,
+                    fontSize: 13,
                     fontFamily: "inherit",
                     borderRadius: 10,
                     border: "1px solid #e6e9ee",
@@ -204,10 +204,10 @@ export function DashboardView({
         <Card className="p-5 flex flex-col justify-center">
           <div className="flex items-center gap-2 text-subtle">
             <Clock size={15} />
-            <h2 className="text-[11px] font-semibold uppercase tracking-wide text-muted">Bu hafta geçen süre</h2>
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">Bu hafta geçen süre</h2>
           </div>
           <p className="text-4xl font-bold tracking-tight text-brand mt-3 tabular-nums leading-none">{formatDuration(timeLoggedSeconds)}</p>
-          <p className="text-xs text-subtle mt-2">
+          <p className="text-xs text-muted mt-2">
             {timeLoggedSeconds === 0 ? "Süre takibi için zamanlayıcı başlatın" : "sizin tarafınızdan kaydedildi"}
           </p>
         </Card>
@@ -231,15 +231,15 @@ export function DashboardView({
                     <div className="flex items-center justify-between gap-2 mb-1">
                       <span className="flex items-center gap-1.5 min-w-0">
                         <span className={cn("h-2 w-2 rounded-full shrink-0", badge.dot)} />
-                        <span className="text-xs text-ink truncate" title={d.name}>{d.name}</span>
+                        <span className="text-sm text-ink truncate" title={d.name}>{d.name}</span>
                       </span>
                       <span className="flex items-center gap-1.5 shrink-0">
                         {d.overdue > 0 && (
-                          <span className="text-[10px] font-medium text-danger bg-[#fbe6e2] rounded-full px-1.5 py-0.5">
+                          <span className="text-xs font-medium text-danger bg-[#fbe6e2] rounded-full px-1.5 py-0.5">
                             {d.overdue} geciken
                           </span>
                         )}
-                        <span className="text-xs font-semibold text-muted tabular-nums">{d.active}</span>
+                        <span className="text-sm font-semibold text-ink tabular-nums">{d.active}</span>
                       </span>
                     </div>
                     <div className="h-1.5 rounded-full bg-surface-sunken overflow-hidden">
@@ -275,14 +275,14 @@ export function DashboardView({
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-sm text-ink group-hover:text-brand truncate transition-colors duration-150">{t.title}</span>
                     {t.deptName && (
-                      <span className="text-[10px] text-subtle shrink-0 truncate max-w-28">{t.deptName}</span>
+                      <span className="text-xs text-subtle shrink-0 truncate max-w-28">{t.deptName}</span>
                     )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className={cn("text-[10px] font-medium rounded-full px-1.5 py-0.5 whitespace-nowrap", STATUS_CHIP_TONE[t.status])}>
+                    <span className={cn("text-xs font-medium rounded-full px-2 py-0.5 whitespace-nowrap", STATUS_CHIP_TONE[t.status])}>
                       {STATUS_LABELS[t.status]}
                     </span>
-                    <span className="text-[11px] text-subtle tabular-nums">
+                    <span className="text-xs text-muted tabular-nums">
                       {formatDateTR(t.updated_at, { day: "numeric", month: "short" })}
                     </span>
                   </div>
@@ -309,7 +309,14 @@ export function DashboardView({
             className="py-6"
           />
         ) : (
-          <div className="space-y-4">
+          // İki sütun yalnız İKİ grup da doluyken — tek grup varken yarım
+          // kart boş kalmasın, satırlar tam genişliği kullansın.
+          <div
+            className={cn(
+              "grid grid-cols-1 gap-y-4 gap-x-8 xl:items-start",
+              overdue.length > 0 && upcoming.length > 0 && "xl:grid-cols-2",
+            )}
+          >
             {overdue.length > 0 && (
               <RiskGroup title="Geciken" tone="danger" tasks={overdue} today={today} />
             )}
@@ -333,7 +340,7 @@ function QuickAction({ href, label, tone = "neutral" }: { href: string; label: s
     <Link
       href={href}
       className={cn(
-        "group inline-flex items-center gap-1 text-xs font-medium rounded-lg border px-2.5 py-1.5 select-none",
+        "group inline-flex items-center gap-1 text-[13px] font-medium rounded-lg border px-2.5 py-1.5 select-none",
         "transition-[background-color,border-color,color,transform] duration-150 ease-standard active:scale-[0.98]",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring/40 focus-visible:ring-offset-1",
         toneCls,
@@ -352,7 +359,7 @@ function FocusTile({ label, value, tone }: { label: string; value: number; tone:
     : "text-muted";
   return (
     <div className="rounded-lg border border-hairline bg-surface-muted px-3 py-2.5 transition-colors duration-150 ease-standard hover:border-line">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted truncate">{label}</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted truncate">{label}</p>
       <p className={cn("mt-1.5 text-2xl font-bold tracking-tight tabular-nums leading-none", valueCls)}>{value}</p>
     </div>
   );
@@ -371,7 +378,7 @@ function RiskGroup({
 }) {
   return (
     <div>
-      <p className={`text-[11px] font-semibold uppercase tracking-wider mb-1.5 ${tone === "danger" ? "text-danger" : "text-warning"}`}>
+      <p className={`text-xs font-semibold uppercase tracking-wider mb-1.5 ${tone === "danger" ? "text-danger" : "text-warning"}`}>
         {title} · {tasks.length}
       </p>
       <div className="divide-y divide-hairline">
@@ -384,7 +391,7 @@ function RiskGroup({
                 <Link prefetch={false} href={`/tasks/${task.id}`} className="text-sm font-medium text-ink hover:text-brand truncate rounded-sm transition-colors duration-150 ease-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring/40">
                   {task.title}
                 </Link>
-                <span className="text-[11px] text-subtle shrink-0">{STATUS_LABELS[task.status]}</span>
+                <span className="text-xs text-muted shrink-0">{STATUS_LABELS[task.status]}</span>
               </div>
               <span className={`text-xs font-medium shrink-0 tabular-nums ${isOverdue ? "text-danger" : "text-warning"}`}>
                 {formatDateTR(task.due_date, { day: "numeric", month: "short" })}

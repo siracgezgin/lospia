@@ -37,60 +37,65 @@ export default async function ProfilePage() {
   const displayName = getPersonDisplayName(profile?.full_name ?? user.email ?? null);
 
   return (
-    <div className="p-4 sm:p-6 max-w-2xl mx-auto space-y-5">
+    <div className="w-full px-4 py-6 sm:px-6 lg:px-8 space-y-5">
       <h1 className="text-xl font-semibold text-ink">Profil</h1>
 
-      {/* Identity card */}
-      <div className="bg-surface rounded-2xl border border-line shadow-card p-5">
-        <div className="flex items-center gap-4">
-          <Avatar name={displayName} size="lg" />
-          <div className="min-w-0">
-            <p className="text-lg font-semibold text-ink truncate">{displayName}</p>
-            <p className="flex items-center gap-1.5 text-xs text-subtle truncate">
-              <Mail size={12} className="shrink-0" />
-              <span className="truncate">{user.email ?? "—"}</span>
-            </p>
+      {/* lg+: kimlik kartı solda, puan özeti sağda — içerik birebir aynı. */}
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:gap-6">
+        <div className="space-y-5 min-w-0">
+          {/* Identity card */}
+          <div className="bg-surface rounded-2xl border border-line shadow-card p-5">
+            <div className="flex items-center gap-4">
+              <Avatar name={displayName} size="lg" />
+              <div className="min-w-0">
+                <p className="text-lg font-semibold text-ink truncate">{displayName}</p>
+                <p className="flex items-center gap-1.5 text-[13px] text-muted truncate">
+                  <Mail size={13} className="shrink-0" />
+                  <span className="truncate">{user.email ?? "—"}</span>
+                </p>
+              </div>
+            </div>
+
+            <dl className="mt-5 grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-line bg-line">
+              {profile?.username && (
+                <div className="flex items-center justify-between gap-3 bg-surface px-4 py-3">
+                  <dt className="flex items-center gap-2 text-sm text-muted">
+                    <AtSign size={14} className="text-subtle shrink-0" />
+                    Kullanıcı adı
+                  </dt>
+                  <dd className="text-sm font-medium text-ink truncate">{profile.username}</dd>
+                </div>
+              )}
+              <div className="flex items-center justify-between gap-3 bg-surface px-4 py-3">
+                <dt className="flex items-center gap-2 text-sm text-muted">
+                  <Shield size={14} className="text-subtle shrink-0" />
+                  Rol
+                </dt>
+                <dd className="text-sm font-medium text-ink">{roleLabel(role)}</dd>
+              </div>
+            </dl>
           </div>
+
+          {/* Sign out */}
+          <form action={signOut}>
+            <button
+              type="submit"
+              className="w-full flex items-center justify-center gap-2 rounded-xl border border-line bg-surface px-4 py-3 text-sm font-medium text-[#a83a2c] hover:bg-[#fbeae7] transition-colors"
+            >
+              <LogOut size={16} />
+              Çıkış yap
+            </button>
+          </form>
         </div>
 
-        <dl className="mt-5 grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-line bg-line">
-          {profile?.username && (
-            <div className="flex items-center justify-between gap-3 bg-surface px-4 py-3">
-              <dt className="flex items-center gap-2 text-sm text-muted">
-                <AtSign size={14} className="text-subtle shrink-0" />
-                Kullanıcı adı
-              </dt>
-              <dd className="text-sm font-medium text-ink truncate">{profile.username}</dd>
-            </div>
-          )}
-          <div className="flex items-center justify-between gap-3 bg-surface px-4 py-3">
-            <dt className="flex items-center gap-2 text-sm text-muted">
-              <Shield size={14} className="text-subtle shrink-0" />
-              Rol
-            </dt>
-            <dd className="text-sm font-medium text-ink">{roleLabel(role)}</dd>
-          </div>
-        </dl>
+        {/* Personal points — only your own figures */}
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 min-w-0 2xl:grid-cols-4">
+          <PointCard icon={<Sparkles size={15} className="text-brand" />} label="Bu ay" value={`${points.monthPoints} puan`} />
+          <PointCard icon={<Clock3 size={15} className="text-warning" />} label="Onay bekleyen" value={`${points.pending} puan`} hint="Görev yönetici tarafından tamamlandığında kesinleşir." />
+          <PointCard icon={<CheckCircle2 size={15} className="text-[#1c7a52]" />} label="Tamamladığım işler" value={points.doneCount} />
+          <PointCard icon={<ClipboardCheck size={15} className="text-[#2f9e63]" />} label="Kontrol bekleyen" value={points.reviewCount} />
+        </div>
       </div>
-
-      {/* Personal points — only your own figures */}
-      <div className="grid grid-cols-2 gap-3">
-        <PointCard icon={<Sparkles size={15} className="text-brand" />} label="Bu ay" value={`${points.monthPoints} puan`} />
-        <PointCard icon={<Clock3 size={15} className="text-warning" />} label="Onay bekleyen" value={`${points.pending} puan`} hint="Görev yönetici tarafından tamamlandığında kesinleşir." />
-        <PointCard icon={<CheckCircle2 size={15} className="text-[#1c7a52]" />} label="Tamamladığım işler" value={points.doneCount} />
-        <PointCard icon={<ClipboardCheck size={15} className="text-[#2f9e63]" />} label="Kontrol bekleyen" value={points.reviewCount} />
-      </div>
-
-      {/* Sign out */}
-      <form action={signOut}>
-        <button
-          type="submit"
-          className="w-full flex items-center justify-center gap-2 rounded-xl border border-line bg-surface px-4 py-3 text-sm font-medium text-[#a83a2c] hover:bg-[#fbeae7] transition-colors"
-        >
-          <LogOut size={16} />
-          Çıkış yap
-        </button>
-      </form>
     </div>
   );
 }
@@ -107,7 +112,7 @@ function PointCard({
     <div className="bg-surface rounded-xl border border-line shadow-card p-4" title={hint}>
       <div className="flex items-center gap-2 text-subtle">
         {icon}
-        <span className="text-xs font-medium text-muted">{label}</span>
+        <span className="text-[13px] font-medium text-muted">{label}</span>
       </div>
       <p className="mt-2 text-2xl font-semibold tabular-nums text-ink">{value}</p>
     </div>

@@ -34,11 +34,11 @@ export function OfficeCenterCard({ title, description, href, icon: Icon, count, 
       <h3 className="text-[15px] font-semibold tracking-tight leading-snug text-ink transition-colors duration-150 group-hover:text-brand-strong">
         {title}
       </h3>
-      <p className="mt-1 flex-1 text-[12.5px] leading-relaxed text-muted">{description}</p>
+      <p className="mt-1 flex-1 text-[13px] leading-relaxed text-muted">{description}</p>
       <div className="mt-3">
         <span
           className={cn(
-            "inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium tabular-nums",
+            "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium tabular-nums",
             count === null
               ? "bg-surface-sunken text-subtle"
               : "bg-brand-soft text-brand-strong",

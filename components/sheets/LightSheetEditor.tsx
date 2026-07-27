@@ -127,15 +127,15 @@ export function LightSheetEditor({ initialSnapshot, readOnly = false, onReady, o
   }
 
   const cellCls =
-    "w-full min-w-[110px] border-0 bg-transparent px-2 py-1.5 text-[12.5px] text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-ring disabled:cursor-default";
+    "w-full min-w-[120px] border-0 bg-transparent px-2 py-1.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-ring disabled:cursor-default";
 
   return (
     <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
-      <div className="max-h-[62vh] overflow-auto">
+      <div className="max-h-[70vh] overflow-auto">
         <table className="w-full border-collapse">
           <thead>
             <tr>
-              <th className="sticky top-0 z-10 w-10 border-b border-r border-line bg-surface-muted/80 px-1 py-1.5 text-[10.5px] font-medium text-subtle">
+              <th className="sticky top-0 z-10 w-10 border-b border-r border-line bg-surface-muted/80 px-1 py-1.5 text-[11px] font-semibold text-subtle">
                 #
               </th>
               {grid.columns.map((h, c) => (
@@ -145,7 +145,7 @@ export function LightSheetEditor({ initialSnapshot, readOnly = false, onReady, o
                       value={h}
                       onChange={(e) => setHeader(c, e.target.value)}
                       disabled={readOnly}
-                      className={cn(cellCls, "py-1.5 text-[11.5px] font-semibold uppercase tracking-wide text-muted")}
+                      className={cn(cellCls, "py-1.5 text-[12px] font-semibold uppercase tracking-wide text-muted")}
                       aria-label={`Sütun başlığı ${c + 1}`}
                     />
                     {!readOnly && grid.columns.length > 1 && (
@@ -177,7 +177,7 @@ export function LightSheetEditor({ initialSnapshot, readOnly = false, onReady, o
           <tbody>
             {grid.rows.map((row, r) => (
               <tr key={r} className="group/row">
-                <td className="border-b border-r border-line/70 bg-surface-muted/40 px-1 py-1 text-center text-[10.5px] tabular-nums text-subtle">
+                <td className="border-b border-r border-line/70 bg-surface-muted/40 px-1 py-1 text-center text-[11.5px] tabular-nums text-subtle">
                   <span className="group-hover/row:hidden">{r + 1}</span>
                   {!readOnly && grid.rows.length > 1 && (
                     <button
@@ -212,11 +212,11 @@ export function LightSheetEditor({ initialSnapshot, readOnly = false, onReady, o
         <div className="flex items-center gap-2 border-t border-line bg-surface-muted/40 px-3 py-2">
           <button
             onClick={addRow}
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] font-medium text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12.5px] font-medium text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
           >
             <Plus size={13} /> Satır ekle
           </button>
-          <span className="text-[11px] text-subtle">
+          <span className="text-[12px] text-subtle">
             <span className="tabular-nums">{grid.rows.length} satır · {grid.columns.length} sütun</span> — Excel’den kopyalanan alanı doğrudan hücreye yapıştırabilirsiniz.
           </span>
         </div>

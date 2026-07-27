@@ -171,7 +171,7 @@ export function ActivityLogView({ rows }: { rows: ActivityRow[] }) {
   const latest = rows[0]?.created_at ?? null;
 
   return (
-    <div className="max-w-6xl mx-auto py-6 px-4 sm:px-6 space-y-5">
+    <div className="w-full py-6 px-4 sm:px-6 lg:px-8 space-y-5">
       {/* ── Page header ─────────────────────────────────────────────────────── */}
       <div className="flex items-start gap-3">
         <div className="grid h-10 w-10 place-items-center rounded-xl bg-brand-soft text-brand shrink-0">
@@ -208,7 +208,7 @@ export function ActivityLogView({ rows }: { rows: ActivityRow[] }) {
               </div>
               <div className="min-w-0">
                 <p className="text-xl font-semibold tracking-tight text-ink tabular-nums leading-none">{counts[f.key]}</p>
-                <p className="text-[11px] text-muted mt-1 leading-tight line-clamp-2">{f.label}</p>
+                <p className="text-xs text-muted mt-1 leading-tight line-clamp-2">{f.label}</p>
               </div>
             </button>
           );
@@ -216,7 +216,7 @@ export function ActivityLogView({ rows }: { rows: ActivityRow[] }) {
       </div>
 
       {/* ── Timeline + context rail ─────────────────────────────────────────── */}
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px] items-start">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px] 2xl:grid-cols-[minmax(0,1fr)_320px] items-start">
       <div key={filter} className="anim-fade bg-surface rounded-2xl border border-line shadow-card divide-y divide-hairline overflow-hidden">
         {groups.length === 0 ? (
           <p className="px-5 py-14 text-sm text-subtle text-center">Bu filtreyle eşleşen kayıt yok.</p>
@@ -269,7 +269,7 @@ export function ActivityLogView({ rows }: { rows: ActivityRow[] }) {
                         const m = metaFor(r.action);
                         const detail = changeDetail(r);
                         return (
-                          <li key={r.id} className="flex items-center gap-2 flex-wrap text-[11px]">
+                          <li key={r.id} className="flex items-center gap-2 flex-wrap text-xs">
                             <span className={cn("inline-flex items-center rounded-md border px-1.5 py-0.5 font-medium", TONE_CLS[m.tone].chip)}>
                               {m.label}
                             </span>
@@ -289,11 +289,11 @@ export function ActivityLogView({ rows }: { rows: ActivityRow[] }) {
                   ) : (
                     // Single change: label + optional from → to detail.
                     <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                      <span className={cn("inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium", headTone.chip)}>
+                      <span className={cn("inline-flex items-center rounded-md border px-1.5 py-0.5 text-xs font-medium", headTone.chip)}>
                         {headMeta.label}
                       </span>
                       {changeDetail(head) && (
-                        <span className="text-[11px] text-muted">
+                        <span className="text-xs text-muted">
                           {changeDetail(head)!.label}:{" "}
                           <span className="text-subtle">{changeDetail(head)!.from}</span>
                           <span className="mx-1 text-subtle/60">→</span>
@@ -322,7 +322,7 @@ export function ActivityLogView({ rows }: { rows: ActivityRow[] }) {
           </p>
           {latest && (
             <div className="mt-3 pt-3 border-t border-hairline">
-              <p className="text-[11px] uppercase tracking-wider font-semibold text-subtle">Son hareket</p>
+              <p className="text-xs uppercase tracking-wider font-semibold text-subtle">Son hareket</p>
               <p className="text-[13px] text-ink mt-1 tabular-nums">{formatDateTimeTR(latest)}</p>
             </div>
           )}

@@ -22,7 +22,7 @@ function formatDate(iso: string | null) {
 function TaskRow({ task, onUnarchive }: { task: Task; onUnarchive: (id: string) => void }) {
   const [_p, startTransition] = useTransition();
   return (
-    <div className="flex items-center justify-between gap-3 py-2.5 px-4 hover:bg-surface-hover transition-colors duration-150 group">
+    <div className="flex items-center justify-between gap-3 py-3 px-4 sm:px-5 hover:bg-surface-hover transition-colors duration-150 group">
       <div className="flex-1 min-w-0">
         <Link
           href={`/tasks/${task.id}`}
@@ -63,25 +63,25 @@ export function ArchiveView({ manuallyArchived, oldCompleted }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-6 py-4 border-b border-line bg-surface shrink-0">
-        <div className="flex items-center gap-2.5">
-          <div className="grid h-8 w-8 place-items-center rounded-lg bg-surface-sunken text-muted shrink-0">
-            <Archive size={16} strokeWidth={1.75} />
+      <div className="px-4 sm:px-6 lg:px-8 py-4 border-b border-line bg-surface shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="grid h-10 w-10 place-items-center rounded-xl bg-surface-sunken text-muted shrink-0">
+            <Archive size={18} strokeWidth={1.75} />
           </div>
           <div className="min-w-0">
             <div className="flex items-baseline gap-2">
-              <h1 className="text-lg font-semibold tracking-tight text-ink">Arşiv</h1>
+              <h1 className="text-xl font-semibold tracking-tight text-ink">Arşiv</h1>
               <span className="text-sm text-subtle tabular-nums">({totalCount} görev)</span>
             </div>
-            <p className="text-xs text-subtle">Manuel arşivlenenler ve önceki haftalarda tamamlananlar</p>
+            <p className="text-[13px] text-muted">Manuel arşivlenenler ve önceki haftalarda tamamlananlar</p>
           </div>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6">
         {archived.length > 0 && (
           <section className="anim-fade-up">
-            <h2 className="text-[11px] font-semibold uppercase tracking-wider text-subtle mb-2 tabular-nums">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-subtle mb-2 tabular-nums">
               Manuel arşivlenenler ({archived.length})
             </h2>
             <div className="bg-surface border border-line rounded-card shadow-card divide-y divide-hairline overflow-hidden">
@@ -94,7 +94,7 @@ export function ArchiveView({ manuallyArchived, oldCompleted }: Props) {
 
         {oldCompleted.length > 0 && (
           <section className="anim-fade-up">
-            <h2 className="text-[11px] font-semibold uppercase tracking-wider text-subtle mb-2 tabular-nums">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-subtle mb-2 tabular-nums">
               Önceki haftalarda tamamlananlar ({oldCompleted.length})
             </h2>
             <div className="bg-surface border border-line rounded-card shadow-card divide-y divide-hairline overflow-hidden">

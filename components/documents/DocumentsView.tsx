@@ -95,7 +95,7 @@ export function DocumentsView({
     "h-9 rounded-lg border border-line bg-surface px-3 text-sm text-muted transition-colors duration-150 hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40";
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+    <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
       <ModulePageHeader
         title="Doküman Merkezi"
         description="Drive, Canva, Word, Excel ve operasyon dokümanlarını Lospia içinde bağlantı ve görev ilişkisiyle yönetin. Dosya yüklenmez — yalnızca bağlantı ve künye tutulur."
@@ -161,7 +161,7 @@ export function DocumentsView({
         </div>
       ) : (
         <div className="anim-fade-up overflow-x-auto rounded-2xl border border-line bg-surface shadow-card">
-          <table className="w-full min-w-[960px] text-left text-[13px]">
+          <table className="w-full min-w-[960px] text-left text-sm">
             <thead>
               <tr className="select-none border-b border-line text-[11px] uppercase tracking-wider text-subtle">
                 <th className="px-4 py-3 font-semibold">Başlık</th>
@@ -181,12 +181,12 @@ export function DocumentsView({
                   <td className="px-4 py-3">
                     <div className="font-medium leading-snug text-ink">{d.title}</div>
                     {d.description && (
-                      <div className="mt-0.5 line-clamp-1 text-[12px] text-muted">{d.description}</div>
+                      <div className="mt-0.5 line-clamp-1 text-[12.5px] text-muted">{d.description}</div>
                     )}
                     {(d.tags ?? []).length > 0 && (
                       <div className="mt-1 flex flex-wrap gap-1">
                         {d.tags.map((t) => (
-                          <span key={t} className="rounded-md border border-hairline bg-surface-muted px-1.5 py-0.5 text-[10.5px] font-medium text-muted">
+                          <span key={t} className="rounded-md border border-hairline bg-surface-muted px-1.5 py-0.5 text-[12px] font-medium text-muted">
                             {t}
                           </span>
                         ))}
@@ -194,7 +194,7 @@ export function DocumentsView({
                     )}
                   </td>
                   <td className="px-3 py-3">
-                    <span className={cn("whitespace-nowrap rounded-md px-2 py-0.5 text-[10.5px] font-medium", DOCUMENT_TYPE_TONE[d.document_type])}>
+                    <span className={cn("whitespace-nowrap rounded-md px-2 py-0.5 text-[12px] font-medium", DOCUMENT_TYPE_TONE[d.document_type])}>
                       {documentTypeLabel(d.document_type)}
                     </span>
                   </td>
@@ -210,7 +210,7 @@ export function DocumentsView({
                     {d.related_contact_id ? contactName.get(d.related_contact_id) ?? "—" : "—"}
                   </td>
                   <td className="px-3 py-3">
-                    <span className={cn("whitespace-nowrap rounded-md px-2 py-0.5 text-[10.5px] font-medium", OFFICE_STATUS_TONE[d.status])}>
+                    <span className={cn("whitespace-nowrap rounded-md px-2 py-0.5 text-[12px] font-medium", OFFICE_STATUS_TONE[d.status])}>
                       {officeStatusLabel(d.status)}
                     </span>
                   </td>
@@ -227,7 +227,7 @@ export function DocumentsView({
                           href={d.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-[12px] font-medium text-brand transition-colors duration-150 hover:bg-brand-soft active:scale-[0.98]"
+                          className="inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-[12.5px] font-medium text-brand transition-colors duration-150 hover:bg-brand-soft active:scale-[0.98]"
                           title="Bağlantıyı yeni sekmede aç"
                         >
                           Bağlantıyı aç <ExternalLink size={12} />
@@ -235,7 +235,7 @@ export function DocumentsView({
                       ) : (
                         <button
                           onClick={() => openEdit(d)}
-                          className="inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-[12px] font-medium text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
+                          className="inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-[12.5px] font-medium text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
                           title="Detayı görüntüle"
                         >
                           <StickyNote size={12} /> Detay

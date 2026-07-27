@@ -312,7 +312,7 @@ export function RulesView({
     <div className="flex flex-col h-full">
       {/* ── Page header: brand well + summary chips ─────────────────────────── */}
       <div className="border-b border-line bg-surface shrink-0">
-        <div className="max-w-6xl mx-auto w-full px-6 py-5">
+        <div className="w-full px-6 py-5">
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div className="flex items-start gap-3 min-w-0">
               <div className="grid h-10 w-10 place-items-center rounded-xl bg-brand-soft text-brand shrink-0">
@@ -346,7 +346,7 @@ export function RulesView({
 
       {/* ── Content: rule categories + side discipline panel ─────────────────── */}
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-6xl mx-auto w-full px-6 py-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_308px] items-start">
+        <div className="w-full px-6 py-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_308px] items-start">
           <div className="flex flex-col gap-4 min-w-0">
             {actionError && (
               <div role="alert" className="anim-fade-down flex items-center justify-between border border-danger/25 bg-danger/10 rounded-lg px-4 py-2.5 text-sm font-medium text-danger">

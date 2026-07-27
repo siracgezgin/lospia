@@ -90,7 +90,7 @@ export function SheetsView({
     "h-9 rounded-lg border border-line bg-surface px-3 text-sm text-muted transition-colors duration-150 hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40";
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+    <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
       <ModulePageHeader
         title="Tablo Merkezi"
         description="Excel/CSV düzenlerinizi Lospia içinde tablo olarak tutun — hücreleri doğrudan düzenleyin, Excel'den kopyalayıp yapıştırın."
@@ -160,16 +160,16 @@ export function SheetsView({
           />
         </div>
       ) : (
-        <div className="stagger-children grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="stagger-children grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
           {filtered.map((s) => (
             <div key={s.id} className="group flex flex-col rounded-2xl border border-line bg-surface p-4 shadow-card transition-all duration-200 ease-standard hover:-translate-y-0.5 hover:border-line-strong hover:shadow-card-hover">
               <div className="mb-2 flex items-start justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="rounded-md bg-surface-muted px-2 py-0.5 text-[10.5px] font-medium text-muted">
+                  <span className="rounded-md bg-surface-muted px-2 py-0.5 text-[12px] font-medium text-muted">
                     {sheetTypeLabel(s.sheet_type)}
                   </span>
-                  <span className={cn("inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10.5px] font-medium", SHEET_STATUS_TONE[s.status])}>
-                    {s.status === "locked" && <Lock size={9} />}
+                  <span className={cn("inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[12px] font-medium", SHEET_STATUS_TONE[s.status])}>
+                    {s.status === "locked" && <Lock size={10} />}
                     {sheetStatusLabel(s.status)}
                   </span>
                 </div>
@@ -188,26 +188,26 @@ export function SheetsView({
               </div>
 
               <Link href={`/sheets/${s.id}`} className="min-w-0">
-                <h3 className="flex items-start justify-between gap-2 text-[14px] font-medium leading-snug text-ink transition-colors duration-150 group-hover:text-brand-strong">
+                <h3 className="flex items-start justify-between gap-2 text-sm font-medium leading-snug text-ink transition-colors duration-150 group-hover:text-brand-strong">
                   <span className="min-w-0">{s.title}</span>
                   <ArrowUpRight size={14} className="mt-0.5 shrink-0 text-subtle opacity-0 transition-opacity duration-150 group-hover:opacity-100" />
                 </h3>
               </Link>
               {s.department_id && deptName.get(s.department_id) && (
-                <p className="mt-0.5 text-[11.5px] text-subtle">{deptName.get(s.department_id)}</p>
+                <p className="mt-0.5 text-[12px] text-subtle">{deptName.get(s.department_id)}</p>
               )}
-              {s.description && <p className="mt-1 line-clamp-2 text-[12px] text-muted">{s.description}</p>}
+              {s.description && <p className="mt-1 line-clamp-2 text-[12.5px] text-muted">{s.description}</p>}
               {(s.tags ?? []).length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">
                   {s.tags.map((t) => (
-                    <span key={t} className="rounded bg-surface-muted px-1.5 py-0.5 text-[10px] text-muted">
+                    <span key={t} className="rounded bg-surface-muted px-1.5 py-0.5 text-[12px] text-muted">
                       {t}
                     </span>
                   ))}
                 </div>
               )}
 
-              <div className="mt-3 flex items-center justify-between border-t border-hairline pt-2.5 text-[11px] text-subtle">
+              <div className="mt-3 flex items-center justify-between border-t border-hairline pt-2.5 text-[12px] text-subtle">
                 <span className="truncate">
                   {s.created_by && memberNames[s.created_by] ? memberNames[s.created_by] : "—"}
                 </span>

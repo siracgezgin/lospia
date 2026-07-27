@@ -70,7 +70,7 @@ export function CollectionViewer({ isAdmin }: Props) {
   const shownRows = filteredRows.slice(0, MAX_ROWS_RENDERED);
 
   return (
-    <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8">
+    <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
       {/* Header */}
       <ModulePageHeader
         title="Koleksiyon & Üretim"
@@ -83,7 +83,7 @@ export function CollectionViewer({ isAdmin }: Props) {
       {/* Read-only banner */}
       <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-[#c4daf6] bg-[#e8f1fd] px-4 py-3">
         <ShieldAlert size={16} className="mt-0.5 shrink-0 text-[#1a4889]" />
-        <div className="text-[12.5px] leading-relaxed text-[#1a4889]">
+        <div className="text-[13px] leading-relaxed text-[#1a4889]">
           <span className="font-semibold">
             Bu alan şu anda yalnızca yöneticiler için salt okunur önizleme modundadır.
           </span>{" "}
@@ -136,7 +136,7 @@ export function CollectionViewer({ isAdmin }: Props) {
       ) : (
         <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-line bg-surface-muted px-4 py-3">
           <Lock size={15} className="mt-0.5 shrink-0 text-subtle" />
-          <p className="text-[12.5px] text-muted">
+          <p className="text-[13px] text-muted">
             Koleksiyon dosyası önizlemesi yalnızca yöneticiler tarafından açılabilir.
           </p>
         </div>
@@ -170,12 +170,12 @@ export function CollectionViewer({ isAdmin }: Props) {
           {showMapping && (
             <div className="mb-3 rounded-xl border border-line bg-surface p-4 shadow-card">
               <div className="mb-2 flex items-center gap-1.5">
-                <span className="rounded bg-surface-sunken px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-subtle">
+                <span className="rounded bg-surface-sunken px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-subtle">
                   Hazırlık aşamasında
                 </span>
-                <p className="text-[12.5px] font-medium text-ink">Kolon eşleştirme yakında</p>
+                <p className="text-[13px] font-medium text-ink">Kolon eşleştirme yakında</p>
               </div>
-              <p className="mb-3 text-[12px] text-muted">
+              <p className="mb-3 text-[13px] text-muted">
                 Bu yalnızca fikir amaçlıdır; hiçbir veri yazılmaz. İleride bu eşleştirme ile
                 seçili kolonlar kontrollü şekilde sisteme alınabilecek.
               </p>
@@ -190,14 +190,14 @@ export function CollectionViewer({ isAdmin }: Props) {
                   </div>
                 ))}
               </div>
-              <p className="mt-3 flex items-center gap-1.5 text-[11.5px] text-[#a05f1c]">
+              <p className="mt-3 flex items-center gap-1.5 text-[12px] text-[#a05f1c]">
                 <Lock size={12} /> Maliyet/fiyat gibi hassas kolonlar ileride Finans / Yönetim yetkisi gerektirecek.
               </p>
             </div>
           )}
 
           <div className="overflow-auto rounded-xl border border-line bg-surface shadow-card" style={{ maxHeight: "70vh" }}>
-            <table className="text-[12px]">
+            <table className="min-w-full text-[13px]">
               <thead className="sticky top-0 z-20">
                 <tr>
                   {table.headers.map((h, i) => {
@@ -255,7 +255,7 @@ export function CollectionViewer({ isAdmin }: Props) {
       {!table && !error && (
         <div className="rounded-2xl border border-dashed border-line bg-surface px-6 py-14 text-center">
           <Boxes size={26} className="mx-auto mb-3 text-subtle" />
-          <p className="text-[13.5px] text-muted">
+          <p className="text-sm text-muted">
             {isAdmin
               ? "Bir koleksiyon CSV/TSV dosyası seçerek salt okunur önizlemeyi başlatın."
               : "Görüntülenecek koleksiyon verisi henüz yüklenmedi."}

@@ -113,7 +113,7 @@ function fromSheet(s: ProductionSheet): ProductionSheetInput {
 
 // ── Field primitives ─────────────────────────────────────────────────────────
 const inputCls =
-  "w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[13px] text-ink placeholder:text-subtle " +
+  "w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm text-ink placeholder:text-subtle " +
   "transition-[color,background-color,border-color,box-shadow] duration-150 ease-standard " +
   "hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40";
 
@@ -122,7 +122,7 @@ function LabeledField({
 }: { label: string; value: string; onChange: (_v: string) => void; placeholder?: string }) {
   return (
     <label className="flex items-center gap-2">
-      <span className="w-40 shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted">{label}</span>
+      <span className="w-40 shrink-0 text-[11.5px] font-semibold uppercase tracking-wide text-muted">{label}</span>
       <input className={inputCls} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
     </label>
   );
@@ -148,7 +148,7 @@ function Section({ title, children, className }: { title: string; children: Reac
     <section className={cn("overflow-hidden rounded-lg border border-line bg-surface shadow-card transition-shadow duration-200 ease-standard", className)}>
       <div className="flex items-center gap-2 border-b border-line bg-surface-muted px-3 py-2">
         <span aria-hidden className="h-3.5 w-[3px] shrink-0 rounded-full bg-brand" />
-        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted">{title}</h2>
+        <h2 className="text-[11.5px] font-semibold uppercase tracking-wider text-muted">{title}</h2>
       </div>
       <div className="p-3">{children}</div>
     </section>
@@ -262,7 +262,7 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
   );
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+    <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
       {/* Kaydedildi bildirimi (toast) */}
       <div
         aria-live="polite"
@@ -277,11 +277,11 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
       {/* Üst bar — eylemler sabit kalır (sticky) ki uzun föyde her zaman erişilebilir */}
       <div className="sticky top-0 z-20 -mx-4 mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-line bg-app/85 px-4 py-3 shadow-pop backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
         <div className="min-w-0">
-          <Link href="/collection" className="mb-1 inline-flex items-center gap-1 rounded-md text-[12.5px] text-subtle transition-colors duration-150 hover:text-ink">
+          <Link href="/collection" className="mb-1 inline-flex items-center gap-1 rounded-md text-[13px] text-subtle transition-colors duration-150 hover:text-ink">
             <ArrowLeft size={13} /> Koleksiyon
           </Link>
           {!isNew && sheet && (
-            <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[11.5px] text-subtle">
+            <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[12px] text-subtle">
               <span className="flex items-center gap-1">
                 <User size={11} /> Oluşturan: <span className="font-medium text-muted">{nameOf(sheet.created_by)}</span>
               </span>
@@ -317,10 +317,10 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
       </div>
 
       {error && (
-        <div className="anim-fade-down mb-4 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-[12.5px] font-medium text-danger">{error}</div>
+        <div className="anim-fade-down mb-4 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] font-medium text-danger">{error}</div>
       )}
       {imgError && (
-        <div className="anim-fade-down mb-4 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-[12.5px] font-medium text-danger">Görsel kaydedilemedi: {imgError}</div>
+        <div className="anim-fade-down mb-4 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] font-medium text-danger">Görsel kaydedilemedi: {imgError}</div>
       )}
 
       {/* ── Föy belgesi ── */}
@@ -355,7 +355,7 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
           </div>
           {/* Koleksiyon kategorisi — web nav yapısı (One-of-a-Kind / Ready to Wear …) */}
           <label className="flex items-center gap-2">
-            <span className="w-40 shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted">Kategori</span>
+            <span className="w-40 shrink-0 text-[11.5px] font-semibold uppercase tracking-wide text-muted">Kategori</span>
             <select
               className={inputCls}
               value={form.category ?? ""}
@@ -377,7 +377,7 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
             </select>
           </label>
           <label className="flex items-center gap-2">
-            <span className="w-40 shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted">Alt kategori</span>
+            <span className="w-40 shrink-0 text-[11.5px] font-semibold uppercase tracking-wide text-muted">Alt kategori</span>
             <select
               className={cn(inputCls, subcategoriesOf(form.category).length === 0 && "opacity-50")}
               value={form.subcategory ?? ""}
@@ -391,7 +391,7 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
             </select>
           </label>
           <label className="md:col-span-2 flex items-start gap-2">
-            <span className="w-40 shrink-0 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted">Ürünün açıklaması</span>
+            <span className="w-40 shrink-0 pt-1.5 text-[11.5px] font-semibold uppercase tracking-wide text-muted">Ürünün açıklaması</span>
             <TextArea value={form.description ?? ""} onChange={(v) => set("description", v)} rows={2} />
           </label>
         </div>
@@ -438,12 +438,12 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
 
         {/* BEDEN DAĞILIMI — sabit standart beden kolonları; hangisine istersen gir */}
         <Section title="Beden Dağılımı">
-          <p className="mb-2.5 text-[11.5px] text-subtle">
+          <p className="mb-2.5 text-[12px] text-subtle">
             Tüm bedenler her zaman burada; yalnızca ürünün olan bedenlerine adet girin.
           </p>
           {/* Hizalı, çizgili ızgara — sabit başlıklar + eşit genişlikte kutucuklar */}
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] table-fixed border-collapse overflow-hidden rounded-lg text-[12.5px]">
+            <table className="w-full min-w-[720px] table-fixed border-collapse overflow-hidden rounded-lg text-[13px]">
               <colgroup>
                 <col className="w-36" />
                 {sd.sizes.map((_, i) => <col key={i} />)}
@@ -452,13 +452,13 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
               </colgroup>
               <thead>
                 <tr className="bg-surface-muted">
-                  <th className="border border-line-strong px-2 py-1.5 text-left text-[10.5px] font-semibold uppercase tracking-wider text-subtle">Satır</th>
+                  <th className="border border-line-strong px-2 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider text-subtle">Satır</th>
                   {sd.sizes.map((s, i) => (
-                    <th key={i} className="border border-line-strong px-1 py-1.5 text-center text-[11.5px] font-semibold text-ink">
+                    <th key={i} className="border border-line-strong px-1 py-1.5 text-center text-[12px] font-semibold text-ink">
                       {s}
                     </th>
                   ))}
-                  <th className="border border-line-strong px-1 py-1.5 text-center text-[10.5px] font-semibold uppercase tracking-wider text-subtle">Toplam</th>
+                  <th className="border border-line-strong px-1 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wider text-subtle">Toplam</th>
                   <th className="w-9" />
                 </tr>
               </thead>
@@ -466,7 +466,7 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
                 {sd.rows.map((row, ri) => (
                   <tr key={ri}>
                     <td className="border border-line p-0">
-                      <input className="w-full bg-transparent px-2 py-1.5 text-[12.5px] font-medium text-ink focus:bg-surface focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-ring" value={row.label} onChange={(e) => setDistLabel(ri, e.target.value)} placeholder="Satır adı" />
+                      <input className="w-full bg-transparent px-2 py-1.5 text-[13px] font-medium text-ink focus:bg-surface focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-ring" value={row.label} onChange={(e) => setDistLabel(ri, e.target.value)} placeholder="Satır adı" />
                     </td>
                     {sd.sizes.map((_, ci) => (
                       <td key={ci} className="border border-line p-0">
@@ -498,14 +498,14 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
             const setP = (patch: Partial<typeof p>) => set("pricing", { ...p, ...patch });
             return (
               <div className="space-y-3">
-                <div className="grid grid-cols-1 gap-x-5 gap-y-2 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-x-5 gap-y-2 sm:grid-cols-2 2xl:grid-cols-4">
                   <LabeledField label="Birim fiyat (₺)" value={p.unit_price ?? ""} onChange={(v) => setP({ unit_price: v })} placeholder="500" />
                   <LabeledField label="Satın alma maliyeti (₺)" value={p.purchase_cost ?? ""} onChange={(v) => setP({ purchase_cost: v })} placeholder="birim malzeme maliyeti" />
                   <LabeledField label="Web satış fiyatı (₺)" value={p.web_sale_price ?? ""} onChange={(v) => setP({ web_sale_price: v })} placeholder="sitedeki satış fiyatı" />
                   <LabeledField label="Not" value={p.notes ?? ""} onChange={(v) => setP({ notes: v })} placeholder="KDV hariç, kargo vb." />
                 </div>
                 {/* Otomatik toplam üretim maliyeti — beden dağılımı toplam adedi × birim fiyat */}
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-surface-muted px-3 py-2 text-[12.5px]">
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-surface-muted px-3 py-2 text-[13px]">
                   <span className="text-muted">
                     Toplam adet: <span className="font-semibold text-ink tabular-nums">{qty || "—"}</span>
                     <span className="mx-1.5 text-subtle">×</span>
@@ -515,7 +515,7 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
                     Üretim maliyeti: {formatMoney(lineTotal)}
                   </span>
                 </div>
-                <p className="text-[11px] text-subtle">
+                <p className="text-[12px] text-subtle">
                   Bu fiyatlar Koleksiyon → Maliyet bölümünde de görünür; oradan değiştirilirse burada da güncellenir (tek kaynak).
                 </p>
               </div>
@@ -538,14 +538,16 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
 
         {/* KUMAŞ BİLGİSİ + AKSESUAR BİLGİSİ */}
         <Section title="Kumaş & Aksesuar Bilgisi">
-          <label className="block">
-            <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">Kumaş bilgisi (cinsi, desen yönü, pantone, gramaj…)</span>
-            <TextArea value={form.fabric_info ?? ""} onChange={(v) => set("fabric_info", v)} rows={2} />
-          </label>
-          <label className="mt-3 block">
-            <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">Aksesuarlar bilgisi (çıtçıt, düğme, kopça, taş, boncuk, etiket…)</span>
-            <TextArea value={form.accessories_info ?? ""} onChange={(v) => set("accessories_info", v)} rows={2} />
-          </label>
+          <div className="grid grid-cols-1 gap-3 xl:grid-cols-2 xl:gap-x-5">
+            <label className="block">
+              <span className="mb-1 block text-[11.5px] font-semibold uppercase tracking-wide text-muted">Kumaş bilgisi (cinsi, desen yönü, pantone, gramaj…)</span>
+              <TextArea value={form.fabric_info ?? ""} onChange={(v) => set("fabric_info", v)} rows={2} />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-[11.5px] font-semibold uppercase tracking-wide text-muted">Aksesuarlar bilgisi (çıtçıt, düğme, kopça, taş, boncuk, etiket…)</span>
+              <TextArea value={form.accessories_info ?? ""} onChange={(v) => set("accessories_info", v)} rows={2} />
+            </label>
+          </div>
           <div className="mt-3">
             <ImageUploader sheetId={sheetId} section="accessories" images={form.photo_refs} onChange={handleImagesChange} label="Aksesuar fotoğrafları" />
           </div>
@@ -569,21 +571,21 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
 
         {/* ÖZEL İŞÇİLİK & KALİTE KONTROL */}
         <Section title="Özel İşçilik ve Kalite Kontrol">
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-3 xl:grid-cols-2 xl:gap-x-5">
             <label className="block">
-              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">Özel işçilik notları</span>
+              <span className="mb-1 block text-[11.5px] font-semibold uppercase tracking-wide text-muted">Özel işçilik notları</span>
               <TextArea value={form.workmanship_notes ?? ""} onChange={(v) => set("workmanship_notes", v)} rows={2} />
             </label>
             <label className="block">
-              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">Kalite kontrol revizyon tarihi</span>
+              <span className="mb-1 block text-[11.5px] font-semibold uppercase tracking-wide text-muted">Kalite kontrol revizyon tarihi</span>
               <TextArea value={form.qc_revision ?? ""} onChange={(v) => set("qc_revision", v)} rows={2} />
             </label>
             <label className="block">
-              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">Revizyon notları</span>
+              <span className="mb-1 block text-[11.5px] font-semibold uppercase tracking-wide text-muted">Revizyon notları</span>
               <TextArea value={form.revision_notes ?? ""} onChange={(v) => set("revision_notes", v)} rows={2} />
             </label>
             <label className="block">
-              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">Üretim fire payı</span>
+              <span className="mb-1 block text-[11.5px] font-semibold uppercase tracking-wide text-muted">Üretim fire payı</span>
               <TextArea value={form.production_waste ?? ""} onChange={(v) => set("production_waste", v)} rows={2} />
             </label>
           </div>

@@ -29,7 +29,7 @@ function TrashRow({
   const [confirming, setConfirming] = useState(false);
 
   return (
-    <div className="flex items-center justify-between gap-3 py-2.5 px-4 hover:bg-surface-hover transition-colors duration-150 group">
+    <div className="flex items-center justify-between gap-3 py-3 px-4 sm:px-5 hover:bg-surface-hover transition-colors duration-150 group">
       <div className="flex-1 min-w-0">
         <Link
           href={`/tasks/${task.id}`}
@@ -53,16 +53,16 @@ function TrashRow({
 
         {confirming ? (
           <div className="anim-fade flex items-center gap-1.5">
-            <span className="text-[10px] font-medium text-danger">Kalıcı silinsin mi?</span>
+            <span className="text-xs font-medium text-danger">Kalıcı silinsin mi?</span>
             <button
               onClick={() => startTransition(async () => { await permanentDeleteTask(task.id); onRemove(task.id); })}
-              className="text-[10px] font-medium bg-danger text-white rounded-md px-1.5 py-0.5 hover:bg-danger-strong active:scale-[0.98] transition-colors duration-150"
+              className="text-xs font-medium bg-danger text-white rounded-md px-2 py-0.5 hover:bg-danger-strong active:scale-[0.98] transition-colors duration-150"
             >
               Evet
             </button>
             <button
               onClick={() => setConfirming(false)}
-              className="text-[10px] font-medium bg-surface-sunken text-muted rounded-md px-1.5 py-0.5 hover:bg-surface-hover hover:text-ink active:scale-[0.98] transition-colors duration-150"
+              className="text-xs font-medium bg-surface-sunken text-muted rounded-md px-2 py-0.5 hover:bg-surface-hover hover:text-ink active:scale-[0.98] transition-colors duration-150"
             >
               İptal
             </button>
@@ -93,22 +93,22 @@ export function TrashView({ tasks: initialTasks }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-6 py-4 border-b border-line bg-surface shrink-0">
-        <div className="flex items-center gap-2.5">
-          <div className="grid h-8 w-8 place-items-center rounded-lg bg-surface-sunken text-muted shrink-0">
-            <Trash2 size={16} strokeWidth={1.75} />
+      <div className="px-4 sm:px-6 lg:px-8 py-4 border-b border-line bg-surface shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="grid h-10 w-10 place-items-center rounded-xl bg-surface-sunken text-muted shrink-0">
+            <Trash2 size={18} strokeWidth={1.75} />
           </div>
           <div className="min-w-0">
             <div className="flex items-baseline gap-2">
-              <h1 className="text-lg font-semibold tracking-tight text-ink">Çöp Kutusu</h1>
+              <h1 className="text-xl font-semibold tracking-tight text-ink">Çöp Kutusu</h1>
               <span className="text-sm text-subtle tabular-nums">({tasks.length} görev)</span>
             </div>
-            <p className="text-xs text-subtle">Silinen görevler burada tutulur. Geri yükleyebilir veya kalıcı olarak silebilirsiniz.</p>
+            <p className="text-[13px] text-muted">Silinen görevler burada tutulur. Geri yükleyebilir veya kalıcı olarak silebilirsiniz.</p>
           </div>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
         {tasks.length > 0 ? (
           <div className="anim-fade-up bg-surface border border-line rounded-card shadow-card divide-y divide-hairline overflow-hidden">
             {tasks.map((task) => (

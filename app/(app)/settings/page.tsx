@@ -104,7 +104,7 @@ export default async function SettingsPage() {
   const profileName = profile?.full_name ?? "—";
 
   return (
-    <div className="max-w-6xl mx-auto p-4 sm:p-6 lg:p-8 space-y-8">
+    <div className="w-full p-4 sm:p-6 lg:p-8 space-y-8">
       {/* Page header: title + summary chips */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
@@ -129,8 +129,11 @@ export default async function SettingsPage() {
         </div>
       </div>
 
-      {/* Profile + Workspace side by side on wider screens */}
-      <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
+      {/* Tek hizalı iki sütun (xl): sol 2/3 = Profil + Hesap + Üyeler,
+          sağ 1/3 = Çalışma alanı + Departmanlar. Ayrı grid'ler sağ sütunda
+          boşluk bırakıyordu — tüm sayfa tek grid'de hizalanır. */}
+      <div className="grid items-start gap-6 xl:grid-cols-3">
+        <div className="min-w-0 space-y-8 xl:col-span-2">
         {/* Profile */}
         <section className="space-y-3">
           <h2 className="text-base font-semibold text-ink">Profiliniz</h2>
@@ -159,57 +162,6 @@ export default async function SettingsPage() {
           </Card>
         </section>
 
-        {/* Workspace */}
-        <section className="space-y-3">
-          <h2 className="text-base font-semibold text-ink">Çalışma alanı</h2>
-          <Card className="p-5 h-full space-y-4">
-            <div>
-              <p className="text-xs text-subtle mb-1">İsim</p>
-              {isOwner && workspace ? (
-                <WorkspaceNameEditor workspaceId={workspaceId} currentName={workspace.name} />
-              ) : (
-                <p className="text-sm font-medium text-ink">{workspace?.name}</p>
-              )}
-            </div>
-            <div className="space-y-3 border-t border-hairline pt-4">
-              <div>
-                <p className="text-xs text-subtle">Kısa ad</p>
-                <p className="text-sm font-mono text-muted">{workspace?.slug}</p>
-              </div>
-              <div>
-                <p className="text-xs text-subtle">Rolünüz</p>
-                <p className="text-sm font-medium text-ink">{roleLabel(userRole)}</p>
-              </div>
-            </div>
-          </Card>
-        </section>
-      </div>
-
-      {/* Departmanlar */}
-      <section className="space-y-3">
-        <Card className="p-5 sm:p-6 space-y-4">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div>
-              <h2 className="text-base font-semibold text-ink">Departmanlar</h2>
-              <p className="text-xs text-subtle mt-0.5">
-                Görevleri departmanlara atayın. Üyeler birden fazla departmanda yer alabilir.
-              </p>
-            </div>
-            <span className="text-xs text-muted bg-surface-sunken px-2.5 py-1 rounded-full tabular-nums shrink-0">
-              {departments.length} departman
-            </span>
-          </div>
-          <DepartmentsManager
-            departments={departments}
-            deptMembers={deptMembers}
-            workspaceMembers={
-              (membersResult.data ?? []) as (WorkspaceMember & { profiles?: Partial<Profile> | null })[]
-            }
-            canManage={canManageDepts}
-          />
-        </Card>
-      </section>
-
       {/* Account creation — admin-created accounts (owner + admin). Replaces the
           old self-signup flow: the person signs in directly with the username +
           password set here. */}
@@ -217,7 +169,7 @@ export default async function SettingsPage() {
         <section className="space-y-3">
           <div>
             <h2 className="text-base font-semibold text-ink">Hesap oluştur</h2>
-            <p className="text-xs text-subtle mt-0.5">
+            <p className="text-[13px] text-muted mt-0.5">
               Yalnızca yöneticiler ve çalışma alanı sahibi yeni hesap oluşturabilir.
             </p>
           </div>
@@ -229,7 +181,7 @@ export default async function SettingsPage() {
       <section className="space-y-3">
         <div>
           <h2 className="text-base font-semibold text-ink">Üyeler</h2>
-          <p className="text-xs text-subtle mt-0.5">
+          <p className="text-[13px] text-muted mt-0.5">
             Ekip üyelerinin rollerini, kullanıcı adlarını ve bildirim e-postalarını yönetin.
           </p>
         </div>
@@ -270,6 +222,62 @@ export default async function SettingsPage() {
           </Card>
         )}
       </section>
+        </div>
+
+        {/* Sağ sütun (1/3): Çalışma alanı + Departmanlar — sol sütunla aynı
+            grid satırından başlar, boşluk kalmaz. */}
+        <div className="min-w-0 space-y-8">
+          {/* Workspace */}
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold text-ink">Çalışma alanı</h2>
+            <Card className="p-5 space-y-4">
+              <div>
+                <p className="text-xs text-subtle mb-1">İsim</p>
+                {isOwner && workspace ? (
+                  <WorkspaceNameEditor workspaceId={workspaceId} currentName={workspace.name} />
+                ) : (
+                  <p className="text-sm font-medium text-ink">{workspace?.name}</p>
+                )}
+              </div>
+              <div className="space-y-3 border-t border-hairline pt-4">
+                <div>
+                  <p className="text-xs text-subtle">Kısa ad</p>
+                  <p className="text-sm font-mono text-muted">{workspace?.slug}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-subtle">Rolünüz</p>
+                  <p className="text-sm font-medium text-ink">{roleLabel(userRole)}</p>
+                </div>
+              </div>
+            </Card>
+          </section>
+
+          {/* Departmanlar */}
+          <section className="space-y-3">
+            <Card className="p-5 sm:p-6 space-y-4">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <h2 className="text-base font-semibold text-ink">Departmanlar</h2>
+                  <p className="text-[13px] text-muted mt-0.5">
+                    Görevleri departmanlara atayın. Üyeler birden fazla departmanda yer alabilir.
+                  </p>
+                </div>
+                <span className="text-xs text-muted bg-surface-sunken px-2.5 py-1 rounded-full tabular-nums shrink-0">
+                  {departments.length} departman
+                </span>
+              </div>
+              <DepartmentsManager
+                departments={departments}
+                deptMembers={deptMembers}
+                workspaceMembers={
+                  (membersResult.data ?? []) as (WorkspaceMember & { profiles?: Partial<Profile> | null })[]
+                }
+                canManage={canManageDepts}
+              />
+            </Card>
+          </section>
+        </div>
+      </div>
     </div>
   );
 }

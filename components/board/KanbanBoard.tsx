@@ -32,7 +32,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  GripVertical, Plus, FileSpreadsheet, Search, X, Check,
+  GripVertical, Plus, FileSpreadsheet, Search, X, Check, CalendarDays,
   ChevronLeft, ChevronRight, ChevronDown, MoreVertical, Pencil, Copy, Archive, Trash2, AlertTriangle, Lock, ShieldCheck,
 } from "lucide-react";
 import { ADMIN_ONLY_CHIP_LABEL, asVisibility, VISIBILITY_LABELS, type TaskVisibility } from "@/lib/utils/visibility";
@@ -295,8 +295,6 @@ function isInWeek(ts: string | null, monday: Date): boolean {
 
 function applyViewFilter(tasks: Task[], slug: string, userId: string, monday: Date): Task[] {
   const today = localISO(new Date());
-  const mondayStr = localISO(monday);
-  const sundayStr = (() => { const d = new Date(monday); d.setDate(d.getDate() + 6); return localISO(d); })();
 
   // Weekly membership is DUE-DATE-ONLY and strictly date-only, and it applies to
   // EXACTLY ONE view: "Bu hafta". A task belongs to a week if and only if its
@@ -311,10 +309,7 @@ function applyViewFilter(tasks: Task[], slug: string, userId: string, monday: Da
   // tasks, "Onay bekleyenler" is ALL waiting tasks — never just the selected
   // week's slice. The week selector is only rendered on "Bu hafta" to match.
   const dueDay = (t: Task) => (t.due_date ? t.due_date.slice(0, 10) : null);
-  const inWeek = (t: Task) => {
-    const d = dueDay(t);
-    return d !== null && d >= mondayStr && d <= sundayStr;
-  };
+  const inWeek = (t: Task) => isDueInWeek(t, monday);
 
   const notArchived = (t: Task) =>
     !t.archived_at && !t.deleted_at && t.status !== "archived";
@@ -358,6 +353,17 @@ function applyViewFilter(tasks: Task[], slug: string, userId: string, monday: Da
 // a user on "Gecikenler" can never believe the week header filters their list.
 function isWeekScopedSlug(slug: string): boolean {
   return slug === "this-week";
+}
+
+// Haftalık üyelik SADECE due_date üzerinden ve tarih-bazlıdır (Pzt–Paz aralığı,
+// string karşılaştırma → TZ güvenli). Tarihsiz görev haftaya girmez. Hem eski
+// "this-week" görünümü hem yeni "Bu hafta" toggle'ı bu tek tanımı kullanır.
+function isDueInWeek(t: Task, monday: Date): boolean {
+  const d = t.due_date ? t.due_date.slice(0, 10) : null;
+  if (d === null) return false;
+  const sunday = new Date(monday);
+  sunday.setDate(sunday.getDate() + 6);
+  return d >= localISO(monday) && d <= localISO(sunday);
 }
 
 // One-line semantics of each view, shown under the tab strip so the general vs.
@@ -1339,6 +1345,10 @@ export function KanbanBoard({
   const [weekStart, setWeekStart] = useState<Date>(() =>
     weekIso ? getMondayOf(new Date(weekIso + "T00:00:00")) : getMondayOf(new Date())
   );
+  // "Bu hafta" toggle — basılıyken aktif görünümün ÜZERİNE hafta filtresi biner
+  // (yalnız seçili haftada teslim tarihli işler); kapalıyken TÜM işler görünür.
+  // URL'de ?week= varsa sayfa yenilemede toggle açık kalır.
+  const [weekOnly, setWeekOnly] = useState<boolean>(() => !!weekIso);
   const currentMonday = getMondayOf(new Date());
   const isCurrentWeek = weekStart.toDateString() === currentMonday.toDateString();
 
@@ -1359,8 +1369,8 @@ export function KanbanBoard({
   // isteğiyle haftalık/aylık bölümleme kaldırıldı; giriş yapıldığında bekleyen,
   // geçmiş ve gelecekteki TÜM işler görünür.
   const effectiveSlug = viewSlug ?? "all";
-  // "Tüm işler" ignores the week entirely; every other view is week-scoped.
-  const weekFilterActive = !isAdminBoard && isWeekScopedSlug(effectiveSlug);
+  // Hafta gezgini yalnız toggle basılıyken görünür (eski this-week sekmesi yok).
+  const weekFilterActive = !isAdminBoard && weekOnly;
 
   // ── Geri bildirimle şimdilik gizlenen özellikler ─────────────────────────────
   // Nisa/Aslı Hanım'ın isteğiyle kapatıldı; kod ve veri korunur, tek satırla
@@ -1471,6 +1481,9 @@ export function KanbanBoard({
       });
     } else {
       tasks = applyViewFilter(optimisticTasks, effectiveSlug, userId, weekStart);
+      // "Bu hafta" toggle'ı görünümün üzerine biner: yalnız seçili haftada
+      // teslim tarihi olan işler kalır (tarihsizler hariç — hafta modeli).
+      if (weekOnly) tasks = tasks.filter((t) => isDueInWeek(t, weekStart));
     }
     if (departmentFilter) {
       const allowed = deptMatchIds[departmentFilter] ?? new Set([departmentFilter]);
@@ -1479,7 +1492,7 @@ export function KanbanBoard({
     if (!adminBoard) tasks = applyPersonFilter(tasks, personFilter);
     tasks = tasks.filter((t) => matchesSearch(t, search, responsibleNames));
     return tasks;
-  }, [adminBoard, adminVisibility, adminManager, managerUserIdSet, optimisticTasks, effectiveSlug, userId, weekStart, departmentFilter, deptMatchIds, personFilter, search, responsibleNames]);
+  }, [adminBoard, adminVisibility, adminManager, managerUserIdSet, optimisticTasks, effectiveSlug, userId, weekStart, weekOnly, departmentFilter, deptMatchIds, personFilter, search, responsibleNames]);
 
   // Distribute filtered tasks into columns
   const tasksByCol = useMemo(() => {
@@ -1790,35 +1803,66 @@ export function KanbanBoard({
           can appear week-bound. Each tab explains itself via the muted
           description line below the strip. */}
       {!isAdminBoard && savedViews.length > 0 && (
-        <div className="px-4 pt-3 pb-2 bg-surface border-b border-line shrink-0 space-y-2">
+        <div className="px-4 pt-2.5 pb-2 bg-surface border-b border-line shrink-0 space-y-1.5">
           {/* Shared segmented view tabs (identical language to the List). The
               general views come first; "Bu hafta" is set apart with a divider +
               calendar icon because it is the ONLY week-scoped view. Entering it
               always starts on the CURRENT week. Icons show on every tab so the
               board reads as a Monday-style toolbar. */}
-          <ViewTabs
-            iconsEverywhere
-            // "Bu hafta" sekmesi gizlendi — haftalık bölümleme kaldırıldı.
-            // (Görünüm mantığı ve saved view verisi korunur; geri alınabilir.)
-            items={savedViews
-              .filter((view) => (SAVED_VIEW_SLUG_MAP[view.name] ?? view.id) !== "this-week")
-              .map((view): ViewTabItem => {
-                const slug = SAVED_VIEW_SLUG_MAP[view.name] ?? view.id;
-                return {
-                  slug,
-                  label: view.name,
-                  icon: VIEW_META[slug as keyof typeof VIEW_META]?.icon,
-                  active: effectiveSlug === slug,
-                  dividerBefore: false,
-                };
-              })}
-            getHref={(slug) => `/board?view=${slug}`}
-          />
+          {/* Sekmeler + "Bu hafta" toggle'ı aynı satırda ("Onay bekleyenler"in
+              hemen yanında). Toggle basılı → aktif görünümün üzerine hafta
+              filtresi biner; kapalı (varsayılan) → tüm işler. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <ViewTabs
+              iconsEverywhere
+              // "Bu hafta" sekmesi gizlendi — haftalık bölümleme kaldırıldı.
+              // (Görünüm mantığı ve saved view verisi korunur; geri alınabilir.)
+              items={savedViews
+                .filter((view) => (SAVED_VIEW_SLUG_MAP[view.name] ?? view.id) !== "this-week")
+                .map((view): ViewTabItem => {
+                  const slug = SAVED_VIEW_SLUG_MAP[view.name] ?? view.id;
+                  return {
+                    slug,
+                    label: view.name,
+                    icon: VIEW_META[slug as keyof typeof VIEW_META]?.icon,
+                    active: effectiveSlug === slug,
+                    dividerBefore: false,
+                  };
+                })}
+              getHref={(slug) => `/board?view=${slug}`}
+            />
+            <button
+              onClick={() => {
+                const next = !weekOnly;
+                const monday = getMondayOf(new Date());
+                setWeekOnly(next);
+                setWeekStart(monday);
+                router.push(
+                  next
+                    ? `/board?view=${effectiveSlug}&week=${localISO(monday)}`
+                    : `/board?view=${effectiveSlug}`,
+                  { scroll: false },
+                );
+              }}
+              aria-pressed={weekOnly}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[13px] font-medium transition-all duration-150 active:scale-[0.98]",
+                weekOnly
+                  ? "bg-brand-soft border-brand/30 text-brand-strong"
+                  : "bg-surface border-line text-muted hover:border-line-strong hover:text-ink hover:bg-surface-muted",
+              )}
+              title={weekOnly ? "Hafta filtresini kaldır — tüm işleri göster" : "Yalnız bu haftanın işlerini göster"}
+            >
+              <CalendarDays size={14} />
+              Bu hafta
+            </button>
+          </div>
 
-          {/* Active view description + (Bu hafta only) the week navigator */}
+          {/* Active view description + (toggle açıkken) week navigator */}
           <div className="flex items-center gap-3 flex-wrap min-h-6">
-            <p className="text-xs text-subtle">
+            <p className="text-[13px] text-muted">
               {VIEW_DESCRIPTIONS[effectiveSlug] ?? ""}
+              {weekFilterActive && " · yalnız seçili haftada teslim tarihli işler"}
             </p>
             {weekFilterActive && (
               <div className="flex items-center gap-1">
@@ -1858,7 +1902,7 @@ export function KanbanBoard({
                       setWeekStart(monday);
                       router.push(`/board?view=${effectiveSlug}&week=${localISO(monday)}`);
                     }}
-                    className="ml-1 text-xs font-medium text-brand hover:text-brand-strong px-2 py-0.5 rounded-md hover:bg-brand-soft transition-colors duration-150"
+                    className="ml-1 text-[13px] font-medium text-brand hover:text-brand-strong px-2 py-0.5 rounded-md hover:bg-brand-soft transition-colors duration-150"
                   >
                     Bu haftaya dön
                   </button>
@@ -1900,7 +1944,7 @@ export function KanbanBoard({
             value={departmentFilter}
             onChange={(e) => setDepartmentFilter(e.target.value)}
             className={cn(
-              "text-sm border rounded-lg px-2 py-1.5 bg-surface transition-colors duration-150 cursor-pointer",
+              "text-sm border rounded-lg px-2.5 py-1.5 bg-surface transition-colors duration-150 cursor-pointer",
               departmentFilter ? "border-brand text-brand" : "border-line text-muted hover:border-line-strong hover:text-ink",
             )}
             aria-label="Departmana göre filtrele"
@@ -1917,7 +1961,7 @@ export function KanbanBoard({
               value={adminManager}
               onChange={(e) => { setAdminManager(e.target.value); syncAdminUrl(adminVisibility, e.target.value); }}
               className={cn(
-                "text-sm border rounded-lg px-2 py-1.5 bg-surface transition-colors duration-150 cursor-pointer",
+                "text-sm border rounded-lg px-2.5 py-1.5 bg-surface transition-colors duration-150 cursor-pointer",
                 adminManager !== "all" ? "border-brand text-brand" : "border-line text-muted hover:border-line-strong hover:text-ink",
               )}
               aria-label="Yöneticiye göre filtrele"
@@ -1932,7 +1976,7 @@ export function KanbanBoard({
               value={personFilter}
               onChange={(e) => setPersonFilter(e.target.value)}
               className={cn(
-                "text-sm border rounded-lg px-2 py-1.5 bg-surface transition-colors duration-150 cursor-pointer",
+                "text-sm border rounded-lg px-2.5 py-1.5 bg-surface transition-colors duration-150 cursor-pointer",
                 personFilter ? "border-brand text-brand" : "border-line text-muted hover:border-line-strong hover:text-ink",
               )}
               aria-label="Kişiye göre filtrele"
@@ -1964,7 +2008,7 @@ export function KanbanBoard({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className={cn(
-                "text-sm border rounded-lg pl-7 pr-3 py-1.5 bg-surface w-40 focus:w-52 focus:outline-none focus:ring-2 transition-[width,color,background-color,border-color,box-shadow] duration-200 ease-standard",
+                "text-sm border rounded-lg pl-7 pr-3 py-1.5 bg-surface w-44 focus:w-64 focus:outline-none focus:ring-2 transition-[width,color,background-color,border-color,box-shadow] duration-200 ease-standard",
                 search ? "border-brand text-brand focus:ring-brand-ring/60" : "border-line text-ink hover:border-line-strong focus:border-brand-ring focus:ring-brand-ring/40",
               )}
               aria-label="Görev ara"
@@ -1978,7 +2022,7 @@ export function KanbanBoard({
                 setPersonFilter(""); setDepartmentFilter(""); setSearch("");
                 if (isAdminBoard) { setAdminManager("all"); syncAdminUrl(adminVisibility, "all"); }
               }}
-              className="text-xs text-subtle hover:text-ink px-1.5 py-0.5 rounded-md hover:bg-surface-muted transition-colors duration-150 whitespace-nowrap"
+              className="text-[13px] text-muted hover:text-ink px-1.5 py-1 rounded-md hover:bg-surface-muted transition-colors duration-150 whitespace-nowrap"
               aria-label="Filtreleri temizle"
             >
               ✕ Temizle

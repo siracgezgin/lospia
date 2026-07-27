@@ -168,7 +168,9 @@ body {
   color: var(--text);
   font-family: var(--font-sans);
   /* Manrope 400 sistem fontundan ince görünür: variable eksende 460 taban —
-     gövde metni dolgun, font-medium(500)/semibold(600) hiyerarşisi korunur. */
+     gövde metni dolgun, font-medium(500)/semibold(600) hiyerarşisi korunur.
+     (2026-07-27: 500/tracking-0 denemesi geri alındı — kullanıcı önceki
+     render'ı tercih etti; bu blok bilinçli olarak eski ayardır, değiştirme.) */
   font-weight: 460;
   letter-spacing: -0.004em;
   -webkit-font-smoothing: antialiased;

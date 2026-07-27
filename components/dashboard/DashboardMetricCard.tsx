@@ -40,7 +40,7 @@ export function DashboardMetricCard({
     <>
       <div className="flex items-center gap-2 text-subtle">
         {icon}
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted truncate">{label}</span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted truncate">{label}</span>
       </div>
       <p className={cn("mt-2.5 text-3xl font-bold tracking-tight tabular-nums leading-none", TONE_TEXT[tone])}>{value}</p>
     </>

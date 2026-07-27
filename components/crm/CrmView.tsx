@@ -11,7 +11,7 @@ import {
   createColumnHelper,
   type SortingState,
 } from "@tanstack/react-table";
-import { Plus, Search, Users, Pencil, Trash2, ArrowUpDown, ExternalLink, Link2 as LinkIcon, UserCheck } from "lucide-react";
+import { Plus, Search, Users, Pencil, Trash2, ArrowUpDown, ExternalLink, Link2 as LinkIcon, UserCheck, Eye } from "lucide-react";
 import { deleteCrmContact } from "@/lib/actions/crm";
 import {
   CRM_SEGMENTS,
@@ -129,7 +129,7 @@ export function CrmView({
                   </span>
                 )}
               </div>
-              {c.organization && <div className="truncate text-[12px] text-subtle">{c.organization}</div>}
+              {c.organization && <div className="truncate text-[12.5px] text-subtle">{c.organization}</div>}
             </div>
           );
         },
@@ -140,7 +140,7 @@ export function CrmView({
           const seg = info.getValue();
           if (!seg) return <span className="text-subtle">—</span>;
           return (
-            <span className={cn("inline-flex rounded-md px-2 py-0.5 text-[11px] font-medium", SEGMENT_TONE[seg] ?? "bg-surface-sunken text-muted")}>
+            <span className={cn("inline-flex rounded-md px-2 py-0.5 text-[12px] font-medium", SEGMENT_TONE[seg] ?? "bg-surface-sunken text-muted")}>
               {segmentLabel(seg)}
             </span>
           );
@@ -152,7 +152,7 @@ export function CrmView({
           const st = info.getValue();
           if (!st) return <span className="text-subtle">—</span>;
           return (
-            <span className={cn("inline-flex rounded-md px-2 py-0.5 text-[11px] font-medium", STATUS_TONE[st] ?? "bg-surface-sunken text-muted")}>
+            <span className={cn("inline-flex rounded-md px-2 py-0.5 text-[12px] font-medium", STATUS_TONE[st] ?? "bg-surface-sunken text-muted")}>
               {statusLabel(st)}
             </span>
           );
@@ -164,8 +164,8 @@ export function CrmView({
         cell: (info) => {
           const c = info.row.original;
           return (
-            <div className="text-[12.5px] leading-tight text-muted">
-              {c.phone && <div className="truncate">{c.phone}</div>}
+            <div className="text-[13px] leading-snug text-muted">
+              {c.phone && <div className="truncate tabular-nums">{c.phone}</div>}
               {c.email && <div className="truncate text-subtle">{c.email}</div>}
               {!c.phone && !c.email && <span className="text-subtle">—</span>}
             </div>
@@ -176,7 +176,7 @@ export function CrmView({
         header: "Sorumlu",
         cell: (info) => {
           const owner = info.getValue();
-          return <span className="text-[12.5px] text-muted">{owner ? memberName.get(owner) ?? "—" : "—"}</span>;
+          return <span className="text-[13px] text-muted">{owner ? memberName.get(owner) ?? "—" : "—"}</span>;
         },
       }),
       columnHelper.accessor("next_follow_up_at", {
@@ -186,7 +186,7 @@ export function CrmView({
           if (!d) return <span className="text-subtle">—</span>;
           const overdue = d < new Date().toISOString().slice(0, 10);
           return (
-            <span className={cn("text-[12.5px] tabular-nums whitespace-nowrap", overdue ? "font-medium text-danger" : "text-muted")}>
+            <span className={cn("text-[13px] tabular-nums whitespace-nowrap", overdue ? "font-medium text-danger" : "text-muted")}>
               {formatDateOnlyTR(d)}
             </span>
           );
@@ -201,9 +201,9 @@ export function CrmView({
           return (
             <Link
               href={`/list?person=${info.row.original.id}`}
-              className="inline-flex items-center gap-1 text-[12.5px] font-medium tabular-nums text-brand transition-colors duration-150 hover:text-brand-strong"
+              className="inline-flex items-center gap-1 text-[13px] font-medium tabular-nums text-brand transition-colors duration-150 hover:text-brand-strong"
             >
-              {n} ilişkili görev <ExternalLink size={11} />
+              {n} ilişkili görev <ExternalLink size={12} />
             </Link>
           );
         },
@@ -248,7 +248,7 @@ export function CrmView({
   });
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+    <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
       {/* Header */}
       <ModulePageHeader
         title="İlişkiler / CRM"
@@ -278,7 +278,7 @@ export function CrmView({
                 <LinkIcon size={14} />
                 Kişi eşleştirme
                 {!setupRequired && linkedCount > 0 && (
-                  <span className="rounded-full bg-surface px-1.5 text-[11px] tabular-nums text-subtle">{linkedCount}</span>
+                  <span className="rounded-full bg-surface px-1.5 text-[12px] tabular-nums text-subtle">{linkedCount}</span>
                 )}
               </button>
               <button
@@ -300,7 +300,12 @@ export function CrmView({
                 Yeni ilişki ekle
               </button>
             </>
-          ) : undefined
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-muted px-3 py-1.5 text-[12px] font-medium text-muted">
+              <Eye size={13} />
+              Salt görüntüleme
+            </span>
+          )
         }
       />
 
@@ -345,7 +350,7 @@ export function CrmView({
 
       {/* Table */}
       <div className="anim-fade-up overflow-x-auto rounded-2xl border border-line bg-surface shadow-card">
-        <table className="w-full min-w-[820px] text-sm">
+        <table className="w-full min-w-[880px] text-sm">
           <thead>
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id} className="select-none border-b border-line bg-surface-muted">
@@ -376,12 +381,12 @@ export function CrmView({
           <tbody className="divide-y divide-hairline">
             {table.getRowModel().rows.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className="px-3 py-14 text-center">
-                  <span className="anim-fade-up inline-flex flex-col items-center gap-2">
-                    <span className="grid h-10 w-10 place-items-center rounded-full bg-surface-sunken text-subtle">
-                      {contacts.length === 0 ? <Users size={18} strokeWidth={1.75} /> : <Search size={17} strokeWidth={1.75} />}
+                <td colSpan={columns.length} className="px-6 py-12 text-center">
+                  <span className="anim-fade-up inline-flex flex-col items-center">
+                    <span className="mb-4 grid h-12 w-12 place-items-center rounded-full bg-brand-soft text-brand ring-8 ring-brand-soft/35">
+                      {contacts.length === 0 ? <Users size={20} strokeWidth={1.75} /> : <Search size={20} strokeWidth={1.75} />}
                     </span>
-                    <span className="text-[13px] text-subtle">
+                    <span className="text-sm font-semibold tracking-tight text-ink">
                       {contacts.length === 0
                         ? "Henüz bir ilişki kaydı yok."
                         : "Filtreye uyan kayıt bulunamadı."}

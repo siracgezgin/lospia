@@ -31,14 +31,14 @@ export function MemberDashboardView({ data, points }: Props) {
   const today = new Date().toISOString().slice(0, 10);
 
   return (
-    <div className="p-4 sm:p-6 max-w-5xl mx-auto space-y-5">
+    <div className="p-4 sm:p-6 w-full space-y-5">
       <div>
         <h1 className="text-xl font-bold tracking-tight text-ink">Raporlar</h1>
         <p className="text-sm text-muted mt-0.5">Size atanan işlerin anlık durumu ve kişisel özetiniz</p>
       </div>
 
       {/* Personal KPIs — only the member's responsible tasks */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 stagger-children">
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3 stagger-children">
         <DashboardMetricCard icon={<ListTodo size={15} />} label="Aktif görevlerim" value={data.active} href="/board?view=mine" />
         <DashboardMetricCard icon={<AlertTriangle size={15} />} label="Geciken işlerim" value={data.overdue} tone={data.overdue > 0 ? "danger" : "neutral"} href="/board?view=overdue" />
         <DashboardMetricCard icon={<CalendarClock size={15} />} label="Bu hafta teslim işlerim" value={data.dueThisWeek} tone={data.dueThisWeek > 0 ? "warning" : "neutral"} href="/board?view=this-week" />
@@ -96,7 +96,7 @@ export function MemberDashboardView({ data, points }: Props) {
                     <Link prefetch={false} href={`/tasks/${t.id}`} className="text-sm font-medium text-ink hover:text-brand truncate rounded-sm transition-colors duration-150 ease-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring/40">
                       {t.title}
                     </Link>
-                    <span className={cn("text-[10px] font-medium rounded-full px-1.5 py-0.5 whitespace-nowrap shrink-0", STATUS_CHIP_TONE[t.status as TaskStatus] ?? "bg-surface-sunken text-muted")}>
+                    <span className={cn("text-xs font-medium rounded-full px-2 py-0.5 whitespace-nowrap shrink-0", STATUS_CHIP_TONE[t.status as TaskStatus] ?? "bg-surface-sunken text-muted")}>
                       {STATUS_LABELS[t.status as TaskStatus] ?? t.status}
                     </span>
                   </div>

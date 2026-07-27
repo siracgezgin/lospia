@@ -31,7 +31,7 @@ function SectionSkeleton({ rows = 4 }: { rows?: number }) {
 
 export default function DashboardLoading() {
   return (
-    <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-5">
+    <div className="p-4 sm:p-6 w-full space-y-5">
       {/* heading */}
       <div>
         <Skeleton className="h-6 w-44" />

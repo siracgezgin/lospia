@@ -26,9 +26,9 @@ interface Props {
 }
 
 const cellInput =
-  "w-full min-w-0 rounded-md border border-transparent bg-transparent px-1.5 py-1 text-[12.5px] text-ink text-center tabular-nums transition-[border-color,background-color,box-shadow] duration-150 hover:border-line focus:border-brand-ring focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand-ring";
+  "w-full min-w-0 rounded-md border border-transparent bg-transparent px-1.5 py-1 text-[13px] text-ink text-center tabular-nums transition-[border-color,background-color,box-shadow] duration-150 hover:border-line focus:border-brand-ring focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand-ring";
 const priceInput =
-  "w-full rounded-md border border-line bg-surface px-2 py-1 text-[12.5px] text-ink text-right tabular-nums transition-[border-color,box-shadow] duration-150 hover:border-line-strong focus:outline-none focus:ring-2 focus:ring-brand-ring focus:border-brand-ring";
+  "w-full rounded-md border border-line bg-surface px-2 py-1 text-[13px] text-ink text-right tabular-nums transition-[border-color,box-shadow] duration-150 hover:border-line-strong focus:outline-none focus:ring-2 focus:ring-brand-ring focus:border-brand-ring";
 // Hücreler arası dikey çizgi
 const colBorder = "border-l border-line/70";
 // Sticky başlık/dip hücreleri — tablo border-separate olduğundan çizgiler hücrede yaşar.
@@ -100,7 +100,7 @@ export function CostTable({ rows }: Props) {
   const grandTotal = rows.reduce((acc, r) => acc + lineTotal(r.id), 0);
 
   return (
-    <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8">
+    <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
       <ModulePageHeader
         title="Maliyet"
         description="Tüm ürünlerin maliyeti tek tabloda. Beden adetlerini ve birim fiyatı burada değiştirebilirsiniz — ürünün föyünde de güncellenir."
@@ -144,16 +144,16 @@ export function CostTable({ rows }: Props) {
           {/* border-separate: sticky başlık/dip hücrelerinde çizgilerin kayarken
               kaybolmaması için (border-collapse sticky ile çizgiyi geride bırakır). */}
           <div className="max-h-[70vh] overflow-auto">
-            <table className="w-full border-separate border-spacing-0 text-[13px]">
+            <table className="w-full min-w-[880px] border-separate border-spacing-0 text-sm">
               <thead>
-                <tr className="text-[11px] font-semibold uppercase tracking-wider text-muted">
-                  <th className={cn(thSticky, "px-3 py-2.5 text-left")}>Ürün</th>
+                <tr className="text-[11.5px] font-semibold uppercase tracking-wider text-muted">
+                  <th className={cn(thSticky, "min-w-[220px] px-3 py-2.5 text-left")}>Ürün</th>
                   {sizes.map((s) => (
-                    <th key={s} className={cn(thSticky, "w-14 px-1 py-2.5 text-center", colBorder)}>{s}</th>
+                    <th key={s} className={cn(thSticky, "w-16 px-1 py-2.5 text-center", colBorder)}>{s}</th>
                   ))}
                   <th className={cn(thSticky, "px-2 py-2.5 text-right", colBorder)}>Toplam Adet</th>
-                  <th className={cn(thSticky, "w-32 px-2 py-2.5 text-right", colBorder)}>Birim Fiyat</th>
-                  <th className={cn(thSticky, "px-3 py-2.5 text-right", colBorder)}>Toplam</th>
+                  <th className={cn(thSticky, "w-36 px-2 py-2.5 text-right", colBorder)}>Birim Fiyat</th>
+                  <th className={cn(thSticky, "min-w-[120px] px-3 py-2.5 text-right", colBorder)}>Toplam</th>
                   <th className={cn(thSticky, "w-8 px-2 py-2.5")} />
                 </tr>
               </thead>
@@ -166,7 +166,7 @@ export function CostTable({ rows }: Props) {
                         <Link href={`/production/${r.id}`} className="font-medium text-ink transition-colors duration-150 hover:text-brand-strong">
                           {r.title}
                         </Link>
-                        {r.product_kind && <span className="ml-2 text-[11px] text-subtle">{r.product_kind}</span>}
+                        {r.product_kind && <span className="ml-2 text-[12px] text-subtle">{r.product_kind}</span>}
                       </td>
                       {sizes.map((s) => (
                         <td key={s} className={cn("px-0.5 py-1", colBorder)}>

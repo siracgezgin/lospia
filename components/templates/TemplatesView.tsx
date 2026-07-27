@@ -109,7 +109,7 @@ export function TemplatesView({
     "h-9 rounded-lg border border-line bg-surface px-3 text-sm text-muted transition-colors duration-150 hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40";
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+    <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
       <ModulePageHeader
         title="Şablon Kütüphanesi"
         description="Format e-postalar, müşteri mesajları, üretici briefleri ve operasyon metinlerini tek merkezde yönetin — kopyalayıp Gmail veya WhatsApp'a yapıştırın."
@@ -172,18 +172,18 @@ export function TemplatesView({
           />
         </div>
       ) : (
-        <div className="stagger-children grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="stagger-children grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
           {filtered.map((t) => (
             <div key={t.id} className="flex flex-col rounded-2xl border border-line bg-surface p-4 shadow-card transition-[transform,box-shadow] duration-200 ease-standard hover:-translate-y-px hover:shadow-card-hover">
               <div className="mb-2 flex items-start justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <span className={cn("rounded-md px-2 py-0.5 text-[10.5px] font-medium", TEMPLATE_CHANNEL_TONE[t.channel])}>
+                  <span className={cn("rounded-md px-2 py-0.5 text-[12px] font-medium", TEMPLATE_CHANNEL_TONE[t.channel])}>
                     {templateChannelLabel(t.channel)}
                   </span>
-                  <span className="rounded-md bg-surface-muted px-2 py-0.5 text-[10.5px] font-medium text-muted">
+                  <span className="rounded-md bg-surface-muted px-2 py-0.5 text-[12px] font-medium text-muted">
                     {templateCategoryLabel(t.category)}
                   </span>
-                  <span className={cn("rounded-md px-2 py-0.5 text-[10.5px] font-medium", OFFICE_STATUS_TONE[t.status])}>
+                  <span className={cn("rounded-md px-2 py-0.5 text-[12px] font-medium", OFFICE_STATUS_TONE[t.status])}>
                     {officeStatusLabel(t.status)}
                   </span>
                 </div>
@@ -204,20 +204,20 @@ export function TemplatesView({
                 </div>
               </div>
 
-              <h3 className="text-[14px] font-semibold leading-snug tracking-tight text-ink">{t.title}</h3>
+              <h3 className="text-sm font-semibold leading-snug tracking-tight text-ink">{t.title}</h3>
               {t.department_id && deptName.get(t.department_id) && (
-                <p className="mt-0.5 text-[11.5px] text-subtle">{deptName.get(t.department_id)}</p>
+                <p className="mt-0.5 text-[12px] text-subtle">{deptName.get(t.department_id)}</p>
               )}
-              {t.description && <p className="mt-1 line-clamp-1 text-[12px] text-muted">{t.description}</p>}
+              {t.description && <p className="mt-1 line-clamp-1 text-[12.5px] text-muted">{t.description}</p>}
               {t.plain_text && (
-                <p className="mt-1.5 line-clamp-3 whitespace-pre-line text-[12px] leading-relaxed text-muted">
+                <p className="mt-1.5 line-clamp-3 whitespace-pre-line text-[13px] leading-relaxed text-muted">
                   {t.plain_text}
                 </p>
               )}
               {(t.variables ?? []).length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">
                   {t.variables.map((v) => (
-                    <span key={v} className="rounded-md border border-hairline bg-surface-sunken px-1.5 py-0.5 font-mono text-[10px] text-muted">
+                    <span key={v} className="rounded-md border border-hairline bg-surface-sunken px-1.5 py-0.5 font-mono text-[12px] text-muted">
                       {v}
                     </span>
                   ))}
@@ -229,7 +229,7 @@ export function TemplatesView({
                 <button
                   onClick={() => handleCopyPlain(t)}
                   className={cn(
-                    "inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] font-medium transition-colors duration-150 active:scale-[0.98]",
+                    "inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12.5px] font-medium transition-colors duration-150 active:scale-[0.98]",
                     copiedId === t.id ? "bg-brand-soft text-brand-strong" : "text-brand hover:bg-brand-soft",
                   )}
                   title="Düz metin olarak panoya kopyala"
@@ -239,7 +239,7 @@ export function TemplatesView({
                 </button>
                 <button
                   onClick={() => handleCopyRich(t)}
-                  className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] font-medium text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
+                  className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12.5px] font-medium text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
                   title="Biçimli metin olarak panoya kopyala (Gmail/Word)"
                 >
                   <ClipboardType size={12} />

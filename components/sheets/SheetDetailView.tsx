@@ -71,7 +71,7 @@ export function SheetDetailView({
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+    <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
       <ModulePageHeader
         title={sheet.title}
         description={sheet.description ?? undefined}
@@ -110,22 +110,22 @@ export function SheetDetailView({
 
       {/* Status row */}
       <div className="mb-3 flex flex-wrap items-center gap-1.5">
-        <span className="rounded-md bg-surface-muted px-2 py-0.5 text-[11px] font-medium text-muted">
+        <span className="rounded-md bg-surface-muted px-2 py-0.5 text-[12px] font-medium text-muted">
           {sheetTypeLabel(sheet.sheet_type)}
         </span>
-        <span className={cn("inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium", SHEET_STATUS_TONE[sheet.status])}>
+        <span className={cn("inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[12px] font-medium", SHEET_STATUS_TONE[sheet.status])}>
           {sheet.status === "locked" && <Lock size={10} />}
           {sheetStatusLabel(sheet.status)}
         </span>
         {(sheet.tags ?? []).map((t) => (
-          <span key={t} className="rounded bg-surface-muted px-1.5 py-0.5 text-[10.5px] text-muted">
+          <span key={t} className="rounded bg-surface-muted px-1.5 py-0.5 text-[12px] text-muted">
             {t}
           </span>
         ))}
       </div>
 
       {readOnly && (
-        <div className="anim-fade-up mb-3 flex items-start gap-2 rounded-xl border border-line bg-surface-muted/60 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-muted">
+        <div className="anim-fade-up mb-3 flex items-start gap-2 rounded-xl border border-line bg-surface-muted/60 px-3.5 py-2.5 text-[13.5px] leading-relaxed text-muted">
           <Info size={14} className="mt-0.5 shrink-0" />
           {contentLocked
             ? sheet.status === "locked"
