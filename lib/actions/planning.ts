@@ -177,6 +177,11 @@ export async function saveMeetingTopics(
       participant_ids: t.participant_ids ?? [],
       due_date: t.due_date ?? null,
     };
+    // Mevcut konu → güncelle. maybeSingle(): id bu toplantıya ait değilse (ör.
+    // istemci eski bir taslak id'si taşıyorsa) 0 satır döner; single() burada
+    // "Cannot coerce the result to a single JSON object" fırlatıyordu. Böyle
+    // bir durumda satırı YENİ olarak ekleyip akışı sürdürüyoruz.
+    let savedId: string | null = null;
     if (t.id) {
       const upd = await supabase
         .from("planning_topics")
@@ -184,18 +189,21 @@ export async function saveMeetingTopics(
         .eq("id", t.id)
         .eq("meeting_id", meetingId)
         .select("id")
-        .single();
+        .maybeSingle();
       if (upd.error) return { error: toActionErrorMessage(upd.error) };
-      out.push({ position: t.position, id: (upd.data as { id: string }).id });
-    } else {
+      savedId = (upd.data as { id: string } | null)?.id ?? null;
+    }
+    if (!savedId) {
       const ins = await supabase
         .from("planning_topics")
         .insert({ ...payload, created_by: ctx.userId })
         .select("id")
-        .single();
+        .maybeSingle();
       if (ins.error) return { error: toActionErrorMessage(ins.error) };
-      out.push({ position: t.position, id: (ins.data as { id: string }).id });
+      savedId = (ins.data as { id: string } | null)?.id ?? null;
+      if (!savedId) return { error: "Konu kaydedilemedi. Sayfayı yenileyip tekrar deneyin." };
     }
+    out.push({ position: t.position, id: savedId });
   }
   revalidatePath("/planning");
   return { ok: true, topics: out };

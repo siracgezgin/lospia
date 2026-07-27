@@ -32,7 +32,12 @@ const inputCls =
   "w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[13px] text-ink placeholder:text-subtle transition-[border-color,box-shadow] duration-150 hover:border-line-strong focus:outline-none focus:ring-2 focus:ring-brand-ring focus:border-brand-ring";
 
 export function MeetingEditor({ meeting, day, slot, dayLabel, members, onClose, onSaved }: Props) {
-  const isNew = meeting === null;
+  // Kaydedilmiş toplantının id'si — prop DEĞİL state, çünkü "Bildir" düğmesi
+  // kaydetmeyi zorlar: yeni bir toplantı oluşturulduktan sonra prop hâlâ null
+  // kalıyordu ve ikinci kayıtta İKİNCİ bir toplantı yaratılıyordu (konular ilk
+  // toplantıda kaldığı için de "Cannot coerce…" hatası düşüyordu).
+  const [meetingId, setMeetingId] = useState<string | null>(meeting?.id ?? null);
+  const isNew = meetingId === null;
   const [category, setCategory] = useState<PlanningCategory>(meeting?.category ?? "uretim");
   const [title, setTitle] = useState(meeting?.title ?? "");
   const [content, setContent] = useState(meeting?.content ?? "");
@@ -56,20 +61,22 @@ export function MeetingEditor({ meeting, day, slot, dayLabel, members, onClose, 
   const addTopic = () => setTopics((ts) => [...ts, { text: "", participant_ids: [], due_date: "" }]);
   const removeTopic = (i: number) => setTopics((ts) => ts.filter((_, idx) => idx !== i));
 
-  // Toplantı + konuları kaydeder; konu id'lerini geri yazar (Ata & bildir için).
+  // Toplantı + konuları kaydeder; konu id'lerini geri yazar ("Bildir" için).
   async function persist(): Promise<{ meetingId: string; posToId: Record<number, string> } | { error: string }> {
     const payload = { meeting_date: day, time_slot: slot, category, title, content, participant_ids: participantIds };
-    let meetingId = meeting?.id;
-    if (!meetingId) {
+    let id = meetingId;
+    if (!id) {
       const res = await createMeeting(payload);
       if ("error" in res) return { error: res.error };
-      meetingId = res.id;
+      id = res.id;
+      // Aynı oturumda ikinci kez kaydedilirse artık GÜNCELLEnir, yenisi açılmaz.
+      setMeetingId(id);
     } else {
-      const res = await updateMeeting(meetingId, payload);
+      const res = await updateMeeting(id, payload);
       if ("error" in res) return { error: res.error };
     }
     const tRes = await saveMeetingTopics(
-      meetingId,
+      id,
       topics.map((t, i) => ({
         id: t.id, position: i, text: t.text, participant_ids: t.participant_ids,
         due_date: t.due_date || null,
@@ -80,7 +87,7 @@ export function MeetingEditor({ meeting, day, slot, dayLabel, members, onClose, 
     for (const { position, id } of tRes.topics) posToId[position] = id;
     // Yerel taslaklara id'leri yaz (yeni satırlar için).
     setTopics((ts) => ts.map((t, i) => (posToId[i] ? { ...t, id: posToId[i] } : t)));
-    return { meetingId, posToId };
+    return { meetingId: id, posToId };
   }
 
   function handleSave() {
@@ -111,11 +118,11 @@ export function MeetingEditor({ meeting, day, slot, dayLabel, members, onClose, 
   }
 
   function handleDelete() {
-    if (!meeting) return;
+    if (!meetingId) return;
     if (!confirm("Bu toplantıyı ve konularını silmek istiyor musunuz?")) return;
     setError(null);
     startDelete(async () => {
-      const res = await deleteMeeting(meeting.id);
+      const res = await deleteMeeting(meetingId);
       if ("error" in res) { setError(res.error); return; }
       onSaved();
     });
@@ -182,7 +189,7 @@ export function MeetingEditor({ meeting, day, slot, dayLabel, members, onClose, 
           <div>
             <div className="mb-1.5 flex items-center justify-between">
               <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">Konular</span>
-              <span className="text-[10.5px] text-subtle">Kişi seç · tarih ver · “Ata &amp; bildir” ile göreve dönüştür</span>
+              <span className="text-[12px] text-subtle">Kişi seç · tarih ver · “Bildir” ile göreve dönüştür</span>
             </div>
             {assignedMsg && (
               <div className="anim-fade-down mb-2 flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[12px] font-medium text-emerald-800">
@@ -204,19 +211,26 @@ export function MeetingEditor({ meeting, day, slot, dayLabel, members, onClose, 
                     onChange={(e) => setTopic(i, { due_date: e.target.value })}
                     title="Teslim tarihi (deadline)"
                   />
+                  {/* Sabit genişlik: etiket her durumda "Bildir" ve buton
+                      ölçüsü değişmez — atama sonrası satır kaymaz. Durum
+                      yalnız renk + ikonla anlatılır. */}
                   <button
                     onClick={() => handleAssign(i)}
                     disabled={isSaving || isDeleting}
                     className={cn(
-                      "inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1.5 text-[11.5px] font-medium transition-colors disabled:opacity-60",
+                      "inline-flex w-[86px] shrink-0 items-center justify-center gap-1 rounded-md border px-2 py-1.5 text-[12px] font-medium transition-colors disabled:opacity-60",
                       t.task_id
                         ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
                         : "border-line bg-surface text-muted hover:border-brand hover:text-brand",
                     )}
-                    title={t.task_id ? "Görev oluşturuldu — güncelle & tekrar bildir" : "Konuyu göreve ata ve atananlara bildir"}
+                    title={
+                      t.task_id
+                        ? "Görev oluşturuldu — güncelleyip tekrar bildirmek için tıklayın"
+                        : "Konuyu göreve dönüştür ve seçilen kişilere bildir"
+                    }
                   >
                     {assigningIdx === i ? <Loader2 size={13} className="animate-spin" /> : t.task_id ? <CheckCircle2 size={13} /> : <Send size={13} />}
-                    <span className="hidden sm:inline">{t.task_id ? "Atandı" : "Ata & bildir"}</span>
+                    <span>Bildir</span>
                   </button>
                   <button onClick={() => removeTopic(i)} className="shrink-0 rounded p-1 text-subtle hover:text-red-600" title="Sil"><Trash2 size={13} /></button>
                 </div>
