@@ -57,7 +57,9 @@ export function quantityBySize(sd: SizeDistribution | null | undefined): Record<
   if (!r || !sd) return out;
   sd.sizes.forEach((size, i) => {
     const q = parseQty(r.values?.[i]);
-    if (size) out[size] = (out[size] ?? 0) + q;
+    // Kanonik ad: eski "Oversize"/"Tek Beden" kolonları "One Size"da toplanır.
+    const key = canonicalSize(size);
+    if (key) out[key] = (out[key] ?? 0) + q;
   });
   return out;
 }
@@ -76,8 +78,9 @@ export function withSizeQty(
     ? { sizes: [...sd.sizes], rows: sd.rows.map((r) => ({ ...r, values: [...(r.values ?? [])] })) }
     : { sizes: [], rows: [] };
 
-  let idx = base.sizes.findIndex((s) => s.toLowerCase() === size.toLowerCase());
-  if (idx === -1) { base.sizes.push(size); idx = base.sizes.length - 1; }
+  const target = canonicalSize(size);
+  let idx = base.sizes.findIndex((s) => canonicalSize(s) === target);
+  if (idx === -1) { base.sizes.push(target); idx = base.sizes.length - 1; }
 
   if (base.rows.length === 0) {
     base.rows.push({ label: "Üretim adeti", values: [], total: "" });
@@ -102,45 +105,75 @@ export function withSizeQty(
 /**
  * Standart beden seti — her üretim föyünde HEP bu kolonlar görünür (kişi
  * hangisine girmek isterse ona girer). Önce tekli bedenler, sonra ikili
- * kombinasyonlar, sonra özel bedenler. Profesyonel, sabit set.
+ * kombinasyonlar, sonra tek beden. Profesyonel, sabit set.
+ *
+ * Tek beden kolonunun adı Excel'deki gibi "One Size"dır. Eski "Oversize" /
+ * "Tek Beden" adları aynı kolona eşlenir (bkz. canonicalSize) — iki ayrı
+ * kolon görünmez, eski veri kaybolmaz.
  */
 export const STANDARD_SIZES = [
   "XS", "S", "M", "L", "XL", "XXL",
   "XS-S", "S-M", "M-L", "L-XL", "XL-XXL",
-  "Oversize", "Tek Beden",
+  "One Size",
 ];
+
+/** Serbest yazılmış beden adı → standart kolon adı. */
+const SIZE_ALIASES: Record<string, string> = {
+  "one size": "One Size",
+  "onesize": "One Size",
+  "oversize": "One Size",
+  "over size": "One Size",
+  "tek beden": "One Size",
+  "tekbeden": "One Size",
+};
+
+/** "OVERSIZE" | "Tek Beden" | "ONE SIZE" → "One Size"; "xs" → "XS". */
+export function canonicalSize(raw: string | null | undefined): string {
+  const trimmed = String(raw ?? "").trim();
+  if (!trimmed) return "";
+  const key = trimmed.toLowerCase().replace(/\s+/g, " ");
+  const alias = SIZE_ALIASES[key];
+  if (alias) return alias;
+  return STANDARD_SIZES.find((s) => s.toLowerCase() === key) ?? trimmed;
+}
 
 /**
  * Bir föyün beden dağılımını standart kolon setine getirir: değerleri beden
- * adına göre eşleştirir (büyük/küçük harf duyarsız), standartta olmayan eski
- * bedenleri sona ekler (veri kaybı olmasın).
+ * adına göre eşleştirir (kanonik ad üzerinden — büyük/küçük harf ve eski
+ * adlar dahil), standartta olmayan bedenleri sona ekler (veri kaybı olmasın).
  */
 export function normalizeToStandardSizes(
   sd: SizeDistribution | null | undefined,
 ): SizeDistribution {
-  const existing = sd?.sizes ?? [];
-  const extras = existing.filter(
-    (s) => s && !STANDARD_SIZES.some((std) => std.toLowerCase() === s.toLowerCase()),
+  const canon = (sd?.sizes ?? []).map(canonicalSize);
+  const extras = canon.filter(
+    (s, i) => s && !STANDARD_SIZES.includes(s) && canon.indexOf(s) === i,
   );
   const target = [...STANDARD_SIZES, ...extras];
   const rows = (sd?.rows ?? []).map((r) => ({
     label: r.label,
     total: r.total,
+    // Aynı kolona eşlenen birden fazla eski beden varsa ilk DOLU değeri al.
     values: target.map((size) => {
-      const i = existing.findIndex((e) => e.toLowerCase() === size.toLowerCase());
-      return i >= 0 ? (r.values?.[i] ?? "") : "";
+      let fallback = "";
+      for (let i = 0; i < canon.length; i++) {
+        if (canon[i] !== size) continue;
+        const v = r.values?.[i] ?? "";
+        if (v !== "") return v;
+        fallback = fallback || v;
+      }
+      return fallback;
     }),
   }));
   return { sizes: target, rows };
 }
 
-/** Beden kolonlarının kanonik sırası (standart set + eski tek-beden varyantları). */
-const SIZE_ORDER = [...STANDARD_SIZES, "One Size", "ONE SIZE"];
+/** Beden kolonlarının kanonik sırası + adı (standart set). */
 export function orderSizes(sizes: string[]): string[] {
-  const uniq = Array.from(new Set(sizes.filter(Boolean)));
+  const uniq = Array.from(new Set(sizes.map(canonicalSize).filter(Boolean)));
   const rank = (s: string) => {
-    const i = SIZE_ORDER.findIndex((o) => o.toLowerCase() === s.toLowerCase());
-    return i === -1 ? SIZE_ORDER.length + uniq.indexOf(s) : i;
+    const i = STANDARD_SIZES.indexOf(s);
+    return i === -1 ? STANDARD_SIZES.length + uniq.indexOf(s) : i;
   };
   return uniq.sort((a, b) => rank(a) - rank(b));
 }
