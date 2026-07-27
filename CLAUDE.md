@@ -32,7 +32,9 @@ app/
   (auth)/login/         sign-in
   (marketing)/          Lospia public site (host-gated; AF host never serves it)
   (app)/                authenticated area (proxy-protected)
-    planning/           haftalık toplantı takvimi (admin ana ekranı; üye salt-okur)
+    home/               Ana Sayfa — giriş rotası (herkes): bana atananlar,
+                        bugünün planı, role göre kısayol ızgarası
+    planning/           haftalık toplantı takvimi (yazım admin-only; üye salt-okur)
     board/ admin-board/ Kanban (+ yönetici görünümü)
     list/               table view
     tasks/[id]/         task detail (+ @modal intercepted drawer)
@@ -53,7 +55,10 @@ lib/
   supabase/             browser | server | middleware clients
   actions/              server actions (all mutations live here)
   planning/ collection/ production/  alan yardımcıları (kategoriler, maliyet, xlsx)
-  modules/registry.ts   hub tanımı — KURAL: isim-only başlık yok
+  modules/registry.ts   MODULE_DIRECTORY — "ne nerede"nin tek kaynağı.
+                        KURAL: isim-only başlık yok; bir rota EN FAZLA bir kez,
+                        TEK kanonik isimle listelenir (sidebar + PAGE_TITLES
+                        ile birebir aynı)
   notifications/        notifyTaskEvent (tek bildirim kapısı — asla direkt insert)
   utils/                cn(), formatters, feature-flag helpers
 modules/                feature-flag'li entegrasyonlar (uploads/slack/email/ai/realtime)
@@ -66,9 +71,13 @@ types/
 ```
 
 ## UI kuralları
-- Sidebar 3 sabit grup (Çalışma / Ürün / Yönetim); yeni modülün kapısı /modules
-  hub'ıdır — sidebar'a başlık eklemek kullanıcı onayı ister.
-- Tek terminoloji: aynı ekran her yerde aynı adla (AppHeader PAGE_TITLES ↔ sidebar).
+- Giriş rotası /home (Ana Sayfa) — tüm roller; kısayol kartları registry'den
+  role göre filtrelenir. /modules yönetici genel-bakış hub'ıdır (sayaçlı).
+- Sidebar 3 sabit grup (Çalışma / Ürün / Yönetim); yeni modülün kapısı Ana
+  Sayfa kısayolları + /modules hub'ıdır — sidebar'a başlık eklemek kullanıcı
+  onayı ister.
+- Tek terminoloji: aynı ekran her yerde aynı adla (registry MODULE_DIRECTORY ↔
+  AppHeader PAGE_TITLES ↔ sidebar ↔ page metadata.title).
 - `app/(app)/layout.tsx`'e sorgu EKLEME — kabuk her gezinmede çalışır.
 - Font Manrope (variable); hizalı rakamlar `tabular-nums`. Animasyonlar
   globals.css'teki `anim-*`/`stagger-children` sınıflarıyla (yeni bağımlılık yok).

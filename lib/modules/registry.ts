@@ -1,15 +1,262 @@
 /**
- * Operasyon Modülleri — the department hub definition.
+ * Modül dizini — "ne nerede?" sorusunun TEK kaynağı.
  *
- * Single source of truth for the /modules screen. Each department maps to an
- * AF colour family (see lib/design/semantics) and lists the operational areas
- * a user can jump into.
+ * KURAL 1: isim-only başlık yok. Her kayıt çalışan bir ekrana gider; hazır
+ * olmayan bir alan burada hiç listelenmez.
+ * KURAL 2: tek isim — buradaki `title`, sidebar etiketi ve AppHeader
+ * PAGE_TITLES ile birebir aynıdır. Aynı rotaya ikinci bir isimle kart açılmaz.
+ * KURAL 3: bir rota bu dizinde en fazla BİR kez geçer. Segment/filtre
+ * varyantları (?segment=, ?provider=) ayrı kart olmaz; hedef sayfanın kendi
+ * filtresi olarak yaşar.
  *
- * KURAL: isim-only başlık yok. Her link çalışan bir modüle gider; hazır
- * olmayan bir alan burada hiç listelenmez (veri ihtiyacı doğunca gerçek
- * modülüyle birlikte eklenir). UI is Turkish; there are no technical enum
- * values here that reach the user.
+ * Tüketiciler: /home kısayol ızgarası (role göre filtreler) ve /modules
+ * yönetici hub'ı (sayaçlı kartlar). UI is Turkish; no technical enum values
+ * reach the user.
  */
+
+import type { LucideIcon } from "lucide-react";
+import {
+  Archive,
+  Boxes,
+  Calculator,
+  Calendar,
+  CalendarRange,
+  Contact,
+  FileText,
+  FolderOpen,
+  Kanban,
+  LayoutDashboard,
+  List,
+  Palette,
+  ScrollText,
+  Settings,
+  ShieldCheck,
+  Table2,
+  Trash2,
+  Wallet,
+} from "lucide-react";
+
+/** Kim GÖRÜR: "all" = tüm üyeler (düzenleme yetkisi ekran içinde isAdmin ile
+ *  daralır — "herkes görsün, yönetici müdahale etsin"), "admin" = yalnız
+ *  owner/admin (veri düzeyinde de kapalı: Finans, Arşiv, Çöp…). */
+export type ModuleAccess = "all" | "admin";
+
+/** Sidebar ve hub ile aynı bölüm dili. */
+export type ModuleGroup = "calisma" | "urun" | "ofis" | "iliskiler" | "yonetim";
+
+export interface ModuleEntry {
+  key: string;
+  /** Kanonik isim — sidebar + AppHeader PAGE_TITLES ile birebir aynı. */
+  title: string;
+  description: string;
+  href: string;
+  icon: LucideIcon;
+  access: ModuleAccess;
+  group: ModuleGroup;
+}
+
+export const MODULE_GROUP_TITLES: Record<ModuleGroup, string> = {
+  calisma: "Çekirdek Operasyon",
+  urun: "Ürün",
+  ofis: "Ofis Merkezi",
+  iliskiler: "İlişkiler",
+  yonetim: "Yönetim",
+};
+
+export const MODULE_DIRECTORY: ModuleEntry[] = [
+  // ── Çalışma — günlük ritim ve iş takibi ───────────────────────────────────
+  {
+    key: "planning",
+    title: "Planlama",
+    description: "Haftalık toplantı takvimi — konular, kişiler ve görev ataması.",
+    href: "/planning",
+    icon: CalendarRange,
+    access: "all",
+    group: "calisma",
+  },
+  {
+    key: "board",
+    title: "Pano",
+    description: "Görev panosu — sürükle-bırak durum takibi.",
+    href: "/board",
+    icon: Kanban,
+    access: "all",
+    group: "calisma",
+  },
+  {
+    key: "admin-board",
+    title: "Yönetici Pano",
+    description: "Yönetici görünümü — sorumluya göre kolonlar ve gizli görevler.",
+    href: "/admin-board",
+    icon: ShieldCheck,
+    access: "admin",
+    group: "calisma",
+  },
+  {
+    key: "list",
+    title: "Liste",
+    description: "Tüm görevler tablo halinde — filtrele, sırala, düzenle.",
+    href: "/list",
+    icon: List,
+    access: "all",
+    group: "calisma",
+  },
+  {
+    key: "calendar",
+    title: "Görev Takvimi",
+    description: "Görevler ay görünümünde — teslim tarihine göre.",
+    href: "/calendar",
+    icon: Calendar,
+    access: "all",
+    group: "calisma",
+  },
+  {
+    key: "dashboard",
+    title: "Raporlar",
+    description: "Departman ve durum bazlı özetler, gecikme analizi.",
+    href: "/dashboard",
+    icon: LayoutDashboard,
+    access: "all",
+    group: "calisma",
+  },
+
+  // ── Ürün — koleksiyon / föy çekirdeği ─────────────────────────────────────
+  {
+    key: "collection",
+    title: "Koleksiyon",
+    description: "Üretim föyleri, kategoriler, ölçüler ve fotoğraflar.",
+    href: "/collection",
+    icon: Boxes,
+    access: "all",
+    group: "urun",
+  },
+  {
+    key: "maliyet",
+    title: "Maliyet Tablosu",
+    description: "Föy bazlı maliyet ve fiyat; Excel çıktısı tek tıkla.",
+    href: "/collection/maliyet",
+    icon: Calculator,
+    access: "all",
+    group: "urun",
+  },
+
+  // ── Ofis Merkezi — Word/Excel işlerinin sistemdeki karşılığı ──────────────
+  {
+    key: "documents",
+    title: "Dokümanlar",
+    description: "Operasyon metinleri, format e-postalar ve Drive bağlantıları.",
+    href: "/documents",
+    icon: FolderOpen,
+    access: "all",
+    group: "ofis",
+  },
+  {
+    key: "templates",
+    title: "Şablonlar",
+    description: "Hazır iletişim formatları — kopyala, uyarla, gönder.",
+    href: "/templates",
+    icon: FileText,
+    access: "all",
+    group: "ofis",
+  },
+  {
+    key: "sheets",
+    title: "Tablolar",
+    description: "Excel/CSV düzenleri ve operasyon tabloları.",
+    href: "/sheets",
+    icon: Table2,
+    access: "all",
+    group: "ofis",
+  },
+  {
+    key: "creative",
+    title: "Kreatif Linkler",
+    description: "Canva, Drive, Figma ve lookbook bağlantıları tek listede.",
+    href: "/creative",
+    icon: Palette,
+    access: "all",
+    group: "ofis",
+  },
+
+  // ── İlişkiler — herkes görür, yönetici düzenler ───────────────────────────
+  {
+    key: "crm",
+    title: "CRM",
+    description: "Müşteri, tedarikçi ve influencer ilişkileri tek rehberde.",
+    href: "/crm",
+    icon: Contact,
+    access: "all",
+    group: "iliskiler",
+  },
+
+  // ── Yönetim — yalnız yönetici (veri düzeyinde de kapalı) ──────────────────
+  {
+    key: "finance",
+    title: "Finans",
+    description: "Ödeme takibi — kime, ne kadar, ne zaman.",
+    href: "/finance",
+    icon: Wallet,
+    access: "admin",
+    group: "yonetim",
+  },
+  {
+    key: "activity",
+    title: "Aktivite Günlüğü",
+    description: "Kim, ne zaman, ne yaptı — tüm görev hareketleri.",
+    href: "/activity",
+    icon: ScrollText,
+    access: "admin",
+    group: "yonetim",
+  },
+  {
+    key: "archive",
+    title: "Arşiv",
+    description: "Arşivlenen ve eski tamamlanmış görevler.",
+    href: "/archive",
+    icon: Archive,
+    access: "admin",
+    group: "yonetim",
+  },
+  {
+    key: "trash",
+    title: "Çöp Kutusu",
+    description: "Silinen görevler — geri al ya da kalıcı sil.",
+    href: "/trash",
+    icon: Trash2,
+    access: "admin",
+    group: "yonetim",
+  },
+  {
+    key: "settings",
+    title: "Ayarlar",
+    description: "Üyeler, davetler, departmanlar ve çalışma alanı.",
+    href: "/settings",
+    icon: Settings,
+    access: "admin",
+    group: "yonetim",
+  },
+];
+
+/** Tek kayıt erişimi — hub kartları başlık/ikonu buradan okur (tek isim kuralı). */
+export function getModuleEntry(key: string): ModuleEntry {
+  const entry = MODULE_DIRECTORY.find((m) => m.key === key);
+  if (!entry) throw new Error(`MODULE_DIRECTORY içinde '${key}' yok`);
+  return entry;
+}
+
+/** Role göre filtrelenmiş dizin — /home kısayol ızgarasının veri kaynağı. */
+export function modulesForRole(isAdmin: boolean): ModuleEntry[] {
+  return MODULE_DIRECTORY.filter((m) => m.access === "all" || isAdmin);
+}
+
+// ---------------------------------------------------------------------------
+// ESKİ departman-kart modeli — KULLANIM DIŞI.
+// /modules artık DepartmentCard çizmiyor: 18 link yalnızca 8 rotaya gidiyor ve
+// aynı ekranlara farklı isimlerle ikinci/üçüncü kapılar açıyordu ("her şey her
+// yerde" karmaşasının kaynağı). Tip + veri, components/modules/DepartmentCard
+// derlenmeye devam etsin diye duruyor; dosya silme onayıyla birlikte bu blok da
+// kaldırılacak.
+// ---------------------------------------------------------------------------
 
 export type ModuleReadiness = "ready" | "prep";
 
@@ -33,82 +280,5 @@ export interface DepartmentModule {
   links: ModuleLink[];
 }
 
-export const DEPARTMENT_MODULES: DepartmentModule[] = [
-  {
-    key: "pazarlama",
-    departmentName: "Pazarlama & İletişim",
-    title: "Pazarlama & İletişim",
-    description:
-      "Marka iletişimi, PR, influencer ilişkileri ve içerik akışı tek yerde.",
-    colorKey: "pink",
-    links: [
-      { label: "CRM / İlişkiler", href: "/crm", readiness: "ready" },
-      { label: "PR & Influencerlar", href: "/crm?segment=influencer", readiness: "ready" },
-      { label: "İçerik / Kreatif Linkler", href: "/creative", readiness: "ready" },
-    ],
-  },
-  {
-    key: "uretim",
-    departmentName: "Üretim & Tedarik Zinciri",
-    title: "Üretim & Tedarik Zinciri",
-    description:
-      "Üretim föyleri, koleksiyon, maliyet ve tedarikçi takibi.",
-    colorKey: "orange",
-    links: [
-      { label: "Koleksiyon & Üretim Föyleri", href: "/collection", readiness: "ready" },
-      { label: "Maliyet Tablosu", href: "/collection/maliyet", readiness: "ready" },
-      { label: "Tedarikçiler", href: "/crm?segment=tedarikci", readiness: "ready" },
-    ],
-  },
-  {
-    key: "tasarim",
-    departmentName: "Tasarım & Yaratıcı Yön",
-    title: "Tasarım & Yaratıcı Yön",
-    description:
-      "Kreatif referanslar, Canva/Drive bağlantıları ve koleksiyon görselleri.",
-    colorKey: "purple",
-    links: [
-      { label: "Kreatif Linkler", href: "/creative", readiness: "ready" },
-      { label: "Canva / Drive Bağlantıları", href: "/creative?provider=canva", readiness: "ready" },
-      { label: "Koleksiyon Görselleri", href: "/collection", readiness: "ready" },
-    ],
-  },
-  {
-    key: "satis",
-    departmentName: "Satış & Ticaret",
-    title: "Satış & Ticaret",
-    description:
-      "Müşteri ilişkileri ve satış görünümü — hareket verisi Raporlar ekranında.",
-    colorKey: "blue",
-    links: [
-      { label: "CRM / Müşteriler", href: "/crm", readiness: "ready" },
-      { label: "Raporlar", href: "/dashboard", readiness: "ready" },
-    ],
-  },
-  {
-    key: "finans",
-    departmentName: "Finans & Operasyon",
-    title: "Finans & Operasyon",
-    description:
-      "Ödeme takibi ve maliyet — hassas alanlar yalnız yönetici görür.",
-    colorKey: "brown",
-    links: [
-      { label: "Ödeme Takibi", href: "/finance", readiness: "ready", adminOnly: true },
-      { label: "Maliyet Tablosu", href: "/collection/maliyet", readiness: "ready" },
-      { label: "Raporlar", href: "/dashboard", readiness: "ready" },
-    ],
-  },
-  {
-    key: "marka",
-    departmentName: "Marka Yönetimi / CEO Katmanı",
-    title: "Marka Yönetimi / CEO Katmanı",
-    description:
-      "Haftalık ritim, yönetici görünümü ve markanın genel durum raporları.",
-    colorKey: "red",
-    links: [
-      { label: "Planlama Takvimi", href: "/planning", readiness: "ready" },
-      { label: "Yönetici Görünümü", href: "/admin-board", readiness: "ready", adminOnly: true },
-      { label: "Kurallar", href: "/rules", readiness: "ready" },
-    ],
-  },
-];
+/** @deprecated /modules artık bu listeyi çizmiyor — bkz. MODULE_DIRECTORY. */
+export const DEPARTMENT_MODULES: DepartmentModule[] = [];

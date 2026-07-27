@@ -2,28 +2,29 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Kanban, List, LayoutDashboard, User, ShieldCheck, CalendarRange, Shirt } from "lucide-react";
+import { Kanban, LayoutDashboard, User, CalendarRange, Shirt, Home } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
 type NavItem = { href: string; label: string; icon: typeof Kanban };
 
-// Mobil sekmeler operasyonun ritmini izler: Planlama (haftalık takvim) ve
-// Koleksiyon (üretim föyleri) telefonda da bir dokunuş uzaklıkta — Aslı Hanım
-// takvimi telefondan açar. Ay takvimi ve ikincil ekranlar masaüstünde kalır.
+// Mobil sekmeler operasyonun ritmini izler: Ana Sayfa (kısayollar + bana
+// atananlar) ilk durak; Planlama ve Koleksiyon telefonda da bir dokunuş
+// uzaklıkta — Aslı Hanım takvimi telefondan açar. Liste, Yönetici Pano ve
+// diğer ekranlara Ana Sayfa kısayollarından ulaşılır.
 const MEMBER_NAV: NavItem[] = [
+  { href: "/home",       label: "Ana Sayfa", icon: Home          },
   { href: "/board",      label: "Pano",      icon: Kanban        },
   { href: "/planning",   label: "Planlama",  icon: CalendarRange },
   { href: "/collection", label: "Koleksiyon", icon: Shirt        },
-  { href: "/list",       label: "Liste",     icon: List          },
   { href: "/profile",    label: "Profil",    icon: User          },
 ];
 
 const ADMIN_NAV: NavItem[] = [
-  { href: "/board",       label: "Pano",      icon: Kanban        },
-  { href: "/planning",    label: "Planlama",  icon: CalendarRange },
-  { href: "/collection",  label: "Koleksiyon", icon: Shirt        },
-  { href: "/admin-board", label: "Yönetici",  icon: ShieldCheck   },
-  { href: "/dashboard",   label: "Raporlar",  icon: LayoutDashboard },
+  { href: "/home",       label: "Ana Sayfa", icon: Home          },
+  { href: "/board",      label: "Pano",      icon: Kanban        },
+  { href: "/planning",   label: "Planlama",  icon: CalendarRange },
+  { href: "/collection", label: "Koleksiyon", icon: Shirt        },
+  { href: "/dashboard",  label: "Raporlar",  icon: LayoutDashboard },
 ];
 
 export function MobileNav({ isAdmin = false }: { isAdmin?: boolean }) {

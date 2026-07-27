@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { requireModuleAdmin } from "@/lib/modules/context";
+import { requireModuleMember } from "@/lib/modules/context";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { CrmView } from "@/components/crm/CrmView";
 import { contactDescriptor, taskMatchesPerson, type PersonMatchTask } from "@/lib/utils/task-person-match";
@@ -16,7 +16,9 @@ export default async function CrmPage({
   const params = await searchParams;
   const initialSegment = typeof params.segment === "string" ? params.segment : "";
 
-  const { supabase, workspaceId, gate } = await requireModuleAdmin();
+  // Herkes görür, yönetici düzenler — CrmView isAdmin=false iken tüm yazma
+  // aksiyonlarını gizler; RLS zaten üye okumasına izin veriyor.
+  const { supabase, workspaceId, isAdmin, gate } = await requireModuleMember();
   if (gate === "login") redirect("/login");
   if (gate !== "ok" || !workspaceId) return <AccessDenied />;
 
@@ -82,7 +84,7 @@ export default async function CrmPage({
       contacts={contacts}
       members={members}
       taskCounts={taskCounts}
-      isAdmin
+      isAdmin={isAdmin}
       initialSegment={initialSegment}
       setupRequired={setup.setupRequired}
       setupMessage={setup.message}

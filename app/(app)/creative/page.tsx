@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { Link2 } from "lucide-react";
-import { requireModuleAdmin } from "@/lib/modules/context";
+import { requireModuleMember } from "@/lib/modules/context";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { CreativeView } from "@/components/creative/CreativeView";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
@@ -18,7 +18,8 @@ export default async function CreativePage({
   const params = await searchParams;
   const initialProvider = typeof params.provider === "string" ? params.provider : "";
 
-  const { supabase, user, workspaceId, isAdmin, gate } = await requireModuleAdmin();
+  // Herkes görür, yönetici (ve link sahibi) düzenler — RLS üye okumasına açık.
+  const { supabase, user, workspaceId, isAdmin, gate } = await requireModuleMember();
   if (gate === "login") redirect("/login");
   if (gate !== "ok" || !workspaceId || !user) return <AccessDenied />;
 

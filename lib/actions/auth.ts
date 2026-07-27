@@ -74,7 +74,7 @@ export async function signIn(
   await supabase.rpc("accept_workspace_access_grant", { p_full_name: null });
 
   revalidatePath("/", "layout");
-  redirect("/board");
+  redirect("/home");
 }
 
 export async function signOut() {

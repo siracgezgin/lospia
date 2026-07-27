@@ -8,7 +8,7 @@ interface Props {
   icon?: LucideIcon;
   /** Optional small pill next to the title (e.g. "Yönetici alanı"). */
   badge?: string;
-  /** Primary back target — defaults to the Operasyon Modülleri hub. */
+  /** Primary back target — defaults to Ana Sayfa (her role açık, çıkmaz yok). */
   backHref?: string;
   backLabel?: string;
   /** Optional secondary back link (e.g. "Panoya dön"). */
@@ -30,8 +30,8 @@ export function ModulePageHeader({
   description,
   icon: Icon,
   badge,
-  backHref = "/modules",
-  backLabel = "Operasyon Modülleri’ne dön",
+  backHref = "/home",
+  backLabel = "Ana Sayfa’ya dön",
   secondaryBackHref,
   secondaryBackLabel = "Panoya dön",
   rightSlot,
@@ -70,15 +70,15 @@ export function ModulePageHeader({
           )}
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-lg font-semibold tracking-tight text-ink">{title}</h1>
+              <h1 className="text-xl font-semibold tracking-tight text-ink">{title}</h1>
               {badge && (
-                <span className="rounded-full bg-brand-soft px-2 py-0.5 text-[10.5px] font-medium text-brand-strong">
+                <span className="rounded-full bg-brand-soft px-2 py-0.5 text-[11px] font-medium text-brand-strong">
                   {badge}
                 </span>
               )}
             </div>
             {description && (
-              <p className="mt-0.5 text-[13px] text-muted">{description}</p>
+              <p className="mt-0.5 text-sm text-muted">{description}</p>
             )}
           </div>
         </div>

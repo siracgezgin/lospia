@@ -6,7 +6,7 @@ import { AppSidebar } from "@/components/layout/AppSidebar";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { pickDisplayEmail } from "@/lib/utils/display-identity";
-import type { Workspace, SavedView, Notification, WorkspaceRole } from "@/types";
+import type { Workspace, Notification, WorkspaceRole } from "@/types";
 
 // Co-locate serverless functions with the Supabase project (eu-north-1, Stockholm).
 // Vercel's "arn1" is Stockholm; this removes the cross-region (fra1↔eu-north-1)
@@ -81,7 +81,6 @@ export default async function AppLayout({
   }
 
   let workspace: Workspace | null = null;
-  let savedViews: SavedView[] = [];
   let unreadCount = 0;
   let notifications: Notification[] = [];
   // task_ids whose task is soft-deleted or gone → their notifications are passive.
@@ -97,18 +96,14 @@ export default async function AppLayout({
   });
 
   if (workspaceId) {
-    const [wsResult, viewsResult, notifResult, profileResult] = await Promise.all([
+    // NOT: saved_views sorgusu kabuktan kaldırıldı — sidebar'daki "Kaydedilen
+    // görünümler" bölümü kalktı; pano/liste kendi sekme verisini kendisi çeker.
+    const [wsResult, notifResult, profileResult] = await Promise.all([
       supabase
         .from("workspaces")
         .select("*")
         .eq("id", workspaceId)
         .single(),
-      supabase
-        .from("saved_views")
-        .select("*")
-        .eq("workspace_id", workspaceId)
-        .or(`is_shared.eq.true,owner_id.eq.${user.id}`)
-        .order("position"),
       supabase
         .from("notifications")
         .select("*")
@@ -123,7 +118,6 @@ export default async function AppLayout({
     ]);
 
     workspace = wsResult.data;
-    savedViews = viewsResult.data ?? [];
     notifications = notifResult.data ?? [];
 
     // A notification may point at a task that has since been soft-deleted
@@ -166,7 +160,6 @@ export default async function AppLayout({
     <div className="flex h-screen bg-app overflow-hidden">
       <AppSidebar
         workspace={workspace}
-        savedViews={savedViews}
         brand={brand}
         userId={user.id}
         userRole={userRole}

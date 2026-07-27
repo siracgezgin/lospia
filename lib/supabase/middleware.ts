@@ -51,10 +51,10 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Redirect authenticated users away from /login
+  // Redirect authenticated users away from /login — Ana Sayfa karşılar.
   if (user && pathname === "/login") {
     const url = request.nextUrl.clone();
-    url.pathname = "/board";
+    url.pathname = "/home";
     return NextResponse.redirect(url);
   }
 

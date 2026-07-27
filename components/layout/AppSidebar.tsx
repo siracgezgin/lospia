@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
   LayoutDashboard,
@@ -11,25 +11,24 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  Archive,
-  Trash2,
-  ScrollText,
   Quote,
   ShieldCheck,
   LayoutGrid,
-  Bookmark,
   Boxes,
   CalendarRange,
-  Wallet,
+  Contact,
+  FileText,
+  FolderOpen,
+  Home,
+  Palette,
+  Table2,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Wordmark } from "@/components/ui/Wordmark";
 import { LOSPIA_BRAND, type AppBrand } from "@/lib/branding";
-import { SAVED_VIEW_SLUG_MAP } from "@/lib/utils/task-constants";
-import { VIEW_META } from "@/components/shared/ViewTabs";
 import { getWeeklyQuote } from "@/lib/content/weekly-quotes";
 import { canViewDestructivePages, canManageSettings } from "@/lib/auth/permissions";
-import type { Workspace, SavedView, WorkspaceRole } from "@/types";
+import type { Workspace, WorkspaceRole } from "@/types";
 
 type NavItem = {
   href: string;
@@ -39,50 +38,64 @@ type NavItem = {
   children?: NavItem[];
 };
 
-// Bilgi mimarisi — Jira/DevOps netliği: üç grup, her grubun tek işi var.
-//   Çalışma  → günlük ritim ve iş takibi (herkes)
-//   Ürün     → koleksiyon/föy çekirdeği (herkes; Maliyet sekmesi sayfanın içinde)
-//   Yönetim  → yalnız yöneticinin gördüğü her şey (modül kapısı dahil)
-// Kural: bir ekran tek yerden erişilir; ikincil modüllerin kapısı Operasyon
-// Modülleri hub'ıdır — sidebar'a yeni başlık eklemeden önce hub'ı düşün.
+// Bilgi mimarisi — bölüm dili hub (/modules) ile BİREBİR aynı:
+//   Çekirdek Operasyon → günlük ritim ve iş takibi (herkes)
+//   Ürün               → koleksiyon/föy + maliyet (herkes)
+//   Ofis Merkezi       → doküman/şablon/tablo/kreatif (herkes görür)
+//   İlişkiler          → CRM (herkes görür, yönetici düzenler)
+//   Yönetim            → müdahale yüzeyleri (Yönetici Pano, Ayarlar: admin;
+//                        hub genel bakışı herkese açık). Finans/Aktivite/
+//                        Arşiv/Çöp sidebar'dan hub'a taşındı — sidebar'da
+//                        yalnız sık kullanılan müdahale kapıları kalır.
+// Kural: bir ekran TEK isimle yaşar (lib/modules/registry.ts kanonik kaynak).
 const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   {
-    title: "Çalışma",
+    title: "Çekirdek Operasyon",
     items: [
-      // Sıra operasyonun ritmini izler: haftalık takvim (Planlama) en üstte —
-      // "ilk panon buna dönecek"; ardından iş akışı ekranları.
+      // Ana Sayfa = kişisel komuta merkezi (bana atananlar + kısayollar).
+      { href: "/home",        label: "Ana Sayfa",      icon: Home,            adminOnly: false },
       { href: "/planning",    label: "Planlama",       icon: CalendarRange,   adminOnly: false },
       { href: "/board",       label: "Pano",           icon: Kanban,          adminOnly: false },
-      { href: "/admin-board", label: "Yönetici Pano",  icon: ShieldCheck,     adminOnly: true  },
       { href: "/list",        label: "Liste",          icon: List,            adminOnly: false },
       { href: "/calendar",    label: "Görev Takvimi",  icon: Calendar,        adminOnly: false },
       { href: "/dashboard",   label: "Raporlar",       icon: LayoutDashboard, adminOnly: false },
     ],
   },
   {
+    // Maliyet, Koleksiyon sayfasının içindeki sekmedir — sol bara ikinci
+    // giriş verilmez (kullanıcı isteği, 2026-07-27).
     title: "Ürün",
     items: [
       { href: "/collection", label: "Koleksiyon", icon: Boxes, adminOnly: false },
     ],
   },
   {
+    title: "Ofis Merkezi",
+    items: [
+      { href: "/documents", label: "Dokümanlar",     icon: FolderOpen, adminOnly: false },
+      { href: "/templates", label: "Şablonlar",      icon: FileText,   adminOnly: false },
+      { href: "/sheets",    label: "Tablolar",       icon: Table2,     adminOnly: false },
+      { href: "/creative",  label: "Kreatif Linkler", icon: Palette,    adminOnly: false },
+    ],
+  },
+  {
+    title: "İlişkiler",
+    items: [
+      { href: "/crm", label: "CRM", icon: Contact, adminOnly: false },
+    ],
+  },
+  {
     title: "Yönetim",
     items: [
-      // Kurallar — Nisa Hanım'ın isteğiyle şimdilik gizlendi (route/veri korunur).
-      // { href: "/rules",    label: "Kurallar",         icon: BookOpen,   adminOnly: false },
-      { href: "/modules",  label: "Operasyon Modülleri", icon: LayoutGrid, adminOnly: true },
-      { href: "/finance",  label: "Finans",           icon: Wallet,     adminOnly: true  },
-      { href: "/activity", label: "Aktivite Günlüğü", icon: ScrollText, adminOnly: true  },
-      { href: "/archive",  label: "Arşiv",            icon: Archive,    adminOnly: true  },
-      { href: "/trash",    label: "Çöp Kutusu",       icon: Trash2,     adminOnly: true  },
-      { href: "/settings", label: "Ayarlar",          icon: Settings,   adminOnly: true  },
+      { href: "/modules",     label: "Operasyon Modülleri", icon: LayoutGrid,  adminOnly: false },
+      { href: "/admin-board", label: "Yönetici Pano",       icon: ShieldCheck, adminOnly: true  },
+      { href: "/settings",    label: "Ayarlar",             icon: Settings,    adminOnly: true  },
     ],
   },
 ];
 
 interface Props {
   workspace: Workspace | null;
-  savedViews: SavedView[];
   /** Host-aware app-shell brand (Lospia, or AF on the pilot host). */
   brand?: AppBrand;
   userId: string;
@@ -90,24 +103,28 @@ interface Props {
 }
 
 export function AppSidebar({
-  workspace, savedViews, brand = LOSPIA_BRAND, userRole = "member",
+  workspace, brand = LOSPIA_BRAND, userRole = "member",
 }: Props) {
   const isAdmin = canViewDestructivePages(userRole) || canManageSettings(userRole);
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  // The board view currently open (drives saved-view active state). Defaults to
-  // "all" — the board's own default (haftalık bölümleme kaldırıldı).
-  const activeBoardView =
-    pathname === "/board" ? searchParams.get("view") ?? "all" : null;
   const [collapsed, setCollapsed] = useState(false);
   const wsName = workspace?.name ?? "Operasyon";
   const weeklyQuote = getWeeklyQuote();
 
+  // Aktif öğe = EN UZUN eşleşen href (tek kazanan) — /collection/maliyet
+  // açıkken hem "Koleksiyon" hem "Maliyet Tablosu" yanmasın.
+  const activeHref =
+    NAV_GROUPS.flatMap((g) => g.items.map((i) => i.href))
+      .filter((h) => pathname === h || pathname.startsWith(h + "/"))
+      .sort((a, b) => b.length - a.length)[0] ?? null;
+
   return (
     <aside
       className={cn(
+        // w-72 — beş gruplu menü + Haftanın Notu kartı rahat nefes alsın
+        // (240px'te uzun etiketler ve alt kart sıkışıyordu).
         "relative hidden md:flex flex-col bg-surface border-r border-line transition-[width] duration-200 ease-standard shrink-0",
-        collapsed ? "w-14" : "w-60",
+        collapsed ? "w-14" : "w-72",
       )}
     >
       {/* Brand row — host-aware product/pilot icon + workspace wordmark. The icon
@@ -143,7 +160,7 @@ export function AppSidebar({
                 </p>
               )}
               {items.map(({ href, label, icon: Icon, children }) => {
-                const active = pathname === href || pathname.startsWith(href + "/");
+                const active = href === activeHref;
                 const kids = (children ?? []).filter((c) => !c.adminOnly || isAdmin);
                 // Alt linkleri, bu bölümdeyken (parent veya çocuk aktif) ve panel
                 // açıkken göster (web nav'daki gibi kategori açılımı).
@@ -213,79 +230,34 @@ export function AppSidebar({
             </div>
           );
         })}
-
-        {/* Saved views — proper rows sharing the board/list tab icon vocabulary,
-            with an active state when the matching board view is open. */}
-        {!collapsed && savedViews.length > 0 && (
-          <div className="space-y-0.5">
-            <p className="px-2 mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-subtle select-none">
-              Kaydedilen görünümler
-            </p>
-            {savedViews.map((view) => {
-              const slug = SAVED_VIEW_SLUG_MAP[view.name] ?? view.id;
-              const Icon = VIEW_META[slug as keyof typeof VIEW_META]?.icon ?? Bookmark;
-              const active = activeBoardView === slug;
-              return (
-                <Link
-                  key={view.id}
-                  href={`/board?view=${slug}`}
-                  aria-current={active ? "page" : undefined}
-                  className={cn(
-                    "group relative flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] font-medium transition-colors duration-150 truncate",
-                    active
-                      ? "bg-brand-soft text-brand-strong"
-                      : "text-muted hover:bg-surface-muted hover:text-ink",
-                  )}
-                >
-                  {active && (
-                    <span
-                      aria-hidden
-                      className="absolute left-0 top-1/2 -translate-y-1/2 h-3.5 w-[3px] rounded-full bg-brand anim-fade"
-                    />
-                  )}
-                  <Icon
-                    size={15}
-                    className={cn(
-                      "shrink-0 transition-colors duration-150",
-                      active ? "text-brand" : "text-subtle group-hover:text-muted",
-                    )}
-                  />
-                  <span className="truncate">{view.name}</span>
-                </Link>
-              );
-            })}
-          </div>
-        )}
       </nav>
 
       {/* Bottom stack: weekly quote. (Logout lives in the top-right profile
-          menu.) İlerleme/puan kartı kaldırıldı — puan sistemi Aslı/Nisa
-          isteğiyle gizli; verisi de artık layout'ta sorgulanmıyor. */}
+          menu.) Kart kompakt tutulur ve kısa ekranlarda tamamen gizlenir —
+          menü maddelerinin önünü asla kesmez. */}
       {!collapsed && (
-        <div className="px-3 pt-2 pb-3 mt-auto space-y-2.5">
-          {/* Haftanın sözü — weekly rotating editorial brand card. */}
-          <div className="group relative rounded-2xl border border-brand-soft bg-gradient-to-br from-[#f7ede9] via-brand-soft/40 to-surface px-4 pt-3.5 pb-4 overflow-hidden shadow-card transition-shadow duration-200 ease-standard hover:shadow-card-hover">
+        <div className="px-3 pt-2 pb-3 mt-auto space-y-2.5 hidden [@media(min-height:47.5rem)]:block">
+          {/* Haftanın Notu — geniş sütunda tek nefeslik editoryal kart. */}
+          <div className="group relative rounded-2xl border border-brand-soft bg-gradient-to-br from-[#f7ede9] via-brand-soft/40 to-surface px-4 pt-3 pb-3.5 overflow-hidden shadow-card transition-shadow duration-200 ease-standard hover:shadow-card-hover">
             <Quote
-              size={40}
+              size={32}
               strokeWidth={1.5}
-              className="absolute -top-1.5 -right-1 text-brand/15 rotate-180 transition-colors duration-300 ease-standard group-hover:text-brand/25"
+              className="absolute -top-1 -right-1 text-brand/15 rotate-180 transition-colors duration-300 ease-standard group-hover:text-brand/25"
             />
             <p className="text-[9.5px] font-semibold uppercase tracking-[0.16em] text-brand-strong select-none">
-              {weeklyQuote.uiDisplaySuggestion || "Haftanın Sözü"}
+              Haftanın Notu
             </p>
             {/* Editoryal ayraç — etiketle alıntı arasında kısa bir marka çizgisi. */}
             <span aria-hidden className="mt-1.5 mb-2 block h-px w-8 rounded-full bg-brand/20" />
             <p
-              className="relative text-[12px] leading-[1.7] text-ink/85 italic font-medium line-clamp-5"
+              className="relative text-[12px] leading-[1.65] text-ink/85 italic font-medium line-clamp-3"
               title={weeklyQuote.quoteTr}
             >
               “{weeklyQuote.quoteTr}”
             </p>
-            <p className="relative mt-2.5 text-[11px] font-semibold tracking-tight text-ink/70 not-italic">
-              {weeklyQuote.author}
-            </p>
-            <p className="relative text-[10px] italic text-subtle leading-snug">
-              {weeklyQuote.authorRole}
+            <p className="relative mt-2 truncate text-[11px] not-italic leading-snug">
+              <span className="font-semibold tracking-tight text-ink/70">{weeklyQuote.author}</span>
+              <span className="italic text-subtle"> · {weeklyQuote.authorRole}</span>
             </p>
           </div>
 
