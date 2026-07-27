@@ -19,6 +19,7 @@
 import { sendEmail } from "@/lib/email/send-email";
 import { taskAssignedEmail } from "@/lib/email/templates/task-assigned";
 import { taskResponsibilityAddedEmail } from "@/lib/email/templates/task-responsibility-added";
+import { PRIORITY_LABELS } from "@/lib/utils/task-constants";
 import {
   resolveEmailRecipients,
   maskEmail,
@@ -53,8 +54,13 @@ export async function dispatchTaskEmails(params: {
   recipientUserIds: string[];
   taskId: string | null;
   taskTitle: string | null;
+  /** Optional meta — enriches the mail when the caller has it at hand. */
+  actorName?: string | null;
+  dueDate?: string | null;
+  priority?: string | null;
 }): Promise<void> {
-  const { event, workspaceId, recipientUserIds, taskId, taskTitle } = params;
+  const { event, workspaceId, recipientUserIds, taskId, taskTitle, actorName, dueDate, priority } =
+    params;
 
   // Cheap short-circuits before touching the DB.
   if (process.env.EMAIL_NOTIFICATIONS_ENABLED !== "true") return;
@@ -68,18 +74,46 @@ export async function dispatchTaskEmails(params: {
   const baseUrl = process.env.EMAIL_TASK_BASE_URL ?? DEFAULT_TASK_BASE_URL;
   const title = taskTitle ?? "Görev";
   const build = TEMPLATE[event];
+  const dueDateLabel = formatTrDueDate(dueDate);
+  const priorityLabel = priority
+    ? ((PRIORITY_LABELS as Record<string, string>)[priority] ?? null)
+    : null;
 
   // One mail per recipient — never reveal other recipients in To.
   for (const r of recipients) {
     let result: SendEmailResult;
     try {
-      result = await sendEmail(build({ to: r.email, taskTitle: title, taskId, baseUrl }));
+      result = await sendEmail(
+        build({
+          to: r.email,
+          taskTitle: title,
+          taskId,
+          baseUrl,
+          recipientName: r.fullName,
+          actorName: actorName ?? null,
+          dueDateLabel,
+          priorityLabel,
+        }),
+      );
     } catch (err) {
       // best-effort: swallow so one bad recipient can't block the rest
       result = { status: "error", error: err instanceof Error ? err.message : String(err) };
     }
     logSend(event, taskId, r, result);
   }
+}
+
+/** "2026-07-28" → "28 Temmuz 2026 Salı". Time parts are dropped; invalid → null. */
+function formatTrDueDate(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const date = new Date(`${iso.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("tr-TR", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    weekday: "long",
+  }).format(date);
 }
 
 // ── Safe logging ─────────────────────────────────────────────────────────────

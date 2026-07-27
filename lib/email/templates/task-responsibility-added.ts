@@ -1,53 +1,17 @@
 // Task-responsibility template — sent to a person added as a responsible
 // participant on a task (the CreateTaskModal → participant_member_ids flow).
-//
-// Deliberately minimal: it links to the task but shows NO note/comment content,
-// CRM data, or other sensitive workspace data in the body. Just the title and a
-// link back into the app.
+// Layout + escaping live in buildTaskEventEmail; this file owns only the copy.
 
 import type { EmailMessage } from "../types";
-import {
-  EMAIL_BRAND_FOOTER_NAME,
-  renderButton,
-  renderEmailShell,
-  renderHeading,
-  renderParagraph,
-} from "./shared";
+import { EMAIL_BRAND_FOOTER_NAME } from "./shared";
+import { buildTaskEventEmail, type TaskEventEmailParams } from "./task-event";
 
-export function taskResponsibilityAddedEmail(params: {
-  to: string;
-  taskTitle: string;
-  taskId: string;
-  baseUrl: string;
-}): EmailMessage {
-  const { to, taskTitle, taskId, baseUrl } = params;
-  const url = `${baseUrl.replace(/\/+$/, "")}/tasks/${taskId}`;
-
-  const text = [
-    "Merhaba,",
-    "",
-    "Size bir görev sorumluluğu verildi.",
-    "",
-    `Görev: ${taskTitle}`,
-    `Görevi görüntüle: ${url}`,
-    "",
-    "—",
-    EMAIL_BRAND_FOOTER_NAME,
-  ].join("\n");
-
-  const html = renderEmailShell({
-    title: "Size bir görev sorumluluğu verildi",
-    bodyHtml: [
-      renderHeading("Size bir görev sorumluluğu verildi"),
-      renderParagraph(`Görev: ${taskTitle}`),
-      renderButton(url, "Görevi görüntüle"),
-    ].join("\n"),
+export function taskResponsibilityAddedEmail(params: TaskEventEmailParams): EmailMessage {
+  return buildTaskEventEmail(params, {
+    heading: "Bir görevin sorumluluğu size verildi",
+    leadFallback: "Bir görevin sorumluluğu size verildi. Detaylar aşağıdadır:",
+    leadWithActor: (actor) =>
+      `${actor} sizi bir görevin sorumluları arasına ekledi. Detaylar aşağıdadır:`,
+    subject: (title) => `Görev sorumluluğu: ${title} — ${EMAIL_BRAND_FOOTER_NAME}`,
   });
-
-  return {
-    to,
-    subject: `${EMAIL_BRAND_FOOTER_NAME}'da size bir görev sorumluluğu verildi — ${taskTitle}`,
-    text,
-    html,
-  };
 }

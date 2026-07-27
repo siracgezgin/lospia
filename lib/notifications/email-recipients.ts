@@ -33,6 +33,8 @@ export type ResolvedEmailRecipient = {
   userId: string;
   email: string;
   source: EmailSource;
+  /** Display name from profiles.full_name — used for the mail greeting. */
+  fullName: string | null;
 };
 
 export type SkipReason =
@@ -91,21 +93,22 @@ export async function resolveEmailRecipients(params: {
     ]),
   );
 
-  // profiles.email fallback — only fetched for members that lack a
-  // notification_email (keeps the query small and avoids reading emails we
-  // won't use).
-  const needProfileEmail = userIds.filter((id) => {
-    const m = memberByUser.get(id);
-    return m && !normalizeNotificationEmail(m.notificationEmail);
-  });
-  const profileEmailByUser = new Map<string, string | null>();
-  if (needProfileEmail.length > 0) {
-    const { data: profileRows } = await admin
-      .from("profiles")
-      .select("id, email")
-      .in("id", needProfileEmail);
-    for (const p of profileRows ?? []) {
-      profileEmailByUser.set(p.id as string, (p.email as string | null) ?? null);
+  // profiles are fetched for every member: full_name feeds the greeting, and
+  // email doubles as the fallback address when notification_email is empty.
+  const profileByUser = new Map<string, { email: string | null; fullName: string | null }>();
+  {
+    const memberIds = userIds.filter((id) => memberByUser.has(id));
+    if (memberIds.length > 0) {
+      const { data: profileRows } = await admin
+        .from("profiles")
+        .select("id, email, full_name")
+        .in("id", memberIds);
+      for (const p of profileRows ?? []) {
+        profileByUser.set(p.id as string, {
+          email: (p.email as string | null) ?? null,
+          fullName: (p.full_name as string | null) ?? null,
+        });
+      }
     }
   }
 
@@ -123,11 +126,12 @@ export async function resolveEmailRecipients(params: {
       continue;
     }
 
+    const profile = profileByUser.get(userId);
     const notificationEmail = normalizeNotificationEmail(member.notificationEmail);
     let email: string | null = notificationEmail;
     let source: EmailSource = "notification_email";
     if (!email) {
-      email = normalizeNotificationEmail(profileEmailByUser.get(userId));
+      email = normalizeNotificationEmail(profile?.email);
       source = "profile_email";
     }
 
@@ -140,7 +144,7 @@ export async function resolveEmailRecipients(params: {
       continue;
     }
 
-    recipients.push({ userId, email, source });
+    recipients.push({ userId, email, source, fullName: profile?.fullName ?? null });
   }
 
   return { recipients, skipped };

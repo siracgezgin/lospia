@@ -67,12 +67,16 @@ export async function notifyTaskEvent(
   // free of leaked titles/bodies for hidden tasks. This is the single chokepoint
   // every task notification flows through. Applied before splitting the lists so
   // email can never leak a hidden task to a non-admin either.
+  // due_date + priority ride along for the email templates below.
+  type TaskMeta = { visibility: string | null; due_date: string | null; priority: string | null };
+  let taskMeta: TaskMeta | null = null;
   if (taskId) {
     const { data: task } = await sb
       .from("tasks")
-      .select("visibility")
+      .select("visibility, due_date, priority")
       .eq("id", taskId)
       .maybeSingle();
+    taskMeta = (task as TaskMeta | null) ?? null;
     if (task?.visibility === "admin_only") {
       const { data: admins } = await sb
         .from("workspace_members")
@@ -110,12 +114,26 @@ export async function notifyTaskEvent(
   // resolver applies notification_email/placeholder/disabled rules.
   if (EMAIL_EVENTS.has(event)) {
     try {
+      // Actor name personalizes the mail ("Nisa Yılmaz size yeni bir görev
+      // atadı"); only fetched for the two whitelisted email events.
+      let actorName: string | null = null;
+      if (actorId) {
+        const { data: actor } = await sb
+          .from("profiles")
+          .select("full_name")
+          .eq("id", actorId)
+          .maybeSingle();
+        actorName = (actor?.full_name as string | null) ?? null;
+      }
       await dispatchTaskEmails({
         event: event as EmailTaskEvent,
         workspaceId,
         recipientUserIds: baseRecipients,
         taskId,
         taskTitle,
+        actorName,
+        dueDate: taskMeta?.due_date ?? null,
+        priority: taskMeta?.priority ?? null,
       });
     } catch {
       // best-effort — never surface email errors to the caller
