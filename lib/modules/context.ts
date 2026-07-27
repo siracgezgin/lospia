@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser, getMembership } from "@/lib/supabase/server";
 import type { WorkspaceRole } from "@/types";
 
 /**
@@ -8,23 +8,18 @@ import type { WorkspaceRole } from "@/types";
  * auth system, no service-role, all under RLS.
  */
 export async function getWorkspaceContext() {
+  // Auth + üyelik istek başına önbellekli (lib/supabase/server) — kabuk zaten
+  // ikisini de çekiyor, sayfa aynı sonucu tekrar sormaz.
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
 
   if (!user) {
     return { supabase, user: null, workspaceId: null as string | null, role: "member" as WorkspaceRole, isAdmin: false };
   }
 
-  const { data: member } = await supabase
-    .from("workspace_members")
-    .select("workspace_id, role")
-    .eq("user_id", user.id)
-    .limit(1)
-    .maybeSingle();
+  const member = await getMembership(user.id);
 
-  const workspaceId = (member?.workspace_id as string | undefined) ?? null;
+  const workspaceId = member?.workspace_id ?? null;
   const role = (member?.role as WorkspaceRole | undefined) ?? "member";
   return { supabase, user, workspaceId, role, isAdmin: role === "owner" || role === "admin" };
 }

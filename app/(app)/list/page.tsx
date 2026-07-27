@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { TaskListView } from "@/components/list/TaskListView";
 import type { Task, SavedView, Profile, WorkspaceContact, WorkspaceDepartment } from "@/types";
@@ -14,7 +14,7 @@ export default async function ListPage({
   const initialPerson = typeof params.person === "string" ? params.person : "";
   const initialView = typeof params.view === "string" ? params.view : "";
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) redirect("/login");
 
   const { data: memberRows } = await supabase

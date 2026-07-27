@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { ActivityLogView, type ActivityRow } from "@/components/activity/ActivityLogView";
@@ -22,7 +22,7 @@ type LogRow = {
 
 export default async function ActivityLogPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) redirect("/login");
 
   const { data: member } = await supabase

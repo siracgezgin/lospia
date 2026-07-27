@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { KanbanBoard } from "@/components/board/KanbanBoard";
 import type { Task, SavedView, Profile, WorkspaceContact, WorkspaceNote, WorkspaceRole, WorkspaceDepartment, TaskParticipant, BoardNoteFeedItem } from "@/types";
@@ -22,7 +22,7 @@ export default async function BoardPage({
   searchParams: Promise<{ view?: string; week?: string }>;
 }) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) redirect("/login");
 
   const params = await searchParams;

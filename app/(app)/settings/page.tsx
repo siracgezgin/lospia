@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { WorkspaceNameEditor } from "@/components/settings/WorkspaceNameEditor";
 import { MembersManager } from "@/components/settings/MembersManager";
@@ -19,7 +19,7 @@ import type {
 
 export default async function SettingsPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) redirect("/login");
 
   const { data: memberRows } = await supabase

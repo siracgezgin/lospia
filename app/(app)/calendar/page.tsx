@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { CalendarView } from "@/components/calendar/CalendarView";
 import type { Task, Profile, WorkspaceContact, WorkspaceDepartment } from "@/types";
@@ -7,7 +7,7 @@ export const metadata = { title: "Görev Takvimi" };
 
 export default async function CalendarPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) redirect("/login");
 
   const { data: memberRows } = await supabase

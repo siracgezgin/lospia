@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { RulesView } from "@/components/rules/RulesView";
 import { markRulesSeen } from "@/lib/actions/members";
@@ -10,7 +10,7 @@ export const metadata = { title: "Kurallar" };
 
 export default async function RulesPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) redirect("/login");
 
   const { data: member } = await supabase

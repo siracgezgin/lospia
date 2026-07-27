@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { KanbanBoard, type ManagerOption } from "@/components/board/KanbanBoard";
 import { asVisibility, type TaskVisibility } from "@/lib/utils/visibility";
@@ -11,7 +11,7 @@ export default async function AdminBoardPage({
   searchParams: Promise<{ visibility?: string; manager?: string }>;
 }) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) redirect("/login");
 
   const { data: memberRows } = await supabase

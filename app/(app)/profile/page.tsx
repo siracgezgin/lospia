@@ -1,8 +1,7 @@
 import { redirect } from "next/navigation";
-import { Mail, Shield, Sparkles, Clock3, CheckCircle2, ClipboardCheck, AtSign, LogOut } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
+import { Mail, Shield, AtSign, LogOut } from "lucide-react";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { Avatar } from "@/components/ui/Avatar";
-import { getMemberPointsSummary } from "@/lib/points/queries";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { roleLabel } from "@/lib/utils/roles";
 import { signOut } from "@/lib/actions/auth";
@@ -10,10 +9,12 @@ import type { WorkspaceRole } from "@/types";
 
 // Lightweight personal profile, surfaced for members in the mobile bottom nav
 // (admins reach it from the top-right avatar menu). Read-only snapshot of who
-// you are plus your own points — no team data ever crosses to a member here.
+// you are — no team data ever crosses to a member here.
+// NOT: puan kartları kaldırıldı (puan sistemi gizli — sidebar/header'dan da
+// kaldırılmıştı, burası son kalan yüzeydi); sorgusu da artık çalışmıyor.
 export default async function ProfilePage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) redirect("/login");
 
   const { data: memberRows } = await supabase
@@ -21,7 +22,6 @@ export default async function ProfilePage() {
     .select("workspace_id, role")
     .eq("user_id", user.id)
     .limit(1);
-  const workspaceId = memberRows?.[0]?.workspace_id ?? null;
   const role = (memberRows?.[0]?.role ?? "member") as WorkspaceRole;
 
   const { data: profile } = await supabase
@@ -30,18 +30,13 @@ export default async function ProfilePage() {
     .eq("id", user.id)
     .maybeSingle();
 
-  const points = workspaceId
-    ? await getMemberPointsSummary(supabase, workspaceId, user.id)
-    : { monthPoints: 0, pending: 0, doneCount: 0, reviewCount: 0 };
-
   const displayName = getPersonDisplayName(profile?.full_name ?? user.email ?? null);
 
   return (
     <div className="w-full px-4 py-6 sm:px-6 lg:px-8 space-y-5">
       <h1 className="text-xl font-semibold text-ink">Profil</h1>
 
-      {/* lg+: kimlik kartı solda, puan özeti sağda — içerik birebir aynı. */}
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:gap-6">
+      <div className="max-w-2xl">
         <div className="space-y-5 min-w-0">
           {/* Identity card */}
           <div className="bg-surface rounded-2xl border border-line shadow-card p-5">
@@ -87,34 +82,7 @@ export default async function ProfilePage() {
             </button>
           </form>
         </div>
-
-        {/* Personal points — only your own figures */}
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 min-w-0 2xl:grid-cols-4">
-          <PointCard icon={<Sparkles size={15} className="text-brand" />} label="Bu ay" value={`${points.monthPoints} puan`} />
-          <PointCard icon={<Clock3 size={15} className="text-warning" />} label="Onay bekleyen" value={`${points.pending} puan`} hint="Görev yönetici tarafından tamamlandığında kesinleşir." />
-          <PointCard icon={<CheckCircle2 size={15} className="text-[#1c7a52]" />} label="Tamamladığım işler" value={points.doneCount} />
-          <PointCard icon={<ClipboardCheck size={15} className="text-[#2f9e63]" />} label="Kontrol bekleyen" value={points.reviewCount} />
-        </div>
       </div>
-    </div>
-  );
-}
-
-function PointCard({
-  icon, label, value, hint,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: number | string;
-  hint?: string;
-}) {
-  return (
-    <div className="bg-surface rounded-xl border border-line shadow-card p-4" title={hint}>
-      <div className="flex items-center gap-2 text-subtle">
-        {icon}
-        <span className="text-[13px] font-medium text-muted">{label}</span>
-      </div>
-      <p className="mt-2 text-2xl font-semibold tabular-nums text-ink">{value}</p>
     </div>
   );
 }

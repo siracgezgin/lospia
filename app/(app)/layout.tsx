@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser, getMembership } from "@/lib/supabase/server";
 import { getAppBrandForHost } from "@/lib/branding";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { AppHeader } from "@/components/layout/AppHeader";
@@ -29,24 +29,18 @@ export default async function AppLayout({
   // everything else is Lospia. Tenant/workspace NAME is separate user data.
   const brand = getAppBrandForHost((await headers()).get("host"));
 
-  // Verify session
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Verify session — istek başına önbellekli; sayfa aynı çağrıyı tekrarlamaz.
+  const user = await getAuthUser();
 
   if (!user) {
     redirect("/login");
   }
 
-  // Fetch workspace membership
-  const { data: memberRows } = await supabase
-    .from("workspace_members")
-    .select("workspace_id, role, notification_email")
-    .eq("user_id", user.id)
-    .limit(1);
+  // Fetch workspace membership (aynı istekte sayfa ile paylaşılır)
+  const membership = await getMembership(user.id);
 
-  let workspaceId: string | null = memberRows?.[0]?.workspace_id ?? null;
-  const userRole: WorkspaceRole = (memberRows?.[0]?.role as WorkspaceRole | undefined) ?? "member";
+  let workspaceId: string | null = membership?.workspace_id ?? null;
+  const userRole: WorkspaceRole = (membership?.role as WorkspaceRole | undefined) ?? "member";
   const isAdmin = userRole === "owner" || userRole === "admin";
 
   // Attach the user to AF Operasyon when they have no membership yet. This is the
@@ -92,7 +86,7 @@ export default async function AppLayout({
   // as the user's address; refined below once the profile row is loaded.
   let displayEmail: string | null = pickDisplayEmail({
     authEmail: user.email,
-    notificationEmail: memberRows?.[0]?.notification_email ?? null,
+    notificationEmail: membership?.notification_email ?? null,
   });
 
   if (workspaceId) {
@@ -145,7 +139,7 @@ export default async function AppLayout({
     displayEmail = pickDisplayEmail({
       profileEmail: profileResult.data?.email ?? null,
       authEmail: user.email,
-      notificationEmail: memberRows?.[0]?.notification_email ?? null,
+      notificationEmail: membership?.notification_email ?? null,
     });
 
     // NOT: puan/takım özet sorguları buradan bilinçli olarak KALDIRILDI —
