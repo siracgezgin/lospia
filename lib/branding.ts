@@ -42,7 +42,7 @@ export const LOSPIA_ICON_WHITE = "/brand/lospia/icon_white.svg";
 // per-tenant branding model plugs into: swap the host lookup for a workspace
 // field and the call sites don't change.
 
-import { isAfOperationsHost } from "@/lib/marketing/host";
+import { isMarketingHost } from "@/lib/marketing/host";
 
 /**
  * Host-aware browser/tab metadata. Fed straight into the root layout's
@@ -148,10 +148,12 @@ export const AF_BRAND: AppBrand = {
 };
 
 /**
- * Resolve the app-shell brand for a request host. The AF Operasyon pilot host
- * keeps its own branding; everything else (lospia.com, www, previews,
- * localhost) is Lospia.
+ * Resolve the app-shell brand for a request host. Lospia branding belongs ONLY
+ * to hosts that actually serve the public marketing site; every host running
+ * the internal app (AF host, localhost, previews, or any host while the
+ * marketing site is disabled) uses AF branding — otherwise the Lospia favicon
+ * leaks into the AF app on non-canonical hosts.
  */
 export function getAppBrandForHost(host: string | null | undefined): AppBrand {
-  return isAfOperationsHost(host) ? AF_BRAND : LOSPIA_BRAND;
+  return isMarketingHost(host) ? LOSPIA_BRAND : AF_BRAND;
 }

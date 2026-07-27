@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { CalendarView } from "@/components/calendar/CalendarView";
 import type { Task, Profile, WorkspaceContact, WorkspaceDepartment } from "@/types";
 
-export const metadata = { title: "Takvim" };
+export const metadata = { title: "Görev Takvimi" };
 
 export default async function CalendarPage() {
   const supabase = await createClient();
@@ -24,7 +24,9 @@ export default async function CalendarPage() {
     .from("tasks")
     .select("id, title, status, priority, due_date, start_date, department_id, visibility")
     .eq("workspace_id", workspaceId)
-    .neq("status", "archived");
+    .neq("status", "archived")
+    .is("archived_at", null)
+    .is("deleted_at", null);
   if (!isAdmin) tasksQuery.eq("visibility", "workspace");
 
   const [tasksResult, membersResult, contactsResult, deptsResult, deptMembersResult] = await Promise.all([

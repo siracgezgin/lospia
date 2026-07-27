@@ -124,7 +124,8 @@ function applyListView(tasks: Task[], slug: string, userId: string): Task[] {
       });
     case "all":
     default:
-      return tasks;
+      // "Tümü" da çöpe/arşive gidenleri göstermez — pano ile aynı sözleşme.
+      return tasks.filter(live);
   }
 }
 
@@ -191,7 +192,7 @@ function StatusBadge({ task }: { task: Task }) {
   return (
     <div className="group/status relative inline-flex items-center">
       <span className={cn(
-        "inline-flex items-center gap-1 text-[11px] font-medium rounded-full pl-2 pr-1.5 py-0.5 whitespace-nowrap pointer-events-none",
+        "inline-flex items-center gap-1 text-xs font-medium rounded-full pl-2.5 pr-1.5 py-0.5 whitespace-nowrap pointer-events-none",
         STATUS_CHIP_TONE[optimisticStatus],
       )}>
         {SIMPLIFIED_STATUS_LABEL[optimisticStatus]}
@@ -220,7 +221,7 @@ function StatusBadge({ task }: { task: Task }) {
 function PriorityBadge({ priority }: { priority: TaskPriority }) {
   return (
     <span className={cn(
-      "text-[10px] font-medium rounded px-1.5 py-0.5 leading-none whitespace-nowrap",
+      "text-xs font-medium rounded px-1.5 py-0.5 leading-none whitespace-nowrap",
       PRIORITY_CHIP[priority],
     )}>
       {PRIORITY_LABELS[priority]}
@@ -258,7 +259,7 @@ function MobileTaskCard({
           {task.title}
         </p>
         <span className={cn(
-          "text-[10px] font-medium rounded-full px-2 py-0.5 whitespace-nowrap shrink-0",
+          "text-xs font-medium rounded-full px-2 py-0.5 whitespace-nowrap shrink-0",
           STATUS_CHIP_TONE[task.status],
         )}>
           {SIMPLIFIED_STATUS_LABEL[task.status]}
@@ -272,7 +273,7 @@ function MobileTaskCard({
       <div className="flex items-center gap-2 mt-2.5 flex-wrap">
         {meta && badge && (
           <span className={cn(
-            "inline-flex items-center gap-1 max-w-[60%] rounded-lg py-0.5 px-2 text-[11px] font-medium ring-1",
+            "inline-flex items-center gap-1 max-w-[60%] rounded-lg py-0.5 px-2 text-xs font-medium ring-1",
             badge.chip, badge.ring,
           )}>
             <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", badge.dot)} />
@@ -281,7 +282,7 @@ function MobileTaskCard({
         )}
         <PriorityBadge priority={task.priority} />
         {task.due_date && (
-          <span className={cn("text-[11px] font-medium whitespace-nowrap", isOverdue ? "text-danger" : "text-muted")}>
+          <span className={cn("text-xs font-medium whitespace-nowrap tabular-nums", isOverdue ? "text-danger" : "text-muted")}>
             {isOverdue ? "⚠ " : ""}
             {formatDateTR(task.due_date, { day: "numeric", month: "short" })}
           </span>
@@ -290,7 +291,7 @@ function MobileTaskCard({
 
       {/* Sorumlu kişi en altta — "görev oluşturan" satırı geri bildirimle kaldırıldı. */}
       {responsible && (
-        <p className="mt-2 text-[11px] text-subtle truncate">
+        <p className="mt-2 text-xs text-subtle truncate">
           Sorumlu: <span className="font-medium text-muted">{responsible}</span>
         </p>
       )}
@@ -423,14 +424,14 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
             {info.getValue()}
           </Link>
           {(info.row.original as unknown as { visibility?: string }).visibility === "admin_only" && (
-            <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1 py-0.5 leading-none mt-1">
-              <Lock size={9} /> {ADMIN_ONLY_CHIP_LABEL}
+            <span className="inline-flex items-center gap-0.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-1 py-0.5 leading-none mt-1">
+              <Lock size={10} /> {ADMIN_ONLY_CHIP_LABEL}
             </span>
           )}
           {(info.row.original.tags?.length ?? 0) > 0 && (
             <div className="flex gap-1 mt-1 flex-wrap">
               {[...new Set(info.row.original.tags)].slice(0, 3).map((tag, i) => (
-                <span key={`${info.row.original.id}-tag-${i}`} className="text-[10px] bg-brand-soft text-brand rounded px-1 py-0.5 leading-none">
+                <span key={`${info.row.original.id}-tag-${i}`} className="text-xs bg-brand-soft text-brand rounded px-1 py-0.5 leading-none">
                   {tag}
                 </span>
               ))}
@@ -447,7 +448,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
       cell: (info) => {
         const val = info.getValue();
         return val
-          ? <span className="text-xs text-subtle italic line-clamp-1">{val}</span>
+          ? <span className="text-[13px] text-muted line-clamp-1">{val}</span>
           : <span className="text-xs text-subtle">—</span>;
       },
       enableSorting: false,
@@ -466,7 +467,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
         return (
           <span
             className={cn(
-              "inline-flex items-start gap-1.5 max-w-[15rem] rounded-xl py-1 pl-2 pr-2.5 text-[11px] font-medium ring-1",
+              "inline-flex items-start gap-1.5 max-w-[15rem] rounded-xl py-1 pl-2 pr-2.5 text-xs font-medium ring-1",
               badge.chip,
               badge.ring,
             )}
@@ -490,7 +491,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
       cell: (info) => {
         const val = info.getValue();
         return val
-          ? <span className="inline-block text-[11px] bg-[#eef0fb] text-[#4a4d9c] rounded-md px-2 py-0.5 max-w-[12rem] truncate align-middle" title={val}>{val}</span>
+          ? <span className="inline-block text-xs font-medium bg-[#eef0fb] text-[#4a4d9c] rounded-md px-2 py-0.5 max-w-[12rem] truncate align-middle" title={val}>{val}</span>
           : <span className="text-xs text-subtle">—</span>;
       },
       sortingFn: (a, b) => {
@@ -524,7 +525,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
         const today = new Date().toISOString().slice(0, 10);
         const isOverdue = val < today;
         return (
-          <span className={cn("text-xs whitespace-nowrap", isOverdue ? "text-danger font-medium" : "text-muted")}>
+          <span className={cn("text-[13px] tabular-nums whitespace-nowrap", isOverdue ? "text-danger font-medium" : "text-muted")}>
             {isOverdue ? "⚠ " : ""}
             {formatDateTR(val as string, { day: "numeric", month: "short" })}
           </span>
@@ -542,7 +543,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
       {
         id: "responsible",
         header: FIELD_LABELS.assignee,
-        cell: (info) => <span className="text-xs text-muted">{info.getValue() || "—"}</span>,
+        cell: (info) => <span className="text-[13px] text-muted whitespace-nowrap">{info.getValue() || "—"}</span>,
         sortingFn: (a, b) => {
           const na = responsibleNames[a.original.assignee_id ?? ""] ?? responsibleNames[(a.original as { responsible_contact_id?: string | null }).responsible_contact_id ?? ""] ?? "";
           const nb = responsibleNames[b.original.assignee_id ?? ""] ?? responsibleNames[(b.original as { responsible_contact_id?: string | null }).responsible_contact_id ?? ""] ?? "";
@@ -568,7 +569,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
         cell: (info) => {
           const val = info.getValue();
           return val
-            ? <span className="text-xs text-muted">{val}</span>
+            ? <span className="text-[13px] text-muted">{val}</span>
             : <span className="text-xs text-subtle">—</span>;
         },
         enableSorting: false,
@@ -580,7 +581,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
       id: "updated_at",
       header: FIELD_LABELS.updatedAt,
       cell: (info) => (
-        <span className="text-xs text-subtle whitespace-nowrap">
+        <span className="text-[13px] text-muted tabular-nums whitespace-nowrap">
           {formatDateTR(info.getValue() as string, { day: "numeric", month: "short" })}
         </span>
       ),
@@ -633,13 +634,13 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
       {viewTabItems.length > 0 && (
         <div className="px-4 pt-3 pb-2 border-b border-line bg-surface shrink-0 space-y-1.5">
           <ViewTabs iconsEverywhere items={viewTabItems} onSelect={handleViewChange} />
-          <p className="text-xs text-subtle">{LIST_VIEW_DESCRIPTIONS[viewSlug] ?? ""}</p>
+          <p className="text-[13px] text-muted">{LIST_VIEW_DESCRIPTIONS[viewSlug] ?? ""}</p>
         </div>
       )}
 
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-2 px-4 py-3 bg-surface border-b border-hairline shrink-0">
-        <Button size="sm" onClick={() => setModalOpen(true)}>
+      <div className="flex flex-wrap items-center gap-2.5 px-4 py-2.5 bg-surface border-b border-hairline shrink-0">
+        <Button onClick={() => setModalOpen(true)}>
           <Plus size={14} />
           Görev oluştur
         </Button>
@@ -657,12 +658,12 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           aria-label="Görev ara"
-          className="h-8 w-52"
+          className="h-9 w-64"
         />
         <select
           value={filterStatusKey}
           onChange={(e) => setFilterStatusKey(e.target.value as StatusFilterKey)}
-          className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-muted focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40 transition-colors"
+          className="h-9 rounded-lg border border-line bg-surface px-2.5 text-sm text-muted focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40 transition-colors"
         >
           {STATUS_FILTER_OPTIONS.map((o) => (
             <option key={o.key} value={o.key}>{o.label}</option>
@@ -671,7 +672,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
         <select
           value={filterPriority}
           onChange={(e) => setFilterPriority(e.target.value as TaskPriority | "all")}
-          className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-muted focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40 transition-colors"
+          className="h-9 rounded-lg border border-line bg-surface px-2.5 text-sm text-muted focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40 transition-colors"
         >
           <option value="all">Tüm öncelikler</option>
           {TASK_PRIORITIES.map((p) => (
@@ -684,7 +685,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
           onChange={(e) => handlePersonChange(e.target.value)}
           aria-label="Kişiye göre filtrele"
           className={cn(
-            "rounded-lg border bg-surface px-2 py-1.5 text-sm focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40 transition-colors",
+            "h-9 rounded-lg border bg-surface px-2.5 text-sm focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40 transition-colors",
             personFilter ? "border-brand-ring text-brand font-medium" : "border-line text-muted",
           )}
         >
@@ -704,7 +705,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
             </optgroup>
           )}
         </select>
-        <span className="ml-auto text-xs text-subtle self-center">{totalRows} görev</span>
+        <span className="ml-auto text-[13px] font-medium text-muted self-center tabular-nums whitespace-nowrap">{totalRows} görev</span>
       </div>
 
       {/* Active person filter banner — makes a deep-link from CRM explicit and
@@ -716,7 +717,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
           </span>
           <button
             onClick={() => handlePersonChange("")}
-            className="text-[12px] font-medium text-brand hover:text-brand-strong underline underline-offset-2"
+            className="text-[13px] font-medium text-brand hover:text-brand-strong underline underline-offset-2"
           >
             Filtreyi temizle
           </button>
@@ -745,9 +746,10 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
         )}
       </div>
 
-      {/* Table — desktop / tablet */}
-      <div className="hidden md:block flex-1 overflow-auto bg-app">
-        <table className="w-full text-sm border-collapse">
+      {/* Table — desktop / tablet. Wide content scrolls INSIDE this wrapper
+          (overflow-x-auto); the page itself never scrolls horizontally. */}
+      <div className="hidden md:block flex-1 overflow-x-auto overflow-y-auto bg-app">
+        <table className="w-full min-w-[56rem] text-sm border-collapse">
           <thead className="bg-surface-muted/90 border-b border-hairline sticky top-0 z-10 backdrop-blur-sm">
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id}>
@@ -755,7 +757,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
                   <th
                     key={header.id}
                     className={cn(
-                      "text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted whitespace-nowrap select-none",
+                      "text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted whitespace-nowrap select-none",
                       header.column.getCanSort() && "cursor-pointer hover:text-ink transition-colors duration-[var(--duration-fast)]"
                     )}
                     onClick={header.column.getToggleSortingHandler()}
@@ -793,8 +795,9 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
                     <td
                       key={cell.id}
                       className={cn(
-                        "px-4 py-3 align-middle",
-                        cell.column.id === "title" && "w-full min-w-[14rem]",
+                        "px-4 py-2.5 align-middle",
+                        cell.column.id === "title" && "w-full min-w-[16rem]",
+                        cell.column.id === "description" && "min-w-[12rem]",
                         cell.column.id === "department" && "min-w-[11rem]",
                       )}
                     >

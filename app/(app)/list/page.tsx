@@ -31,7 +31,9 @@ export default async function ListPage({
     .from("tasks")
     .select("*")
     .eq("workspace_id", workspaceId)
-    .neq("status", "archived");
+    .neq("status", "archived")
+    .is("archived_at", null)
+    .is("deleted_at", null);
   if (!isAdmin) tasksQuery.eq("visibility", "workspace");
 
   const [tasksResult, viewsResult, membersResult, contactsResult, deptsResult, deptMembersResult] = await Promise.all([

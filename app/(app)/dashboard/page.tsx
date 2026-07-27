@@ -8,7 +8,7 @@ import {
 } from "@/lib/points/queries";
 import type { TaskStatus, WorkspaceDepartment } from "@/types";
 
-export const metadata = { title: "Gösterge Paneli" };
+export const metadata = { title: "Raporlar" };
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -58,12 +58,16 @@ export default async function DashboardPage() {
         .from("tasks")
         .select("id, department_id, due_date")
         .eq("workspace_id", workspaceId)
-        .not("status", "in", "(done,archived)"),
+        .not("status", "in", "(done,archived)")
+        .is("archived_at", null)
+        .is("deleted_at", null),
       supabase
         .from("tasks")
         .select("id, title, status, department_id, updated_at")
         .eq("workspace_id", workspaceId)
         .neq("status", "archived")
+        .is("archived_at", null)
+        .is("deleted_at", null)
         .order("updated_at", { ascending: false })
         .limit(6),
     ]);
