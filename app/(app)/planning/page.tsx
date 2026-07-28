@@ -9,6 +9,7 @@ import { maybeDatabaseSetupRequired } from "@/lib/utils/supabase-errors";
 import { PlanningBoard } from "@/components/planning/PlanningBoard";
 import type {
   PlanningMeeting, PlanningTopic, PlanningMeetingWithTopics, PlanningTemplate,
+  PlanningOpenItem,
 } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -109,6 +110,17 @@ export default async function PlanningPage({
     }
   }
 
+  // "Tamamlanmamış Eksik Konular" — haftadan bağımsız açık konu defteri. Tablo
+  // henüz migrate edilmediyse bölüm kendi içinde bilgi notu gösterir, sayfa
+  // çalışmaya devam eder.
+  const openItemsRes = await supabase
+    .from("planning_open_items")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .order("done", { ascending: true })
+    .order("position", { ascending: true });
+  const openItems = (openItemsRes.data ?? []) as unknown as PlanningOpenItem[];
+
   return (
     <PlanningBoard
       meetings={withTopics}
@@ -118,6 +130,9 @@ export default async function PlanningPage({
       memberNames={memberNames}
       templates={templates}
       isAdmin={isAdmin}
+      currentUserId={user.id}
+      openItems={openItems}
+      openItemsAvailable={!openItemsRes.error}
     />
   );
 }

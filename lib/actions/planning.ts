@@ -14,7 +14,7 @@ const AUTH_REQUIRED = "Kimlik doğrulama gerekli.";
 const PLANNING_ADMIN_ONLY = "Planlamayı yalnız yöneticiler düzenleyebilir.";
 const NOT_FOUND = "Toplantı bulunamadı.";
 
-const CATEGORIES = ["uretim", "ai", "sales", "marketing", "finance", "external", "system", "other"] as const;
+const CATEGORIES = ["uretim", "ai", "sales", "marketing", "finance", "external", "system", "tasarim", "other"] as const;
 
 const memberIds = z.array(z.string().max(64)).max(50).default([]);
 

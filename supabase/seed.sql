@@ -644,3 +644,15 @@ begin
   on conflict (id) do nothing;
 
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- Planlama — Aslı Hanım'ın aktif toplantı takvimi (27 Tem – 2 Ağu 2026).
+-- Aktarım migration'ı (20240229) çalışma alanından ÖNCE koştuğu için burada
+-- çağrılır; idempotenttir, tekrar çalıştırmak mükerrer kayıt üretmez.
+-- ---------------------------------------------------------------------------
+do $$
+declare v_msg text;
+begin
+  select public.af_import_planning_week_2026_07_27() into v_msg;
+  raise notice '%', v_msg;
+end $$;

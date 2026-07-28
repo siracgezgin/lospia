@@ -1,0 +1,383 @@
+"use client";
+
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import {
+  ClipboardList, Plus, Trash2, Loader2, Send, CheckCircle2, Check, Undo2, X,
+} from "lucide-react";
+import { cn } from "@/lib/utils/cn";
+import { initialsOf } from "@/lib/planning/initials";
+import { categoryMeta } from "@/lib/planning/categories";
+import {
+  createOpenItem, updateOpenItem, setOpenItemDone, deleteOpenItem, assignOpenItemAsTask,
+} from "@/lib/actions/planning-open-items";
+import type { Member } from "./MemberMultiSelect";
+import type { PlanningOpenItem } from "@/types";
+
+interface Props {
+  items: PlanningOpenItem[];
+  members: Member[];
+  currentUserId: string;
+  isAdmin: boolean;
+  /** Tablo henüz migrate edilmediyse bölüm bilgi notuyla kapanır. */
+  available: boolean;
+}
+
+/** Sahipsiz satırların toplandığı sütun. */
+const GENERAL = "Genel";
+
+type Column = {
+  key: string;
+  userId: string | null;
+  label: string;
+  open: PlanningOpenItem[];
+  done: PlanningOpenItem[];
+};
+
+/**
+ * "Tamamlanmamış Eksik Konular" — Aslı Hanım'ın takviminin altındaki kişi
+ * sütunları. Not defteri gibi çalışır: haftaya bağlı değildir, konu
+ * tamamlanana kadar durur. Herkes görür; kendi sütununa yazar, yönetici
+ * hepsine müdahale eder ve tek tıkla göreve dönüştürür.
+ */
+export function OpenItemsBoard({ items, members, currentUserId, isAdmin, available }: Props) {
+  const router = useRouter();
+  const [showDone, setShowDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [, startWork] = useTransition();
+
+  const memberName = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const p of members) m[p.id] = p.name;
+    return m;
+  }, [members]);
+
+  const columns = useMemo<Column[]>(() => {
+    const map = new Map<string, Column>();
+    const ensure = (key: string, userId: string | null, label: string) => {
+      if (!map.has(key)) map.set(key, { key, userId, label, open: [], done: [] });
+      return map.get(key)!;
+    };
+    // Önce sistemdeki her üye için bir sütun — herkesin kendi defteri hazır olsun.
+    for (const p of members) ensure(p.id, p.id, p.name);
+    for (const it of items) {
+      const userId = it.owner_user_id;
+      const label = userId ? (memberName[userId] ?? it.owner_label ?? "—") : (it.owner_label?.trim() || GENERAL);
+      const col = ensure(userId ?? label, userId, label);
+      (it.done ? col.done : col.open).push(it);
+    }
+    const list = [...map.values()];
+    for (const c of list) {
+      c.open.sort((a, b) => a.position - b.position);
+      c.done.sort((a, b) => a.position - b.position);
+    }
+    // Sıralama: önce ben, sonra dolu sütunlar, sonra boşlar; "Genel" en sonda.
+    return list.sort((a, b) => {
+      if (a.userId === currentUserId) return -1;
+      if (b.userId === currentUserId) return 1;
+      const aGen = a.label === GENERAL, bGen = b.label === GENERAL;
+      if (aGen !== bGen) return aGen ? 1 : -1;
+      const aHas = a.open.length > 0, bHas = b.open.length > 0;
+      if (aHas !== bHas) return aHas ? -1 : 1;
+      return a.label.localeCompare(b.label, "tr");
+    });
+  }, [items, members, memberName, currentUserId]);
+
+  const totalOpen = items.filter((i) => !i.done).length;
+  const totalDone = items.length - totalOpen;
+
+  // Bir sütuna yazma yetkisi: yönetici hepsine, üye kendi sütununa.
+  const canWrite = (col: Column) => isAdmin || col.userId === currentUserId;
+
+  function run(id: string, fn: () => Promise<{ error?: string } | unknown>) {
+    setError(null);
+    setBusyId(id);
+    startWork(async () => {
+      const res = (await fn()) as { error?: string };
+      setBusyId(null);
+      if (res && "error" in res && res.error) { setError(res.error); return; }
+      router.refresh();
+    });
+  }
+
+  if (!available) {
+    return (
+      <section className="mt-6">
+        <SectionHeader open={0} done={0} showDone={showDone} onToggleDone={() => {}} disabled />
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] font-medium text-amber-900">
+          Bu bölüm için veritabanı güncellemesi bekleniyor (planning_open_items).
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="mt-6">
+      <SectionHeader
+        open={totalOpen}
+        done={totalDone}
+        showDone={showDone}
+        onToggleDone={() => setShowDone((s) => !s)}
+      />
+
+      {error && (
+        <div className="anim-fade-down mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] font-medium text-red-700">
+          {error}
+        </div>
+      )}
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+        {columns.map((col) => (
+          <div key={col.key} className="flex flex-col rounded-xl border border-line bg-surface shadow-card">
+            {/* Sütun başlığı — kişi */}
+            <div className="flex items-center gap-2 border-b border-hairline px-3 py-2">
+              <span className="inline-flex h-6 w-7 shrink-0 items-center justify-center rounded bg-surface-muted text-[11px] font-semibold text-muted">
+                {col.label === GENERAL ? "∷" : initialsOf(col.label)}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[13px] font-semibold tracking-tight text-ink" title={col.label}>
+                {col.label}
+              </span>
+              <span
+                className={cn(
+                  "rounded-md px-1.5 py-px text-[11px] font-semibold tabular-nums",
+                  col.open.length ? "bg-brand-soft text-brand-strong" : "bg-surface-muted text-subtle",
+                )}
+                title="Açık konu"
+              >
+                {col.open.length}
+              </span>
+            </div>
+
+            {/* Açık konular */}
+            <ul className="max-h-[24rem] flex-1 divide-y divide-hairline overflow-y-auto">
+              {col.open.length === 0 && (!showDone || col.done.length === 0) && (
+                <li className="px-3 py-3 text-[12.5px] text-subtle">Açık konu yok.</li>
+              )}
+              {col.open.map((it) => (
+                <ItemRow
+                  key={it.id}
+                  item={it}
+                  busy={busyId === it.id}
+                  canWrite={canWrite(col)}
+                  canAssign={isAdmin && !!col.userId}
+                  onToggle={() => run(it.id, () => setOpenItemDone(it.id, true))}
+                  onSave={(text) => run(it.id, () => updateOpenItem(it.id, { text }))}
+                  onDelete={() => run(it.id, () => deleteOpenItem(it.id))}
+                  onAssign={() => run(it.id, () => assignOpenItemAsTask(it.id, { dueDate: null }))}
+                />
+              ))}
+              {showDone && col.done.map((it) => (
+                <li key={it.id} className="flex items-start gap-2 px-3 py-1.5">
+                  <button
+                    onClick={() => run(it.id, () => setOpenItemDone(it.id, false))}
+                    disabled={!canWrite(col) || busyId === it.id}
+                    className="mt-px shrink-0 rounded p-0.5 text-emerald-600 transition-colors hover:bg-emerald-50 disabled:opacity-50"
+                    title="Geri al"
+                  >
+                    {busyId === it.id ? <Loader2 size={13} className="animate-spin" /> : <Undo2 size={13} />}
+                  </button>
+                  <span className="min-w-0 flex-1 text-[12.5px] leading-snug text-subtle line-through">{it.text}</span>
+                </li>
+              ))}
+            </ul>
+
+            {/* Ekleme satırı */}
+            {canWrite(col) && (
+              <AddRow
+                onAdd={(text) =>
+                  run(`add-${col.key}`, () =>
+                    createOpenItem({
+                      owner_user_id: col.userId,
+                      owner_label: col.userId ? col.label : (col.label === GENERAL ? GENERAL : col.label),
+                      text,
+                    }),
+                  )
+                }
+                busy={busyId === `add-${col.key}`}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+
+      <p className="mt-2 px-1 text-[12.5px] text-subtle">
+        Bu liste haftadan bağımsızdır — konu tamamlanana kadar durur. Herkes kendi sütununa yazar
+        {isAdmin ? "; yönetici tüm sütunlara müdahale eder ve “Bildir” ile konuyu göreve dönüştürür." : "."}
+      </p>
+    </section>
+  );
+}
+
+function SectionHeader({
+  open, done, showDone, onToggleDone, disabled,
+}: { open: number; done: number; showDone: boolean; onToggleDone: () => void; disabled?: boolean }) {
+  return (
+    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+      <h2 className="inline-flex items-center gap-2 text-[15px] font-semibold tracking-tight text-ink">
+        <ClipboardList size={16} className="text-muted" />
+        Tamamlanmamış Eksik Konular
+        {!disabled && <span className="rounded-md bg-surface-muted px-1.5 py-px text-[11px] font-semibold tabular-nums text-muted">{open}</span>}
+      </h2>
+      {!disabled && (
+        <button
+          onClick={onToggleDone}
+          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 text-[12.5px] font-medium text-muted transition-all duration-150 hover:border-line-strong hover:text-ink active:scale-[0.98]"
+        >
+          <Check size={13} /> {showDone ? "Tamamlananları gizle" : `Tamamlananlar (${done})`}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function ItemRow({
+  item, busy, canWrite, canAssign, onToggle, onSave, onDelete, onAssign,
+}: {
+  item: PlanningOpenItem;
+  busy: boolean;
+  canWrite: boolean;
+  canAssign: boolean;
+  onToggle: () => void;
+  onSave: (_text: string) => void;
+  onDelete: () => void;
+  onAssign: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(item.text);
+  const meta = item.category ? categoryMeta(item.category) : null;
+
+  function commit() {
+    const t = draft.trim();
+    setEditing(false);
+    if (!t || t === item.text) { setDraft(item.text); return; }
+    onSave(t);
+  }
+
+  return (
+    <li className="group/item flex items-start gap-2 px-3 py-1.5">
+      <button
+        onClick={onToggle}
+        disabled={!canWrite || busy}
+        className="mt-[3px] inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[4px] border border-line-strong text-transparent transition-colors duration-150 hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-40"
+        title={canWrite ? "Tamamlandı olarak işaretle" : "Bu sütuna yalnız sahibi veya yönetici yazar"}
+        aria-label="Tamamlandı"
+      >
+        {busy ? <Loader2 size={10} className="animate-spin text-muted" /> : <Check size={10} />}
+      </button>
+
+      {editing ? (
+        <input
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commit();
+            if (e.key === "Escape") { setDraft(item.text); setEditing(false); }
+          }}
+          className="min-w-0 flex-1 rounded border border-brand-ring bg-surface px-1.5 py-0.5 text-[12.5px] text-ink focus:outline-none focus:ring-2 focus:ring-brand-ring"
+        />
+      ) : (
+        <button
+          onClick={() => canWrite && setEditing(true)}
+          className={cn(
+            "min-w-0 flex-1 text-left text-[12.5px] leading-snug text-ink/90",
+            canWrite && "cursor-text hover:text-ink",
+          )}
+          title={canWrite ? "Düzenlemek için tıklayın" : undefined}
+        >
+          {meta && (
+            <span
+              aria-hidden
+              className={cn("mr-1.5 inline-block h-2 w-2 shrink-0 rounded-sm align-middle ring-1 ring-inset ring-black/10", meta.dot)}
+              title={meta.label}
+            />
+          )}
+          {item.text}
+          {item.task_id && <CheckCircle2 size={11} className="ml-1 inline text-emerald-600" aria-label="Göreve atandı" />}
+        </button>
+      )}
+
+      <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/item:opacity-100">
+        {canAssign && (
+          <button
+            onClick={onAssign}
+            disabled={busy}
+            className={cn(
+              "rounded p-1 transition-colors",
+              item.task_id ? "text-emerald-600 hover:bg-emerald-50" : "text-subtle hover:bg-surface-muted hover:text-brand",
+            )}
+            title={item.task_id ? "Görev oluşturuldu — güncelleyip tekrar bildir" : "Göreve dönüştür ve sahibine bildir"}
+          >
+            <Send size={12} />
+          </button>
+        )}
+        {canWrite && (
+          <button
+            onClick={onDelete}
+            disabled={busy}
+            className="rounded p-1 text-subtle transition-colors hover:bg-red-50 hover:text-red-600"
+            title="Sil"
+          >
+            <Trash2 size={12} />
+          </button>
+        )}
+      </span>
+    </li>
+  );
+}
+
+function AddRow({ onAdd, busy }: { onAdd: (_text: string) => void; busy: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+
+  function submit() {
+    const t = text.trim();
+    if (!t) { setOpen(false); return; }
+    onAdd(t);
+    setText("");
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="flex items-center gap-1 border-t border-hairline px-3 py-2 text-[12.5px] font-medium text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-brand"
+      >
+        <Plus size={12} /> Konu ekle
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1 border-t border-hairline px-2 py-1.5">
+      <input
+        autoFocus
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") submit();
+          if (e.key === "Escape") { setText(""); setOpen(false); }
+        }}
+        placeholder="Yeni konu…"
+        className="min-w-0 flex-1 rounded border border-line bg-surface px-1.5 py-1 text-[12.5px] text-ink placeholder:text-subtle focus:border-brand-ring focus:outline-none focus:ring-2 focus:ring-brand-ring"
+      />
+      <button
+        onClick={submit}
+        disabled={busy}
+        className="rounded p-1 text-brand transition-colors hover:bg-brand-soft disabled:opacity-60"
+        title="Ekle"
+      >
+        {busy ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+      </button>
+      <button
+        onClick={() => { setText(""); setOpen(false); }}
+        className="rounded p-1 text-subtle transition-colors hover:bg-surface-muted hover:text-ink"
+        title="Kapat"
+      >
+        <X size={13} />
+      </button>
+    </div>
+  );
+}

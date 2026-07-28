@@ -262,7 +262,7 @@ export type ProductionPricing = {
 // ── Planlama Modülü — Haftalık Toplantı Takvimi (20240216 migration) ─────────
 /** Toplantı kategorisi → ızgarada renk paterni. */
 export type PlanningCategory =
-  | "uretim" | "ai" | "sales" | "marketing" | "finance" | "external" | "system" | "other";
+  | "uretim" | "ai" | "sales" | "marketing" | "finance" | "external" | "system" | "tasarim" | "other";
 
 /** Izgaradaki renkli "toplantı kutusu" (gün + saat). */
 export type PlanningMeeting = {
@@ -317,6 +317,25 @@ export type PlanningTemplate = {
   participant_ids: string[];   // varsayılan katılımcılar (user id)
   position: number;
   active: boolean;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** "Tamamlanmamış Eksik Konular" satırı (20240228 migration).
+ *  Haftaya bağlı DEĞİL — tamamlanana kadar durur. Sütun = kişi. */
+export type PlanningOpenItem = {
+  id: string;
+  workspace_id: string;
+  owner_user_id: string | null;   // sistemde kullanıcısı olan sahip
+  owner_label: string | null;     // kullanıcı yoksa serbest ad ("EF", "Genel")
+  text: string;
+  category: PlanningCategory | null;
+  done: boolean;
+  done_at: string | null;
+  position: number;
+  task_id: string | null;         // göreve dönüştürüldüyse ilgili görev
   created_by: string | null;
   updated_by: string | null;
   created_at: string;

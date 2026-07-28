@@ -100,17 +100,24 @@ export function MemberMultiSelect({ members, selected, onChange, placeholder = "
   );
 }
 
-/** Salt-görüntü: id listesini baş-harf rozetleri olarak gösterir. */
+/** Salt-görüntü: id listesini baş-harf rozetleri olarak gösterir.
+ *  `extra` — sistemde kullanıcısı olmayan kişiler (Aslı'nın "Kim" metninden
+ *  çözülemeyen adlar); ham hâliyle, daha soluk gösterilir. */
 export function MemberInitials({
-  ids, memberNames, className,
-}: { ids: string[]; memberNames: Record<string, string>; className?: string }) {
-  if (!ids?.length) return null;
+  ids, memberNames, extra = [], className,
+}: { ids: string[]; memberNames: Record<string, string>; extra?: string[]; className?: string }) {
+  if (!ids?.length && !extra.length) return null;
   return (
     <span className={cn("inline-flex flex-wrap items-center gap-1", className)}>
       <Users size={9} className="text-ink/50" />
       {ids.map((id) => (
         <span key={id} title={memberNames[id] ?? ""} className="rounded bg-black/5 px-1 text-[10px] font-semibold text-ink/70">
           {initialsOf(memberNames[id])}
+        </span>
+      ))}
+      {extra.map((name) => (
+        <span key={name} title={`${name} — sistemde kullanıcı değil`} className="rounded bg-black/5 px-1 text-[10px] font-medium text-ink/55">
+          {name}
         </span>
       ))}
     </span>

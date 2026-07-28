@@ -12,10 +12,12 @@ import { cn } from "@/lib/utils/cn";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { PLANNING_CATEGORIES, categoryMeta } from "@/lib/planning/categories";
 import { applyTemplatesToWeek, copyPreviousWeek } from "@/lib/actions/planning";
+import { unresolvedKim } from "@/lib/planning/initials";
 import { MeetingEditor } from "./MeetingEditor";
 import { TemplateManager } from "./TemplateManager";
+import { OpenItemsBoard } from "./OpenItemsBoard";
 import { MemberInitials, type Member } from "./MemberMultiSelect";
-import type { PlanningMeetingWithTopics, PlanningTemplate } from "@/types";
+import type { PlanningMeetingWithTopics, PlanningTemplate, PlanningOpenItem } from "@/types";
 
 interface Props {
   meetings: PlanningMeetingWithTopics[];
@@ -25,14 +27,22 @@ interface Props {
   memberNames: Record<string, string>;
   templates: PlanningTemplate[];
   isAdmin: boolean;
+  currentUserId: string;
+  openItems: PlanningOpenItem[];
+  openItemsAvailable: boolean;
 }
 
 const DAY_LABELS = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
 const DEFAULT_SLOTS = ["09:00", "10:00", "11:00", "12:00"];
 const TOPIC_LIMIT = 5; // Aslı Hanım'ın sınırı: bir toplantıda en çok 5 konu
 
+/** Katılımcı id'lerinin görünen adları (çözülemeyen "Kim" adlarını ayıklamak için). */
+const namesOf = (ids: string[] | null | undefined, memberNames: Record<string, string>) =>
+  (ids ?? []).map((id) => memberNames[id]).filter(Boolean);
+
 export function PlanningBoard({
   meetings, weekDays, weekStart, members, memberNames, templates, isAdmin,
+  currentUserId, openItems, openItemsAvailable,
 }: Props) {
   const router = useRouter();
   const [editor, setEditor] = useState<
@@ -205,6 +215,9 @@ export function PlanningBoard({
                         <div className="stagger-children space-y-1.5">
                           {cell.map((m) => {
                             const meta = categoryMeta(m.category);
+                            // "Kim" ham metninde sistem üyesine çözülemeyen adlar
+                            // (Meral, Hakan Usta…) rozetlerin yanında yaşamaya devam eder.
+                            const extraKim = unresolvedKim(m.kim, namesOf(m.participant_ids, memberNames));
                             return (
                               <div
                                 key={m.id}
@@ -240,28 +253,35 @@ export function PlanningBoard({
                                     )}
                                   </span>
                                 </div>
-                                {m.participant_ids?.length > 0 && (
+                                {(m.participant_ids?.length > 0 || extraKim.length > 0) && (
                                   <div className="mt-1">
                                     <span className="inline-flex items-center gap-1 rounded-md bg-black/5 px-1.5 py-0.5">
-                                      <MemberInitials ids={m.participant_ids} memberNames={memberNames} />
+                                      <MemberInitials ids={m.participant_ids} memberNames={memberNames} extra={extraKim} />
                                     </span>
                                   </div>
                                 )}
                                 {/* Konular — Excel gibi hep görünür, satır satır */}
                                 {m.topics.length > 0 && (
                                   <ul className="mt-1.5 space-y-1 border-t border-black/10 pt-1.5">
-                                    {m.topics.map((t, ti) => (
-                                      <li key={t.id} className="flex items-start gap-1.5 text-[12px] leading-snug text-ink/85">
-                                        <span className="mt-px shrink-0 font-semibold tabular-nums text-ink/50">{ti + 1}.</span>
-                                        <span className="min-w-0 flex-1">
+                                    {m.topics.map((t, ti) => {
+                                      const topicKim = unresolvedKim(t.kim, namesOf(t.participant_ids, memberNames));
+                                      return (
+                                        // Rozetler METNİN AKIŞINDA durur (ayrı bir
+                                        // sütun değil) — dar hücrede satır kırılınca
+                                        // isimler cümlenin ortasına düşmesin.
+                                        <li key={t.id} className="text-[12px] leading-snug text-ink/85">
+                                          <span className="mr-1 font-semibold tabular-nums text-ink/50">{ti + 1}.</span>
                                           {t.text}
                                           {t.task_id && <CheckCircle2 size={11} className="ml-1 inline text-emerald-600" aria-label="Göreve atandı" />}
-                                        </span>
-                                        {t.participant_ids?.length > 0 && (
-                                          <MemberInitials ids={t.participant_ids} memberNames={memberNames} className="shrink-0" />
-                                        )}
-                                      </li>
-                                    ))}
+                                          <MemberInitials
+                                            ids={t.participant_ids ?? []}
+                                            memberNames={memberNames}
+                                            extra={topicKim}
+                                            className="ml-1 align-middle"
+                                          />
+                                        </li>
+                                      );
+                                    })}
                                   </ul>
                                 )}
                               </div>
@@ -295,6 +315,15 @@ export function PlanningBoard({
           ? "Bir kutuya tıklayınca konular açılır · kalem simgesiyle düzenle · boş hücrede “Ekle”."
           : "Takvim salt görüntüleme — konular ve kişiler kutuların içinde listelenir."}
       </p>
+
+      {/* Takvimin altındaki kişi sütunları — haftadan bağımsız açık konu defteri */}
+      <OpenItemsBoard
+        items={openItems}
+        members={members}
+        currentUserId={currentUserId}
+        isAdmin={isAdmin}
+        available={openItemsAvailable}
+      />
 
       {editor && (
         <MeetingEditor

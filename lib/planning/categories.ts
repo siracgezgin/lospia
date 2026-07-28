@@ -18,6 +18,7 @@ export const PLANNING_CATEGORIES: CategoryMeta[] = [
   { key: "sales",     label: "Sales",     cell: "bg-violet-50 border-violet-200",   title: "text-violet-800",  chip: "bg-violet-100 text-violet-800",   dot: "bg-violet-400" },
   { key: "finance",   label: "Finans",    cell: "bg-orange-50 border-orange-200",   title: "text-orange-800",  chip: "bg-orange-100 text-orange-800",   dot: "bg-orange-400" },
   { key: "system",    label: "Sistem",    cell: "bg-emerald-50 border-emerald-200", title: "text-emerald-800", chip: "bg-emerald-100 text-emerald-800", dot: "bg-emerald-400" },
+  { key: "tasarim",   label: "Tasarım",   cell: "bg-indigo-50 border-indigo-200",   title: "text-indigo-800",  chip: "bg-indigo-100 text-indigo-800",   dot: "bg-indigo-400" },
   { key: "external",  label: "Dış / Diğer", cell: "bg-pink-50 border-pink-200",     title: "text-pink-700",    chip: "bg-pink-100 text-pink-700",       dot: "bg-pink-400" },
   { key: "other",     label: "Diğer",     cell: "bg-slate-50 border-slate-200",     title: "text-slate-700",   chip: "bg-slate-100 text-slate-700",     dot: "bg-slate-400" },
 ];
