@@ -255,10 +255,6 @@ export function AppSidebar({
             >
               “{weeklyQuote.quoteTr}”
             </p>
-            <p className="relative mt-2 truncate text-[11px] not-italic leading-snug">
-              <span className="font-semibold tracking-tight text-ink/70">{weeklyQuote.author}</span>
-              <span className="italic text-subtle"> · {weeklyQuote.authorRole}</span>
-            </p>
           </div>
 
           {/* Brand sign-off — anchors the expanded sidebar with the full
