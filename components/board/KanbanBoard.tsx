@@ -29,6 +29,7 @@ import {
   createContext,
   useContext,
 } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -508,6 +509,9 @@ function urgentCardStyle(
 
 // ── Card 3-dot menu ───────────────────────────────────────────────────────────
 
+const MENU_WIDTH = 144;      // matches the old w-36
+const MENU_EST_HEIGHT = 132; // first-paint guess; refined after measuring
+
 function CardMenu({
   onEdit,
   onDuplicate,
@@ -528,17 +532,56 @@ function CardMenu({
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  // Fixed viewport coords: the menu is PORTALLED to <body> so neither the
+  // column's overflow-auto nor a following card's paint order can clip it.
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  // Measure the trigger and place the menu, flipping above when the space below
+  // the card runs out (bottom-of-column cards used to lose the "Sil" row).
+  const place = useCallback(() => {
+    const trigger = ref.current;
+    if (!trigger) return;
+    const r = trigger.getBoundingClientRect();
+    const height = menuRef.current?.offsetHeight ?? MENU_EST_HEIGHT;
+    const left = Math.min(
+      Math.max(8, r.right - MENU_WIDTH),
+      Math.max(8, window.innerWidth - MENU_WIDTH - 8),
+    );
+    const below = r.bottom + 4;
+    const top = below + height > window.innerHeight - 8
+      ? Math.max(8, r.top - height - 4)
+      : below;
+    setPos((prev) => (prev && prev.top === top && prev.left === left ? prev : { top, left }));
+  }, []);
+
+  // Re-place once the real height is known (and again when the confirm step
+  // grows the menu), so a flipped menu never hangs off the viewport.
+  useEffect(() => {
+    if (open) place();
+  }, [open, confirming, place]);
 
   useEffect(() => {
     if (!open) return;
     function handleOutsideClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-        setConfirming(false);
-      }
+      const target = e.target as Node;
+      if (ref.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
+      setConfirming(false);
+    }
+    // A fixed menu can't follow the column scroll — close instead of drifting.
+    function dismiss() {
+      setOpen(false);
+      setConfirming(false);
     }
     document.addEventListener("mousedown", handleOutsideClick);
-    return () => document.removeEventListener("mousedown", handleOutsideClick);
+    window.addEventListener("scroll", dismiss, true);
+    window.addEventListener("resize", dismiss);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      window.removeEventListener("scroll", dismiss, true);
+      window.removeEventListener("resize", dismiss);
+    };
   }, [open]);
 
   return (
@@ -550,16 +593,33 @@ function CardMenu({
       onPointerDown={(e) => e.stopPropagation()}
     >
       <button
-        onClick={() => { setOpen((o) => !o); setConfirming(false); }}
-        className="p-0.5 rounded-md text-subtle hover:text-ink hover:bg-surface-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-[opacity,background-color,color] duration-150"
+        onClick={() => {
+          // Place BEFORE opening so the first frame paints in position.
+          if (!open) place();
+          setOpen((o) => !o);
+          setConfirming(false);
+        }}
+        // Stays visible while open: the menu now lives in a portal, so moving
+        // the pointer onto it leaves the card's :hover group.
+        className={`p-0.5 rounded-md text-subtle hover:text-ink hover:bg-surface-muted group-hover:opacity-100 focus-visible:opacity-100 transition-[opacity,background-color,color] duration-150 ${open ? "opacity-100 text-ink" : "opacity-0"}`}
         aria-label="Görev seçenekleri"
+        aria-haspopup="menu"
+        aria-expanded={open}
         tabIndex={-1}
       >
         <MoreVertical size={12} />
       </button>
 
-      {open && (
-        <div className="absolute right-0 top-full mt-1 w-36 bg-surface border border-line rounded-lg shadow-pop z-50 py-1 origin-top-right anim-fade-down">
+      {open && createPortal(
+        <div
+          ref={menuRef}
+          role="menu"
+          style={{ top: pos?.top ?? -9999, left: pos?.left ?? -9999, width: MENU_WIDTH }}
+          className="fixed z-[100] bg-surface border border-line rounded-lg shadow-pop py-1 origin-top-right anim-fade-down"
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
           <button
             onClick={() => { setOpen(false); onEdit(); }}
             className="w-full text-left px-3 py-1.5 text-xs text-muted hover:bg-surface-muted hover:text-ink transition-colors flex items-center gap-1.5"
@@ -609,7 +669,8 @@ function CardMenu({
               <Trash2 size={11} /> Sil
             </button>
           ) : null}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

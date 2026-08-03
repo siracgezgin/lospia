@@ -1,8 +1,16 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { createContext, useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
+
+/**
+ * Present only while the task detail renders INSIDE the drawer. Content can use
+ * it to close the sheet instead of navigating: a plain <Link href="/board">
+ * would change the URL underneath while Next keeps the (unmatched) @modal slot
+ * mounted on soft navigation — the panel would stay open over the board.
+ */
+export const TaskDrawerContext = createContext<{ close: () => void } | null>(null);
 
 /**
  * TaskDetailDrawer — right-side sheet used by the intercepting route
@@ -39,6 +47,8 @@ export function TaskDetailDrawer({ children }: { children: React.ReactNode }) {
     return () => document.removeEventListener("keydown", onKey);
   }, [close]);
 
+  const ctx = useMemo(() => ({ close }), [close]);
+
   return (
     <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Görev detayı">
       {/* Backdrop — fades in via anim-fade, transitions out on close. */}
@@ -61,18 +71,22 @@ export function TaskDetailDrawer({ children }: { children: React.ReactNode }) {
             : "anim-drawer-in"
         }`}
       >
-        {/* Close affordance — pinned; TaskDetail keeps its own "Panoya dön" link. */}
+        {/* Close affordance — pinned. Must sit ABOVE the content's own sticky
+            action bar (z-30), which otherwise paints over it; the bar reserves
+            room on its right (pr-12) so the two never overlap. */}
         <button
           type="button"
           onClick={close}
           aria-label="Kapat"
-          className="absolute right-3 top-3 z-10 grid h-8 w-8 place-items-center rounded-full bg-surface/90 backdrop-blur text-muted border border-line shadow-card transition-all duration-150 ease-standard hover:text-ink hover:bg-surface-muted hover:border-line-strong active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring/60"
+          className="absolute right-3 top-3 z-40 grid h-8 w-8 place-items-center rounded-full bg-surface/90 backdrop-blur text-muted border border-line shadow-card transition-all duration-150 ease-standard hover:text-ink hover:bg-surface-muted hover:border-line-strong active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring/60"
         >
           <X size={16} />
         </button>
 
         <div className="flex-1 overflow-y-auto overflow-x-hidden">
-          {children}
+          <TaskDrawerContext.Provider value={ctx}>
+            {children}
+          </TaskDrawerContext.Provider>
         </div>
       </div>
     </div>

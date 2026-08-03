@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useTransition, useRef, useEffect } from "react";
+import { useState, useMemo, useTransition, useRef, useEffect, useContext } from "react";
 import { useRouter } from "next/navigation";
 import { formatDateTimeTR, formatDateOnlyTR } from "@/lib/utils/format-date";
 import Link from "next/link";
@@ -28,6 +28,7 @@ import {
 import { Avatar } from "@/components/ui/Avatar";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { cn } from "@/lib/utils/cn";
+import { TaskDrawerContext } from "@/components/task/TaskDetailDrawer";
 import {
   TASK_VISIBILITIES, VISIBILITY_LABELS, VISIBILITY_DESCRIPTIONS,
   ADMIN_ONLY_CHIP_LABEL, asVisibility, type TaskVisibility,
@@ -116,6 +117,10 @@ function TaskEditor({
   activitySlot: React.ReactNode;
 }) {
   const router = useRouter();
+  // Inside the drawer the detail is an overlay, not a page: "geri" must close
+  // the sheet (a Link would only change the URL behind it and leave the panel
+  // hanging over the board). On the full page it stays a real navigation.
+  const drawer = useContext(TaskDrawerContext);
   const initial = useMemo(() => draftFromTask(task), [task]);
   const [draft, setDraft] = useState<Draft>(initial);
   const [saving, startSaving] = useTransition();
@@ -194,10 +199,24 @@ function TaskEditor({
   return (
     <>
       {/* ── Top action bar: back link + explicit Save / Cancel ─────────────── */}
-      <div className="sticky top-0 z-30 -mx-4 px-4 py-2 bg-app/90 backdrop-blur border-b border-line/60 flex items-center justify-between gap-3 flex-wrap">
-        <Link href={backHref} className="group inline-flex items-center gap-1 text-sm text-muted hover:text-ink transition-colors duration-150">
-          <ArrowLeft size={14} className="transition-transform duration-150 ease-standard group-hover:-translate-x-0.5" /> {backLabel}
-        </Link>
+      <div className={cn(
+        "sticky top-0 z-30 -mx-4 px-4 py-2 bg-app/90 backdrop-blur border-b border-line/60 flex items-center justify-between gap-3 flex-wrap",
+        // Keep the drawer's pinned close button clear of the action buttons.
+        drawer && "pr-12",
+      )}>
+        {drawer ? (
+          <button
+            type="button"
+            onClick={drawer.close}
+            className="group inline-flex items-center gap-1 text-sm text-muted hover:text-ink transition-colors duration-150"
+          >
+            <ArrowLeft size={14} className="transition-transform duration-150 ease-standard group-hover:-translate-x-0.5" /> Kapat
+          </button>
+        ) : (
+          <Link href={backHref} className="group inline-flex items-center gap-1 text-sm text-muted hover:text-ink transition-colors duration-150">
+            <ArrowLeft size={14} className="transition-transform duration-150 ease-standard group-hover:-translate-x-0.5" /> {backLabel}
+          </Link>
+        )}
         <div className="flex items-center gap-2 ml-auto">
           {feedback && (
             <span className={cn(
