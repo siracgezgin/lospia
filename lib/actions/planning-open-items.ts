@@ -29,6 +29,9 @@ const nn = (s?: string | null) => {
 const CreateSchema = z.object({
   owner_user_id: z.string().max(64).optional().nullable(),
   owner_label: z.string().max(120).optional().nullable(),
+  // Kişinin alt sütunu — Excel'de bir kişinin iki listesi olabiliyor
+  // ("Sales / Satın Alma" ve "Sales / Online").
+  owner_role: z.string().max(200).optional().nullable(),
   text: z.string().min(1, "Konu metni boş olamaz.").max(2000),
   category: z.enum(CATEGORIES).optional().nullable(),
 });
@@ -65,16 +68,18 @@ export async function createOpenItem(
   const ownerUserId = nn(v.owner_user_id);
   if (!canWrite(ctx, ownerUserId)) return { error: NOT_ALLOWED };
 
-  // Sıra: aynı sütundaki son satırın altına.
-  const posQ = supabase
+  // Sıra: aynı ALT SÜTUNdaki son satırın altına (kişi + rol birlikte).
+  const ownerRole = nn(v.owner_role);
+  let posQ = supabase
     .from("planning_open_items")
     .select("position")
     .eq("workspace_id", ctx.workspaceId)
     .order("position", { ascending: false })
     .limit(1);
-  const { data: last } = ownerUserId
-    ? await posQ.eq("owner_user_id", ownerUserId)
-    : await posQ.eq("owner_label", nn(v.owner_label) ?? "Genel").is("owner_user_id", null);
+  posQ = ownerUserId
+    ? posQ.eq("owner_user_id", ownerUserId)
+    : posQ.eq("owner_label", nn(v.owner_label) ?? "Genel").is("owner_user_id", null);
+  const { data: last } = await (ownerRole ? posQ.eq("owner_role", ownerRole) : posQ.is("owner_role", null));
   const position = ((last?.[0]?.position as number | undefined) ?? -1) + 1;
 
   const { data, error } = await supabase
@@ -83,6 +88,7 @@ export async function createOpenItem(
       workspace_id: ctx.workspaceId,
       owner_user_id: ownerUserId,
       owner_label: nn(v.owner_label),
+      owner_role: ownerRole,
       text: v.text.trim(),
       category: v.category ?? null,
       position,

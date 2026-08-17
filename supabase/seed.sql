@@ -646,13 +646,17 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
--- Planlama — Aslı Hanım'ın aktif toplantı takvimi (27 Tem – 2 Ağu 2026).
--- Aktarım migration'ı (20240229) çalışma alanından ÖNCE koştuğu için burada
+-- Planlama — Aslı Hanım'ın aktif toplantı takvimi (17 – 23 Ağustos 2026).
+-- Toplantı ızgarası + Tarih/Saat matrisi + kişi sütunları + Operasyon Kurgusu.
+-- Aktarım migration'ı (20240302) çalışma alanından ÖNCE koştuğu için burada
 -- çağrılır; idempotenttir, tekrar çalıştırmak mükerrer kayıt üretmez.
 -- ---------------------------------------------------------------------------
 do $$
 declare v_msg text;
 begin
-  select public.af_import_planning_week_2026_07_27() into v_msg;
+  select public.af_import_planning_week_2026_08_17() into v_msg;
+  raise notice '%', v_msg;
+  -- Haftalık ritim şablonu — "Haftayı kur" her haftanın iskeletini bundan üretir.
+  select public.af_import_planning_templates() into v_msg;
   raise notice '%', v_msg;
 end $$;

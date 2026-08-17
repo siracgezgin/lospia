@@ -26,12 +26,23 @@ interface Props {
 /** Sahipsiz satırların toplandığı sütun. */
 const GENERAL = "Genel";
 
+/** Excel'de bir kişinin altında birden çok liste olabiliyor
+ *  ("Sales / Satın Alma" + "Sales / Online") — her biri bir RoleGroup. */
+type RoleGroup = {
+  key: string;
+  role: string | null;   // alt sütun başlığı (yoksa tek liste)
+  order: number;         // Excel'deki soldan sağa sıra (en küçük position)
+  open: PlanningOpenItem[];
+  done: PlanningOpenItem[];
+};
+
 type Column = {
   key: string;
   userId: string | null;
   label: string;
-  open: PlanningOpenItem[];
-  done: PlanningOpenItem[];
+  roles: RoleGroup[];
+  openCount: number;
+  doneCount: number;
 };
 
 /**
@@ -56,21 +67,38 @@ export function OpenItemsBoard({ items, members, currentUserId, isAdmin, availab
   const columns = useMemo<Column[]>(() => {
     const map = new Map<string, Column>();
     const ensure = (key: string, userId: string | null, label: string) => {
-      if (!map.has(key)) map.set(key, { key, userId, label, open: [], done: [] });
+      if (!map.has(key)) map.set(key, { key, userId, label, roles: [], openCount: 0, doneCount: 0 });
       return map.get(key)!;
     };
+    const ensureRole = (col: Column, role: string | null, position: number) => {
+      const rk = role ?? "";
+      let g = col.roles.find((r) => (r.role ?? "") === rk);
+      if (!g) { g = { key: `${col.key}|${rk}`, role, order: position, open: [], done: [] }; col.roles.push(g); }
+      g.order = Math.min(g.order, position);
+      return g;
+    };
+
     // Önce sistemdeki her üye için bir sütun — herkesin kendi defteri hazır olsun.
     for (const p of members) ensure(p.id, p.id, p.name);
     for (const it of items) {
       const userId = it.owner_user_id;
       const label = userId ? (memberName[userId] ?? it.owner_label ?? "—") : (it.owner_label?.trim() || GENERAL);
       const col = ensure(userId ?? label, userId, label);
-      (it.done ? col.done : col.open).push(it);
+      const g = ensureRole(col, it.owner_role?.trim() || null, it.position);
+      (it.done ? g.done : g.open).push(it);
+      if (it.done) col.doneCount++; else col.openCount++;
     }
+
     const list = [...map.values()];
     for (const c of list) {
-      c.open.sort((a, b) => a.position - b.position);
-      c.done.sort((a, b) => a.position - b.position);
+      // Rol sırası Excel'deki soldan sağa (aktarımda ikinci liste 100'den başlar).
+      c.roles.sort((a, b) => a.order - b.order);
+      for (const g of c.roles) {
+        g.open.sort((a, b) => a.position - b.position);
+        g.done.sort((a, b) => a.position - b.position);
+      }
+      // Hiç satırı olmayan üyede yine de tek bir boş liste dursun (ekleme için).
+      if (c.roles.length === 0) c.roles.push({ key: `${c.key}|`, role: null, order: 0, open: [], done: [] });
     }
     // Sıralama: önce ben, sonra dolu sütunlar, sonra boşlar; "Genel" en sonda.
     return list.sort((a, b) => {
@@ -78,7 +106,7 @@ export function OpenItemsBoard({ items, members, currentUserId, isAdmin, availab
       if (b.userId === currentUserId) return 1;
       const aGen = a.label === GENERAL, bGen = b.label === GENERAL;
       if (aGen !== bGen) return aGen ? 1 : -1;
-      const aHas = a.open.length > 0, bHas = b.open.length > 0;
+      const aHas = a.openCount > 0, bHas = b.openCount > 0;
       if (aHas !== bHas) return aHas ? -1 : 1;
       return a.label.localeCompare(b.label, "tr");
     });
@@ -127,12 +155,13 @@ export function OpenItemsBoard({ items, members, currentUserId, isAdmin, availab
         </div>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+      {/* Excel'deki kişi blokları: başlık = kişi, altında rol alt sütunları. */}
+      <div className="grid items-start gap-3 xl:grid-cols-2">
         {columns.map((col) => (
-          <div key={col.key} className="flex flex-col rounded-xl border border-line bg-surface shadow-card">
-            {/* Sütun başlığı — kişi */}
-            <div className="flex items-center gap-2 border-b border-hairline px-3 py-2">
-              <span className="inline-flex h-6 w-7 shrink-0 items-center justify-center rounded bg-surface-muted text-[11px] font-semibold text-muted">
+          <div key={col.key} className="flex flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-card">
+            {/* Blok başlığı — kişi */}
+            <div className="flex items-center gap-2 border-b border-hairline bg-surface-muted px-3 py-2">
+              <span className="inline-flex h-6 w-7 shrink-0 items-center justify-center rounded bg-surface text-[11px] font-semibold text-muted">
                 {col.label === GENERAL ? "∷" : initialsOf(col.label)}
               </span>
               <span className="min-w-0 flex-1 truncate text-[13px] font-semibold tracking-tight text-ink" title={col.label}>
@@ -141,62 +170,80 @@ export function OpenItemsBoard({ items, members, currentUserId, isAdmin, availab
               <span
                 className={cn(
                   "rounded-md px-1.5 py-px text-[11px] font-semibold tabular-nums",
-                  col.open.length ? "bg-brand-soft text-brand-strong" : "bg-surface-muted text-subtle",
+                  col.openCount ? "bg-brand-soft text-brand-strong" : "bg-surface text-subtle",
                 )}
                 title="Açık konu"
               >
-                {col.open.length}
+                {col.openCount}
               </span>
             </div>
 
-            {/* Açık konular */}
-            <ul className="max-h-[24rem] flex-1 divide-y divide-hairline overflow-y-auto">
-              {col.open.length === 0 && (!showDone || col.done.length === 0) && (
-                <li className="px-3 py-3 text-[12.5px] text-subtle">Açık konu yok.</li>
-              )}
-              {col.open.map((it) => (
-                <ItemRow
-                  key={it.id}
-                  item={it}
-                  busy={busyId === it.id}
-                  canWrite={canWrite(col)}
-                  canAssign={isAdmin && !!col.userId}
-                  onToggle={() => run(it.id, () => setOpenItemDone(it.id, true))}
-                  onSave={(text) => run(it.id, () => updateOpenItem(it.id, { text }))}
-                  onDelete={() => run(it.id, () => deleteOpenItem(it.id))}
-                  onAssign={() => run(it.id, () => assignOpenItemAsTask(it.id, { dueDate: null }))}
-                />
-              ))}
-              {showDone && col.done.map((it) => (
-                <li key={it.id} className="flex items-start gap-2 px-3 py-1.5">
-                  <button
-                    onClick={() => run(it.id, () => setOpenItemDone(it.id, false))}
-                    disabled={!canWrite(col) || busyId === it.id}
-                    className="mt-px shrink-0 rounded p-0.5 text-emerald-600 transition-colors hover:bg-emerald-50 disabled:opacity-50"
-                    title="Geri al"
-                  >
-                    {busyId === it.id ? <Loader2 size={13} className="animate-spin" /> : <Undo2 size={13} />}
-                  </button>
-                  <span className="min-w-0 flex-1 text-[12.5px] leading-snug text-subtle line-through">{it.text}</span>
-                </li>
-              ))}
-            </ul>
+            {/* Rol alt sütunları — yan yana (Excel'deki iki liste) */}
+            <div className={cn("grid flex-1", col.roles.length > 1 && "sm:grid-cols-2")}>
+              {col.roles.map((g, gi) => (
+                <div
+                  key={g.key}
+                  className={cn(
+                    "flex min-w-0 flex-col border-hairline",
+                    gi > 0 && "border-t sm:border-l sm:border-t-0",
+                  )}
+                >
+                  {g.role && (
+                    <div className="border-b border-hairline px-3 py-1.5 text-[11.5px] font-semibold leading-snug text-muted" title={g.role}>
+                      {g.role}
+                    </div>
+                  )}
+                  <ul className="max-h-[36rem] flex-1 divide-y divide-hairline overflow-y-auto">
+                    {g.open.length === 0 && (!showDone || g.done.length === 0) && (
+                      <li className="px-3 py-3 text-[12.5px] text-subtle">Açık konu yok.</li>
+                    )}
+                    {g.open.map((it) => (
+                      <ItemRow
+                        key={it.id}
+                        item={it}
+                        busy={busyId === it.id}
+                        canWrite={canWrite(col)}
+                        canAssign={isAdmin && !!col.userId}
+                        onToggle={() => run(it.id, () => setOpenItemDone(it.id, true))}
+                        onSave={(text) => run(it.id, () => updateOpenItem(it.id, { text }))}
+                        onDelete={() => run(it.id, () => deleteOpenItem(it.id))}
+                        onAssign={() => run(it.id, () => assignOpenItemAsTask(it.id, { dueDate: null }))}
+                      />
+                    ))}
+                    {showDone && g.done.map((it) => (
+                      <li key={it.id} className="flex items-start gap-2 px-3 py-1.5">
+                        <button
+                          onClick={() => run(it.id, () => setOpenItemDone(it.id, false))}
+                          disabled={!canWrite(col) || busyId === it.id}
+                          className="mt-px shrink-0 rounded p-0.5 text-emerald-600 transition-colors hover:bg-emerald-50 disabled:opacity-50"
+                          title="Geri al"
+                        >
+                          {busyId === it.id ? <Loader2 size={13} className="animate-spin" /> : <Undo2 size={13} />}
+                        </button>
+                        <span className="min-w-0 flex-1 text-[12.5px] leading-snug text-subtle line-through">{it.text}</span>
+                      </li>
+                    ))}
+                  </ul>
 
-            {/* Ekleme satırı */}
-            {canWrite(col) && (
-              <AddRow
-                onAdd={(text) =>
-                  run(`add-${col.key}`, () =>
-                    createOpenItem({
-                      owner_user_id: col.userId,
-                      owner_label: col.userId ? col.label : (col.label === GENERAL ? GENERAL : col.label),
-                      text,
-                    }),
-                  )
-                }
-                busy={busyId === `add-${col.key}`}
-              />
-            )}
+                  {/* Ekleme satırı — satır aynı alt sütuna (role) düşer */}
+                  {canWrite(col) && (
+                    <AddRow
+                      onAdd={(text) =>
+                        run(`add-${g.key}`, () =>
+                          createOpenItem({
+                            owner_user_id: col.userId,
+                            owner_label: col.userId ? col.label : (col.label === GENERAL ? GENERAL : col.label),
+                            owner_role: g.role,
+                            text,
+                          }),
+                        )
+                      }
+                      busy={busyId === `add-${g.key}`}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         ))}
       </div>

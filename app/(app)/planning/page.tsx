@@ -9,7 +9,7 @@ import { maybeDatabaseSetupRequired } from "@/lib/utils/supabase-errors";
 import { PlanningBoard } from "@/components/planning/PlanningBoard";
 import type {
   PlanningMeeting, PlanningTopic, PlanningMeetingWithTopics, PlanningTemplate,
-  PlanningOpenItem,
+  PlanningOpenItem, PlanningWeekMatrixRow, PlanningProcessStep,
 } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -121,6 +121,24 @@ export default async function PlanningPage({
     .order("position", { ascending: true });
   const openItems = (openItemsRes.data ?? []) as unknown as PlanningOpenItem[];
 
+  // Takvimin altındaki "Tarih/Saat × departman" matrisi — haftaya bağlı.
+  const matrixRes = await supabase
+    .from("planning_week_matrix")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .eq("week_start", weekStart)
+    .order("weekday", { ascending: true })
+    .order("position", { ascending: true });
+  const matrix = (matrixRes.data ?? []) as unknown as PlanningWeekMatrixRow[];
+
+  // "Adımlar / Operasyon Kurgusu" — haftadan bağımsız sabit akış.
+  const stepsRes = await supabase
+    .from("planning_process_steps")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .order("position", { ascending: true });
+  const processSteps = (stepsRes.data ?? []) as unknown as PlanningProcessStep[];
+
   return (
     <PlanningBoard
       meetings={withTopics}
@@ -133,6 +151,10 @@ export default async function PlanningPage({
       currentUserId={user.id}
       openItems={openItems}
       openItemsAvailable={!openItemsRes.error}
+      matrix={matrix}
+      matrixAvailable={!matrixRes.error}
+      processSteps={processSteps}
+      processStepsAvailable={!stepsRes.error}
     />
   );
 }

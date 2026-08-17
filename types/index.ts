@@ -330,12 +330,48 @@ export type PlanningOpenItem = {
   workspace_id: string;
   owner_user_id: string | null;   // sistemde kullanıcısı olan sahip
   owner_label: string | null;     // kullanıcı yoksa serbest ad ("EF", "Genel")
+  owner_role: string | null;      // kişinin alt sütunu ("Sales / Online") (20240301)
   text: string;
   category: PlanningCategory | null;
   done: boolean;
   done_at: string | null;
   position: number;
   task_id: string | null;         // göreve dönüştürüldüyse ilgili görev
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Takvimin altındaki "Tarih/Saat × departman" matrisi (20240301 migration).
+ *  Satır = haftanın günü (Mon 09:00 … Fri 09:00), sütun = departman. */
+export type PlanningWeekMatrixRow = {
+  id: string;
+  workspace_id: string;
+  week_start: string;          // haftanın pazartesisi "YYYY-MM-DD"
+  weekday: number;             // 0=Pazartesi … 6=Pazar
+  time_slot: string;           // "09:00"
+  category: PlanningCategory;  // sütun
+  text: string | null;
+  kim: string | null;
+  participant_ids: string[];
+  position: number;            // sütun sırası (Excel'deki soldan sağa)
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** "Adımlar / Operasyon Kurgusu / Kim" (20240301 migration).
+ *  Haftaya bağlı DEĞİL — markanın sabit iş akışı. */
+export type PlanningProcessStep = {
+  id: string;
+  workspace_id: string;
+  position: number;            // 1, 2, 3…
+  title: string;
+  note: string | null;
+  kim: string | null;
+  participant_ids: string[];
   created_by: string | null;
   updated_by: string | null;
   created_at: string;
