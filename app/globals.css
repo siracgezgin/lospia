@@ -19,7 +19,7 @@
   --border:        #dfe3e9;
   --border-strong: #c9cfd8;
 
-  /* Text — Manrope ince kurulduğu için tonlar bir kademe koyu tutulur;
+  /* Text — gövde tonları bir kademe koyu tutulur;
      hiyerarşi korunur (primary > muted > subtle) ama hepsi net okunur. */
   --text:          #15191f;   /* primary */
   --text-muted:    #495160;   /* secondary */
@@ -88,11 +88,11 @@
   --color-overdue:       var(--overdue);
   --color-urgent:        var(--urgent);
 
-  --font-sans: var(--font-manrope), ui-sans-serif, -apple-system,
+  --font-sans: var(--font-sans-face), ui-sans-serif, -apple-system,
     BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
     "Noto Sans", sans-serif;
 
-  /* Manrope variable ekseni: taban 460'ın üstünde hiyerarşi net kalsın diye
+  /* Variable eksen: taban ağırlığın üstünde hiyerarşi net kalsın diye
      medium/semibold/bold bir kademe dolgun (560/640/740). */
   --font-weight-medium:   560;
   --font-weight-semibold: 640;
@@ -167,13 +167,13 @@ body {
   background: var(--app-bg);
   color: var(--text);
   font-family: var(--font-sans);
-  /* Manrope 400 sistem fontundan ince görünür: variable eksende 460 taban —
-     gövde metni dolgun, font-medium(500)/semibold(600) hiyerarşisi korunur.
-     (2026-07-27: 500/tracking-0 denemesi geri alındı — kullanıcı önceki
-     render'ı tercih etti; bu blok bilinçli olarak eski ayardır, değiştirme.) */
-  font-weight: 460;
-  letter-spacing: -0.004em;
-  -webkit-font-smoothing: antialiased;
+  /* Inter ekran için çizilmiştir; Manrope'un 460 tabanına gerek yok — 430
+     dolgun ama ağır değil, font-medium(500)/semibold(600) hiyerarşisi korunur.
+     -webkit-font-smoothing KASITLI OLARAK YOK: macOS'ta harfleri inceltip
+     "bulanık" görünmesine sebep oluyordu (2026-08-17 kullanıcı geri bildirimi).
+     Alt piksel render varsayılanı daha keskin. */
+  font-weight: 430;
+  letter-spacing: -0.006em;
   text-rendering: optimizeLegibility;
 }
 

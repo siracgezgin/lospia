@@ -79,7 +79,8 @@ types/
 - Tek terminoloji: aynı ekran her yerde aynı adla (registry MODULE_DIRECTORY ↔
   AppHeader PAGE_TITLES ↔ sidebar ↔ page metadata.title).
 - `app/(app)/layout.tsx`'e sorgu EKLEME — kabuk her gezinmede çalışır.
-- Font Manrope (variable); hizalı rakamlar `tabular-nums`. Animasyonlar
+- Font Inter (variable, `--font-sans-face`); hizalı rakamlar `tabular-nums`.
+  `-webkit-font-smoothing` KULLANMA — macOS'ta metni bulanıklaştırıyor. Animasyonlar
   globals.css'teki `anim-*`/`stagger-children` sınıflarıyla (yeni bağımlılık yok).
 - tailwind-merge cn() içindeki border-l renklerini yutar → renkli sol kenarı
   cn() dışında ver ya da absolute 3px bar kullan.

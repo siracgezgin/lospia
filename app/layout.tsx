@@ -1,15 +1,18 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { Manrope } from "next/font/google";
+import { Inter } from "next/font/google";
 import { getAppBrandForHost } from "@/lib/branding";
 import "./globals.css";
 
-// Ürün yazı yüzü — Manrope (variable). Geometrik-hümanist, Türkçe (latin-ext)
-// tam destekli, tabular rakamları güçlü; sistem fontuna göre belirgin karakter
-// kazandırır. next/font self-host eder: harici istek yok, CLS yok.
-const manrope = Manrope({
+// Ürün yazı yüzü — Inter (variable). Ekran için çizilmiş nötr grotesk: küçük
+// puntoda ve yoğun tablolarda (planlama ızgarası, maliyet tablosu) Manrope'un
+// geometrik yuvarlaklığından daha okunaklı, kurumsal panel standardı. Türkçe
+// (latin-ext) tam destekli, tabular rakamları güçlü.
+// next/font self-host eder: harici istek yok, CLS yok.
+// (2026-08-17 kullanıcı kararı: Manrope → Inter + antialiasing kapatıldı.)
+const inter = Inter({
   subsets: ["latin", "latin-ext"],
-  variable: "--font-manrope",
+  variable: "--font-sans-face",
   display: "swap",
 });
 
@@ -72,7 +75,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="tr" className={`h-full antialiased ${manrope.variable}`} suppressHydrationWarning>
+    <html lang="tr" className={`h-full ${inter.variable}`} suppressHydrationWarning>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );
