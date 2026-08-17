@@ -26,21 +26,25 @@ export function KimBadges({ ids, kim, memberNames, className }: Props) {
   if (!list.length && !extra.length) return null;
 
   return (
-    <span className={cn("ml-1 inline-flex flex-wrap items-center gap-0.5 align-middle", className)}>
+    <span className={cn("ml-1 inline-flex flex-wrap items-center gap-1 align-middle", className)}>
+      {/* Sistem üyesi — marka rengiyle dolu rozet. Konu metninin içinde
+          kaybolmasın diye kontrast bilinçli olarak yüksek tutulur. */}
       {list.map((id) => (
         <span
           key={id}
           title={memberNames[id] ?? ""}
-          className="rounded bg-ink/[0.07] px-1 text-[10px] font-semibold leading-[15px] text-ink/70"
+          className="inline-flex items-center rounded-md bg-brand px-1.5 py-px text-[10.5px] font-bold uppercase leading-[15px] tracking-wide text-white"
         >
           {initialsOf(memberNames[id])}
         </span>
       ))}
+      {/* Sistemde kullanıcısı olmayan kişi (Meral, Nihal Hoca) — okunur ama
+          üyeden ayrışsın diye çerçeveli/açık zemin. */}
       {extra.map((name) => (
         <span
           key={name}
           title={`${name} — sistemde kullanıcı değil`}
-          className="rounded bg-ink/[0.07] px-1 text-[10px] font-medium leading-[15px] text-ink/55"
+          className="inline-flex items-center rounded-md border border-brand-ring/60 bg-brand-soft px-1.5 py-px text-[10.5px] font-semibold leading-[15px] text-brand-strong"
         >
           {name}
         </span>

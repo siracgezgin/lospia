@@ -156,8 +156,22 @@ export async function saveMeetingTopics(
     .maybeSingle();
   if (!meeting) return { error: NOT_FOUND };
 
-  // Boş olmayan konular (metin veya kişi var).
-  const kept = parsed.data.filter((t) => nn(t.text) || (t.participant_ids?.length ?? 0) > 0);
+  // Hangi konular tutulur:
+  //   * metni olan  → her zaman,
+  //   * metinsiz    → YALNIZ zaten kayıtlıysa (t.id).
+  //
+  // Metinsiz-ama-kayıtlı satırlar Aslı Hanım'ın Excel'inden geliyor (metin
+  // hücresi boş, yalnız "Kim" dolu). Bunların ham `kim` metni düzenleyiciye
+  // hiç yüklenmiyor ve yerelde üyeye de çözülmüyor; participant_ids'e bakarak
+  // karar vermek onları SESSİZCE SİLİYORDU. Varlık ölçütü artık id.
+  //
+  // Yeni taslakta metin şart: düzenleyici her açılışta 3 boş satır üretiyor,
+  // boş satırda yanlışlıkla kişi seçilip kaydedilince ızgarada yalnız bir
+  // rozetten ibaret HAYALET "Konu" satırı oluşuyordu.
+  //
+  // Silme yolu değişmedi: çöp kutusu düğmesi satırı taslaktan çıkarır, bu
+  // fonksiyon da gönderilmeyen mevcut konuları siler.
+  const kept = parsed.data.filter((t) => nn(t.text) || !!t.id);
   const keepIds = kept.map((t) => t.id).filter((id): id is string => !!id);
 
   // Bu toplantıda tutulmayan mevcut konuları sil.
