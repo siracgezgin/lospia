@@ -12,6 +12,7 @@ import {
   createOpenItem, updateOpenItem, setOpenItemDone, deleteOpenItem, assignOpenItemAsTask,
 } from "@/lib/actions/planning-open-items";
 import type { Member } from "./MemberMultiSelect";
+import { PlanningSection } from "./PlanningSection";
 import type { PlanningOpenItem } from "@/types";
 
 interface Props {
@@ -131,24 +132,19 @@ export function OpenItemsBoard({ items, members, currentUserId, isAdmin, availab
 
   if (!available) {
     return (
-      <section className="mt-6">
-        <SectionHeader open={0} done={0} showDone={showDone} onToggleDone={() => {}} disabled />
+      <Wrap open={0}>
         <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] font-medium text-amber-900">
           Bu bölüm için veritabanı güncellemesi bekleniyor (planning_open_items).
         </p>
-      </section>
+      </Wrap>
     );
   }
 
   return (
-    <section className="mt-6">
-      <SectionHeader
-        open={totalOpen}
-        done={totalDone}
-        showDone={showDone}
-        onToggleDone={() => setShowDone((s) => !s)}
-      />
-
+    <Wrap
+      open={totalOpen}
+      doneToggle={<DoneToggle done={totalDone} showDone={showDone} onToggle={() => setShowDone((s) => !s)} />}
+    >
       {error && (
         <div className="anim-fade-down mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] font-medium text-red-700">
           {error}
@@ -252,49 +248,62 @@ export function OpenItemsBoard({ items, members, currentUserId, isAdmin, availab
         Bu liste haftadan bağımsızdır — konu tamamlanana kadar durur. Herkes kendi sütununa yazar
         {isAdmin ? "; yönetici tüm sütunlara müdahale eder ve “Bildir” ile konuyu göreve dönüştürür." : "."}
       </p>
-    </section>
+    </Wrap>
   );
 }
 
-function SectionHeader({
-  open, done, showDone, onToggleDone, disabled,
-}: { open: number; done: number; showDone: boolean; onToggleDone: () => void; disabled?: boolean }) {
+/** Bloğun kabuğu — haftaya bağlı OLMAYAN açık konu defteri. */
+function Wrap({
+  open, doneToggle, children,
+}: { open: number; doneToggle?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-      <h2 className="inline-flex items-center gap-2 text-[15px] font-semibold tracking-tight text-ink">
-        <ClipboardList size={16} className="text-muted" />
-        Tamamlanmamış Eksik Konular
-        {!disabled && <span className="rounded-md bg-surface-muted px-1.5 py-px text-[11px] font-semibold tabular-nums text-muted">{open}</span>}
-      </h2>
-      {!disabled && (
-        /* Aslı Hanım (2026-08-19) bu düğmeyi ekranda BULAMADI: "Şurada
-           tamamlananlar kısmı var, görüyorsunuz küçük bir buton… Nerede ya?"
-           Artık dolu yeşil bir anahtar: yükseklik 8→9, sayaç ayrı rozet,
-           basılıyken zemin doluyor. Telefonda tam genişlik. */
-        <button
-          onClick={onToggleDone}
-          aria-pressed={showDone}
-          className={cn(
-            "inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border px-3 text-[13px] font-semibold transition-all duration-150 active:scale-[0.98] sm:w-auto",
-            showDone
-              ? "border-emerald-500 bg-emerald-500 text-white hover:bg-emerald-600"
-              : "border-emerald-200 bg-emerald-50 text-emerald-800 hover:border-emerald-400 hover:bg-emerald-100",
-          )}
-          title={showDone ? "Tamamlananları gizle" : "Tamamlanan konuları göster — üstü çizili olarak listenin altına iner"}
-        >
-          <CheckCircle2 size={15} className="shrink-0" />
-          {showDone ? "Tamamlananları gizle" : "Tamamlananlar"}
-          <span
-            className={cn(
-              "rounded-md px-1.5 py-px text-[11.5px] font-bold tabular-nums",
-              showDone ? "bg-white/20 text-white" : "bg-emerald-600 text-white",
-            )}
-          >
-            {done}
+    <PlanningSection
+      step={3}
+      title="Tamamlanmamış Eksik Konular"
+      description="Haftaya bağlı değildir — kişi bazlı açık konu defteri, konu tamamlanana kadar durur."
+      icon={ClipboardList}
+      rightSlot={
+        <>
+          <span className="rounded-md bg-surface-muted px-2 py-1 text-[12px] font-semibold tabular-nums text-muted">
+            {open} açık
           </span>
-        </button>
+          {doneToggle}
+        </>
+      }
+    >
+      {children}
+    </PlanningSection>
+  );
+}
+
+/** "Tamamlananlar" anahtarı — Aslı Hanım bunu ekranda BULAMAMIŞTI
+ *  ("küçük bir buton… nerede ya?"), o yüzden dolu yeşil ve sayaçlı. */
+function DoneToggle({
+  done, showDone, onToggle,
+}: { done: number; showDone: boolean; onToggle: () => void }) {
+  return (
+    <button
+      onClick={onToggle}
+      aria-pressed={showDone}
+      className={cn(
+        "inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border px-3 text-[13px] font-semibold transition-all duration-150 active:scale-[0.98]",
+        showDone
+          ? "border-emerald-500 bg-emerald-500 text-white hover:bg-emerald-600"
+          : "border-emerald-200 bg-emerald-50 text-emerald-800 hover:border-emerald-400 hover:bg-emerald-100",
       )}
-    </div>
+      title={showDone ? "Tamamlananları gizle" : "Tamamlanan konuları göster — üstü çizili olarak listenin altına iner"}
+    >
+      <CheckCircle2 size={15} className="shrink-0" />
+      {showDone ? "Tamamlananları gizle" : "Tamamlananlar"}
+      <span
+        className={cn(
+          "rounded-md px-1.5 py-px text-[11.5px] font-bold tabular-nums",
+          showDone ? "bg-white/20 text-white" : "bg-emerald-600 text-white",
+        )}
+      >
+        {done}
+      </span>
+    </button>
   );
 }
 

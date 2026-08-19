@@ -2,6 +2,7 @@
 
 import { Workflow } from "lucide-react";
 import { KimBadges } from "./KimBadges";
+import { PlanningSection } from "./PlanningSection";
 import type { PlanningProcessStep } from "@/types";
 
 interface Props {
@@ -19,29 +20,26 @@ interface Props {
 export function ProcessSteps({ steps, memberNames, available }: Props) {
   if (!available) {
     return (
-      <section className="mt-6">
-        <Header />
+      <Wrap>
         <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] font-medium text-amber-900">
           Bu bölüm için veritabanı güncellemesi bekleniyor (planning_process_steps).
         </p>
-      </section>
+      </Wrap>
     );
   }
 
   if (steps.length === 0) {
     return (
-      <section className="mt-6">
-        <Header />
+      <Wrap>
         <p className="rounded-xl border border-line bg-surface px-3 py-2 text-[12.5px] text-subtle">
           Henüz adım tanımlanmadı.
         </p>
-      </section>
+      </Wrap>
     );
   }
 
   return (
-    <section className="mt-6">
-      <Header />
+    <Wrap>
       <ol className="overflow-hidden rounded-2xl border border-line-strong bg-surface shadow-card">
         {steps.map((s) => (
           <li
@@ -61,15 +59,20 @@ export function ProcessSteps({ steps, memberNames, available }: Props) {
           </li>
         ))}
       </ol>
-    </section>
+    </Wrap>
   );
 }
 
-function Header() {
+/** Bloğun kabuğu — haftaya bağlı OLMAYAN sabit akış. */
+function Wrap({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="mb-2 inline-flex items-center gap-2 text-[15px] font-semibold tracking-tight text-ink">
-      <Workflow size={16} className="text-muted" />
-      Operasyon Kurgusu
-    </h2>
+    <PlanningSection
+      step={4}
+      title="Operasyon Kurgusu"
+      description="Haftadan bağımsız sabit adımlar — işin hangi sırayla kimden kime geçtiği."
+      icon={Workflow}
+    >
+      {children}
+    </PlanningSection>
   );
 }

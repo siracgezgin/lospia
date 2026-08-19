@@ -208,7 +208,7 @@ export function CollectionViewer({ isAdmin }: Props) {
                         className={cn(
                           "border-b border-line bg-surface-muted px-3 py-2 text-left font-semibold whitespace-nowrap",
                           sensitive ? "text-[#a05f1c]" : "text-muted",
-                          i === 0 && "sticky left-0 z-30 bg-surface-muted",
+                          i === 0 && "sticky left-0 z-20 bg-surface-muted",
                         )}
                       >
                         <span className="inline-flex items-center gap-1">

@@ -6,6 +6,7 @@ import { AccessDenied } from "@/components/modules/AccessDenied";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { SetupRequiredNotice } from "@/components/modules/SetupRequiredNotice";
 import { maybeDatabaseSetupRequired } from "@/lib/utils/supabase-errors";
+import { ensureWeekScaffold } from "@/lib/planning/scaffold";
 import { PlanningBoard } from "@/components/planning/PlanningBoard";
 import { CalendarViewSwitch } from "@/components/planning/CalendarViewSwitch";
 import { asCalendarScale } from "@/lib/planning/calendar-scale";
@@ -167,6 +168,12 @@ export default async function CalendarPage({
   const isoDays = days.map((d) => format(d, "yyyy-MM-dd"));
   const weekStart = isoDays[0];
   const weekEnd = isoDays[6];
+
+  // Her hafta AYNI iskeletle açılır — boşsa şablondan sessizce kurulur.
+  // (Aslı Hanım, 2026-08-20: "Ben tek tek uğraşmayayım.")
+  await ensureWeekScaffold(supabase, {
+    workspaceId, userId: user.id, isAdmin, weekStart, weekEnd,
+  });
 
   const meetingsRes = await supabase
     .from("planning_meetings")

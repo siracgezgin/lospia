@@ -55,7 +55,7 @@ export function PlanningWeekGrid({
     <div className="hidden overflow-auto overscroll-x-contain rounded-2xl border border-line-strong bg-surface shadow-card lg:block lg:max-h-[calc(100dvh-13rem)]">
       <div style={{ minWidth }}>
         {/* GÜN + TARİH — dikey kaydırmada üstte kalır */}
-        <div className="sticky top-0 z-30 bg-surface-muted">
+        <div className="sticky top-0 z-20 bg-surface-muted">
           <div className="grid border-b border-hairline" style={{ gridTemplateColumns: cols }}>
             <HeadCell>Gün</HeadCell>
             {weekDays.map((iso, i) => (

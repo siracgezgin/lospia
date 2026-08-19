@@ -169,7 +169,15 @@ export function AppHeader({
   const showProfileOnMobile = isAdmin && !onProfile;
 
   return (
-    <header className="relative z-30 h-14 bg-surface border-b border-line flex items-center justify-between px-5 shrink-0">
+    /* KATMAN SIRASI (tek yerde tanımlı):
+         z-50  modal / çekmece / açılır liste (portal)
+         z-40  uygulama kabuğu — bu başlık + mobil alt gezinme
+         z-20  sayfa içi yapışkan başlıklar (ızgara satırı, görev aksiyon çubuğu)
+         z-10  kart içi yapışkanlar
+       Başlık eskiden z-30'daydı; Planlama ızgarasının yapışkan satırı da
+       z-30'daydı ve DOM'da sonra geldiği için profil menüsünün ÜSTÜNE
+       çiziliyordu — menü kırpılmış görünüyordu (2026-08-20 geri bildirimi). */
+    <header className="relative z-40 h-14 bg-surface border-b border-line flex items-center justify-between px-5 shrink-0">
       <div className="flex items-center gap-2.5 min-w-0">
         {/* key={pathname} — rota değişince başlık yumuşakça belirir. */}
         <h1

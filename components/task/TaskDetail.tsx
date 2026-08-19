@@ -200,7 +200,7 @@ function TaskEditor({
     <>
       {/* ── Top action bar: back link + explicit Save / Cancel ─────────────── */}
       <div className={cn(
-        "sticky top-0 z-30 -mx-4 px-4 py-2 bg-app/90 backdrop-blur border-b border-line/60 flex items-center justify-between gap-3 flex-wrap",
+        "sticky top-0 z-20 -mx-4 px-4 py-2 bg-app/90 backdrop-blur border-b border-line/60 flex items-center justify-between gap-3 flex-wrap",
         // Keep the drawer's pinned close button clear of the action buttons.
         drawer && "pr-12",
       )}>

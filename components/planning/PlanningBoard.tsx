@@ -1,16 +1,12 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format, parseISO, addDays, subDays } from "date-fns";
 import { tr } from "date-fns/locale";
-import {
-  CalendarRange, ChevronLeft, ChevronRight, CalendarPlus, CopyPlus, Settings2, Loader2,
-} from "lucide-react";
-import { cn } from "@/lib/utils/cn";
+import { CalendarRange, ChevronLeft, ChevronRight, Settings2 } from "lucide-react";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { PLANNING_BANDS, TOPIC_ROWS, WEEKDAY_LONG_TR } from "@/lib/planning/bands";
-import { applyTemplatesToWeek, copyPreviousWeek } from "@/lib/actions/planning";
 import { MeetingEditor } from "./MeetingEditor";
 import { TemplateManager } from "./TemplateManager";
 import { OpenItemsBoard } from "./OpenItemsBoard";
@@ -55,21 +51,6 @@ export function PlanningBoard({
     { meeting: PlanningMeetingWithTopics | null; day: string; slot: string; dayLabel: string } | null
   >(null);
   const [showTemplates, setShowTemplates] = useState(false);
-  const [notice, setNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
-  const [isWorking, startWork] = useTransition();
-
-  function run(
-    fn: () => Promise<{ ok: true; created: number } | { error: string }>,
-    okText: (_n: number) => string,
-  ) {
-    setNotice(null);
-    startWork(async () => {
-      const res = await fn();
-      if ("error" in res) { setNotice({ kind: "error", text: res.error }); return; }
-      setNotice({ kind: "ok", text: okText(res.created) });
-      router.refresh();
-    });
-  }
 
   // (gün|saat) → toplantılar
   const byCell = useMemo(() => {
@@ -147,35 +128,18 @@ export function PlanningBoard({
           <div className="flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2">
             {/* Tek takvimin ölçeği — Hafta · Ay · Yıl (Aslı Hanım, 2026-08-19). */}
             <CalendarViewSwitch scale="hafta" />
+            {/* "Haftayı kur" ve "Geçen haftadan" KALDIRILDI (Aslı Hanım,
+                2026-08-20: "Bu butonlara gerek var mı, kafa karıştırmaya gerek
+                var mı?"). Hafta iskeleti artık sayfa açılırken şablondan
+                kendiliğinden kuruluyor (lib/planning/scaffold.ts), dolayısıyla
+                bu düğmelerin ve "hafta zaten kurulu" gibi bildirimlerin bir
+                işlevi kalmadı. Aksiyonlar (applyTemplatesToWeek /
+                copyPreviousWeek) yerinde duruyor — geri açmak tek satır.
+                "Şablonlar" kalıyor: haftanın ritmini değiştirmenin TEK yeri. */}
             {isAdmin && (
-              <>
-                <button
-                  onClick={() => run(
-                    () => applyTemplatesToWeek(weekStart),
-                    (n) => n > 0 ? `${n} toplantı şablondan kuruldu.` : "Hafta zaten kurulu — yeni eklenen olmadı.",
-                  )}
-                  disabled={isWorking}
-                  className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-brand px-2.5 text-[13px] font-medium text-white transition-all duration-150 hover:bg-brand-strong active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60 sm:px-3"
-                  title="Aktif şablonlardan bu haftanın toplantılarını kur"
-                >
-                  {isWorking ? <Loader2 size={14} className="animate-spin" /> : <CalendarPlus size={14} />}
-                  <span className="hidden sm:inline">Haftayı kur</span>
-                </button>
-                <button
-                  onClick={() => run(
-                    () => copyPreviousWeek(weekStart),
-                    (n) => n > 0 ? `${n} toplantı geçen haftadan kopyalandı.` : "Kopyalanacak yeni toplantı yok — hafta zaten dolu.",
-                  )}
-                  disabled={isWorking}
-                  className={btn}
-                  title="Geçen haftanın toplantılarını (konular hariç) bu haftaya kopyala"
-                >
-                  <CopyPlus size={14} /> <span className="hidden md:inline">Geçen haftadan</span>
-                </button>
-                <button onClick={() => setShowTemplates(true)} className={btn} title="Haftanın tekrar eden ritmini tanımla">
-                  <Settings2 size={14} /> <span className="hidden md:inline">Şablonlar</span>
-                </button>
-              </>
+              <button onClick={() => setShowTemplates(true)} className={btn} title="Haftanın tekrar eden ritmini tanımla — değişiklik tüm haftalara uygulanır">
+                <Settings2 size={14} /> <span className="hidden md:inline">Şablonlar</span>
+              </button>
             )}
             <span className="mx-0.5 hidden h-6 w-px bg-line sm:block" />
             <div className="inline-flex h-9 shrink-0 items-stretch overflow-hidden rounded-lg border border-line bg-surface">
@@ -204,20 +168,15 @@ export function PlanningBoard({
         }
       />
 
-      {notice && (
-        <div
-          className={cn(
-            "anim-fade-down mb-3 rounded-lg border px-3 py-2 text-[13px] font-medium shadow-card",
-            notice.kind === "ok"
-              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-              : "border-red-200 bg-red-50 text-red-700",
-          )}
-        >
-          {notice.text}
-        </div>
-      )}
-
-      {/* Blok 1 — takvim. Geniş ekranda Excel ızgarası, dar ekranda gün gün liste. */}
+      {/* Blok 1 — takvim. Geniş ekranda Excel ızgarası, dar ekranda gün gün liste.
+          Sayfa dört ayrı bloktan oluşuyor; hepsi numaralı ve ayraçlı başlıkla
+          işaretli (bkz. PlanningSection) — "bunlar ayrı şeyler" bakışta okunsun.
+          Bu birinci blok sayfa başlığının hemen altında olduğu için kendi
+          ayracını taşımaz, yalnız numarasını gösterir. */}
+      <div className="mb-2 flex items-center gap-2">
+        <span className="text-[12px] font-bold tabular-nums text-subtle">1</span>
+        <h2 className="text-[16px] font-semibold tracking-tight text-ink">Haftalık Toplantı Izgarası</h2>
+      </div>
       <PlanningWeekGrid
         weekDays={weekDays}
         byCell={byCell}

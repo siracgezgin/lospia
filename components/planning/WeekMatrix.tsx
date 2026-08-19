@@ -1,6 +1,7 @@
 "use client";
 
 import { Grid2X2 } from "lucide-react";
+import { PlanningSection } from "./PlanningSection";
 import { cn } from "@/lib/utils/cn";
 import { categoryMeta } from "@/lib/planning/categories";
 import { MATRIX_COLUMNS, MATRIX_WEEKDAYS, WEEKDAY_SHORT_EN, WEEKDAY_LONG_TR } from "@/lib/planning/bands";
@@ -22,12 +23,11 @@ interface Props {
 export function WeekMatrix({ rows, memberNames, available }: Props) {
   if (!available) {
     return (
-      <section className="mt-6">
-        <Header />
+      <Wrap>
         <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] font-medium text-amber-900">
           Bu bölüm için veritabanı güncellemesi bekleniyor (planning_week_matrix).
         </p>
-      </section>
+      </Wrap>
     );
   }
 
@@ -47,9 +47,7 @@ export function WeekMatrix({ rows, memberNames, available }: Props) {
   const minWidth = 92 + cols.length * 150;
 
   return (
-    <section className="mt-6">
-      <Header />
-
+    <Wrap>
       {/* Geniş ekran — Excel tablosu */}
       <div className="hidden overflow-x-auto overscroll-x-contain rounded-2xl border border-line-strong bg-surface shadow-card lg:block">
         <div style={{ minWidth }}>
@@ -125,15 +123,20 @@ export function WeekMatrix({ rows, memberNames, available }: Props) {
           );
         })}
       </div>
-    </section>
+    </Wrap>
   );
 }
 
-function Header() {
+/** Bloğun kabuğu — takvim ızgarasından AYRI olduğunu gösteren ayraçlı başlık. */
+function Wrap({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="mb-2 inline-flex items-center gap-2 text-[15px] font-semibold tracking-tight text-ink">
-      <Grid2X2 size={16} className="text-muted" />
-      Tarih / Saat — Departman Dağılımı
-    </h2>
+    <PlanningSection
+      step={2}
+      title="Tarih / Saat — Departman Dağılımı"
+      description="Haftanın hangi gününde hangi departmanın ne üzerinde çalıştığı — yukarıdaki toplantı ızgarasından ayrı bir tablodur."
+      icon={Grid2X2}
+    >
+      {children}
+    </PlanningSection>
   );
 }
