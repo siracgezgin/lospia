@@ -5,6 +5,10 @@
  * olmayan bir alan burada hiç listelenmez.
  * KURAL 2: tek isim — buradaki `title`, sidebar etiketi ve AppHeader
  * PAGE_TITLES ile birebir aynıdır. Aynı rotaya ikinci bir isimle kart açılmaz.
+ * KURAL 4 (2026-08-20): sayfa ADLARI İNGİLİZCE, içerik Türkçe. Aslı Hanım:
+ * "Bunu İngilizce yapabiliriz, Türkçe olması şart değil, o kadar İngilizce
+ * herkes biliyor." Karma dil profesyonel görünmüyor — başlık/etiket seviyesi
+ * tamamen İngilizce, açıklama ve gövde metni tamamen Türkçe.
  * KURAL 3: bir rota bu dizinde en fazla BİR kez geçer. Segment/filtre
  * varyantları (?segment=, ?provider=) ayrı kart olmaz; hedef sayfanın kendi
  * filtresi olarak yaşar.
@@ -56,11 +60,11 @@ export interface ModuleEntry {
 }
 
 export const MODULE_GROUP_TITLES: Record<ModuleGroup, string> = {
-  calisma: "Çekirdek Operasyon",
-  urun: "Ürün",
-  ofis: "Ofis Merkezi",
-  iliskiler: "İlişkiler",
-  yonetim: "Yönetim",
+  calisma: "Core Operations",
+  urun: "Product",
+  ofis: "Office",
+  iliskiler: "Relations",
+  yonetim: "Admin",
 };
 
 export const MODULE_DIRECTORY: ModuleEntry[] = [
@@ -76,7 +80,7 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
   },
   {
     key: "board",
-    title: "Pano",
+    title: "Board",
     description: "Görev panosu — sürükle-bırak durum takibi.",
     href: "/board",
     icon: Kanban,
@@ -85,7 +89,7 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
   },
   {
     key: "admin-board",
-    title: "Yönetici Pano",
+    title: "Admin Board",
     description: "Yönetici görünümü — sorumluya göre kolonlar ve gizli görevler.",
     href: "/admin-board",
     icon: ShieldCheck,
@@ -94,7 +98,7 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
   },
   {
     key: "list",
-    title: "Liste",
+    title: "List",
     description: "Tüm görevler tablo halinde — filtrele, sırala, düzenle.",
     href: "/list",
     icon: List,
@@ -103,7 +107,7 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
   },
   {
     key: "dashboard",
-    title: "Raporlar",
+    title: "Reports",
     description: "Departman ve durum bazlı özetler, gecikme analizi.",
     href: "/dashboard",
     icon: LayoutDashboard,
@@ -114,7 +118,7 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
   // ── Ürün — koleksiyon / föy çekirdeği ─────────────────────────────────────
   {
     key: "collection",
-    title: "Koleksiyon",
+    title: "Collection",
     description: "Üretim föyleri, kategoriler, ölçüler ve fotoğraflar.",
     href: "/collection",
     icon: Boxes,
@@ -123,7 +127,7 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
   },
   {
     key: "maliyet",
-    title: "Maliyet",
+    title: "Cost",
     description: "Ürün başına birim maliyet, kalem kalem: kumaş, dikim, fermuar, kalıp, genel giderler.",
     href: "/collection/maliyet",
     icon: Calculator,
@@ -132,7 +136,7 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
   },
   {
     key: "odeme",
-    title: "Ödeme Tablosu",
+    title: "Payment Table",
     description: "Usta başına ödeme — hangi usta hangi ürünü dikti, ne kadar ödenecek.",
     href: "/collection/odeme",
     icon: HandCoins,
@@ -143,7 +147,7 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
   // ── Ofis Merkezi — Word/Excel işlerinin sistemdeki karşılığı ──────────────
   {
     key: "documents",
-    title: "Dokümanlar",
+    title: "Documents",
     description: "Operasyon metinleri, format e-postalar ve Drive bağlantıları.",
     href: "/documents",
     icon: FolderOpen,
@@ -152,7 +156,7 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
   },
   {
     key: "templates",
-    title: "Şablonlar",
+    title: "Templates",
     description: "Hazır iletişim formatları — kopyala, uyarla, gönder.",
     href: "/templates",
     icon: FileText,
@@ -161,7 +165,7 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
   },
   {
     key: "sheets",
-    title: "Tablolar",
+    title: "Sheets",
     description: "Excel/CSV düzenleri ve operasyon tabloları.",
     href: "/sheets",
     icon: Table2,
@@ -170,7 +174,7 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
   },
   {
     key: "creative",
-    title: "Kreatif Linkler",
+    title: "Creative Links",
     description: "Canva, Drive, Figma ve lookbook bağlantıları tek listede.",
     href: "/creative",
     icon: Palette,
@@ -192,7 +196,7 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
   // ── Yönetim — yalnız yönetici (veri düzeyinde de kapalı) ──────────────────
   {
     key: "finance",
-    title: "Finans",
+    title: "Finance",
     description: "Ödeme takibi — kime, ne kadar, ne zaman.",
     href: "/finance",
     icon: Wallet,
@@ -201,7 +205,7 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
   },
   {
     key: "activity",
-    title: "Aktivite Günlüğü",
+    title: "Activity Log",
     description: "Kim, ne zaman, ne yaptı — tüm görev hareketleri.",
     href: "/activity",
     icon: ScrollText,
@@ -210,7 +214,7 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
   },
   {
     key: "archive",
-    title: "Arşiv",
+    title: "Archive",
     description: "Arşivlenen ve eski tamamlanmış görevler.",
     href: "/archive",
     icon: Archive,
@@ -219,7 +223,7 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
   },
   {
     key: "trash",
-    title: "Çöp Kutusu",
+    title: "Trash",
     description: "Silinen görevler — geri al ya da kalıcı sil.",
     href: "/trash",
     icon: Trash2,
@@ -228,7 +232,7 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
   },
   {
     key: "settings",
-    title: "Ayarlar",
+    title: "Settings",
     description: "Üyeler, davetler, departmanlar ve çalışma alanı.",
     href: "/settings",
     icon: Settings,

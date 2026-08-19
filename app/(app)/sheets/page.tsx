@@ -34,7 +34,7 @@ export default async function SheetsPage() {
     return (
       <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 lg:px-8">
         <ModulePageHeader
-          title="Tablo Merkezi"
+          title="Sheets"
           description="Excel/CSV düzenlerini ve operasyon tablolarını Lospia içinde güvenli şekilde takip edin."
           icon={Table2}
           secondaryBackHref="/board"

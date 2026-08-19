@@ -48,7 +48,7 @@ type NavItem = {
 // Kural: bir ekran TEK isimle yaşar (lib/modules/registry.ts kanonik kaynak).
 const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   {
-    title: "Çekirdek Operasyon",
+    title: "Core Operations",
     items: [
       // Home Page = kişisel komuta merkezi (bana atananlar + kısayollar).
       // Calendar = TEK takvim: hafta ızgarası + ay + yıl aynı ekranda
@@ -56,39 +56,39 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       // ("buna gerek olmayabilir") — rota duruyor, hub'dan erişilir.
       { href: "/home",        label: "Home Page",      icon: Home,            adminOnly: false },
       { href: "/planning",    label: "Calendar",       icon: CalendarRange,   adminOnly: false },
-      { href: "/board",       label: "Pano",           icon: Kanban,          adminOnly: false },
-      { href: "/dashboard",   label: "Raporlar",       icon: LayoutDashboard, adminOnly: false },
+      { href: "/board",       label: "Board",           icon: Kanban,          adminOnly: false },
+      { href: "/dashboard",   label: "Reports",       icon: LayoutDashboard, adminOnly: false },
     ],
   },
   {
     // Maliyet, Koleksiyon sayfasının içindeki sekmedir — sol bara ikinci
     // giriş verilmez (kullanıcı isteği, 2026-07-27).
-    title: "Ürün",
+    title: "Product",
     items: [
-      { href: "/collection", label: "Koleksiyon", icon: Boxes, adminOnly: false },
+      { href: "/collection", label: "Collection", icon: Boxes, adminOnly: false },
     ],
   },
   {
-    title: "Ofis Merkezi",
+    title: "Office",
     items: [
-      { href: "/documents", label: "Dokümanlar",     icon: FolderOpen, adminOnly: false },
-      { href: "/templates", label: "Şablonlar",      icon: FileText,   adminOnly: false },
-      { href: "/sheets",    label: "Tablolar",       icon: Table2,     adminOnly: false },
-      { href: "/creative",  label: "Kreatif Linkler", icon: Palette,    adminOnly: false },
+      { href: "/documents", label: "Documents",     icon: FolderOpen, adminOnly: false },
+      { href: "/templates", label: "Templates",      icon: FileText,   adminOnly: false },
+      { href: "/sheets",    label: "Sheets",       icon: Table2,     adminOnly: false },
+      { href: "/creative",  label: "Creative Links", icon: Palette,    adminOnly: false },
     ],
   },
   {
-    title: "İlişkiler",
+    title: "Relations",
     items: [
       { href: "/crm", label: "CRM", icon: Contact, adminOnly: false },
     ],
   },
   {
-    title: "Yönetim",
+    title: "Admin",
     items: [
-      { href: "/modules",     label: "Operasyon Modülleri", icon: LayoutGrid,  adminOnly: false },
-      { href: "/admin-board", label: "Yönetici Pano",       icon: ShieldCheck, adminOnly: true  },
-      { href: "/settings",    label: "Ayarlar",             icon: Settings,    adminOnly: true  },
+      { href: "/modules",     label: "Operation Modules", icon: LayoutGrid,  adminOnly: false },
+      { href: "/admin-board", label: "Admin Board",       icon: ShieldCheck, adminOnly: true  },
+      { href: "/settings",    label: "Settings",             icon: Settings,    adminOnly: true  },
     ],
   },
 ];

@@ -100,7 +100,7 @@ export function TrashView({ tasks: initialTasks }: Props) {
           </div>
           <div className="min-w-0">
             <div className="flex items-baseline gap-2">
-              <h1 className="text-xl font-semibold tracking-tight text-ink">Çöp Kutusu</h1>
+              <h1 className="text-xl font-semibold tracking-tight text-ink">Trash</h1>
               <span className="text-sm text-subtle tabular-nums">({tasks.length} görev)</span>
             </div>
             <p className="text-[13px] text-muted">Silinen görevler burada tutulur. Geri yükleyebilir veya kalıcı olarak silebilirsiniz.</p>

@@ -70,7 +70,7 @@ export function ArchiveView({ manuallyArchived, oldCompleted }: Props) {
           </div>
           <div className="min-w-0">
             <div className="flex items-baseline gap-2">
-              <h1 className="text-xl font-semibold tracking-tight text-ink">Arşiv</h1>
+              <h1 className="text-xl font-semibold tracking-tight text-ink">Archive</h1>
               <span className="text-sm text-subtle tabular-nums">({totalCount} görev)</span>
             </div>
             <p className="text-[13px] text-muted">Manuel arşivlenenler ve önceki haftalarda tamamlananlar</p>

@@ -11,7 +11,7 @@ interface Props {
   /** Primary back target — defaults to Home Page (her role açık, çıkmaz yok). */
   backHref?: string;
   backLabel?: string;
-  /** Optional secondary back link (e.g. "Panoya dön"). */
+  /** Optional secondary back link (e.g. "Board'a dön"). */
   secondaryBackHref?: string;
   secondaryBackLabel?: string;
   /** Optional right-aligned actions (buttons, filters). */
@@ -33,7 +33,7 @@ export function ModulePageHeader({
   backHref = "/home",
   backLabel = "Home Page’e dön",
   secondaryBackHref,
-  secondaryBackLabel = "Panoya dön",
+  secondaryBackLabel = "Board’a dön",
   rightSlot,
 }: Props) {
   return (

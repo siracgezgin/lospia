@@ -553,7 +553,7 @@ export function TaskDetail({
   canComplete = false,
   isAdmin = false,
   backHref = "/board",
-  backLabel = "Panoya dön",
+  backLabel = "Board’a dön",
   responsiblePeople = [],
   participantsSlot,
   notesSlot,

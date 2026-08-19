@@ -8,7 +8,7 @@ import {
 } from "@/lib/points/queries";
 import type { TaskStatus, WorkspaceDepartment } from "@/types";
 
-export const metadata = { title: "Raporlar" };
+export const metadata = { title: "Reports" };
 
 export default async function DashboardPage() {
   const supabase = await createClient();

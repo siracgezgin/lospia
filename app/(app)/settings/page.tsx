@@ -34,7 +34,7 @@ export default async function SettingsPage() {
   if (!canManageSettings(userRole)) {
     return (
       <div className="max-w-2xl mx-auto py-8 px-4">
-        <h1 className="text-2xl font-bold text-ink mb-6">Ayarlar</h1>
+        <h1 className="text-2xl font-bold text-ink mb-6">Settings</h1>
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-sm text-amber-800">
           Bu sayfayı düzenlemek için yetkiniz yok. Yöneticinize başvurun.
         </div>
@@ -108,7 +108,7 @@ export default async function SettingsPage() {
       {/* Page header: title + summary chips */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-ink tracking-tight">Ayarlar</h1>
+          <h1 className="text-2xl font-bold text-ink tracking-tight">Settings</h1>
           <p className="text-sm text-muted mt-1">
             Profilinizi, çalışma alanınızı, departmanları ve ekip üyelerini buradan yönetin.
           </p>

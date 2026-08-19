@@ -91,7 +91,7 @@ export function ProductionSheetsView({ sheets, memberNames, isAdmin }: Props) {
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       <ModulePageHeader
-        title="Üretim Föyü"
+        title="Production Sheet"
         description="Her ürün bir föy. Ölçüler, beden dağılımı ve talimatları buradan girin — kimin girdiği herkese görünür."
         icon={ClipboardList}
         secondaryBackHref="/board"

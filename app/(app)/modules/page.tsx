@@ -94,7 +94,7 @@ function SectionHeading({ title, note }: { title: string; note?: string }) {
   );
 }
 
-export const metadata = { title: "Operasyon Modülleri" };
+export const metadata = { title: "Operation Modules" };
 
 export default async function ModulesPage() {
   // Herkes görür ("ekip olarak herkes her şeyi görebilmeli") — yalnız Yönetim
@@ -139,7 +139,7 @@ export default async function ModulesPage() {
     <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
       {/* Page header */}
       <ModulePageHeader
-        title="Operasyon Modülleri"
+        title="Operation Modules"
         description="Tüm modüllerin genel bakışı — her ekran sistemde TEK isimle yaşar; buradaki kartlar sol menüyle aynı adı taşır."
         icon={LayoutGrid}
         badge={isAdmin ? "Yönetici düzenler" : "Görüntüleme"}

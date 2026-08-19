@@ -23,7 +23,7 @@ export function AccessDenied() {
           className="group mt-5 inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-[13px] font-medium text-white shadow-xs transition-[background-color,box-shadow,transform] duration-150 ease-standard hover:bg-brand-strong active:scale-[0.98]"
         >
           <ArrowLeft size={15} className="transition-transform duration-150 ease-standard group-hover:-translate-x-0.5" />
-          Panoya dön
+          Board’a dön
         </Link>
       </div>
     </div>

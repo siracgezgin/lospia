@@ -167,14 +167,35 @@ body {
   background: var(--app-bg);
   color: var(--text);
   font-family: var(--font-sans);
-  /* Inter ekran için çizilmiştir; Manrope'un 460 tabanına gerek yok — 430
-     dolgun ama ağır değil, font-medium(500)/semibold(600) hiyerarşisi korunur.
-     -webkit-font-smoothing KASITLI OLARAK YOK: macOS'ta harfleri inceltip
-     "bulanık" görünmesine sebep oluyordu (2026-08-17 kullanıcı geri bildirimi).
-     Alt piksel render varsayılanı daha keskin. */
-  font-weight: 430;
-  letter-spacing: -0.006em;
-  text-rendering: optimizeLegibility;
+  /* NETLİK — üç kural, üçü de "bulanık" şikâyetinin (2026-08-20) gerekçesi:
+       1. font-weight TAM SAYI olmalı. 430 gibi ara değerler Inter'in değişken
+          eksenini iki named instance arasında konumlandırır; ölçeklenmiş
+          Retina modunda (bu Mac ~1.8x) gövde çizgileri piksel ızgarasına
+          oturmaz ve harfler yumuşar. 450 yine "regular ile medium arası"
+          dolgunluğu verir ama kararlı bir örnektir.
+       2. letter-spacing 0. Negatif izleme 13px'te harf başına ~0.08px kayma
+          demek; her glif alt piksel konumuna düşünce metin puslanır.
+       3. text-rendering: optimizeLegibility KALDIRILDI. WebKit'te bilinen
+          render kusurları var, buradaki tek katkısı bulanıklıktı.
+     -webkit-font-smoothing yine KASITLI OLARAK YOK (2026-08-17 kararı):
+     macOS'ta harfleri inceltip daha da soluklaştırıyor. */
+  font-weight: 450;
+  letter-spacing: 0;
+}
+
+/* Tailwind v4 preflight'ı <button>'ın tarayıcı varsayılanını `cursor: default`
+   yaptı (v3'te pointer'dı). Bunun sonucu: kişi kartları, sekmeler, ızgara
+   hücreleri — tıklanabilir her düğme fareyle üzerine gelince ölü görünüyordu
+   (2026-08-20 kullanıcı geri bildirimi). Tek yerden geri alınır; devre dışı
+   düğmeler hariç tutulur ki "tıklanabilir" yanılgısı doğmasın. */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  summary,
+  label:has(> input[type="checkbox"]:not(:disabled)),
+  label:has(> input[type="radio"]:not(:disabled)) {
+    cursor: pointer;
+  }
 }
 
 /* ──────────────────────────────────────────────────────────────────────────

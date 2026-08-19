@@ -37,7 +37,7 @@ export default async function ActivityLogPage() {
   if (!isAdmin) {
     return (
       <div className="max-w-2xl mx-auto py-8 px-4">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Aktivite Günlüğü</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">Activity Log</h1>
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-sm text-amber-800">
           Bu sayfa yalnızca yöneticiler içindir.
         </div>

@@ -30,7 +30,7 @@ export default async function FinancePage() {
     return (
       <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 lg:px-8">
         <ModulePageHeader
-          title="Finans — Ödeme Takibi"
+          title="Finance"
           description="Kime, ne kadar, ne zaman — ödemelerin tek listesi."
           icon={Wallet}
           secondaryBackHref="/modules"

@@ -127,7 +127,7 @@ export function FinanceView({ payments }: Props) {
   return (
     <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
       <ModulePageHeader
-        title="Finans — Ödeme Takibi"
+        title="Finance"
         description="Kime, ne kadar, ne zaman — ödemelerin tek listesi. Yalnız yöneticiler görür."
         icon={Wallet}
         secondaryBackHref="/modules"

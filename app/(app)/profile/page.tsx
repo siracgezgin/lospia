@@ -34,7 +34,7 @@ export default async function ProfilePage() {
 
   return (
     <div className="w-full px-4 py-6 sm:px-6 lg:px-8 space-y-5">
-      <h1 className="text-xl font-semibold text-ink">Profil</h1>
+      <h1 className="text-xl font-semibold text-ink">Profile</h1>
 
       <div className="max-w-2xl">
         <div className="space-y-5 min-w-0">

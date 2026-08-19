@@ -35,7 +35,7 @@ export async function TaskDetailContent({
   // Back link follows the board the task was opened from (Yönetici Pano keeps its
   // visibility/manager tab); anything else falls back to the normal board.
   let backHref = "/board";
-  let backLabel = "Panoya dön";
+  let backLabel = "Board’a dön";
   if (backParams.from === "admin-board") {
     const qs = new URLSearchParams();
     if (backParams.visibility) qs.set("visibility", backParams.visibility);

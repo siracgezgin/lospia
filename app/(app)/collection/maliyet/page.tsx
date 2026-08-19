@@ -31,7 +31,7 @@ export default async function CostPage() {
     return (
       <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 lg:px-8">
         <ModulePageHeader
-          title="Maliyet"
+          title="Cost"
           description="Her ürünün birim maliyeti kalem kalem — kumaş, dikim, fermuar, ütü/paket, kalıp, genel giderler."
           icon={Wallet}
           secondaryBackHref="/collection"

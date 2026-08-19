@@ -113,7 +113,7 @@ export function PaymentTable({ rows }: Props) {
   return (
     <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
       <ModulePageHeader
-        title="Ödeme Tablosu"
+        title="Payment Table"
         description="Usta başına ödeme — hangi usta hangi ürünü dikti, ne kadar ödenecek. Ürün maliyeti ayrı ekranda."
         icon={HandCoins}
         secondaryBackHref="/collection"
@@ -122,7 +122,7 @@ export function PaymentTable({ rows }: Props) {
       <CollectionTabs active="odeme" />
 
       {rows.length === 0 ? (
-        <EmptyBox text="Henüz ürün yok. Koleksiyona föy ekleyin." />
+        <EmptyBox text="Henüz ürün yok. Collection’a föy ekleyin." />
       ) : active ? (
         /* ── Bir ustanın sayfası — diktiği ürünler ─────────────────────── */
         <section className="anim-fade">
@@ -277,9 +277,9 @@ export function CollectionTabs({ active }: { active: "foy" | "maliyet" | "odeme"
     );
   return (
     <div className="mb-4 flex items-center gap-1 overflow-x-auto border-b border-line no-scrollbar">
-      {item("/collection", "Üretim Föyleri", ClipboardList, "foy")}
-      {item("/collection/maliyet", "Maliyet", Wallet, "maliyet")}
-      {item("/collection/odeme", "Ödeme Tablosu", HandCoins, "odeme")}
+      {item("/collection", "Production Sheets", ClipboardList, "foy")}
+      {item("/collection/maliyet", "Cost", Wallet, "maliyet")}
+      {item("/collection/odeme", "Payment Table", HandCoins, "odeme")}
     </div>
   );
 }

@@ -14,7 +14,7 @@ function parseWeekParam(weekStr?: string): string | null {
   return weekStr.slice(0, 10);
 }
 
-export const metadata = { title: "Pano" };
+export const metadata = { title: "Board" };
 
 export default async function BoardPage({
   searchParams,

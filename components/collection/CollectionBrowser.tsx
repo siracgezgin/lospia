@@ -100,7 +100,7 @@ export function CollectionBrowser({ sheets }: Props) {
   return (
     <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
       <ModulePageHeader
-        title="Koleksiyon"
+        title="Collection"
         description="Ürünler web sitesindeki gibi kategorilere ayrılır — her ürünün üretim föyü ve maliyeti bir arada."
         icon={Boxes}
         secondaryBackHref="/board"

@@ -704,7 +704,7 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
                 </div>
                 <p className="text-[12px] text-subtle">
                   Maliyet ile <b className="font-semibold text-muted">ödeme</b> ayrı şeylerdir: buradaki kalemler ürünün
-                  maliyetini verir; ustaya ödenen tutar Koleksiyon → <b className="font-semibold text-muted">Ödeme Tablosu</b>’nda
+                  maliyetini verir; ustaya ödenen tutar Collection → <b className="font-semibold text-muted">Payment Table</b>’da
                   usta bazında toplanır.
                 </p>
               </div>

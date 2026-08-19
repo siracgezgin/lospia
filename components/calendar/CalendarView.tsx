@@ -247,7 +247,7 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
       <div className={cn("flex flex-col gap-4", embedded ? "min-h-[70vh]" : "p-4 sm:p-6 h-full")}>
         {!embedded && (
           <div className="flex items-center gap-3 shrink-0">
-            <h1 className="text-2xl font-semibold tracking-tight text-ink">Takvim</h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-ink">Calendar</h1>
           </div>
         )}
         <div className="flex-1 min-h-0 rounded-xl border border-line anim-shimmer bg-gradient-to-r from-surface-sunken via-surface-muted to-surface-sunken" />
@@ -261,7 +261,7 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
           The month label itself opens the month/year picker for jumping ahead.
           Gömülü modda başlık üstteki sayfa başlığıdır; burada tekrar edilmez. */}
       <div className="flex items-center gap-3 flex-wrap shrink-0">
-        {!embedded && <h1 className="text-2xl font-semibold tracking-tight text-ink">Takvim</h1>}
+        {!embedded && <h1 className="text-2xl font-semibold tracking-tight text-ink">Calendar</h1>}
 
         {/* Prev · clickable month/year picker · next.
             NOTE: no `overflow-hidden` here — it would clip the picker popover

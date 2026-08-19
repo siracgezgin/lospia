@@ -97,7 +97,7 @@ export function DocumentsView({
   return (
     <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
       <ModulePageHeader
-        title="Doküman Merkezi"
+        title="Documents"
         description="Drive, Canva, Word, Excel ve operasyon dokümanlarını Lospia içinde bağlantı ve görev ilişkisiyle yönetin. Dosya yüklenmez — yalnızca bağlantı ve künye tutulur."
         icon={FolderOpen}
         secondaryBackHref="/board"

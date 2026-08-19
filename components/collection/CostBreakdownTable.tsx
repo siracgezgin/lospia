@@ -101,7 +101,7 @@ export function CostBreakdownTable({ rows }: Props) {
   return (
     <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
       <ModulePageHeader
-        title="Maliyet"
+        title="Cost"
         description="Her ürünün birim maliyeti kalem kalem: kumaş, dikim, fermuar, ütü/paket, kalıp, genel giderler."
         icon={Wallet}
         secondaryBackHref="/collection"
@@ -124,7 +124,7 @@ export function CostBreakdownTable({ rows }: Props) {
         <Info size={14} className="mt-px shrink-0 text-subtle" />
         <span>
           Bu tablo <b className="font-semibold text-ink">ürün maliyetidir</b>. Ustaya ödenecek tutar
-          ayrı bir şeydir ve <Link href="/collection/odeme" className="font-medium text-brand hover:text-brand-strong">Ödeme Tablosu</Link>’nda
+          ayrı bir şeydir ve <Link href="/collection/odeme" className="font-medium text-brand hover:text-brand-strong">Payment Table</Link>’da
           usta bazında toplanır.
         </span>
       </p>
@@ -134,7 +134,7 @@ export function CostBreakdownTable({ rows }: Props) {
           <div className="mx-auto mb-3 grid size-11 place-items-center rounded-full bg-surface-sunken text-subtle">
             <Wallet size={20} />
           </div>
-          <p className="text-[13.5px] text-subtle">Henüz ürün yok. Koleksiyona föy ekleyin.</p>
+          <p className="text-[13.5px] text-subtle">Henüz ürün yok. Collection’a föy ekleyin.</p>
         </div>
       ) : (
         <div className="anim-fade-up overflow-hidden rounded-2xl border border-line-strong bg-surface shadow-card">

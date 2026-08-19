@@ -13,18 +13,18 @@ type NavItem = { href: string; label: string; icon: typeof Kanban };
 // diğer ekranlara Home Page kısayollarından ulaşılır.
 const MEMBER_NAV: NavItem[] = [
   { href: "/home",       label: "Home Page", icon: Home          },
-  { href: "/board",      label: "Pano",      icon: Kanban        },
+  { href: "/board",      label: "Board",      icon: Kanban        },
   { href: "/planning",   label: "Calendar",  icon: CalendarRange },
-  { href: "/collection", label: "Koleksiyon", icon: Shirt        },
-  { href: "/profile",    label: "Profil",    icon: User          },
+  { href: "/collection", label: "Collection", icon: Shirt        },
+  { href: "/profile",    label: "Profile",    icon: User          },
 ];
 
 const ADMIN_NAV: NavItem[] = [
   { href: "/home",       label: "Home Page", icon: Home          },
-  { href: "/board",      label: "Pano",      icon: Kanban        },
+  { href: "/board",      label: "Board",      icon: Kanban        },
   { href: "/planning",   label: "Calendar",  icon: CalendarRange },
-  { href: "/collection", label: "Koleksiyon", icon: Shirt        },
-  { href: "/dashboard",  label: "Raporlar",  icon: LayoutDashboard },
+  { href: "/collection", label: "Collection", icon: Shirt        },
+  { href: "/dashboard",  label: "Reports",  icon: LayoutDashboard },
 ];
 
 export function MobileNav({ isAdmin = false }: { isAdmin?: boolean }) {

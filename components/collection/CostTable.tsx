@@ -102,7 +102,7 @@ export function CostTable({ rows }: Props) {
   return (
     <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
       <ModulePageHeader
-        title="Maliyet"
+        title="Cost"
         description="Tüm ürünlerin maliyeti tek tabloda. Beden adetlerini ve birim fiyatı burada değiştirebilirsiniz — ürünün föyünde de güncellenir."
         icon={Wallet}
         secondaryBackHref="/collection"
@@ -137,7 +137,7 @@ export function CostTable({ rows }: Props) {
           <div className="mx-auto mb-3 grid size-11 place-items-center rounded-full bg-surface-sunken text-subtle">
             <Wallet size={20} />
           </div>
-          <p className="text-[13.5px] text-subtle">Henüz ürün yok. Koleksiyona föy ekleyin.</p>
+          <p className="text-[13.5px] text-subtle">Henüz ürün yok. Collection’a föy ekleyin.</p>
         </div>
       ) : (
         <div className="anim-fade-up overflow-hidden rounded-2xl border border-line-strong bg-surface shadow-card">

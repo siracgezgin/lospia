@@ -319,7 +319,7 @@ export function RulesView({
                 <BookOpen size={20} strokeWidth={1.75} />
               </div>
               <div className="min-w-0">
-                <h1 className="text-xl font-semibold tracking-tight text-ink">Kurallar</h1>
+                <h1 className="text-xl font-semibold tracking-tight text-ink">Rules</h1>
                 <p className="text-sm text-muted mt-0.5 max-w-xl leading-relaxed">
                   Operasyon kuralları, kalite standardını ve günlük kontrol disiplinini korur.
                 </p>

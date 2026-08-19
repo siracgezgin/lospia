@@ -92,7 +92,7 @@ export function SheetsView({
   return (
     <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
       <ModulePageHeader
-        title="Tablo Merkezi"
+        title="Sheets"
         description="Excel/CSV düzenlerinizi Lospia içinde tablo olarak tutun — hücreleri doğrudan düzenleyin, Excel'den kopyalayıp yapıştırın."
         icon={Table2}
         secondaryBackHref="/board"

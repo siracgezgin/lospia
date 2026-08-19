@@ -178,7 +178,7 @@ export function ActivityLogView({ rows }: { rows: ActivityRow[] }) {
           <ActivityIcon size={20} strokeWidth={1.75} />
         </div>
         <div className="min-w-0">
-          <h1 className="text-xl font-semibold tracking-tight text-ink">Aktivite Günlüğü</h1>
+          <h1 className="text-xl font-semibold tracking-tight text-ink">Activity Log</h1>
           <p className="text-sm text-muted mt-0.5 leading-relaxed">
             Kim, ne yaptı, hangi görevde — tüm çalışma alanı hareketleri. Yalnızca yöneticiler görür.
           </p>

@@ -251,7 +251,7 @@ export function CrmView({
     <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
       {/* Header */}
       <ModulePageHeader
-        title="İlişkiler / CRM"
+        title="CRM"
         description="VIP müşteriler, PR kontakları, influencerlar, tedarikçiler ve işbirliği adayları."
         icon={Users}
         secondaryBackHref="/board"

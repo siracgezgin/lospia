@@ -66,7 +66,7 @@ export default async function CalendarPage({
         scale === "hafta"
           ? (isAdmin
             ? "Haftalık toplantı ızgarası — gün, saat, konu ve sorumlular."
-            : "Haftalık toplantı ızgarası — takvimi yöneticiler düzenler; size atanan işler Pano’da görünür.")
+            : "Haftalık toplantı ızgarası — takvimi yöneticiler düzenler; size atanan işler Board’da görünür.")
           : scale === "ay"
             ? "Ay görünümü — görevler teslim tarihine göre."
             : "Yıl görünümü — 12 ay bir arada; bir güne tıklayınca o gün açılır."

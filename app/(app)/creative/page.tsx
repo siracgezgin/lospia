@@ -37,7 +37,7 @@ export default async function CreativePage({
     return (
       <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 lg:px-8">
         <ModulePageHeader
-          title="Kreatif Linkler"
+          title="Creative Links"
           description="Canva, Drive ve Figma bağlantılarının kayıt altında tutulacağı alan."
           icon={Link2}
           secondaryBackHref="/board"

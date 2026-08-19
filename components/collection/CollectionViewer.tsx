@@ -73,7 +73,7 @@ export function CollectionViewer({ isAdmin }: Props) {
     <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
       {/* Header */}
       <ModulePageHeader
-        title="Koleksiyon & Üretim"
+        title="Collection"
         description="Koleksiyon/kumaş verilerini Lospia içinde güvenle görüntüleyin."
         icon={Boxes}
         badge="Salt okunur"

@@ -27,7 +27,7 @@ export default async function DocumentsPage() {
     return (
       <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 lg:px-8">
         <ModulePageHeader
-          title="Doküman Merkezi"
+          title="Documents"
           description="Drive, Canva, Word, Excel ve operasyon dokümanlarını Lospia içinde bağlantı ve görev ilişkisiyle yönetin."
           icon={FolderOpen}
           secondaryBackHref="/board"

@@ -111,7 +111,7 @@ export function TemplatesView({
   return (
     <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
       <ModulePageHeader
-        title="Şablon Kütüphanesi"
+        title="Templates"
         description="Format e-postalar, müşteri mesajları, üretici briefleri ve operasyon metinlerini tek merkezde yönetin — kopyalayıp Gmail veya WhatsApp'a yapıştırın."
         icon={FileText}
         secondaryBackHref="/board"

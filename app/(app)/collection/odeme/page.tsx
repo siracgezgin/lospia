@@ -36,7 +36,7 @@ export default async function PaymentPage() {
     return (
       <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 lg:px-8">
         <ModulePageHeader
-          title="Ödeme Tablosu"
+          title="Payment Table"
           description="Usta başına ödeme — hangi usta hangi ürünü dikti, ne kadar ödenecek."
           icon={HandCoins}
           secondaryBackHref="/collection"

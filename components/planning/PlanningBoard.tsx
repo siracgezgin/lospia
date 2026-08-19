@@ -139,7 +139,7 @@ export function PlanningBoard({
         description={
           isAdmin
             ? "Haftalık toplantı ızgarası — gün, saat, konu ve sorumlular."
-            : "Haftalık toplantı ızgarası — takvimi yöneticiler düzenler; size atanan işler Pano'da görünür."
+            : "Haftalık toplantı ızgarası — takvimi yöneticiler düzenler; size atanan işler Board’da görünür."
         }
         icon={CalendarRange}
         secondaryBackHref="/board"
