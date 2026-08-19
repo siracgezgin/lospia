@@ -33,8 +33,9 @@ export const CARD_STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
 ];
 
 // Project options for custom_fields.project
+// Aslı Hanım (2026-08-19): "Online demiyoruz, online'ın her şeyi AFCOM demek."
 export const PROJECT_OPTIONS = [
-  "AF Online",
+  "AFCOM",
   "Lookbook",
   "AFR-AF Operasyon",
   "Genel",

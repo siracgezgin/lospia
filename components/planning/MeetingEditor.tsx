@@ -23,7 +23,8 @@ interface Props {
 type TopicDraft = {
   id?: string;
   text: string;
-  participant_ids: string[];
+  participant_ids: string[];   // SORUMLU
+  collaborator_ids: string[];  // İŞ BİRLİĞİ (Aslı Hanım, 2026-08-19)
   due_date: string;      // "yyyy-MM-dd" | ""
   task_id?: string | null;
 };
@@ -42,12 +43,16 @@ export function MeetingEditor({ meeting, day, slot, dayLabel, members, onClose, 
   const [title, setTitle] = useState(meeting?.title ?? "");
   const [content, setContent] = useState(meeting?.content ?? "");
   const [participantIds, setParticipantIds] = useState<string[]>(meeting?.participant_ids ?? []);
+  const [collaboratorIds, setCollaboratorIds] = useState<string[]>(meeting?.collaborator_ids ?? []);
   const [topics, setTopics] = useState<TopicDraft[]>(() => {
     const existing: TopicDraft[] = (meeting?.topics ?? []).map((t) => ({
       id: t.id, text: t.text ?? "", participant_ids: t.participant_ids ?? [],
+      collaborator_ids: t.collaborator_ids ?? [],
       due_date: t.due_date ?? "", task_id: t.task_id,
     }));
-    while (existing.length < 3) existing.push({ text: "", participant_ids: [], due_date: "" });
+    while (existing.length < 3) {
+      existing.push({ text: "", participant_ids: [], collaborator_ids: [], due_date: "" });
+    }
     return existing;
   });
   const [error, setError] = useState<string | null>(null);
@@ -58,12 +63,16 @@ export function MeetingEditor({ meeting, day, slot, dayLabel, members, onClose, 
 
   const setTopic = (i: number, patch: Partial<TopicDraft>) =>
     setTopics((ts) => ts.map((t, idx) => (idx === i ? { ...t, ...patch } : t)));
-  const addTopic = () => setTopics((ts) => [...ts, { text: "", participant_ids: [], due_date: "" }]);
+  const addTopic = () =>
+    setTopics((ts) => [...ts, { text: "", participant_ids: [], collaborator_ids: [], due_date: "" }]);
   const removeTopic = (i: number) => setTopics((ts) => ts.filter((_, idx) => idx !== i));
 
   // Toplantı + konuları kaydeder; konu id'lerini geri yazar ("Bildir" için).
   async function persist(): Promise<{ meetingId: string; posToId: Record<number, string> } | { error: string }> {
-    const payload = { meeting_date: day, time_slot: slot, category, title, content, participant_ids: participantIds };
+    const payload = {
+      meeting_date: day, time_slot: slot, category, title, content,
+      participant_ids: participantIds, collaborator_ids: collaboratorIds,
+    };
     let id = meetingId;
     if (!id) {
       const res = await createMeeting(payload);
@@ -79,7 +88,7 @@ export function MeetingEditor({ meeting, day, slot, dayLabel, members, onClose, 
       id,
       topics.map((t, i) => ({
         id: t.id, position: i, text: t.text, participant_ids: t.participant_ids,
-        due_date: t.due_date || null,
+        collaborator_ids: t.collaborator_ids, due_date: t.due_date || null,
       })),
     );
     if ("error" in tRes) return { error: tRes.error };
@@ -131,7 +140,7 @@ export function MeetingEditor({ meeting, day, slot, dayLabel, members, onClose, 
   return (
     <div className="anim-fade fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-[2px] sm:p-8" onClick={onClose}>
       <div
-        className="anim-scale-in w-full max-w-3xl rounded-2xl border border-line bg-surface shadow-drawer"
+        className="anim-scale-in w-full max-w-4xl rounded-2xl border border-line bg-surface shadow-drawer"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Başlık */}
@@ -180,29 +189,48 @@ export function MeetingEditor({ meeting, day, slot, dayLabel, members, onClose, 
             <textarea className={cn(inputCls, "resize-y leading-relaxed")} rows={2} value={content} onChange={(e) => setContent(e.target.value)} placeholder="Toplantı içeriği…" />
           </label>
 
-          <div>
-            <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">Kim</span>
-            <MemberMultiSelect members={members} selected={participantIds} onChange={setParticipantIds} placeholder="Üye seç…" />
+          {/* Sorumlu ve iş birliği AYRI iki alan. Aslı Hanım (2026-08-19):
+              "Sorumlu kişinin iş birliğini koyacaksın. Çünkü yanında iş
+              birliği yapması gereken biri oluyor ya genelde." */}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">
+                Kim <span className="font-normal normal-case tracking-normal text-subtle">· sorumlu</span>
+              </span>
+              <MemberMultiSelect members={members} selected={participantIds} onChange={setParticipantIds} placeholder="Üye seç…" />
+            </div>
+            <div>
+              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">
+                İş birliği <span className="font-normal normal-case tracking-normal text-subtle">· yanında çalışan</span>
+              </span>
+              <MemberMultiSelect members={members} selected={collaboratorIds} onChange={setCollaboratorIds} placeholder="Üye seç…" />
+            </div>
           </div>
 
           {/* Konular */}
           <div>
             <div className="mb-1.5 flex items-center justify-between">
               <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">Konular</span>
-              <span className="text-[12px] text-subtle">Kişi seç · tarih ver · “Bildir” ile göreve dönüştür</span>
+              <span className="text-[12px] text-subtle">Sorumlu + iş birliği · tarih · “Bildir” ile göreve dönüştür</span>
             </div>
             {assignedMsg && (
               <div className="anim-fade-down mb-2 flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[12px] font-medium text-emerald-800">
                 <CheckCircle2 size={14} className="shrink-0" /> {assignedMsg}
               </div>
             )}
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               {topics.map((t, i) => (
-                <div key={i} className="flex items-center gap-1.5">
+                /* Satır dar ekranda kırılır (metin üstte, seçimler altta),
+                   geniş ekranda tek satır kalır. */
+                <div key={i} className="flex flex-wrap items-center gap-1.5 rounded-lg border border-hairline p-1.5 sm:border-0 sm:p-0">
                   <span className="w-5 shrink-0 text-center text-[11px] font-medium text-subtle">{i + 1}</span>
-                  <input className={cn(inputCls, "min-w-0 flex-1")} value={t.text} onChange={(e) => setTopic(i, { text: e.target.value })} placeholder={`Konu ${i + 1}`} />
-                  <div className="w-24 shrink-0">
+                  <input className={cn(inputCls, "min-w-0 flex-1 basis-full sm:basis-0")} value={t.text} onChange={(e) => setTopic(i, { text: e.target.value })} placeholder={`Konu ${i + 1}`} />
+                  <div className="w-[88px] shrink-0">
                     <MemberMultiSelect members={members} selected={t.participant_ids} onChange={(ids) => setTopic(i, { participant_ids: ids })} placeholder="Kim" compact />
+                  </div>
+                  {/* İş birliği — sorumlunun yanında çalışan kişi. */}
+                  <div className="w-[88px] shrink-0" title="İş birliği yapan kişi">
+                    <MemberMultiSelect members={members} selected={t.collaborator_ids} onChange={(ids) => setTopic(i, { collaborator_ids: ids })} placeholder="İş birliği" compact />
                   </div>
                   <input
                     type="date"

@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils/cn";
 import type { TaskPriority, TaskStatus } from "@/types";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Ana Sayfa" };
+export const metadata = { title: "Home Page" };
 
 // Operasyon İstanbul saatiyle yaşar; sunucu (Vercel) UTC'dir — selamlama ve
 // "bugün" hesabı bu yüzden Europe/Istanbul üzerinden yapılır.
@@ -128,7 +128,7 @@ export default async function HomePage() {
   const overdueCount = myTasks.filter((t) => t.due_date && t.due_date.slice(0, 10) < todayIso).length;
   const visibleTasks = myTasks.slice(0, 8);
 
-  // Planlama tablosu migrate edilmemişse sessizce boş kalır — Ana Sayfa çökmez.
+  // Takvim tablosu migrate edilmemişse sessizce boş kalır — Home Page çökmez.
   const weekMeetings = (meetingsRes.error ? [] : (meetingsRes.data ?? [])) as HomeMeeting[];
   const todayMeetings = weekMeetings.filter((m) => m.meeting_date === todayIso);
 
@@ -279,7 +279,7 @@ export default async function HomePage() {
                 href="/planning"
                 className="group inline-flex items-center gap-1.5 text-sm font-medium text-brand transition-colors duration-150 hover:text-brand-strong"
               >
-                Planlama&apos;yı aç
+                Calendar&apos;ı aç
                 <ArrowRight
                   size={13}
                   className="transition-transform duration-150 ease-standard group-hover:translate-x-0.5"

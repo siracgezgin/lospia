@@ -27,7 +27,7 @@ interface Props {
 const GENERAL = "Genel";
 
 /** Excel'de bir kişinin altında birden çok liste olabiliyor
- *  ("Sales / Satın Alma" + "Sales / Online") — her biri bir RoleGroup. */
+ *  ("Sales / Satın Alma" + "Sales / AFCOM") — her biri bir RoleGroup. */
 type RoleGroup = {
   key: string;
   role: string | null;   // alt sütun başlığı (yoksa tek liste)
@@ -267,11 +267,31 @@ function SectionHeader({
         {!disabled && <span className="rounded-md bg-surface-muted px-1.5 py-px text-[11px] font-semibold tabular-nums text-muted">{open}</span>}
       </h2>
       {!disabled && (
+        /* Aslı Hanım (2026-08-19) bu düğmeyi ekranda BULAMADI: "Şurada
+           tamamlananlar kısmı var, görüyorsunuz küçük bir buton… Nerede ya?"
+           Artık dolu yeşil bir anahtar: yükseklik 8→9, sayaç ayrı rozet,
+           basılıyken zemin doluyor. Telefonda tam genişlik. */
         <button
           onClick={onToggleDone}
-          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 text-[12.5px] font-medium text-muted transition-all duration-150 hover:border-line-strong hover:text-ink active:scale-[0.98]"
+          aria-pressed={showDone}
+          className={cn(
+            "inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border px-3 text-[13px] font-semibold transition-all duration-150 active:scale-[0.98] sm:w-auto",
+            showDone
+              ? "border-emerald-500 bg-emerald-500 text-white hover:bg-emerald-600"
+              : "border-emerald-200 bg-emerald-50 text-emerald-800 hover:border-emerald-400 hover:bg-emerald-100",
+          )}
+          title={showDone ? "Tamamlananları gizle" : "Tamamlanan konuları göster — üstü çizili olarak listenin altına iner"}
         >
-          <Check size={13} /> {showDone ? "Tamamlananları gizle" : `Tamamlananlar (${done})`}
+          <CheckCircle2 size={15} className="shrink-0" />
+          {showDone ? "Tamamlananları gizle" : "Tamamlananlar"}
+          <span
+            className={cn(
+              "rounded-md px-1.5 py-px text-[11.5px] font-bold tabular-nums",
+              showDone ? "bg-white/20 text-white" : "bg-emerald-600 text-white",
+            )}
+          >
+            {done}
+          </span>
         </button>
       )}
     </div>

@@ -6,7 +6,7 @@ import { MarketingHome } from "@/components/marketing/MarketingHome";
 import { LOSPIA_HOME_METADATA } from "@/components/marketing/seo";
 
 // Root "/" is host-aware:
-//  * operasyon.aslifilinta.com → /home (Ana Sayfa: bana atananlar + bugünün
+//  * operasyon.aslifilinta.com → /home (Home Page: bana atananlar + bugünün
 //    planı + kısayollar) — rolden bağımsız tek giriş noktası. Oturum yoksa
 //    middleware login'e yönlendirir.
 //  * localhost / future Lospia domains → public Lospia marketing homepage.

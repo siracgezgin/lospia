@@ -95,6 +95,7 @@ export function PlanningDayList({
           const content = cell.map((m) => m.content).filter(Boolean).join(" · ");
           const ids = [...new Set(cell.flatMap((m) => m.participant_ids ?? []))];
           const kim = cell.map((m) => m.kim).filter(Boolean).join(", ");
+          const collabIds = [...new Set(cell.flatMap((m) => m.collaborator_ids ?? []))];
           const topics = (topicRows.get(`${iso}|${slot}`) ?? []).filter(Boolean) as PlanningTopic[];
 
           // Boş şeridi üyeye gösterme — yönetici ekleyebilsin diye ona kalır.
@@ -124,7 +125,7 @@ export function PlanningDayList({
                   <span className={cn("block text-[13.5px] font-bold leading-snug tracking-tight", meta.title)}>
                     {title || (isAdmin ? "— başlık ekle" : "—")}
                   </span>
-                  <KimBadges ids={ids} kim={kim} memberNames={memberNames} className="ml-0 mt-1" />
+                  <KimBadges ids={ids} kim={kim} collaboratorIds={collabIds} memberNames={memberNames} className="ml-0 mt-1" />
                   {content && (
                     <span className="mt-1 block whitespace-pre-line text-[12px] leading-snug text-ink/70">
                       {content}
@@ -146,7 +147,7 @@ export function PlanningDayList({
                         {t.task_id && (
                           <CheckCircle2 size={12} className="ml-1 inline shrink-0 text-emerald-600" aria-label="Göreve atandı" />
                         )}
-                        <KimBadges ids={t.participant_ids} kim={t.kim} memberNames={memberNames} />
+                        <KimBadges ids={t.participant_ids} kim={t.kim} collaboratorIds={t.collaborator_ids} memberNames={memberNames} />
                         {t.due_date && (
                           <span className="ml-1 whitespace-nowrap text-[11px] tabular-nums text-subtle">
                             {format(parseISO(t.due_date), "d MMM", { locale: tr })}

@@ -43,7 +43,7 @@ export default async function AdminBoardPage({
         .order("fractional_index"),
       supabase
         .from("workspace_members")
-        .select("id, user_id, role, profiles(id, full_name, email)")
+        .select("id, user_id, role, profiles(id, full_name, email, avatar_url)")
         .eq("workspace_id", workspaceId),
       supabase
         .from("workspace_contacts")
@@ -68,7 +68,7 @@ export default async function AdminBoardPage({
 
   const allTasks: Task[] = tasksResult.data ?? [];
 
-  type ProfileLite = Pick<Profile, "id" | "full_name" | "email">;
+  type ProfileLite = Pick<Profile, "id" | "full_name" | "email" | "avatar_url">;
   type MemberRow = { id: string; user_id: string; role: string; profiles: ProfileLite | ProfileLite[] | null };
   const memberRowsData = (profilesResult.data ?? []) as unknown as MemberRow[];
 

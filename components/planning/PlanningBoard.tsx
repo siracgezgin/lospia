@@ -18,6 +18,7 @@ import { WeekMatrix } from "./WeekMatrix";
 import { ProcessSteps } from "./ProcessSteps";
 import { PlanningWeekGrid } from "./PlanningWeekGrid";
 import { PlanningDayList } from "./PlanningDayList";
+import { CalendarViewSwitch } from "./CalendarViewSwitch";
 import type { Member } from "./MemberMultiSelect";
 import type {
   PlanningMeetingWithTopics, PlanningTemplate, PlanningOpenItem,
@@ -134,16 +135,18 @@ export function PlanningBoard({
   return (
     <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
       <ModulePageHeader
-        title="Planlama"
+        title="Calendar"
         description={
           isAdmin
-            ? "Haftalık Toplantı Takvimi — departman şeritleri, saatler, gün başlıkları ve konular."
-            : "Haftalık Toplantı Takvimi — planlamayı yöneticiler düzenler; size atanan işler Pano'da görünür."
+            ? "Haftalık toplantı ızgarası — gün, saat, konu ve sorumlular."
+            : "Haftalık toplantı ızgarası — takvimi yöneticiler düzenler; size atanan işler Pano'da görünür."
         }
         icon={CalendarRange}
         secondaryBackHref="/board"
         rightSlot={
           <div className="flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2">
+            {/* Tek takvimin ölçeği — Hafta · Ay · Yıl (Aslı Hanım, 2026-08-19). */}
+            <CalendarViewSwitch scale="hafta" />
             {isAdmin && (
               <>
                 <button

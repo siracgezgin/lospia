@@ -25,6 +25,8 @@ const MeetingSchema = z.object({
   title: z.string().max(300).optional().nullable(),
   content: z.string().max(4000).optional().nullable(),
   participant_ids: memberIds,
+  // "İş birliği" — sorumlunun yanında çalışan kişiler (Aslı Hanım, 2026-08-19).
+  collaborator_ids: memberIds,
 });
 export type MeetingInput = z.infer<typeof MeetingSchema>;
 
@@ -33,6 +35,7 @@ const TopicSchema = z.object({
   position: z.number().int().min(0).max(50),
   text: z.string().max(2000).optional().nullable(),
   participant_ids: memberIds,
+  collaborator_ids: memberIds,
   due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
 });
 
@@ -75,6 +78,7 @@ export async function createMeeting(
       title: nn(v.title),
       content: nn(v.content),
       participant_ids: v.participant_ids,
+      collaborator_ids: v.collaborator_ids,
       created_by: ctx.userId,
       updated_by: ctx.userId,
     })
@@ -106,6 +110,7 @@ export async function updateMeeting(
       title: nn(v.title),
       content: nn(v.content),
       participant_ids: v.participant_ids,
+      collaborator_ids: v.collaborator_ids,
       updated_by: ctx.userId,
     })
     .eq("id", meetingId)
@@ -189,6 +194,7 @@ export async function saveMeetingTopics(
       position: t.position,
       text: nn(t.text),
       participant_ids: t.participant_ids ?? [],
+      collaborator_ids: t.collaborator_ids ?? [],
       due_date: t.due_date ?? null,
     };
     // Mevcut konu → güncelle. maybeSingle(): id bu toplantıya ait değilse (ör.
@@ -238,7 +244,7 @@ export async function assignTopicAsTask(
 
   const { data: topic } = await supabase
     .from("planning_topics")
-    .select("id, text, participant_ids, task_id, meeting_id, workspace_id")
+    .select("id, text, participant_ids, collaborator_ids, task_id, meeting_id, workspace_id")
     .eq("id", topicId)
     .eq("workspace_id", ctx.workspaceId)
     .maybeSingle();
@@ -246,6 +252,11 @@ export async function assignTopicAsTask(
 
   const assignees = ((topic.participant_ids as string[]) ?? []).filter(Boolean);
   if (assignees.length === 0) return { error: "Önce konuya en az bir kişi seçin." };
+  // İş birliği yapan kişiler göreve custom_fields.collaborators olarak geçer —
+  // Pano'nun kişi ızgarası ve kişi filtresi bunları da o kişinin işi sayar.
+  // (Kolon migrate edilmediyse alan yoktur; boş dizi olarak akar.)
+  const collaborators = ((topic.collaborator_ids as string[] | null) ?? []).filter(Boolean);
+  const customFields = collaborators.length ? { collaborators } : null;
 
   // Başlık: konu metni; yoksa toplantı başlığı.
   const { data: meeting } = await supabase
@@ -264,7 +275,10 @@ export async function assignTopicAsTask(
     if (existing) {
       const upd = await supabase
         .from("tasks")
-        .update({ title, assignee_id: assignees[0], due_date: dueDate })
+        .update({
+          title, assignee_id: assignees[0], due_date: dueDate,
+          ...(customFields ? { custom_fields: customFields } : {}),
+        })
         .eq("id", taskId);
       if (upd.error) return { error: toActionErrorMessage(upd.error) };
     } else {
@@ -281,6 +295,7 @@ export async function assignTopicAsTask(
         due_date: dueDate,
         start_date: today,
         created_by: ctx.userId,
+        ...(customFields ? { custom_fields: customFields } : {}),
       })
       .select("id")
       .single();

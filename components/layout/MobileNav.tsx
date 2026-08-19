@@ -7,22 +7,22 @@ import { cn } from "@/lib/utils/cn";
 
 type NavItem = { href: string; label: string; icon: typeof Kanban };
 
-// Mobil sekmeler operasyonun ritmini izler: Ana Sayfa (kısayollar + bana
-// atananlar) ilk durak; Planlama ve Koleksiyon telefonda da bir dokunuş
+// Mobil sekmeler operasyonun ritmini izler: Home Page (kısayollar + bana
+// atananlar) ilk durak; Calendar ve Koleksiyon telefonda da bir dokunuş
 // uzaklıkta — Aslı Hanım takvimi telefondan açar. Liste, Yönetici Pano ve
-// diğer ekranlara Ana Sayfa kısayollarından ulaşılır.
+// diğer ekranlara Home Page kısayollarından ulaşılır.
 const MEMBER_NAV: NavItem[] = [
-  { href: "/home",       label: "Ana Sayfa", icon: Home          },
+  { href: "/home",       label: "Home Page", icon: Home          },
   { href: "/board",      label: "Pano",      icon: Kanban        },
-  { href: "/planning",   label: "Planlama",  icon: CalendarRange },
+  { href: "/planning",   label: "Calendar",  icon: CalendarRange },
   { href: "/collection", label: "Koleksiyon", icon: Shirt        },
   { href: "/profile",    label: "Profil",    icon: User          },
 ];
 
 const ADMIN_NAV: NavItem[] = [
-  { href: "/home",       label: "Ana Sayfa", icon: Home          },
+  { href: "/home",       label: "Home Page", icon: Home          },
   { href: "/board",      label: "Pano",      icon: Kanban        },
-  { href: "/planning",   label: "Planlama",  icon: CalendarRange },
+  { href: "/planning",   label: "Calendar",  icon: CalendarRange },
   { href: "/collection", label: "Koleksiyon", icon: Shirt        },
   { href: "/dashboard",  label: "Raporlar",  icon: LayoutDashboard },
 ];

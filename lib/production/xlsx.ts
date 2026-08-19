@@ -7,8 +7,9 @@ import ExcelJS from "exceljs";
 import type { ProductionSheet } from "@/types";
 import { categoryLabel, subcategoryLabel } from "@/lib/collection/taxonomy";
 import {
-  costOfSheet, totalQuantity, quantityBySize, orderSizes, parseMoney, formatMoney,
+  costOfSheet, totalQuantity, quantityBySize, orderSizes, formatMoney,
   STANDARD_SIZES,
+  unitCostOf,
 } from "@/lib/collection/cost";
 
 const COLS = 9; // A–I
@@ -77,8 +78,11 @@ async function addProductionSheet(
   titleCell.value = "ÜRETİM FÖYÜ";
   titleCell.font = { bold: true, size: 15, color: { argb: "FFFFFFFF" }, name: "Calibri" };
   titleCell.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+  // Marka adı bilerek YOK — Aslı Hanım (2026-08-19): "Şu Aslı Filinta'yı
+  // yazma böyle… Logoya gerek yok kendi iç üretimimizde." Sağ üstte artık
+  // ürün kodu durur (çıktıda sayfayı tanımlayan tek işaret).
   const brandCell = ws.getCell(`H${r}`);
-  brandCell.value = "aslıfilinta";
+  brandCell.value = sheet.product_code ?? "";
   brandCell.font = { bold: true, size: 11, color: { argb: "FFE5E7EB" } };
   brandCell.alignment = { vertical: "middle", horizontal: "right", indent: 1 };
   for (let c = 1; c <= COLS; c++) {
@@ -117,12 +121,14 @@ async function addProductionSheet(
   };
   infoRow("ÜRÜN KODU", sheet.product_code ?? "", "ÜRETİM TARİHİ", sheet.production_date ?? "");
   infoRow("ÜRÜN CİNSİ", sheet.product_kind ?? "", "TESLİM TARİHİ", sheet.delivery_date ?? "");
-  infoRow("ÜRETİCİ", sheet.producer ?? "", "SEZON", sheet.season ?? "");
+  // "Bir ürünlerin teslim tarihi, bir de dikim teslim tarihi lazım."
+  infoRow("ÜRETİCİ", sheet.producer ?? "", "DİKİM TESLİM TARİHİ", sheet.sewing_delivery_date ?? "");
+  infoRow("SEZON", sheet.season ?? "", "1 ÜRÜNE METRAJ", sheet.meterage ?? "");
   infoRow(
     "KATEGORİ", sheet.category ? categoryLabel(sheet.category) : "",
     "ALT KATEGORİ", subcategoryLabel(sheet.category, sheet.subcategory),
   );
-  infoRow("AÇIKLAMA", sheet.description ?? "", "1 ÜRÜNE METRAJ", sheet.meterage ?? "");
+  infoRow("AÇIKLAMA", sheet.description ?? "", "", "");
   r++; // boşluk
 
   // ── Bölüm başlığı şeridi ─────────────────────────────────────────────────────
@@ -159,8 +165,9 @@ async function addProductionSheet(
   };
   measHead("No", "ÖLÇÜ", "DEĞER");
   const measRows = sheet.measurements?.length ? sheet.measurements : [{ no: "", label: "", value: "" }];
-  for (const m of measRows) {
-    ws.getCell(`A${r}`).value = m.no;
+  // Numara elle girilene değil SIRAYA bağlı: "Mesela üç numara niye boş?"
+  measRows.forEach((m, mi) => {
+    ws.getCell(`A${r}`).value = String(mi + 1);
     ws.mergeCells(`B${r}:G${r}`); ws.getCell(`B${r}`).value = m.label;
     ws.mergeCells(`H${r}:I${r}`); ws.getCell(`H${r}`).value = m.value;
     for (let i = 1; i <= COLS; i++) {
@@ -170,15 +177,18 @@ async function addProductionSheet(
     }
     ws.getRow(r).height = 16;
     r++;
-  }
+  });
   r++;
 
-  // ── TESLİM EDİLEN ÜRÜNLER ────────────────────────────────────────────────────
+  // TESLİM EDİLEN ÜRÜNLER artık Beden Dağılımı'nın ALTINDA — "Teslim edilen
+  // ürünler yukarıda olmaz, önce siparişi görmemiz lazım." Bölümü tek yerden
+  // çizen yardımcı; çağrısı aşağıda.
+  const deliveredSection = () => {
   sectionBand("Teslim Edilen Ürünler");
   measHead("No", "ÜRÜN", "ADET");
   const delRows = sheet.delivered_items?.length ? sheet.delivered_items : [{ no: "", label: "", qty: "" }];
-  for (const d of delRows) {
-    ws.getCell(`A${r}`).value = d.no;
+  delRows.forEach((d, di) => {
+    ws.getCell(`A${r}`).value = String(di + 1);
     ws.mergeCells(`B${r}:G${r}`); ws.getCell(`B${r}`).value = d.label;
     ws.mergeCells(`H${r}:I${r}`); ws.getCell(`H${r}`).value = d.qty;
     for (let i = 1; i <= COLS; i++) {
@@ -188,8 +198,9 @@ async function addProductionSheet(
     }
     ws.getRow(r).height = 16;
     r++;
-  }
+  });
   r++;
+  };
 
   // ── BEDEN DAĞILIMI ───────────────────────────────────────────────────────────
   const sd = sheet.size_distribution;
@@ -211,6 +222,23 @@ async function addProductionSheet(
     }
     ws.getRow(r).height = 17;
     r++;
+    // GRUP satırı — Aslı Hanım (2026-08-19): "Bedenlerin altına o ürünün gibi
+    // bir sıra daha açacaksın. XS-S 1, M-L 2, XL-XXL 3, hepsi one size."
+    const groups = sd.groups ?? {};
+    if (Object.keys(groups).length) {
+      ws.getCell(r, 1).value = "GRUP";
+      sizes.forEach((sz, i) => { ws.getCell(r, 2 + i).value = groups[sz] ?? ""; });
+      ws.getCell(r, startTotal).value = "";
+      for (let i = 1; i <= nCols; i++) {
+        const cell = ws.getCell(r, i);
+        cell.font = { bold: true, size: 10, color: { argb: INK } };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BAND } };
+        cell.border = border;
+        cell.alignment = { vertical: "middle", horizontal: i === 1 ? "left" : "center", indent: i === 1 ? 1 : 0 };
+      }
+      ws.getRow(r).height = 16;
+      r++;
+    }
     // Değer satırları
     for (const row of sd.rows ?? []) {
       ws.getCell(r, 1).value = row.label;
@@ -226,6 +254,9 @@ async function addProductionSheet(
     }
     r++;
   }
+
+  // Sipariş (beden dağılımı) çizildikten SONRA teslim edilenler.
+  deliveredSection();
 
   // ── MALİYET / FİYAT ──────────────────────────────────────────────────────────
   const cost = costOfSheet(sheet);
@@ -313,7 +344,10 @@ async function addProductionSheet(
   if (photos.length) {
     // Görselleri paralel indir (başarısız olan atlanır — export yine üretilir).
     const SECTION_TR: Record<string, string> = {
-      technical_drawing: "Teknik çizim", fabric: "Kumaş / astar",
+      technical_drawing: "Teknik çizim",
+      technical_drawing_front: "Teknik çizim — Ön",
+      technical_drawing_back: "Teknik çizim — Arka",
+      fabric: "Kumaş / astar",
       accessories: "Aksesuar", embellishments: "Süsleme", sewing: "Dikiş / numune",
       general: "Görsel",
     };
@@ -429,7 +463,7 @@ export function buildCostWorkbook(rows: CostRow[]): Promise<Buffer> {
   // Başlık şeridi
   ws.mergeCells(r, 1, r, nCols);
   const title = ws.getCell(r, 1);
-  title.value = "MALİYET — ÜRETİM ADETLERİ";
+  title.value = "MALİYET — BİRİM MALİYET × ÜRETİM ADEDİ";
   title.font = { bold: true, size: 14, color: { argb: "FFFFFFFF" } };
   title.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
   for (let c = 1; c <= nCols; c++) {
@@ -440,7 +474,7 @@ export function buildCostWorkbook(rows: CostRow[]): Promise<Buffer> {
   r++;
 
   // Tablo başlığı
-  const headers = ["ÜRÜN", ...sizes, "TOPLAM ADET", "BİRİM FİYAT", "TOPLAM"];
+  const headers = ["ÜRÜN", ...sizes, "TOPLAM ADET", "BİRİM MALİYET", "TOPLAM"];
   headers.forEach((h, i) => {
     const cell = ws.getCell(r, i + 1);
     cell.value = h;
@@ -458,7 +492,8 @@ export function buildCostWorkbook(rows: CostRow[]): Promise<Buffer> {
   for (const row of rows) {
     const qbs = quantityBySize(row.size_distribution);
     const qty = totalQuantity(row.size_distribution);
-    const unit = parseMoney(row.pricing?.unit_price);
+    // Birim MALİYET = kalemlerin toplamı (Aslı Hanım, 2026-08-19).
+    const unit = unitCostOf(row.pricing);
     const lineTotal = qty * unit;
     grand += lineTotal;
 

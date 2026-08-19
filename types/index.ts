@@ -195,11 +195,18 @@ export type DeliveredItemRow = { no: string; label: string; qty: string };
 export type SizeDistribution = {
   sizes: string[];
   rows: { label: string; values: string[]; total: string }[];
+  /** Beden GRUBU satırı — Aslı Hanım (2026-08-19): "Bedenlerin altına o ürünün
+   *  gibi bir sıra daha açacaksın. XSmall'la small'a 1, medium'le large'a 2,
+   *  XXlarge'a 3 diyeceksin. Bir de hepsinin işaretli olduğu one size."
+   *  Beden adı → grup etiketi ("1" | "2" | "3" | "OS"). */
+  groups?: Record<string, string>;
 };
 
-/** Föye eklenen görsellerin bağlı olduğu bölüm. */
+/** Föye eklenen görsellerin bağlı olduğu bölüm.
+ *  technical_drawing (tekil) geri uyum içindir — yeni föyler ÖN/ARKA kullanır. */
 export type ProductionImageSection =
-  | "technical_drawing" | "fabric" | "accessories" | "embellishments" | "sewing" | "general";
+  | "technical_drawing" | "technical_drawing_front" | "technical_drawing_back"
+  | "fabric" | "accessories" | "embellishments" | "sewing" | "general";
 /** Supabase Storage'da tutulan föy görseli (public URL + silme için path). */
 export type ProductionImage = {
   url: string;
@@ -220,6 +227,8 @@ export type ProductionSheet = {
   season: string | null;
   production_date: string | null;
   delivery_date: string | null;
+  /** Dikim teslim tarihi — ürün teslim tarihinden AYRI (20240306). */
+  sewing_delivery_date?: string | null;
   meterage: string | null;
   measurements: MeasurementRow[];
   delivered_items: DeliveredItemRow[];
@@ -250,13 +259,40 @@ export type ProductionSheet = {
 export type ProductionCategory =
   | "one_of_a_kind" | "ready_to_wear" | "shoes" | "accessories";
 
+/**
+ * Maliyet kalemi — ürünün birim maliyetini oluşturan TEK bir gider.
+ *
+ * Aslı Hanım (2026-08-19):
+ *   "Maliyet şöyle hesaplanıyor: kumaşın fiyatına ayrı giriyorsun, dikim
+ *    fiyatına ayrı giriyorsun, fermuar fiyatına ayrı giriyorsun, ütü paketi
+ *    ayrı giriyorsun, kalıba ayrı giriyorsun, genel giderleri ayrı giriyorsun.
+ *    Maliyetin bir sürü kategorisi var."
+ */
+export type CostItemKey =
+  | "kumas" | "dikim" | "fermuar" | "utu_paket" | "kalip" | "aksesuar"
+  | "genel_gider" | "diger";
+
+export type CostItem = {
+  key: CostItemKey;
+  /** Serbest ad — "diger" kaleminde kullanıcı yazar. */
+  label?: string;
+  /** Birim başına tutar (serbest metin; parseMoney ile sayıya çevrilir). */
+  amount: string;
+};
+
 /** Föy fiyat bilgisi — her föy tek ürün. Toplam adet beden dağılımından gelir. */
 export type ProductionPricing = {
-  unit_price?: string;      // birim (üretim) fiyatı
-  purchase_cost?: string;   // satın alma / malzeme maliyeti
+  /** Birim ÜRETİM maliyeti — artık cost_items toplamından türetilir. */
+  unit_price?: string;
+  purchase_cost?: string;   // satın alma / malzeme maliyeti (geri uyum)
   web_sale_price?: string;  // web sitesi satış fiyatı
   currency?: string;        // varsayılan "TL"
   notes?: string;
+  /** Kalem kalem maliyet — gerçek maliyet hesabı (20240306 sonrası). */
+  cost_items?: CostItem[];
+  /** Ustaya birim başına ödenen tutar. ÖDEME TABLOSU bunu kullanır; maliyetle
+   *  KARIŞTIRILMAZ — "bu maliyet değil, bu ödeme tablosu". */
+  usta_unit_payment?: string;
 };
 
 // ── Planlama Modülü — Haftalık Toplantı Takvimi (20240216 migration) ─────────
@@ -275,6 +311,7 @@ export type PlanningMeeting = {
   content: string | null;
   kim: string | null;          // "Kim" — serbest metin (SE, ND…)
   participant_ids: string[];   // ileride yapısal katılımcı
+  collaborator_ids?: string[]; // iş birliği yapan kişiler (20240304)
   position: number;
   template_id?: string | null; // şablondan kurulduysa kaynağı (20240222)
   created_by: string | null;
@@ -291,7 +328,8 @@ export type PlanningTopic = {
   position: number;
   text: string | null;
   kim: string | null;              // eski serbest metin (geri uyum)
-  participant_ids: string[];       // konu bazlı "Kim" — üye id'leri
+  participant_ids: string[];       // konu bazlı "Kim" — SORUMLU üye id'leri
+  collaborator_ids?: string[];     // "İş birliği" — yanında çalışan kişiler (20240304)
   due_date: string | null;         // konu teslim tarihi (deadline)
   task_id: string | null;          // göreve dönüştürüldüyse ilgili görev
   created_by: string | null;
@@ -330,7 +368,8 @@ export type PlanningOpenItem = {
   workspace_id: string;
   owner_user_id: string | null;   // sistemde kullanıcısı olan sahip
   owner_label: string | null;     // kullanıcı yoksa serbest ad ("EF", "Genel")
-  owner_role: string | null;      // kişinin alt sütunu ("Sales / Online") (20240301)
+  owner_role: string | null;      // kişinin alt sütunu ("Sales / AFCOM") (20240301)
+  collaborator_user_id?: string | null; // iş birliği yapan kişi (20240304)
   text: string;
   category: PlanningCategory | null;
   done: boolean;

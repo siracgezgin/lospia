@@ -8,6 +8,9 @@ interface Props {
   ids?: string[] | null;
   /** Ham "Kim" metni — üyeye çözülemeyenler (Meral, Nihal Hoca) burada yaşar. */
   kim?: string | null;
+  /** İş birliği yapan kişiler — sorumludan AYIRT EDİLİR (ince, açık rozet).
+   *  Aslı Hanım, 2026-08-19: "Sorumlu kişinin iş birliğini koyacaksın." */
+  collaboratorIds?: string[] | null;
   memberNames: Record<string, string>;
   className?: string;
 }
@@ -19,11 +22,13 @@ interface Props {
  * haftanın tamamının sığmasını engelliyordu. Bilgi kaybolmasın diye rozetler
  * metnin akışına alındı: satır kırılınca isim cümlenin ortasına düşmez.
  */
-export function KimBadges({ ids, kim, memberNames, className }: Props) {
+export function KimBadges({ ids, kim, collaboratorIds, memberNames, className }: Props) {
   const list = ids ?? [];
+  // Sorumlu olarak zaten görünen kişi ikinci kez iş birliği rozetiyle çıkmasın.
+  const collabs = (collaboratorIds ?? []).filter((id) => !list.includes(id));
   const resolved = list.map((id) => memberNames[id]).filter(Boolean);
   const extra = unresolvedKim(kim, resolved);
-  if (!list.length && !extra.length) return null;
+  if (!list.length && !extra.length && !collabs.length) return null;
 
   return (
     <span className={cn("ml-1 inline-flex flex-wrap items-center gap-1 align-middle", className)}>
@@ -34,6 +39,17 @@ export function KimBadges({ ids, kim, memberNames, className }: Props) {
           key={id}
           title={memberNames[id] ?? ""}
           className="inline-flex items-center rounded-md bg-brand px-1.5 py-px text-[10.5px] font-bold uppercase leading-[15px] tracking-wide text-white"
+        >
+          {initialsOf(memberNames[id])}
+        </span>
+      ))}
+      {/* İş birliği — sorumludan görsel olarak bir kademe geride: dolu değil,
+          kesikli çerçeveli. "Kim" bakışta hâlâ tek bir kişiyi işaret eder. */}
+      {collabs.map((id) => (
+        <span
+          key={`c-${id}`}
+          title={`${memberNames[id] ?? ""} — iş birliği`}
+          className="inline-flex items-center rounded-md border border-dashed border-brand/50 bg-surface px-1.5 py-px text-[10.5px] font-semibold uppercase leading-[15px] tracking-wide text-brand-strong"
         >
           {initialsOf(memberNames[id])}
         </span>

@@ -30,7 +30,7 @@ const CreateSchema = z.object({
   owner_user_id: z.string().max(64).optional().nullable(),
   owner_label: z.string().max(120).optional().nullable(),
   // Kişinin alt sütunu — Excel'de bir kişinin iki listesi olabiliyor
-  // ("Sales / Satın Alma" ve "Sales / Online").
+  // ("Sales / Satın Alma" ve "Sales / AFCOM").
   owner_role: z.string().max(200).optional().nullable(),
   text: z.string().min(1, "Konu metni boş olamaz.").max(2000),
   category: z.enum(CATEGORIES).optional().nullable(),

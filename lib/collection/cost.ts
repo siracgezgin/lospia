@@ -1,7 +1,7 @@
 // Maliyet yardımcıları — föy pricing + beden dağılımından tutarlı sayı/para türet.
 // Koleksiyon tarayıcısı ve Maliyet tablosu AYNI hesabı kullansın diye tek yer.
 
-import type { ProductionSheet, SizeDistribution, ProductionPricing } from "@/types";
+import type { ProductionSheet, SizeDistribution, ProductionPricing, CostItem, CostItemKey } from "@/types";
 
 /** "₺500.00", "500,00 TL", "1.800" → 500 / 1800. Boş/geçersiz → 0. */
 export function parseMoney(raw: string | null | undefined): number {
@@ -117,6 +117,87 @@ export const STANDARD_SIZES = [
   "One Size",
 ];
 
+/**
+ * Maliyet kalemleri — Aslı Hanım'ın saydığı sıra.
+ *
+ *   "Kumaşın fiyatına ayrı giriyorsun. Dikim fiyatına ayrı giriyorsun.
+ *    Fermuar fiyatına ayrı giriyorsun. Ütü paketi ayrı giriyorsun. Kalıba ayrı
+ *    giriyorsun… genel giderleri ayrı giriyorsun."
+ *
+ * Sıra bilerek onun söylediği sıradır — ekranda tanıdık gelsin.
+ */
+export const COST_ITEM_DEFS: { key: CostItemKey; label: string }[] = [
+  { key: "kumas",        label: "Kumaş" },
+  { key: "dikim",        label: "Dikim" },
+  { key: "fermuar",      label: "Fermuar" },
+  { key: "utu_paket",    label: "Ütü / Paket" },
+  { key: "kalip",        label: "Kalıp" },
+  { key: "aksesuar",     label: "Aksesuar" },
+  { key: "genel_gider",  label: "Genel Giderler" },
+  { key: "diger",        label: "Diğer" },
+];
+
+const COST_ITEM_LABEL: Record<string, string> = Object.fromEntries(
+  COST_ITEM_DEFS.map((d) => [d.key, d.label]),
+);
+
+export function costItemLabel(item: CostItem): string {
+  return (item.label ?? "").trim() || COST_ITEM_LABEL[item.key] || "Kalem";
+}
+
+/** Boş bir maliyet kalemi seti — her föy aynı iskeletle açılır. */
+export function emptyCostItems(): CostItem[] {
+  return COST_ITEM_DEFS.map((d) => ({ key: d.key, amount: "" }));
+}
+
+/**
+ * Ürünün BİRİM maliyeti = kalemlerin toplamı.
+ *
+ * Kalem yoksa eski `unit_price` alanına düşer (geri uyum): mevcut föylerde
+ * girilmiş tek rakam kaybolmasın.
+ */
+export function unitCostOf(pricing: ProductionPricing | null | undefined): number {
+  const items = pricing?.cost_items;
+  if (Array.isArray(items) && items.length) {
+    const sum = items.reduce((acc, it) => acc + parseMoney(it.amount), 0);
+    if (sum > 0) return sum;
+  }
+  return parseMoney(pricing?.unit_price);
+}
+
+/** Ustaya ödenecek BİRİM tutar — maliyetten AYRI kalem. */
+export function ustaUnitPaymentOf(pricing: ProductionPricing | null | undefined): number {
+  const explicit = parseMoney(pricing?.usta_unit_payment);
+  if (explicit > 0) return explicit;
+  // Geri uyum: eskiden "birim fiyat" bu anlamda kullanılıyordu (Aslı Hanım'ın
+  // "bu maliyet değil, ödeme tablosu" dediği hesap). Kalem bazlı maliyet
+  // girilmemişse tek rakamı ödeme kabul et.
+  const items = pricing?.cost_items;
+  const hasItems = Array.isArray(items) && items.some((i) => parseMoney(i.amount) > 0);
+  return hasItems ? 0 : parseMoney(pricing?.unit_price);
+}
+
+/**
+ * Beden GRUBU — Aslı Hanım (2026-08-19):
+ *   "Xsmall'la small'a 1 diyeceksin. Medium'le large'a 2 diyeceksin.
+ *    XXlarge'a 3 diyeceksin… Bir de üçüncü beden kategorin, hepsinin işaretli
+ *    olduğu one size."
+ *
+ * XL sözlü olarak sayılmadı; ikili beden mantığı (XL-XXL) gereği 3. gruba
+ * konuldu. Föy ekranında grup satırı DÜZENLENEBİLİR — düzeltmesi tek tık.
+ */
+export const DEFAULT_SIZE_GROUPS: Record<string, string> = {
+  "XS": "1", "S": "1", "XS-S": "1",
+  "M": "2", "L": "2", "S-M": "2", "M-L": "2",
+  "XL": "3", "XXL": "3", "L-XL": "3", "XL-XXL": "3",
+  "One Size": "OS",
+};
+
+/** Grup etiketi → ekranda gösterilecek ad. */
+export const SIZE_GROUP_LABELS: Record<string, string> = {
+  "1": "1", "2": "2", "3": "3", "OS": "One Size",
+};
+
 /** Serbest yazılmış beden adı → standart kolon adı. */
 const SIZE_ALIASES: Record<string, string> = {
   "one size": "One Size",
@@ -193,7 +274,8 @@ export function sheetCost(
   sd: SizeDistribution | null | undefined,
 ): SheetCost {
   const qty = totalQuantity(sd);
-  const unitPrice = parseMoney(pricing?.unit_price);
+  // Birim = kalem kalem maliyetin toplamı (kalem yoksa eski tek rakama düşer).
+  const unitPrice = unitCostOf(pricing);
   return {
     qty,
     unitPrice,

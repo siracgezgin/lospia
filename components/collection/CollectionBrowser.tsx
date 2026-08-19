@@ -4,9 +4,10 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Boxes, Plus, Search, ChevronRight, FileDown,
-  FileSpreadsheet, ClipboardList, Wallet,
+  FileSpreadsheet, ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { CollectionTabs } from "./PaymentTable";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { COLLECTION_TAXONOMY, categoryLabel, subcategoryLabel } from "@/lib/collection/taxonomy";
 import type { ProductionSheet } from "@/types";
@@ -124,18 +125,8 @@ export function CollectionBrowser({ sheets }: Props) {
         }
       />
 
-      {/* Sekme çubuğu — Üretim Föyleri (aktif) | Maliyet */}
-      <div className="mb-4 flex items-center gap-1 border-b border-line">
-        <span className="flex items-center gap-1.5 border-b-2 border-brand px-3 py-2 text-[13px] font-semibold text-ink">
-          <ClipboardList size={15} /> Üretim Föyleri
-        </span>
-        <Link
-          href="/collection/maliyet"
-          className="flex items-center gap-1.5 border-b-2 border-transparent px-3 py-2 text-[13px] font-medium text-muted transition-colors duration-150 hover:border-line-strong hover:text-ink"
-        >
-          <Wallet size={15} /> Maliyet
-        </Link>
-      </div>
+      {/* Sekme çubuğu — Üretim Föyleri | Maliyet | Ödeme Tablosu (tek kaynak) */}
+      <CollectionTabs active="foy" />
 
       <div className="flex flex-col gap-5 lg:flex-row">
         {/* Sol — kategori ağacı (web nav yapısı) */}

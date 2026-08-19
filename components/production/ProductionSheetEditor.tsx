@@ -19,9 +19,11 @@ import { ImageUploader } from "./ImageUploader";
 import { COLLECTION_TAXONOMY, subcategoriesOf } from "@/lib/collection/taxonomy";
 import {
   totalQuantity, parseMoney, formatMoney, STANDARD_SIZES, normalizeToStandardSizes,
+  DEFAULT_SIZE_GROUPS, emptyCostItems, costItemLabel,
 } from "@/lib/collection/cost";
 import type {
   ProductionSheet, MeasurementRow, DeliveredItemRow, SizeDistribution, ProductionCategory,
+  CostItem,
 } from "@/types";
 
 interface Props {
@@ -44,14 +46,18 @@ function emptyState(): ProductionSheetInput {
     season: "",
     production_date: "",
     delivery_date: "",
+    sewing_delivery_date: "",
     meterage: "",
-    measurements: Array.from({ length: 4 }, (_, i) => ({ no: String(i + 1), label: "", value: "" })),
+    // Aslı Hanım (2026-08-19): "Şimdi ölçüler daha uzun oluyor. Oraya bir 10
+    // tane falan ekle." 4 → 14 satır.
+    measurements: Array.from({ length: 14 }, (_, i) => ({ no: String(i + 1), label: "", value: "" })),
     delivered_items: Array.from({ length: 3 }, (_, i) => ({ no: String(i + 1), label: "", qty: "" })),
     size_distribution: {
       sizes: [...STANDARD_SIZES],
       rows: [
         { label: "Üretim adeti", values: STANDARD_SIZES.map(() => ""), total: "" },
       ],
+      groups: { ...DEFAULT_SIZE_GROUPS },
     },
     photo_refs: [],
     wash_instruction: "",
@@ -66,7 +72,10 @@ function emptyState(): ProductionSheetInput {
     production_waste: "",
     category: null,
     subcategory: "",
-    pricing: { unit_price: "", purchase_cost: "", web_sale_price: "", currency: "TL", notes: "" },
+    pricing: {
+      unit_price: "", purchase_cost: "", web_sale_price: "", currency: "TL", notes: "",
+      cost_items: emptyCostItems(), usta_unit_payment: "",
+    },
   };
 }
 
@@ -74,6 +83,8 @@ function fromSheet(s: ProductionSheet): ProductionSheetInput {
   // Mevcut föyleri de sabit standart beden setine getir (değerler ada göre eşlenir).
   const sd: SizeDistribution = normalizeToStandardSizes(s.size_distribution);
   if (!sd.rows.length) sd.rows = [{ label: "Üretim adeti", values: sd.sizes.map(() => ""), total: "" }];
+  // Grup satırı henüz yoksa Aslı Hanım'ın verdiği eşlemeyle açılır (düzenlenebilir).
+  if (!sd.groups || Object.keys(sd.groups).length === 0) sd.groups = { ...DEFAULT_SIZE_GROUPS };
   return {
     title: s.title ?? "",
     status: s.status,
@@ -84,6 +95,7 @@ function fromSheet(s: ProductionSheet): ProductionSheetInput {
     season: s.season ?? "",
     production_date: s.production_date ?? "",
     delivery_date: s.delivery_date ?? "",
+    sewing_delivery_date: s.sewing_delivery_date ?? "",
     meterage: s.meterage ?? "",
     measurements: s.measurements?.length ? s.measurements : [{ no: "1", label: "", value: "" }],
     delivered_items: s.delivered_items?.length ? s.delivered_items : [{ no: "1", label: "", qty: "" }],
@@ -107,6 +119,10 @@ function fromSheet(s: ProductionSheet): ProductionSheetInput {
       web_sale_price: s.pricing?.web_sale_price ?? "",
       currency: s.pricing?.currency ?? "TL",
       notes: s.pricing?.notes ?? "",
+      // Kalem seti yoksa boş iskeletle açılır; eski tek "birim fiyat" rakamı
+      // ustaya ödeme kabul edilir (bkz. ustaUnitPaymentOf) — veri kaybolmaz.
+      cost_items: s.pricing?.cost_items?.length ? s.pricing.cost_items : emptyCostItems(),
+      usta_unit_payment: s.pricing?.usta_unit_payment ?? "",
     },
   };
 }
@@ -220,6 +236,13 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
     set("size_distribution", { ...sd, rows: [...sd.rows, { label: "", values: sd.sizes.map(() => ""), total: "" }] });
   const removeDistRow = (rowIdx: number) =>
     set("size_distribution", { ...sd, rows: sd.rows.filter((_, ri) => ri !== rowIdx) });
+  /** Beden grubu hücresi ("1" | "2" | "3" | "OS") — boş bırakılırsa silinir. */
+  const setSizeGroup = (size: string, v: string) => {
+    const groups = { ...(sd.groups ?? {}) };
+    const t = v.trim();
+    if (t) groups[size] = t; else delete groups[size];
+    set("size_distribution", { ...sd, groups });
+  };
 
   function handleSave() {
     setError(null);
@@ -325,34 +348,43 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
 
       {/* ── Föy belgesi ── */}
       <div className="stagger-children space-y-3 rounded-2xl border border-line-strong bg-surface p-4 shadow-card sm:p-6">
-        {/* Başlık şeridi — solda başlık, sağda AF logosu (koyu band → beyaz logo) */}
+        {/* Başlık şeridi. Aslı Hanım (2026-08-19): "Şu Aslı Filinta'yı yazma
+            böyle… Logoya gerek yok kendi iç üretimimizde güzelim." — marka
+            kimliği çıkarıldı; şerit yalnız belgenin adını taşır. Sağda ürün
+            kodu, çıktıda sayfayı tanımlayan tek işaret olarak durur. */}
         <div className="flex items-center justify-between gap-3 rounded-xl bg-ink px-5 py-3">
           <div className="flex items-center gap-2.5 text-white">
             <ClipboardList size={19} />
             <span className="text-[15px] font-bold uppercase tracking-[0.18em]">Üretim Föyü</span>
           </div>
-          <img
-            src="/brands/asli-filinta-logo.png"
-            alt="Aslı Filinta"
-            className="h-9 w-auto select-none object-contain opacity-95 [filter:brightness(0)_invert(1)]"
-            draggable={false}
-          />
+          {form.product_code ? (
+            <span className="text-[13px] font-semibold tabular-nums tracking-wide text-white/85">
+              {form.product_code}
+            </span>
+          ) : null}
         </div>
 
+      {/* Sipariş bilgisi (sol) + TEKNİK ÇİZİM ÖN/ARKA (sağ üst).
+          Aslı Hanım (2026-08-19): "Benim yukarıda çizimini görmem lazım.
+          Teknik çizimini yukarıda sağda… En üst sağda teknik çizim ön,
+          teknik çizim arka olacak." ve "Teslim edilen ürünler yukarıda olmaz.
+          Önce siparişi görmemiz lazım." */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
         {/* Ürün bilgileri — 2 kolon (Excel'deki gibi) */}
+        {/* TEK ızgara, iki kolon: alanlar satır satır akar, sütunların boyu
+            farklı olduğu için altta BOŞLUK oluşmaz. Aslı Hanım (2026-08-19):
+            "Hiçbir şey boş kalmasın… hiçbir yerde boşluk istemiyorum." */}
         <div className="grid grid-cols-1 gap-x-5 gap-y-2 rounded-lg border border-line p-3 md:grid-cols-2">
-          <div className="space-y-2">
-            <LabeledField label="Föy başlığı *" value={form.title} onChange={(v) => set("title", v)} placeholder="Beyaz Dantel Etek" />
-            <LabeledField label="Ürün kodu" value={form.product_code ?? ""} onChange={(v) => set("product_code", v)} />
-            <LabeledField label="Ürün cinsi" value={form.product_kind ?? ""} onChange={(v) => set("product_kind", v)} placeholder="Etek" />
-            <LabeledField label="Üretici" value={form.producer ?? ""} onChange={(v) => set("producer", v)} />
-          </div>
-          <div className="space-y-2">
-            <LabeledField label="Üretim tarihi" value={form.production_date ?? ""} onChange={(v) => set("production_date", v)} />
-            <LabeledField label="Teslim tarihi" value={form.delivery_date ?? ""} onChange={(v) => set("delivery_date", v)} placeholder="21.07.2026" />
-            <LabeledField label="Sezon" value={form.season ?? ""} onChange={(v) => set("season", v)} placeholder="2026 RESORT" />
-            <LabeledField label="1 ürüne giden metraj" value={form.meterage ?? ""} onChange={(v) => set("meterage", v)} placeholder="1.60 CM" />
-          </div>
+          <LabeledField label="Föy başlığı *" value={form.title} onChange={(v) => set("title", v)} placeholder="Beyaz Dantel Etek" />
+          <LabeledField label="Üretim tarihi" value={form.production_date ?? ""} onChange={(v) => set("production_date", v)} />
+          <LabeledField label="Ürün kodu" value={form.product_code ?? ""} onChange={(v) => set("product_code", v)} />
+          <LabeledField label="Teslim tarihi" value={form.delivery_date ?? ""} onChange={(v) => set("delivery_date", v)} placeholder="21.07.2026" />
+          <LabeledField label="Ürün cinsi" value={form.product_kind ?? ""} onChange={(v) => set("product_kind", v)} placeholder="Etek" />
+          {/* İkinci tarih — "Bir ürünlerin teslim tarihi, bir de dikim teslim
+              tarihi lazım." */}
+          <LabeledField label="Dikim teslim tarihi" value={form.sewing_delivery_date ?? ""} onChange={(v) => set("sewing_delivery_date", v)} placeholder="14.07.2026" />
+          <LabeledField label="Üretici" value={form.producer ?? ""} onChange={(v) => set("producer", v)} />
+          <LabeledField label="Sezon" value={form.season ?? ""} onChange={(v) => set("season", v)} placeholder="2026 RESORT" />
           {/* Koleksiyon kategorisi — web nav yapısı (One-of-a-Kind / Ready to Wear …) */}
           <label className="flex items-center gap-2">
             <span className="w-40 shrink-0 text-[11.5px] font-semibold uppercase tracking-wide text-muted">Kategori</span>
@@ -390,48 +422,66 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
               ))}
             </select>
           </label>
+          <LabeledField label="1 ürüne giden metraj" value={form.meterage ?? ""} onChange={(v) => set("meterage", v)} placeholder="1.60 CM" />
           <label className="md:col-span-2 flex items-start gap-2">
             <span className="w-40 shrink-0 pt-1.5 text-[11.5px] font-semibold uppercase tracking-wide text-muted">Ürünün açıklaması</span>
             <TextArea value={form.description ?? ""} onChange={(v) => set("description", v)} rows={2} />
           </label>
         </div>
 
-        {/* ÖLÇÜLER (sol) + TEKNİK ÇİZİM (sağ) — Excel'deki gibi yan yana */}
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          <Section title="Ölçüler (cm)">
-            <div className="space-y-1.5">
-              {form.measurements.map((row, i) => (
-                <div key={i} className="flex items-center gap-1.5">
-                  <input className={cn(inputCls, "w-10 px-1 text-center tabular-nums")} value={row.no} onChange={(e) => updateMeasurement(i, { no: e.target.value })} />
-                  <input className={cn(inputCls, "flex-1")} value={row.label} onChange={(e) => updateMeasurement(i, { label: e.target.value })} placeholder="Ölçü adı" />
-                  <input className={cn(inputCls, "w-20 text-center tabular-nums")} value={row.value} onChange={(e) => updateMeasurement(i, { value: e.target.value })} placeholder="cm" />
-                  <button onClick={() => removeMeasurement(i)} className="shrink-0 rounded-md p-1 text-subtle transition-colors duration-150 hover:bg-danger/10 hover:text-danger" title="Sil"><Trash2 size={13} /></button>
-                </div>
-              ))}
-            </div>
-            <button onClick={addMeasurement} className="mt-2 -ml-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[12px] font-medium text-brand transition-colors duration-150 hover:bg-brand-soft hover:text-brand-strong">
-              <Plus size={12} /> Satır ekle
-            </button>
+        {/* TEKNİK ÇİZİM — sağ üst köşe, ÖN ve ARKA yan yana. */}
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-1">
+          <Section title="Teknik Çizim — Ön">
+            <ImageUploader sheetId={sheetId} section="technical_drawing_front" images={form.photo_refs} onChange={handleImagesChange} variant="drawing" />
           </Section>
-
-          <Section title="Teknik Çizim">
-            <ImageUploader sheetId={sheetId} section="technical_drawing" images={form.photo_refs} onChange={handleImagesChange} variant="drawing" />
+          <Section title="Teknik Çizim — Arka">
+            <ImageUploader sheetId={sheetId} section="technical_drawing_back" images={form.photo_refs} onChange={handleImagesChange} variant="drawing" />
           </Section>
         </div>
+      </div>
 
-        {/* TESLİM EDİLEN ÜRÜNLER */}
-        <Section title="Teslim Edilen Ürünler">
-          <div className="space-y-1.5">
-            {form.delivered_items.map((row, i) => (
-              <div key={i} className="flex items-center gap-1.5">
-                <input className={cn(inputCls, "w-10 px-1 text-center tabular-nums")} value={row.no} onChange={(e) => updateDelivered(i, { no: e.target.value })} />
-                <input className={cn(inputCls, "flex-1")} value={row.label} onChange={(e) => updateDelivered(i, { label: e.target.value })} placeholder="Ürün (ör. Karton Etiket)" />
-                <input className={cn(inputCls, "w-24 text-center tabular-nums")} value={row.qty} onChange={(e) => updateDelivered(i, { qty: e.target.value })} placeholder="Adet" />
-                <button onClick={() => removeDelivered(i)} className="shrink-0 rounded-md p-1 text-subtle transition-colors duration-150 hover:bg-danger/10 hover:text-danger" title="Sil"><Trash2 size={13} /></button>
-              </div>
-            ))}
+        {/* ÖLÇÜLER — Excel gibi çizgili ızgara, numaralar OTOMATİK.
+            Aslı Hanım (2026-08-19): "Bunların Excel gibi çizgi çizgi kare kare
+            olması… hiçbir boş hücre kalmaması. Mesela üç numara niye boş?"
+            Sıra numarası artık elle yazılmıyor → hiçbir numara boş kalamaz. */}
+        <Section title="Ölçüler (cm)">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[420px] table-fixed border-collapse text-[13px]">
+              <colgroup>
+                <col className="w-10" />
+                <col />
+                <col className="w-24" />
+                <col className="w-9" />
+              </colgroup>
+              <thead>
+                <tr className="bg-surface-muted">
+                  <th className="border border-line-strong px-1 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wider text-subtle">No</th>
+                  <th className="border border-line-strong px-2 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider text-subtle">Ölçü</th>
+                  <th className="border border-line-strong px-1 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wider text-subtle">cm</th>
+                  <th className="w-9" />
+                </tr>
+              </thead>
+              <tbody>
+                {form.measurements.map((row, i) => (
+                  <tr key={i}>
+                    <td className="border border-line bg-surface-muted/60 px-1 py-1.5 text-center text-[12px] font-semibold tabular-nums text-muted">
+                      {i + 1}
+                    </td>
+                    <td className="border border-line p-0">
+                      <input className="w-full bg-transparent px-2 py-1.5 text-[13px] text-ink focus:bg-surface focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-ring" value={row.label} onChange={(e) => updateMeasurement(i, { label: e.target.value })} placeholder="Ölçü adı" />
+                    </td>
+                    <td className="border border-line p-0">
+                      <input className="w-full bg-transparent px-1 py-1.5 text-center tabular-nums text-ink focus:bg-surface focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-ring" value={row.value} onChange={(e) => updateMeasurement(i, { value: e.target.value })} />
+                    </td>
+                    <td className="text-center align-middle">
+                      <button onClick={() => removeMeasurement(i)} className="rounded-md p-1 text-subtle transition-colors duration-150 hover:bg-danger/10 hover:text-danger" title="Satırı sil"><Trash2 size={12} /></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          <button onClick={addDelivered} className="mt-2 -ml-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[12px] font-medium text-brand transition-colors duration-150 hover:bg-brand-soft hover:text-brand-strong">
+          <button onClick={addMeasurement} className="mt-2 -ml-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[12px] font-medium text-brand transition-colors duration-150 hover:bg-brand-soft hover:text-brand-strong">
             <Plus size={12} /> Satır ekle
           </button>
         </Section>
@@ -440,6 +490,10 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
         <Section title="Beden Dağılımı">
           <p className="mb-2.5 text-[12px] text-subtle">
             Tüm bedenler her zaman burada; yalnızca ürünün olan bedenlerine adet girin.
+            <br />
+            <b className="font-semibold text-muted">Grup</b> satırı ikili bedenleri
+            eşler: XS-S <b>1</b>, M-L <b>2</b>, XL-XXL <b>3</b>, tek beden <b>OS</b>.
+            Hücreye yazarak değiştirebilirsiniz.
           </p>
           {/* Hizalı, çizgili ızgara — sabit başlıklar + eşit genişlikte kutucuklar */}
           <div className="overflow-x-auto">
@@ -459,6 +513,30 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
                     </th>
                   ))}
                   <th className="border border-line-strong px-1 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wider text-subtle">Toplam</th>
+                  <th className="w-9" />
+                </tr>
+                {/* BEDEN GRUBU — Aslı Hanım (2026-08-19): "Bedenlerin altına
+                    o ürünün gibi bir sıra daha açacaksın. XSmall'la small'a 1,
+                    medium'le large'a 2, XXlarge'a 3 diyeceksin. Bir de
+                    hepsinin işaretli olduğu one size." Hücreler düzenlenebilir:
+                    grubu değiştirmek tek tık. */}
+                <tr className="bg-surface-sunken">
+                  <th className="border border-line-strong px-2 py-1 text-left text-[11px] font-semibold uppercase tracking-wider text-subtle">
+                    Grup
+                  </th>
+                  {sd.sizes.map((size, i) => (
+                    <th key={i} className="border border-line-strong p-0">
+                      <input
+                        className="w-full bg-transparent px-1 py-1 text-center text-[12px] font-bold tabular-nums text-brand-strong focus:bg-surface focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-ring"
+                        value={sd.groups?.[size] ?? ""}
+                        onChange={(e) => setSizeGroup(size, e.target.value)}
+                        placeholder="—"
+                        maxLength={8}
+                        title={`${size} bedeninin grubu`}
+                      />
+                    </th>
+                  ))}
+                  <th className="border border-line-strong" />
                   <th className="w-9" />
                 </tr>
               </thead>
@@ -489,34 +567,145 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
           </button>
         </Section>
 
-        {/* MALİYET / FİYAT — her föy tek ürün; toplam adet beden dağılımından gelir */}
-        <Section title="Maliyet / Fiyat">
+        {/* TESLİM EDİLEN ÜRÜNLER — siparişin ALTINDA.
+            Aslı Hanım (2026-08-19): "Teslim edilen ürünler yukarıda olmaz.
+            Önce siparişi görmemiz lazım." Numaralar otomatik: boş hücre yok. */}
+        <Section title="Teslim Edilen Ürünler">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[420px] table-fixed border-collapse text-[13px]">
+              <colgroup>
+                <col className="w-10" />
+                <col />
+                <col className="w-24" />
+                <col className="w-9" />
+              </colgroup>
+              <thead>
+                <tr className="bg-surface-muted">
+                  <th className="border border-line-strong px-1 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wider text-subtle">No</th>
+                  <th className="border border-line-strong px-2 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider text-subtle">Ürün</th>
+                  <th className="border border-line-strong px-1 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wider text-subtle">Adet</th>
+                  <th className="w-9" />
+                </tr>
+              </thead>
+              <tbody>
+                {form.delivered_items.map((row, i) => (
+                  <tr key={i}>
+                    <td className="border border-line bg-surface-muted/60 px-1 py-1.5 text-center text-[12px] font-semibold tabular-nums text-muted">
+                      {i + 1}
+                    </td>
+                    <td className="border border-line p-0">
+                      <input className="w-full bg-transparent px-2 py-1.5 text-[13px] text-ink focus:bg-surface focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-ring" value={row.label} onChange={(e) => updateDelivered(i, { label: e.target.value })} placeholder="Ürün (ör. Karton Etiket)" />
+                    </td>
+                    <td className="border border-line p-0">
+                      <input className="w-full bg-transparent px-1 py-1.5 text-center tabular-nums text-ink focus:bg-surface focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-ring" value={row.qty} onChange={(e) => updateDelivered(i, { qty: e.target.value })} inputMode="numeric" />
+                    </td>
+                    <td className="text-center align-middle">
+                      <button onClick={() => removeDelivered(i)} className="rounded-md p-1 text-subtle transition-colors duration-150 hover:bg-danger/10 hover:text-danger" title="Satırı sil"><Trash2 size={12} /></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <button onClick={addDelivered} className="mt-2 -ml-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[12px] font-medium text-brand transition-colors duration-150 hover:bg-brand-soft hover:text-brand-strong">
+            <Plus size={12} /> Satır ekle
+          </button>
+        </Section>
+
+        {/* MALİYET — kalem kalem. Aslı Hanım (2026-08-19):
+            "Maliyet şöyle hesaplanıyor: kumaşın fiyatına ayrı giriyorsun,
+             dikim fiyatına ayrı, fermuar fiyatına ayrı, ütü paketi ayrı,
+             kalıba ayrı, genel giderleri ayrı. Maliyetin bir sürü kategorisi
+             var. Öyle birim fiyat diye maliyet hesaplanmıyor." */}
+        <Section title="Maliyet (kalem kalem)">
           {(() => {
             const p = form.pricing;
             const qty = totalQuantity(form.size_distribution);
-            const lineTotal = qty * parseMoney(p.unit_price);
+            const items = p.cost_items?.length ? p.cost_items : emptyCostItems();
+            const unitCost = items.reduce((a, it) => a + parseMoney(it.amount), 0);
             const setP = (patch: Partial<typeof p>) => set("pricing", { ...p, ...patch });
+            const setItem = (i: number, patch: Partial<CostItem>) =>
+              setP({ cost_items: items.map((it, ix) => (ix === i ? { ...it, ...patch } : it)) });
+            const sale = parseMoney(p.web_sale_price);
+            const margin = sale > 0 && unitCost > 0 ? ((sale - unitCost) / sale) * 100 : null;
             return (
               <div className="space-y-3">
-                <div className="grid grid-cols-1 gap-x-5 gap-y-2 sm:grid-cols-2 2xl:grid-cols-4">
-                  <LabeledField label="Birim fiyat (₺)" value={p.unit_price ?? ""} onChange={(v) => setP({ unit_price: v })} placeholder="500" />
-                  <LabeledField label="Satın alma maliyeti (₺)" value={p.purchase_cost ?? ""} onChange={(v) => setP({ purchase_cost: v })} placeholder="birim malzeme maliyeti" />
+                {/* Kalem ızgarası — Excel gibi çizgili, boş hücre bırakmaz. */}
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[380px] table-fixed border-collapse text-[13px]">
+                    <colgroup><col /><col className="w-36" /></colgroup>
+                    <thead>
+                      <tr className="bg-surface-muted">
+                        <th className="border border-line-strong px-2 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider text-subtle">Maliyet kalemi</th>
+                        <th className="border border-line-strong px-2 py-1.5 text-right text-[11px] font-semibold uppercase tracking-wider text-subtle">Birim (₺)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((it, i) => (
+                        <tr key={`${it.key}-${i}`}>
+                          <td className="border border-line px-2 py-1.5">
+                            {it.key === "diger" ? (
+                              <input
+                                className="w-full bg-transparent text-[13px] text-ink focus:outline-none"
+                                value={it.label ?? ""}
+                                onChange={(e) => setItem(i, { label: e.target.value })}
+                                placeholder="Diğer gider adı"
+                              />
+                            ) : (
+                              <span className="font-medium text-ink">{costItemLabel(it)}</span>
+                            )}
+                          </td>
+                          <td className="border border-line p-0">
+                            <input
+                              className="w-full bg-transparent px-2 py-1.5 text-right tabular-nums text-ink focus:bg-surface focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-ring"
+                              value={it.amount}
+                              onChange={(e) => setItem(i, { amount: e.target.value })}
+                              inputMode="decimal"
+                              placeholder="—"
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                      <tr className="bg-surface-muted">
+                        <td className="border border-line-strong px-2 py-1.5 text-[12px] font-bold uppercase tracking-wide text-ink">
+                          Birim maliyet
+                        </td>
+                        <td className="border border-line-strong px-2 py-1.5 text-right text-[13px] font-bold tabular-nums text-ink">
+                          {formatMoney(unitCost)}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Satış fiyatı + ustaya ödeme — maliyetten AYRI iki kalem. */}
+                <div className="grid grid-cols-1 gap-x-5 gap-y-2 sm:grid-cols-2">
                   <LabeledField label="Web satış fiyatı (₺)" value={p.web_sale_price ?? ""} onChange={(v) => setP({ web_sale_price: v })} placeholder="sitedeki satış fiyatı" />
+                  <LabeledField label="Ustaya birim ödeme (₺)" value={p.usta_unit_payment ?? ""} onChange={(v) => setP({ usta_unit_payment: v })} placeholder="Ödeme Tablosu’na girer" />
                   <LabeledField label="Not" value={p.notes ?? ""} onChange={(v) => setP({ notes: v })} placeholder="KDV hariç, kargo vb." />
                 </div>
-                {/* Otomatik toplam üretim maliyeti — beden dağılımı toplam adedi × birim fiyat */}
+
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-surface-muted px-3 py-2 text-[13px]">
                   <span className="text-muted">
-                    Toplam adet: <span className="font-semibold text-ink tabular-nums">{qty || "—"}</span>
+                    Toplam adet: <span className="font-semibold tabular-nums text-ink">{qty || "—"}</span>
                     <span className="mx-1.5 text-subtle">×</span>
-                    Birim: <span className="font-semibold text-ink tabular-nums">{formatMoney(parseMoney(p.unit_price))}</span>
+                    Birim maliyet: <span className="font-semibold tabular-nums text-ink">{formatMoney(unitCost)}</span>
                   </span>
-                  <span className="font-bold text-ink tabular-nums">
-                    Üretim maliyeti: {formatMoney(lineTotal)}
+                  <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                    {margin !== null && (
+                      <span className={cn("font-semibold tabular-nums", margin >= 0 ? "text-success" : "text-danger")}>
+                        Kâr marjı: %{margin.toFixed(0)}
+                      </span>
+                    )}
+                    <span className="font-bold tabular-nums text-ink">
+                      Toplam maliyet: {formatMoney(qty * unitCost)}
+                    </span>
                   </span>
                 </div>
                 <p className="text-[12px] text-subtle">
-                  Bu fiyatlar Koleksiyon → Maliyet bölümünde de görünür; oradan değiştirilirse burada da güncellenir (tek kaynak).
+                  Maliyet ile <b className="font-semibold text-muted">ödeme</b> ayrı şeylerdir: buradaki kalemler ürünün
+                  maliyetini verir; ustaya ödenen tutar Koleksiyon → <b className="font-semibold text-muted">Ödeme Tablosu</b>’nda
+                  usta bazında toplanır.
                 </p>
               </div>
             );

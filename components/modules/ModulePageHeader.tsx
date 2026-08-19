@@ -8,7 +8,7 @@ interface Props {
   icon?: LucideIcon;
   /** Optional small pill next to the title (e.g. "Yönetici alanı"). */
   badge?: string;
-  /** Primary back target — defaults to Ana Sayfa (her role açık, çıkmaz yok). */
+  /** Primary back target — defaults to Home Page (her role açık, çıkmaz yok). */
   backHref?: string;
   backLabel?: string;
   /** Optional secondary back link (e.g. "Panoya dön"). */
@@ -31,7 +31,7 @@ export function ModulePageHeader({
   icon: Icon,
   badge,
   backHref = "/home",
-  backLabel = "Ana Sayfa’ya dön",
+  backLabel = "Home Page’e dön",
   secondaryBackHref,
   secondaryBackLabel = "Panoya dön",
   rightSlot,

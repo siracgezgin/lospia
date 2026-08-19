@@ -76,7 +76,7 @@ export default async function BoardPage({
     // workspace_members row id so we can build the dept-filtered responsible picker.
     supabase
       .from("workspace_members")
-      .select("id, user_id, role, profiles(id, full_name, email)")
+      .select("id, user_id, role, profiles(id, full_name, email, avatar_url)")
       .eq("workspace_id", workspaceId),
     supabase
       .from("workspace_contacts")
@@ -116,7 +116,7 @@ export default async function BoardPage({
 
   const tasks: Task[] = tasksResult.data ?? [];
   const savedViews: SavedView[] = viewsResult.data ?? [];
-  type ProfileLite = Pick<Profile, "id" | "full_name" | "email">;
+  type ProfileLite = Pick<Profile, "id" | "full_name" | "email" | "avatar_url">;
   type MemberRow = { id: string; user_id: string; role: string; profiles: ProfileLite | ProfileLite[] | null };
   const memberRowsData = (profilesResult.data ?? []) as unknown as MemberRow[];
   const profiles: ProfileLite[] = memberRowsData

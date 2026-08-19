@@ -3,7 +3,7 @@ import { ArrowUpRight } from "lucide-react";
 import type { ModuleEntry } from "@/lib/modules/registry";
 
 /**
- * Ana Sayfa kısayol karosu — modül dizinindeki TEK kanonik isimle, sayaçsız,
+ * Home Page kısayol karosu — modül dizinindeki TEK kanonik isimle, sayaçsız,
  * kompakt bir giriş kapısı. Görsel dil OfficeCenterCard ile aynı ailedendir;
  * fark: daha sıkı dikey ritim (ana sayfada 10+ karo yan yana yaşar).
  */

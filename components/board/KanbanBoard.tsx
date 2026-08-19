@@ -61,6 +61,8 @@ import { formatDateTR } from "@/lib/utils/format-date";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { buildAssignablePeople } from "@/lib/people/assignable";
 import { buildDeptMeta, type DeptMeta } from "@/lib/utils/departments";
+import { PeopleGrid, buildPersonLoads, type GridPerson } from "./PeopleGrid";
+import { assignPersonTones } from "@/lib/design/person-colors";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
 import { CsvImportModal } from "@/components/task/CsvImportModal";
 import { NotesColumn } from "@/components/board/NotesColumn";
@@ -437,7 +439,9 @@ interface Props {
   weekIso?: string | null;
   workspaceId: string;
   userId: string;
-  profiles: Pick<Profile, "id" | "full_name" | "email">[];
+  // avatar_url optional: kişi ızgarasındaki ekip fotoğrafı. Yoksa kişiye özel
+  // ikon + baş harf çizilir (lib/design/person-colors.ts).
+  profiles: (Pick<Profile, "id" | "full_name" | "email"> & { avatar_url?: string | null })[];
   contacts: WorkspaceContact[];
   notes: WorkspaceNote[];
   rules?: BoardRule[];
@@ -1382,6 +1386,12 @@ export function KanbanBoard({
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [search, setSearch] = useState("");
 
+  // Panonun kapısı kişi ızgarasıdır (Aslı Hanım, 2026-08-19: "Ana sayfan o
+  // olsun. Kişi seçelim… ortada, büyük büyük"). Bir kişi seçilince ya da
+  // "Tüm işler" denince kolonlara geçilir; "← Kişiler" ile geri dönülür.
+  // Yönetici Pano bu kapıyı kullanmaz (kendi yönetici filtresi var).
+  const [peopleEntry, setPeopleEntry] = useState(!isAdminBoard);
+
   // Manager-mode state (visibility tab + manager person filter). URL-synced so a
   // Yönetici Pano view is shareable; defaults come from the server-parsed params.
   const [adminVisibility, setAdminVisibility] = useState<TaskVisibility>(adminBoard?.visibility ?? "admin_only");
@@ -1438,6 +1448,10 @@ export function KanbanBoard({
   // geri açılabilir.
   const RULES_PANEL_ENABLED = false; // Kurallar paneli
   const CSV_IMPORT_ENABLED = false;  // CSV'den içe aktar
+  // Departman filtresi — Aslı Hanım (2026-08-19): "Yukarıda bir daha üretim ve
+  // tedarik zinciri, finans ve operasyon diye yazmasın yani. Yoruyor onlar
+  // bizi." Filtre mantığı ve verisi korunur; yalnız araç çubuğundan kalktı.
+  const DEPARTMENT_FILTER_ENABLED = false;
 
   const responsibleNames = useMemo<Record<string, string>>(() => {
     const map: Record<string, string> = {};
@@ -1694,6 +1708,49 @@ export function KanbanBoard({
     return mid ? [mid] : [];
   }, [isAdminBoard, adminManager, memberIdByUserId, userId]);
 
+  // ── Kişi ızgarası — panonun giriş ekranı ─────────────────────────────────
+  // Üyeler ∪ (üyeyle eşleşmeyen) CRM kişileri; ızgara ve renk/ikon ataması
+  // buradan beslenir. Departman üyeliği burayı ASLA daraltmaz (proje kuralı:
+  // buildAssignablePeople tek kaynak).
+  const gridPeople = useMemo<GridPerson[]>(() => {
+    const fromMembers: GridPerson[] = (members.length > 0
+      ? members.map((m) => ({
+          filterKey: `member:${m.userId}`,
+          id: m.userId,
+          name: m.name,
+          avatarUrl: profiles.find((p) => p.id === m.userId)?.avatar_url ?? null,
+          isAdmin: m.isAdmin,
+        }))
+      : profiles.map((p) => ({
+          filterKey: `member:${p.id}`,
+          id: p.id,
+          name: p.full_name ?? p.email ?? "—",
+          avatarUrl: p.avatar_url ?? null,
+        })));
+    const fromContacts: GridPerson[] = pickerContacts.map((c) => ({
+      filterKey: `contact:${c.id}`,
+      id: c.id,
+      name: c.name,
+    }));
+    return [...fromMembers, ...fromContacts];
+  }, [members, profiles, pickerContacts]);
+
+  const personLoads = useMemo(
+    () => buildPersonLoads(optimisticTasks, gridPeople, localISO(new Date())),
+    [optimisticTasks, gridPeople],
+  );
+
+  const personTones = useMemo(
+    () => assignPersonTones(gridPeople.map((p) => p.id)),
+    [gridPeople],
+  );
+
+  /** Seçili kişinin ızgaradaki kaydı — üst şeritteki renkli başlık için. */
+  const selectedPerson = useMemo(
+    () => gridPeople.find((p) => p.filterKey === personFilter) ?? null,
+    [gridPeople, personFilter],
+  );
+
   // Person workload summary (computed from raw tasks, not view-filtered). Not
   // shown on the manager board (its person filter lists managers, not members).
   const personStats = useMemo(() => {
@@ -1863,7 +1920,7 @@ export function KanbanBoard({
           UNDER the tabs and ONLY while "Bu hafta" is active, so no other view
           can appear week-bound. Each tab explains itself via the muted
           description line below the strip. */}
-      {!isAdminBoard && savedViews.length > 0 && (
+      {!isAdminBoard && !peopleEntry && savedViews.length > 0 && (
         <div className="px-4 pt-2.5 pb-2 bg-surface border-b border-line shrink-0 space-y-1.5">
           {/* Shared segmented view tabs (identical language to the List). The
               general views come first; "Bu hafta" is set apart with a divider +
@@ -1974,7 +2031,45 @@ export function KanbanBoard({
         </div>
       )}
 
+      {/* ── Kişi ızgarası — panonun kapısı (Aslı Hanım, 2026-08-19) ──────── */}
+      {peopleEntry && !isAdminBoard && (
+        <PeopleGrid
+          people={gridPeople}
+          loadOf={personLoads}
+          meKey={`member:${userId}`}
+          totalTasks={optimisticTasks.length}
+          onPick={(key) => { setPersonFilter(key); setPeopleEntry(false); }}
+          onShowAll={() => { setPersonFilter(""); setPeopleEntry(false); }}
+        />
+      )}
+
+      {/* ── Seçili kişi şeridi — kimin sayfasındayız? ─────────────────────── */}
+      {!peopleEntry && !isAdminBoard && (
+        <div className="flex items-center gap-2 border-b border-hairline bg-surface px-4 py-2 shrink-0">
+          <button
+            onClick={() => { setPersonFilter(""); setSearch(""); setPeopleEntry(true); }}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[13px] font-medium text-muted transition-all duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
+          >
+            <ChevronLeft size={14} /> Kişiler
+          </button>
+          {selectedPerson ? (
+            <span className="flex min-w-0 items-center gap-2">
+              <span
+                aria-hidden
+                className={`h-5 w-1.5 shrink-0 rounded-full ${personTones[selectedPerson.id]?.bar ?? "bg-brand"}`}
+              />
+              <span className="truncate text-[15px] font-semibold tracking-tight text-ink">
+                {getPersonDisplayName(selectedPerson.name)}
+              </span>
+            </span>
+          ) : (
+            <span className="truncate text-[15px] font-semibold tracking-tight text-ink">Tüm işler</span>
+          )}
+        </div>
+      )}
+
       {/* ── Toolbar ──────────────────────────────────────────────────────── */}
+      {!peopleEntry && (
       <div className="flex items-center gap-2 px-4 py-2 border-b border-hairline bg-surface shrink-0 flex-wrap">
         {/* Left: action buttons (hidden for viewer) */}
         {canCreate && (
@@ -2000,7 +2095,8 @@ export function KanbanBoard({
         {/* Right: Departman + Kişi + Arama */}
         <div className="flex items-center gap-2 ml-auto flex-wrap">
 
-          {/* Departman filter */}
+          {/* Departman filtresi — gizli (DEPARTMENT_FILTER_ENABLED). */}
+          {DEPARTMENT_FILTER_ENABLED && (
           <select
             value={departmentFilter}
             onChange={(e) => setDepartmentFilter(e.target.value)}
@@ -2013,6 +2109,7 @@ export function KanbanBoard({
             <option value="">Departman</option>
             {deptFilterOptions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
+          )}
 
           {/* Person filter. Manager board lists ONLY owner/admin people and
               filters by canonical responsibility; the normal board keeps the
@@ -2091,9 +2188,10 @@ export function KanbanBoard({
           )}
         </div>
       </div>
+      )}
 
       {/* ── Person workload summary strip ───────────────────────────────── */}
-      {personStats && (
+      {!peopleEntry && personStats && (
         <div className="flex items-center gap-4 px-4 py-2 bg-brand-soft/40 border-b border-brand-soft text-xs shrink-0 flex-wrap tabular-nums anim-fade">
           <span className="font-semibold text-brand-strong">{personStats.name}</span>
           <span className="text-muted">
@@ -2116,7 +2214,7 @@ export function KanbanBoard({
       )}
 
       {/* ── Pre-mount: static (no DnD) — desktop/tablet only ─────────────── */}
-      {!mounted && (
+      {!peopleEntry && !mounted && (
         <div className="hidden md:block overflow-auto flex-1 min-h-0">
           <div className="relative min-w-max">
             {/* Continuous sticky band behind every column header (no gaps/peek). */}
@@ -2139,7 +2237,7 @@ export function KanbanBoard({
       )}
 
       {/* ── Post-mount: full DnD board ───────────────────────────────────── */}
-      {mounted && (
+      {!peopleEntry && mounted && (
         <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}
@@ -2190,6 +2288,7 @@ export function KanbanBoard({
       )}
 
       {/* ── Mobile board: segmented status control + single full-width column ── */}
+      {!peopleEntry && (
       <div className="md:hidden flex flex-col">
         {/* Segmented status tabs — the one sticky element on mobile (compact, single
             row, horizontal scroll with the scrollbar hidden). */}
@@ -2266,6 +2365,7 @@ export function KanbanBoard({
           )}
         </div>
       </div>
+      )}
 
       {/* ── Toast overlay ─────────────────────────────────────────────────── */}
       {toasts.length > 0 && (

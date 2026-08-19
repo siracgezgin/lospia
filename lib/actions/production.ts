@@ -38,13 +38,16 @@ const sizeDistribution = z.object({
     )
     .max(20)
     .default([]),
+  // Beden grubu satırı: beden adı → "1" | "2" | "3" | "OS" (Aslı Hanım, 2026-08-19).
+  groups: z.record(z.string().max(20), z.string().max(8)).optional(),
 });
 
 const productionImage = z.object({
   url: z.string().max(2000),
   path: z.string().max(500),
   section: z.enum([
-    "technical_drawing", "fabric", "accessories", "embellishments", "sewing", "general",
+    "technical_drawing", "technical_drawing_front", "technical_drawing_back",
+    "fabric", "accessories", "embellishments", "sewing", "general",
   ]),
   caption: z.string().max(300).optional(),
 });
@@ -52,12 +55,23 @@ const productionImage = z.object({
 const longText = z.string().max(8000).optional().nullable();
 const shortText = z.string().max(500).optional().nullable();
 
+const costItem = z.object({
+  key: z.enum(["kumas", "dikim", "fermuar", "utu_paket", "kalip", "aksesuar", "genel_gider", "diger"]),
+  label: z.string().max(120).optional(),
+  amount: z.string().max(40).default(""),
+});
+
 const pricing = z.object({
   unit_price: z.string().max(40).optional().default(""),
   purchase_cost: z.string().max(40).optional().default(""),
   web_sale_price: z.string().max(40).optional().default(""),
   currency: z.string().max(10).optional().default("TL"),
   notes: z.string().max(500).optional().default(""),
+  // Kalem kalem maliyet + ustaya birim ödeme (Aslı Hanım, 2026-08-19):
+  // "Bu maliyet değil, bu ödeme tablosu. Maliyet her ürünün bir maliyetini
+  // hesaplamaktır." İkisi AYRI alanlarda yaşar.
+  cost_items: z.array(costItem).max(20).optional(),
+  usta_unit_payment: z.string().max(40).optional(),
 });
 
 const SheetSchema = z.object({
@@ -70,6 +84,7 @@ const SheetSchema = z.object({
   season: shortText,
   production_date: shortText,
   delivery_date: shortText,
+  sewing_delivery_date: shortText,
   meterage: shortText,
   measurements: z.array(measurementRow).max(60).default([]),
   delivered_items: z.array(deliveredItemRow).max(60).default([]),
@@ -129,6 +144,7 @@ function normalize(v: ProductionSheetInput) {
     season: nn(v.season),
     production_date: nn(v.production_date),
     delivery_date: nn(v.delivery_date),
+    sewing_delivery_date: nn(v.sewing_delivery_date),
     meterage: nn(v.meterage),
     measurements: v.measurements,
     delivered_items: v.delivered_items,

@@ -202,7 +202,7 @@ begin
       ('2026-08-20',       '10:00',       0, 'Celebrity Styling raporlaması, yeni celebrity seçimi, ürün sözleşmesi',                        'SE'),
       ('2026-08-20',       '10:00',       1, null,                                                                                           'EF'),
       ('2026-08-20',       '10:00',       2, 'AFR görsel düzenleme',                                                                         null),
-      ('2026-08-20',       '10:00',       3, 'AF Online / Instagram içerik çalışması',                                                       'ND'),
+      ('2026-08-20',       '10:00',       3, 'AFCOM / Instagram içerik çalışması',                                                       'ND'),
       ('2026-08-21',       '10:00',       0, 'Özlem Özgörkey görüşme feedback',                                                              null),
       ('2026-08-21',       '10:00',       1, 'Eda baba /',                                                                                   null),
       ('2026-08-21',       '10:00',       2, 'Aytül - Celebrity sistemi',                                                                    null),
@@ -250,7 +250,7 @@ begin
       -- Pazartesi
       (0, 'uretim'::text,    0, 'Ready to Wear'::text,                                                                                'SE, Meral'::text),
       (0, 'system',          1, 'Genel Sistem İyileştirme Raporlaması',                                                                'GÖ'),
-      (0, 'sales',           2, 'Online Koleksiyon içerikleri excel hazırlama',                                                        'KY'),
+      (0, 'sales',           2, 'AFCOM Koleksiyon içerikleri excel hazırlama',                                                        'KY'),
       (0, 'marketing',       3, 'İmaj Yaratımı',                                                                                       'ND'),
       (0, 'ai',              4, null,                                                                                                  'SG'),
       (0, 'tasarim',         5, 'Aksesuar Tasarımı',                                                                                   'ND'),
@@ -296,11 +296,12 @@ begin
       ('Kısmet Yalçın',       'Sales / Satın Alma',        6, 'Olgunlaşmadıki kumaşın üretim takibi ve video çekim talepleri (fotoğraf ve videolar Nisa aktaracak)'),
       ('Kısmet Yalçın',       'Sales / Satın Alma',        7, 'Mağazadaki teknik eksiklerin tamirinin takibi'),
       ('Kısmet Yalçın',       'Sales / Satın Alma',        8, 'Yelekler güncel fiyata çekilecek'),
-      -- ── Kısmet Yalçın / Sales / Online ─────────────────────────────────
-      ('Kısmet Yalçın',       'Sales / Online',            100, 'Yeni ürün ekleme'),
-      ('Kısmet Yalçın',       'Sales / Online',            101, 'Başlık koleksiyonun sitede açılması için ürün bilgilerini almak, Başlıkların mağazaya gelmesi planlanacak, Nihal Hoca ile görüşüldü cumartesi gününe kadar ürün listesi çıkaracak.'),
-      ('Kısmet Yalçın',       'Sales / Online',            102, 'Potansiyel Eksikleri Raporlama'),
-      ('Kısmet Yalçın',       'Sales / Online',            103, 'Size chart GÖ ile birlikte web e girecek.'),
+      -- ── Kısmet Yalçın / Sales / AFCOM ──────────────────────────────────
+      -- ("Online demiyoruz, online'ın her şeyi AFCOM demek." — 2026-08-19)
+      ('Kısmet Yalçın',       'Sales / AFCOM',            100, 'Yeni ürün ekleme'),
+      ('Kısmet Yalçın',       'Sales / AFCOM',            101, 'Başlık koleksiyonun sitede açılması için ürün bilgilerini almak, Başlıkların mağazaya gelmesi planlanacak, Nihal Hoca ile görüşüldü cumartesi gününe kadar ürün listesi çıkaracak.'),
+      ('Kısmet Yalçın',       'Sales / AFCOM',            102, 'Potansiyel Eksikleri Raporlama'),
+      ('Kısmet Yalçın',       'Sales / AFCOM',            103, 'Size chart GÖ ile birlikte web e girecek.'),
       -- ── Gül Özerdekli / Sales & Marketing ──────────────────────────────
       ('Gül Özerdekli',       'Sales & Marketing / Çekim, Basın, İhracat', 0, 'Ny times yazısı Türk basını ile paylaşılacak'),
       ('Gül Özerdekli',       'Sales & Marketing / Çekim, Basın, İhracat', 1, 'Alev ile görüşülecek Fatih Altaylı röportajı organize edilecek'),

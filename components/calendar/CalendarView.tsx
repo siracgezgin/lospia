@@ -45,6 +45,11 @@ interface Props {
   members?: { memberId: string; userId: string; name: string }[];
   deptMembers?: { department_id: string; member_id: string }[];
   isAdmin?: boolean;
+  /** Calendar'ın "Ay" sekmesi olarak gömülü çalışır: kendi başlığını ve
+   *  dış boşluğunu çizmez (sayfa başlığı zaten üstte). */
+  embedded?: boolean;
+  /** Açılışta gösterilecek gün (yyyy-MM-dd) — Yıl görünümünden gelen atlama. */
+  initialDate?: string | null;
 }
 
 const DONE_CLS = "line-through text-subtle";
@@ -187,7 +192,7 @@ function MonthYearPicker({ value, onChange }: { value: Date; onChange: (d: Date)
   );
 }
 
-export function CalendarView({ tasks, workspaceId, profiles, contacts, departments = [], members = [], deptMembers = [], isAdmin = false }: Props) {
+export function CalendarView({ tasks, workspaceId, profiles, contacts, departments = [], members = [], deptMembers = [], isAdmin = false, embedded = false, initialDate = null }: Props) {
   const deptMeta = buildDeptMeta(departments);
   const dotFor = (t: CalTask) => {
     if (t.status === "done") return "bg-success";
@@ -195,9 +200,11 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
     return getDepartmentCardStyle(color).dot;
   };
 
-  const [current, setCurrent] = useState(new Date());
-  // Default the agenda to today so the side panel is never empty on load.
-  const [selectedDay, setSelectedDay] = useState<Date>(new Date());
+  // Yıl görünümünden bir güne tıklanarak gelinmişse o gün açılır; yoksa bugün.
+  const seedDay = safeParseISO(initialDate) ?? new Date();
+  const [current, setCurrent] = useState(seedDay);
+  // Default the agenda to the seed day so the side panel is never empty on load.
+  const [selectedDay, setSelectedDay] = useState<Date>(seedDay);
   const [showMobilePanel, setShowMobilePanel] = useState(false);
   const [createModalDate, setCreateModalDate] = useState<string | null>(null);
 
@@ -237,21 +244,24 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
   // Server / pre-hydration skeleton — same outer shape so layout doesn't jump.
   if (!mounted) {
     return (
-      <div className="p-4 sm:p-6 h-full flex flex-col gap-4">
-        <div className="flex items-center gap-3 shrink-0">
-          <h1 className="text-2xl font-semibold tracking-tight text-ink">Takvim</h1>
-        </div>
+      <div className={cn("flex flex-col gap-4", embedded ? "min-h-[70vh]" : "p-4 sm:p-6 h-full")}>
+        {!embedded && (
+          <div className="flex items-center gap-3 shrink-0">
+            <h1 className="text-2xl font-semibold tracking-tight text-ink">Takvim</h1>
+          </div>
+        )}
         <div className="flex-1 min-h-0 rounded-xl border border-line anim-shimmer bg-gradient-to-r from-surface-sunken via-surface-muted to-surface-sunken" />
       </div>
     );
   }
 
   return (
-    <div className="p-4 sm:p-6 h-full flex flex-col gap-4">
+    <div className={cn("flex flex-col gap-4", embedded ? "min-h-[70vh]" : "p-4 sm:p-6 h-full")}>
       {/* Header — a single month/year control next to the title (no duplicates).
-          The month label itself opens the month/year picker for jumping ahead. */}
+          The month label itself opens the month/year picker for jumping ahead.
+          Gömülü modda başlık üstteki sayfa başlığıdır; burada tekrar edilmez. */}
       <div className="flex items-center gap-3 flex-wrap shrink-0">
-        <h1 className="text-2xl font-semibold tracking-tight text-ink">Takvim</h1>
+        {!embedded && <h1 className="text-2xl font-semibold tracking-tight text-ink">Takvim</h1>}
 
         {/* Prev · clickable month/year picker · next.
             NOTE: no `overflow-hidden` here — it would clip the picker popover

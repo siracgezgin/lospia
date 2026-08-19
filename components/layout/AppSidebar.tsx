@@ -6,8 +6,6 @@ import { useState } from "react";
 import {
   LayoutDashboard,
   Kanban,
-  List,
-  Calendar,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -52,12 +50,13 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   {
     title: "Çekirdek Operasyon",
     items: [
-      // Ana Sayfa = kişisel komuta merkezi (bana atananlar + kısayollar).
-      { href: "/home",        label: "Ana Sayfa",      icon: Home,            adminOnly: false },
-      { href: "/planning",    label: "Planlama",       icon: CalendarRange,   adminOnly: false },
+      // Home Page = kişisel komuta merkezi (bana atananlar + kısayollar).
+      // Calendar = TEK takvim: hafta ızgarası + ay + yıl aynı ekranda
+      // (Aslı Hanım, 2026-08-19: "Bence tek takvim yap"). Liste kaldırıldı
+      // ("buna gerek olmayabilir") — rota duruyor, hub'dan erişilir.
+      { href: "/home",        label: "Home Page",      icon: Home,            adminOnly: false },
+      { href: "/planning",    label: "Calendar",       icon: CalendarRange,   adminOnly: false },
       { href: "/board",       label: "Pano",           icon: Kanban,          adminOnly: false },
-      { href: "/list",        label: "Liste",          icon: List,            adminOnly: false },
-      { href: "/calendar",    label: "Görev Takvimi",  icon: Calendar,        adminOnly: false },
       { href: "/dashboard",   label: "Raporlar",       icon: LayoutDashboard, adminOnly: false },
     ],
   },

@@ -1,26 +1,31 @@
+/**
+ * Ödeme Tablosu — Aslı Hanım (2026-08-19): "Bu maliyet değil, bu ödeme
+ * tablosu. Usta başına ödememesi. Hakan Usta ödeme tablosu. Bu kalsın."
+ * Maliyet AYRI ekrandır: /collection/maliyet
+ */
 import { redirect } from "next/navigation";
-import { Wallet } from "lucide-react";
+import { HandCoins } from "lucide-react";
 import { requireModuleMember } from "@/lib/modules/context";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { SetupRequiredNotice } from "@/components/modules/SetupRequiredNotice";
 import { maybeDatabaseSetupRequired } from "@/lib/utils/supabase-errors";
-import { CostBreakdownTable } from "@/components/collection/CostBreakdownTable";
+import { PaymentTable } from "@/components/collection/PaymentTable";
 import type { ProductionSheet } from "@/types";
 
 export const dynamic = "force-dynamic";
 
-const COST_COLUMNS =
+const PAYMENT_COLUMNS =
   "id, title, product_kind, producer, category, subcategory, pricing, size_distribution, status";
 
-export default async function CostPage() {
+export default async function PaymentPage() {
   const { supabase, user, workspaceId, isAdmin, gate } = await requireModuleMember();
   if (gate === "login") redirect("/login");
   if (gate !== "ok" || !workspaceId || !user) return <AccessDenied />;
 
   const result = await supabase
     .from("production_sheets")
-    .select(COST_COLUMNS)
+    .select(PAYMENT_COLUMNS)
     .eq("workspace_id", workspaceId)
     .neq("status", "archived")
     .order("category", { ascending: true, nullsFirst: false })
@@ -31,15 +36,15 @@ export default async function CostPage() {
     return (
       <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 lg:px-8">
         <ModulePageHeader
-          title="Maliyet"
-          description="Her ürünün birim maliyeti kalem kalem — kumaş, dikim, fermuar, ütü/paket, kalıp, genel giderler."
-          icon={Wallet}
+          title="Ödeme Tablosu"
+          description="Usta başına ödeme — hangi usta hangi ürünü dikti, ne kadar ödenecek."
+          icon={HandCoins}
           secondaryBackHref="/collection"
         />
         <SetupRequiredNotice
           variant="block"
           title="Koleksiyon tablosu henüz oluşturulmadı"
-          message={setup.message ?? "Maliyet için veritabanı güncellemesi bekleniyor."}
+          message={setup.message ?? "Ödeme tablosu için veritabanı güncellemesi bekleniyor."}
           technicalDetail={isAdmin ? setup.technicalDetail : null}
         />
       </div>
@@ -51,5 +56,5 @@ export default async function CostPage() {
     "id" | "title" | "product_kind" | "producer" | "category" | "subcategory" | "pricing" | "size_distribution" | "status"
   >[];
 
-  return <CostBreakdownTable rows={rows} />;
+  return <PaymentTable rows={rows} />;
 }

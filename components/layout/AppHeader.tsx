@@ -26,15 +26,15 @@ interface Props {
 // Page-context titles. Header shows WHERE you are; the sidebar owns brand/workspace.
 // Adlar sidebar etiketleriyle BİREBİR aynı olmalı (tek terminoloji kuralı).
 const PAGE_TITLES: { match: (p: string) => boolean; title: string }[] = [
-  { match: (p) => p.startsWith("/home"), title: "Ana Sayfa" },
+  { match: (p) => p.startsWith("/home"), title: "Home Page" },
   { match: (p) => p.startsWith("/admin-board"), title: "Yönetici Pano" },
   { match: (p) => p.startsWith("/board"), title: "Pano" },
-  { match: (p) => p.startsWith("/planning"), title: "Planlama" },
+  { match: (p) => p.startsWith("/planning"), title: "Calendar" },
   { match: (p) => p.startsWith("/list"), title: "Liste" },
   { match: (p) => p.startsWith("/dashboard"), title: "Raporlar" },
-  { match: (p) => p.startsWith("/calendar"), title: "Görev Takvimi" },
   // "/collection/maliyet" kendi adını taşır — sıra önemli (startsWith).
-  { match: (p) => p.startsWith("/collection/maliyet"), title: "Maliyet Tablosu" },
+  { match: (p) => p.startsWith("/collection/maliyet"), title: "Maliyet" },
+  { match: (p) => p.startsWith("/collection/odeme"), title: "Ödeme Tablosu" },
   { match: (p) => p.startsWith("/collection"), title: "Koleksiyon" },
   { match: (p) => p.startsWith("/production"), title: "Üretim Föyü" },
   { match: (p) => p.startsWith("/finance"), title: "Finans" },

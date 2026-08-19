@@ -110,6 +110,7 @@ export function PlanningWeekGrid({
                   const content = cell.map((m) => m.content).filter(Boolean).join(" · ");
                   const ids = [...new Set(cell.flatMap((m) => m.participant_ids ?? []))];
                   const kim = cell.map((m) => m.kim).filter(Boolean).join(", ");
+                  const collabIds = [...new Set(cell.flatMap((m) => m.collaborator_ids ?? []))];
                   return (
                     <div
                       key={iso}
@@ -127,7 +128,7 @@ export function PlanningWeekGrid({
                         <span className={cn("text-[12.5px] font-bold leading-[1.25] tracking-tight", meta.title)}>
                           {title}
                         </span>
-                        <KimBadges ids={ids} kim={kim} memberNames={memberNames} />
+                        <KimBadges ids={ids} kim={kim} collaboratorIds={collabIds} memberNames={memberNames} />
                         {content && (
                           <span className="mt-0.5 block whitespace-pre-line text-[11.5px] leading-snug text-ink/70">
                             {content}
@@ -164,7 +165,7 @@ export function PlanningWeekGrid({
                         {t?.task_id && (
                           <CheckCircle2 size={11} className="ml-1 inline shrink-0 text-emerald-600" aria-label="Göreve atandı" />
                         )}
-                        {t && <KimBadges ids={t.participant_ids} kim={t.kim} memberNames={memberNames} />}
+                        {t && <KimBadges ids={t.participant_ids} kim={t.kim} collaboratorIds={t.collaborator_ids} memberNames={memberNames} />}
                         {t?.due_date && (
                           <span className="ml-1 whitespace-nowrap text-[10.5px] tabular-nums text-subtle">
                             {format(parseISO(t.due_date), "d MMM", { locale: tr })}
