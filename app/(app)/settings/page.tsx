@@ -4,6 +4,7 @@ import { WorkspaceNameEditor } from "@/components/settings/WorkspaceNameEditor";
 import { MembersManager } from "@/components/settings/MembersManager";
 import { CreateAccountPanel } from "@/components/settings/CreateAccountPanel";
 import { DepartmentsManager } from "@/components/settings/DepartmentsManager";
+import { ManufacturersManager, type ManagerManufacturer } from "@/components/settings/ManufacturersManager";
 import { canManageSettings, canRenameWorkspace, canManageMembers, canManageWorkspace } from "@/lib/auth/permissions";
 import { roleLabel } from "@/lib/utils/roles";
 import { getDisplayNotificationEmail } from "@/lib/utils/notification-email";
@@ -47,7 +48,7 @@ export default async function SettingsPage() {
   const canManageDepts = canManageWorkspace(userRole);   // owner + admin (departments)
 
   const [wsResult, membersResult, profileResult, invitesResult,
-         deptsResult, deptMembersResult] =
+         deptsResult, deptMembersResult, manufacturersResult, sheetProducerResult] =
     await Promise.all([
       supabase.from("workspaces").select("*").eq("id", workspaceId).single(),
       supabase
@@ -72,7 +73,28 @@ export default async function SettingsPage() {
         .from("department_members")
         .select("*, workspace_members(profiles(id, full_name, email))")
         .eq("workspace_id", workspaceId),
+      // Üretici (Usta) listesi — Aslı Hanım'ın "Cihan Usta, Hakan Usta" isteği.
+      // Tablo migrate edilmemişse hata döner; bölüm sessizce gizlenir.
+      supabase
+        .from("workspace_manufacturers")
+        .select("id, name, photo_url, city, country, currency, lead_time_days, min_order_qty, contact_name, phone, email, notes, is_active")
+        .eq("workspace_id", workspaceId)
+        .order("is_active", { ascending: false })
+        .order("name"),
+      // Usta başına föy sayısı — "hangi ürünler orada dikiliyor" göstergesi.
+      supabase
+        .from("production_sheets")
+        .select("manufacturer_id")
+        .eq("workspace_id", workspaceId)
+        .not("manufacturer_id", "is", null),
     ]);
+
+  const manufacturers = (manufacturersResult.data ?? []) as ManagerManufacturer[];
+  const manufacturersAvailable = !manufacturersResult.error;
+  const sheetCounts: Record<string, number> = {};
+  for (const r of (sheetProducerResult.data ?? []) as { manufacturer_id: string | null }[]) {
+    if (r.manufacturer_id) sheetCounts[r.manufacturer_id] = (sheetCounts[r.manufacturer_id] ?? 0) + 1;
+  }
 
   const workspace: Workspace | null = wsResult.data;
   const profile: Profile | null = profileResult.data;
@@ -276,6 +298,34 @@ export default async function SettingsPage() {
               />
             </Card>
           </section>
+
+          {/* Üretici (Usta) — Aslı Hanım (2026-08-19): "Cihan Usta, o ustaları
+              da öyle açacağız… hangi ürünler orada dikiliyor." Föydeki üretici
+              alanı ve Ödeme Tablosu bu listeden beslenir. Tablo henüz migrate
+              edilmemişse bölüm hiç çizilmez. */}
+          {manufacturersAvailable && (
+            <section className="space-y-3">
+              <Card className="p-5 space-y-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <h2 className="text-base font-semibold text-ink">Üreticiler (Ustalar)</h2>
+                    <p className="text-[13px] text-muted mt-0.5">
+                      Föydeki “Üretici” alanı ve Ödeme Tablosu buradan beslenir.
+                      Teslim süresi ve minimum adet sipariş verirken lazım olur.
+                    </p>
+                  </div>
+                  <span className="text-xs text-muted bg-surface-sunken px-2.5 py-1 rounded-full tabular-nums shrink-0">
+                    {manufacturers.length} usta
+                  </span>
+                </div>
+                <ManufacturersManager
+                  manufacturers={manufacturers}
+                  sheetCounts={sheetCounts}
+                  canManage={canManageDepts}
+                />
+              </Card>
+            </section>
+          )}
         </div>
       </div>
     </div>

@@ -80,6 +80,8 @@ const SheetSchema = z.object({
   product_code: shortText,
   product_kind: shortText,
   producer: shortText,
+  // Gerçek usta kaydı (20240307). producer metni geri uyum için korunur.
+  manufacturer_id: z.string().uuid().optional().nullable(),
   description: longText,
   season: shortText,
   production_date: shortText,
@@ -140,6 +142,7 @@ function normalize(v: ProductionSheetInput) {
     product_code: nn(v.product_code),
     product_kind: nn(v.product_kind),
     producer: nn(v.producer),
+    manufacturer_id: v.manufacturer_id || null,
     description: nn(v.description),
     season: nn(v.season),
     production_date: nn(v.production_date),

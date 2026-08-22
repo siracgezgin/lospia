@@ -2,8 +2,10 @@
 
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   Wallet, ClipboardList, Check, Loader2, HandCoins, ChevronLeft, Scissors,
+  MapPin, Clock3, Package,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
@@ -12,15 +14,22 @@ import {
   totalQuantity, formatMoney, ustaUnitPaymentOf,
 } from "@/lib/collection/cost";
 import { assignPersonTones, assignPersonIcons } from "@/lib/design/person-colors";
-import type { ProductionSheet, ProductionPricing } from "@/types";
+import type { ProductionSheet, ProductionPricing, Manufacturer } from "@/types";
 
 type Row = Pick<
   ProductionSheet,
-  "id" | "title" | "product_kind" | "producer" | "category" | "subcategory" | "pricing" | "size_distribution"
+  "id" | "title" | "product_kind" | "producer" | "manufacturer_id" | "category" | "subcategory" | "pricing" | "size_distribution"
+>;
+
+export type PaymentManufacturer = Pick<
+  Manufacturer,
+  "id" | "name" | "photo_url" | "city" | "country" | "currency" | "lead_time_days" | "min_order_qty" | "is_active"
 >;
 
 interface Props {
   rows: Row[];
+  /** Usta kayıtları. Boşsa eski serbest-metin gruplamasına düşülür. */
+  manufacturers?: PaymentManufacturer[];
 }
 
 /** Üreticisi girilmemiş föylerin toplandığı kova. */
@@ -43,7 +52,7 @@ const priceInput =
  * Yani Pano'daki kişi ızgarasının aynısı: önce usta kartları, tıklayınca o
  * ustanın diktiği ürünler ve ödemesi. Maliyet AYRI ekrandır (/collection/maliyet).
  */
-export function PaymentTable({ rows }: Props) {
+export function PaymentTable({ rows, manufacturers = [] }: Props) {
   const [pricing, setPricing] = useState<Record<string, ProductionPricing>>(() => {
     const m: Record<string, ProductionPricing> = {};
     for (const r of rows) m[r.id] = { ...(r.pricing ?? {}) };
@@ -58,16 +67,32 @@ export function PaymentTable({ rows }: Props) {
   const qtyOf = (r: Row) => totalQuantity(r.size_distribution);
   const lineTotal = (r: Row) => qtyOf(r) * unitPaymentOf(r.id);
 
-  /** Usta → föyleri + toplam ödeme. */
+  const byId = useMemo(() => {
+    const m: Record<string, PaymentManufacturer> = {};
+    for (const x of manufacturers) m[x.id] = x;
+    return m;
+  }, [manufacturers]);
+
+  /**
+   * Usta → föyleri + toplam ödeme.
+   *
+   * Gruplama anahtarı ÖNCE manufacturer_id'dir. Serbest metne düşmek yalnız
+   * geri uyum içindir (usta tablosu migrate edilmemiş ya da föy henüz
+   * bağlanmamışsa) — metinle gruplamak "Hakan Günaydın" ile "Hakan usta"yı iki
+   * ayrı usta yapıyordu.
+   */
   const ustalar = useMemo(() => {
-    const map = new Map<string, { name: string; rows: Row[]; qty: number; total: number }>();
+    type G = { key: string; name: string; rec?: PaymentManufacturer; rows: Row[]; qty: number; total: number };
+    const map = new Map<string, G>();
     for (const r of rows) {
-      const name = (r.producer ?? "").trim() || UNKNOWN;
-      const g = map.get(name) ?? { name, rows: [], qty: 0, total: 0 };
+      const rec = r.manufacturer_id ? byId[r.manufacturer_id] : undefined;
+      const key = rec ? rec.id : ((r.producer ?? "").trim() || UNKNOWN);
+      const name = rec ? rec.name : key;
+      const g = map.get(key) ?? { key, name, rec, rows: [], qty: 0, total: 0 };
       g.rows.push(r);
       g.qty += qtyOf(r);
       g.total += lineTotal(r);
-      map.set(name, g);
+      map.set(key, g);
     }
     return [...map.values()].sort((a, b) => {
       if (a.name === UNKNOWN) return 1;
@@ -76,10 +101,10 @@ export function PaymentTable({ rows }: Props) {
     });
     // pricing değişince toplamlar yeniden hesaplansın.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, pricing]);
+  }, [rows, pricing, byId]);
 
-  const tones = useMemo(() => assignPersonTones(ustalar.map((u) => u.name)), [ustalar]);
-  const icons = useMemo(() => assignPersonIcons(ustalar.map((u) => u.name)), [ustalar]);
+  const tones = useMemo(() => assignPersonTones(ustalar.map((u) => u.key)), [ustalar]);
+  const icons = useMemo(() => assignPersonIcons(ustalar.map((u) => u.key)), [ustalar]);
   const grandTotal = ustalar.reduce((a, u) => a + u.total, 0);
 
   const flash = (id: string) => {
@@ -108,7 +133,7 @@ export function PaymentTable({ rows }: Props) {
     });
   }
 
-  const active = openUsta ? ustalar.find((u) => u.name === openUsta) ?? null : null;
+  const active = openUsta ? ustalar.find((u) => u.key === openUsta) ?? null : null;
 
   return (
     <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
@@ -134,7 +159,7 @@ export function PaymentTable({ rows }: Props) {
               <ChevronLeft size={14} /> Ustalar
             </button>
             <span className="flex min-w-0 items-center gap-2">
-              <span aria-hidden className={`h-5 w-1.5 shrink-0 rounded-full ${tones[active.name]?.bar ?? "bg-brand"}`} />
+              <span aria-hidden className={`h-5 w-1.5 shrink-0 rounded-full ${tones[active.key]?.bar ?? "bg-brand"}`} />
               <span className="truncate text-[15px] font-semibold tracking-tight text-ink">{active.name}</span>
             </span>
             <span className="ml-auto text-[13px] tabular-nums text-muted">
@@ -219,12 +244,12 @@ export function PaymentTable({ rows }: Props) {
 
           <div className="stagger-children grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {ustalar.map((u) => {
-              const tone = tones[u.name]!;
-              const Icon = icons[u.name]!;
+              const tone = tones[u.key]!;
+              const Icon = icons[u.key]!;
               return (
                 <button
-                  key={u.name}
-                  onClick={() => setOpenUsta(u.name)}
+                  key={u.key}
+                  onClick={() => setOpenUsta(u.key)}
                   className={cn(
                     "group relative flex flex-col overflow-hidden rounded-2xl border bg-surface text-left shadow-card transition-all duration-200 ease-standard",
                     "hover:-translate-y-0.5 hover:shadow-card-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
@@ -233,9 +258,22 @@ export function PaymentTable({ rows }: Props) {
                 >
                   <span aria-hidden className={`absolute inset-x-0 top-0 h-1 ${tone.bar}`} />
                   <div className={cn("flex items-center gap-3 px-4 pb-3 pt-5", tone.soft)}>
-                    <span className={cn("grid h-12 w-12 shrink-0 place-items-center rounded-full text-white ring-2 ring-surface", tone.solid)}>
-                      {u.name === UNKNOWN ? <Scissors size={20} strokeWidth={1.9} /> : <Icon size={20} strokeWidth={1.9} />}
-                    </span>
+                    {/* Aslı Hanım: "Cihan diye bir fotoğraf, Hakan diye bir olsa."
+                        Fotoğraf varsa fotoğraf; yoksa ustaya özel ikon. */}
+                    {u.rec?.photo_url ? (
+                      <Image
+                        src={u.rec.photo_url}
+                        alt=""
+                        width={48}
+                        height={48}
+                        className="h-12 w-12 shrink-0 rounded-full object-cover ring-2 ring-surface"
+                        unoptimized
+                      />
+                    ) : (
+                      <span className={cn("grid h-12 w-12 shrink-0 place-items-center rounded-full text-white ring-2 ring-surface", tone.solid)}>
+                        {u.name === UNKNOWN ? <Scissors size={20} strokeWidth={1.9} /> : <Icon size={20} strokeWidth={1.9} />}
+                      </span>
+                    )}
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[15px] font-semibold tracking-tight text-ink" title={u.name}>
                         {u.name}
@@ -248,6 +286,28 @@ export function PaymentTable({ rows }: Props) {
                     <span className={cn("block text-[17px] font-semibold tabular-nums", u.total > 0 ? tone.text : "text-subtle")}>
                       {formatMoney(u.total)}
                     </span>
+                    {/* Teslim süresi + minimum adet — Zedonk'un Manufacturers
+                        sekmesinden alınan iki alan ("Lead Time: 30 days",
+                        "Minimums: 50 units"). Sipariş verirken sorulan ilk iki
+                        soru bunlar; kartta durması aramayı bitirir. */}
+                    {(u.rec?.lead_time_days || u.rec?.min_order_qty || u.rec?.city) && (
+                      <span className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11.5px] text-subtle">
+                        {u.rec?.city && (
+                          <span className="inline-flex items-center gap-1"><MapPin size={11} />{u.rec.city}</span>
+                        )}
+                        {u.rec?.lead_time_days != null && (
+                          <span className="inline-flex items-center gap-1"><Clock3 size={11} />{u.rec.lead_time_days} gün</span>
+                        )}
+                        {u.rec?.min_order_qty != null && (
+                          <span className="inline-flex items-center gap-1"><Package size={11} />min {u.rec.min_order_qty}</span>
+                        )}
+                      </span>
+                    )}
+                    {!u.rec && u.name !== UNKNOWN && (
+                      <span className="mt-1.5 block text-[11.5px] text-warning">
+                        Kayıtlı usta değil — Ayarlar’dan ekleyin
+                      </span>
+                    )}
                   </div>
                 </button>
               );

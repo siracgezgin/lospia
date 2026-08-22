@@ -23,12 +23,19 @@ import {
 } from "@/lib/collection/cost";
 import type {
   ProductionSheet, MeasurementRow, DeliveredItemRow, SizeDistribution, ProductionCategory,
-  CostItem,
+  CostItem, Manufacturer,
 } from "@/types";
+
+/** Föydeki "Üretici" seçicisini besleyen sade usta kaydı. */
+export type SheetManufacturer = Pick<
+  Manufacturer, "id" | "name" | "is_active" | "lead_time_days" | "min_order_qty" | "currency" | "city"
+>;
 
 interface Props {
   sheet: ProductionSheet | null;
   memberNames: Record<string, string>;
+  /** Usta listesi. Boşsa alan serbest metne düşer (tablo migrate edilmemiş). */
+  manufacturers?: SheetManufacturer[];
   isAdmin: boolean;
   currentUserId: string;
 }
@@ -42,6 +49,7 @@ function emptyState(): ProductionSheetInput {
     product_code: "",
     product_kind: "",
     producer: "",
+    manufacturer_id: null,
     description: "",
     season: "",
     production_date: "",
@@ -91,6 +99,7 @@ function fromSheet(s: ProductionSheet): ProductionSheetInput {
     product_code: s.product_code ?? "",
     product_kind: s.product_kind ?? "",
     producer: s.producer ?? "",
+    manufacturer_id: s.manufacturer_id ?? null,
     description: s.description ?? "",
     season: s.season ?? "",
     production_date: s.production_date ?? "",
@@ -171,7 +180,7 @@ function Section({ title, children, className }: { title: string; children: Reac
   );
 }
 
-export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUserId }: Props) {
+export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], isAdmin, currentUserId }: Props) {
   const router = useRouter();
   const [form, setForm] = useState<ProductionSheetInput>(() => (sheet ? fromSheet(sheet) : emptyState()));
   const [error, setError] = useState<string | null>(null);
@@ -383,7 +392,37 @@ export function ProductionSheetEditor({ sheet, memberNames, isAdmin, currentUser
           {/* İkinci tarih — "Bir ürünlerin teslim tarihi, bir de dikim teslim
               tarihi lazım." */}
           <LabeledField label="Dikim teslim tarihi" value={form.sewing_delivery_date ?? ""} onChange={(v) => set("sewing_delivery_date", v)} placeholder="14.07.2026" />
-          <LabeledField label="Üretici" value={form.producer ?? ""} onChange={(v) => set("producer", v)} />
+          {/* ÜRETİCİ — artık serbest metin değil, gerçek usta kaydı.
+              Aslı Hanım (2026-08-19): "Cihan Usta, Hakan Usta… ona gireceksin,
+              hangi ürünler orada dikiliyor." Serbest metinken Ödeme Tablosu
+              "Hakan Günaydın" ile "Hakan usta"yı iki ayrı usta sayıyordu.
+              Liste boşsa (tablo migrate edilmemiş) eski metin alanına düşer —
+              föy her hâlükârda açılır. */}
+          {manufacturers.length > 0 ? (
+            <label className="flex items-center gap-2">
+              <span className="w-40 shrink-0 text-[11.5px] font-semibold uppercase tracking-wide text-muted">Üretici</span>
+              <select
+                className={inputCls}
+                value={form.manufacturer_id ?? ""}
+                onChange={(e) => {
+                  const id = e.target.value || null;
+                  const m = manufacturers.find((x) => x.id === id);
+                  // producer metnini de senkron tut: eski föyler, Excel çıktısı
+                  // ve migrate edilmemiş ortamlar hâlâ onu okuyor.
+                  setForm((f) => ({ ...f, manufacturer_id: id, producer: m?.name ?? "" }));
+                }}
+              >
+                <option value="">Seçiniz…</option>
+                {manufacturers.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}{m.is_active ? "" : " (pasif)"}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <LabeledField label="Üretici" value={form.producer ?? ""} onChange={(v) => set("producer", v)} />
+          )}
           <LabeledField label="Sezon" value={form.season ?? ""} onChange={(v) => set("season", v)} placeholder="2026 RESORT" />
           {/* Koleksiyon kategorisi — web nav yapısı (One-of-a-Kind / Ready to Wear …) */}
           <label className="flex items-center gap-2">

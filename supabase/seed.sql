@@ -656,7 +656,10 @@ declare v_msg text;
 begin
   select public.af_import_planning_week_2026_08_17() into v_msg;
   raise notice '%', v_msg;
-  -- Haftalık ritim şablonu — "Haftayı kur" her haftanın iskeletini bundan üretir.
+  -- Haftalık ritim şablonu — her haftanın iskeleti bundan kurulur.
   select public.af_import_planning_templates() into v_msg;
+  raise notice '%', v_msg;
+  -- Föylerdeki serbest metin üreticiyi gerçek usta kaydına bağla (20240307).
+  select public.af_backfill_manufacturers() into v_msg;
   raise notice '%', v_msg;
 end $$;

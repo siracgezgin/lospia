@@ -182,6 +182,39 @@ export type OperationSpreadsheet = {
   updated_at: string;
 };
 
+/**
+ * Üretici (Usta) — 20240307 migration.
+ *
+ * Aslı Hanım (2026-08-19): "Cihan Usta, o ustaları da öyle açacağız. Cihan diye
+ * bir fotoğraf, Hakan diye bir olsa, ona gireceksin — hangi ürünler orada
+ * dikiliyor." Eskiden yalnız serbest metindi (production_sheets.producer);
+ * artık gerçek kayıt.
+ *
+ * lead_time_days / min_order_qty / currency alanları Zedonk incelemesinden
+ * geldi (Manufacturers sekmesi: Lead Time, Minimums, Currency).
+ */
+export type Manufacturer = {
+  id: string;
+  workspace_id: string;
+  name: string;
+  photo_url: string | null;
+  city: string | null;
+  country: string | null;
+  currency: string;
+  lead_time_days: number | null;
+  min_order_qty: number | null;
+  contact_name: string | null;
+  phone: string | null;
+  email: string | null;
+  notes: string | null;
+  is_active: boolean;
+  position: number;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 // ── Üretim Föyü — production_sheets ──────────────────────────────────────────
 // Hand-written (not from generated database.ts) so the feature ships without a
 // local Supabase type regen. Mirrors 20240212000000_production_sheets.sql.
@@ -222,7 +255,8 @@ export type ProductionSheet = {
   status: ProductionSheetStatus;
   product_code: string | null;
   product_kind: string | null;
-  producer: string | null;
+  producer: string | null;        // eski serbest metin (geri uyum)
+  manufacturer_id?: string | null; // gerçek usta kaydı (20240307) — bu kazanır
   description: string | null;
   season: string | null;
   production_date: string | null;

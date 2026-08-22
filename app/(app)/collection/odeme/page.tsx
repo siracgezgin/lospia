@@ -11,12 +11,12 @@ import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { SetupRequiredNotice } from "@/components/modules/SetupRequiredNotice";
 import { maybeDatabaseSetupRequired } from "@/lib/utils/supabase-errors";
 import { PaymentTable } from "@/components/collection/PaymentTable";
-import type { ProductionSheet } from "@/types";
+import type { ProductionSheet, Manufacturer } from "@/types";
 
 export const dynamic = "force-dynamic";
 
 const PAYMENT_COLUMNS =
-  "id, title, product_kind, producer, category, subcategory, pricing, size_distribution, status";
+  "id, title, product_kind, producer, manufacturer_id, category, subcategory, pricing, size_distribution, status";
 
 export default async function PaymentPage() {
   const { supabase, user, workspaceId, isAdmin, gate } = await requireModuleMember();
@@ -53,8 +53,20 @@ export default async function PaymentPage() {
 
   const rows = (result.data ?? []) as unknown as Pick<
     ProductionSheet,
-    "id" | "title" | "product_kind" | "producer" | "category" | "subcategory" | "pricing" | "size_distribution" | "status"
+    "id" | "title" | "product_kind" | "producer" | "manufacturer_id" | "category" | "subcategory" | "pricing" | "size_distribution" | "status"
   >[];
 
-  return <PaymentTable rows={rows} />;
+  // Usta kayıtları — gruplama artık serbest metne değil BUNA göre yapılır.
+  // Tablo migrate edilmemişse boş liste döner ve tablo eski metin gruplamasına
+  // düşer (geri uyum).
+  const mResult = await supabase
+    .from("workspace_manufacturers")
+    .select("id, name, photo_url, city, country, currency, lead_time_days, min_order_qty, is_active")
+    .eq("workspace_id", workspaceId);
+  const manufacturers = (mResult.data ?? []) as Pick<
+    Manufacturer,
+    "id" | "name" | "photo_url" | "city" | "country" | "currency" | "lead_time_days" | "min_order_qty" | "is_active"
+  >[];
+
+  return <PaymentTable rows={rows} manufacturers={manufacturers} />;
 }
