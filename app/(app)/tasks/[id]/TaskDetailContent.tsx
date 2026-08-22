@@ -5,6 +5,7 @@ import type { Task, TaskActivity, TaskActivityLogWithActor, TimeEntry, CustomFie
 import { TaskNotesPanel, type NotePerson } from "@/components/task/TaskNotesPanel";
 import { TaskParticipantsPanel, type PanelMember, type PanelContact, type PanelParticipant } from "@/components/task/TaskParticipantsPanel";
 import { TaskEffortPanel } from "@/components/task/TaskEffortPanel";
+import { POINTS_UI_ENABLED } from "@/lib/points/effort";
 import { isEffortSize } from "@/lib/points/effort";
 import { buildAssignablePeople } from "@/lib/people/assignable";
 
@@ -299,7 +300,7 @@ export async function TaskDetailContent({
         />
       }
       effortSlot={
-        canComplete ? (
+        POINTS_UI_ENABLED && canComplete ? (
           <TaskEffortPanel
             taskId={task.id}
             effortSize={effortSize}

@@ -27,6 +27,7 @@ import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DashboardMetricCard } from "@/components/dashboard/DashboardMetricCard";
 import { PointsMotivationSection } from "@/components/dashboard/PointsMotivationSection";
+import { POINTS_UI_ENABLED } from "@/lib/points/effort";
 import type { AdminPointsData, MemberPointsSummary } from "@/lib/points/queries";
 
 interface DepartmentStat {
@@ -159,9 +160,9 @@ export function DashboardView({
         </div>
       </Card>
 
-      {/* Puan & Motivasyon — geri bildirimle şimdilik gizlendi (bileşen/veri
-          korunur, tek satırla geri açılır). */}
-      {false && <PointsMotivationSection isAdmin={isAdmin} admin={adminPoints} member={memberPoints} />}
+      {/* Puan & Motivasyon — tek anahtardan kapalı (lib/points/effort.ts).
+          Bileşen ve veri korunur; POINTS_UI_ENABLED açılınca geri gelir. */}
+      {POINTS_UI_ENABLED && <PointsMotivationSection isAdmin={isAdmin} admin={adminPoints} member={memberPoints} />}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Status distribution */}

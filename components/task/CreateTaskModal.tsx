@@ -14,7 +14,7 @@ import {
 import { Avatar } from "@/components/ui/Avatar";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { cn } from "@/lib/utils/cn";
-import { EFFORT_OPTIONS, EFFORT_LABELS, type EffortSize } from "@/lib/points/effort";
+import { EFFORT_OPTIONS, EFFORT_LABELS, POINTS_UI_ENABLED, type EffortSize } from "@/lib/points/effort";
 import {
   TASK_VISIBILITIES, VISIBILITY_LABELS, VISIBILITY_DESCRIPTIONS,
   DEFAULT_VISIBILITY, type TaskVisibility,
@@ -335,8 +335,8 @@ export function CreateTaskModal({
             </div>
           </div>
 
-          {/* Efor — admin-only. Members never see point values. */}
-          {isAdmin && (
+          {/* Efor — Puan & Motivasyon kapalıyken çizilmez (POINTS_UI_ENABLED). */}
+          {POINTS_UI_ENABLED && isAdmin && (
             <div>
               <label className={labelCls}>Efor</label>
               <div className="flex gap-2">

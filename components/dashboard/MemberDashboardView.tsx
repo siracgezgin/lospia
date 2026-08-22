@@ -12,6 +12,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { DashboardMetricCard } from "@/components/dashboard/DashboardMetricCard";
 import type { TaskStatus, TaskPriority } from "@/types";
 import type { MemberDashboardData, MemberPointsSummary } from "@/lib/points/queries";
+import { POINTS_UI_ENABLED } from "@/lib/points/effort";
 
 interface Props {
   data: MemberDashboardData;
@@ -46,8 +47,8 @@ export function MemberDashboardView({ data, points }: Props) {
         <DashboardMetricCard icon={<CheckCircle2 size={15} />} label="Tamamladığım işler" value={data.done} tone="success" />
       </div>
 
-      {/* Puan & Motivasyon — geri bildirimle şimdilik gizlendi (geri alınabilir). */}
-      {false && (
+      {/* Puan & Motivasyon — tek anahtardan kapalı (lib/points/effort.ts). */}
+      {POINTS_UI_ENABLED && (
       <section id="puan-motivasyon" className="space-y-4 scroll-mt-6">
         <div>
           <h2 className="text-base font-semibold text-ink flex items-center gap-2">
