@@ -551,6 +551,14 @@ export async function createMemberAccount(input: {
   password: string;
   role: "admin" | "member";
   departmentId?: string | null;
+  /* Kişiyi tanımlayan ALANLARIN TAMAMI burada sorulur — Aslı Hanım
+     (2026-08-23): "Ekleyeceğim kişiye rengiydi, mailiydi, kullanıcı adı, ikon
+     vs. hepsi aynı kısımda olmalı… hesap oluştur kısmı da benzer mantıkta aynı
+     özellikleri istemeli." Önce kişi oluşturuluyor, sonra rengi ayrı bir
+     ekrandan veriliyordu. */
+  notificationEmail?: string | null;
+  colorKey?: string | null;
+  iconKey?: string | null;
 }): Promise<{ ok: true; userId: string } | { error: string }> {
   const parsed = CreateAccountSchema.safeParse({
     workspaceId: input.workspaceId,
@@ -627,18 +635,36 @@ export async function createMemberAccount(input: {
       { onConflict: "id" },
     );
   if (profileErr) {
+    console.error("[createMemberAccount] profil upsert hatası:", profileErr);
     await admin.auth.admin.deleteUser(userId);
     return { error: "Profil oluşturulamadı. Lütfen tekrar deneyin." };
   }
 
-  // 3. Workspace membership with the chosen role.
+  // 3. Workspace membership: rol + bildirim e-postası + kimlik (renk/ikon).
+  //    Boş bırakılan renk/ikon NULL kalır ve kişinin id'sinden otomatik türetilir.
+  const notificationEmail = (input.notificationEmail ?? "").trim() || null;
+  if (notificationEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(notificationEmail)) {
+    await admin.auth.admin.deleteUser(userId);
+    return { error: "Bildirim e-postası geçerli değil." };
+  }
   const { data: member, error: memberErr } = await admin
     .from("workspace_members")
-    .insert({ workspace_id: ctx.workspaceId, user_id: userId, role: parsed.data.role })
+    .insert({
+      workspace_id: ctx.workspaceId,
+      user_id: userId,
+      role: parsed.data.role,
+      notification_email: notificationEmail,
+      color_key: (input.colorKey ?? "").trim() || null,
+      icon_key: (input.iconKey ?? "").trim() || null,
+    })
     .select("id")
     .single();
   if (memberErr || !member) {
     await admin.auth.admin.deleteUser(userId);
+    // Renk tekil: aynı rengi iki kişiye veremeyiz (20240313 kısmi indeksi).
+    if ((memberErr as { code?: string } | null)?.code === "23505") {
+      return { error: "Seçilen renk başka bir kişide kullanılıyor. Başka bir renk seçin." };
+    }
     return { error: "Üyelik oluşturulamadı. Lütfen tekrar deneyin." };
   }
 

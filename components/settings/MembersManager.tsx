@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { X, UserMinus, ChevronDown, Pencil, Check } from "lucide-react";
+import { X, UserMinus, ChevronDown, Pencil, Check, Palette, RotateCcw, UserPlus } from "lucide-react";
 import {
   revokeTeamAccess,
   changeWorkspaceMemberRole,
@@ -23,6 +23,11 @@ import { Input } from "@/components/ui/Input";
 import { buildDeptMeta } from "@/lib/utils/departments";
 import { getDepartmentBadge } from "@/lib/design/semantics";
 import { cn } from "@/lib/utils/cn";
+import { personStyles } from "@/lib/design/person-colors";
+import { saveMemberIdentity } from "@/lib/actions/member-identity";
+import {
+  usePersonIdentities, PersonIdentityEditor, type IdentityMember,
+} from "@/components/settings/PersonIdentityManager";
 
 interface MemberRow extends WorkspaceMember {
   profiles?: Partial<Profile> | null;
@@ -37,6 +42,12 @@ interface Props {
   pendingGrants: WorkspaceInvite[];
   departments?: WorkspaceDepartment[];
   deptMembers?: DepartmentMember[];
+  /** Kişi kimlikleri (renk + ikon). Ayrı bir liste DEĞİL — Aslı Hanım
+   *  (2026-08-23): "Burayı neden tek başlık altında toplamıyoruz." */
+  identities?: IdentityMember[];
+  canManageIdentity?: boolean;
+  /** "Kişi ekle" formu — aynı başlık altında, açılır. */
+  createPanel?: React.ReactNode;
 }
 
 export function MembersManager({
@@ -46,12 +57,34 @@ export function MembersManager({
   pendingGrants,
   departments = [],
   deptMembers = [],
+  identities = [],
+  canManageIdentity = false,
+  createPanel,
 }: Props) {
   const router = useRouter();
   const [members, setMembers] = useState(initialMembers);
   const [grants, setGrants] = useState(pendingGrants);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  /* KİMLİK (renk + ikon) — ayrı bölüm değil, üyenin kendi satırında.
+     Önce iki ayrı kart aynı sekiz kişiyi iki kez listeliyordu. */
+  const { tones, icons, usedColors, clashes } = usePersonIdentities(identities);
+  const identityOf = new Map(identities.map((i) => [i.id, i]));
+  const [openIdentityId, setOpenIdentityId] = useState<string | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+
+  function saveIdentity(m: IdentityMember, next: { colorKey?: string | null; iconKey?: string | null }) {
+    setError(null);
+    startTransition(async () => {
+      const res = await saveMemberIdentity(m.id, {
+        colorKey: next.colorKey !== undefined ? next.colorKey : m.colorKey,
+        iconKey: next.iconKey !== undefined ? next.iconKey : m.iconKey,
+      });
+      if ("error" in res) { setError(res.error); return; }
+      router.refresh();
+    });
+  }
 
   // Inline name editing (owner fixes stale/placeholder names).
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -175,6 +208,31 @@ export function MembersManager({
 
   return (
     <div className="space-y-4">
+      {/* Kişi ekle — ayrı bir "Hesap oluştur" kartı DEĞİL. Aslı Hanım
+          (2026-08-23): "Bunların tamamı aynı başlıkta toplanabilir."
+          Ekibe kişi eklemek ekip yönetiminin parçası; formu isteyen açar. */}
+      {createPanel && (
+        <div>
+          <button
+            onClick={() => setAddOpen((v) => !v)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-[13px] font-medium text-muted transition-all duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
+            aria-expanded={addOpen}
+          >
+            <UserPlus size={14} /> {addOpen ? "Vazgeç" : "Kişi ekle"}
+          </button>
+          {addOpen && <div className="anim-fade-down mt-3">{createPanel}</div>}
+        </div>
+      )}
+
+      {/* Palet tükendiyse iki kişi aynı rengi paylaşır — sessizce yapılmaz. */}
+      {clashes.length > 0 && (
+        <p className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-[12.5px] leading-relaxed text-ink">
+          Otomatik atama şu kişilere aynı rengi verdi:{" "}
+          <strong className="font-semibold">{clashes.map((n) => n.join(" / ")).join(" · ")}</strong>.
+          Satırdaki palet düğmesinden birine başka bir renk verebilirsiniz — hex de yazılabilir.
+        </p>
+      )}
+
       {/* Current members */}
       <Card className="divide-y divide-hairline">
         {members.map((m) => {
@@ -183,8 +241,26 @@ export function MembersManager({
           const canManage = isOwner && !isSelf && !isOwnerRow;
 
           return (
-            <div key={m.id} className="px-5 py-3 transition-colors duration-150 hover:bg-surface-hover">
-            <div className="flex items-center justify-between gap-3">
+            <div key={m.id} className="px-4 py-3 transition-colors duration-150 hover:bg-surface-hover sm:px-5">
+            <div className="flex items-start justify-between gap-3">
+              {/* Kimlik rozeti — panodaki, rapordaki ve görev kartındakiyle AYNI
+                  renk ve ikon. Kişiyi listede gözle bulmanın en hızlı yolu. */}
+              {(() => {
+                const ident = identityOf.get(m.id);
+                if (!ident) return null;
+                const tone = tones[ident.userId];
+                const Icon = icons[ident.userId];
+                if (!tone || !Icon) return null;
+                return (
+                  <span
+                    className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full"
+                    style={personStyles(tone.hex).solid}
+                    title={tone.label}
+                  >
+                    <Icon size={16} />
+                  </span>
+                );
+              })()}
               <div className="flex-1 min-w-0">
                 {editingId === m.id ? (
                   <div className="flex items-center gap-1.5">
@@ -363,6 +439,22 @@ export function MembersManager({
                 )}
               </div>
 
+              {/* Sağ blok: kimlik düğmesi HER ZAMAN (yönetici de kullanabilsin),
+                  rol değiştirme ve kaldırma yalnız çalışma alanı sahibine.
+                  Palet düğmesi önce rol koluna gömülüydü; owner olmayan yönetici
+                  kimlik düzenlemesini hiç göremiyordu. */}
+              <div className="flex shrink-0 items-center gap-2">
+                {canManageIdentity && identityOf.has(m.id) && (
+                  <button
+                    onClick={() => setOpenIdentityId(openIdentityId === m.id ? null : m.id)}
+                    className="tap-target rounded-md p-1 text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-95"
+                    aria-label="Renk ve ikon"
+                    aria-expanded={openIdentityId === m.id}
+                    title="Renk ve ikon"
+                  >
+                    <Palette size={13} />
+                  </button>
+                )}
               {canManage ? (
                 <div className="flex items-center gap-2 shrink-0">
                   <div className="relative">
@@ -396,7 +488,36 @@ export function MembersManager({
                   {roleLabel(m.role)}
                 </span>
               )}
+              </div>
             </div>
+
+            {/* Renk + ikon seçici — kişinin kendi satırının altında açılır.
+                68 ikon herkeste açık dursa bölüm tek başına 1000px oluyor. */}
+            {canManageIdentity && openIdentityId === m.id && identityOf.has(m.id) && (() => {
+              const ident = identityOf.get(m.id)!;
+              const tone = tones[ident.userId];
+              if (!tone) return null;
+              return (
+                <div className="mt-3 rounded-xl border border-line bg-surface-sunken/60 p-3">
+                  <PersonIdentityEditor
+                    member={ident}
+                    tone={tone}
+                    usedColors={usedColors}
+                    busy={isPending}
+                    onSave={(next) => saveIdentity(ident, next)}
+                  />
+                  {(ident.colorKey || ident.iconKey) && (
+                    <button
+                      onClick={() => saveIdentity(ident, { colorKey: "", iconKey: "" })}
+                      disabled={isPending}
+                      className="mt-2 inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-2 py-1 text-[12px] font-medium text-muted transition-colors hover:border-line-strong hover:text-ink disabled:opacity-50"
+                    >
+                      <RotateCcw size={12} /> Otomatiğe dön
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
             </div>
           );
         })}

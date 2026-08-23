@@ -4,15 +4,15 @@ import { WorkspaceNameEditor } from "@/components/settings/WorkspaceNameEditor";
 import { MembersManager } from "@/components/settings/MembersManager";
 import { CreateAccountPanel } from "@/components/settings/CreateAccountPanel";
 import { DepartmentsManager } from "@/components/settings/DepartmentsManager";
-import { PersonIdentityManager, type IdentityMember } from "@/components/settings/PersonIdentityManager";
-import { SettingsTabs, SettingsSection, CountChip } from "@/components/settings/SettingsTabs";
+import type { IdentityMember } from "@/components/settings/PersonIdentityManager";
+import { SettingsTabs, SettingsTab } from "@/components/settings/SettingsTabs";
+import { SettingsSection, CountChip } from "@/components/settings/SettingsSection";
 import { assignPersonTones } from "@/lib/design/person-colors";
 import { ManufacturersManager, type ManagerManufacturer } from "@/components/settings/ManufacturersManager";
 import { SeasonsManager, type ManagerSeason } from "@/components/settings/SeasonsManager";
 import { MaterialsManager, type ManagerMaterial } from "@/components/settings/MaterialsManager";
-import { canManageSettings, canRenameWorkspace, canManageMembers, canManageWorkspace } from "@/lib/auth/permissions";
+import { canManageSettings, canRenameWorkspace, canManageWorkspace } from "@/lib/auth/permissions";
 import { roleLabel } from "@/lib/utils/roles";
-import { getDisplayNotificationEmail } from "@/lib/utils/notification-email";
 import { pickDisplayEmail } from "@/lib/utils/display-identity";
 import { Avatar } from "@/components/ui/Avatar";
 import { Shield } from "lucide-react";
@@ -48,7 +48,6 @@ export default async function SettingsPage() {
   }
 
   const isOwner = canRenameWorkspace(userRole);
-  const canManage = canManageMembers(userRole);          // owner-only (invites)
   const canManageDepts = canManageWorkspace(userRole);   // owner + admin (departments)
 
   const [wsResult, membersResult, profileResult, invitesResult,
@@ -188,6 +187,13 @@ export default async function SettingsPage() {
     iconKey: (m as { icon_key?: string | null }).icon_key ?? null,
   })).sort((a, b) => a.name.localeCompare(b.name, "tr"));
 
+  /* Başka kişilerde KULLANILAN renkler — "Kişi ekle" formu aynı rengi ikinci
+     kez teklif etmesin. Sunucuda hesaplanır: istemci bileşenine fonksiyon
+     geçilemez (React Server Components kuralı), düz dizi geçilir. */
+  const takenColors = identityMembers
+    .map((m) => m.colorKey)
+    .filter((c): c is string => !!c);
+
   // Giriş yapan kişinin efektif tonu — ekip geneli atamadan, panodakiyle aynı.
   const myTone = assignPersonTones(
     identityMembers.map((m) => m.userId),
@@ -221,67 +227,49 @@ export default async function SettingsPage() {
           işler ve farklı sıklıkta açılıyor; hepsini aynı anda göstermek her
           birini bulunmaz kılıyordu. Kart biçimi de tekleşti (SettingsSection):
           önce bazı başlıklar kartın içinde, bazıları dışındaydı. */}
-      <SettingsTabs
-        tabs={[
-          {
-            key: "ekip",
-            label: "Ekip",
-            count: memberCount,
-            node: (
-              /* İki kolon: bölümler kısa, tam genişlikte tek sütun olunca satırlar
-                 1100px'e yayılıp sağda kocaman boşluk bırakıyordu. items-start
-                 ile kolonlar birbirinin boyuna esir olmaz. */
+      <SettingsTabs>
+        <SettingsTab label="Ekip" count={memberCount}>
               <div className="grid items-start gap-6 xl:grid-cols-2">
+                {/* TEK BAŞLIK — Aslı Hanım (2026-08-23): "Bunların tamamı
+                    aynı başlıkta toplanabilir, daha profesyonel tasarımla."
+                    Üyeler, Kişi Kimliği ve Hesap oluştur üç ayrı karttı ve ilk
+                    ikisi aynı sekiz kişiyi iki kez listeliyordu. Artık tek
+                    satır: rozet + isim/kullanıcı adı/e-posta + rol + kimlik. */}
+                <div className="xl:col-span-2">
                 <SettingsSection
-                  title="Üyeler"
-                  description="Ekip üyelerinin rollerini, kullanıcı adlarını ve bildirim e-postalarını yönetin."
+                  title="Ekip"
+                  description="Roller, kullanıcı adları, bildirim e-postaları ve kişi kimlikleri (renk + ikon). Görev kartları da kişinin rengini taşır — panoda kimin işi olduğu renkten okunur."
+                  aside={<CountChip n={memberCount} birim="kişi" />}
                 >
-                  {canManage ? (
-                    <MembersManager
-                      workspaceId={workspaceId}
-                      currentUserId={user.id}
-                      userRole={userRole}
-                      initialMembers={
-                        (membersResult.data ?? []) as (WorkspaceMember & { profiles?: Partial<Profile> | null })[]
-                      }
-                      pendingGrants={invites}
-                      departments={departments}
-                      deptMembers={deptMembers}
-                    />
-                  ) : (
-                    <div className="divide-y divide-hairline rounded-xl border border-line">
-                      {(membersResult.data ?? []).map(
-                        (m: WorkspaceMember & { profiles?: Partial<Profile> | null }) => {
-                          const display = getDisplayNotificationEmail(m);
-                          return (
-                            <div key={m.id} className="flex items-center justify-between px-4 py-3">
-                              <div>
-                                <p className="text-sm font-medium">
-                                  {m.profiles?.full_name ?? m.profiles?.email ?? "—"}
-                                </p>
-                                <p className={display.email ? "text-xs text-subtle" : "text-xs text-warning"}>
-                                  {display.email ?? "Bildirim e-postası eklenmedi"}
-                                </p>
-                              </div>
-                              <span className="shrink-0 rounded-full bg-surface-sunken px-2.5 py-0.5 text-xs text-muted">
-                                {roleLabel(m.role)}
-                              </span>
-                            </div>
-                          );
-                        },
-                      )}
-                    </div>
-                  )}
+                  {/* MembersManager yetkiyi KENDİ içinde denetler (userRole
+                      === "owner" olmayan rol/kaldırma düğmelerini çizmez), bu
+                      yüzden herkese çizilir. Önce yalnız owner'a çiziliyordu ve
+                      yönetici (admin) rolü kimlik düzenlemesini göremiyordu;
+                      ayrıca aynı liste bir de salt-okur olarak tekrarlanıyordu. */}
+                  <MembersManager
+                    workspaceId={workspaceId}
+                    currentUserId={user.id}
+                    userRole={userRole}
+                    initialMembers={
+                      (membersResult.data ?? []) as (WorkspaceMember & { profiles?: Partial<Profile> | null })[]
+                    }
+                    pendingGrants={invites}
+                    departments={departments}
+                    deptMembers={deptMembers}
+                    identities={identityMembers}
+                    canManageIdentity={canManageDepts}
+                    createPanel={
+                      canManageDepts ? (
+                        <CreateAccountPanel
+                          workspaceId={workspaceId}
+                          departments={departments}
+                          takenColors={takenColors}
+                        />
+                      ) : undefined
+                    }
+                  />
                 </SettingsSection>
-
-                {/* Kişi Kimliği — Aslı Hanım (2026-08-19): "Herkesin bir rengi
-                    olsa da herkes kendi rengini takip etse" / "Herkese ikon koy." */}
-                <SettingsSection
-                  title="Kişi Kimliği"
-                  description="Her kişinin rengi ve ikonu. Görev kartları da kişinin rengini taşır — panoda kimin işi olduğu renkten okunur."
-                >
-                  <PersonIdentityManager members={identityMembers} canManage={canManageDepts} />
-                </SettingsSection>
+                </div>
 
                 <SettingsSection
                   title="Departmanlar"
@@ -298,25 +286,9 @@ export default async function SettingsPage() {
                   />
                 </SettingsSection>
 
-                {/* Hesap oluştur — kendi kaydolma akışının yerine geçti: kişi
-                    burada verilen kullanıcı adı + şifreyle doğrudan giriş yapar. */}
-                {canManageDepts && (
-                  <SettingsSection
-                    title="Hesap oluştur"
-                    description="Yalnızca yöneticiler ve çalışma alanı sahibi yeni hesap oluşturabilir."
-                  >
-                    <CreateAccountPanel workspaceId={workspaceId} departments={departments} />
-                  </SettingsSection>
-                )}
               </div>
-            ),
-          },
-          {
-            key: "urun",
-            label: "Ürün verisi",
-            node: (
-              /* Sezon ve Usta kısa listelerdir → yan yana. Hammadde satırı daha
-                 çok veri taşır (fiyat, kategori, kaç föyde) → tam genişlik. */
+        </SettingsTab>
+        <SettingsTab label="Ürün verisi">
               <div className="grid items-start gap-6 xl:grid-cols-2">
                 {/* Sezon — Ürün ekranlarının BAĞLAMI. */}
                 {seasonsAvailable && (
@@ -363,14 +335,11 @@ export default async function SettingsPage() {
                   </div>
                 )}
               </div>
-            ),
-          },
-          {
-            key: "hesap",
-            label: "Hesabım",
-            node: (
+        </SettingsTab>
+        <SettingsTab label="Hesabım">
               <div className="grid items-start gap-6 lg:grid-cols-2">
                 <SettingsSection title="Profiliniz">
+                  <div className="space-y-4">
                   <div className="flex items-center gap-3">
                     {/* Kendi renginiz — panodaki, rapordaki ve Kişi Kimliği'ndekiyle
                         AYNI ton. Avatar kendi paletine düşerse aynı kişi iki
@@ -381,7 +350,7 @@ export default async function SettingsPage() {
                       <p className="text-xs text-subtle">{roleLabel(userRole)}</p>
                     </div>
                   </div>
-                  <div className="mt-4 space-y-3 border-t border-hairline pt-4">
+                  <div className="space-y-3 border-t border-hairline pt-4">
                     <div>
                       <p className="text-xs text-subtle">E-posta</p>
                       <p className={displayEmail ? "text-sm font-medium text-ink" : "text-sm italic text-subtle"}>
@@ -395,9 +364,11 @@ export default async function SettingsPage() {
                       </div>
                     )}
                   </div>
+                  </div>
                 </SettingsSection>
 
                 <SettingsSection title="Çalışma alanı">
+                  <div className="space-y-4">
                   <div>
                     <p className="mb-1 text-xs text-subtle">İsim</p>
                     {isOwner && workspace ? (
@@ -406,7 +377,7 @@ export default async function SettingsPage() {
                       <p className="text-sm font-medium text-ink">{workspace?.name}</p>
                     )}
                   </div>
-                  <div className="mt-4 space-y-3 border-t border-hairline pt-4">
+                  <div className="space-y-3 border-t border-hairline pt-4">
                     <div>
                       <p className="text-xs text-subtle">Kısa ad</p>
                       <p className="font-mono text-sm text-muted">{workspace?.slug}</p>
@@ -416,12 +387,11 @@ export default async function SettingsPage() {
                       <p className="text-sm font-medium text-ink">{roleLabel(userRole)}</p>
                     </div>
                   </div>
+                  </div>
                 </SettingsSection>
               </div>
-            ),
-          },
-        ]}
-      />
+        </SettingsTab>
+      </SettingsTabs>
     </div>
   );
 }

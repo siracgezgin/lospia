@@ -7,23 +7,34 @@ import { createMemberAccount } from "@/lib/actions/workspace";
 import { ASSIGNABLE_ROLE_OPTIONS } from "@/lib/utils/roles";
 import { Button } from "@/components/ui/Button";
 import { Input, Select, Field } from "@/components/ui/Input";
+import { cn } from "@/lib/utils/cn";
+import { PERSON_TONES, PERSON_ICONS } from "@/lib/design/person-colors";
 import type { WorkspaceDepartment } from "@/types";
 
 interface Props {
   workspaceId: string;
   departments?: WorkspaceDepartment[];
+  /** Başka kişilerde kullanılan renkler — aynı renk iki kişiye verilemez. */
+  takenColors?: string[];
 }
 
 // Admin-created account form. Replaces the old self-signup ("Ekip erişimi") flow:
 // an owner/admin sets the person's name, username, password and role; the person
 // then signs in directly with that username + password — no registration step.
-export function CreateAccountPanel({ workspaceId, departments = [] }: Props) {
+export function CreateAccountPanel({ workspaceId, departments = [], takenColors = [] }: Props) {
   const router = useRouter();
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"admin" | "member">("member");
   const [departmentId, setDepartmentId] = useState("");
+  /* Kişiyi tanımlayan alanların TAMAMI burada — Aslı Hanım (2026-08-23):
+     "Ekleyeceğim kişiye rengiydi, mailiydi, kullanıcı adı, ikon vs. hepsi aynı
+     kısımda olmalı." Renk/ikon boş bırakılırsa kişinin id'sinden otomatik
+     türetilir; kimse renksiz kalmaz. */
+  const [notificationEmail, setNotificationEmail] = useState("");
+  const [colorKey, setColorKey] = useState("");
+  const [iconKey, setIconKey] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -45,6 +56,9 @@ export function CreateAccountPanel({ workspaceId, departments = [] }: Props) {
         password,
         role,
         departmentId: departmentId || null,
+        notificationEmail: notificationEmail.trim() || null,
+        colorKey: colorKey || null,
+        iconKey: iconKey || null,
       });
       if ("error" in result) {
         setError(result.error);
@@ -56,6 +70,9 @@ export function CreateAccountPanel({ workspaceId, departments = [] }: Props) {
       setPassword("");
       setRole("member");
       setDepartmentId("");
+      setNotificationEmail("");
+      setColorKey("");
+      setIconKey("");
       // Surface the new member in the list immediately (no manual reload).
       router.refresh();
     });
@@ -109,6 +126,16 @@ export function CreateAccountPanel({ workspaceId, departments = [] }: Props) {
             className="h-8"
           />
         </Field>
+        <Field label="Bildirim e-postası (opsiyonel)">
+          <Input
+            type="email"
+            value={notificationEmail}
+            onChange={(e) => setNotificationEmail(e.target.value)}
+            placeholder="ornek@aslifilinta.com"
+            disabled={isPending}
+            className="h-8"
+          />
+        </Field>
         <Field label="Rol">
           <Select
             value={role}
@@ -141,6 +168,61 @@ export function CreateAccountPanel({ workspaceId, departments = [] }: Props) {
             </Select>
           </Field>
         )}
+
+        {/* Renk ve ikon — üye satırındakiyle AYNI seçenekler. Boş bırakılırsa
+            otomatik atanır. */}
+        <div className="sm:col-span-2 space-y-2 rounded-xl border border-line bg-surface-sunken/50 p-3">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="w-[52px] shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted">Renk</span>
+            {PERSON_TONES.map((t) => {
+              const taken = takenColors.includes(t.key);
+              const selected = colorKey === t.key;
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setColorKey(selected ? "" : t.key)}
+                  disabled={isPending || taken}
+                  title={taken ? `${t.label} — başka kişide kullanılıyor` : t.label}
+                  className={cn(
+                    "tap-target grid h-7 w-7 place-items-center rounded-full transition-transform duration-150",
+                    selected ? "ring-2 ring-ink ring-offset-2" : "hover:scale-110",
+                    taken && "cursor-not-allowed opacity-25",
+                  )}
+                  style={{ backgroundColor: t.hex }}
+                >
+                  {selected && <Check size={13} className="text-white" strokeWidth={3} />}
+                </button>
+              );
+            })}
+            <span className="ml-1 text-[11.5px] text-subtle">
+              {colorKey ? "" : "boş = otomatik"}
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="w-[52px] shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted">İkon</span>
+            {PERSON_ICONS.map(({ key, label, Icon: Opt }) => {
+              const selected = iconKey === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setIconKey(selected ? "" : key)}
+                  disabled={isPending}
+                  title={label}
+                  className={cn(
+                    "tap-target grid h-7 w-7 place-items-center rounded-lg border transition-colors duration-150",
+                    selected
+                      ? "border-ink bg-ink text-white"
+                      : "border-line text-muted hover:border-line-strong hover:bg-surface-muted hover:text-ink",
+                  )}
+                >
+                  <Opt size={14} />
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {error && <p role="alert" className="anim-fade-down text-xs text-danger">{error}</p>}
