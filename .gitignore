@@ -86,3 +86,19 @@ gemini.md
 /*.pdf
 /toplanti_transkript*.md
 /veri/
+
+# Toplantı/analiz malzemesi — depo PUBLIC olduğu için hiçbiri girmez.
+# İçlerinde transkript, üretici adı, maliyet rakamı ve iş modeli tartışması var;
+# ayrıca ~51 MB medya (git ikili dosyayı sıkıştıramaz, geçmişe girerse çıkmaz).
+# Kalıcı yerleri: ~/Desktop/AF_metodoloji/
+son/
+*.mp4
+*.mov
+Screenrecorder-*.txt
+toplanti_transkript*.md
+toplanti_*_analiz.md
+zedonk_rakip_analizi.md
+dokuman_depolama_maliyeti.md
+enson.md
+ileri.md
+plan.md
