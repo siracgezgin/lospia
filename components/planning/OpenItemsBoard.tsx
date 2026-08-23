@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -113,6 +115,13 @@ export function OpenItemsBoard({ items, members, currentUserId, isAdmin, availab
     });
   }, [items, members, memberName, currentUserId]);
 
+  /* Açık konusu OLAN kişiler kart alır; olmayanlar altta tek satırda toplanır.
+     Boş kart yanındaki dolu kartın hizasını bozuyordu. */
+  const withItems = columns.filter((c) => c.openCount > 0 || (showDone && c.doneCount > 0));
+  const emptyLabels = columns
+    .filter((c) => !(c.openCount > 0 || (showDone && c.doneCount > 0)))
+    .map((c) => c.label);
+
   const totalOpen = items.filter((i) => !i.done).length;
   const totalDone = items.length - totalOpen;
 
@@ -151,9 +160,12 @@ export function OpenItemsBoard({ items, members, currentUserId, isAdmin, availab
         </div>
       )}
 
-      {/* Excel'deki kişi blokları: başlık = kişi, altında rol alt sütunları. */}
+      {/* Kişi blokları. AÇIK KONUSU OLAN kişiler kart olur; olmayanlar altta tek
+          satırda toplanır — boş kart tam bir sütun kaplayıp yanındaki dolu
+          kartın hizasını bozuyordu (Aslı Hanım, 2026-08-24: "tasarım çok kötü,
+          iyileştirilmesi profesyonelleştirilmesi lazım"). */}
       <div className="grid items-start gap-3 xl:grid-cols-2">
-        {columns.map((col) => (
+        {withItems.map((col) => (
           <div key={col.key} className="flex flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-card">
             {/* Blok başlığı — kişi */}
             <div className="flex items-center gap-2 border-b border-hairline bg-surface-muted px-3 py-2">
@@ -175,21 +187,22 @@ export function OpenItemsBoard({ items, members, currentUserId, isAdmin, availab
             </div>
 
             {/* Rol alt sütunları — yan yana (Excel'deki iki liste) */}
-            <div className={cn("grid flex-1", col.roles.length > 1 && "sm:grid-cols-2")}>
+            {/* Rol grupları ALT ALTA. Yan yana iki alt sütun, kişiden kişiye
+                değişen sayıda olduğu için kartların içi düzensiz genişliklere
+                bölünüyordu; uzun konu metni de dar sütunda kelime kelime
+                sarıyordu. Tek kolon + rol başlığı hem hizalı hem okunur. */}
+            <div className="flex flex-1 flex-col">
               {col.roles.map((g, gi) => (
                 <div
                   key={g.key}
-                  className={cn(
-                    "flex min-w-0 flex-col border-hairline",
-                    gi > 0 && "border-t sm:border-l sm:border-t-0",
-                  )}
+                  className={cn("flex min-w-0 flex-col border-hairline", gi > 0 && "border-t")}
                 >
                   {g.role && (
                     <div className="border-b border-hairline px-3 py-1.5 text-[11.5px] font-semibold leading-snug text-muted" title={g.role}>
                       {g.role}
                     </div>
                   )}
-                  <ul className="max-h-[36rem] flex-1 divide-y divide-hairline overflow-y-auto">
+                  <ul className="max-h-[28rem] flex-1 divide-y divide-hairline overflow-y-auto">
                     {g.open.length === 0 && (!showDone || g.done.length === 0) && (
                       <li className="px-3 py-3 text-[12.5px] text-subtle">Açık konu yok.</li>
                     )}
@@ -243,6 +256,13 @@ export function OpenItemsBoard({ items, members, currentUserId, isAdmin, availab
           </div>
         ))}
       </div>
+
+      {emptyLabels.length > 0 && (
+        <p className="mt-3 rounded-lg border border-line bg-surface-muted px-3 py-2 text-[12.5px] text-muted">
+          <span className="font-medium text-ink">Açık konusu olmayanlar:</span>{" "}
+          {emptyLabels.join(" · ")}
+        </p>
+      )}
 
       <p className="mt-2 px-1 text-[12.5px] text-subtle">
         Bu liste haftadan bağımsızdır — konu tamamlanana kadar durur. Herkes kendi sütununa yazar
@@ -371,8 +391,24 @@ function ItemRow({
             />
           )}
           {item.text}
-          {item.task_id && <CheckCircle2 size={11} className="ml-1 inline text-emerald-600" aria-label="Göreve atandı" />}
         </button>
+      )}
+
+      {/* BOARD BAĞI — görünür ve tıklanır.
+          Aslı Hanım (2026-08-24): "Tamamlanmamış Eksik Konular board ile
+          entegre çalışmalı." Bağ eskiden yalnız minik bir tik ikonuydu; hangi
+          göreve gittiğini görmenin yolu yoktu. Artık konudan panodaki göreve
+          doğrudan gidiliyor. Ters yön veritabanında: görev Tamamlandı'ya
+          çekilince konu kendiliğinden kapanıyor (20240316 trigger'ı). */}
+      {item.task_id && (
+        <Link
+          href={`/tasks/${item.task_id}`}
+          onClick={(e) => e.stopPropagation()}
+          className="tap-target inline-flex shrink-0 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-px text-[10.5px] font-medium text-emerald-700 transition-colors hover:border-emerald-300 hover:bg-emerald-100"
+          title="Panodaki görevi aç"
+        >
+          <CheckCircle2 size={10} /> Board
+        </Link>
       )}
 
       <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/item:opacity-100">
