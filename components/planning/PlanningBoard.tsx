@@ -4,11 +4,10 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format, parseISO, addDays, subDays } from "date-fns";
 import { tr } from "date-fns/locale";
-import { CalendarRange, ChevronLeft, ChevronRight, Settings2 } from "lucide-react";
+import { CalendarRange, ChevronLeft, ChevronRight } from "lucide-react";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { PLANNING_BANDS, TOPIC_ROWS, WEEKDAY_LONG_TR } from "@/lib/planning/bands";
 import { MeetingEditor } from "./MeetingEditor";
-import { TemplateManager } from "./TemplateManager";
 import { OpenItemsBoard } from "./OpenItemsBoard";
 import { WeekMatrix } from "./WeekMatrix";
 import { ProcessSteps } from "./ProcessSteps";
@@ -17,7 +16,7 @@ import { PlanningDayList } from "./PlanningDayList";
 import { CalendarViewSwitch } from "./CalendarViewSwitch";
 import type { Member } from "./MemberMultiSelect";
 import type {
-  PlanningMeetingWithTopics, PlanningTemplate, PlanningOpenItem,
+  PlanningMeetingWithTopics, PlanningOpenItem,
   PlanningWeekMatrixRow, PlanningProcessStep, PlanningTopic,
 } from "@/types";
 
@@ -27,7 +26,6 @@ interface Props {
   weekStart: string;    // Pazartesi yyyy-MM-dd
   members: Member[];
   memberNames: Record<string, string>;
-  templates: PlanningTemplate[];
   isAdmin: boolean;
   currentUserId: string;
   openItems: PlanningOpenItem[];
@@ -42,7 +40,7 @@ interface Props {
 const MIN_TOPIC_ROWS = 3;
 
 export function PlanningBoard({
-  meetings, weekDays, weekStart, members, memberNames, templates, isAdmin,
+  meetings, weekDays, weekStart, members, memberNames, isAdmin,
   currentUserId, openItems, openItemsAvailable, matrix, matrixAvailable,
   processSteps, processStepsAvailable,
 }: Props) {
@@ -50,7 +48,6 @@ export function PlanningBoard({
   const [editor, setEditor] = useState<
     { meeting: PlanningMeetingWithTopics | null; day: string; slot: string; dayLabel: string } | null
   >(null);
-  const [showTemplates, setShowTemplates] = useState(false);
 
   // (gün|saat) → toplantılar
   const byCell = useMemo(() => {
@@ -110,9 +107,6 @@ export function PlanningBoard({
     });
   };
 
-  const btn =
-    "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 text-[13px] font-medium text-muted transition-all duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60 sm:px-3";
-
   return (
     <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
       <ModulePageHeader
@@ -126,21 +120,12 @@ export function PlanningBoard({
         secondaryBackHref="/board"
         rightSlot={
           <div className="flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2">
-            {/* Tek takvimin ölçeği — Hafta · Ay · Yıl (Aslı Hanım, 2026-08-19). */}
-            <CalendarViewSwitch scale="hafta" />
-            {/* "Haftayı kur" ve "Geçen haftadan" KALDIRILDI (Aslı Hanım,
-                2026-08-20: "Bu butonlara gerek var mı, kafa karıştırmaya gerek
-                var mı?"). Hafta iskeleti artık sayfa açılırken şablondan
-                kendiliğinden kuruluyor (lib/planning/scaffold.ts), dolayısıyla
-                bu düğmelerin ve "hafta zaten kurulu" gibi bildirimlerin bir
-                işlevi kalmadı. Aksiyonlar (applyTemplatesToWeek /
-                copyPreviousWeek) yerinde duruyor — geri açmak tek satır.
-                "Şablonlar" kalıyor: haftanın ritmini değiştirmenin TEK yeri. */}
-            {isAdmin && (
-              <button onClick={() => setShowTemplates(true)} className={btn} title="Haftanın tekrar eden ritmini tanımla — değişiklik tüm haftalara uygulanır">
-                <Settings2 size={14} /> <span className="hidden md:inline">Şablonlar</span>
-              </button>
-            )}
+            {/* SIRA: hafta gezinme solda, ölçek seçici EN SAĞDA — Aslı Hanım
+                (2026-08-24): "Hafta / Ay / Yıl yazısı en köşede olsun."
+                "Şablonlar" KALDIRILDI ("olmasına gerek yok, zaten elden
+                giriyoruz biz"): haftanın iskeleti artık kodda sabit
+                (lib/planning/bands.ts) ve boş hafta açılırken kendiliğinden
+                kuruluyor, ayrı bir şablon ekranına gerek kalmadı. */}
             <span className="mx-0.5 hidden h-6 w-px bg-line sm:block" />
             <div className="inline-flex h-9 shrink-0 items-stretch overflow-hidden rounded-lg border border-line bg-surface">
               <button
@@ -164,6 +149,7 @@ export function PlanningBoard({
                 <ChevronRight size={16} />
               </button>
             </div>
+            <CalendarViewSwitch scale="hafta" />
           </div>
         }
       />
@@ -232,15 +218,6 @@ export function PlanningBoard({
         />
       )}
 
-      {showTemplates && (
-        <TemplateManager
-          templates={templates}
-          members={members}
-          memberNames={memberNames}
-          onClose={() => setShowTemplates(false)}
-          onChanged={() => router.refresh()}
-        />
-      )}
     </div>
   );
 }

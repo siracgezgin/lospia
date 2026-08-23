@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { X, UserMinus, ChevronDown, Pencil, Check, Palette, RotateCcw, UserPlus } from "lucide-react";
+import { X, UserMinus, Pencil, UserPlus } from "lucide-react";
 import {
   revokeTeamAccess,
   changeWorkspaceMemberRole,
@@ -16,18 +16,16 @@ import type {
   WorkspaceMember, Profile, WorkspaceInvite, WorkspaceRole,
   WorkspaceDepartment, DepartmentMember,
 } from "@/types";
-import { roleLabel, ASSIGNABLE_ROLE_OPTIONS } from "@/lib/utils/roles";
+import { roleLabel } from "@/lib/utils/roles";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Card } from "@/components/ui/Card";
-import { Input } from "@/components/ui/Input";
 import { buildDeptMeta } from "@/lib/utils/departments";
 import { getDepartmentBadge } from "@/lib/design/semantics";
 import { cn } from "@/lib/utils/cn";
 import { personStyles } from "@/lib/design/person-colors";
 import { saveMemberIdentity } from "@/lib/actions/member-identity";
-import {
-  usePersonIdentities, PersonIdentityEditor, type IdentityMember,
-} from "@/components/settings/PersonIdentityManager";
+import { usePersonIdentities, type IdentityMember } from "@/components/settings/PersonIdentityManager";
+import { MemberEditPanel } from "@/components/settings/MemberEditPanel";
 
 interface MemberRow extends WorkspaceMember {
   profiles?: Partial<Profile> | null;
@@ -71,7 +69,6 @@ export function MembersManager({
      Önce iki ayrı kart aynı sekiz kişiyi iki kez listeliyordu. */
   const { tones, icons, usedColors, clashes } = usePersonIdentities(identities);
   const identityOf = new Map(identities.map((i) => [i.id, i]));
-  const [openIdentityId, setOpenIdentityId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
 
   function saveIdentity(m: IdentityMember, next: { colorKey?: string | null; iconKey?: string | null }) {
@@ -86,27 +83,78 @@ export function MembersManager({
     });
   }
 
-  // Inline name editing (owner fixes stale/placeholder names).
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editName, setEditName] = useState("");
+  /** Açık düzenleme paneli — üye başına TEK. */
+  const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
 
-  // Inline username editing (owner sets/corrects a member's username).
-  const [editingUsernameId, setEditingUsernameId] = useState<string | null>(null);
-  const [editUsername, setEditUsername] = useState("");
-
-  // Inline notification e-mail editing (workspace_members.notification_email —
-  // the REAL outbound address; the auth/login e-mail is never touched here).
-  const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
-  const [editEmail, setEditEmail] = useState("");
-
-  // Pending confirmation for a destructive delete.
+  /** Silme/kaldırma onayı — üye satırı ya da bekleyen davet. */
   const [confirm, setConfirm] = useState<
-    | { kind: "grant"; id: string; label: string }
     | { kind: "member"; id: string; label: string }
+    | { kind: "grant"; id: string; label: string }
     | null
   >(null);
 
   const isOwner = userRole === "owner";
+
+  /**
+   * Tek kaydetme akışı.
+   *
+   * YALNIZ DEĞİŞEN alan sunucuya gider: isim değişmediyse yeniden yazılmaz,
+   * kullanıcı adı değişmediyse tekillik denetimine hiç girilmez. İlk hatada
+   * durur ve mesajı gösterir — yarım kaydedilmiş bir üye bırakmaz.
+   */
+  function handleSaveMember(
+    m: MemberRow,
+    ident: IdentityMember | null,
+    next: {
+      fullName: string; username: string; notificationEmail: string;
+      role: "admin" | "member" | "viewer"; colorKey: string; iconKey: string;
+    },
+  ) {
+    setError(null);
+    startTransition(async () => {
+      const name = next.fullName.trim();
+      if (name && name !== (m.profiles?.full_name ?? "")) {
+        const r = await renameWorkspaceMember(m.id, name);
+        if ("error" in r) { setError(r.error); return; }
+        setMembers((prev) => prev.map((x) =>
+          x.id === m.id ? { ...x, profiles: { ...(x.profiles ?? {}), full_name: name } } : x));
+      }
+
+      const username = next.username.trim().toLowerCase();
+      if (username && username !== (m.profiles?.username ?? "")) {
+        const r = await setMemberUsername(m.id, username);
+        if ("error" in r) { setError(r.error); return; }
+        setMembers((prev) => prev.map((x) =>
+          x.id === m.id ? { ...x, profiles: { ...(x.profiles ?? {}), username } } : x));
+      }
+
+      const mail = next.notificationEmail.trim();
+      if (mail !== (m.notification_email ?? "")) {
+        const r = await setMemberNotificationEmail({
+          memberId: m.id,
+          notificationEmail: mail === "" ? null : mail,
+        });
+        if ("error" in r) { setError(r.error); return; }
+        setMembers((prev) => prev.map((x) =>
+          x.id === m.id ? { ...x, notification_email: r.notificationEmail } : x));
+      }
+
+      // Rol yalnız çalışma alanı sahibinde; sahip satırının rolü değişmez.
+      if (isOwner && m.role !== "owner" && next.role !== m.role) {
+        const r = await changeWorkspaceMemberRole(m.id, next.role);
+        if ("error" in r) { setError(r.error); return; }
+        setMembers((prev) => prev.map((x) => (x.id === m.id ? { ...x, role: next.role } : x)));
+      }
+
+      if (ident && (next.colorKey !== (ident.colorKey ?? "") || next.iconKey !== (ident.iconKey ?? ""))) {
+        const r = await saveMemberIdentity(m.id, { colorKey: next.colorKey, iconKey: next.iconKey });
+        if ("error" in r) { setError(r.error); return; }
+      }
+
+      setEditingMemberId(null);
+      router.refresh();
+    });
+  }
 
   // member_id (workspace_members.id) → department badges (name + effective colour)
   const deptMeta = buildDeptMeta(departments);
@@ -119,72 +167,6 @@ export function MembersManager({
     deptsByMember.set(dm.member_id, arr);
   }
 
-  function handleRoleChange(memberId: string, newRole: "admin" | "member" | "viewer") {
-    setError(null);
-    startTransition(async () => {
-      const result = await changeWorkspaceMemberRole(memberId, newRole);
-      if ("error" in result) { setError(result.error); return; }
-      setMembers((prev) =>
-        prev.map((m) => m.id === memberId ? { ...m, role: newRole } : m)
-      );
-    });
-  }
-
-  function handleSaveName(memberId: string) {
-    const name = editName.trim();
-    if (!name) { setEditingId(null); return; }
-    setError(null);
-    startTransition(async () => {
-      const result = await renameWorkspaceMember(memberId, name);
-      if ("error" in result) { setError(result.error); return; }
-      setMembers((prev) =>
-        prev.map((m) =>
-          m.id === memberId
-            ? { ...m, profiles: { ...(m.profiles ?? {}), full_name: name } }
-            : m
-        )
-      );
-      setEditingId(null);
-    });
-  }
-
-  function handleSaveUsername(memberId: string) {
-    const username = editUsername.trim().toLowerCase();
-    if (!username) { setEditingUsernameId(null); return; }
-    setError(null);
-    startTransition(async () => {
-      const result = await setMemberUsername(memberId, username);
-      if ("error" in result) { setError(result.error); return; }
-      setMembers((prev) =>
-        prev.map((m) =>
-          m.id === memberId
-            ? { ...m, profiles: { ...(m.profiles ?? {}), username } }
-            : m
-        )
-      );
-      setEditingUsernameId(null);
-    });
-  }
-
-  function handleSaveEmail(memberId: string) {
-    setError(null);
-    startTransition(async () => {
-      // Empty input clears the address (falls back to profiles.email when real).
-      const result = await setMemberNotificationEmail({
-        memberId,
-        notificationEmail: editEmail.trim() === "" ? null : editEmail,
-      });
-      if ("error" in result) { setError(result.error); return; }
-      setMembers((prev) =>
-        prev.map((m) =>
-          m.id === memberId ? { ...m, notification_email: result.notificationEmail } : m
-        )
-      );
-      setEditingEmailId(null);
-    });
-  }
-
-  // Runs only after the user confirms in the dialog.
   function runConfirmedDelete() {
     if (!confirm) return;
     const target = confirm;
@@ -262,158 +244,24 @@ export function MembersManager({
                 );
               })()}
               <div className="flex-1 min-w-0">
-                {editingId === m.id ? (
-                  <div className="flex items-center gap-1.5">
-                    <Input
-                      value={editName}
-                      onChange={(e) => setEditName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleSaveName(m.id);
-                        if (e.key === "Escape") setEditingId(null);
-                      }}
-                      autoFocus
-                      disabled={isPending}
-                      className="flex-1 min-w-0 h-7 px-2"
-                    />
-                    <button
-                      onClick={() => handleSaveName(m.id)}
-                      disabled={isPending}
-                      className="p-1 rounded-md text-success hover:bg-success/10 active:scale-95 transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50"
-                      aria-label="Kaydet"
-                    >
-                      <Check size={14} />
-                    </button>
-                    <button
-                      onClick={() => setEditingId(null)}
-                      disabled={isPending}
-                      className="p-1 rounded-md text-subtle hover:bg-surface-muted hover:text-ink active:scale-95 transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50"
-                      aria-label="Vazgeç"
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                ) : (
-                  <p className="text-sm font-medium text-ink truncate flex items-center gap-1.5">
-                    <span className="truncate">{m.profiles?.full_name ?? m.profiles?.email ?? "—"}</span>
-                    {isSelf && <span className="text-[10px] text-subtle">(siz)</span>}
-                    {isOwner && (
-                      <button
-                        onClick={() => { setEditingId(m.id); setEditName(m.profiles?.full_name ?? ""); }}
-                        className="p-0.5 rounded text-subtle hover:text-ink hover:bg-surface-muted active:scale-95 transition-colors duration-150 shrink-0"
-                        aria-label="İsmi düzenle"
-                      >
-                        <Pencil size={11} />
-                      </button>
-                    )}
-                  </p>
-                )}
-                {editingUsernameId === m.id ? (
-                  <div className="flex items-center gap-1.5 mt-1">
-                    <span className="text-[11px] text-subtle">@</span>
-                    <Input
-                      value={editUsername}
-                      onChange={(e) => setEditUsername(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleSaveUsername(m.id);
-                        if (e.key === "Escape") setEditingUsernameId(null);
-                      }}
-                      autoFocus
-                      disabled={isPending}
-                      placeholder="kullanici.adi"
-                      className="flex-1 min-w-0 h-6 px-2 text-xs"
-                    />
-                    <button
-                      onClick={() => handleSaveUsername(m.id)}
-                      disabled={isPending}
-                      className="p-1 rounded-md text-success hover:bg-success/10 active:scale-95 transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50"
-                      aria-label="Kaydet"
-                    >
-                      <Check size={14} />
-                    </button>
-                    <button
-                      onClick={() => setEditingUsernameId(null)}
-                      disabled={isPending}
-                      className="p-1 rounded-md text-subtle hover:bg-surface-muted hover:text-ink active:scale-95 transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50"
-                      aria-label="Vazgeç"
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted truncate flex items-center gap-1">
-                    <span className="truncate">
-                      {m.profiles?.username ? `@${m.profiles.username}` : "Kullanıcı adı yok"}
-                    </span>
-                    {isOwner && (
-                      <button
-                        onClick={() => { setEditingUsernameId(m.id); setEditUsername(m.profiles?.username ?? ""); }}
-                        className="p-0.5 rounded text-subtle hover:text-ink hover:bg-surface-muted active:scale-95 transition-colors duration-150 shrink-0"
-                        aria-label="Kullanıcı adını düzenle"
-                      >
-                        <Pencil size={11} />
-                      </button>
-                    )}
-                  </p>
-                )}
-                {editingEmailId === m.id ? (
-                  <div className="flex items-center gap-1.5 mt-1">
-                    <Input
-                      type="email"
-                      value={editEmail}
-                      onChange={(e) => setEditEmail(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") { e.preventDefault(); handleSaveEmail(m.id); }
-                        if (e.key === "Escape") setEditingEmailId(null);
-                      }}
-                      autoFocus
-                      disabled={isPending}
-                      placeholder="bildirim@ornek.com"
-                      className="flex-1 min-w-0 h-6 px-2 text-xs"
-                    />
-                    <button
-                      onClick={() => handleSaveEmail(m.id)}
-                      disabled={isPending}
-                      className="p-1 rounded-md text-success hover:bg-success/10 active:scale-95 transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50"
-                      aria-label="Kaydet"
-                    >
-                      <Check size={14} />
-                    </button>
-                    <button
-                      onClick={() => setEditingEmailId(null)}
-                      disabled={isPending}
-                      className="p-1 rounded-md text-subtle hover:bg-surface-muted hover:text-ink active:scale-95 transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50"
-                      aria-label="Vazgeç"
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                ) : (() => {
-                  // notification_email → real profiles.email → "not set".
-                  // @lospia.local login placeholders are never shown as a
-                  // notification address.
+                {/* Satır SALT OKUR. Düzenleme tek panelde (MemberEditPanel) —
+                    Aslı Hanım (2026-08-24): "Her kısmı böyle düzeltmek yerine
+                    daha profesyonel düzenleme kısmı olmalı her üye için."
+                    Önce isim, kullanıcı adı ve e-posta üç ayrı kalemdi. */}
+                <p className="flex items-center gap-1.5 truncate text-sm font-medium text-ink">
+                  <span className="truncate">{m.profiles?.full_name ?? m.profiles?.email ?? "—"}</span>
+                  {isSelf && <span className="shrink-0 text-[10px] text-subtle">(siz)</span>}
+                </p>
+                <p className="truncate text-xs text-muted">
+                  {m.profiles?.username ? `@${m.profiles.username}` : "Kullanıcı adı yok"}
+                </p>
+                {(() => {
+                  // notification_email → gerçek profiles.email → "eklenmedi".
+                  // @lospia.local giriş yer tutucuları adres olarak gösterilmez.
                   const display = getDisplayNotificationEmail(m);
                   return (
-                    <p className="text-xs truncate flex items-center gap-1">
-                      <span
-                        className={cn(
-                          "truncate",
-                          display.email ? "text-subtle" : "text-warning"
-                        )}
-                      >
-                        {display.email ?? "Bildirim e-postası eklenmedi"}
-                      </span>
-                      {isOwner && (
-                        <button
-                          onClick={() => {
-                            setEditingEmailId(m.id);
-                            setEditEmail(m.notification_email ?? "");
-                          }}
-                          className="p-0.5 rounded text-subtle hover:text-ink hover:bg-surface-muted active:scale-95 transition-colors duration-150 shrink-0"
-                          aria-label="Bildirim e-postasını düzenle"
-                        >
-                          <Pencil size={11} />
-                        </button>
-                      )}
+                    <p className={cn("truncate text-xs", display.email ? "text-subtle" : "text-warning")}>
+                      {display.email ?? "Bildirim e-postası eklenmedi"}
                     </p>
                   );
                 })()}
@@ -439,37 +287,25 @@ export function MembersManager({
                 )}
               </div>
 
-              {/* Sağ blok: kimlik düğmesi HER ZAMAN (yönetici de kullanabilsin),
-                  rol değiştirme ve kaldırma yalnız çalışma alanı sahibine.
-                  Palet düğmesi önce rol koluna gömülüydü; owner olmayan yönetici
-                  kimlik düzenlemesini hiç göremiyordu. */}
+              {/* Sağ blok: rol rozeti (salt okur) + TEK "Düzenle" + kaldırma.
+                  Rol seçici de panele taşındı — satırda beş ayrı etkileşim
+                  vardı, artık bir tane. */}
               <div className="flex shrink-0 items-center gap-2">
-                {canManageIdentity && identityOf.has(m.id) && (
+                <span className="rounded-full bg-surface-sunken px-2.5 py-0.5 text-xs text-muted">
+                  {roleLabel(m.role)}
+                </span>
+                {(canManage || canManageIdentity) && (
                   <button
-                    onClick={() => setOpenIdentityId(openIdentityId === m.id ? null : m.id)}
+                    onClick={() => setEditingMemberId(editingMemberId === m.id ? null : m.id)}
                     className="tap-target rounded-md p-1 text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-95"
-                    aria-label="Renk ve ikon"
-                    aria-expanded={openIdentityId === m.id}
-                    title="Renk ve ikon"
+                    aria-label="Üyeyi düzenle"
+                    aria-expanded={editingMemberId === m.id}
+                    title="Düzenle"
                   >
-                    <Palette size={13} />
+                    <Pencil size={13} />
                   </button>
                 )}
-              {canManage ? (
-                <div className="flex items-center gap-2 shrink-0">
-                  <div className="relative">
-                    <select
-                      value={m.role}
-                      onChange={(e) => handleRoleChange(m.id, e.target.value as "admin" | "member" | "viewer")}
-                      disabled={isPending}
-                      className="appearance-none text-xs text-muted bg-surface-sunken border border-line rounded-full px-2.5 py-0.5 pr-6 transition-colors duration-150 hover:border-line-strong focus:outline-none focus:ring-2 focus:ring-brand-ring/40 focus:border-brand-ring disabled:opacity-50"
-                    >
-                      {ASSIGNABLE_ROLE_OPTIONS.map((r) => (
-                        <option key={r.value} value={r.value}>{r.label}</option>
-                      ))}
-                    </select>
-                    <ChevronDown size={10} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-subtle pointer-events-none" />
-                  </div>
+                {canManage && (
                   <button
                     onClick={() => setConfirm({
                       kind: "member",
@@ -477,45 +313,36 @@ export function MembersManager({
                       label: m.profiles?.full_name ?? m.profiles?.email ?? "",
                     })}
                     disabled={isPending}
-                    className="p-1 rounded-md text-subtle hover:text-danger hover:bg-danger/10 active:scale-95 disabled:pointer-events-none disabled:opacity-50 transition-colors duration-150"
+                    className="tap-target rounded-md p-1 text-subtle transition-colors duration-150 hover:bg-danger/10 hover:text-danger active:scale-95 disabled:pointer-events-none disabled:opacity-50"
                     aria-label="Üyeyi kaldır"
                   >
                     <UserMinus size={13} />
                   </button>
-                </div>
-              ) : (
-                <span className="text-xs text-muted bg-surface-sunken px-2.5 py-0.5 rounded-full shrink-0">
-                  {roleLabel(m.role)}
-                </span>
-              )}
+                )}
               </div>
             </div>
 
-            {/* Renk + ikon seçici — kişinin kendi satırının altında açılır.
-                68 ikon herkeste açık dursa bölüm tek başına 1000px oluyor. */}
-            {canManageIdentity && openIdentityId === m.id && identityOf.has(m.id) && (() => {
-              const ident = identityOf.get(m.id)!;
-              const tone = tones[ident.userId];
-              if (!tone) return null;
+            {editingMemberId === m.id && (() => {
+              const ident = identityOf.get(m.id) ?? null;
               return (
-                <div className="mt-3 rounded-xl border border-line bg-surface-sunken/60 p-3">
-                  <PersonIdentityEditor
-                    member={ident}
-                    tone={tone}
-                    usedColors={usedColors}
-                    busy={isPending}
-                    onSave={(next) => saveIdentity(ident, next)}
-                  />
-                  {(ident.colorKey || ident.iconKey) && (
-                    <button
-                      onClick={() => saveIdentity(ident, { colorKey: "", iconKey: "" })}
-                      disabled={isPending}
-                      className="mt-2 inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-2 py-1 text-[12px] font-medium text-muted transition-colors hover:border-line-strong hover:text-ink disabled:opacity-50"
-                    >
-                      <RotateCcw size={12} /> Otomatiğe dön
-                    </button>
-                  )}
-                </div>
+                <MemberEditPanel
+                  member={ident}
+                  draft={{
+                    fullName: m.profiles?.full_name ?? "",
+                    username: m.profiles?.username ?? "",
+                    notificationEmail: m.notification_email ?? "",
+                    role: (m.role === "owner" ? "admin" : m.role) as "admin" | "member" | "viewer",
+                    colorKey: ident?.colorKey ?? "",
+                    iconKey: ident?.iconKey ?? "",
+                  }}
+                  canManageRole={canManage}
+                  canManageIdentity={canManageIdentity && !!ident}
+                  usedColors={usedColors}
+                  busy={isPending}
+                  onCancel={() => setEditingMemberId(null)}
+                  onResetIdentity={() => { if (ident) saveIdentity(ident, { colorKey: "", iconKey: "" }); }}
+                  onSave={(next) => handleSaveMember(m, ident, next)}
+                />
               );
             })()}
             </div>

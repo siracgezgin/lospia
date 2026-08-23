@@ -1,17 +1,19 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { PLANNING_BANDS } from "@/lib/planning/bands";
 
 /**
- * Haftanın iskeletini şablonlardan OTOMATİK kurar.
+ * Haftanın iskeletini OTOMATİK kurar (kaynak: PLANNING_BANDS).
  *
  * Aslı Hanım (2026-08-20):
  *   "Calendar kısmı hepsinde, tüm haftalarda aynı mantıkta olacak — saat ve
  *    başlık vs. O yüzden diğer haftalara da uyarla, ben tek tek uğraşmayayım."
  *
- * Eskiden her hafta için "Haftayı kur" düğmesine basmak gerekiyordu; boş bir
- * haftaya girildiğinde ızgara bomboş açılıyordu. Artık boş bir hafta
- * görüntülendiğinde şablon satırları sessizce yazılır — her hafta aynı
- * saatlerle ve aynı gün başlıklarıyla açılır.
+ * Eskiden önce "Haftayı kur" düğmesine basmak, sonra da Şablonlar ekranını
+ * doldurmak gerekiyordu; şablon yoksa hafta bomboş açılıyordu. Artık iskelet
+ * KODDA sabit (AF_Work "Toplantı Takvimi" sayfasının birebir karşılığı) ve boş
+ * bir hafta görüntülendiğinde sessizce yazılır — her hafta aynı saatler, aynı
+ * gün başlıkları.
  *
  * Güvenlik ve idempotenlik:
  *   • YALNIZ yönetici tetikler. Yazma zaten RLS'te admin-only (20240226); üye
@@ -40,29 +42,29 @@ export async function ensureWeekScaffold(
     .limit(1);
   if (probeErr || (any1 && any1.length > 0)) return 0;
 
-  const { data: templates, error: tErr } = await supabase
-    .from("planning_templates")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .eq("active", true)
-    .order("weekday", { ascending: true })
-    .order("time_slot", { ascending: true })
-    .order("position", { ascending: true });
-  if (tErr || !templates?.length) return 0;
-
-  const rows = templates.map((t) => ({
-    workspace_id: workspaceId,
-    meeting_date: addDaysIso(weekStart, t.weekday as number),
-    time_slot: t.time_slot,
-    category: t.category,
-    title: t.title,
-    content: t.content,
-    participant_ids: t.participant_ids ?? [],
-    position: t.position ?? 0,
-    template_id: t.id,
-    created_by: userId,
-    updated_by: userId,
-  }));
+  /* İskelet KODDAN gelir, şablon tablosundan değil.
+     Aslı Hanım (2026-08-24): "Şablonları kaldır, olmasına gerek yok; zaten
+     elden giriyoruz biz." Şablonlar ayrı bir ekranda yönetiliyor, boş
+     bırakılınca hafta bomboş açılıyordu. Artık haftanın saatleri ve gün
+     başlıkları PLANNING_BANDS'ten okunur — her hafta birebir aynı. */
+  const rows = PLANNING_BANDS.flatMap((band) =>
+    band.columns.flatMap((title, weekday) => {
+      if (!title.trim()) return []; // o gün o şeritte toplantı yok
+      return [{
+        workspace_id: workspaceId,
+        meeting_date: addDaysIso(weekStart, weekday),
+        time_slot: band.slot,
+        category: band.category,
+        title,
+        content: null,
+        participant_ids: [] as string[],
+        position: weekday,
+        created_by: userId,
+        updated_by: userId,
+      }];
+    }),
+  );
+  if (!rows.length) return 0;
 
   const { error } = await supabase.from("planning_meetings").insert(rows);
   // Hata yutulur: iskelet kurulamasa da takvim açılmalı (üye görünümü, RLS

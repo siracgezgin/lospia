@@ -220,17 +220,6 @@ export default async function CalendarPage({
     topics: byMeeting.get(m.id) ?? [],
   }));
 
-  // Hafta şablonları — "Haftayı kur" + Şablonlar yöneticisi için. Tablo henüz
-  // migrate edilmediyse boş liste (sayfa çalışmaya devam eder).
-  const templatesRes = await supabase
-    .from("planning_templates")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .order("weekday", { ascending: true })
-    .order("time_slot", { ascending: true })
-    .order("position", { ascending: true });
-  const templates = (templatesRes.data ?? []) as unknown as PlanningTemplate[];
-
   // "Tamamlanmamış Eksik Konular" — haftadan bağımsız açık konu defteri. Tablo
   // henüz migrate edilmediyse bölüm kendi içinde bilgi notu gösterir, sayfa
   // çalışmaya devam eder.
@@ -267,7 +256,6 @@ export default async function CalendarPage({
       weekStart={weekStart}
       members={members}
       memberNames={memberNames}
-      templates={templates}
       isAdmin={isAdmin}
       currentUserId={user.id}
       openItems={openItems}
