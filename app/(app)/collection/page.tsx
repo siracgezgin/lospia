@@ -49,7 +49,13 @@ export default async function CollectionPage({
     .select(LIST_COLUMNS)
     .eq("workspace_id", workspaceId)
     .order("updated_at", { ascending: false });
-  if (seasonId) sheetsQuery.eq("season_id", seasonId);
+  // Sezonu OLMAYAN föyler her sezon bağlamında görünür.
+  // Gerekçe: prod'daki föylerin bir kısmında sezon metni hiç yoktu (taşımada
+  // 12 föyün yalnız 5'i bağlandı). Katı `eq` süzgeci bunları aktif sezonda
+  // gizlerdi ve kullanıcıya VERİ KAYBI gibi görünürdü. Sezonsuz föy bir
+  // "eksik", saklanacak bir şey değil — görünür kalır, Koleksiyon'da uyarı
+  // ile sezona atanması istenir.
+  if (seasonId) sheetsQuery.or(`season_id.eq.${seasonId},season_id.is.null`);
   const sheetsResult = await sheetsQuery;
 
   const setup = maybeDatabaseSetupRequired(sheetsResult.error);

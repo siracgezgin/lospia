@@ -44,7 +44,13 @@ export default async function CostPage({
     .neq("status", "archived")
     .order("category", { ascending: true, nullsFirst: false })
     .order("title", { ascending: true });
-  if (seasonId) query.eq("season_id", seasonId);
+  // Sezonu OLMAYAN föyler her sezon bağlamında görünür.
+  // Gerekçe: prod'daki föylerin bir kısmında sezon metni hiç yoktu (taşımada
+  // 12 föyün yalnız 5'i bağlandı). Katı `eq` süzgeci bunları aktif sezonda
+  // gizlerdi ve kullanıcıya VERİ KAYBI gibi görünürdü. Sezonsuz föy bir
+  // "eksik", saklanacak bir şey değil — görünür kalır, Koleksiyon'da uyarı
+  // ile sezona atanması istenir.
+  if (seasonId) query.or(`season_id.eq.${seasonId},season_id.is.null`);
   const result = await query;
 
   const setup = maybeDatabaseSetupRequired(result.error);

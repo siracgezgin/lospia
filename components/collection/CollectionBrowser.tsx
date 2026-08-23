@@ -19,7 +19,7 @@ export type CollectionItem = Pick<
   ProductionSheet,
   | "id" | "workspace_id" | "title" | "status" | "product_code" | "product_kind"
   | "producer" | "manufacturer_id" | "delivery_date" | "sewing_delivery_date"
-  | "season" | "photo_refs" | "category" | "subcategory" | "description"
+  | "season" | "season_id" | "photo_refs" | "category" | "subcategory" | "description"
   | "pricing" | "size_distribution" | "measurements"
   | "confirmed_at" | "confirmed_by"
   | "created_by" | "updated_by" | "archived_at" | "created_at" | "updated_at"
@@ -49,6 +49,8 @@ function coverImage(s: CollectionItem): string | null {
 }
 
 export function CollectionBrowser({ sheets, seasons = [] }: Props) {
+  // Sezona bağlanmamış föyler — taşımada sezon metni boş olanlar.
+  const seasonlessCount = sheets.filter((s) => !s.season_id && s.status !== "archived").length;
   const [query, setQuery] = useState("");
   // Seçim: null = tümü. category = ana kategori anahtarı ya da UNCAT. sub = alt kategori.
   const [selCat, setSelCat] = useState<string | null>(null);
@@ -136,6 +138,20 @@ export function CollectionBrowser({ sheets, seasons = [] }: Props) {
 
       {/* Sekme çubuğu — Üretim Föyleri | Maliyet | Ödeme Tablosu (tek kaynak) */}
       <CollectionTabs active="foy" />
+
+      {/* Sezonsuz föy uyarısı. Bunlar gizlenmiyor (her sezon bağlamında
+          görünürler) ama sezona atanmadan "bu sezon ne ürettik" sorusu doğru
+          cevaplanamaz — o yüzden sessizce geçilmiyor. */}
+      {seasons.length > 0 && seasonlessCount > 0 && (
+        <p className="mb-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] text-amber-900">
+          <AlertTriangle size={14} className="mt-px shrink-0 text-amber-600" />
+          <span>
+            <b className="font-semibold">{seasonlessCount} föyün sezonu yok.</b>{" "}
+            Şimdilik her sezonda görünüyorlar; föyü açıp sezonunu seçerseniz
+            sezon bazlı maliyet ve karşılaştırma doğru çalışır.
+          </span>
+        </p>
+      )}
 
       <div className="flex flex-col gap-5 lg:flex-row">
         {/* Sol — kategori ağacı (web nav yapısı) */}
