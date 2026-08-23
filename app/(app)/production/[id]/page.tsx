@@ -42,6 +42,15 @@ export default async function ProductionSheetPage({
     Manufacturer, "id" | "name" | "is_active" | "lead_time_days" | "min_order_qty" | "currency" | "city"
   >[];
 
+  // Sezon listesi — föydeki "Sezon" alanı da artık seçim.
+  const seasonsResult = await supabase
+    .from("workspace_seasons")
+    .select("id, name, is_current")
+    .eq("workspace_id", workspaceId)
+    .order("is_current", { ascending: false })
+    .order("name", { ascending: false });
+  const seasons = (seasonsResult.data ?? []) as { id: string; name: string; is_current: boolean }[];
+
   // "new" → boş föy oluşturma modu.
   if (id === "new") {
     return (
@@ -49,6 +58,7 @@ export default async function ProductionSheetPage({
         sheet={null}
         memberNames={memberNames}
         manufacturers={manufacturers}
+        seasons={seasons}
         isAdmin={isAdmin}
         currentUserId={user.id}
       />
@@ -71,6 +81,7 @@ export default async function ProductionSheetPage({
       sheet={data as unknown as ProductionSheet}
       memberNames={memberNames}
       manufacturers={manufacturers}
+      seasons={seasons}
       isAdmin={isAdmin}
       currentUserId={user.id}
     />

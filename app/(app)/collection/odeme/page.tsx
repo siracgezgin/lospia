@@ -6,6 +6,7 @@
 import { redirect } from "next/navigation";
 import { HandCoins } from "lucide-react";
 import { requireModuleMember } from "@/lib/modules/context";
+import { resolveSeasonId } from "@/lib/collection/season";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { SetupRequiredNotice } from "@/components/modules/SetupRequiredNotice";
@@ -18,18 +19,37 @@ export const dynamic = "force-dynamic";
 const PAYMENT_COLUMNS =
   "id, title, product_kind, producer, manufacturer_id, category, subcategory, pricing, size_distribution, status";
 
-export default async function PaymentPage() {
+export default async function PaymentPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ sezon?: string }>;
+}) {
   const { supabase, user, workspaceId, isAdmin, gate } = await requireModuleMember();
   if (gate === "login") redirect("/login");
   if (gate !== "ok" || !workspaceId || !user) return <AccessDenied />;
 
-  const result = await supabase
+  const sp = await searchParams;
+
+  // Sezon bağlamı — Koleksiyon ile AYNI seçim (Zedonk `SS 21 - WW` deseni).
+  const seasonsRes = await supabase
+    .from("workspace_seasons")
+    .select("id, name, is_current")
+    .eq("workspace_id", workspaceId)
+    .order("is_current", { ascending: false })
+    .order("position")
+    .order("name", { ascending: false });
+  const seasons = (seasonsRes.data ?? []) as { id: string; name: string; is_current: boolean }[];
+  const seasonId = resolveSeasonId(sp?.sezon, seasons);
+
+  const query = supabase
     .from("production_sheets")
     .select(PAYMENT_COLUMNS)
     .eq("workspace_id", workspaceId)
     .neq("status", "archived")
     .order("category", { ascending: true, nullsFirst: false })
     .order("title", { ascending: true });
+  if (seasonId) query.eq("season_id", seasonId);
+  const result = await query;
 
   const setup = maybeDatabaseSetupRequired(result.error);
   if (setup.setupRequired) {
@@ -68,5 +88,5 @@ export default async function PaymentPage() {
     "id" | "name" | "photo_url" | "city" | "country" | "currency" | "lead_time_days" | "min_order_qty" | "is_active"
   >[];
 
-  return <PaymentTable rows={rows} manufacturers={manufacturers} />;
+  return <PaymentTable rows={rows} manufacturers={manufacturers} seasons={seasons} />;
 }

@@ -9,6 +9,7 @@ import {
 import { cn } from "@/lib/utils/cn";
 import { CollectionTabs } from "./PaymentTable";
 import { missingOf } from "@/lib/production/completeness";
+import { SeasonSwitch, type SwitchSeason } from "./SeasonSwitch";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { COLLECTION_TAXONOMY, categoryLabel, subcategoryLabel } from "@/lib/collection/taxonomy";
 import type { ProductionSheet } from "@/types";
@@ -28,6 +29,8 @@ interface Props {
   sheets: CollectionItem[];
   memberNames: Record<string, string>;
   isAdmin: boolean;
+  /** Sezon bağlamı — boşsa seçici çizilmez (tablo migrate edilmemiş). */
+  seasons?: SwitchSeason[];
 }
 
 const UNCAT = "__uncat__";
@@ -45,7 +48,7 @@ function coverImage(s: CollectionItem): string | null {
   return (drawing ?? imgs.find((i) => i?.url))?.url ?? null;
 }
 
-export function CollectionBrowser({ sheets }: Props) {
+export function CollectionBrowser({ sheets, seasons = [] }: Props) {
   const [query, setQuery] = useState("");
   // Seçim: null = tümü. category = ana kategori anahtarı ya da UNCAT. sub = alt kategori.
   const [selCat, setSelCat] = useState<string | null>(null);
@@ -108,7 +111,10 @@ export function CollectionBrowser({ sheets }: Props) {
         icon={Boxes}
         secondaryBackHref="/board"
         rightSlot={
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+            {/* Sezon — Ürün ekranlarının BAĞLAMI (Zedonk `SS 21 - WW` deseni).
+                Koleksiyon, Maliyet ve Ödeme Tablosu aynı seçime uyar. */}
+            <SeasonSwitch seasons={seasons} />
             {visible.length > 0 && (
               <a
                 href="/production/export-all"

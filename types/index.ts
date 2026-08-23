@@ -183,6 +183,28 @@ export type OperationSpreadsheet = {
 };
 
 /**
+ * Sezon — 20240309 migration.
+ *
+ * Zedonk incelemesinden gelen mimari fikir: her ekranın sağ üstünde bir sezon
+ * seçici var (`SS 21 - WW`) ve bu bir filtre değil, sistemin çalıştığı BAĞLAM.
+ * Bizde `production_sheets.season` yalnız serbest metindi.
+ */
+export type Season = {
+  id: string;
+  workspace_id: string;
+  name: string;
+  starts_on: string | null;
+  ends_on: string | null;
+  /** Aktif sezon — çalışma alanı başına en fazla bir tane. */
+  is_current: boolean;
+  position: number;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/**
  * Üretici (Usta) — 20240307 migration.
  *
  * Aslı Hanım (2026-08-19): "Cihan Usta, o ustaları da öyle açacağız. Cihan diye
@@ -258,7 +280,8 @@ export type ProductionSheet = {
   producer: string | null;        // eski serbest metin (geri uyum)
   manufacturer_id?: string | null; // gerçek usta kaydı (20240307) — bu kazanır
   description: string | null;
-  season: string | null;
+  season: string | null;          // eski serbest metin (geri uyum)
+  season_id?: string | null;      // gerçek sezon kaydı (20240309) — bu kazanır
   production_date: string | null;
   delivery_date: string | null;
   /** Dikim teslim tarihi — ürün teslim tarihinden AYRI (20240306). */

@@ -10,6 +10,7 @@ import {
   totalQuantity, formatMoney, COST_ITEM_DEFS, emptyCostItems, unitCostOf,
 } from "@/lib/collection/cost";
 import { CollectionTabs } from "./PaymentTable";
+import { SeasonSwitch, type SwitchSeason } from "./SeasonSwitch";
 import type { ProductionSheet, ProductionPricing, CostItemKey } from "@/types";
 
 type Row = Pick<
@@ -19,6 +20,8 @@ type Row = Pick<
 
 interface Props {
   rows: Row[];
+  /** Sezon bağlamı — Koleksiyon ile aynı seçim. */
+  seasons?: SwitchSeason[];
 }
 
 const cellInput =
@@ -37,7 +40,7 @@ const thSticky = "sticky top-0 z-10 border-b-2 border-line-strong bg-surface-mut
  *
  * Ustaya yapılan ödeme burada DEĞİL — o "Ödeme Tablosu"nda yaşar.
  */
-export function CostBreakdownTable({ rows }: Props) {
+export function CostBreakdownTable({ rows, seasons = [] }: Props) {
   const [pricing, setPricing] = useState<Record<string, ProductionPricing>>(() => {
     const m: Record<string, ProductionPricing> = {};
     for (const r of rows) {
@@ -106,7 +109,9 @@ export function CostBreakdownTable({ rows }: Props) {
         icon={Wallet}
         secondaryBackHref="/collection"
         rightSlot={
-          rows.length > 0 ? (
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+            <SeasonSwitch seasons={seasons} />
+            {rows.length > 0 && (
             <a
               href="/collection/maliyet/export"
               className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-muted transition-[background-color,border-color,color,transform] duration-150 ease-standard hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
@@ -114,7 +119,8 @@ export function CostBreakdownTable({ rows }: Props) {
             >
               <FileSpreadsheet size={15} /> Excel indir
             </a>
-          ) : undefined
+            )}
+          </div>
         }
       />
 

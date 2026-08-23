@@ -84,6 +84,8 @@ const SheetSchema = z.object({
   manufacturer_id: z.string().uuid().optional().nullable(),
   description: longText,
   season: shortText,
+  // Gerçek sezon kaydı (20240309). season metni geri uyum için korunur.
+  season_id: z.string().uuid().optional().nullable(),
   production_date: shortText,
   delivery_date: shortText,
   sewing_delivery_date: shortText,
@@ -145,6 +147,7 @@ function normalize(v: ProductionSheetInput) {
     manufacturer_id: v.manufacturer_id || null,
     description: nn(v.description),
     season: nn(v.season),
+    season_id: v.season_id || null,
     production_date: nn(v.production_date),
     delivery_date: nn(v.delivery_date),
     sewing_delivery_date: nn(v.sewing_delivery_date),

@@ -14,6 +14,7 @@ import {
   totalQuantity, formatMoney, ustaUnitPaymentOf,
 } from "@/lib/collection/cost";
 import { assignPersonTones, assignPersonIcons } from "@/lib/design/person-colors";
+import { SeasonSwitch, type SwitchSeason } from "./SeasonSwitch";
 import type { ProductionSheet, ProductionPricing, Manufacturer } from "@/types";
 
 type Row = Pick<
@@ -30,6 +31,8 @@ interface Props {
   rows: Row[];
   /** Usta kayıtları. Boşsa eski serbest-metin gruplamasına düşülür. */
   manufacturers?: PaymentManufacturer[];
+  /** Sezon bağlamı — Koleksiyon ile aynı seçim. */
+  seasons?: SwitchSeason[];
 }
 
 /** Üreticisi girilmemiş föylerin toplandığı kova. */
@@ -52,7 +55,7 @@ const priceInput =
  * Yani Pano'daki kişi ızgarasının aynısı: önce usta kartları, tıklayınca o
  * ustanın diktiği ürünler ve ödemesi. Maliyet AYRI ekrandır (/collection/maliyet).
  */
-export function PaymentTable({ rows, manufacturers = [] }: Props) {
+export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) {
   const [pricing, setPricing] = useState<Record<string, ProductionPricing>>(() => {
     const m: Record<string, ProductionPricing> = {};
     for (const r of rows) m[r.id] = { ...(r.pricing ?? {}) };
@@ -142,6 +145,7 @@ export function PaymentTable({ rows, manufacturers = [] }: Props) {
         description="Usta başına ödeme — hangi usta hangi ürünü dikti, ne kadar ödenecek. Ürün maliyeti ayrı ekranda."
         icon={HandCoins}
         secondaryBackHref="/collection"
+        rightSlot={<SeasonSwitch seasons={seasons} />}
       />
 
       <CollectionTabs active="odeme" />

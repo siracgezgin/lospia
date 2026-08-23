@@ -662,4 +662,7 @@ begin
   -- Föylerdeki serbest metin üreticiyi gerçek usta kaydına bağla (20240307).
   select public.af_backfill_manufacturers() into v_msg;
   raise notice '%', v_msg;
+  -- Aynısı sezon için (20240309).
+  select public.af_backfill_seasons() into v_msg;
+  raise notice '%', v_msg;
 end $$;

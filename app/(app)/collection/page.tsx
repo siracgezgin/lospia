@@ -6,6 +6,7 @@ import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { SetupRequiredNotice } from "@/components/modules/SetupRequiredNotice";
 import { maybeDatabaseSetupRequired } from "@/lib/utils/supabase-errors";
 import { CollectionBrowser } from "@/components/collection/CollectionBrowser";
+import { resolveSeasonId } from "@/lib/collection/season";
 import type { ProductionSheet } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -14,21 +15,42 @@ export const dynamic = "force-dynamic";
 // gerekiyor (kart üzerinde maliyet göstermek için). measurements/talimatlar
 // gibi ağır jsonb'ler editöre bırakılır ki liste hafif kalsın.
 const LIST_COLUMNS =
-  "id, workspace_id, title, status, product_code, product_kind, producer, manufacturer_id, " +
+  "id, workspace_id, title, status, product_code, product_kind, producer, manufacturer_id, season_id, " +
   "delivery_date, sewing_delivery_date, season, photo_refs, category, subcategory, pricing, " +
   "size_distribution, measurements, description, confirmed_at, confirmed_by, " +
   "created_by, updated_by, archived_at, created_at, updated_at";
 
-export default async function CollectionPage() {
+export default async function CollectionPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ sezon?: string }>;
+}) {
   const { supabase, user, workspaceId, isAdmin, gate } = await requireModuleMember();
   if (gate === "login") redirect("/login");
   if (gate !== "ok" || !workspaceId || !user) return <AccessDenied />;
 
-  const sheetsResult = await supabase
+  const sp = await searchParams;
+
+  // Sezon bağlamı — Zedonk'un sağ üstteki `SS 21 - WW` seçicisinin karşılığı.
+  // Tablo henüz migrate edilmemişse boş liste döner, seçici çizilmez ve süzme
+  // olmaz (geri uyum).
+  const seasonsRes = await supabase
+    .from("workspace_seasons")
+    .select("id, name, is_current")
+    .eq("workspace_id", workspaceId)
+    .order("is_current", { ascending: false })
+    .order("position")
+    .order("name", { ascending: false });
+  const seasons = (seasonsRes.data ?? []) as { id: string; name: string; is_current: boolean }[];
+  const seasonId = resolveSeasonId(sp?.sezon, seasons);
+
+  const sheetsQuery = supabase
     .from("production_sheets")
     .select(LIST_COLUMNS)
     .eq("workspace_id", workspaceId)
     .order("updated_at", { ascending: false });
+  if (seasonId) sheetsQuery.eq("season_id", seasonId);
+  const sheetsResult = await sheetsQuery;
 
   const setup = maybeDatabaseSetupRequired(sheetsResult.error);
   if (setup.setupRequired) {
@@ -67,5 +89,5 @@ export default async function CollectionPage() {
     if (p) memberNames[m.user_id as string] = p.full_name || p.email || "—";
   }
 
-  return <CollectionBrowser sheets={sheets} memberNames={memberNames} isAdmin={isAdmin} />;
+  return <CollectionBrowser sheets={sheets} memberNames={memberNames} isAdmin={isAdmin} seasons={seasons} />;
 }

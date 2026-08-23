@@ -38,6 +38,8 @@ interface Props {
   memberNames: Record<string, string>;
   /** Usta listesi. Boşsa alan serbest metne düşer (tablo migrate edilmemiş). */
   manufacturers?: SheetManufacturer[];
+  /** Sezon listesi. Boşsa alan serbest metne düşer. */
+  seasons?: { id: string; name: string; is_current: boolean }[];
   isAdmin: boolean;
   currentUserId: string;
 }
@@ -82,6 +84,7 @@ function emptyState(): ProductionSheetInput {
     manufacturer_id: null,
     description: "",
     season: "",
+    season_id: null,
     production_date: "",
     delivery_date: "",
     sewing_delivery_date: "",
@@ -132,6 +135,7 @@ function fromSheet(s: ProductionSheet): ProductionSheetInput {
     manufacturer_id: s.manufacturer_id ?? null,
     description: s.description ?? "",
     season: s.season ?? "",
+    season_id: s.season_id ?? null,
     production_date: s.production_date ?? "",
     delivery_date: s.delivery_date ?? "",
     sewing_delivery_date: s.sewing_delivery_date ?? "",
@@ -210,7 +214,7 @@ function Section({ title, children, className }: { title: string; children: Reac
   );
 }
 
-export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], isAdmin, currentUserId }: Props) {
+export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], seasons = [], isAdmin, currentUserId }: Props) {
   const router = useRouter();
   const [form, setForm] = useState<ProductionSheetInput>(() => (sheet ? fromSheet(sheet) : emptyState()));
   const [error, setError] = useState<string | null>(null);
@@ -540,7 +544,31 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
           ) : (
             <LabeledField label="Üretici" value={form.producer ?? ""} onChange={(v) => set("producer", v)} />
           )}
-          <LabeledField label="Sezon" value={form.season ?? ""} onChange={(v) => set("season", v)} placeholder="2026 RESORT" />
+          {/* SEZON — artık serbest metin değil, gerçek kayıt. Ürün ekranlarının
+              bağlamı bu (Zedonk `SS 21 - WW` deseni). Liste boşsa eski metin
+              alanına düşer. Yeni föy varsayılan olarak AKTİF sezonda açılır. */}
+          {seasons.length > 0 ? (
+            <label className="flex items-center gap-2">
+              <span className="w-40 shrink-0 text-[11.5px] font-semibold uppercase tracking-wide text-muted">Sezon</span>
+              <select
+                className={inputCls}
+                value={form.season_id ?? ""}
+                onChange={(e) => {
+                  const id = e.target.value || null;
+                  const sn = seasons.find((x) => x.id === id);
+                  setDirty(true);
+                  setForm((f) => ({ ...f, season_id: id, season: sn?.name ?? "" }));
+                }}
+              >
+                <option value="">Seçiniz…</option>
+                {seasons.map((sn) => (
+                  <option key={sn.id} value={sn.id}>{sn.name}{sn.is_current ? " ·" : ""}</option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <LabeledField label="Sezon" value={form.season ?? ""} onChange={(v) => set("season", v)} placeholder="2026 RESORT" />
+          )}
           {/* Koleksiyon kategorisi — web nav yapısı (One-of-a-Kind / Ready to Wear …) */}
           <label className="flex items-center gap-2">
             <span className="w-40 shrink-0 text-[11.5px] font-semibold uppercase tracking-wide text-muted">Kategori</span>

@@ -5,6 +5,7 @@ import { MembersManager } from "@/components/settings/MembersManager";
 import { CreateAccountPanel } from "@/components/settings/CreateAccountPanel";
 import { DepartmentsManager } from "@/components/settings/DepartmentsManager";
 import { ManufacturersManager, type ManagerManufacturer } from "@/components/settings/ManufacturersManager";
+import { SeasonsManager, type ManagerSeason } from "@/components/settings/SeasonsManager";
 import { canManageSettings, canRenameWorkspace, canManageMembers, canManageWorkspace } from "@/lib/auth/permissions";
 import { roleLabel } from "@/lib/utils/roles";
 import { getDisplayNotificationEmail } from "@/lib/utils/notification-email";
@@ -48,7 +49,8 @@ export default async function SettingsPage() {
   const canManageDepts = canManageWorkspace(userRole);   // owner + admin (departments)
 
   const [wsResult, membersResult, profileResult, invitesResult,
-         deptsResult, deptMembersResult, manufacturersResult, sheetProducerResult] =
+         deptsResult, deptMembersResult, manufacturersResult, sheetProducerResult,
+         seasonsResult, sheetSeasonResult] =
     await Promise.all([
       supabase.from("workspaces").select("*").eq("id", workspaceId).single(),
       supabase
@@ -87,6 +89,18 @@ export default async function SettingsPage() {
         .select("manufacturer_id")
         .eq("workspace_id", workspaceId)
         .not("manufacturer_id", "is", null),
+      // Sezon — Ürün ekranlarının bağlamı (Zedonk `SS 21 - WW` deseni).
+      supabase
+        .from("workspace_seasons")
+        .select("id, name, starts_on, ends_on, is_current")
+        .eq("workspace_id", workspaceId)
+        .order("is_current", { ascending: false })
+        .order("name", { ascending: false }),
+      supabase
+        .from("production_sheets")
+        .select("season_id")
+        .eq("workspace_id", workspaceId)
+        .not("season_id", "is", null),
     ]);
 
   const manufacturers = (manufacturersResult.data ?? []) as ManagerManufacturer[];
@@ -94,6 +108,13 @@ export default async function SettingsPage() {
   const sheetCounts: Record<string, number> = {};
   for (const r of (sheetProducerResult.data ?? []) as { manufacturer_id: string | null }[]) {
     if (r.manufacturer_id) sheetCounts[r.manufacturer_id] = (sheetCounts[r.manufacturer_id] ?? 0) + 1;
+  }
+
+  const seasons = (seasonsResult.data ?? []) as ManagerSeason[];
+  const seasonsAvailable = !seasonsResult.error;
+  const seasonCounts: Record<string, number> = {};
+  for (const r of (sheetSeasonResult.data ?? []) as { season_id: string | null }[]) {
+    if (r.season_id) seasonCounts[r.season_id] = (seasonCounts[r.season_id] ?? 0) + 1;
   }
 
   const workspace: Workspace | null = wsResult.data;
@@ -298,6 +319,28 @@ export default async function SettingsPage() {
               />
             </Card>
           </section>
+
+          {/* Sezon — Ürün ekranlarının BAĞLAMI. Koleksiyon, Maliyet ve Ödeme
+              Tablosu üstteki seçiciyle bu listeden süzülür. */}
+          {seasonsAvailable && (
+            <section className="space-y-3">
+              <Card className="p-5 space-y-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <h2 className="text-base font-semibold text-ink">Sezonlar</h2>
+                    <p className="text-[13px] text-muted mt-0.5">
+                      Koleksiyon, Maliyet ve Ödeme Tablosu seçili sezona göre süzülür.
+                      Aktif sezon üst çubukta ilk gelen ve yeni föyün varsayılanıdır.
+                    </p>
+                  </div>
+                  <span className="text-xs text-muted bg-surface-sunken px-2.5 py-1 rounded-full tabular-nums shrink-0">
+                    {seasons.length} sezon
+                  </span>
+                </div>
+                <SeasonsManager seasons={seasons} sheetCounts={seasonCounts} canManage={canManageDepts} />
+              </Card>
+            </section>
+          )}
 
           {/* Üretici (Usta) — Aslı Hanım (2026-08-19): "Cihan Usta, o ustaları
               da öyle açacağız… hangi ürünler orada dikiliyor." Föydeki üretici
