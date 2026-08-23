@@ -526,10 +526,18 @@ export function NotesColumn({
     <NoteAuthorsContext.Provider value={authorsById}>
     <div className={cn("flex flex-col gap-2 shrink-0", mobile ? "w-full" : "w-[80vw] max-w-64 sm:w-64")}>
       {/* Header */}
-      <div className="flex items-center justify-between sticky top-0 z-20 h-11">
-        <div className="flex items-center gap-2">
-          <StickyNote size={13} className="text-[#c8c39e]" />
-          <h3 className="text-xs font-bold uppercase tracking-wider text-[#6b6748]">Notlar</h3>
+      {/* Başlık, görev sütunlarıyla BİREBİR aynı hizada.
+          Aslı Hanım (2026-08-24): "Bu başlıklarda kayma var gibi duruyor."
+          Sebep artı düğmesi değildi: bu sütunun başlığında bir ikon vardı ve
+          metni 21px sağa itiyordu; diğer dört başlık sütun kenarına bitişikti.
+          Sayaç da yalnız burada eksikti. İkon kaldırıldı, sayaç eklendi —
+          beş başlık aynı x'te başlıyor ve aynı biçimi taşıyor. */}
+      <div className="sticky top-0 z-20 flex h-11 items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <h3 className="truncate text-xs font-bold uppercase tracking-wider text-[#6b6748]">Notlar</h3>
+          <span className="inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-surface-sunken px-1.5 py-0.5 text-[10px] font-semibold leading-none text-muted tabular-nums">
+            {optimisticNotes.length}
+          </span>
         </div>
       </div>
 
