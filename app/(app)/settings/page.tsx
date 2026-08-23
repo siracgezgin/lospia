@@ -5,6 +5,7 @@ import { MembersManager } from "@/components/settings/MembersManager";
 import { CreateAccountPanel } from "@/components/settings/CreateAccountPanel";
 import { DepartmentsManager } from "@/components/settings/DepartmentsManager";
 import { PersonIdentityManager, type IdentityMember } from "@/components/settings/PersonIdentityManager";
+import { SettingsTabs, SettingsSection, CountChip } from "@/components/settings/SettingsTabs";
 import { assignPersonTones } from "@/lib/design/person-colors";
 import { ManufacturersManager, type ManagerManufacturer } from "@/components/settings/ManufacturersManager";
 import { SeasonsManager, type ManagerSeason } from "@/components/settings/SeasonsManager";
@@ -13,9 +14,8 @@ import { canManageSettings, canRenameWorkspace, canManageMembers, canManageWorks
 import { roleLabel } from "@/lib/utils/roles";
 import { getDisplayNotificationEmail } from "@/lib/utils/notification-email";
 import { pickDisplayEmail } from "@/lib/utils/display-identity";
-import { Card } from "@/components/ui/Card";
 import { Avatar } from "@/components/ui/Avatar";
-import { Building2, Shield, Users } from "lucide-react";
+import { Shield } from "lucide-react";
 import type {
   Workspace, WorkspaceMember, Profile,
   WorkspaceRole, WorkspaceInvite,
@@ -205,273 +205,223 @@ export default async function SettingsPage() {
             Profilinizi, çalışma alanınızı, departmanları ve ekip üyelerini buradan yönetin.
           </p>
         </div>
+        {/* Yalnız rol. Departman ve üye sayısı artık sekmelerde ve bölüm
+            başlıklarında duruyordu; başlıkta tekrar etmeleri gürültüydü. */}
         <div className="flex items-center gap-2 flex-wrap">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1 text-xs font-medium text-muted shadow-card">
             <Shield size={12} className="text-brand" />
             {roleLabel(userRole)}
           </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1 text-xs font-medium text-muted shadow-card tabular-nums">
-            <Building2 size={12} className="text-brand" />
-            {departments.length} departman
-          </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1 text-xs font-medium text-muted shadow-card tabular-nums">
-            <Users size={12} className="text-brand" />
-            {memberCount} ekip üyesi
-          </span>
         </div>
       </div>
 
-      {/* Tek hizalı iki sütun (xl): sol 2/3 = Profil + Hesap + Üyeler,
-          sağ 1/3 = Çalışma alanı + Departmanlar. Ayrı grid'ler sağ sütunda
-          boşluk bırakıyordu — tüm sayfa tek grid'de hizalanır. */}
-      <div className="grid items-start gap-6 xl:grid-cols-3">
-        <div className="min-w-0 space-y-8 xl:col-span-2">
-        {/* Profile */}
-        <section className="space-y-3">
-          <h2 className="text-base font-semibold text-ink">Profiliniz</h2>
-          <Card className="p-5 h-full space-y-4">
-            <div className="flex items-center gap-3">
-              {/* Kendi renginiz — panodaki, rapordaki ve Kişi Kimliği'ndekiyle
-                  AYNI ton. Avatar kendi paletine düşerse aynı kişi iki farklı
-                  renkte görünüyor. */}
-              <Avatar name={profileName} size="md" colorHex={myTone?.hex} />
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-ink truncate">{profileName}</p>
-                <p className="text-xs text-subtle">{roleLabel(userRole)}</p>
-              </div>
-            </div>
-            <div className="space-y-3 border-t border-hairline pt-4">
-              <div>
-                <p className="text-xs text-subtle">E-posta</p>
-                <p className={displayEmail ? "text-sm font-medium text-ink" : "text-sm text-subtle italic"}>
-                  {displayEmail ?? "E-posta eklenmedi"}
-                </p>
-              </div>
-              {profile?.username && (
-                <div>
-                  <p className="text-xs text-subtle">Kullanıcı adı</p>
-                  <p className="text-sm font-medium text-ink">@{profile.username}</p>
-                </div>
-              )}
-            </div>
-          </Card>
-        </section>
+      {/* SEKMELER — Aslı Hanım (2026-08-23): "diğer kısımlar da çok kötü,
+          ayarlar sayfası." Dokuz bölüm tek yığındaydı: profil, hesap açma, ekip
+          ve ürün verisi (sezon/usta/hammadde) yan yana duruyordu. Bunlar farklı
+          işler ve farklı sıklıkta açılıyor; hepsini aynı anda göstermek her
+          birini bulunmaz kılıyordu. Kart biçimi de tekleşti (SettingsSection):
+          önce bazı başlıklar kartın içinde, bazıları dışındaydı. */}
+      <SettingsTabs
+        tabs={[
+          {
+            key: "ekip",
+            label: "Ekip",
+            count: memberCount,
+            node: (
+              /* İki kolon: bölümler kısa, tam genişlikte tek sütun olunca satırlar
+                 1100px'e yayılıp sağda kocaman boşluk bırakıyordu. items-start
+                 ile kolonlar birbirinin boyuna esir olmaz. */
+              <div className="grid items-start gap-6 xl:grid-cols-2">
+                <SettingsSection
+                  title="Üyeler"
+                  description="Ekip üyelerinin rollerini, kullanıcı adlarını ve bildirim e-postalarını yönetin."
+                >
+                  {canManage ? (
+                    <MembersManager
+                      workspaceId={workspaceId}
+                      currentUserId={user.id}
+                      userRole={userRole}
+                      initialMembers={
+                        (membersResult.data ?? []) as (WorkspaceMember & { profiles?: Partial<Profile> | null })[]
+                      }
+                      pendingGrants={invites}
+                      departments={departments}
+                      deptMembers={deptMembers}
+                    />
+                  ) : (
+                    <div className="divide-y divide-hairline rounded-xl border border-line">
+                      {(membersResult.data ?? []).map(
+                        (m: WorkspaceMember & { profiles?: Partial<Profile> | null }) => {
+                          const display = getDisplayNotificationEmail(m);
+                          return (
+                            <div key={m.id} className="flex items-center justify-between px-4 py-3">
+                              <div>
+                                <p className="text-sm font-medium">
+                                  {m.profiles?.full_name ?? m.profiles?.email ?? "—"}
+                                </p>
+                                <p className={display.email ? "text-xs text-subtle" : "text-xs text-warning"}>
+                                  {display.email ?? "Bildirim e-postası eklenmedi"}
+                                </p>
+                              </div>
+                              <span className="shrink-0 rounded-full bg-surface-sunken px-2.5 py-0.5 text-xs text-muted">
+                                {roleLabel(m.role)}
+                              </span>
+                            </div>
+                          );
+                        },
+                      )}
+                    </div>
+                  )}
+                </SettingsSection>
 
-      {/* Account creation — admin-created accounts (owner + admin). Replaces the
-          old self-signup flow: the person signs in directly with the username +
-          password set here. */}
-      {canManageDepts && (
-        <section className="space-y-3">
-          <div>
-            <h2 className="text-base font-semibold text-ink">Hesap oluştur</h2>
-            <p className="text-[13px] text-muted mt-0.5">
-              Yalnızca yöneticiler ve çalışma alanı sahibi yeni hesap oluşturabilir.
-            </p>
-          </div>
-          <CreateAccountPanel workspaceId={workspaceId} departments={departments} />
-        </section>
-      )}
+                {/* Kişi Kimliği — Aslı Hanım (2026-08-19): "Herkesin bir rengi
+                    olsa da herkes kendi rengini takip etse" / "Herkese ikon koy." */}
+                <SettingsSection
+                  title="Kişi Kimliği"
+                  description="Her kişinin rengi ve ikonu. Görev kartları da kişinin rengini taşır — panoda kimin işi olduğu renkten okunur."
+                >
+                  <PersonIdentityManager members={identityMembers} canManage={canManageDepts} />
+                </SettingsSection>
 
-      {/* Members */}
-      <section className="space-y-3">
-        <div>
-          <h2 className="text-base font-semibold text-ink">Üyeler</h2>
-          <p className="text-[13px] text-muted mt-0.5">
-            Ekip üyelerinin rollerini, kullanıcı adlarını ve bildirim e-postalarını yönetin.
-          </p>
-        </div>
-        {canManage ? (
-          <MembersManager
-            workspaceId={workspaceId}
-            currentUserId={user.id}
-            userRole={userRole}
-            initialMembers={
-              (membersResult.data ?? []) as (WorkspaceMember & { profiles?: Partial<Profile> | null })[]
-            }
-            pendingGrants={invites}
-            departments={departments}
-            deptMembers={deptMembers}
-          />
-        ) : (
-          <Card className="divide-y divide-hairline">
-            {(membersResult.data ?? []).map(
-              (m: WorkspaceMember & { profiles?: Partial<Profile> | null }) => {
-                const display = getDisplayNotificationEmail(m);
-                return (
-                <div key={m.id} className="flex items-center justify-between px-5 py-3">
-                  <div>
-                    <p className="text-sm font-medium">
-                      {m.profiles?.full_name ?? m.profiles?.email ?? "—"}
-                    </p>
-                    <p className={display.email ? "text-xs text-subtle" : "text-xs text-warning"}>
-                      {display.email ?? "Bildirim e-postası eklenmedi"}
-                    </p>
-                  </div>
-                  <span className="text-xs text-muted bg-surface-sunken px-2.5 py-0.5 rounded-full">
-                    {roleLabel(m.role)}
-                  </span>
-                </div>
-                );
-              }
-            )}
-          </Card>
-        )}
-      </section>
+                <SettingsSection
+                  title="Departmanlar"
+                  description="Görevleri departmanlara atayın. Üyeler birden fazla departmanda yer alabilir."
+                  aside={<CountChip n={departments.length} birim="departman" />}
+                >
+                  <DepartmentsManager
+                    departments={departments}
+                    deptMembers={deptMembers}
+                    workspaceMembers={
+                      (membersResult.data ?? []) as (WorkspaceMember & { profiles?: Partial<Profile> | null })[]
+                    }
+                    canManage={canManageDepts}
+                  />
+                </SettingsSection>
 
-      {/* Kişi Kimliği — renk + ikon.
-          Aslı Hanım (2026-08-19): "Herkesin bir rengi olsa da herkes kendi
-          rengini takip etse" / "Herkese ikon koy." Seçim yoksa kimlikten
-          otomatik türetilir; kimse renksiz kalmaz. */}
-      <section className="space-y-3">
-        <Card className="p-5 sm:p-6 space-y-4">
-          <div>
-            <h2 className="text-base font-semibold text-ink">Kişi Kimliği</h2>
-            <p className="text-[13px] text-muted mt-0.5">
-              Her kişinin rengi ve ikonu. Görev kartları da kişinin rengini taşır —
-              panoda kimin işi olduğu renkten okunur.
-            </p>
-          </div>
-          <PersonIdentityManager
-            members={identityMembers}
-            canManage={canManageDepts}
-          />
-        </Card>
-      </section>
-
-        </div>
-
-        {/* Sağ sütun (1/3): Çalışma alanı + Departmanlar — sol sütunla aynı
-            grid satırından başlar, boşluk kalmaz. */}
-        <div className="min-w-0 space-y-8">
-          {/* Workspace */}
-          <section className="space-y-3">
-            <h2 className="text-base font-semibold text-ink">Çalışma alanı</h2>
-            <Card className="p-5 space-y-4">
-              <div>
-                <p className="text-xs text-subtle mb-1">İsim</p>
-                {isOwner && workspace ? (
-                  <WorkspaceNameEditor workspaceId={workspaceId} currentName={workspace.name} />
-                ) : (
-                  <p className="text-sm font-medium text-ink">{workspace?.name}</p>
+                {/* Hesap oluştur — kendi kaydolma akışının yerine geçti: kişi
+                    burada verilen kullanıcı adı + şifreyle doğrudan giriş yapar. */}
+                {canManageDepts && (
+                  <SettingsSection
+                    title="Hesap oluştur"
+                    description="Yalnızca yöneticiler ve çalışma alanı sahibi yeni hesap oluşturabilir."
+                  >
+                    <CreateAccountPanel workspaceId={workspaceId} departments={departments} />
+                  </SettingsSection>
                 )}
               </div>
-              <div className="space-y-3 border-t border-hairline pt-4">
-                <div>
-                  <p className="text-xs text-subtle">Kısa ad</p>
-                  <p className="text-sm font-mono text-muted">{workspace?.slug}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-subtle">Rolünüz</p>
-                  <p className="text-sm font-medium text-ink">{roleLabel(userRole)}</p>
-                </div>
+            ),
+          },
+          {
+            key: "urun",
+            label: "Ürün verisi",
+            node: (
+              /* Sezon ve Usta kısa listelerdir → yan yana. Hammadde satırı daha
+                 çok veri taşır (fiyat, kategori, kaç föyde) → tam genişlik. */
+              <div className="grid items-start gap-6 xl:grid-cols-2">
+                {/* Sezon — Ürün ekranlarının BAĞLAMI. */}
+                {seasonsAvailable && (
+                  <SettingsSection
+                    title="Sezonlar"
+                    description="Koleksiyon, Maliyet ve Ödeme Tablosu seçili sezona göre süzülür. Aktif sezon üst çubukta ilk gelen ve yeni föyün varsayılanıdır."
+                    aside={<CountChip n={seasons.length} birim="sezon" />}
+                  >
+                    <SeasonsManager seasons={seasons} sheetCounts={seasonCounts} canManage={canManageDepts} />
+                  </SettingsSection>
+                )}
+
+                {/* Üretici (Usta) — "Cihan Usta, o ustaları da öyle açacağız…
+                    hangi ürünler orada dikiliyor." */}
+                {manufacturersAvailable && (
+                  <SettingsSection
+                    title="Üreticiler (Ustalar)"
+                    description="Föydeki “Üretici” alanı ve Ödeme Tablosu buradan beslenir. Teslim süresi ve minimum adet sipariş verirken lazım olur."
+                    aside={<CountChip n={manufacturers.length} birim="usta" />}
+                  >
+                    <ManufacturersManager
+                      manufacturers={manufacturers}
+                      sheetCounts={sheetCounts}
+                      canManage={canManageDepts}
+                    />
+                  </SettingsSection>
+                )}
+
+                {/* Hammadde — föy reçetelerinin kaynağı. */}
+                {materialsAvailable && (
+                  <div className="xl:col-span-2">
+                  <SettingsSection
+                    title="Hammadde"
+                    description="Kumaş ve aksesuarlar burada bir kez tanımlanır. Föyün reçetesine eklenince maliyet hesaplanır; fiyat burada değişince tüm föyler güncellenir."
+                    aside={<CountChip n={materials.length} birim="malzeme" />}
+                  >
+                    <MaterialsManager
+                      materials={materials}
+                      suppliers={suppliers}
+                      usageCounts={materialUsage}
+                      canManage={canManageDepts}
+                    />
+                  </SettingsSection>
+                  </div>
+                )}
               </div>
-            </Card>
-          </section>
+            ),
+          },
+          {
+            key: "hesap",
+            label: "Hesabım",
+            node: (
+              <div className="grid items-start gap-6 lg:grid-cols-2">
+                <SettingsSection title="Profiliniz">
+                  <div className="flex items-center gap-3">
+                    {/* Kendi renginiz — panodaki, rapordaki ve Kişi Kimliği'ndekiyle
+                        AYNI ton. Avatar kendi paletine düşerse aynı kişi iki
+                        farklı renkte görünüyor. */}
+                    <Avatar name={profileName} size="md" colorHex={myTone?.hex} />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-ink">{profileName}</p>
+                      <p className="text-xs text-subtle">{roleLabel(userRole)}</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 space-y-3 border-t border-hairline pt-4">
+                    <div>
+                      <p className="text-xs text-subtle">E-posta</p>
+                      <p className={displayEmail ? "text-sm font-medium text-ink" : "text-sm italic text-subtle"}>
+                        {displayEmail ?? "E-posta eklenmedi"}
+                      </p>
+                    </div>
+                    {profile?.username && (
+                      <div>
+                        <p className="text-xs text-subtle">Kullanıcı adı</p>
+                        <p className="text-sm font-medium text-ink">@{profile.username}</p>
+                      </div>
+                    )}
+                  </div>
+                </SettingsSection>
 
-          {/* Departmanlar */}
-          <section className="space-y-3">
-            <Card className="p-5 sm:p-6 space-y-4">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <h2 className="text-base font-semibold text-ink">Departmanlar</h2>
-                  <p className="text-[13px] text-muted mt-0.5">
-                    Görevleri departmanlara atayın. Üyeler birden fazla departmanda yer alabilir.
-                  </p>
-                </div>
-                <span className="text-xs text-muted bg-surface-sunken px-2.5 py-1 rounded-full tabular-nums shrink-0">
-                  {departments.length} departman
-                </span>
+                <SettingsSection title="Çalışma alanı">
+                  <div>
+                    <p className="mb-1 text-xs text-subtle">İsim</p>
+                    {isOwner && workspace ? (
+                      <WorkspaceNameEditor workspaceId={workspaceId} currentName={workspace.name} />
+                    ) : (
+                      <p className="text-sm font-medium text-ink">{workspace?.name}</p>
+                    )}
+                  </div>
+                  <div className="mt-4 space-y-3 border-t border-hairline pt-4">
+                    <div>
+                      <p className="text-xs text-subtle">Kısa ad</p>
+                      <p className="font-mono text-sm text-muted">{workspace?.slug}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-subtle">Rolünüz</p>
+                      <p className="text-sm font-medium text-ink">{roleLabel(userRole)}</p>
+                    </div>
+                  </div>
+                </SettingsSection>
               </div>
-              <DepartmentsManager
-                departments={departments}
-                deptMembers={deptMembers}
-                workspaceMembers={
-                  (membersResult.data ?? []) as (WorkspaceMember & { profiles?: Partial<Profile> | null })[]
-                }
-                canManage={canManageDepts}
-              />
-            </Card>
-          </section>
-
-          {/* Sezon — Ürün ekranlarının BAĞLAMI. Koleksiyon, Maliyet ve Ödeme
-              Tablosu üstteki seçiciyle bu listeden süzülür. */}
-          {seasonsAvailable && (
-            <section className="space-y-3">
-              <Card className="p-5 space-y-4">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <h2 className="text-base font-semibold text-ink">Sezonlar</h2>
-                    <p className="text-[13px] text-muted mt-0.5">
-                      Koleksiyon, Maliyet ve Ödeme Tablosu seçili sezona göre süzülür.
-                      Aktif sezon üst çubukta ilk gelen ve yeni föyün varsayılanıdır.
-                    </p>
-                  </div>
-                  <span className="text-xs text-muted bg-surface-sunken px-2.5 py-1 rounded-full tabular-nums shrink-0">
-                    {seasons.length} sezon
-                  </span>
-                </div>
-                <SeasonsManager seasons={seasons} sheetCounts={seasonCounts} canManage={canManageDepts} />
-              </Card>
-            </section>
-          )}
-
-          {/* Üretici (Usta) — Aslı Hanım (2026-08-19): "Cihan Usta, o ustaları
-              da öyle açacağız… hangi ürünler orada dikiliyor." Föydeki üretici
-              alanı ve Ödeme Tablosu bu listeden beslenir. Tablo henüz migrate
-              edilmemişse bölüm hiç çizilmez. */}
-          {manufacturersAvailable && (
-            <section className="space-y-3">
-              <Card className="p-5 space-y-4">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <h2 className="text-base font-semibold text-ink">Üreticiler (Ustalar)</h2>
-                    <p className="text-[13px] text-muted mt-0.5">
-                      Föydeki “Üretici” alanı ve Ödeme Tablosu buradan beslenir.
-                      Teslim süresi ve minimum adet sipariş verirken lazım olur.
-                    </p>
-                  </div>
-                  <span className="text-xs text-muted bg-surface-sunken px-2.5 py-1 rounded-full tabular-nums shrink-0">
-                    {manufacturers.length} usta
-                  </span>
-                </div>
-                <ManufacturersManager
-                  manufacturers={manufacturers}
-                  sheetCounts={sheetCounts}
-                  canManage={canManageDepts}
-                />
-              </Card>
-            </section>
-          )}
-
-          {/* Hammadde — föy reçetelerinin kaynağı. Malzeme burada BİR KEZ
-              tanımlanır; fiyatı değişince tüm föylerin maliyeti güncellenir. */}
-          {materialsAvailable && (
-            <section className="space-y-3">
-              <Card className="p-5 space-y-4">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <h2 className="text-base font-semibold text-ink">Hammadde</h2>
-                    <p className="text-[13px] text-muted mt-0.5">
-                      Kumaş ve aksesuarlar burada bir kez tanımlanır. Föyün reçetesine eklenince
-                      maliyet <b className="font-semibold text-ink">hesaplanır</b>; fiyat burada
-                      değişince tüm föyler güncellenir.
-                    </p>
-                  </div>
-                  <span className="text-xs text-muted bg-surface-sunken px-2.5 py-1 rounded-full tabular-nums shrink-0">
-                    {materials.length} malzeme
-                  </span>
-                </div>
-                <MaterialsManager
-                  materials={materials}
-                  suppliers={suppliers}
-                  usageCounts={materialUsage}
-                  canManage={canManageDepts}
-                />
-              </Card>
-            </section>
-          )}
-        </div>
-      </div>
+            ),
+          },
+        ]}
+      />
     </div>
   );
 }

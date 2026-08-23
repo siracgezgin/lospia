@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, RotateCcw, Check } from "lucide-react";
+import { Loader2, RotateCcw, Check, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import {
   PERSON_TONES, PERSON_ICONS, PERSON_TONE_CAPACITY,
@@ -95,6 +95,11 @@ export function PersonIdentityManager({ members, canManage }: Props) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+  /* Seçiciler KAPALI başlar. 68 ikon × her kişi aynı anda çizilince Ayarlar
+     sayfası tek bölümle ~1000px'e çıkıyor ve sayfanın geri kalanını eziyordu
+     (Aslı Hanım, 2026-08-23: "diğer kısımlar da çok kötü ayarlar sayfası").
+     Kimlik satırı artık tek satır; değiştirmek isteyen açar. */
+  const [openId, setOpenId] = useState<string | null>(null);
   const [busy, startWork] = useTransition();
 
   // Ekranda gösterilen efektif kimlik — panodakiyle birebir aynı hesap.
@@ -187,6 +192,16 @@ export function PersonIdentityManager({ members, canManage }: Props) {
                   </span>
                 </span>
                 {saving && <Loader2 size={15} className="animate-spin text-muted" />}
+                {canManage && (
+                  <button
+                    onClick={() => setOpenId(openId === m.id ? null : m.id)}
+                    className="tap-target inline-flex items-center gap-1 rounded-lg border border-line px-2 py-1 text-[12px] font-medium text-muted transition-colors hover:border-line-strong hover:text-ink"
+                    aria-expanded={openId === m.id}
+                  >
+                    {openId === m.id ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                    {openId === m.id ? "Kapat" : "Değiştir"}
+                  </button>
+                )}
                 {!auto && canManage && (
                   <button
                     onClick={() => save(m, { colorKey: "", iconKey: "" })}
@@ -199,8 +214,8 @@ export function PersonIdentityManager({ members, canManage }: Props) {
                 )}
               </div>
 
-              {canManage && (
-                <div className="mt-3 space-y-2">
+              {canManage && openId === m.id && (
+                <div className="anim-fade-down mt-3 space-y-2">
                   {/* Renk — dokuz ton, hiçbiri diğerine benzemiyor. */}
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="w-[52px] shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted">

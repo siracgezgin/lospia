@@ -93,7 +93,7 @@ export async function createSeason(
     .select("id")
     .single();
   if (error) {
-    if (error.code === "23505") return { error: "Bu adda bir sezon zaten var." };
+    if (error.code === "23505") return { error: "Bu adda bir sezon zaten var (büyük/küçük harf farkı aynı sayılır)." };
     return { error: toActionErrorMessage(error) };
   }
   revalidateAll();
@@ -129,7 +129,7 @@ export async function updateSeason(
     .eq("id", id)
     .eq("workspace_id", ctx.workspaceId);
   if (error) {
-    if (error.code === "23505") return { error: "Bu adda bir sezon zaten var." };
+    if (error.code === "23505") return { error: "Bu adda bir sezon zaten var (büyük/küçük harf farkı aynı sayılır)." };
     return { error: toActionErrorMessage(error) };
   }
   if (count === 0) return { error: NOT_FOUND };

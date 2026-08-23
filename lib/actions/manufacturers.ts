@@ -103,7 +103,7 @@ export async function createManufacturer(
     .single();
   // Aynı ad benzersiz (workspace_id, name) — kullanıcıya anlaşılır mesaj ver.
   if (error) {
-    if (error.code === "23505") return { error: "Bu adda bir usta zaten var." };
+    if (error.code === "23505") return { error: "Bu adda bir usta zaten var (büyük/küçük harf farkı aynı sayılır)." };
     return { error: toActionErrorMessage(error) };
   }
   revalidateAll();
@@ -127,7 +127,7 @@ export async function updateManufacturer(
     .eq("id", id)
     .eq("workspace_id", ctx.workspaceId);
   if (error) {
-    if (error.code === "23505") return { error: "Bu adda bir usta zaten var." };
+    if (error.code === "23505") return { error: "Bu adda bir usta zaten var (büyük/küçük harf farkı aynı sayılır)." };
     return { error: toActionErrorMessage(error) };
   }
   if (count === 0) return { error: NOT_FOUND };

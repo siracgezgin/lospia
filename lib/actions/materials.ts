@@ -106,7 +106,7 @@ export async function saveSupplier(
       .from("workspace_suppliers")
       .update(payload, { count: "exact" })
       .eq("id", id).eq("workspace_id", ctx.workspaceId);
-    if (error) return { error: error.code === "23505" ? "Bu adda bir tedarikçi zaten var." : toActionErrorMessage(error) };
+    if (error) return { error: error.code === "23505" ? "Bu adda bir tedarikçi zaten var (büyük/küçük harf farkı aynı sayılır)." : toActionErrorMessage(error) };
     if (count === 0) return { error: NOT_FOUND };
     revalidateAll();
     return { id };
@@ -116,7 +116,7 @@ export async function saveSupplier(
     .from("workspace_suppliers")
     .insert({ workspace_id: ctx.workspaceId, ...payload, created_by: ctx.userId })
     .select("id").single();
-  if (error) return { error: error.code === "23505" ? "Bu adda bir tedarikçi zaten var." : toActionErrorMessage(error) };
+  if (error) return { error: error.code === "23505" ? "Bu adda bir tedarikçi zaten var (büyük/küçük harf farkı aynı sayılır)." : toActionErrorMessage(error) };
   revalidateAll();
   return { id: (data as { id: string }).id };
 }
@@ -193,7 +193,7 @@ export async function saveMaterial(
       .from("workspace_materials")
       .update(payload, { count: "exact" })
       .eq("id", id).eq("workspace_id", ctx.workspaceId);
-    if (error) return { error: error.code === "23505" ? "Bu adda bir malzeme zaten var." : toActionErrorMessage(error) };
+    if (error) return { error: error.code === "23505" ? "Bu adda bir malzeme zaten var (büyük/küçük harf farkı aynı sayılır)." : toActionErrorMessage(error) };
     if (count === 0) return { error: NOT_FOUND };
     revalidateAll();
     return { id };
@@ -203,7 +203,7 @@ export async function saveMaterial(
     .from("workspace_materials")
     .insert({ workspace_id: ctx.workspaceId, ...payload, created_by: ctx.userId })
     .select("id").single();
-  if (error) return { error: error.code === "23505" ? "Bu adda bir malzeme zaten var." : toActionErrorMessage(error) };
+  if (error) return { error: error.code === "23505" ? "Bu adda bir malzeme zaten var (büyük/küçük harf farkı aynı sayılır)." : toActionErrorMessage(error) };
   revalidateAll();
   return { id: (data as { id: string }).id };
 }
