@@ -28,11 +28,17 @@
  * Bir kişinin rengi asla "bitti" gibi okunmamalı.
  */
 
-import type { LucideIcon } from "lucide-react";
+import type { LucideIcon, LucideProps } from "lucide-react";
 import {
   Feather, Flame, Gem, Leaf, Compass, Anchor, Crown, Rocket,
   Sparkles, Wand2, Mountain, Waves, Star, Heart, Sun, Moon,
-  Bird, Fish, Cat, Bike,
+  Bird, Fish, Cat, Bike, Apple, Banana, Cherry, Grape,
+  Bell, Bookmark, Box, Brush, Camera, Candy, Cloud, Clover,
+  Coffee, Cookie, Diamond, Dog, Droplet, Flower2, Ghost, Guitar,
+  Hammer, Headphones, IceCream, Key, Lightbulb, Magnet, Medal, Palette,
+  PawPrint, Pencil, Pizza, Plane, Puzzle, Rabbit, Scissors, Shell,
+  Ship, Shirt, Snowflake, Squirrel, Swords, Target, Tent, TreePine,
+  Trophy, Turtle, Umbrella, Zap,
 } from "lucide-react";
 
 export type PersonTone = {
@@ -95,36 +101,162 @@ export const PERSON_TONES: PersonTone[] = [
 ];
 
 /**
- * Palet kaç kişiye yeter. Bunu aşan ekipte renk TEKRARLAR — sistem sessizce
- * benzer renk vermez, Ayarlar → Kişi Kimliği ekranında açıkça uyarır ve
- * yönetici hangi ikilinin aynı rengi paylaşacağına kendi karar verir.
+ * Hazır palet kaç kişiye yeter. Bunu aşan ekipte OTOMATİK atama renk tekrarlar;
+ * sistem bunu sessizce yapmaz, Ayarlar → Kişi Kimliği'nde açıkça uyarır. Çözüm
+ * yöneticide: hex seçiciyle palet dışı bir renk verilebilir, sınır yoktur.
  */
 export const PERSON_TONE_CAPACITY = 12;
 
 const TONE_BY_KEY = new Map(PERSON_TONES.map((t) => [t.key, t]));
 
-/** Kişi ikonları — "herkesin bir Pokemon'u olsun" isteğinin sade karşılığı. */
+/* ── Serbest renk (hex) ─────────────────────────────────────────────────────
+   Aslı Hanım (2026-08-23): "Her kişi için renk paleti çıksa, mesela
+   hexadecimal. Biz seçip eklesek on numara olur."
+
+   Tailwind sınıfları DERLEME anında üretilir; çalışma anında gelen bir hex için
+   `bg-[#a1b2c3]` yazmak işe yaramaz (JIT o sınıfı görmez, boş çıkar). Bu yüzden
+   serbest renkler SATIR İÇİ STİLE çevrilir. Hazır palet Tailwind sınıflarını
+   korur (hızlı yol), serbest renk stil üretir; iki yol da aynı hex'ten besleniyor.
+   ────────────────────────────────────────────────────────────────────────── */
+
+const HEX_RE = /^#[0-9a-fA-F]{6}$/;
+
+export function isHexColor(v: string | null | undefined): boolean {
+  return !!v && HEX_RE.test(v);
+}
+
+function rgbOf(hex: string): [number, number, number] {
+  return [
+    parseInt(hex.slice(1, 3), 16),
+    parseInt(hex.slice(3, 5), 16),
+    parseInt(hex.slice(5, 7), 16),
+  ];
+}
+
+/** hex'i beyaza (t>0) ya da siyaha (t<0) doğru karıştırır. t ∈ [-1, 1]. */
+function mix(hex: string, t: number): string {
+  const [r, g, b] = rgbOf(hex);
+  const to = t > 0 ? 255 : 0;
+  const k = Math.abs(t);
+  const c = (v: number) => Math.round(v + (to - v) * k);
+  return `rgb(${c(r)}, ${c(g)}, ${c(b)})`;
+}
+
+/**
+ * Bir kişinin rengi görsel katmanlara açılır. Oranlar hazır paletin ton
+ * ilişkisini taklit eder: zemin çok açık, kenarlık orta, metin koyu.
+ */
+export type PersonStyles = {
+  hex: string;
+  /** Dolu rozet / avatar. */
+  solid: React.CSSProperties;
+  /** Kart zemini — uzun süre bakılabilir. */
+  soft: React.CSSProperties;
+  /** Kart kenarlığı. */
+  border: React.CSSProperties;
+  /** Sol kimlik şeridi. */
+  accent: React.CSSProperties;
+  /** Metin vurgusu. */
+  text: React.CSSProperties;
+};
+
+export function personStyles(hex: string): PersonStyles {
+  return {
+    hex,
+    solid: { backgroundColor: hex, color: "#fff" },
+    soft: { backgroundColor: mix(hex, 0.9) },
+    border: { borderColor: mix(hex, 0.62) },
+    accent: { borderLeftColor: hex },
+    text: { color: mix(hex, -0.35) },
+  };
+}
+
+/**
+ * Renk anahtarı → hex. Anahtar hazır palet adı da olabilir, `#rrggbb` de.
+ * Tanınmayan değer null döner; çağıran otomatik atamaya düşer.
+ */
+export function hexOfColorKey(key: string | null | undefined): string | null {
+  if (!key) return null;
+  if (isHexColor(key)) return key;
+  return TONE_BY_KEY.get(key)?.hex ?? null;
+}
+
+/**
+ * Kişi ikonları — "herkesin bir Pokemon'u olsun" isteğinin sade karşılığı.
+ *
+ * Aslı Hanım (2026-08-23): "İkonlar için de ortalama 50 tane olsun, kim neyi
+ * seçmek istiyorsa." Liste bilerek geniş ve gündelik: kimse listede kendini
+ * bulamadığı için mecburen bir şey seçmesin.
+ */
 export const PERSON_ICONS: { key: string; label: string; Icon: LucideIcon }[] = [
-  { key: "feather",  label: "Tüy",      Icon: Feather },
-  { key: "flame",    label: "Alev",     Icon: Flame },
-  { key: "gem",      label: "Mücevher", Icon: Gem },
-  { key: "leaf",     label: "Yaprak",   Icon: Leaf },
-  { key: "compass",  label: "Pusula",   Icon: Compass },
-  { key: "anchor",   label: "Çapa",     Icon: Anchor },
-  { key: "crown",    label: "Taç",      Icon: Crown },
-  { key: "rocket",   label: "Roket",    Icon: Rocket },
-  { key: "sparkles", label: "Işıltı",   Icon: Sparkles },
-  { key: "wand",     label: "Değnek",   Icon: Wand2 },
-  { key: "mountain", label: "Dağ",      Icon: Mountain },
-  { key: "waves",    label: "Dalga",    Icon: Waves },
-  { key: "star",     label: "Yıldız",   Icon: Star },
-  { key: "heart",    label: "Kalp",     Icon: Heart },
-  { key: "sun",      label: "Güneş",    Icon: Sun },
-  { key: "moon",     label: "Ay",       Icon: Moon },
-  { key: "bird",     label: "Kuş",      Icon: Bird },
-  { key: "fish",     label: "Balık",    Icon: Fish },
-  { key: "cat",      label: "Kedi",     Icon: Cat },
-  { key: "bike",     label: "Bisiklet", Icon: Bike },
+  { key: "feather",   label: "Tüy",       Icon: Feather },
+  { key: "flame",     label: "Alev",      Icon: Flame },
+  { key: "gem",       label: "Mücevher",  Icon: Gem },
+  { key: "leaf",      label: "Yaprak",    Icon: Leaf },
+  { key: "compass",   label: "Pusula",    Icon: Compass },
+  { key: "anchor",    label: "Çapa",      Icon: Anchor },
+  { key: "crown",     label: "Taç",       Icon: Crown },
+  { key: "rocket",    label: "Roket",     Icon: Rocket },
+  { key: "sparkles",  label: "Işıltı",    Icon: Sparkles },
+  { key: "wand",      label: "Değnek",    Icon: Wand2 },
+  { key: "mountain",  label: "Dağ",       Icon: Mountain },
+  { key: "waves",     label: "Dalga",     Icon: Waves },
+  { key: "star",      label: "Yıldız",    Icon: Star },
+  { key: "heart",     label: "Kalp",      Icon: Heart },
+  { key: "sun",       label: "Güneş",     Icon: Sun },
+  { key: "moon",      label: "Ay",        Icon: Moon },
+  { key: "bird",      label: "Kuş",       Icon: Bird },
+  { key: "fish",      label: "Balık",     Icon: Fish },
+  { key: "cat",       label: "Kedi",      Icon: Cat },
+  { key: "dog",       label: "Köpek",     Icon: Dog },
+  { key: "rabbit",    label: "Tavşan",    Icon: Rabbit },
+  { key: "turtle",    label: "Kaplumbağa", Icon: Turtle },
+  { key: "squirrel",  label: "Sincap",    Icon: Squirrel },
+  { key: "pawprint",  label: "Pati",      Icon: PawPrint },
+  { key: "shell",     label: "Deniz kabuğu", Icon: Shell },
+  { key: "flower",    label: "Çiçek",     Icon: Flower2 },
+  { key: "clover",    label: "Yonca",     Icon: Clover },
+  { key: "treepine",  label: "Çam",       Icon: TreePine },
+  { key: "snowflake", label: "Kar tanesi", Icon: Snowflake },
+  { key: "cloud",     label: "Bulut",     Icon: Cloud },
+  { key: "droplet",   label: "Damla",     Icon: Droplet },
+  { key: "zap",       label: "Şimşek",    Icon: Zap },
+  { key: "bike",      label: "Bisiklet",  Icon: Bike },
+  { key: "plane",     label: "Uçak",      Icon: Plane },
+  { key: "ship",      label: "Gemi",      Icon: Ship },
+  { key: "tent",      label: "Çadır",     Icon: Tent },
+  { key: "umbrella",  label: "Şemsiye",   Icon: Umbrella },
+  { key: "camera",    label: "Kamera",    Icon: Camera },
+  { key: "headphones", label: "Kulaklık", Icon: Headphones },
+  { key: "guitar",    label: "Gitar",     Icon: Guitar },
+  { key: "palette",   label: "Palet",     Icon: Palette },
+  { key: "brush",     label: "Fırça",     Icon: Brush },
+  { key: "pencil",    label: "Kalem",     Icon: Pencil },
+  { key: "scissors",  label: "Makas",     Icon: Scissors },
+  { key: "shirt",     label: "Gömlek",    Icon: Shirt },
+  { key: "hammer",    label: "Çekiç",     Icon: Hammer },
+  { key: "key",       label: "Anahtar",   Icon: Key },
+  { key: "magnet",    label: "Mıknatıs",  Icon: Magnet },
+  { key: "lightbulb", label: "Ampul",     Icon: Lightbulb },
+  { key: "puzzle",    label: "Yapboz",    Icon: Puzzle },
+  { key: "target",    label: "Hedef",     Icon: Target },
+  { key: "trophy",    label: "Kupa",      Icon: Trophy },
+  { key: "medal",     label: "Madalya",   Icon: Medal },
+  { key: "swords",    label: "Kılıçlar",  Icon: Swords },
+  { key: "diamond",   label: "Elmas",     Icon: Diamond },
+  { key: "bell",      label: "Zil",       Icon: Bell },
+  { key: "bookmark",  label: "Yer imi",   Icon: Bookmark },
+  { key: "box",       label: "Kutu",      Icon: Box },
+  { key: "ghost",     label: "Hayalet",   Icon: Ghost },
+  { key: "coffee",    label: "Kahve",     Icon: Coffee },
+  { key: "cookie",    label: "Kurabiye",  Icon: Cookie },
+  { key: "candy",     label: "Şeker",     Icon: Candy },
+  { key: "icecream",  label: "Dondurma",  Icon: IceCream },
+  { key: "pizza",     label: "Pizza",     Icon: Pizza },
+  { key: "apple",     label: "Elma",      Icon: Apple },
+  { key: "banana",    label: "Muz",       Icon: Banana },
+  { key: "cherry",    label: "Kiraz",     Icon: Cherry },
+  { key: "grape",     label: "Üzüm",      Icon: Grape },
 ];
 
 const ICON_BY_KEY = new Map(PERSON_ICONS.map((i) => [i.key, i.Icon]));
@@ -139,9 +271,21 @@ function hashOf(seed: string): number {
   return Math.abs(h);
 }
 
-/** Anahtardan ton — geçersiz/boş anahtar null döner (çağıran otomatiğe düşer). */
+/**
+ * Anahtardan ton. Hazır palet adı doğrudan eşlenir; SERBEST HEX için Tailwind
+ * sınıf alanları BOŞ bırakılır (çalışma anında sınıf üretilemez) ve `hex`
+ * doldurulur — çağıran personStyles() ile satır içi stile geçer.
+ * Geçersiz/boş anahtar null döner, çağıran otomatiğe düşer.
+ */
 export function toneByKey(key: string | null | undefined): PersonTone | null {
-  return (key && TONE_BY_KEY.get(key)) || null;
+  if (!key) return null;
+  const preset = TONE_BY_KEY.get(key);
+  if (preset) return preset;
+  if (!isHexColor(key)) return null;
+  return {
+    key, label: "Özel renk", hex: key,
+    soft: "", solid: "", border: "", text: "", bar: "", ring: "", accent: "",
+  };
 }
 export function iconByKey(key: string | null | undefined): LucideIcon | null {
   return (key && ICON_BY_KEY.get(key)) || null;

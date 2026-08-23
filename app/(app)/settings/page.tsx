@@ -234,7 +234,7 @@ export default async function SettingsPage() {
               {/* Kendi renginiz — panodaki, rapordaki ve Kişi Kimliği'ndekiyle
                   AYNI ton. Avatar kendi paletine düşerse aynı kişi iki farklı
                   renkte görünüyor. */}
-              <Avatar name={profileName} size="md" colorClass={myTone?.solid} />
+              <Avatar name={profileName} size="md" colorHex={myTone?.hex} />
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-ink truncate">{profileName}</p>
                 <p className="text-xs text-subtle">{roleLabel(userRole)}</p>

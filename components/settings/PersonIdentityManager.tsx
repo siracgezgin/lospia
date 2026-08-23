@@ -6,7 +6,8 @@ import { Loader2, RotateCcw, Check } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import {
   PERSON_TONES, PERSON_ICONS, PERSON_TONE_CAPACITY,
-  assignPersonTones, assignPersonIcons, type PersonChoice,
+  assignPersonTones, assignPersonIcons, personStyles, isHexColor,
+  type PersonChoice,
 } from "@/lib/design/person-colors";
 import { saveMemberIdentity } from "@/lib/actions/member-identity";
 
@@ -37,6 +38,59 @@ interface Props {
  * da o görünür. Yönetici bir rengi seçince o renk kilitlenir; aynı çalışma
  * alanında iki kişi aynı rengi alamaz (kısmi tekil indeks, 20240313).
  */
+/**
+ * Serbest renk seçici.
+ *
+ * Tarayıcının kendi renk çarkı (`input[type=color]`) + elle hex girişi. Değer
+ * yalnız GEÇERLİ olduğunda kaydedilir; her tuş vuruşunda sunucuya gitmemek için
+ * yazarken beklenir, çarkta ise seçim bitince (change) gönderilir.
+ */
+function HexPicker({
+  value, isCustom, disabled, onPick,
+}: { value: string; isCustom: boolean; disabled: boolean; onPick: (_hex: string) => void }) {
+  /* Kaydedilen renk değişince bileşen `key` ile yeniden bağlanır; taslak da o
+     anda sıfırlanır. Effect içinde setState etmek React'te kademeli yeniden
+     render tetikliyor (lint kuralı da bunu yakalıyor). */
+  const [draft, setDraft] = useState(value);
+  const valid = isHexColor(draft);
+  return (
+    <span className="ml-1 inline-flex items-center gap-1">
+      <span
+        className={cn(
+          "relative grid h-7 w-7 place-items-center overflow-hidden rounded-full",
+          isCustom ? "ring-2 ring-ink ring-offset-2" : "ring-1 ring-line",
+        )}
+        style={{ backgroundColor: valid ? draft : "#ffffff" }}
+        title="Serbest renk"
+      >
+        <input
+          type="color"
+          value={valid ? draft : "#2563c9"}
+          disabled={disabled}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => { if (isHexColor(draft)) onPick(draft); }}
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+          aria-label="Serbest renk seç"
+        />
+      </span>
+      <input
+        value={draft}
+        disabled={disabled}
+        onChange={(e) => setDraft(e.target.value.trim())}
+        onKeyDown={(e) => { if (e.key === "Enter" && isHexColor(draft)) onPick(draft); }}
+        onBlur={() => { if (isHexColor(draft)) onPick(draft); }}
+        placeholder="#2563c9"
+        spellCheck={false}
+        className={cn(
+          "w-[78px] rounded-md border bg-surface px-1.5 py-1 font-mono text-[11px] tabular-nums text-ink",
+          "focus:outline-none focus:ring-2 focus:ring-brand-ring/40",
+          valid ? "border-line" : "border-danger/50",
+        )}
+      />
+    </span>
+  );
+}
+
 export function PersonIdentityManager({ members, canManage }: Props) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -97,9 +151,8 @@ export function PersonIdentityManager({ members, canManage }: Props) {
           <strong className="font-semibold">
             {members.length} kişi var, palette {PERSON_TONE_CAPACITY} renk.
           </strong>{" "}
-          Şu kişiler aynı rengi paylaşıyor: {clashes.map((n) => n.join(" / ")).join(" · ")}.
-          Hangi ikilinin aynı renkte kalacağına siz karar verin — aşağıdan birine
-          başka bir renk seçebilirsiniz.
+          Otomatik atama şu kişilere aynı rengi verdi: {clashes.map((n) => n.join(" / ")).join(" · ")}.
+          Satırın sonundaki renk seçiciden palet dışı bir renk verebilirsiniz — orada sınır yok.
         </p>
       )}
 
@@ -120,7 +173,10 @@ export function PersonIdentityManager({ members, canManage }: Props) {
             <li key={m.id} className="rounded-xl border border-line bg-surface p-3 shadow-card">
               <div className="flex flex-wrap items-center gap-3">
                 {/* Önizleme — panodaki rozetin aynısı. */}
-                <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-full text-white", tone.solid)}>
+                <span
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-full"
+                  style={personStyles(tone.hex).solid}
+                >
                   <Icon size={18} />
                 </span>
                 <span className="min-w-0 flex-1">
@@ -162,15 +218,26 @@ export function PersonIdentityManager({ members, canManage }: Props) {
                           title={takenByOther ? `${t.label} — ${owner} kullanıyor` : t.label}
                           className={cn(
                             "tap-target grid h-7 w-7 place-items-center rounded-full transition-transform duration-150",
-                            t.solid,
                             selected ? "ring-2 ring-ink ring-offset-2" : "hover:scale-110",
                             takenByOther && "cursor-not-allowed opacity-25",
                           )}
+                          style={{ backgroundColor: t.hex }}
                         >
                           {selected && <Check size={13} className="text-white" strokeWidth={3} />}
                         </button>
                       );
                     })}
+                    {/* SERBEST RENK — Aslı Hanım (2026-08-23): "Her kişi için
+                        renk paleti çıksa, mesela hexadecimal. Biz seçip
+                        eklesek." Hazır palet hızlı yol; buradan istenen her
+                        renk verilebilir. */}
+                    <HexPicker
+                      key={m.colorKey ?? "otomatik"}
+                      value={isHexColor(m.colorKey) ? m.colorKey! : (tone.hex ?? "#2563c9")}
+                      isCustom={isHexColor(m.colorKey)}
+                      disabled={busy}
+                      onPick={(hex) => save(m, { colorKey: hex })}
+                    />
                   </div>
 
                   {/* İkon */}
@@ -208,6 +275,7 @@ export function PersonIdentityManager({ members, canManage }: Props) {
       {canManage && (
         <p className="text-[12px] leading-relaxed text-subtle">
           Seçilmeyen renk ve ikon kişinin kimliğinden otomatik türetilir — kimse renksiz kalmaz.
+          Hazır paletin yanındaki seçiciden istediğiniz rengi verebilirsiniz (hex de yazılabilir).
           Bir renk yalnız bir kişide olabilir. Yeşil bilerek yok: yeşil yalnızca tamamlanan işler için.
         </p>
       )}

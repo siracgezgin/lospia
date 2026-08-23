@@ -34,7 +34,7 @@ export function Avatar({
   tone = "color",
   title,
   className,
-  colorClass,
+  colorHex,
 }: {
   name: string;
   size?: "xs" | "sm" | "md" | "lg";
@@ -42,14 +42,15 @@ export function Avatar({
   title?: string;
   className?: string;
   /**
-   * Kişinin GERÇEK rengi (lib/design/person-colors.ts `solid`).
+   * Kişinin GERÇEK rengi (hex).
    *
    * Verilmezse addan türetilen yedek palete düşülür. Bu bileşen kişi kimliği
    * sisteminden habersiz doğdu ve kendi paletini kullanıyordu; aynı kişi
    * Ayarlar'da mor, panoda turkuaz görünüyordu. Rengi bilen çağıran buradan
-   * geçirir — kimlik tek kaynaktan okunur.
+   * geçirir — kimlik tek kaynaktan okunur. Serbest renk seçilebildiği için
+   * değer Tailwind sınıfı değil ham hex'tir; sınıf çalışma anında üretilemez.
    */
-  colorClass?: string;
+  colorHex?: string;
 }) {
   const sizeClass =
     size === "xs" ? "w-4 h-4 text-[8px]"
@@ -61,7 +62,7 @@ export function Avatar({
       ? "bg-surface border border-line-strong text-muted"
       : tone === "done"
         ? "bg-green-500 border border-green-600 text-white"
-        : cn("text-white", colorClass || colorFor(name));
+        : cn("text-white", !colorHex && colorFor(name));
   return (
     <span
       className={cn(
@@ -70,6 +71,7 @@ export function Avatar({
         toneClass,
         className
       )}
+      style={colorHex && tone === "color" ? { backgroundColor: colorHex } : undefined}
       title={title ?? name}
     >
       {getInitials(name)}

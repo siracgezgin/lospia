@@ -518,11 +518,11 @@ function taskUrgencyRank(t: Task, today: string): number {
 // as plain class strings (no cn()) because tailwind-merge strips border-l-*.
 function urgentCardStyle(
   task: Task,
-  base: { surface: string; border: string; accent: string },
-): { surface: string; border: string; accent: string; widthCls: string; ring: string; shadow: string; urgent: boolean } {
+  base: { surface: string; border: string; accent: string; style?: React.CSSProperties },
+): { surface: string; border: string; accent: string; style?: React.CSSProperties; widthCls: string; ring: string; shadow: string; urgent: boolean } {
   const urgent = task.priority === "urgent" && task.status !== "done";
   if (!urgent) {
-    return { surface: base.surface, border: base.border, accent: base.accent, widthCls: "border-l-[3px]", ring: "", shadow: "shadow-card", urgent };
+    return { surface: base.surface, border: base.border, accent: base.accent, style: base.style, widthCls: "border-l-[3px]", ring: "", shadow: "shadow-card", urgent };
   }
   // ACİL: zemin KİŞİNİN rengi olarak kalır — Aslı Hanım (2026-08-23) "renk
   // kişinin renginde olsun" dedi, aciliyet kimliği silmemeli. Aciliyet artık
@@ -530,6 +530,8 @@ function urgentCardStyle(
   // kartın üstünde duruyor.
   return {
     surface: base.surface,
+    // Zemin kişinin rengi kalır, kenarlık ve şerit kırmızıya döner.
+    style: base.style ? { ...base.style, borderColor: "#f87171", borderLeftColor: "#dc2626" } : undefined,
     border: "border-red-400",
     accent: "border-l-red-600",
     widthCls: "border-l-[6px]",
@@ -1005,7 +1007,7 @@ function StaticTaskCard({
   const em = urgentCardStyle(task, getTaskCardStyleByPerson(task.status, personColor));
   const cardCls = `rounded-card border ${em.widthCls} p-3 ${em.shadow} hover:shadow-card-hover transition-shadow duration-200 ease-standard cursor-pointer ${em.surface} ${em.border} ${em.accent} ${em.ring}`;
   return (
-    <div className={cardCls}>
+    <div className={cardCls} style={em.style}>
       <div className="flex items-start gap-1.5">
         <span className="mt-0.5 p-0.5 shrink-0 text-subtle/70"><GripVertical size={13} /></span>
         <CardContent task={task} profiles={profiles} contacts={contacts} responsibleNames={responsibleNames} interactive={false} />
@@ -1095,7 +1097,9 @@ function TaskCard({
   return (
     <div
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
+      /* Sürükleme dönüşümü ile kişi rengi AYNI style nesnesinde birleşir —
+         ayrı verilirse biri diğerini eziyor. */
+      style={{ ...em.style, transform: CSS.Transform.toString(transform), transition }}
       className={`rounded-card border ${em.widthCls} p-3 ${em.shadow} group ${colorCls} ${stateCls} ${dragCls}`}
       {...dragProps}
       onClick={openDetail}
@@ -1175,6 +1179,7 @@ function MobileTaskCard({
   return (
     <div
       className={`rounded-card border ${em.widthCls} p-3.5 ${em.shadow} cursor-pointer ${colorCls} transition-transform duration-[var(--duration-fast)] ease-standard active:scale-[0.99]`}
+      style={em.style}
       onClick={openDetail}
     >
       <CardContent

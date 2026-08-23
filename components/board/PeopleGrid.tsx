@@ -5,7 +5,7 @@ import Image from "next/image";
 import { LayoutList, CheckCircle2, Activity, Clock3, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { getPersonDisplayName, getPersonInitials } from "@/lib/utils/person-display";
-import { assignPersonTones, assignPersonIcons, type PersonChoice } from "@/lib/design/person-colors";
+import { assignPersonTones, assignPersonIcons, personStyles, type PersonChoice } from "@/lib/design/person-colors";
 import type { Task } from "@/types";
 
 export type GridPerson = {
@@ -53,6 +53,14 @@ interface Props {
  */
 export function PeopleGrid({ people, loadOf, meKey, onPick, onShowAll, totalTasks, choices }: Props) {
   const tones = useMemo(() => assignPersonTones(people.map((p) => p.id), choices), [people, choices]);
+  /* Renk katmanı hex'ten türer: hazır palet ile serbest renk (Ayarlar'daki
+     hex seçici) birebir aynı görünsün. Tailwind sınıfı çalışma anında
+     üretilemediği için satır içi stil tek doğru yol. */
+  const styles = useMemo(() => {
+    const out: Record<string, ReturnType<typeof personStyles>> = {};
+    for (const [id, t] of Object.entries(tones)) out[id] = personStyles(t.hex);
+    return out;
+  }, [tones]);
   const icons = useMemo(() => assignPersonIcons(people.map((p) => p.id), choices), [people, choices]);
 
   // Sıra: önce ben, sonra açık işi olanlar (çok → az), sonra alfabetik.
@@ -97,7 +105,7 @@ export function PeopleGrid({ people, loadOf, meKey, onPick, onShowAll, totalTask
       ) : (
         <div className="stagger-children grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
           {ordered.map((p) => {
-            const tone = tones[p.id]!;
+            const st = styles[p.id]!;
             const Icon = icons[p.id]!;
             const load = loadOf[p.filterKey] ?? { open: 0, inProgress: 0, done: 0, overdue: 0 };
             const isMe = p.filterKey === meKey;
@@ -108,15 +116,14 @@ export function PeopleGrid({ people, loadOf, meKey, onPick, onShowAll, totalTask
                 className={cn(
                   "group relative flex flex-col overflow-hidden rounded-2xl border bg-surface text-left shadow-card transition-all duration-200 ease-standard",
                   "hover:-translate-y-0.5 hover:shadow-card-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
-                  tone.border,
-                  tone.ring,
                 )}
+                style={st.border}
               >
                 {/* Kimlik çubuğu — kişinin rengi. cn() dışında absolute bar
                     (tailwind-merge border-l renklerini yutuyor: proje kuralı). */}
-                <span aria-hidden className={`absolute inset-x-0 top-0 h-1 ${tone.bar}`} />
+                <span aria-hidden className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: st.hex }} />
 
-                <div className={cn("flex items-center gap-3 px-4 pb-3 pt-5", tone.soft)}>
+                <div className="flex items-center gap-3 px-4 pb-3 pt-5" style={st.soft}>
                   {/* Fotoğraf varsa fotoğraf; yoksa kişiye özel ikon + baş harf.
                       Aslı Hanım: "Ekip fotoğrafları olsun… Sen yap, sonra
                       değiştiririz." */}
@@ -131,10 +138,8 @@ export function PeopleGrid({ people, loadOf, meKey, onPick, onShowAll, totalTask
                     />
                   ) : (
                     <span
-                      className={cn(
-                        "relative grid h-14 w-14 shrink-0 place-items-center rounded-full text-white ring-2 ring-surface",
-                        tone.solid,
-                      )}
+                      className="relative grid h-14 w-14 shrink-0 place-items-center rounded-full ring-2 ring-surface"
+                      style={st.solid}
                     >
                       <Icon size={22} strokeWidth={1.9} />
                       <span className="absolute -bottom-0.5 -right-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-surface px-1 text-[9.5px] font-bold tracking-tight text-ink ring-1 ring-line">
@@ -157,8 +162,9 @@ export function PeopleGrid({ people, loadOf, meKey, onPick, onShowAll, totalTask
                     className={cn(
                       "grid h-11 min-w-11 shrink-0 place-items-center rounded-xl border px-2 text-lg font-semibold tabular-nums",
                       "bg-surface",
-                      load.open > 0 ? cn(tone.text, tone.border) : "border-line text-subtle",
+                      load.open === 0 && "border-line text-subtle",
                     )}
+                    style={load.open > 0 ? { ...st.text, ...st.border } : undefined}
                     title="Açık iş"
                   >
                     {load.open}

@@ -24,9 +24,18 @@ const COLOR_TAKEN = "Bu renk başka bir kişide kullanılıyor. Önce onu deği�
 const COLOR_KEYS = PERSON_TONES.map((t) => t.key);
 const ICON_KEYS = PERSON_ICONS.map((i) => i.key);
 
+const HEX = /^#[0-9a-fA-F]{6}$/;
+
 const IdentitySchema = z.object({
-  // "" → otomatik atamaya dön.
-  colorKey: z.union([z.enum(COLOR_KEYS as [string, ...string[]]), z.literal("")]).nullable(),
+  /* Hazır palet anahtarı VEYA serbest hex (#rrggbb). Aslı Hanım (2026-08-23):
+     "Her kişi için renk paleti çıksa, mesela hexadecimal." Hex küçük harfe
+     indirgenir ki "#AABBCC" ile "#aabbcc" iki ayrı renk sayılmasın — tekil
+     indeks metin karşılaştırıyor. "" → otomatik atamaya dön. */
+  colorKey: z.union([
+    z.enum(COLOR_KEYS as [string, ...string[]]),
+    z.string().regex(HEX, "Renk #rrggbb biçiminde olmalı.").transform((v) => v.toLowerCase()),
+    z.literal(""),
+  ]).nullable(),
   iconKey: z.union([z.enum(ICON_KEYS as [string, ...string[]]), z.literal("")]).nullable(),
 });
 

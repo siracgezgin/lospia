@@ -17,7 +17,9 @@
  * strings (never through cn()). See KanbanBoard.
  */
 
+import type { CSSProperties } from "react";
 import type { TaskPriority, TaskStatus } from "@/types";
+import { hexOfColorKey, personStyles } from "@/lib/design/person-colors";
 
 // ── Card visual style (category-driven, plus the reserved done style) ─────────
 
@@ -205,10 +207,24 @@ export function getPersonCardStyle(personColorKey?: string | null): CardStyle {
  */
 export function getTaskCardStyleByPerson(
   status: TaskStatus, personColorKey?: string | null,
-): CardStyle {
+): CardStyle & { style?: CSSProperties } {
   if (status === "done") return DONE_STYLE;
   if (status === "review") return REVIEW_STYLE;
-  return getPersonCardStyle(personColorKey);
+  // Serbest renk (hex) Tailwind sınıfı üretemez — kart nötr sınıflarla çizilir,
+  // renk SATIR İÇİ stille gelir. Hazır palet de aynı yoldan geçer ki iki
+  // seçenek birebir aynı görünsün.
+  const hex = hexOfColorKey(personColorKey);
+  if (!hex) return CATEGORY_NONE;
+  const st = personStyles(hex);
+  return {
+    ...CATEGORY_NONE,
+    dot: "",
+    style: {
+      ...st.soft,
+      ...st.border,
+      ...st.accent,
+    },
+  };
 }
 
 /**
