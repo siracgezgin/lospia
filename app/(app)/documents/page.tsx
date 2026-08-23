@@ -6,6 +6,7 @@ import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { SetupRequiredNotice } from "@/components/modules/SetupRequiredNotice";
 import { maybeDatabaseSetupRequired } from "@/lib/utils/supabase-errors";
 import { DocumentsView } from "@/components/documents/DocumentsView";
+import type { DocFolder } from "@/components/documents/DocumentFiles";
 import type { OperationDocument, WorkspaceDepartment } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -83,9 +84,39 @@ export default async function DocumentsPage() {
     if (p) memberNames[m.user_id as string] = p.full_name || p.email || "—";
   }
 
+  // Klasör ağacı (20240312). RLS görünürlüğe göre süzer: 'admin' klasörleri
+  // üyeye hiç dönmez. Tablo migrate edilmemişse boş liste → bölüm çizilmez.
+  const foldersRes = await supabase
+    .from("document_folders")
+    .select("id, parent_id, name, visibility")
+    .eq("workspace_id", workspaceId)
+    .order("position")
+    .order("name");
+  const folders = (foldersRes.data ?? []) as DocFolder[];
+  const filesAvailable = !foldersRes.error;
+  // Yüklenmiş dosyalar — bağlantı kayıtlarından ayrı (document_type = 'file').
+  const files = documents
+    .filter((d) => (d as { document_type?: string }).document_type === "file")
+    .map((d) => {
+      const r = d as unknown as Record<string, unknown>;
+      return {
+        id: r.id as string,
+        title: r.title as string,
+        folder_id: (r.folder_id as string | null) ?? null,
+        file_name: (r.file_name as string | null) ?? null,
+        file_size: (r.file_size as number | null) ?? null,
+        file_mime: (r.file_mime as string | null) ?? null,
+        created_by: (r.created_by as string | null) ?? null,
+        created_at: r.created_at as string,
+      };
+    });
+
   return (
     <DocumentsView
       documents={documents}
+      folders={folders}
+      files={files}
+      filesAvailable={filesAvailable}
       departments={departments}
       tasks={tasks}
       contacts={contacts}

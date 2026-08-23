@@ -15,10 +15,16 @@ import { cn } from "@/lib/utils/cn";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { DocumentFormModal } from "./DocumentFormModal";
+import { DocumentFiles, type DocFolder, type DocFile } from "./DocumentFiles";
 import type { OperationDocument, WorkspaceDepartment } from "@/types";
 
 interface Props {
   documents: OperationDocument[];
+  /** Klasör ağacı + yüklenmiş dosyalar (20240312). */
+  folders?: DocFolder[];
+  files?: DocFile[];
+  /** Tablo migrate edilmemişse dosya bölümü hiç çizilmez. */
+  filesAvailable?: boolean;
   departments: Pick<WorkspaceDepartment, "id" | "name">[];
   tasks: { id: string; title: string }[];
   contacts: { id: string; name: string }[];
@@ -37,6 +43,7 @@ function norm(s: string): string {
 
 export function DocumentsView({
   documents, departments, tasks, contacts, memberNames, currentUserId, isAdmin,
+  folders = [], files = [], filesAvailable = false,
 }: Props) {
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -98,7 +105,7 @@ export function DocumentsView({
     <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
       <ModulePageHeader
         title="Documents"
-        description="Drive, Canva, Word, Excel ve operasyon dokümanlarını Lospia içinde bağlantı ve görev ilişkisiyle yönetin. Dosya yüklenmez — yalnızca bağlantı ve künye tutulur."
+        description="Dosyalarınızı klasörlerde saklayın; Drive, Canva ve dış bağlantıları da aynı yerde künyeleyin."
         icon={FolderOpen}
         secondaryBackHref="/board"
         rightSlot={
@@ -111,6 +118,23 @@ export function DocumentsView({
           </button>
         }
       />
+
+      {/* DOSYALAR — Aslı Hanım (2026-08-19): "Drive, Word, Excel hepsinin
+          burada olduğu böyle klasör şeklinde ayırmayı düşündüm." Maliyet
+          araştırıldı (Pro planda 100 GB dahil → ek maliyet ₺0), modül gerçek
+          dosya saklamaya açıldı. Bağlantı kayıtları altta duruyor. */}
+      {filesAvailable && (
+        <div className="mb-6">
+          <DocumentFiles folders={folders} files={files} memberNames={memberNames} isAdmin={isAdmin} />
+        </div>
+      )}
+
+      {/* Bağlantılar — Drive/Canva/Figma künyeleri. Dosya değil, dış kaynak. */}
+      {filesAvailable && (
+        <h2 className="mb-2 mt-8 border-t border-line-strong pt-6 text-[16px] font-semibold tracking-tight text-ink">
+          Bağlantılar
+        </h2>
+      )}
 
       {/* Toolbar */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
