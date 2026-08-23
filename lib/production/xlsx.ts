@@ -27,6 +27,44 @@ function estimateLines(text: string, charsPerLine: number): number {
   return lines;
 }
 
+/**
+ * Görselin piksel ölçüsü — PNG ve JPEG başlığından okunur.
+ * ExcelJS sabit `ext` istiyor; oranı bilmeden yerleştirince fotoğraf geriliyor
+ * (Aslı Hanım, 2026-08-24: "teknik çizim kısmı böyle olmamalıydı").
+ * Okunamayan biçimde null döner ve çağıran kutuyu doldurmaya çalışmaz.
+ */
+function imageSize(buf: Buffer): { w: number; h: number } | null {
+  // PNG: 8 bayt imza + IHDR → 16..24 arası genişlik/yükseklik
+  if (buf.length > 24 && buf.readUInt32BE(0) === 0x89504e47) {
+    return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
+  }
+  // JPEG: SOF0..SOF15 işaretçisini tara (SOF4/SOF8/SOF12 hariç)
+  if (buf.length > 4 && buf[0] === 0xff && buf[1] === 0xd8) {
+    let i = 2;
+    while (i + 9 < buf.length) {
+      if (buf[i] !== 0xff) { i++; continue; }
+      const marker = buf[i + 1];
+      if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+        return { h: buf.readUInt16BE(i + 5), w: buf.readUInt16BE(i + 7) };
+      }
+      i += 2 + buf.readUInt16BE(i + 2);
+    }
+  }
+  return null;
+}
+
+/** Görseli kutuya SIĞDIRIR (contain): taşmaz, gerilmez, ortalanır. */
+function fitBox(
+  buf: Buffer, boxW: number, boxH: number,
+): { w: number; h: number; dx: number; dy: number } {
+  const sz = imageSize(buf);
+  if (!sz || !sz.w || !sz.h) return { w: boxW, h: boxH, dx: 0, dy: 0 };
+  const k = Math.min(boxW / sz.w, boxH / sz.h);
+  const w = Math.round(sz.w * k);
+  const h = Math.round(sz.h * k);
+  return { w, h, dx: Math.round((boxW - w) / 2), dy: Math.round((boxH - h) / 2) };
+}
+
 function newWorkbook(): ExcelJS.Workbook {
   const wb = new ExcelJS.Workbook();
   wb.creator = "Lospia — Aslı Filinta Operasyon";
@@ -156,15 +194,17 @@ async function addProductionSheet(
     for (let c = 5; c <= COLS; c++) ws.getCell(r, c).border = border;
     ws.getRow(r).height = 17;
   }
-  const drawTop = MEAS_HEAD;                       // çizim bu satırdan başlar
-  const drawRows = ROWS_PER_TABLE;                 // ölçü tablosu boyunca
+  const drawTop = MEAS_HEAD;
 
   // ── TESLİM EDİLEN ÜRÜNLER ─────────────────────────────────────────────────
   const DELIV_HEAD = MEAS_HEAD + ROWS_PER_TABLE + 1;
+  /* TAM GENİŞLİK. Orijinal föyde bu tablo da A:D idi ve sağı boş kalıyordu;
+     Aslı Hanım (2026-08-24): "Alt tarafı neden boşluk?" Teknik çizim yalnız
+     ölçülerin sağında duruyor, altında boş bir sütun bırakmanın karşılığı yok —
+     tablo sayfanın tamamını kullanır, ürün adına da yer açılır. */
   th(`A${DELIV_HEAD}`, null, "No", true);
-  th(`B${DELIV_HEAD}`, `B${DELIV_HEAD}:C${DELIV_HEAD}`, "TESLİM EDİLEN ÜRÜNLER");
-  th(`D${DELIV_HEAD}`, null, "ADET", true);
-  th(`E${DELIV_HEAD}`, `E${DELIV_HEAD}:I${DELIV_HEAD}`, "");
+  th(`B${DELIV_HEAD}`, `B${DELIV_HEAD}:G${DELIV_HEAD}`, "TESLİM EDİLEN ÜRÜNLER");
+  th(`H${DELIV_HEAD}`, `H${DELIV_HEAD}:I${DELIV_HEAD}`, "ADET", true);
   boxRow(DELIV_HEAD);
   ws.getRow(DELIV_HEAD).height = 18;
 
@@ -174,15 +214,15 @@ async function addProductionSheet(
     const d = delivered[i];
     ws.getCell(`A${r}`).value = i + 1;
     ws.getCell(`A${r}`).alignment = { vertical: "middle", horizontal: "center" };
-    ws.mergeCells(`B${r}:C${r}`);
+    ws.mergeCells(`B${r}:G${r}`);
     ws.getCell(`B${r}`).value = d ? txt(d.label) : "";
-    ws.getCell(`D${r}`).value = d ? txt(d.qty) : "";
-    ws.mergeCells(`E${r}:I${r}`);
+    ws.mergeCells(`H${r}:I${r}`);
+    ws.getCell(`H${r}`).value = d ? txt(d.qty) : "";
     for (let c = 1; c <= COLS; c++) {
       const cell = ws.getCell(r, c);
       cell.border = border;
       cell.font = { size: 10.5 };
-      cell.alignment = { vertical: "middle", horizontal: c === 1 || c === 4 ? "center" : "left", indent: c === 2 ? 1 : 0 };
+      cell.alignment = { vertical: "middle", horizontal: c === 1 || c >= 8 ? "center" : "left", indent: c === 2 ? 1 : 0 };
     }
     ws.getRow(r).height = 17;
   }
@@ -191,7 +231,18 @@ async function addProductionSheet(
   let r = DELIV_HEAD + ROWS_PER_TABLE + 1;
   const sd = sheet.size_distribution;
   const rawSizes = sd?.sizes ?? [];
-  const sizes = orderSizes(rawSizes).slice(0, COLS - 3); // A:B etiket + TOPLAM
+  const dataRows = sd?.rows ?? [];
+  const groups = sd?.groups ?? {};
+
+  /* BOŞ BEDEN KOLONU ÇİZİLMEZ. Föyde XS · XS-S · S · S-M · M · M-L gibi yedi
+     kolon çıkıyordu; çoğu tamamen boştu (Aslı Hanım, 2026-08-24: "optimum bir
+     Excel formatı değil bu"). Bir bedende ne adet ne grup etiketi varsa o
+     kolonun kâğıtta yeri yok. */
+  const usedRaw = rawSizes
+    .map((sz, i) => ({ sz, i }))
+    .filter(({ sz, i }) =>
+      dataRows.some((row) => txt(row.values?.[i])) || txt(groups[sz]));
+  const sizes = orderSizes(usedRaw.map((x) => x.sz)).slice(0, COLS - 3);
   const srcIndex = sizes.map((sz) => rawSizes.findIndex((x) => canonicalSize(x) === sz));
   const FIRST_SIZE = 3;
   const totalCol = FIRST_SIZE + sizes.length;
@@ -212,17 +263,22 @@ async function addProductionSheet(
     ws.getRow(r).height = 18;
     r++;
   };
+
   if (sizes.length) {
     sizeRow("BEDEN DAĞILIMI", sizes, "TOPLAM", true);
-    const groups = sd?.groups ?? {};
-    if (Object.keys(groups).length) {
+    /* "BEDEN ETİKETİ" İKİ KEZ yazılıyordu: biri size_distribution.groups'tan,
+       biri de rows içinde aynı adla duran satırdan. Grup satırı yalnız rows'ta
+       karşılığı YOKSA yazılır. */
+    const hasLabelRow = dataRows.some((row) =>
+      /beden\s*etiket/i.test(txt(row.label)));
+    if (!hasLabelRow && Object.keys(groups).length) {
       sizeRow("BEDEN ETİKETİ", sizes.map((sz, i) => groups[sz] ?? groups[rawSizes[srcIndex[i]]] ?? ""), "");
     }
-    for (const row of sd?.rows ?? []) {
+    for (const row of dataRows) {
       sizeRow(
         (row.label || "ÜRETİM ADETİ").toLocaleUpperCase("tr-TR"),
-        srcIndex.map((si) => (si >= 0 ? row.values?.[si] ?? "" : "")),
-        row.total ?? "",
+        srcIndex.map((si) => (si >= 0 ? txt(row.values?.[si]) : "")),
+        txt(row.total),
       );
     }
   }
@@ -296,9 +352,27 @@ async function addProductionSheet(
     const front = ok.find((f) => f.section === "technical_drawing_front")
       ?? ok.find((f) => f.section === "technical_drawing");
     const back = ok.find((f) => f.section === "technical_drawing_back");
-    const boxH = Math.max(90, drawRows * 22);
-    if (front) place(front, 4.05, drawTop + 0.6, 130, boxH);
-    if (back) place(back, 6.55, drawTop + 0.6, 130, boxH);
+
+    /* Çizim kutusu ÖLÇÜLER + TESLİM EDİLEN ÜRÜNLER tablolarının ikisi boyunca
+       uzanır. Aslı Hanım (2026-08-24): "Alt tarafı neden boşluk?" — orijinal
+       föyde de orası boştu ama boşuna duruyordu; kutuyu aşağı uzatınca çizim
+       iki katı büyüklükte ve okunur oluyor.
+       Görseller kutuya SIĞDIRILIR (contain): en-boy oranı korunur, ortalanır. */
+    const drawFirst = MEAS_HEAD + 1;
+    const drawLast = MEAS_HEAD + ROWS_PER_TABLE;
+    const boxH = (drawLast - drawFirst + 1) * 17 - 8;   // satır yüksekliği 17pt
+    const half = 175;                                    // E:I ≈ 2 × 175px
+    const put = (img: { buf: Buffer; ext: "jpeg" | "png" | "gif" }, colBase: number) => {
+      const f = fitBox(img.buf, half, boxH);
+      const id = wb.addImage({ buffer: img.buf as unknown as ExcelJS.Buffer, extension: img.ext });
+      ws.addImage(id, {
+        tl: { col: colBase, row: drawFirst - 1 } as ExcelJS.Anchor,
+        ext: { width: f.w, height: f.h },
+        editAs: "oneCell",
+      });
+    };
+    if (front) put(front, 4.05);
+    if (back) put(back, 6.6);
 
     const rest = ok.filter((f) => f !== front && f !== back);
     if (rest.length) {
