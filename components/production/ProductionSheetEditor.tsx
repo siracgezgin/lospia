@@ -7,7 +7,7 @@ import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 import {
   ClipboardList, ArrowLeft, Plus, Trash2, Save, User, Clock, Loader2, FileDown,
-  CheckCircle2,
+  CheckCircle2, Ruler, Wallet, Layers,
 } from "lucide-react";
 import {
   createProductionSheet, updateProductionSheet, updateProductionSheetImages,
@@ -41,6 +41,34 @@ interface Props {
   isAdmin: boolean;
   currentUserId: string;
 }
+
+/**
+ * Föy sekmeleri.
+ *
+ * Aslı Hanım (2026-08-19): "Bu resmen çok yoruyor. Hangi bir noktaya bakacağımı
+ * şaşırıyorum… 50 tane işi bir anda görmek işine gelmiyor. Biraz daha
+ * basitleştirmemiz gerekiyor."
+ *
+ * Zedonk (rakip PLM) aynı sorunu sekmeyle çözüyor: ürünün her yönü tek sayfada
+ * ama ayrı sekmelerde. ÇIKTI DEĞİŞMEZ — Excel hâlâ tek sayfadır ("çıktı
+ * aldığımda tek sayfa görüp kalıbın üstüne yapıştıracağım"); sekmeler yalnız
+ * düzenleme ekranıdır.
+ */
+type SheetTabId = "urun" | "olcu" | "maliyet" | "malzeme";
+
+const SHEET_TABS: { id: SheetTabId; label: string; icon: typeof ClipboardList }[] = [
+  { id: "urun",    label: "Ürün",             icon: ClipboardList },
+  { id: "olcu",    label: "Ölçü & Beden",     icon: Ruler },
+  { id: "maliyet", label: "Maliyet",          icon: Wallet },
+  { id: "malzeme", label: "Malzeme & Talimat", icon: Layers },
+];
+
+/** Hangi zorunlu alan hangi sekmede — sekme rozetleri buradan sayılır. */
+const CHECK_TAB: Record<string, SheetTabId> = {
+  title: "urun", category: "urun", subcategory: "urun", description: "urun",
+  producer: "urun", delivery_date: "urun", sewing_delivery_date: "urun", drawing: "urun",
+  sizes: "olcu", measurements: "olcu",
+};
 
 // Beden kolonları artık her föyde sabit standart set (bkz. STANDARD_SIZES).
 
@@ -190,6 +218,7 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
   // Kaydedilmemiş değişiklik: konfirme yalnız DİSKTEKİ hâli onaylar, ekrandaki
   // taslağı değil. Yoksa "konfirme edildi" yazan bir föyün içeriği başka olur.
   const [dirty, setDirty] = useState(false);
+  const [tab, setTab] = useState<SheetTabId>("urun");
   const [isSaving, startSave] = useTransition();
   const [isDeleting, startDelete] = useTransition();
 
@@ -201,6 +230,30 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
     setDirty(true);
     setForm((f) => ({ ...f, [key]: value }));
   };
+
+  // Eksiksizlik tek yerde hesaplanır: hem üstteki şerit hem sekme rozetleri
+  // aynı sonucu kullansın (iki ayrı hesap er geç ayrışır).
+  const checks = checkSheet({
+    title: form.title,
+    product_kind: form.product_kind ?? null,
+    description: form.description ?? null,
+    producer: form.producer ?? null,
+    manufacturer_id: form.manufacturer_id ?? null,
+    category: form.category ?? null,
+    subcategory: form.subcategory ?? null,
+    delivery_date: form.delivery_date ?? null,
+    sewing_delivery_date: form.sewing_delivery_date ?? null,
+    size_distribution: form.size_distribution,
+    measurements: form.measurements,
+    photo_refs: form.photo_refs,
+  });
+  const missingByTab = checks.reduce<Record<string, number>>((acc, c) => {
+    if (!c.ok) {
+      const t = CHECK_TAB[c.key] ?? "urun";
+      acc[t] = (acc[t] ?? 0) + 1;
+    }
+    return acc;
+  }, {});
 
   const nameOf = (id: string | null) => (id && memberNames[id]) || "—";
   const relTime = (iso: string) => {
@@ -370,20 +423,8 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
           olmayan föy konfirme edilemez. */}
       <SheetReadiness
         sheetId={sheet?.id ?? null}
-        checks={checkSheet({
-          title: form.title,
-          product_kind: form.product_kind ?? null,
-          description: form.description ?? null,
-          producer: form.producer ?? null,
-          manufacturer_id: form.manufacturer_id ?? null,
-          category: form.category ?? null,
-          subcategory: form.subcategory ?? null,
-          delivery_date: form.delivery_date ?? null,
-          sewing_delivery_date: form.sewing_delivery_date ?? null,
-          size_distribution: form.size_distribution,
-          measurements: form.measurements,
-          photo_refs: form.photo_refs,
-        })}
+        checks={checks}
+        onJump={(key) => setTab(CHECK_TAB[key] ?? "urun")}
         confirmedAt={sheet?.confirmed_at ?? null}
         confirmedByName={sheet?.confirmed_by ? nameOf(sheet.confirmed_by) : null}
         dirty={dirty}
@@ -407,6 +448,47 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
           ) : null}
         </div>
 
+        {/* SEKMELER — Aslı Hanım (2026-08-19): "Bu resmen çok yoruyor. Hangi
+            bir noktaya bakacağımı şaşırıyorum… Yaratıcı insanlarda zihinde
+            zaten 50 tane iş döndüğü için 50 tane işi bir anda görmek işine
+            gelmiyor. Biraz daha basitleştirmemiz gerekiyor."
+            Föy tek uzun dikey akıştı: 14 ölçü + beden ızgarası + maliyet + 8
+            metin bloğu alt alta. Artık dört sekme. ÇIKTI DEĞİŞMEDİ — Excel
+            hâlâ tek sayfa; sekmeler yalnız DÜZENLEME ekranı içindir.
+            Eksik zorunlu alan olan sekme sarı noktayla işaretlenir. */}
+        <div role="tablist" aria-label="Föy bölümleri" className="flex flex-wrap items-center gap-1 border-b border-line">
+          {SHEET_TABS.map((t) => {
+            const on = tab === t.id;
+            const eksik = missingByTab[t.id] ?? 0;
+            return (
+              <button
+                key={t.id}
+                role="tab"
+                aria-selected={on}
+                onClick={() => setTab(t.id)}
+                className={cn(
+                  "inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-[13px] transition-colors duration-150",
+                  on
+                    ? "border-brand font-semibold text-ink"
+                    : "border-transparent font-medium text-muted hover:border-line-strong hover:text-ink",
+                )}
+              >
+                <t.icon size={14} />
+                {t.label}
+                {eksik > 0 && (
+                  <span
+                    className="grid h-4 min-w-4 place-items-center rounded-full bg-amber-500 px-1 text-[10px] font-bold tabular-nums text-white"
+                    title={`${eksik} zorunlu alan eksik`}
+                  >
+                    {eksik}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+      {tab === "urun" && (<>
       {/* Sipariş bilgisi (sol) + TEKNİK ÇİZİM ÖN/ARKA (sağ üst).
           Aslı Hanım (2026-08-19): "Benim yukarıda çizimini görmem lazım.
           Teknik çizimini yukarıda sağda… En üst sağda teknik çizim ön,
@@ -514,7 +596,9 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
           </Section>
         </div>
       </div>
+      </>)}
 
+      {tab === "olcu" && (<>
         {/* ÖLÇÜLER — Excel gibi çizgili ızgara, numaralar OTOMATİK.
             Aslı Hanım (2026-08-19): "Bunların Excel gibi çizgi çizgi kare kare
             olması… hiçbir boş hücre kalmaması. Mesela üç numara niye boş?"
@@ -686,7 +770,9 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
             <Plus size={12} /> Satır ekle
           </button>
         </Section>
+      </>)}
 
+      {tab === "maliyet" && (<>
         {/* MALİYET — kalem kalem. Aslı Hanım (2026-08-19):
             "Maliyet şöyle hesaplanıyor: kumaşın fiyatına ayrı giriyorsun,
              dikim fiyatına ayrı, fermuar fiyatına ayrı, ütü paketi ayrı,
@@ -786,7 +872,9 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
             );
           })()}
         </Section>
+      </>)}
 
+      {tab === "malzeme" && (<>
         {/* YIKAMA TALİMATI */}
         <Section title="Yıkama Talimatı">
           <TextArea value={form.wash_instruction ?? ""} onChange={(v) => set("wash_instruction", v)} rows={2} placeholder="% 100 Polyester Dry Clean Only…" />
@@ -861,8 +949,10 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
             <ImageUploader sheetId={sheetId} section="general" images={form.photo_refs} onChange={handleImagesChange} label="Genel fotoğraflar" />
           </Section>
         )}
+      </>)}
 
-        {isAdmin && !isNew && (
+      {/* Durum — sekmeden bağımsız, föyün kimliğine ait; her sekmede altta durur. */}
+      {tab === "urun" && isAdmin && !isNew && (
           <Section title="Durum">
             <label className="block max-w-xs">
               <select

@@ -14,6 +14,8 @@ interface Props {
   confirmedByName: string | null;
   /** Kaydedilmemiş değişiklik varsa konfirme düğmesi kapanır. */
   dirty: boolean;
+  /** Eksik bir kaleme tıklandığında o alanın bulunduğu sekmeye atlar. */
+  onJump?: (_checkKey: string) => void;
 }
 
 /**
@@ -29,7 +31,7 @@ interface Props {
  * föyde bir şey değişirse damga veritabanı trigger'ıyla düşer — "konfirme"
  * görünen bir föy her zaman gerçekten konfirme edilmiş hâlidir.
  */
-export function SheetReadiness({ sheetId, checks, confirmedAt, confirmedByName, dirty }: Props) {
+export function SheetReadiness({ sheetId, checks, confirmedAt, confirmedByName, dirty, onJump }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -143,12 +145,19 @@ export function SheetReadiness({ sheetId, checks, confirmedAt, confirmedByName, 
       {open && !complete && (
         <ul className="anim-fade-down divide-y divide-amber-200/70 border-t border-amber-200 bg-white/50">
           {missing.map((c) => (
-            <li key={c.key} className="flex items-start gap-2 px-3.5 py-2">
-              <AlertTriangle size={13} className="mt-0.5 shrink-0 text-amber-600" />
-              <span className="min-w-0">
-                <span className="block text-[13px] font-medium text-ink">{c.label}</span>
-                {c.hint && <span className="block text-[12px] text-muted">{c.hint}</span>}
-              </span>
+            <li key={c.key}>
+              {/* Eksik kaleme tıklayınca o alanın sekmesine atlar — föy dört
+                  sekmeye ayrıldığı için "nerede bu alan?" sorusu doğuyordu. */}
+              <button
+                onClick={() => onJump?.(c.key)}
+                className="flex w-full items-start gap-2 px-3.5 py-2 text-left transition-colors hover:bg-amber-100/60"
+              >
+                <AlertTriangle size={13} className="mt-0.5 shrink-0 text-amber-600" />
+                <span className="min-w-0">
+                  <span className="block text-[13px] font-medium text-ink">{c.label}</span>
+                  {c.hint && <span className="block text-[12px] text-muted">{c.hint}</span>}
+                </span>
+              </button>
             </li>
           ))}
         </ul>
