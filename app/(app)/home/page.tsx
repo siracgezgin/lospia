@@ -75,17 +75,28 @@ export default async function HomePage() {
   if (gate !== "ok" || !workspaceId || !user) return <AccessDenied />;
 
   const { hour, todayIso, longDate } = istanbulNowParts();
-  const monday = startOfWeek(new Date(), { weekStartsOn: 1 });
+  /* Hafta penceresi BUGÜNDEN türer, `new Date()`ten değil.
+     todayIso İstanbul saatiyle, startOfWeek(new Date()) ise SUNUCU saatiyle
+     hesaplanıyordu. Vercel UTC'de olduğu için gece yarısı–03:00 arasında ikisi
+     farklı güne düşüyor: hafta bir önceki haftaya kayıyor ve "bugünkü toplantı"
+     hep 0 çıkıyordu (Aslı Hanım, 2026-08-24 00:32'de bunu gördü). */
+  const monday = startOfWeek(new Date(`${todayIso}T12:00:00`), { weekStartsOn: 1 });
   const weekStart = format(monday, "yyyy-MM-dd");
   const weekEnd = format(addDays(monday, 6), "yyyy-MM-dd");
 
   // Bana atanan açık görevler — Liste/Pano'daki "Bana atananlar" merceğiyle
   // aynı sözleşme (assignee bazlı, silinmiş/arşivlenmiş hariç).
+  /* SORUMLULUK KURALI panonunkiyle AYNI olmalı: atanan VEYA katılımcı
+     (applyPersonFilter). Burada yalnız assignee_id'ye bakılıyordu; katılımcı
+     olarak yürüttüğü işler sayılmıyor, bu yüzden Ana Sayfa ile Pano farklı
+     rakam gösteriyordu (Aslı Hanım, 2026-08-24: "bu kısımlar doğru
+     çalışmıyor"). custom_fields->collaborators bir jsonb dizi; `cs` (contains)
+     ile aranır. */
   const myTasksQuery = supabase
     .from("tasks")
     .select("id, title, status, priority, due_date")
     .eq("workspace_id", workspaceId)
-    .eq("assignee_id", user.id)
+    .or(`assignee_id.eq.${user.id},custom_fields->collaborators.cs.["${user.id}"]`)
     .not("status", "in", "(done,archived)")
     .is("deleted_at", null)
     .is("archived_at", null)
@@ -105,12 +116,17 @@ export default async function HomePage() {
       .order("time_slot", { ascending: true })
       .order("position", { ascending: true }),
     supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
+    /* "Onay bekleyen" tanımı PANONUNKİYLE aynı olmalı (applyBoardView →
+       waiting-approval): yalnız status='review' değil; onay gerektiren ya da
+       birini/bir kişiyi bekleyen işler de sayılır. Dar tanım Ana Sayfa ile
+       Pano'ya farklı rakam yazdırıyordu. */
     isAdmin
       ? supabase
           .from("tasks")
           .select("id", { count: "exact", head: true })
           .eq("workspace_id", workspaceId)
-          .eq("status", "review")
+          .not("status", "in", "(done,archived)")
+          .or("status.eq.review,approval_required.is.true,waiting_on_member_id.not.is.null,waiting_on_contact_id.not.is.null")
           .is("deleted_at", null)
           .is("archived_at", null)
       : Promise.resolve({ count: null }),
@@ -146,13 +162,15 @@ export default async function HomePage() {
      Sıfır olan karo sönük çizilir (StatTile), böylece göz yalnız DOLU olana
      takılır. Yöneticinin iki sayısı eskiden ayrı bir "Yönetici özeti" kartında
      tekrar ediyordu — o kart kaldırıldı, sayılar buraya taşındı. */
+  /* Bağlantı parametresi `view` — Liste sayfası `lens` diye bir şey OKUMUYOR.
+     Karolara tıklanınca filtre uygulanmıyordu, liste her şeyi gösteriyordu. */
   const tiles: { label: string; value: number; href: string; tone: "ink" | "brand" | "danger" | "warning" | "muted" }[] = [
-    { label: "Açık işim", value: myTasks.length, href: "/list?lens=mine", tone: "ink" },
-    { label: "Geciken", value: overdueCount, href: "/list?lens=overdue", tone: overdueCount > 0 ? "danger" : "muted" },
+    { label: "Açık işim", value: myTasks.length, href: "/list?view=mine", tone: "ink" },
+    { label: "Geciken", value: overdueCount, href: "/list?view=overdue", tone: overdueCount > 0 ? "danger" : "muted" },
     { label: "Bugünkü toplantı", value: todayMeetings.length, href: "/planning", tone: todayMeetings.length > 0 ? "brand" : "muted" },
   ];
   if (isAdmin) {
-    tiles.push({ label: "Onay bekleyen", value: reviewCount ?? 0, href: "/admin-board", tone: (reviewCount ?? 0) > 0 ? "warning" : "muted" });
+    tiles.push({ label: "Onay bekleyen", value: reviewCount ?? 0, href: "/list?view=waiting-approval", tone: (reviewCount ?? 0) > 0 ? "warning" : "muted" });
     tiles.push({ label: "Bekleyen ödeme", value: paymentCount ?? 0, href: "/finance", tone: (paymentCount ?? 0) > 0 ? "warning" : "muted" });
   } else {
     tiles.push({ label: "Bu hafta toplantı", value: weekMeetings.length, href: "/planning", tone: "muted" });
