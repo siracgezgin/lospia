@@ -4,6 +4,8 @@ import { WorkspaceNameEditor } from "@/components/settings/WorkspaceNameEditor";
 import { MembersManager } from "@/components/settings/MembersManager";
 import { CreateAccountPanel } from "@/components/settings/CreateAccountPanel";
 import { DepartmentsManager } from "@/components/settings/DepartmentsManager";
+import { PersonIdentityManager, type IdentityMember } from "@/components/settings/PersonIdentityManager";
+import { assignPersonTones } from "@/lib/design/person-colors";
 import { ManufacturersManager, type ManagerManufacturer } from "@/components/settings/ManufacturersManager";
 import { SeasonsManager, type ManagerSeason } from "@/components/settings/SeasonsManager";
 import { MaterialsManager, type ManagerMaterial } from "@/components/settings/MaterialsManager";
@@ -171,6 +173,26 @@ export default async function SettingsPage() {
     notificationEmail: memberRows?.[0]?.notification_email ?? null,
   });
   const memberCount = (membersResult.data ?? []).length;
+
+  // Kişi Kimliği listesi. Tohum profiles.id (userId) — pano, liste ve raporlar
+  // da onu kullanıyor; workspace_members.id kullanılırsa renkler ekranlar
+  // arasında TUTMAZ.
+  const identityMembers: IdentityMember[] = (
+    (membersResult.data ?? []) as (WorkspaceMember & { profiles?: Partial<Profile> | null })[]
+  ).map((m) => ({
+    id: m.id,
+    userId: m.user_id,
+    name: m.profiles?.full_name || m.profiles?.username || m.profiles?.email || "—",
+    roleLabel: roleLabel(m.role),
+    colorKey: (m as { color_key?: string | null }).color_key ?? null,
+    iconKey: (m as { icon_key?: string | null }).icon_key ?? null,
+  })).sort((a, b) => a.name.localeCompare(b.name, "tr"));
+
+  // Giriş yapan kişinin efektif tonu — ekip geneli atamadan, panodakiyle aynı.
+  const myTone = assignPersonTones(
+    identityMembers.map((m) => m.userId),
+    Object.fromEntries(identityMembers.map((m) => [m.userId, { colorKey: m.colorKey, iconKey: m.iconKey }])),
+  )[user.id];
   const profileName = profile?.full_name ?? "—";
 
   return (
@@ -209,7 +231,10 @@ export default async function SettingsPage() {
           <h2 className="text-base font-semibold text-ink">Profiliniz</h2>
           <Card className="p-5 h-full space-y-4">
             <div className="flex items-center gap-3">
-              <Avatar name={profileName} size="md" />
+              {/* Kendi renginiz — panodaki, rapordaki ve Kişi Kimliği'ndekiyle
+                  AYNI ton. Avatar kendi paletine düşerse aynı kişi iki farklı
+                  renkte görünüyor. */}
+              <Avatar name={profileName} size="md" colorClass={myTone?.solid} />
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-ink truncate">{profileName}</p>
                 <p className="text-xs text-subtle">{roleLabel(userRole)}</p>
@@ -292,6 +317,27 @@ export default async function SettingsPage() {
           </Card>
         )}
       </section>
+
+      {/* Kişi Kimliği — renk + ikon.
+          Aslı Hanım (2026-08-19): "Herkesin bir rengi olsa da herkes kendi
+          rengini takip etse" / "Herkese ikon koy." Seçim yoksa kimlikten
+          otomatik türetilir; kimse renksiz kalmaz. */}
+      <section className="space-y-3">
+        <Card className="p-5 sm:p-6 space-y-4">
+          <div>
+            <h2 className="text-base font-semibold text-ink">Kişi Kimliği</h2>
+            <p className="text-[13px] text-muted mt-0.5">
+              Her kişinin rengi ve ikonu. Görev kartları da kişinin rengini taşır —
+              panoda kimin işi olduğu renkten okunur.
+            </p>
+          </div>
+          <PersonIdentityManager
+            members={identityMembers}
+            canManage={canManageDepts}
+          />
+        </Card>
+      </section>
+
         </div>
 
         {/* Sağ sütun (1/3): Çalışma alanı + Departmanlar — sol sütunla aynı

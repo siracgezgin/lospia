@@ -163,9 +163,61 @@ export function getDepartmentCardStyle(colorKey?: string | null): CardStyle {
 }
 
 /**
+ * Kişi renginden kart stili.
+ *
+ * Aslı Hanım (2026-08-23): "Görevlerde de renk kişinin renginde olsun. Sadece
+ * tamamlananlar yeşil olacak."
+ *
+ * Kart kimliği artık DEPARTMAN değil KİŞİ. Panoda "bu kimin işi" sorusu renkten
+ * okunuyor; departman rozetle taşınmaya devam ediyor. Renkler person-colors.ts
+ * ile AYNI hex'ler — kişi rozeti ile kartı aynı rengi konuşur.
+ *
+ * PERSON_TONE_STYLE anahtarları PERSON_TONES anahtarlarıyla birebir aynı olmalı.
+ */
+const PERSON_TONE_STYLE: Record<string, CardStyle> = {
+  crimson: FAMILY.red,
+  orange:  FAMILY.orange,
+  gold:    FAMILY.amber,
+  olive:   FAMILY.brown,
+  teal:    FAMILY.teal,
+  blue:    FAMILY.blue,
+  violet:  FAMILY.lavender,
+  magenta: FAMILY.pink,
+  slate:   FAMILY.slate,
+  // Dokuzu aşan ekipler için yedek tonlar (person-colors.ts ile aynı hex'ler).
+  navy:    { surface: "bg-[#e7ecf8]", border: "border-[#c3cfeb]", accent: "border-l-[#1e3a8a]", chip: "bg-[#d7e0f4] text-[#152a63]", dot: "bg-[#1e3a8a]" },
+  plum:    { surface: "bg-[#f7e8f8]", border: "border-[#e5c2e8]", accent: "border-l-[#86198f]", chip: "bg-[#efd6f1] text-[#5e1265]", dot: "bg-[#86198f]" },
+  rose:    { surface: "bg-[#fde8ec]", border: "border-[#f5c2ce]", accent: "border-l-[#e11d48]", chip: "bg-[#fad4dd] text-[#9f1239]", dot: "bg-[#e11d48]" },
+};
+
+/** Kişi rengi anahtarından kart stili. Kişi yoksa nötr — sahte kimlik yok. */
+export function getPersonCardStyle(personColorKey?: string | null): CardStyle {
+  if (!personColorKey) return CATEGORY_NONE;
+  return PERSON_TONE_STYLE[personColorKey] ?? CATEGORY_NONE;
+}
+
+/**
+ * Bir görevin nihai kart stili.
+ *
+ * TAMAMLANDI tek istisnadır ve yeşile geçer — "sadece tamamlananlar yeşil".
+ * Kontrol/Onay ise neredeyse beyaz, yalnız nane kenarlıklı: "bitmedi, onayda"
+ * demek; dolu yeşille karıştırılmasın diye bilerek zayıf.
+ */
+export function getTaskCardStyleByPerson(
+  status: TaskStatus, personColorKey?: string | null,
+): CardStyle {
+  if (status === "done") return DONE_STYLE;
+  if (status === "review") return REVIEW_STYLE;
+  return getPersonCardStyle(personColorKey);
+}
+
+/**
  * Resolved card style for a task in the department model. DONE overrides to the
  * reserved green; otherwise the department owns the colour. Tasks with no
  * department render neutral (never a faked identity).
+ *
+ * NOT: Pano artık kişi rengini kullanıyor (getTaskCardStyleByPerson). Bu
+ * fonksiyon departman renkli yüzeyler (takvim, departman panoları) için durur.
  */
 export function getTaskCardStyle(status: TaskStatus, deptColorKey?: string | null): CardStyle {
   if (status === "done") return DONE_STYLE;

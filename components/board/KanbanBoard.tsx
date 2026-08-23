@@ -46,7 +46,7 @@ import {
 } from "@/lib/utils/task-constants";
 import { PRIORITY_LABELS, STATUS_LABELS } from "@/lib/utils/task-constants";
 import {
-  getTaskCardStyle,
+  getTaskCardStyleByPerson,
   getDepartmentCardStyle,
   getTaskStateMarkers,
   PRIORITY_CHIP,
@@ -80,6 +80,30 @@ const DeptMetaContext = createContext<Record<string, DeptMeta>>({});
 function useTaskDept(task: Task): DeptMeta | undefined {
   const meta = useContext(DeptMetaContext);
   return task.department_id ? meta[task.department_id] : undefined;
+}
+
+/* Kişi rengi — kart kimliğinin kaynağı.
+   Aslı Hanım (2026-08-23): "Görevlerde de renk kişinin renginde olsun. Sadece
+   tamamlananlar yeşil olacak." Kart artık departmanın değil SORUMLUNUN rengini
+   taşır; departman rozetle görünmeye devam eder.
+   Eşleme profiles.id → ton anahtarı (görevin assignee_id'si o alandır). */
+const PersonColorContext = createContext<Record<string, string>>({});
+function useTaskPersonColor(task: Task): string | null {
+  const map = useContext(PersonColorContext);
+  // Sorumluluk kuralı panonun geri kalanıyla AYNI olmalı (applyPersonFilter):
+  // atanan → katılımcı → dış kişi. Yalnız assignee'ye bakınca katılımcıyla
+  // yürüyen görevler renksiz kalıyordu.
+  if (task.assignee_id && map[task.assignee_id]) return map[task.assignee_id]!;
+  const collabs = (task.custom_fields as Record<string, unknown> | undefined)?.collaborators;
+  if (Array.isArray(collabs)) {
+    for (const id of collabs) {
+      if (typeof id === "string" && map[id]) return map[id]!;
+    }
+  }
+  if (task.responsible_contact_id && map[task.responsible_contact_id]) {
+    return map[task.responsible_contact_id]!;
+  }
+  return null;
 }
 
 // Participant completions (taskId → [{name, completed}]) for card chips.
@@ -500,9 +524,13 @@ function urgentCardStyle(
   if (!urgent) {
     return { surface: base.surface, border: base.border, accent: base.accent, widthCls: "border-l-[3px]", ring: "", shadow: "shadow-card", urgent };
   }
+  // ACİL: zemin KİŞİNİN rengi olarak kalır — Aslı Hanım (2026-08-23) "renk
+  // kişinin renginde olsun" dedi, aciliyet kimliği silmemeli. Aciliyet artık
+  // kalın kırmızı çerçeve + halka + gölge ile anlatılır; "Acil" rozeti zaten
+  // kartın üstünde duruyor.
   return {
-    surface: "bg-gradient-to-br from-red-50 to-white",
-    border: "border-red-300",
+    surface: base.surface,
+    border: "border-red-400",
     accent: "border-l-red-600",
     widthCls: "border-l-[6px]",
     ring: "ring-1 ring-red-300/80",
@@ -973,8 +1001,8 @@ function StaticTaskCard({
 }) {
   // Department drives the card color; done overrides to the reserved green.
   // border (all sides) then border-l accent last so it wins. No cn() — tailwind-merge strips border-l-*.
-  const dept = useTaskDept(task);
-  const em = urgentCardStyle(task, getTaskCardStyle(task.status, dept?.color));
+  const personColor = useTaskPersonColor(task);
+  const em = urgentCardStyle(task, getTaskCardStyleByPerson(task.status, personColor));
   const cardCls = `rounded-card border ${em.widthCls} p-3 ${em.shadow} hover:shadow-card-hover transition-shadow duration-200 ease-standard cursor-pointer ${em.surface} ${em.border} ${em.accent} ${em.ring}`;
   return (
     <div className={cardCls}>
@@ -1023,8 +1051,8 @@ function TaskCard({
   const boardCtx = useContext(BoardContext);
   // Department drives the card color; done overrides to the reserved green; urgent
   // overrides both with a red emphasis. No cn() — tailwind-merge strips border-l-*.
-  const dept = useTaskDept(task);
-  const em = urgentCardStyle(task, getTaskCardStyle(task.status, dept?.color));
+  const personColor = useTaskPersonColor(task);
+  const em = urgentCardStyle(task, getTaskCardStyleByPerson(task.status, personColor));
   const colorCls = `${em.surface} ${em.border} ${em.accent} ${em.ring}`;
   const stateCls = [
     isDragging ? "opacity-40" : "",
@@ -1133,8 +1161,8 @@ function MobileTaskCard({
   showMenu?: boolean;
 }) {
   // Same colour language as the desktop card; no cn() — tailwind-merge strips border-l-*.
-  const dept = useTaskDept(task);
-  const em = urgentCardStyle(task, getTaskCardStyle(task.status, dept?.color));
+  const personColor = useTaskPersonColor(task);
+  const em = urgentCardStyle(task, getTaskCardStyleByPerson(task.status, personColor));
   const colorCls = `${em.surface} ${em.border} ${em.accent} ${em.ring}`;
   const router = useRouter();
   const boardCtx = useContext(BoardContext);
@@ -1740,10 +1768,26 @@ export function KanbanBoard({
     [optimisticTasks, gridPeople],
   );
 
+  /* Kimlik seçimleri (Ayarlar → Kişi Kimliği). Anahtar profiles.id — pano,
+     liste ve raporlar aynı tohumu kullanmalı, yoksa kişinin rengi ekranlar
+     arasında tutmaz. */
+  const personChoices = useMemo(() => {
+    const out: Record<string, { colorKey?: string | null; iconKey?: string | null }> = {};
+    for (const m of members) out[m.userId] = { colorKey: m.colorKey, iconKey: m.iconKey };
+    return out;
+  }, [members]);
+
   const personTones = useMemo(
-    () => assignPersonTones(gridPeople.map((p) => p.id)),
-    [gridPeople],
+    () => assignPersonTones(gridPeople.map((p) => p.id), personChoices),
+    [gridPeople, personChoices],
   );
+
+  /** Görev kartının rengi buradan gelir: profiles.id → ton anahtarı. */
+  const personColorMap = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const [id, tone] of Object.entries(personTones)) out[id] = tone.key;
+    return out;
+  }, [personTones]);
 
   /** Seçili kişinin ızgaradaki kaydı — üst şeritteki renkli başlık için. */
   const selectedPerson = useMemo(
@@ -1872,6 +1916,7 @@ export function KanbanBoard({
 
   return (
     <DeptMetaContext.Provider value={deptMeta}>
+    <PersonColorContext.Provider value={personColorMap}>
     <ParticipantsContext.Provider value={participantsByTask}>
     <NoteSignalsContext.Provider value={noteSignals}>
     <BoardContext.Provider value={boardCtx}>
@@ -2035,6 +2080,7 @@ export function KanbanBoard({
       {peopleEntry && !isAdminBoard && (
         <PeopleGrid
           people={gridPeople}
+          choices={personChoices}
           loadOf={personLoads}
           meKey={`member:${userId}`}
           totalTasks={optimisticTasks.length}
@@ -2435,6 +2481,7 @@ export function KanbanBoard({
     </BoardContext.Provider>
     </NoteSignalsContext.Provider>
     </ParticipantsContext.Provider>
+    </PersonColorContext.Provider>
     </DeptMetaContext.Provider>
   );
 }

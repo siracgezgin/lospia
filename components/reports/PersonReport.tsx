@@ -30,6 +30,8 @@ interface Props {
   departments: string[];
   today: string;      // yyyy-MM-dd
   weekStart: string;  // yyyy-MM-dd (pazartesi)
+  /** Ekibin tamamının kimliği — renk panodakiyle aynı çıksın diye. */
+  teamIdentity?: { id: string; colorKey: string | null; iconKey: string | null }[];
 }
 
 const GUNLER = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
@@ -50,9 +52,18 @@ const trTarih = (iso: string) => {
  * altta ve kısa. Gecikmiş iş varsa en üste çıkıyor — okunmayacak tek şey o
  * olmamalı.
  */
-export function PersonReport({ person, tasks, meetings, departments, today, weekStart }: Props) {
-  const tone = assignPersonTones([person.id])[person.id]!;
-  const Icon = assignPersonIcons([person.id])[person.id]!;
+export function PersonReport({
+  person, tasks, meetings, departments, today, weekStart, teamIdentity,
+}: Props) {
+  /* Renk EKİP GENELİ atamadan gelir. Tek kişi için hesaplamak, panoda çakışma
+     yüzünden kayan tonu ve yöneticinin Ayarlar'daki seçimini görmez; kişinin
+     rengi rapor ile pano arasında tutmaz. */
+  const seeds = (teamIdentity ?? [{ id: person.id, colorKey: null, iconKey: null }]).map((m) => m.id);
+  const choices = Object.fromEntries(
+    (teamIdentity ?? []).map((m) => [m.id, { colorKey: m.colorKey, iconKey: m.iconKey }]),
+  );
+  const tone = assignPersonTones(seeds, choices)[person.id] ?? assignPersonTones([person.id])[person.id]!;
+  const Icon = assignPersonIcons(seeds, choices)[person.id] ?? assignPersonIcons([person.id])[person.id]!;
 
   const done = tasks.filter((t) => t.status === "done");
   const open = tasks.filter((t) => t.status !== "done");

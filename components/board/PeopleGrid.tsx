@@ -5,7 +5,7 @@ import Image from "next/image";
 import { LayoutList, CheckCircle2, Activity, Clock3, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { getPersonDisplayName, getPersonInitials } from "@/lib/utils/person-display";
-import { assignPersonTones, assignPersonIcons } from "@/lib/design/person-colors";
+import { assignPersonTones, assignPersonIcons, type PersonChoice } from "@/lib/design/person-colors";
 import type { Task } from "@/types";
 
 export type GridPerson = {
@@ -34,6 +34,8 @@ interface Props {
   onPick: (_filterKey: string) => void;
   onShowAll: () => void;
   totalTasks: number;
+  /** Yöneticinin Ayarlar'dan seçtiği renk/ikon (id → seçim). Boşsa otomatik. */
+  choices?: Record<string, PersonChoice>;
 }
 
 /**
@@ -49,9 +51,9 @@ interface Props {
  * ("Üretim ve Tedarik Zinciri", "Finans ve Operasyon") burada bilerek yoktur —
  * "yoruyor onlar bizi".
  */
-export function PeopleGrid({ people, loadOf, meKey, onPick, onShowAll, totalTasks }: Props) {
-  const tones = useMemo(() => assignPersonTones(people.map((p) => p.id)), [people]);
-  const icons = useMemo(() => assignPersonIcons(people.map((p) => p.id)), [people]);
+export function PeopleGrid({ people, loadOf, meKey, onPick, onShowAll, totalTasks, choices }: Props) {
+  const tones = useMemo(() => assignPersonTones(people.map((p) => p.id), choices), [people, choices]);
+  const icons = useMemo(() => assignPersonIcons(people.map((p) => p.id), choices), [people, choices]);
 
   // Sıra: önce ben, sonra açık işi olanlar (çok → az), sonra alfabetik.
   const ordered = useMemo(() => {

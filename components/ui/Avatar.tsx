@@ -34,12 +34,22 @@ export function Avatar({
   tone = "color",
   title,
   className,
+  colorClass,
 }: {
   name: string;
   size?: "xs" | "sm" | "md" | "lg";
   tone?: AvatarTone;
   title?: string;
   className?: string;
+  /**
+   * Kişinin GERÇEK rengi (lib/design/person-colors.ts `solid`).
+   *
+   * Verilmezse addan türetilen yedek palete düşülür. Bu bileşen kişi kimliği
+   * sisteminden habersiz doğdu ve kendi paletini kullanıyordu; aynı kişi
+   * Ayarlar'da mor, panoda turkuaz görünüyordu. Rengi bilen çağıran buradan
+   * geçirir — kimlik tek kaynaktan okunur.
+   */
+  colorClass?: string;
 }) {
   const sizeClass =
     size === "xs" ? "w-4 h-4 text-[8px]"
@@ -51,7 +61,7 @@ export function Avatar({
       ? "bg-surface border border-line-strong text-muted"
       : tone === "done"
         ? "bg-green-500 border border-green-600 text-white"
-        : cn("text-white", colorFor(name));
+        : cn("text-white", colorClass || colorFor(name));
   return (
     <span
       className={cn(

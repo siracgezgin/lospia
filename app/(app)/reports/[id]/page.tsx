@@ -38,8 +38,15 @@ export default async function PersonReportPage({
   const weekEnd = format(addDays(monday, 6), "yyyy-MM-dd");
   const today = format(new Date(), "yyyy-MM-dd");
 
-  const [profileRes, tasksRes, meetingsRes, deptRes] = await Promise.all([
+  const [profileRes, membersRes, tasksRes, meetingsRes, deptRes] = await Promise.all([
     supabase.from("profiles").select("id, full_name, email, avatar_url").eq("id", id).maybeSingle(),
+    // Kimlik seçimleri — raporun rengi panodakiyle AYNI olmalı. Tek kişilik
+    // hesap yapılırsa takım geneli atamayla tutmaz, yöneticinin seçimini de
+    // görmez; bu yüzden ekibin tamamı çekilir.
+    supabase
+      .from("workspace_members")
+      .select("user_id, color_key, icon_key")
+      .eq("workspace_id", workspaceId),
     // Kişinin işleri: sorumlu ya da iş birliği yapan.
     supabase
       .from("tasks")
@@ -92,6 +99,8 @@ export default async function PersonReportPage({
 
   return (
     <PersonReport
+      teamIdentity={((membersRes.data ?? []) as { user_id: string; color_key: string | null; icon_key: string | null }[])
+        .map((m) => ({ id: m.user_id, colorKey: m.color_key, iconKey: m.icon_key }))}
       person={{
         id: profile.id,
         name: profile.full_name ?? profile.email ?? "—",
