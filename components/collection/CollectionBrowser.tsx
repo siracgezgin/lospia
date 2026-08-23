@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  Boxes, Plus, Search, ChevronRight, FileDown,
+  Boxes, Plus, Search, ChevronRight, FileDown, Printer,
   FileSpreadsheet, ClipboardList, ShieldCheck, AlertTriangle, CheckCircle2,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
@@ -302,14 +302,25 @@ export function CollectionBrowser({ sheets, seasons = [] }: Props) {
                       </div>
                     )}
                   </div>
-                  {/* İndir — yalnızca hover'da, köşede sade; kart linkinin üstünde */}
-                  <a
-                    href={`/production/${s.id}/export`}
-                    className="tap-target absolute right-2 top-2 z-[2] rounded-md bg-surface/90 p-1.5 text-subtle opacity-0 shadow-sm backdrop-blur transition-[opacity,color,transform] duration-150 hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 active:scale-95"
-                    title="Föyü Excel olarak indir"
-                  >
-                    <FileDown size={13} />
-                  </a>
+                  {/* Çıktı — yalnızca hover'da, köşede sade; kart linkinin üstünde.
+                      Yazdır önce gelir: föyü üreticiye vermenin ana yolu artık
+                      tek sayfalık kâğıt, Excel düzenleme/veri formatı. */}
+                  <div className="absolute right-2 top-2 z-[2] flex items-center gap-1 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover:opacity-100">
+                    <a
+                      href={`/production/${s.id}/print`}
+                      className="tap-target rounded-md bg-surface/90 p-1.5 text-subtle shadow-sm backdrop-blur transition-[color,transform] duration-150 hover:text-ink active:scale-95"
+                      title="Tek sayfa çıktı — yazdır veya PDF"
+                    >
+                      <Printer size={13} />
+                    </a>
+                    <a
+                      href={`/production/${s.id}/export`}
+                      className="tap-target rounded-md bg-surface/90 p-1.5 text-subtle shadow-sm backdrop-blur transition-[color,transform] duration-150 hover:text-ink active:scale-95"
+                      title="Föyü Excel olarak indir"
+                    >
+                      <FileDown size={13} />
+                    </a>
+                  </div>
                   {/* Hazırlık rozeti — Nisa hangi föyün konfirmeye hazır
                       olduğunu listeden görsün (Aslı Hanım, 2026-08-21:
                       "Nisa'yla konfirme ederek bana göstermenizi istiyorum").

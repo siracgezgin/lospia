@@ -214,8 +214,10 @@ body {
   /* Kâğıt beyaz: ekran arka planları mürekkep yakar ve gri basar. */
   html, body { background: #fff !important; }
 
-  /* Kabuk kaydırma kapları kâğıtta içeriği KIRPIYOR — hepsi serbest bırakılır. */
-  body * { overflow: visible !important; }
+  /* Kabuk kaydırma kapları kâğıtta içeriği KIRPIYOR — hepsi serbest bırakılır.
+     Üretim föyü kutusu HARİÇ: onun overflow'u bilinçli, tek sayfa sınırını o
+     çiziyor (bu kural onu ezince föy üç sayfaya taşıyordu). */
+  body *:not(.print-sheet):not(.print-sheet *) { overflow: visible !important; }
   main, .print-page { height: auto !important; max-height: none !important; }
 
   .print-page {
@@ -231,7 +233,23 @@ body {
 
 @page {
   size: A4 portrait;
-  margin: 14mm;
+  /* 10mm — uretim foyu tek sayfaya sigsin diye dar. Kullanilabilir alan
+     190 x 277mm; foy kutusu bilerek 272mm, yuvarlama ikinci sayfa acmasin. */
+  margin: 10mm;
+}
+
+/* Üretim föyü çıktısı.
+   .print-sheet--fit → tek sayfaya sığdı: kutu ASLA bölünmez, içindeki hiçbir
+   şey de sayfa kırmaz (yükseklik zaten ölçülüp ölçeklendirildi).
+   Sınıf yoksa föy tek sayfaya okunabilir sığmamıştır; o zaman doğal sayfa
+   sonlarıyla basılır, yalnız BÖLÜMLERİN ortadan bölünmesi engellenir. */
+@media print {
+  .print-sheet { box-shadow: none !important; outline: 0 !important; }
+  .print-sheet--fit,
+  .print-sheet--fit * { break-inside: avoid !important; page-break-inside: avoid !important; }
+  .print-sheet section,
+  .print-sheet table,
+  .print-sheet tr { break-inside: avoid; page-break-inside: avoid; }
 }
 
 /* ──────────────────────────────────────────────────────────────────────────

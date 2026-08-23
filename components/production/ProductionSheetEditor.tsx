@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 import {
-  ClipboardList, ArrowLeft, Plus, Trash2, Save, User, Clock, Loader2, FileDown,
+  ClipboardList, ArrowLeft, Plus, Trash2, Save, User, Clock, Loader2, FileDown, Printer,
   CheckCircle2, Ruler, Wallet, Layers,
 } from "lucide-react";
 import {
@@ -444,6 +444,18 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
               {isDeleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
               <span className="hidden sm:inline">Sil</span>
             </button>
+          )}
+          {/* TEK SAYFA CIKTI — Asli Hanim (2026-08-23): "cikti aldigin zaman tek
+              sayfada ciksin ve her sey gorunsun… firmaya vereyim." Ekrandaki
+              dort sekme kagitta tek parca olur. */}
+          {!isNew && sheet && (
+            <a
+              href={`/production/${sheet.id}/print`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-muted shadow-xs transition-all duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
+              title="Föyün tamamı tek A4 sayfada — yazdır veya PDF olarak kaydet"
+            >
+              <Printer size={15} /> <span className="hidden sm:inline">Tek sayfa çıktı</span>
+            </a>
           )}
           {!isNew && sheet && (
             <a

@@ -316,13 +316,24 @@ export function normalizeToStandardSizes(
   return { sizes: target, rows };
 }
 
-/** Beden kolonlarının kanonik sırası + adı (standart set). */
+/**
+ * Beden kolonlarinin BEDEN ILERLEMESINE gore sirasi.
+ *
+ * STANDARD_SIZES dizisi tekilleri (XS…XXL) kombolardan (XS-S…) once listeler;
+ * dizideki yerini siralama olarak kullanmak "XL | XS-S | M-L" gibi okunamaz bir
+ * basli uretiyordu. Sira artik bedenin kendi buyuklugu: kombo, basladigi bedenle
+ * onu izleyen tekil arasina girer (XS < XS-S < S < S-M < M …).
+ */
+const SIZE_RANK: Record<string, number> = {
+  XS: 0, "XS-S": 0.5, S: 1, "S-M": 1.5, M: 2, "M-L": 2.5,
+  L: 3, "L-XL": 3.5, XL: 4, "XL-XXL": 4.5, XXL: 5,
+  "One Size": 90, // her zaman en sonda
+};
+
 export function orderSizes(sizes: string[]): string[] {
   const uniq = Array.from(new Set(sizes.map(canonicalSize).filter(Boolean)));
-  const rank = (s: string) => {
-    const i = STANDARD_SIZES.indexOf(s);
-    return i === -1 ? STANDARD_SIZES.length + uniq.indexOf(s) : i;
-  };
+  // Standart disi bedenler girdideki sirasini koruyarak sona eklenir.
+  const rank = (s: string) => SIZE_RANK[s] ?? 100 + uniq.indexOf(s);
   return uniq.sort((a, b) => rank(a) - rank(b));
 }
 
