@@ -1,17 +1,16 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
-  AlertTriangle,
   ArrowRight,
   CalendarRange,
   CheckSquare,
   CircleDot,
-  Wallet,
 } from "lucide-react";
 import { startOfWeek, addDays, format } from "date-fns";
 import { requireModuleMember } from "@/lib/modules/context";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { ShortcutCard } from "@/components/home/ShortcutCard";
+import { StatTile } from "@/components/home/StatTile";
 import {
   MODULE_GROUP_TITLES,
   modulesForRole,
@@ -141,6 +140,24 @@ export default async function HomePage() {
       ? null
       : ((paymentCountRes as { count: number | null }).count ?? null);
 
+  /* DURUM ŞERİDİ — "şu an ne durumdayım" ilk satırda.
+     Aslı Hanım (2026-08-24): "Home Page daha profesyonel ve daha anlaşılır
+     olabilir; bu haliyle her şey aynı geliyor, karmaşık geliyor."
+     Sıfır olan karo sönük çizilir (StatTile), böylece göz yalnız DOLU olana
+     takılır. Yöneticinin iki sayısı eskiden ayrı bir "Yönetici özeti" kartında
+     tekrar ediyordu — o kart kaldırıldı, sayılar buraya taşındı. */
+  const tiles: { label: string; value: number; href: string; tone: "ink" | "brand" | "danger" | "warning" | "muted" }[] = [
+    { label: "Açık işim", value: myTasks.length, href: "/list?lens=mine", tone: "ink" },
+    { label: "Geciken", value: overdueCount, href: "/list?lens=overdue", tone: overdueCount > 0 ? "danger" : "muted" },
+    { label: "Bugünkü toplantı", value: todayMeetings.length, href: "/planning", tone: todayMeetings.length > 0 ? "brand" : "muted" },
+  ];
+  if (isAdmin) {
+    tiles.push({ label: "Onay bekleyen", value: reviewCount ?? 0, href: "/admin-board", tone: (reviewCount ?? 0) > 0 ? "warning" : "muted" });
+    tiles.push({ label: "Bekleyen ödeme", value: paymentCount ?? 0, href: "/finance", tone: (paymentCount ?? 0) > 0 ? "warning" : "muted" });
+  } else {
+    tiles.push({ label: "Bu hafta toplantı", value: weekMeetings.length, href: "/planning", tone: "muted" });
+  }
+
   const shortcuts = modulesForRole(isAdmin);
   const groups: ModuleGroup[] = ["calisma", "urun", "ofis", "yonetim"];
 
@@ -155,7 +172,24 @@ export default async function HomePage() {
         <p className="mt-1 text-sm text-muted">{longDate}</p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-5 2xl:gap-6">
+      {/* DURUM ŞERİDİ — "şu an ne durumdayım" tek bakışta.
+          Aslı Hanım (2026-08-24): "Home Page daha profesyonel ve daha anlaşılır
+          olabilir; bu haliyle her şey aynı geliyor, karmaşık geliyor."
+          Sayfa 17 birbirinin aynı kısayol kartıyla açılıyordu; asıl bilgi
+          (kaç işim var, kaçı gecikti) onların arasında kayboluyordu. Önce
+          rakamlar, sonra iş, en sonda gezinme. */}
+      <div
+        className={cn(
+          "mb-5 grid grid-cols-2 gap-3 lg:mb-6",
+          tiles.length === 5 ? "lg:grid-cols-5" : "lg:grid-cols-4",
+        )}
+      >
+        {tiles.map((t) => (
+          <StatTile key={t.label} label={t.label} value={t.value} href={t.href} tone={t.tone} />
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-3 lg:gap-5 2xl:gap-6">
         {/* Bana atanan görevler */}
         <section className="lg:col-span-2 rounded-2xl border border-line bg-surface p-5 shadow-card lg:p-6">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -288,39 +322,6 @@ export default async function HomePage() {
             </div>
           </section>
 
-          {isAdmin && (
-            <section className="rounded-2xl border border-line bg-surface p-5 shadow-card lg:p-6">
-              <h2 className="mb-3 text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle">
-                Yönetici özeti
-              </h2>
-              <div className="space-y-2">
-                <Link
-                  href="/board?view=waiting-approval"
-                  className="group flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 -mx-2 transition-colors duration-150 hover:bg-surface-muted"
-                >
-                  <span className="flex items-center gap-2 text-sm text-ink">
-                    <AlertTriangle size={14} className="text-amber-500" />
-                    Onay bekleyen görev
-                  </span>
-                  <span className="rounded-md bg-brand-soft px-2 py-0.5 text-[12px] font-medium tabular-nums text-brand-strong">
-                    {reviewCount ?? "—"}
-                  </span>
-                </Link>
-                <Link
-                  href="/finance"
-                  className="group flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 -mx-2 transition-colors duration-150 hover:bg-surface-muted"
-                >
-                  <span className="flex items-center gap-2 text-sm text-ink">
-                    <Wallet size={14} className="text-brand" />
-                    Bekleyen ödeme
-                  </span>
-                  <span className="rounded-md bg-brand-soft px-2 py-0.5 text-[12px] font-medium tabular-nums text-brand-strong">
-                    {paymentCount ?? "—"}
-                  </span>
-                </Link>
-              </div>
-            </section>
-          )}
         </div>
       </div>
 
@@ -328,17 +329,18 @@ export default async function HomePage() {
       <div className="mt-8 lg:mt-10">
         <h2 className="mb-1 text-base font-semibold tracking-tight text-ink">Kısayollar</h2>
         <p className="mb-4 text-[13px] text-muted">
-          Her ekran sistemde tek isimle yaşar — buradaki adlar sol menüyle aynıdır.
+          Sol menüyle aynı adlar. Ne işe yaradığını görmek için üzerine gelin;
+          tam dizin <span className="font-medium text-ink">Operation Modules</span>’ta.
         </p>
         {groups.map((group) => {
           const items = shortcuts.filter((m) => m.group === group);
           if (items.length === 0) return null;
           return (
-            <div key={group} className="mb-6">
+            <div key={group} className="mb-5">
               <h3 className="mb-2.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle">
                 {MODULE_GROUP_TITLES[group]}
               </h3>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 stagger-children">
+              <div className="flex flex-wrap gap-2">
                 {items.map((entry) => (
                   <ShortcutCard key={entry.key} entry={entry} />
                 ))}

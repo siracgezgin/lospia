@@ -1,36 +1,28 @@
 import Link from "next/link";
-import { ArrowUpRight } from "lucide-react";
 import type { ModuleEntry } from "@/lib/modules/registry";
 
 /**
- * Home Page kısayol karosu — modül dizinindeki TEK kanonik isimle, sayaçsız,
- * kompakt bir giriş kapısı. Görsel dil OfficeCenterCard ile aynı ailedendir;
- * fark: daha sıkı dikey ritim (ana sayfada 10+ karo yan yana yaşar).
+ * Home Page kısayolu — KOMPAKT çip.
+ *
+ * Aslı Hanım (2026-08-24): "Bu haliyle her şey aynı geliyor, karmaşık geliyor."
+ * Kısayollar iki satırlık açıklamalı büyük kartlardı; 17 tanesi dört sıra
+ * kaplayıp sayfanın çoğunu yutuyor ve hepsi aynı ağırlıkta olduğu için hiçbiri
+ * seçilemiyordu. Üstelik sol menü zaten aynı ekranların hepsini listeliyor —
+ * yani bu bölüm gezinmeyi TEKRAR ediyordu.
+ *
+ * Çip artık tek satır: ikon + ad. Açıklama `title` olarak duruyor (kaybolmadı,
+ * yalnız yer kaplamıyor). Modüllerin tam dizini "Operation Modules" ekranında.
  */
 export function ShortcutCard({ entry }: { entry: ModuleEntry }) {
   const Icon = entry.icon;
   return (
     <Link
       href={entry.href}
-      className="group flex items-start gap-3 rounded-xl border border-line bg-surface p-3.5 shadow-card transition-[box-shadow,transform,border-color] duration-200 ease-standard hover:-translate-y-px hover:border-line-strong hover:shadow-card-hover active:translate-y-0 active:shadow-card"
+      title={entry.description}
+      className="group inline-flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2 shadow-xs transition-[box-shadow,border-color,color] duration-150 ease-standard hover:border-line-strong hover:bg-surface-muted"
     >
-      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand transition-transform duration-200 ease-standard group-hover:scale-105">
-        <Icon size={16} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-1.5">
-          <h3 className="truncate text-sm font-semibold tracking-tight text-ink transition-colors duration-150 group-hover:text-brand-strong">
-            {entry.title}
-          </h3>
-          <ArrowUpRight
-            size={13}
-            className="shrink-0 text-subtle opacity-0 -translate-x-0.5 translate-y-0.5 transition-[opacity,transform] duration-150 ease-standard group-hover:opacity-100 group-hover:translate-x-0 group-hover:translate-y-0"
-          />
-        </div>
-        <p className="mt-0.5 line-clamp-2 text-[12px] leading-relaxed text-muted">
-          {entry.description}
-        </p>
-      </div>
+      <Icon size={14} className="shrink-0 text-muted transition-colors duration-150 group-hover:text-brand" />
+      <span className="truncate text-[13px] font-medium text-ink">{entry.title}</span>
     </Link>
   );
 }
