@@ -63,15 +63,23 @@ export function DocumentsView({
   const taskTitle = useMemo(() => new Map(tasks.map((t) => [t.id, t.title])), [tasks]);
   const contactName = useMemo(() => new Map(contacts.map((c) => [c.id, c.name])), [contacts]);
 
+  // Yüklenen DOSYALAR yukarıdaki klasör tarayıcısında yaşar; "Bağlantılar"
+  // listesi yalnız dış kaynakları (Drive, Canva, Figma…) gösterir. Aksi hâlde
+  // aynı dosya iki yerde birden görünüyordu (390px denetiminde fark edildi).
+  const links = useMemo(
+    () => (filesAvailable ? documents.filter((d) => d.document_type !== "file") : documents),
+    [documents, filesAvailable],
+  );
+
   const allTags = useMemo(() => {
     const set = new Set<string>();
-    for (const d of documents) for (const t of d.tags ?? []) set.add(t);
+    for (const d of links) for (const t of d.tags ?? []) set.add(t);
     return [...set].sort((a, b) => a.localeCompare(b, "tr"));
-  }, [documents]);
+  }, [links]);
 
   const filtered = useMemo(() => {
     const q = norm(query.trim());
-    return documents.filter((d) => {
+    return links.filter((d) => {
       if (!showArchived && d.status === "archived") return false;
       if (docType && d.document_type !== docType) return false;
       if (status && d.status !== status) return false;
@@ -82,7 +90,7 @@ export function DocumentsView({
         [d.title, d.description, d.notes, d.url, ...(d.tags ?? [])].filter(Boolean).join(" "),
       ).includes(q);
     });
-  }, [documents, query, docType, status, deptFilter, tagFilter, showArchived]);
+  }, [links, query, docType, status, deptFilter, tagFilter, showArchived]);
 
   function canMutate(d: OperationDocument) {
     if (isAdmin) return true;
@@ -251,7 +259,7 @@ export function DocumentsView({
                           href={d.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-[12.5px] font-medium text-brand transition-colors duration-150 hover:bg-brand-soft active:scale-[0.98]"
+                          className="tap-target inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-[12.5px] font-medium text-brand transition-colors duration-150 hover:bg-brand-soft active:scale-[0.98]"
                           title="Bağlantıyı yeni sekmede aç"
                         >
                           Bağlantıyı aç <ExternalLink size={12} />
@@ -259,7 +267,7 @@ export function DocumentsView({
                       ) : (
                         <button
                           onClick={() => openEdit(d)}
-                          className="inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-[12.5px] font-medium text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
+                          className="tap-target inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-[12.5px] font-medium text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
                           title="Detayı görüntüle"
                         >
                           <StickyNote size={12} /> Detay

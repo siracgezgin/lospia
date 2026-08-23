@@ -186,14 +186,49 @@ const inputCls =
   "transition-[color,background-color,border-color,box-shadow] duration-150 ease-standard " +
   "hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40";
 
+/** Etiket telefonda ÜSTTE (160px sabit sütun 390px'te girdiye yer bırakmıyordu),
+ *  sm ve üstünde solda — Excel föyünün hizalı görünümü korunur. */
+/**
+ * Alan satiri — etiket + girdi.
+ *
+ * Etiket sola YALNIZ kendi sutunu genisse gecer. Olcu ekran genisligi DEGIL,
+ * alanin bulundugu sutun: foy izgarasi 768px'te ikiye bolundugu icin ekran
+ * kirilimina baglanan sabit etiket girdiyi 768–1280 arasinda 22–82px'e
+ * eziyordu (tasma olmadigi icin denetimden kaciyordu). Kapsayici sorgusu
+ * sutunu olctugu icin sonuc her genislikte dogru.
+ */
+function FieldRow({
+  label, align = "center", className, children,
+}: { label: string; align?: "center" | "start"; className?: string; children: React.ReactNode }) {
+  return (
+    <label className={cn("@container block", className)}>
+      <span
+        className={cn(
+          "flex flex-col gap-1 @[23rem]:flex-row @[23rem]:gap-2",
+          align === "start" ? "@[23rem]:items-start" : "@[23rem]:items-center",
+        )}
+      >
+        <span
+          className={cn(
+            "text-[11.5px] font-semibold uppercase tracking-wide text-muted @[23rem]:w-36 @[23rem]:shrink-0",
+            align === "start" && "@[23rem]:pt-1.5",
+          )}
+        >
+          {label}
+        </span>
+        <span className="min-w-0 flex-1">{children}</span>
+      </span>
+    </label>
+  );
+}
+
 function LabeledField({
   label, value, onChange, placeholder,
 }: { label: string; value: string; onChange: (_v: string) => void; placeholder?: string }) {
   return (
-    <label className="flex items-center gap-2">
-      <span className="w-40 shrink-0 text-[11.5px] font-semibold uppercase tracking-wide text-muted">{label}</span>
+    <FieldRow label={label}>
       <input className={inputCls} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
-    </label>
+    </FieldRow>
   );
 }
 
@@ -508,12 +543,15 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
           Teknik çizimini yukarıda sağda… En üst sağda teknik çizim ön,
           teknik çizim arka olacak." ve "Teslim edilen ürünler yukarıda olmaz.
           Önce siparişi görmemiz lazım." */}
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">
         {/* Ürün bilgileri — 2 kolon (Excel'deki gibi) */}
         {/* TEK ızgara, iki kolon: alanlar satır satır akar, sütunların boyu
             farklı olduğu için altta BOŞLUK oluşmaz. Aslı Hanım (2026-08-19):
             "Hiçbir şey boş kalmasın… hiçbir yerde boşluk istemiyorum." */}
-        <div className="grid grid-cols-1 gap-x-5 gap-y-2 rounded-lg border border-line p-3 md:grid-cols-2">
+        {/* Alan izgarasi ikiye YALNIZ kutu gercekten genisse bolunur — sabit
+            ekran kirilimi 1024'te sutunu 122px'e dusuruyordu. */}
+        <div className="@container">
+        <div className="grid grid-cols-1 gap-x-5 gap-y-2 rounded-lg border border-line p-3 @[49rem]:grid-cols-2">
           <LabeledField label="Föy başlığı *" value={form.title} onChange={(v) => set("title", v)} placeholder="Beyaz Dantel Etek" />
           <LabeledField label="Üretim tarihi" value={form.production_date ?? ""} onChange={(v) => set("production_date", v)} />
           <LabeledField label="Ürün kodu" value={form.product_code ?? ""} onChange={(v) => set("product_code", v)} />
@@ -533,8 +571,7 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
               Liste boşsa (tablo migrate edilmemiş) eski metin alanına düşer —
               föy her hâlükârda açılır. */}
           {manufacturers.length > 0 ? (
-            <label className="flex items-center gap-2">
-              <span className="w-40 shrink-0 text-[11.5px] font-semibold uppercase tracking-wide text-muted">Üretici</span>
+            <FieldRow label="Üretici">
               <select
                 className={inputCls}
                 value={form.manufacturer_id ?? ""}
@@ -554,7 +591,7 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
                   </option>
                 ))}
               </select>
-            </label>
+            </FieldRow>
           ) : (
             <LabeledField label="Üretici" value={form.producer ?? ""} onChange={(v) => set("producer", v)} />
           )}
@@ -562,8 +599,7 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
               bağlamı bu (Zedonk `SS 21 - WW` deseni). Liste boşsa eski metin
               alanına düşer. Yeni föy varsayılan olarak AKTİF sezonda açılır. */}
           {seasons.length > 0 ? (
-            <label className="flex items-center gap-2">
-              <span className="w-40 shrink-0 text-[11.5px] font-semibold uppercase tracking-wide text-muted">Sezon</span>
+            <FieldRow label="Sezon">
               <select
                 className={inputCls}
                 value={form.season_id ?? ""}
@@ -579,13 +615,12 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
                   <option key={sn.id} value={sn.id}>{sn.name}{sn.is_current ? " ·" : ""}</option>
                 ))}
               </select>
-            </label>
+            </FieldRow>
           ) : (
             <LabeledField label="Sezon" value={form.season ?? ""} onChange={(v) => set("season", v)} placeholder="2026 RESORT" />
           )}
           {/* Koleksiyon kategorisi — web nav yapısı (One-of-a-Kind / Ready to Wear …) */}
-          <label className="flex items-center gap-2">
-            <span className="w-40 shrink-0 text-[11.5px] font-semibold uppercase tracking-wide text-muted">Kategori</span>
+          <FieldRow label="Kategori">
             <select
               className={inputCls}
               value={form.category ?? ""}
@@ -606,9 +641,8 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
                 <option key={c.key} value={c.key}>{c.label}</option>
               ))}
             </select>
-          </label>
-          <label className="flex items-center gap-2">
-            <span className="w-40 shrink-0 text-[11.5px] font-semibold uppercase tracking-wide text-muted">Alt kategori</span>
+          </FieldRow>
+          <FieldRow label="Alt kategori">
             <select
               className={cn(inputCls, subcategoriesOf(form.category).length === 0 && "opacity-50")}
               value={form.subcategory ?? ""}
@@ -620,16 +654,16 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
                 <option key={s.key} value={s.key}>{s.label}</option>
               ))}
             </select>
-          </label>
+          </FieldRow>
           <LabeledField label="1 ürüne giden metraj" value={form.meterage ?? ""} onChange={(v) => set("meterage", v)} placeholder="1.60 CM" />
-          <label className="md:col-span-2 flex items-start gap-2">
-            <span className="w-40 shrink-0 pt-1.5 text-[11.5px] font-semibold uppercase tracking-wide text-muted">Ürünün açıklaması</span>
+          <FieldRow label="Ürünün açıklaması" align="start" className="@[49rem]:col-span-2">
             <TextArea value={form.description ?? ""} onChange={(v) => set("description", v)} rows={2} />
-          </label>
+          </FieldRow>
+        </div>
         </div>
 
         {/* TEKNİK ÇİZİM — sağ üst köşe, ÖN ve ARKA yan yana. */}
-        <div className="grid grid-cols-2 gap-2 lg:grid-cols-1">
+        <div className="grid grid-cols-2 gap-2 xl:grid-cols-1">
           <Section title="Teknik Çizim — Ön">
             <ImageUploader sheetId={sheetId} section="technical_drawing_front" images={form.photo_refs} onChange={handleImagesChange} variant="drawing" />
           </Section>
@@ -688,7 +722,7 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
                       <input className="w-full bg-transparent px-1 py-1.5 text-center tabular-nums text-ink focus:bg-surface focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-ring" value={row.value} onChange={(e) => updateMeasurement(i, { value: e.target.value })} />
                     </td>
                     <td className="text-center align-middle">
-                      <button onClick={() => removeMeasurement(i)} className="rounded-md p-1 text-subtle transition-colors duration-150 hover:bg-danger/10 hover:text-danger" title="Satırı sil"><Trash2 size={12} /></button>
+                      <button onClick={() => removeMeasurement(i)} className="tap-target rounded-md p-1 text-subtle transition-colors duration-150 hover:bg-danger/10 hover:text-danger" title="Satırı sil"><Trash2 size={12} /></button>
                     </td>
                   </tr>
                 ))}
@@ -769,7 +803,7 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
                       <input className="w-full bg-transparent px-1 py-1.5 text-center font-semibold tabular-nums text-ink focus:bg-surface focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-ring" value={row.total} onChange={(e) => setDistTotal(ri, e.target.value)} placeholder="—" inputMode="numeric" />
                     </td>
                     <td className="text-center align-middle">
-                      <button onClick={() => removeDistRow(ri)} className="rounded-md p-1 text-subtle transition-colors duration-150 hover:bg-danger/10 hover:text-danger" title="Satırı sil"><Trash2 size={12} /></button>
+                      <button onClick={() => removeDistRow(ri)} className="tap-target rounded-md p-1 text-subtle transition-colors duration-150 hover:bg-danger/10 hover:text-danger" title="Satırı sil"><Trash2 size={12} /></button>
                     </td>
                   </tr>
                 ))}
@@ -814,7 +848,7 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
                       <input className="w-full bg-transparent px-1 py-1.5 text-center tabular-nums text-ink focus:bg-surface focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-ring" value={row.qty} onChange={(e) => updateDelivered(i, { qty: e.target.value })} inputMode="numeric" />
                     </td>
                     <td className="text-center align-middle">
-                      <button onClick={() => removeDelivered(i)} className="rounded-md p-1 text-subtle transition-colors duration-150 hover:bg-danger/10 hover:text-danger" title="Satırı sil"><Trash2 size={12} /></button>
+                      <button onClick={() => removeDelivered(i)} className="tap-target rounded-md p-1 text-subtle transition-colors duration-150 hover:bg-danger/10 hover:text-danger" title="Satırı sil"><Trash2 size={12} /></button>
                     </td>
                   </tr>
                 ))}

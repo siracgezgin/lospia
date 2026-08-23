@@ -199,7 +199,7 @@ export function MaterialsManager({ materials, suppliers, usageCounts, canManage 
                   <span className="flex shrink-0 items-center gap-1">
                     <button
                       onClick={() => { setDraft(draftOf(m)); setEditingId(m.id); setAdding(false); setError(null); }}
-                      className="rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-muted hover:text-ink"
+                      className="tap-target rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-muted hover:text-ink"
                       title="Düzenle"
                     >
                       <Pencil size={14} />
@@ -207,7 +207,7 @@ export function MaterialsManager({ materials, suppliers, usageCounts, canManage 
                     <button
                       onClick={() => run(() => deleteMaterial(m.id))}
                       disabled={busy}
-                      className="rounded-md p-1.5 text-subtle transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-50"
+                      className="tap-target rounded-md p-1.5 text-subtle transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-50"
                       title={used > 0 ? "Reçetelerde kullanılıyor — silmek yerine pasif yapın" : "Sil"}
                     >
                       <Trash2 size={14} />

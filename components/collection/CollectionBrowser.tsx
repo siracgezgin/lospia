@@ -305,7 +305,7 @@ export function CollectionBrowser({ sheets, seasons = [] }: Props) {
                   {/* İndir — yalnızca hover'da, köşede sade; kart linkinin üstünde */}
                   <a
                     href={`/production/${s.id}/export`}
-                    className="absolute right-2 top-2 z-[2] rounded-md bg-surface/90 p-1.5 text-subtle opacity-0 shadow-sm backdrop-blur transition-[opacity,color,transform] duration-150 hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 active:scale-95"
+                    className="tap-target absolute right-2 top-2 z-[2] rounded-md bg-surface/90 p-1.5 text-subtle opacity-0 shadow-sm backdrop-blur transition-[opacity,color,transform] duration-150 hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 active:scale-95"
                     title="Föyü Excel olarak indir"
                   >
                     <FileDown size={13} />

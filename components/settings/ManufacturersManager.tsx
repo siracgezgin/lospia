@@ -216,13 +216,13 @@ export function ManufacturersManager({ manufacturers, sheetCounts, canManage }: 
 
                 {canManage && (
                   <span className="flex shrink-0 items-center gap-1">
-                    <button onClick={() => openEdit(m)} className="rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-muted hover:text-ink" title="Düzenle">
+                    <button onClick={() => openEdit(m)} className="tap-target rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-muted hover:text-ink" title="Düzenle">
                       <Pencil size={14} />
                     </button>
                     <button
                       onClick={() => run(() => deleteManufacturer(m.id))}
                       disabled={busy}
-                      className="rounded-md p-1.5 text-subtle transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-50"
+                      className="tap-target rounded-md p-1.5 text-subtle transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-50"
                       title={count > 0 ? "Föye bağlı — silmek yerine pasif yapın" : "Sil"}
                     >
                       <Trash2 size={14} />

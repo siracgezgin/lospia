@@ -5,7 +5,7 @@ import { X, AlertCircle } from "lucide-react";
 import { createOperationDocument, updateOperationDocument } from "@/lib/actions/documents";
 import { DOCUMENT_TYPES, OFFICE_STATUSES } from "@/lib/office/constants";
 import { cn } from "@/lib/utils/cn";
-import type { OperationDocument, OperationDocumentType, WorkspaceDepartment } from "@/types";
+import type { OperationDocument, LinkDocumentType, WorkspaceDepartment } from "@/types";
 
 interface Props {
   onClose: () => void;
@@ -24,7 +24,7 @@ const inputCls =
 const labelCls = "block text-[12px] font-medium text-muted mb-1";
 
 // Best-effort type guess from the pasted URL host.
-function guessType(url: string): OperationDocumentType {
+function guessType(url: string): LinkDocumentType {
   const u = url.toLowerCase();
   if (u.includes("docs.google.com/spreadsheets")) return "google_sheet";
   if (u.includes("docs.google.com/document")) return "google_doc";
@@ -49,7 +49,7 @@ export function DocumentFormModal({
   const [form, setForm] = useState({
     title: doc?.title ?? "",
     description: doc?.description ?? "",
-    document_type: (doc?.document_type ?? "other") as OperationDocumentType,
+    document_type: (doc?.document_type ?? "other") as LinkDocumentType,
     url: doc?.url ?? "",
     status: doc?.status ?? "draft",
     department_id: doc?.department_id ?? "",

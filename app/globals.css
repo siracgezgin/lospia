@@ -241,6 +241,31 @@ body {
    inset with .safe-bottom; full-height sheets use .h-dvh-safe.
    ────────────────────────────────────────────────────────────────────────── */
 @layer utilities {
+  /* ──────────────────────────────────────────────────────────────────────
+     Dokunma hedefi — GÖRSEL boyutu değiştirmeden tıklama alanını büyütür.
+
+     Denetimde telefonda (390px) 14–26px'lik ikon düğmeleri sayıldı: takvimin
+     onay kutuları 14×14, kart indirme ikonları 25×25, ayarlardaki düzenle/sil
+     26×26. Parmakla isabet ettirmek zor. Boyutu büyütmek düzeni bozardı; bunun
+     yerine görünmez bir ::after ile hedef 40×40'a çıkar.
+
+     Yalnız KABA işaretçide (parmak) uygulanır — farede zaten sorun yok ve
+     büyük görünmez alanlar imleç yakalamasını bozar.
+     ────────────────────────────────────────────────────────────────────── */
+  @media (pointer: coarse) {
+    .tap-target { position: relative; }
+    .tap-target::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 40px;
+      height: 40px;
+      transform: translate(-50%, -50%);
+      /* Yalnız hedef büyütür; görünürlüğe ve düzene etkisi yok. */
+    }
+  }
+
   .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }

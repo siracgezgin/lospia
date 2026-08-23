@@ -211,7 +211,7 @@ export function OpenItemsBoard({ items, members, currentUserId, isAdmin, availab
                         <button
                           onClick={() => run(it.id, () => setOpenItemDone(it.id, false))}
                           disabled={!canWrite(col) || busyId === it.id}
-                          className="mt-px shrink-0 rounded p-0.5 text-emerald-600 transition-colors hover:bg-emerald-50 disabled:opacity-50"
+                          className="tap-target mt-px shrink-0 rounded p-0.5 text-emerald-600 transition-colors hover:bg-emerald-50 disabled:opacity-50"
                           title="Geri al"
                         >
                           {busyId === it.id ? <Loader2 size={13} className="animate-spin" /> : <Undo2 size={13} />}
@@ -335,7 +335,7 @@ function ItemRow({
       <button
         onClick={onToggle}
         disabled={!canWrite || busy}
-        className="mt-[3px] inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[4px] border border-line-strong text-transparent transition-colors duration-150 hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-40"
+        className="tap-target mt-[3px] inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[4px] border border-line-strong text-transparent transition-colors duration-150 hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-40"
         title={canWrite ? "Tamamlandı olarak işaretle" : "Bu sütuna yalnız sahibi veya yönetici yazar"}
         aria-label="Tamamlandı"
       >
@@ -381,7 +381,7 @@ function ItemRow({
             onClick={onAssign}
             disabled={busy}
             className={cn(
-              "rounded p-1 transition-colors",
+              "tap-target rounded p-1 transition-colors",
               item.task_id ? "text-emerald-600 hover:bg-emerald-50" : "text-subtle hover:bg-surface-muted hover:text-brand",
             )}
             title={item.task_id ? "Görev oluşturuldu — güncelleyip tekrar bildir" : "Göreve dönüştür ve sahibine bildir"}
@@ -393,7 +393,7 @@ function ItemRow({
           <button
             onClick={onDelete}
             disabled={busy}
-            className="rounded p-1 text-subtle transition-colors hover:bg-red-50 hover:text-red-600"
+            className="tap-target rounded p-1 text-subtle transition-colors hover:bg-red-50 hover:text-red-600"
             title="Sil"
           >
             <Trash2 size={12} />

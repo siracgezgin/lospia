@@ -153,7 +153,7 @@ export function SheetBom({ sheetId, rows, materials, canEdit }: Props) {
                       <button
                         onClick={() => run(r.id, () => removeSheetMaterial(r.id))}
                         disabled={busyId === r.id}
-                        className="rounded-md p-1 text-subtle transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-50"
+                        className="tap-target rounded-md p-1 text-subtle transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-50"
                         title="Reçeteden çıkar"
                       >
                         {busyId === r.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}

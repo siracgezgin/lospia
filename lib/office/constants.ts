@@ -4,7 +4,7 @@
  */
 import type {
   OfficeRecordStatus,
-  OperationDocumentType,
+  LinkDocumentType,
   SpreadsheetStatus,
   SpreadsheetType,
   TemplateCategory,
@@ -13,7 +13,8 @@ import type {
 
 // ── Doküman Merkezi ──────────────────────────────────────────────────────────
 
-export const DOCUMENT_TYPES: { key: OperationDocumentType; label: string }[] = [
+/** Bağlantı formu ve filtre için — yüklenen dosya ("file") burada YOK. */
+export const DOCUMENT_TYPES: { key: LinkDocumentType; label: string }[] = [
   { key: "drive_link", label: "Drive klasörü" },
   { key: "google_doc", label: "Google Doküman" },
   { key: "google_sheet", label: "Google E-Tablo" },
@@ -39,7 +40,9 @@ const OFFICE_STATUS_LABELS = new Map(OFFICE_STATUSES.map((s) => [s.key, s.label]
 
 export function documentTypeLabel(key: string | null | undefined): string {
   if (!key) return "Diğer";
-  return DOCUMENT_TYPE_LABELS.get(key as OperationDocumentType) ?? key;
+  // "file" listede yok (elle seçilemez) ama kayıtlarda geçer — adı burada.
+  if (key === "file") return "Yüklenen dosya";
+  return DOCUMENT_TYPE_LABELS.get(key as LinkDocumentType) ?? key;
 }
 export function officeStatusLabel(key: string | null | undefined): string {
   if (!key) return "Taslak";

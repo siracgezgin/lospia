@@ -100,7 +100,14 @@ export type OfficeRecordStatus = "draft" | "in_review" | "approved" | "archived"
 
 export type OperationDocumentType =
   | "drive_link" | "google_doc" | "google_sheet" | "canva" | "figma"
-  | "pdf_link" | "word_link" | "excel_link" | "website" | "internal_note" | "other";
+  | "pdf_link" | "word_link" | "excel_link" | "website" | "internal_note" | "other"
+  /** Sisteme YÜKLENMİŞ dosya (20240312). Bağlantı değil; klasör tarayıcısında
+   *  yaşar, "Bağlantılar" listesinde görünmez. */
+  | "file";
+
+/** Bağlantı formunun üretebildiği türler — "file" yalnız yükleme akışında
+ *  oluşur, elle seçilemez. */
+export type LinkDocumentType = Exclude<OperationDocumentType, "file">;
 
 export type OperationDocument = {
   id: string;

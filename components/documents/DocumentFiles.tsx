@@ -251,7 +251,7 @@ export function DocumentFiles({ folders, files, memberNames, isAdmin }: Props) {
                 <span className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                   <button
                     onClick={() => { setRenaming(f); setNaming(false); setFolderName(f.name); }}
-                    className="rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-muted hover:text-ink"
+                    className="tap-target rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-muted hover:text-ink"
                     title="Yeniden adlandır"
                   >
                     <Pencil size={13} />
@@ -266,7 +266,7 @@ export function DocumentFiles({ folders, files, memberNames, isAdmin }: Props) {
                         }),
                       )
                     }
-                    className="rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-muted hover:text-ink"
+                    className="tap-target rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-muted hover:text-ink"
                     title={f.visibility === "admin" ? "Tüm ekibe aç" : "Yalnız yöneticiye kapat"}
                   >
                     {f.visibility === "admin" ? <Users size={13} /> : <Lock size={13} />}
@@ -274,7 +274,7 @@ export function DocumentFiles({ folders, files, memberNames, isAdmin }: Props) {
                   <button
                     onClick={() => run(`d-${f.id}`, () => deleteFolder(f.id))}
                     disabled={busy === `d-${f.id}`}
-                    className="rounded-md p-1.5 text-subtle transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-50"
+                    className="tap-target rounded-md p-1.5 text-subtle transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-50"
                     title="Sil (yalnız boş klasör)"
                   >
                     {busy === `d-${f.id}` ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
@@ -303,7 +303,7 @@ export function DocumentFiles({ folders, files, memberNames, isAdmin }: Props) {
                 <button
                   onClick={() => download(d.id)}
                   disabled={busy === `dl-${d.id}`}
-                  className="rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-muted hover:text-ink disabled:opacity-50"
+                  className="tap-target rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-muted hover:text-ink disabled:opacity-50"
                   title="İndir"
                 >
                   {busy === `dl-${d.id}` ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
@@ -311,7 +311,7 @@ export function DocumentFiles({ folders, files, memberNames, isAdmin }: Props) {
                 <button
                   onClick={() => run(`x-${d.id}`, () => deleteDocumentFile(d.id))}
                   disabled={busy === `x-${d.id}`}
-                  className="rounded-md p-1.5 text-subtle opacity-0 transition-all hover:bg-danger/10 hover:text-danger disabled:opacity-50 group-hover:opacity-100"
+                  className="tap-target rounded-md p-1.5 text-subtle opacity-0 transition-all hover:bg-danger/10 hover:text-danger disabled:opacity-50 group-hover:opacity-100"
                   title="Sil"
                 >
                   {busy === `x-${d.id}` ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}

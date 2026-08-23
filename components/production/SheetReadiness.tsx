@@ -62,6 +62,9 @@ export function SheetReadiness({ sheetId, checks, confirmedAt, confirmedByName, 
             : "border-amber-300 bg-amber-50",
       )}
     >
+      {/* Telefonda metin TAM GENİŞLİK, düğmeler alt satıra iner. Aksi hâlde
+          "3 alan eksik" ve açıklaması ~90px'lik bir sütuna sıkışıp kelime
+          kelime kırılıyordu (390px denetiminde görüldü). */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3.5 py-2.5">
         {confirmed ? (
           <ShieldCheck size={17} className="shrink-0 text-emerald-600" />
@@ -71,7 +74,7 @@ export function SheetReadiness({ sheetId, checks, confirmedAt, confirmedByName, 
           <AlertTriangle size={17} className="shrink-0 text-amber-600" />
         )}
 
-        <span className="min-w-0 flex-1">
+        <span className="min-w-0 flex-1 basis-[calc(100%-2rem)] sm:basis-0">
           <span
             className={cn(
               "block text-[13.5px] font-semibold tracking-tight",
@@ -101,7 +104,7 @@ export function SheetReadiness({ sheetId, checks, confirmedAt, confirmedByName, 
         {!complete && (
           <button
             onClick={() => setOpen((o) => !o)}
-            className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-amber-300 bg-white/70 px-2.5 py-1.5 text-[12.5px] font-medium text-amber-900 transition-colors hover:bg-white"
+            className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-amber-300 bg-white/70 px-2.5 py-1.5 text-[12.5px] font-medium text-amber-900 transition-colors hover:bg-white max-sm:flex-1 max-sm:justify-center"
           >
             {open ? "Gizle" : "Eksikleri gör"}
             <ChevronDown size={13} className={cn("transition-transform duration-200", open && "rotate-180")} />
@@ -113,7 +116,7 @@ export function SheetReadiness({ sheetId, checks, confirmedAt, confirmedByName, 
             <button
               onClick={() => toggleConfirm(false)}
               disabled={busy}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-emerald-300 bg-white/70 px-3 py-1.5 text-[12.5px] font-medium text-emerald-900 transition-colors hover:bg-white disabled:opacity-60"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-emerald-300 bg-white/70 px-3 py-1.5 text-[12.5px] font-medium text-emerald-900 transition-colors hover:bg-white disabled:opacity-60 max-sm:flex-1 max-sm:justify-center"
             >
               {busy ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />} Geri al
             </button>
@@ -128,7 +131,7 @@ export function SheetReadiness({ sheetId, checks, confirmedAt, confirmedByName, 
                     ? "Föyü konfirme et"
                     : "Eksik alanlar var; önce onları doldurun."
               }
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-[12.5px] font-semibold text-white transition-colors hover:bg-emerald-700 disabled:pointer-events-none disabled:opacity-45"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-[12.5px] font-semibold text-white transition-colors hover:bg-emerald-700 disabled:pointer-events-none disabled:opacity-45 max-sm:flex-1 max-sm:justify-center"
             >
               {busy ? <Loader2 size={13} className="animate-spin" /> : <ShieldCheck size={13} />} Konfirme et
             </button>
