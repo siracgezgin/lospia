@@ -247,6 +247,43 @@ export async function updateProductionSheet(
 // Yalnızca fiyat güncelle — Koleksiyon → Maliyet tablosundan hızlı geri yazma.
 // Föyün geri kalanını dokunmadan bırakır (tek kaynak: pricing alanı hem föyde
 // hem maliyet tablosunda aynı satırı okur/yazar).
+/**
+ * Föyü konfirme et / konfirmasyonu kaldır.
+ *
+ * Aslı Hanım (2026-08-21): "Onlar föyü hazırladıktan sonra Nisa'yla beraber
+ * konfirme ederek bana göstermenizi istiyorum. Bir tane daha üretim föyü
+ * revizesi vermek istemiyorum çünkü."
+ *
+ * Her ÜYE konfirme edebilir — akıştaki konfirme eden Nisa, yönetici değil.
+ * Kimin konfirme ettiği kaydedilir. Föy sonradan değişirse damga veritabanı
+ * trigger'ıyla düşer (20240308); burada ayrıca bir şey yapmak gerekmez.
+ */
+export async function setProductionSheetConfirmed(
+  sheetId: string,
+  confirmed: boolean,
+): Promise<{ ok: true } | { error: string }> {
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+
+  const { error, count } = await supabase
+    .from("production_sheets")
+    .update(
+      confirmed
+        ? { confirmed_at: new Date().toISOString(), confirmed_by: ctx.userId }
+        : { confirmed_at: null, confirmed_by: null },
+      { count: "exact" },
+    )
+    .eq("id", sheetId)
+    .eq("workspace_id", ctx.workspaceId);
+  if (error) return { error: toActionErrorMessage(error) };
+  if (count === 0) return { error: NOT_FOUND };
+
+  revalidatePath("/collection");
+  revalidatePath(`/production/${sheetId}`);
+  return { ok: true };
+}
+
 export async function updateProductionSheetPricing(
   sheetId: string,
   input: z.infer<typeof pricing>,

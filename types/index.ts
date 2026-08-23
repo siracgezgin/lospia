@@ -287,6 +287,10 @@ export type ProductionSheet = {
   archived_at: string | null;
   created_at: string;
   updated_at: string;
+  /** Konfirmasyon (20240308). Föy her güncellendiğinde trigger ile SIFIRLANIR —
+   *  "hazırla → Nisa konfirme → Aslı'ya göster" akışının veri karşılığı. */
+  confirmed_at?: string | null;
+  confirmed_by?: string | null;
 };
 
 /** Web nav ana kategorileri (aslifilinta.com). */

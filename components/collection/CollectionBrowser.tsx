@@ -4,10 +4,11 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Boxes, Plus, Search, ChevronRight, FileDown,
-  FileSpreadsheet, ClipboardList,
+  FileSpreadsheet, ClipboardList, ShieldCheck, AlertTriangle, CheckCircle2,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { CollectionTabs } from "./PaymentTable";
+import { missingOf } from "@/lib/production/completeness";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { COLLECTION_TAXONOMY, categoryLabel, subcategoryLabel } from "@/lib/collection/taxonomy";
 import type { ProductionSheet } from "@/types";
@@ -16,9 +17,11 @@ import type { ProductionSheet } from "@/types";
 export type CollectionItem = Pick<
   ProductionSheet,
   | "id" | "workspace_id" | "title" | "status" | "product_code" | "product_kind"
-  | "producer" | "delivery_date" | "season" | "photo_refs" | "category" | "subcategory"
-  | "pricing" | "size_distribution" | "created_by" | "updated_by" | "archived_at"
-  | "created_at" | "updated_at"
+  | "producer" | "manufacturer_id" | "delivery_date" | "sewing_delivery_date"
+  | "season" | "photo_refs" | "category" | "subcategory" | "description"
+  | "pricing" | "size_distribution" | "measurements"
+  | "confirmed_at" | "confirmed_by"
+  | "created_by" | "updated_by" | "archived_at" | "created_at" | "updated_at"
 >;
 
 interface Props {
@@ -285,6 +288,35 @@ export function CollectionBrowser({ sheets }: Props) {
                   >
                     <FileDown size={13} />
                   </a>
+                  {/* Hazırlık rozeti — Nisa hangi föyün konfirmeye hazır
+                      olduğunu listeden görsün (Aslı Hanım, 2026-08-21:
+                      "Nisa'yla konfirme ederek bana göstermenizi istiyorum").
+                      Konfirme > eksiksiz > eksik sırasıyla tek rozet. */}
+                  {(() => {
+                    const eksik = missingOf(s).length;
+                    if (s.confirmed_at) {
+                      return (
+                        <span className="absolute left-2 top-2 z-[2] inline-flex items-center gap-1 rounded-md bg-emerald-600/95 px-1.5 py-0.5 text-[10.5px] font-semibold text-white shadow-sm">
+                          <ShieldCheck size={10} /> Konfirme
+                        </span>
+                      );
+                    }
+                    if (eksik > 0) {
+                      return (
+                        <span
+                          className="absolute left-2 top-2 z-[2] inline-flex items-center gap-1 rounded-md bg-amber-500/95 px-1.5 py-0.5 text-[10.5px] font-semibold text-white shadow-sm tabular-nums"
+                          title={`${eksik} zorunlu alan eksik`}
+                        >
+                          <AlertTriangle size={10} /> {eksik} eksik
+                        </span>
+                      );
+                    }
+                    return (
+                      <span className="absolute left-2 top-2 z-[2] inline-flex items-center gap-1 rounded-md bg-surface/95 px-1.5 py-0.5 text-[10.5px] font-semibold text-emerald-700 shadow-sm backdrop-blur">
+                        <CheckCircle2 size={10} /> Hazır
+                      </span>
+                    );
+                  })()}
                   <div className="border-t border-hairline p-3">
                     <h3 className="truncate text-sm font-medium tracking-tight text-ink transition-colors duration-150 group-hover:text-brand-strong">
                       {s.title}

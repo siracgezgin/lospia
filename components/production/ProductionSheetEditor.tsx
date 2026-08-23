@@ -16,6 +16,8 @@ import {
 } from "@/lib/actions/production";
 import { cn } from "@/lib/utils/cn";
 import { ImageUploader } from "./ImageUploader";
+import { SheetReadiness } from "./SheetReadiness";
+import { checkSheet } from "@/lib/production/completeness";
 import { COLLECTION_TAXONOMY, subcategoriesOf } from "@/lib/collection/taxonomy";
 import {
   totalQuantity, parseMoney, formatMoney, STANDARD_SIZES, normalizeToStandardSizes,
@@ -185,6 +187,9 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
   const [form, setForm] = useState<ProductionSheetInput>(() => (sheet ? fromSheet(sheet) : emptyState()));
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  // Kaydedilmemiş değişiklik: konfirme yalnız DİSKTEKİ hâli onaylar, ekrandaki
+  // taslağı değil. Yoksa "konfirme edildi" yazan bir föyün içeriği başka olur.
+  const [dirty, setDirty] = useState(false);
   const [isSaving, startSave] = useTransition();
   const [isDeleting, startDelete] = useTransition();
 
@@ -192,8 +197,10 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
   const sheetId = sheet?.id ?? "new";
   // Silme: admin her föyü; üye kendi oluşturduğu föyü siler (RLS de bunu uygular).
   const canDelete = !isNew && !!sheet && (isAdmin || sheet.created_by === currentUserId);
-  const set = <K extends keyof ProductionSheetInput>(key: K, value: ProductionSheetInput[K]) =>
+  const set = <K extends keyof ProductionSheetInput>(key: K, value: ProductionSheetInput[K]) => {
+    setDirty(true);
     setForm((f) => ({ ...f, [key]: value }));
+  };
 
   const nameOf = (id: string | null) => (id && memberNames[id]) || "—";
   const relTime = (iso: string) => {
@@ -264,6 +271,7 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
         router.replace(`/production/${res.id}`);
       } else {
         setSaved(true);
+        setDirty(false);
         window.setTimeout(() => setSaved(false), 2600);
         router.refresh();
       }
@@ -355,6 +363,32 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
         <div className="anim-fade-down mb-4 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] font-medium text-danger">Görsel kaydedilemedi: {imgError}</div>
       )}
 
+      {/* ── Hazır mı? — eksiksizlik + Nisa konfirmasyonu ──────────────────
+          Aslı Hanım (2026-08-21): üç kez eksik föy aldı. "Üreticiye gidecek
+          dosyanın eksiksiz olmasını istiyorum" + "Nisa'yla konfirme ederek bana
+          göstermenizi istiyorum." Şerit föyün EN ÜSTÜNDE durur; eksiksiz
+          olmayan föy konfirme edilemez. */}
+      <SheetReadiness
+        sheetId={sheet?.id ?? null}
+        checks={checkSheet({
+          title: form.title,
+          product_kind: form.product_kind ?? null,
+          description: form.description ?? null,
+          producer: form.producer ?? null,
+          manufacturer_id: form.manufacturer_id ?? null,
+          category: form.category ?? null,
+          subcategory: form.subcategory ?? null,
+          delivery_date: form.delivery_date ?? null,
+          sewing_delivery_date: form.sewing_delivery_date ?? null,
+          size_distribution: form.size_distribution,
+          measurements: form.measurements,
+          photo_refs: form.photo_refs,
+        })}
+        confirmedAt={sheet?.confirmed_at ?? null}
+        confirmedByName={sheet?.confirmed_by ? nameOf(sheet.confirmed_by) : null}
+        dirty={dirty}
+      />
+
       {/* ── Föy belgesi ── */}
       <div className="stagger-children space-y-3 rounded-2xl border border-line-strong bg-surface p-4 shadow-card sm:p-6">
         {/* Başlık şeridi. Aslı Hanım (2026-08-19): "Şu Aslı Filinta'yı yazma
@@ -409,6 +443,7 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
                   const m = manufacturers.find((x) => x.id === id);
                   // producer metnini de senkron tut: eski föyler, Excel çıktısı
                   // ve migrate edilmemiş ortamlar hâlâ onu okuyor.
+                  setDirty(true);
                   setForm((f) => ({ ...f, manufacturer_id: id, producer: m?.name ?? "" }));
                 }}
               >
@@ -434,6 +469,7 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
                 const next = (e.target.value || null) as ProductionCategory | null;
                 // Kategori değişince geçersiz alt kategoriyi temizle.
                 const validSubs = subcategoriesOf(next).map((s) => s.key);
+                setDirty(true);
                 setForm((f) => ({
                   ...f,
                   category: next,

@@ -14,8 +14,9 @@ export const dynamic = "force-dynamic";
 // gerekiyor (kart üzerinde maliyet göstermek için). measurements/talimatlar
 // gibi ağır jsonb'ler editöre bırakılır ki liste hafif kalsın.
 const LIST_COLUMNS =
-  "id, workspace_id, title, status, product_code, product_kind, producer, " +
-  "delivery_date, season, photo_refs, category, subcategory, pricing, size_distribution, " +
+  "id, workspace_id, title, status, product_code, product_kind, producer, manufacturer_id, " +
+  "delivery_date, sewing_delivery_date, season, photo_refs, category, subcategory, pricing, " +
+  "size_distribution, measurements, description, confirmed_at, confirmed_by, " +
   "created_by, updated_by, archived_at, created_at, updated_at";
 
 export default async function CollectionPage() {
