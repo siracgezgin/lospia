@@ -89,6 +89,19 @@ export default async function ProductionSheetPage({
     redirect("/production");
   }
 
+  // Aynı modelin diğer renkleri. Kök föy: kendisi varyantsa parent'ı, değilse
+  // kendisi. Kardeşler = aynı köke bağlı olanlar + kökün kendisi.
+  const sheetRow = data as unknown as ProductionSheet;
+  const rootId = sheetRow.parent_sheet_id ?? id;
+  const siblingsRes = await supabase
+    .from("production_sheets")
+    .select("id, title, colorway, parent_sheet_id")
+    .eq("workspace_id", workspaceId)
+    .or(`id.eq.${rootId},parent_sheet_id.eq.${rootId}`)
+    .order("created_at");
+  const siblings = ((siblingsRes.data ?? []) as { id: string; title: string; colorway: string | null }[])
+    .filter((x) => x.id !== id);
+
   // Reçete (BOM) — malzemeyle birlikte; maliyet bundan hesaplanır.
   const bomResult = await supabase
     .from("production_sheet_materials")
@@ -105,6 +118,7 @@ export default async function ProductionSheetPage({
       seasons={seasons}
       materials={materials}
       bom={bom}
+      siblings={siblings}
       isAdmin={isAdmin}
       currentUserId={user.id}
     />

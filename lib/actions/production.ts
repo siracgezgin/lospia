@@ -80,6 +80,8 @@ const SheetSchema = z.object({
   product_code: shortText,
   product_kind: shortText,
   producer: shortText,
+  /** Renk adı — föy kimliğinin üçüncü parçası (20240311). */
+  colorway: shortText,
   // Gerçek usta kaydı (20240307). producer metni geri uyum için korunur.
   manufacturer_id: z.string().uuid().optional().nullable(),
   description: longText,
@@ -144,6 +146,7 @@ function normalize(v: ProductionSheetInput) {
     product_code: nn(v.product_code),
     product_kind: nn(v.product_kind),
     producer: nn(v.producer),
+    colorway: nn(v.colorway),
     manufacturer_id: v.manufacturer_id || null,
     description: nn(v.description),
     season: nn(v.season),
@@ -261,6 +264,107 @@ export async function updateProductionSheet(
  * Kimin konfirme ettiği kaydedilir. Föy sonradan değişirse damga veritabanı
  * trigger'ıyla düşer (20240308); burada ayrıca bir şey yapmak gerekmez.
  */
+/**
+ * Bir föyden RENK VARYANTI oluşturur.
+ *
+ * Zedonk'ta ürün kimliği "Knot dress | Organic Cotton | Blue" — model × kumaş ×
+ * renk. Bizde her renk ayrı föydü, yani aynı modelin 3 rengi için ölçüler,
+ * talimatlar, beden dağılımı ve reçete üç kez elden geçiyordu. Aynı bilgiyi üç
+ * kez yazan er geç birinde hata yapar; Aslı Hanım'ın föy şikâyetinin sessiz
+ * sebeplerinden biri de bu.
+ *
+ * Kopyalanan: tüm ürün bilgileri, ölçüler, beden dağılımı, talimatlar, fiyat
+ * ve REÇETE. Kopyalanmayan:
+ *   • renge özgü görseller (kumaş, aksesuar, süsleme, dikiş) — renk değişince
+ *     onlar da değişir. TEKNİK ÇİZİM korunur: model aynı.
+ *   • konfirmasyon — yeni föy kendi başına konfirme edilmeli.
+ *
+ * Föyler oluşturulduktan sonra BAĞIMSIZDIR; varyant ana föyden veri okumaz.
+ * Renkler arası küçük ölçü farkları moda üretiminde olağandır.
+ */
+export async function createSheetVariant(
+  sheetId: string,
+  colorway: string,
+): Promise<{ id: string } | { error: string }> {
+  const color = colorway.trim();
+  if (!color) return { error: "Renk adı gerekli." };
+
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+
+  const { data: src, error: loadErr } = await supabase
+    .from("production_sheets")
+    .select("*")
+    .eq("id", sheetId)
+    .eq("workspace_id", ctx.workspaceId)
+    .maybeSingle();
+  if (loadErr) return { error: toActionErrorMessage(loadErr) };
+  if (!src) return { error: NOT_FOUND };
+
+  const row = src as unknown as Record<string, unknown>;
+  const srcPhotos = row.photo_refs;
+
+  // Kopyalanmayacak alanlar DIŞARIDA bırakılır (whitelist değil blacklist):
+  // föye yeni bir alan eklendiğinde varyanta da kendiliğinden taşınsın,
+  // kimsenin bu listeyi güncellemesi gerekmesin.
+  const OMIT = [
+    "id", "created_at", "updated_at",
+    "confirmed_at", "confirmed_by",
+    "photo_refs", "colorway", "parent_sheet_id",
+    "created_by", "updated_by",
+  ];
+  const rest: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(row)) if (!OMIT.includes(k)) rest[k] = v;
+
+  // Teknik çizim modele aittir, renge değil — o kalır; gerisi düşer.
+  const photos = (Array.isArray(srcPhotos) ? srcPhotos : []).filter(
+    (ph) =>
+      ph &&
+      typeof ph === "object" &&
+      ["technical_drawing", "technical_drawing_front", "technical_drawing_back"].includes(
+        String((ph as { section?: string }).section),
+      ),
+  );
+
+  const { data: created, error } = await supabase
+    .from("production_sheets")
+    .insert({
+      ...rest,
+      workspace_id: ctx.workspaceId,
+      colorway: color,
+      parent_sheet_id: (row.parent_sheet_id as string | null) ?? sheetId,
+      photo_refs: photos,
+      created_by: ctx.userId,
+      updated_by: ctx.userId,
+    })
+    .select("id")
+    .single();
+  if (error) return { error: toActionErrorMessage(error) };
+  const newId = (created as { id: string }).id;
+
+  // Reçeteyi de kopyala — aynı model, aynı malzeme tüketimi. Tablo migrate
+  // edilmemişse sessizce atlanır; varyant yine oluşur.
+  const { data: bom } = await supabase
+    .from("production_sheet_materials")
+    .select("material_id, consumption, waste_pct, note, position")
+    .eq("sheet_id", sheetId);
+  if (bom?.length) {
+    await supabase.from("production_sheet_materials").insert(
+      bom.map((b) => ({
+        ...(b as Record<string, unknown>),
+        workspace_id: ctx.workspaceId,
+        sheet_id: newId,
+        created_by: ctx.userId,
+      })),
+    );
+  }
+
+  revalidatePath("/collection");
+  revalidatePath(`/production/${sheetId}`);
+  return { id: newId };
+}
+
 export async function setProductionSheetConfirmed(
   sheetId: string,
   confirmed: boolean,

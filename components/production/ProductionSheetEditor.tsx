@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils/cn";
 import { ImageUploader } from "./ImageUploader";
 import { SheetReadiness } from "./SheetReadiness";
 import { SheetBom, type PickableMaterial } from "./SheetBom";
+import { SheetVariants, type SiblingSheet } from "./SheetVariants";
 import { checkSheet } from "@/lib/production/completeness";
 import { COLLECTION_TAXONOMY, subcategoriesOf } from "@/lib/collection/taxonomy";
 import {
@@ -45,6 +46,8 @@ interface Props {
   materials?: PickableMaterial[];
   /** Bu föyün reçetesi (BOM). Maliyetin malzeme kalemleri bundan hesaplanır. */
   bom?: SheetMaterialWithMaterial[];
+  /** Aynı modelin diğer renkleri. */
+  siblings?: SiblingSheet[];
   isAdmin: boolean;
   currentUserId: string;
 }
@@ -87,6 +90,7 @@ function emptyState(): ProductionSheetInput {
     product_kind: "",
     producer: "",
     manufacturer_id: null,
+    colorway: "",
     description: "",
     season: "",
     season_id: null,
@@ -138,6 +142,7 @@ function fromSheet(s: ProductionSheet): ProductionSheetInput {
     product_kind: s.product_kind ?? "",
     producer: s.producer ?? "",
     manufacturer_id: s.manufacturer_id ?? null,
+    colorway: s.colorway ?? "",
     description: s.description ?? "",
     season: s.season ?? "",
     season_id: s.season_id ?? null,
@@ -219,7 +224,7 @@ function Section({ title, children, className }: { title: string; children: Reac
   );
 }
 
-export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], seasons = [], materials = [], bom = [], isAdmin, currentUserId }: Props) {
+export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], seasons = [], materials = [], bom = [], siblings = [], isAdmin, currentUserId }: Props) {
   const router = useRouter();
   const [form, setForm] = useState<ProductionSheetInput>(() => (sheet ? fromSheet(sheet) : emptyState()));
   const [error, setError] = useState<string | null>(null);
@@ -514,6 +519,10 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
           <LabeledField label="Ürün kodu" value={form.product_code ?? ""} onChange={(v) => set("product_code", v)} />
           <LabeledField label="Teslim tarihi" value={form.delivery_date ?? ""} onChange={(v) => set("delivery_date", v)} placeholder="21.07.2026" />
           <LabeledField label="Ürün cinsi" value={form.product_kind ?? ""} onChange={(v) => set("product_kind", v)} placeholder="Etek" />
+          {/* RENK — föy kimliğinin üçüncü parçası (model | kumaş | renk),
+              Zedonk deseni. Aynı modelin başka rengi için aşağıdaki varyant
+              şeridinden "Renk ekle" kullanılır. */}
+          <LabeledField label="Renk" value={form.colorway ?? ""} onChange={(v) => set("colorway", v)} placeholder="Mavi" />
           {/* İkinci tarih — "Bir ürünlerin teslim tarihi, bir de dikim teslim
               tarihi lazım." */}
           <LabeledField label="Dikim teslim tarihi" value={form.sewing_delivery_date ?? ""} onChange={(v) => set("sewing_delivery_date", v)} placeholder="14.07.2026" />
@@ -629,6 +638,19 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
           </Section>
         </div>
       </div>
+
+        {/* RENK VARYANTLARI — aynı modelin diğer renkleri. Zedonk'ta ürün
+            kimliği model × kumaş × renktir; bizde her renk ayrı föy olduğu için
+            ölçüler, talimatlar ve reçete üç kez yazılıyordu. Tam genişlik:
+            yukarıdaki iki sütunlu ızgaranın DIŞINDA durur. */}
+        <Section title="Renk Varyantları">
+          <SheetVariants
+            sheetId={sheet?.id ?? null}
+            colorway={form.colorway ?? null}
+            siblings={siblings}
+            canEdit={isAdmin}
+          />
+        </Section>
       </>)}
 
       {tab === "olcu" && (<>

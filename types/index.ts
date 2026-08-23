@@ -385,6 +385,10 @@ export type ProductionSheet = {
    *  "hazırla → Nisa konfirme → Aslı'ya göster" akışının veri karşılığı. */
   confirmed_at?: string | null;
   confirmed_by?: string | null;
+  /** Renk adı — kimliğin üçüncü parçası (model | kumaş | RENK), 20240311. */
+  colorway?: string | null;
+  /** Varyantsa ana föy. Veri paylaşılmaz; yalnız gruplama. */
+  parent_sheet_id?: string | null;
 };
 
 /** Web nav ana kategorileri (aslifilinta.com). */
