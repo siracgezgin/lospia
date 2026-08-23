@@ -7,14 +7,13 @@ import ExcelJS from "exceljs";
 import type { ProductionSheet } from "@/types";
 import { categoryLabel, subcategoryLabel } from "@/lib/collection/taxonomy";
 import {
-  costOfSheet, totalQuantity, quantityBySize, orderSizes, canonicalSize, formatMoney,
+  totalQuantity, quantityBySize, orderSizes, canonicalSize, formatMoney,
   STANDARD_SIZES,
   unitCostOf,
 } from "@/lib/collection/cost";
 
 const COLS = 9; // A–I
 const INK = "FF1F2937"; // koyu başlık şeridi
-const BAND = "FFF3F4F6"; // bölüm şeridi
 const TH = "FFE5E7EB"; // tablo başlığı
 const LINE = "FFD9DCE1"; // ince kenarlık
 
@@ -58,8 +57,6 @@ async function addProductionSheet(
 ): Promise<void> {
   const ws = wb.addWorksheet(uniqueSheetName(sheet.title, usedNames), {
     views: [{ showGridLines: false }],
-    // fitToHeight: 1 → Asli Hanim (2026-08-23): "cikti aldigin zaman tek sayfada
-    // ciksin." Onceki 0 "yukseklik serbest" demekti, foy iki-uc sayfaya boluyordu.
     pageSetup: {
       paperSize: 9, orientation: "portrait",
       fitToPage: true, fitToWidth: 1, fitToHeight: 1,
@@ -67,373 +64,210 @@ async function addProductionSheet(
     },
   });
 
-  // Kolon genişlikleri (A–I).
-  // A = sira no, B–D sol blok, E ince oluk, F–I sag blok.
+  // Kolon genişlikleri ORİJİNAL föyle birebir (uretim_foyu/…Beyaz Dantel Etek).
   ws.columns = [
-    { width: 4 }, { width: 26 }, { width: 15 }, { width: 13 },
-    { width: 5 }, { width: 14 }, { width: 14 }, { width: 13 }, { width: 13 },
+    { width: 8 }, { width: 13 }, { width: 12 }, { width: 12 },
+    { width: 12 }, { width: 12 }, { width: 9 }, { width: 9 }, { width: 9 },
   ];
 
-  let r = 1;
+  const txt = (v: unknown) => String(v ?? "").trim();
   const nameOf = (id: string | null) => (id && memberNames[id]) || "—";
 
-  // ── Başlık şeridi ──────────────────────────────────────────────────────────
-  ws.mergeCells(`A${r}:G${r}`);
-  ws.mergeCells(`H${r}:I${r}`);
-  const titleCell = ws.getCell(`A${r}`);
-  titleCell.value = "ÜRETİM FÖYÜ";
-  titleCell.font = { bold: true, size: 15, color: { argb: "FFFFFFFF" }, name: "Calibri" };
-  titleCell.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
-  // Marka adı bilerek YOK — Aslı Hanım (2026-08-19): "Şu Aslı Filinta'yı
-  // yazma böyle… Logoya gerek yok kendi iç üretimimizde." Sağ üstte artık
-  // ürün kodu durur (çıktıda sayfayı tanımlayan tek işaret).
-  const brandCell = ws.getCell(`H${r}`);
-  brandCell.value = sheet.product_code ?? "";
-  brandCell.font = { bold: true, size: 11, color: { argb: "FFE5E7EB" } };
-  brandCell.alignment = { vertical: "middle", horizontal: "right", indent: 1 };
-  for (let c = 1; c <= COLS; c++) {
-    ws.getCell(r, c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: INK } };
-  }
-  ws.getRow(r).height = 26;
-  r++;
-
-  // Föy başlığı (ürün adı) — ikinci satır, vurgulu.
-  ws.mergeCells(`A${r}:I${r}`);
-  const productCell = ws.getCell(`A${r}`);
-  productCell.value = sheet.title;
-  productCell.font = { bold: true, size: 13, color: { argb: INK } };
-  productCell.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
-  ws.getRow(r).height = 22;
-  r += 1;
-  r++; // boşluk
-
-  // ── Ürün bilgileri — TEK kolon (A:D). Sağ yarı (F:I) teknik çizime ayrıldı.
-  //    Aslı Hanım (2026-08-19): "Benim yukarıda çizimini görmem lazım. Teknik
-  //    çizimini yukarıda sağda… teknik çizim ön, teknik çizim arka olacak."
-  //    Çizimler eskiden föyün EN ALTINDA ayrı bir bölümdeydi ve tek başına
-  //    16+ satır ekleyip çıktıyı üçüncü sayfaya taşıyordu.
-  const infoStartRow = r;
-  const infoRow = (label: string, value: string) => {
-    const l = ws.getCell(`A${r}`); ws.mergeCells(`A${r}:B${r}`);
-    l.value = label; l.font = { bold: true, size: 9, color: { argb: "FF6B7280" } };
-    l.alignment = { vertical: "middle", indent: 1 };
-    const v = ws.getCell(`C${r}`); ws.mergeCells(`C${r}:D${r}`);
-    v.value = value || ""; v.font = { size: 10.5, color: { argb: INK } };
-    v.alignment = { vertical: "middle" };
-    v.border = { bottom: thin };
-    ws.getRow(r).height = 16;
-    r++;
+  /** A..I boyunca kenarlık — form hissi orijinaldeki gibi çizgiyle kurulur. */
+  const boxRow = (r: number, from = 1, to = COLS) => {
+    for (let c = from; c <= to; c++) ws.getCell(r, c).border = border;
   };
-  infoRow("ÜRÜN KODU", sheet.product_code ?? "");
-  infoRow("ÜRÜN CİNSİ", sheet.product_kind ?? "");
-  infoRow("RENK", sheet.colorway ?? "");
-  infoRow("SEZON", sheet.season ?? "");
-  infoRow("KATEGORİ", sheet.category ? categoryLabel(sheet.category) : "");
-  infoRow("ALT KATEGORİ", subcategoryLabel(sheet.category, sheet.subcategory));
-  infoRow("ÜRETİCİ", sheet.producer ?? "");
-  infoRow("ÜRETİM TARİHİ", sheet.production_date ?? "");
-  infoRow("TESLİM TARİHİ", sheet.delivery_date ?? "");
-  // "Bir ürünlerin teslim tarihi, bir de dikim teslim tarihi lazım."
-  infoRow("DİKİM TESLİM TARİHİ", sheet.sewing_delivery_date ?? "");
-  infoRow("1 ÜRÜNE METRAJ", sheet.meterage ?? "");
-  const infoEndRow = r - 1;
 
-  if ((sheet.description ?? "").trim()) {
-    ws.mergeCells(`A${r}:D${r}`);
-    const d = ws.getCell(`A${r}`);
-    d.value = sheet.description!.trim();
-    d.font = { size: 9.5, color: { argb: "FF374151" } };
-    d.alignment = { vertical: "top", wrapText: true, indent: 1 };
-    ws.getRow(r).height = Math.min(90, Math.max(16, estimateLines(sheet.description!.trim(), 55) * 12));
-    r++;
-  }
-
-  // Teknik çizim başlıkları — bilgi bloğunun hizasında, sağ yarıda.
-  const drawLabel = (col: string, text: string) => {
-    const c = ws.getCell(`${col}${infoStartRow}`);
-    c.value = text;
-    c.font = { bold: true, size: 8.5, color: { argb: "FF6B7280" } };
-    c.alignment = { vertical: "middle" };
-  };
-  ws.mergeCells(`F${infoStartRow}:G${infoStartRow}`);
-  ws.mergeCells(`H${infoStartRow}:I${infoStartRow}`);
-  drawLabel("F", "TEKNİK ÇİZİM — ÖN");
-  drawLabel("H", "TEKNİK ÇİZİM — ARKA");
-  // Çizim kutularının çerçevesi (görsel gelmezse de yer belli olur).
-  for (let rr = infoStartRow + 1; rr <= infoEndRow; rr++) {
-    for (const ci of [6, 7, 8, 9]) ws.getCell(rr, ci).border = border;
-  }
-  const drawingAnchor = { startRow: infoStartRow, endRow: infoEndRow };
-
-  r++; // boşluk
-
-  // ── Bölüm başlığı şeridi ─────────────────────────────────────────────────────
-  const sectionBand = (title: string) => {
-    ws.mergeCells(`A${r}:I${r}`);
-    const c = ws.getCell(`A${r}`);
-    c.value = title.toLocaleUpperCase("tr-TR"); // Türkçe: i→İ, ı korunur
-    c.font = { bold: true, size: 10.5, color: { argb: INK } };
+  /** "ETİKET: değer" — orijinalde etiket ve değer AYNI hücrededir. */
+  const labelValue = (addr: string, merge: string, label: string, value: string) => {
+    ws.mergeCells(merge);
+    const c = ws.getCell(addr);
+    c.value = value ? `${label} ${value}` : label;
+    c.font = { size: 10.5, color: { argb: INK } };
     c.alignment = { vertical: "middle", indent: 1 };
-    for (let i = 1; i <= COLS; i++) {
-      const cell = ws.getCell(r, i);
-      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BAND } };
-      cell.border = { bottom: thin };
-    }
-    ws.getRow(r).height = 20;
-    r++;
+    return c;
   };
 
-  // ── ÖLÇÜLER ──────────────────────────────────────────────────────────────────
-  sectionBand("Ölçüler (cm)");
-  const measHead = (a: string, b: string, cc: string) => {
-    ws.getCell(`A${r}`).value = a;
-    ws.mergeCells(`B${r}:G${r}`); ws.getCell(`B${r}`).value = b;
-    ws.mergeCells(`H${r}:I${r}`); ws.getCell(`H${r}`).value = cc;
-    for (let i = 1; i <= COLS; i++) {
-      const cell = ws.getCell(r, i);
-      cell.font = { bold: true, size: 10, color: { argb: "FF374151" } };
-      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: TH } };
+  // ── 1. Başlık ──────────────────────────────────────────────────────────────
+  ws.mergeCells("A1:I1");
+  const title = ws.getCell("A1");
+  title.value = "ÜRETİM FÖYÜ";
+  title.font = { bold: true, size: 14, color: { argb: INK } };
+  title.alignment = { vertical: "middle", horizontal: "center" };
+  boxRow(1);
+  ws.getRow(1).height = 31;
+
+  // ── 2..5. Sipariş bilgisi — solda dört satır, sağda dört satır ─────────────
+  const info: [string, string, string, string][] = [
+    ["ÜRÜN KODU:", txt(sheet.product_code), "ÜRETİM TARİHİ:", txt(sheet.production_date)],
+    ["ÜRÜN CİNSİ:", txt(sheet.product_kind), "TESLİM TARİHİ:", txt(sheet.delivery_date)],
+    ["ÜRETİCİ:", txt(sheet.producer), "SEZON :", txt(sheet.season)],
+    ["ÜRÜNÜN AÇIKLAMASI:", txt(sheet.description), "1 ÜRÜNE GİDEN METRAJ :", txt(sheet.meterage)],
+  ];
+  info.forEach(([ll, lv, rl, rv], i) => {
+    const r = 2 + i;
+    labelValue(`A${r}`, `A${r}:D${r}`, ll, lv);
+    labelValue(`E${r}`, `E${r}:I${r}`, rl, rv);
+    boxRow(r);
+    ws.getRow(r).height = 18;
+  });
+  // "Dikim teslim tarihi" orijinal föyde yok ama Aslı Hanım 2026-08-19'da
+  // ayrıca istedi: "Bir ürünlerin teslim tarihi, bir de dikim teslim tarihi
+  // lazım." Sipariş bloğunun altına, aynı biçimde eklenir.
+  labelValue("A6", "A6:D6", "DİKİM TESLİM TARİHİ:", txt(sheet.sewing_delivery_date));
+  labelValue("E6", "E6:I6", "RENK :", txt(sheet.colorway));
+  boxRow(6);
+  ws.getRow(6).height = 18;
+
+  // ── 7. ÖLÇÜLER başlığı + sağda TEKNİK ÇİZİM alanı ─────────────────────────
+  const MEAS_HEAD = 7;
+  const ROWS_PER_TABLE = 9; // orijinalde 9 numaralı satır — boşlar elle doldurulur
+  const th = (addr: string, merge: string | null, text: string, center = false) => {
+    if (merge) ws.mergeCells(merge);
+    const c = ws.getCell(addr);
+    c.value = text;
+    c.font = { bold: true, size: 10.5, color: { argb: INK } };
+    c.alignment = { vertical: "middle", horizontal: center ? "center" : "left", indent: center ? 0 : 1 };
+    c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: TH } };
+  };
+  th(`A${MEAS_HEAD}`, null, "No", true);
+  th(`B${MEAS_HEAD}`, `B${MEAS_HEAD}:C${MEAS_HEAD}`, "ÖLÇÜLER");
+  th(`D${MEAS_HEAD}`, null, "(Cm)", true);
+  th(`E${MEAS_HEAD}`, `E${MEAS_HEAD}:I${MEAS_HEAD}`, "TEKNİK ÇİZİM", true);
+  boxRow(MEAS_HEAD);
+  ws.getRow(MEAS_HEAD).height = 18;
+
+  const measurements = (sheet.measurements ?? []).filter((m) => txt(m.label) || txt(m.value));
+  for (let i = 0; i < ROWS_PER_TABLE; i++) {
+    const r = MEAS_HEAD + 1 + i;
+    const m = measurements[i];
+    ws.getCell(`A${r}`).value = i + 1;
+    ws.getCell(`A${r}`).alignment = { vertical: "middle", horizontal: "center" };
+    ws.mergeCells(`B${r}:C${r}`);
+    ws.getCell(`B${r}`).value = m ? txt(m.label) : "";
+    ws.getCell(`D${r}`).value = m ? txt(m.value) : "";
+    for (const c of ["A", "B", "C", "D"]) {
+      const cell = ws.getCell(`${c}${r}`);
       cell.border = border;
-      cell.alignment = { vertical: "middle", horizontal: i === 1 ? "center" : "left", indent: i === 1 ? 0 : 1 };
+      if (c !== "A") cell.font = { size: 10.5 };
+      cell.alignment = { vertical: "middle", horizontal: c === "A" || c === "D" ? "center" : "left", indent: c === "B" ? 1 : 0 };
+    }
+    // Çizim alanının çerçevesi (görsel gelmese de yer belli olsun).
+    for (let c = 5; c <= COLS; c++) ws.getCell(r, c).border = border;
+    ws.getRow(r).height = 17;
+  }
+  const drawTop = MEAS_HEAD;                       // çizim bu satırdan başlar
+  const drawRows = ROWS_PER_TABLE;                 // ölçü tablosu boyunca
+
+  // ── TESLİM EDİLEN ÜRÜNLER ─────────────────────────────────────────────────
+  const DELIV_HEAD = MEAS_HEAD + ROWS_PER_TABLE + 1;
+  th(`A${DELIV_HEAD}`, null, "No", true);
+  th(`B${DELIV_HEAD}`, `B${DELIV_HEAD}:C${DELIV_HEAD}`, "TESLİM EDİLEN ÜRÜNLER");
+  th(`D${DELIV_HEAD}`, null, "ADET", true);
+  th(`E${DELIV_HEAD}`, `E${DELIV_HEAD}:I${DELIV_HEAD}`, "");
+  boxRow(DELIV_HEAD);
+  ws.getRow(DELIV_HEAD).height = 18;
+
+  const delivered = (sheet.delivered_items ?? []).filter((d) => txt(d.label) || txt(d.qty));
+  for (let i = 0; i < ROWS_PER_TABLE; i++) {
+    const r = DELIV_HEAD + 1 + i;
+    const d = delivered[i];
+    ws.getCell(`A${r}`).value = i + 1;
+    ws.getCell(`A${r}`).alignment = { vertical: "middle", horizontal: "center" };
+    ws.mergeCells(`B${r}:C${r}`);
+    ws.getCell(`B${r}`).value = d ? txt(d.label) : "";
+    ws.getCell(`D${r}`).value = d ? txt(d.qty) : "";
+    ws.mergeCells(`E${r}:I${r}`);
+    for (let c = 1; c <= COLS; c++) {
+      const cell = ws.getCell(r, c);
+      cell.border = border;
+      cell.font = { size: 10.5 };
+      cell.alignment = { vertical: "middle", horizontal: c === 1 || c === 4 ? "center" : "left", indent: c === 2 ? 1 : 0 };
     }
     ws.getRow(r).height = 17;
-    r++;
-  };
-  measHead("No", "ÖLÇÜ", "DEĞER");
-  const measRows = sheet.measurements?.length ? sheet.measurements : [{ no: "", label: "", value: "" }];
-  // Numara elle girilene değil SIRAYA bağlı: "Mesela üç numara niye boş?"
-  measRows.forEach((m, mi) => {
-    ws.getCell(`A${r}`).value = String(mi + 1);
-    ws.mergeCells(`B${r}:G${r}`); ws.getCell(`B${r}`).value = m.label;
-    ws.mergeCells(`H${r}:I${r}`); ws.getCell(`H${r}`).value = m.value;
-    for (let i = 1; i <= COLS; i++) {
-      const cell = ws.getCell(r, i);
-      cell.border = border; cell.font = { size: 10.5 };
-      cell.alignment = { vertical: "middle", horizontal: i === 1 ? "center" : "left", indent: i === 1 ? 0 : 1 };
-    }
-    ws.getRow(r).height = 16;
-    r++;
-  });
-  r++;
+  }
 
-  // TESLİM EDİLEN ÜRÜNLER artık Beden Dağılımı'nın ALTINDA — "Teslim edilen
-  // ürünler yukarıda olmaz, önce siparişi görmemiz lazım." Bölümü tek yerden
-  // çizen yardımcı; çağrısı aşağıda.
-  const deliveredSection = () => {
-  sectionBand("Teslim Edilen Ürünler");
-  measHead("No", "ÜRÜN", "ADET");
-  const delRows = sheet.delivered_items?.length ? sheet.delivered_items : [{ no: "", label: "", qty: "" }];
-  delRows.forEach((d, di) => {
-    ws.getCell(`A${r}`).value = String(di + 1);
-    ws.mergeCells(`B${r}:G${r}`); ws.getCell(`B${r}`).value = d.label;
-    ws.mergeCells(`H${r}:I${r}`); ws.getCell(`H${r}`).value = d.qty;
-    for (let i = 1; i <= COLS; i++) {
-      const cell = ws.getCell(r, i);
-      cell.border = border; cell.font = { size: 10.5 };
-      cell.alignment = { vertical: "middle", horizontal: i === 1 ? "center" : "left", indent: i === 1 ? 0 : 1 };
-    }
-    ws.getRow(r).height = 16;
-    r++;
-  });
-  r++;
-  };
-
-  // ── BEDEN DAĞILIMI ───────────────────────────────────────────────────────────
-  //  Etiket kolonu A:B BİRLEŞİK (tek A'ya "Üretim adeti" sığmıyordu), beden
-  //  kolonları bu yüzden 3'ten başlar. Üç satırın da (başlık / grup / değer)
-  //  aynı geometriyi kullanması şart — biri kayarsa tablo yanlış okunur.
+  // ── BEDEN DAĞILIMI — tek satır başlık, altında etiket ve adet ─────────────
+  let r = DELIV_HEAD + ROWS_PER_TABLE + 1;
   const sd = sheet.size_distribution;
-  if (sd && Array.isArray(sd.sizes) && sd.sizes.length) {
-    sectionBand("Beden Dağılımı");
-    const FIRST = 3;                       // ilk beden kolonu (C)
-    /* Beden sırası baskı görünümüyle AYNI kaynaktan (orderSizes): aynı föyün
-       Excel'i ile kâğıdı farklı sırada beden göstermemeli. Değerler ada göre
-       yeniden eşlenir — ham dizideki konumuna göre DEĞİL, yoksa sıralama
-       adetleri karıştırır. */
-    const rawSizes = sd.sizes;
-    const sizes = orderSizes(rawSizes).slice(0, COLS - FIRST); // + TOPLAM için yer
-    const srcIndex = sizes.map((sz) => rawSizes.findIndex((x) => canonicalSize(x) === sz));
-    const totalCol = FIRST + sizes.length;
-    const lastCol = totalCol;
+  const rawSizes = sd?.sizes ?? [];
+  const sizes = orderSizes(rawSizes).slice(0, COLS - 3); // A:B etiket + TOPLAM
+  const srcIndex = sizes.map((sz) => rawSizes.findIndex((x) => canonicalSize(x) === sz));
+  const FIRST_SIZE = 3;
+  const totalCol = FIRST_SIZE + sizes.length;
 
-    const gridRow = (
-      label: string, values: string[], totalVal: string,
-      opts: { head?: boolean; band?: boolean } = {},
-    ) => {
-      ws.mergeCells(r, 1, r, 2);
-      ws.getCell(r, 1).value = label;
-      values.forEach((v, i) => { ws.getCell(r, FIRST + i).value = v; });
-      ws.getCell(r, totalCol).value = totalVal;
-      for (let i = 1; i <= lastCol; i++) {
-        const cell = ws.getCell(r, i);
-        cell.border = border;
-        cell.font = opts.head
-          ? { bold: true, size: 10, color: { argb: "FF374151" } }
-          : { size: 10.5, bold: opts.band || i <= 2 };
-        if (opts.head) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: TH } };
-        else if (opts.band) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BAND } };
-        cell.alignment = {
-          vertical: "middle",
-          horizontal: i <= 2 ? "left" : "center",
-          indent: i <= 2 ? 1 : 0,
-        };
-      }
-      ws.getRow(r).height = 17;
-      r++;
-    };
-
-    gridRow("", sizes, "TOPLAM", { head: true });
-    // GRUP satırı — Aslı Hanım (2026-08-19): "Bedenlerin altına o ürünün gibi
-    // bir sıra daha açacaksın. XS-S 1, M-L 2, XL-XXL 3, hepsi one size."
-    const groups = sd.groups ?? {};
-    if (Object.keys(groups).length) {
-      // Grup etiketi hem kanonik hem ham adla aranır (eski föyler ham ada yazmış).
-      gridRow(
-        "GRUP",
-        sizes.map((sz, i) => groups[sz] ?? groups[rawSizes[srcIndex[i]]] ?? ""),
-        "", { band: true },
-      );
+  const sizeRow = (label: string, values: string[], total: string, head = false) => {
+    ws.mergeCells(r, 1, r, 2);
+    ws.getCell(r, 1).value = label;
+    values.forEach((v, i) => { ws.getCell(r, FIRST_SIZE + i).value = v; });
+    ws.getCell(r, totalCol).value = total;
+    // Kenarlık TOPLAM kolonunda biter; sağdaki boş hücreler çizilmez.
+    for (let c = 1; c <= totalCol; c++) {
+      const cell = ws.getCell(r, c);
+      cell.border = border;
+      cell.font = { bold: head || c <= 2, size: 10.5, color: { argb: INK } };
+      if (head) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: TH } };
+      cell.alignment = { vertical: "middle", horizontal: c <= 2 ? "left" : "center", indent: c <= 2 ? 1 : 0 };
     }
-    for (const row of sd.rows ?? []) {
-      gridRow(
-        row.label,
+    ws.getRow(r).height = 18;
+    r++;
+  };
+  if (sizes.length) {
+    sizeRow("BEDEN DAĞILIMI", sizes, "TOPLAM", true);
+    const groups = sd?.groups ?? {};
+    if (Object.keys(groups).length) {
+      sizeRow("BEDEN ETİKETİ", sizes.map((sz, i) => groups[sz] ?? groups[rawSizes[srcIndex[i]]] ?? ""), "");
+    }
+    for (const row of sd?.rows ?? []) {
+      sizeRow(
+        (row.label || "ÜRETİM ADETİ").toLocaleUpperCase("tr-TR"),
         srcIndex.map((si) => (si >= 0 ? row.values?.[si] ?? "" : "")),
         row.total ?? "",
       );
     }
+  }
+
+  // ── Metin blokları — orijinaldeki sıra ve etiketlerle ─────────────────────
+  //  Etiketler UZUN ve açıklayıcı: "KUMAŞ BİLGİSİ : CİNSİ, DESEN YÖNÜ,
+  //  PANTONE RENGİ…" — üreticiye ne yazılacağını söyleyen kısım orada.
+  const textRow = (label: string, value: string | null, minLines = 1) => {
+    ws.mergeCells(r, 1, r, 2);
+    const l = ws.getCell(r, 1);
+    l.value = label;
+    l.font = { bold: true, size: 9.5, color: { argb: INK } };
+    l.alignment = { vertical: "top", wrapText: true, indent: 1 };
+    ws.mergeCells(r, 3, r, COLS);
+    const v = ws.getCell(r, 3);
+    v.value = txt(value);
+    v.font = { size: 10 };
+    v.alignment = { vertical: "top", wrapText: true, indent: 1 };
+    boxRow(r);
+    /* Satır yüksekliği İKİ metnin uzunuyla belirlenir. Etiket sütunu (A:B)
+       ~21 karakter genişliğinde; "AKSESUARLAR BİLGİSİ : ÇITÇIT, DÜĞME…" gibi
+       uzun etiketler 26 karakterle hesaplanınca satıra sığmayıp bir alttakinin
+       üstüne biniyordu. */
+    const lines = Math.max(minLines, estimateLines(txt(value) || " ", 78), estimateLines(label, 20));
+    ws.getRow(r).height = Math.min(220, Math.max(20, lines * 12 + 6));
     r++;
-  }
+  };
 
-  // Sipariş (beden dağılımı) çizildikten SONRA teslim edilenler.
-  deliveredSection();
+  textRow("YIKAMA TALİMATI", sheet.wash_instruction);
+  textRow("KUMAŞ / ASTAR", sheet.fabric_lining, 3);
+  textRow("KUMAŞ BİLGİSİ : CİNSİ, DESEN YÖNÜ, PANTONE RENGİ, GRAMAJ, ESNEME PAYI, ÇEKME ORANI", sheet.fabric_info, 3);
+  textRow("AKSESUARLAR BİLGİSİ : ÇITÇIT, DÜĞME, KOPÇA, TAŞ, BONCUK, SÜSLEMELER ve ETİKET", sheet.accessories_info, 3);
+  textRow("SÜSLEMELER VE AKSESUAR AÇIKLAMASI", sheet.embellishments, 2);
+  textRow("DİKİŞ TALİMATI :", sheet.sewing_instruction, 3);
+  textRow("ÖZEL İŞÇİLİK NOTLARI :", sheet.workmanship_notes, 2);
+  textRow("KALITE KONTROL REVIZYON TARIHI :", sheet.qc_revision);
+  textRow("REVIZYON NOTLARI :", sheet.revision_notes);
+  textRow("ÜRETİM FİRE PAYI:", sheet.production_waste);
+  textRow("Fotoğraf Referansları :", null, 2);
 
-  // ── MALİYET / FİYAT ──────────────────────────────────────────────────────────
-  const cost = costOfSheet(sheet);
-  const hasPricing =
-    cost.unitPrice > 0 || cost.purchaseCost > 0 || cost.webSalePrice > 0 ||
-    (sheet.pricing?.notes ?? "").trim().length > 0;
-  if (hasPricing) {
-    sectionBand("Maliyet / Fiyat");
-    const money = (n: number) => (n > 0 ? formatMoney(n, cost.currency) : "");
-    // Geometri metin bloklarıyla AYNI: sol A:B etiket / C:D değer,
-    // sağ F:G etiket / H:I değer. Eski düzende sağ etiket tek E hücresindeydi;
-    // E artık ince oluk olduğu için "SATIN ALMA MALİYETİ" → "SATIN" diye
-    // kırpılıyordu.
-    const priceRow = (leftLabel: string, leftVal: string, rightLabel: string, rightVal: string) => {
-      const cell = (addr: string, merge: string, text: string, label: boolean) => {
-        ws.mergeCells(merge);
-        const c = ws.getCell(addr);
-        c.value = text;
-        c.font = label
-          ? { bold: true, size: 9, color: { argb: "FF6B7280" } }
-          : { size: 11, color: { argb: INK } };
-        c.alignment = { vertical: "middle", indent: label ? 1 : 0 };
-      };
-      cell(`A${r}`, `A${r}:B${r}`, leftLabel, true);
-      cell(`C${r}`, `C${r}:D${r}`, leftVal, false);
-      cell(`F${r}`, `F${r}:G${r}`, rightLabel, true);
-      cell(`H${r}`, `H${r}:I${r}`, rightVal, false);
-      ws.getRow(r).height = 18;
-      r++;
-    };
-    priceRow("BİRİM FİYAT", money(cost.unitPrice), "SATIN ALMA MALİYETİ", money(cost.purchaseCost));
-    priceRow("WEB SATIŞ FİYATI", money(cost.webSalePrice), "TOPLAM ADET", cost.qty ? String(cost.qty) : "");
-    // Üretim maliyeti — vurgulu satır (adet × birim)
-    ws.mergeCells(`A${r}:E${r}`);
-    const lbl = ws.getCell(`A${r}`);
-    lbl.value = "ÜRETİM MALİYETİ (adet × birim)";
-    lbl.font = { bold: true, size: 10.5, color: { argb: INK } };
-    lbl.alignment = { vertical: "middle", indent: 1 };
-    ws.mergeCells(`F${r}:I${r}`);
-    const val = ws.getCell(`F${r}`);
-    val.value = money(cost.lineTotal) || "—";
-    val.font = { bold: true, size: 12, color: { argb: INK } };
-    val.alignment = { vertical: "middle", horizontal: "right", indent: 1 };
-    for (let i = 1; i <= COLS; i++) {
-      ws.getCell(r, i).fill = { type: "pattern", pattern: "solid", fgColor: { argb: TH } };
-      ws.getCell(r, i).border = { top: thin, bottom: thin };
-    }
-    ws.getRow(r).height = 20;
-    r++;
-    if ((sheet.pricing?.notes ?? "").trim()) {
-      ws.mergeCells(`A${r}:I${r}`);
-      const n = ws.getCell(`A${r}`);
-      n.value = `Not: ${sheet.pricing!.notes!.trim()}`;
-      n.font = { size: 9.5, italic: true, color: { argb: "FF6B7280" } };
-      n.alignment = { vertical: "middle", indent: 1 };
-      r++;
-    }
-    r++; // boşluk
-  }
-
-  // ── Uzun metin bölümleri — İKİ KOLON ────────────────────────────────────────
-  //  Eskiden her bölüm A:I boyunca tam genişlikteydi; on bölüm alt alta yığılıp
-  //  çıktıyı tek başına ikinci sayfaya taşıyordu. Artık sol (A:D) ve sağ (F:I)
-  //  yarıya ikişer ikişer dizilir — aynı içerik, yarı yükseklik.
-  const blocks = ([
-    ["Kumaş Bilgisi", sheet.fabric_info],
-    ["Kumaş / Astar", sheet.fabric_lining],
-    ["Süslemeler ve Aksesuar", sheet.embellishments],
-    ["Aksesuar Bilgisi", sheet.accessories_info],
-    ["Dikiş Talimatı", sheet.sewing_instruction],
-    ["Özel İşçilik Notları", sheet.workmanship_notes],
-    ["Yıkama Talimatı", sheet.wash_instruction],
-    ["Üretim Fire Payı", sheet.production_waste],
-    ["Kalite Kontrol Revizyon", sheet.qc_revision],
-    ["Revizyon Notları", sheet.revision_notes],
-  ] as [string, string | null][]).filter(([, v]) => (v ?? "").trim());
-
-  if (blocks.length) {
-    // Yarım genişlik ≈ 58 karakter/satır (A:D ve F:I birbirine yakın).
-    const CHARS = 58;
-    for (let i = 0; i < blocks.length; i += 2) {
-      const pair = [blocks[i], blocks[i + 1]].filter(Boolean) as [string, string | null][];
-      // Başlık satırı
-      const titleRow = r;
-      pair.forEach(([title], k) => {
-        const c1 = k === 0 ? "A" : "F", c2 = k === 0 ? "D" : "I";
-        ws.mergeCells(`${c1}${titleRow}:${c2}${titleRow}`);
-        const c = ws.getCell(`${c1}${titleRow}`);
-        c.value = title.toLocaleUpperCase("tr-TR");
-        c.font = { bold: true, size: 9, color: { argb: INK } };
-        c.alignment = { vertical: "middle", indent: 1 };
-        c.border = { bottom: { style: "thin", color: { argb: INK } } };
-      });
-      ws.getRow(titleRow).height = 15;
-      r++;
-      // Gövde satırı — iki bloğun uzunu satır yüksekliğini belirler.
-      const bodyRow = r;
-      let lines = 1;
-      pair.forEach(([, body], k) => {
-        const c1 = k === 0 ? "A" : "F", c2 = k === 0 ? "D" : "I";
-        const text = (body ?? "").trim();
-        ws.mergeCells(`${c1}${bodyRow}:${c2}${bodyRow}`);
-        const c = ws.getCell(`${c1}${bodyRow}`);
-        c.value = text;
-        c.font = { size: 9.5, color: { argb: INK } };
-        c.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
-        lines = Math.max(lines, estimateLines(text, CHARS));
-      });
-      ws.getRow(bodyRow).height = Math.min(260, Math.max(16, lines * 12 + 4));
-      r++;
-      r++; // bölümler arası boşluk
-    }
-  }
-
-  // ── Görseller ───────────────────────────────────────────────────────────────
-  //  TEKNİK ÇİZİM ön/arka → yukarıda sağ üstteki ayrılmış alana yerleşir.
-  //  Diğer görseller (kumaş, aksesuar, detay) föyün sonunda, iki sütun.
+  // ── Görseller ─────────────────────────────────────────────────────────────
+  //  TEKNİK ÇİZİM ön/arka → ölçü tablosunun SAĞINDAKİ alana (orijinaldeki yeri).
+  //  Diğer görseller "Fotoğraf Referansları" satırının altına.
   const photos = Array.isArray(sheet.photo_refs) ? sheet.photo_refs.filter((p) => p?.url) : [];
   if (photos.length) {
-    const SECTION_TR: Record<string, string> = {
-      technical_drawing: "Teknik çizim",
-      technical_drawing_front: "Teknik çizim — Ön",
-      technical_drawing_back: "Teknik çizim — Arka",
-      fabric: "Kumaş / astar",
-      accessories: "Aksesuar", embellishments: "Süsleme", sewing: "Dikiş / numune",
-      general: "Görsel",
-    };
-    // Paralel indir; başarısız olan atlanır — export yine üretilir.
     const fetched = await Promise.all(
       photos.map(async (p) => {
         try {
@@ -453,38 +287,26 @@ async function addProductionSheet(
 
     const place = (
       img: { buf: Buffer; ext: "jpeg" | "png" | "gif" },
-      colStart: number, rowStart: number, w: number, h: number,
+      col: number, row: number, w: number, h: number,
     ) => {
       const id = wb.addImage({ buffer: img.buf as unknown as ExcelJS.Buffer, extension: img.ext });
-      ws.addImage(id, {
-        tl: { col: colStart, row: rowStart } as ExcelJS.Anchor,
-        ext: { width: w, height: h },
-        editAs: "oneCell",
-      });
+      ws.addImage(id, { tl: { col, row } as ExcelJS.Anchor, ext: { width: w, height: h }, editAs: "oneCell" });
     };
 
-    // Sağ üstteki ayrılmış alan: satır yüksekliği 16pt × satır sayısı.
-    const boxRows = drawingAnchor.endRow - drawingAnchor.startRow;
-    const boxH = Math.max(60, boxRows * 21);
     const front = ok.find((f) => f.section === "technical_drawing_front")
       ?? ok.find((f) => f.section === "technical_drawing");
     const back = ok.find((f) => f.section === "technical_drawing_back");
-    if (front) place(front, 5.05, drawingAnchor.startRow, 118, boxH);
-    if (back) place(back, 7.05, drawingAnchor.startRow, 118, boxH);
+    const boxH = Math.max(90, drawRows * 22);
+    if (front) place(front, 4.05, drawTop + 0.6, 130, boxH);
+    if (back) place(back, 6.55, drawTop + 0.6, 130, boxH);
 
-    // Kalanlar — teknik çizim DIŞINDAKİLER, sonda iki sütun.
     const rest = ok.filter((f) => f !== front && f !== back);
     if (rest.length) {
-      sectionBand("Görseller");
       const startRow = r;
-      const perRow = 2, imgW = 240, imgH = 170, gapRows = 12;
+      const perRow = 3, imgW = 170, imgH = 130, gapRows = 9;
       rest.forEach((img, i) => {
         const rb = Math.floor(i / perRow), cb = i % perRow;
-        const labelRow = startRow + rb * gapRows;
-        const labelCell = ws.getCell(labelRow, cb === 0 ? 1 : 6);
-        labelCell.value = SECTION_TR[img.section] ?? "Görsel";
-        labelCell.font = { size: 8.5, italic: true, color: { argb: "FF9CA3AF" } };
-        place(img, cb === 0 ? 0.1 : 5.05, labelRow + 0.05, imgW, imgH);
+        place(img, cb * 3 + 0.1, startRow + rb * gapRows + 0.05, imgW, imgH);
       });
       const blockRows = Math.ceil(rest.length / perRow) * gapRows;
       for (let k = startRow; k < startRow + blockRows; k++) ws.getRow(k).height = 14;
@@ -492,16 +314,17 @@ async function addProductionSheet(
     }
   }
 
-  ws.mergeCells(`A${r}:I${r}`);
-  const foot = ws.getCell(`A${r}`);
-  const updated = (() => { try { return new Date(sheet.updated_at).toLocaleDateString("tr-TR"); } catch { return ""; } })();
-  foot.value = `Oluşturan: ${nameOf(sheet.created_by)}   ·   Son giren: ${nameOf(sheet.updated_by)}   ·   Son güncelleme: ${updated}`;
+  // ── Künye ─────────────────────────────────────────────────────────────────
+  ws.mergeCells(r, 1, r, COLS);
+  const foot = ws.getCell(r, 1);
+  foot.value = `Oluşturan: ${nameOf(sheet.created_by)}   ·   Son giren: ${nameOf(sheet.updated_by)}   ·   Son güncelleme: ${new Date(sheet.updated_at).toLocaleDateString("tr-TR")}`;
   foot.font = { size: 9, italic: true, color: { argb: "FF9CA3AF" } };
-  foot.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+  foot.alignment = { vertical: "middle", indent: 1 };
   ws.getRow(r).height = 18;
+
+  ws.pageSetup.printArea = `A1:I${r}`;
 }
 
-/** Tek föyü biçimli bir çalışma kitabı olarak üretir. */
 export async function buildProductionSheetWorkbook(
   sheet: ProductionSheet,
   memberNames: Record<string, string>,
