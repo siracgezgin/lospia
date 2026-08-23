@@ -16,6 +16,8 @@ interface Props {
   rowCountOfSlot: Map<string, number>;
   extraSlots: string[];
   memberNames: Record<string, string>;
+  /** Kişi rengi (profiles.id → hex) — baş harf rozetleri kendi renginde. */
+  personHex?: Record<string, string>;
   isAdmin: boolean;
   todayIso: string;
   onOpen: (_iso: string, _slot: string, _dayIndex: number) => void;
@@ -30,7 +32,7 @@ interface Props {
  * alındı (bkz. KimBadges).
  */
 export function PlanningWeekGrid({
-  weekDays, byCell, topicRows, rowCountOfSlot, extraSlots, memberNames,
+  weekDays, byCell, topicRows, rowCountOfSlot, extraSlots, memberNames, personHex = {},
   isAdmin, todayIso, onOpen,
 }: Props) {
   const allSlots = [...PLANNING_BANDS.map((b) => b.slot), ...extraSlots];
@@ -128,7 +130,7 @@ export function PlanningWeekGrid({
                         <span className={cn("text-[12.5px] font-bold leading-[1.25] tracking-tight", meta.title)}>
                           {title}
                         </span>
-                        <KimBadges ids={ids} kim={kim} collaboratorIds={collabIds} memberNames={memberNames} />
+                        <KimBadges ids={ids} kim={kim} collaboratorIds={collabIds} memberNames={memberNames} personHex={personHex} />
                         {content && (
                           <span className="mt-0.5 block whitespace-pre-line text-[11.5px] leading-snug text-ink/70">
                             {content}
@@ -165,7 +167,7 @@ export function PlanningWeekGrid({
                         {t?.task_id && (
                           <CheckCircle2 size={11} className="ml-1 inline shrink-0 text-emerald-600" aria-label="Göreve atandı" />
                         )}
-                        {t && <KimBadges ids={t.participant_ids} kim={t.kim} collaboratorIds={t.collaborator_ids} memberNames={memberNames} />}
+                        {t && <KimBadges ids={t.participant_ids} kim={t.kim} collaboratorIds={t.collaborator_ids} memberNames={memberNames} personHex={personHex} />}
                         {t?.due_date && (
                           <span className="ml-1 whitespace-nowrap text-[10.5px] tabular-nums text-subtle">
                             {format(parseISO(t.due_date), "d MMM", { locale: tr })}

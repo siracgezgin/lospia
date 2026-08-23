@@ -8,6 +8,8 @@ import type { PlanningProcessStep } from "@/types";
 interface Props {
   steps: PlanningProcessStep[];
   memberNames: Record<string, string>;
+  /** Kişi rengi (profiles.id → hex) — baş harf rozetleri kendi renginde. */
+  personHex?: Record<string, string>;
   /** Tablo henüz migrate edilmediyse bölüm bilgi notuyla kapanır. */
   available: boolean;
 }
@@ -17,7 +19,7 @@ interface Props {
  * ön görüşmeden satışa kadar geçtiği sabit akış ve her adımın sahibi.
  * Haftaya bağlı değildir. Dar ekranda "Kim" alt satıra iner, tablo kaydırmaz.
  */
-export function ProcessSteps({ steps, memberNames, available }: Props) {
+export function ProcessSteps({ steps, memberNames, personHex = {}, available }: Props) {
   if (!available) {
     return (
       <Wrap>
@@ -52,7 +54,7 @@ export function ProcessSteps({ steps, memberNames, available }: Props) {
             <span className="min-w-0 flex-1">
               <span className="block text-[13px] font-medium leading-snug text-ink">
                 {s.title}
-                <KimBadges ids={s.participant_ids} kim={s.kim} memberNames={memberNames} />
+                <KimBadges ids={s.participant_ids} kim={s.kim} memberNames={memberNames} personHex={personHex} />
               </span>
               {s.note && <span className="mt-0.5 block text-[12px] leading-snug text-subtle">{s.note}</span>}
             </span>

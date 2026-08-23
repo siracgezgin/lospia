@@ -10,6 +10,7 @@ import { ensureWeekScaffold } from "@/lib/planning/scaffold";
 import { PlanningBoard } from "@/components/planning/PlanningBoard";
 import { CalendarViewSwitch } from "@/components/planning/CalendarViewSwitch";
 import { asCalendarScale } from "@/lib/planning/calendar-scale";
+import { assignPersonTones } from "@/lib/design/person-colors";
 import { CalendarYearView, type YearDayLoad } from "@/components/planning/CalendarYearView";
 import { CalendarView } from "@/components/calendar/CalendarView";
 import type {
@@ -44,10 +45,10 @@ export default async function CalendarPage({
   // Sistemdeki üyeler — her ölçekte lazım (Kim rozetleri, kişi seçimi).
   const membersRes = await supabase
     .from("workspace_members")
-    .select("id, user_id, role, profiles(id, full_name, email, avatar_url)")
+    .select("id, user_id, role, color_key, icon_key, profiles(id, full_name, email, avatar_url)")
     .eq("workspace_id", workspaceId);
   type ProfileLite = Pick<Profile, "id" | "full_name" | "email" | "avatar_url">;
-  type MemberRow = { id: string; user_id: string; role: string; profiles: ProfileLite | ProfileLite[] | null };
+  type MemberRow = { id: string; user_id: string; role: string; color_key: string | null; icon_key: string | null; profiles: ProfileLite | ProfileLite[] | null };
   const memberRowsData = (membersRes.data ?? []) as unknown as MemberRow[];
   const members: { id: string; name: string }[] = [];
   const memberNames: Record<string, string> = {};
@@ -57,6 +58,21 @@ export default async function CalendarPage({
       const name = p.full_name || p.email || "—";
       members.push({ id: m.user_id, name });
       memberNames[m.user_id] = name;
+    }
+  }
+
+  /* Kişi renkleri — takvimdeki baş harf rozetleri (SE, GÖ, AF) herkeste aynı
+     marka rengindeydi; kimin olduğu ancak okunarak anlaşılıyordu. Aslı Hanım
+     (2026-08-24): "Kişilerin isimleri kendi renklerinde olsun."
+     Hesap panodakiyle AYNI kaynaktan: ekip geneli atama + yöneticinin seçimi. */
+  const personHex: Record<string, string> = {};
+  {
+    const seeds = memberRowsData.map((m) => m.user_id);
+    const choices = Object.fromEntries(
+      memberRowsData.map((m) => [m.user_id, { colorKey: m.color_key, iconKey: m.icon_key }]),
+    );
+    for (const [id, tone] of Object.entries(assignPersonTones(seeds, choices))) {
+      personHex[id] = tone.hex;
     }
   }
 
@@ -256,6 +272,7 @@ export default async function CalendarPage({
       weekStart={weekStart}
       members={members}
       memberNames={memberNames}
+      personHex={personHex}
       isAdmin={isAdmin}
       currentUserId={user.id}
       openItems={openItems}

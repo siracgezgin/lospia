@@ -12,6 +12,8 @@ interface Props {
    *  Aslı Hanım, 2026-08-19: "Sorumlu kişinin iş birliğini koyacaksın." */
   collaboratorIds?: string[] | null;
   memberNames: Record<string, string>;
+  /** profiles.id → hex. Boşsa marka rengine düşülür (kimse renksiz kalmaz). */
+  personHex?: Record<string, string>;
   className?: string;
 }
 
@@ -22,7 +24,7 @@ interface Props {
  * haftanın tamamının sığmasını engelliyordu. Bilgi kaybolmasın diye rozetler
  * metnin akışına alındı: satır kırılınca isim cümlenin ortasına düşmez.
  */
-export function KimBadges({ ids, kim, collaboratorIds, memberNames, className }: Props) {
+export function KimBadges({ ids, kim, collaboratorIds, memberNames, personHex = {}, className }: Props) {
   const list = ids ?? [];
   // Sorumlu olarak zaten görünen kişi ikinci kez iş birliği rozetiyle çıkmasın.
   const collabs = (collaboratorIds ?? []).filter((id) => !list.includes(id));
@@ -38,7 +40,11 @@ export function KimBadges({ ids, kim, collaboratorIds, memberNames, className }:
         <span
           key={id}
           title={memberNames[id] ?? ""}
-          className="inline-flex items-center rounded-md bg-brand px-1.5 py-px text-[10.5px] font-bold uppercase leading-[15px] tracking-wide text-white"
+          className={cn(
+            "inline-flex items-center rounded-md px-1.5 py-px text-[10.5px] font-bold uppercase leading-[15px] tracking-wide text-white",
+            !personHex[id] && "bg-brand",
+          )}
+          style={personHex[id] ? { backgroundColor: personHex[id] } : undefined}
         >
           {initialsOf(memberNames[id])}
         </span>
@@ -49,7 +55,11 @@ export function KimBadges({ ids, kim, collaboratorIds, memberNames, className }:
         <span
           key={`c-${id}`}
           title={`${memberNames[id] ?? ""} — iş birliği`}
-          className="inline-flex items-center rounded-md border border-dashed border-brand/50 bg-surface px-1.5 py-px text-[10.5px] font-semibold uppercase leading-[15px] tracking-wide text-brand-strong"
+          className={cn(
+            "inline-flex items-center rounded-md border border-dashed bg-surface px-1.5 py-px text-[10.5px] font-semibold uppercase leading-[15px] tracking-wide",
+            !personHex[id] && "border-brand/50 text-brand-strong",
+          )}
+          style={personHex[id] ? { borderColor: personHex[id], color: personHex[id] } : undefined}
         >
           {initialsOf(memberNames[id])}
         </span>

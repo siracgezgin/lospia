@@ -26,6 +26,8 @@ interface Props {
   weekStart: string;    // Pazartesi yyyy-MM-dd
   members: Member[];
   memberNames: Record<string, string>;
+  /** Kişi rengi (profiles.id → hex) — baş harf rozetleri kendi renginde. */
+  personHex?: Record<string, string>;
   isAdmin: boolean;
   currentUserId: string;
   openItems: PlanningOpenItem[];
@@ -40,7 +42,7 @@ interface Props {
 const MIN_TOPIC_ROWS = 3;
 
 export function PlanningBoard({
-  meetings, weekDays, weekStart, members, memberNames, isAdmin,
+  meetings, weekDays, weekStart, members, memberNames, personHex = {}, isAdmin,
   currentUserId, openItems, openItemsAvailable, matrix, matrixAvailable,
   processSteps, processStepsAvailable,
 }: Props) {
@@ -170,6 +172,7 @@ export function PlanningBoard({
         rowCountOfSlot={rowCountOfSlot}
         extraSlots={extraSlots}
         memberNames={memberNames}
+        personHex={personHex}
         isAdmin={isAdmin}
         todayIso={todayIso}
         onOpen={openEditor}
@@ -180,6 +183,7 @@ export function PlanningBoard({
         topicRows={topicRows}
         extraSlots={extraSlots}
         memberNames={memberNames}
+        personHex={personHex}
         isAdmin={isAdmin}
         todayIso={todayIso}
         onOpen={openEditor}
@@ -192,7 +196,7 @@ export function PlanningBoard({
       </p>
 
       {/* Blok 2 — Tarih/Saat × departman matrisi */}
-      <WeekMatrix rows={matrix} memberNames={memberNames} available={matrixAvailable} />
+      <WeekMatrix rows={matrix} memberNames={memberNames} personHex={personHex} available={matrixAvailable} />
 
       {/* Blok 3 — Kişi sütunları */}
       <OpenItemsBoard
@@ -204,7 +208,7 @@ export function PlanningBoard({
       />
 
       {/* Blok 4 — Adımlar / Operasyon Kurgusu */}
-      <ProcessSteps steps={processSteps} memberNames={memberNames} available={processStepsAvailable} />
+      <ProcessSteps steps={processSteps} memberNames={memberNames} personHex={personHex} available={processStepsAvailable} />
 
       {editor && (
         <MeetingEditor

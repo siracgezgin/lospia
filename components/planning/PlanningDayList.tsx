@@ -16,6 +16,8 @@ interface Props {
   topicRows: Map<string, (PlanningTopic | null)[]>;
   extraSlots: string[];
   memberNames: Record<string, string>;
+  /** Kişi rengi (profiles.id → hex) — baş harf rozetleri kendi renginde. */
+  personHex?: Record<string, string>;
   isAdmin: boolean;
   todayIso: string;
   onOpen: (_iso: string, _slot: string, _dayIndex: number) => void;
@@ -29,7 +31,7 @@ interface Props {
  * okunur — bilgi aynı, gezinme parmakla mümkün.
  */
 export function PlanningDayList({
-  weekDays, byCell, topicRows, extraSlots, memberNames, isAdmin, todayIso, onOpen,
+  weekDays, byCell, topicRows, extraSlots, memberNames, personHex = {}, isAdmin, todayIso, onOpen,
 }: Props) {
   const todayIdx = weekDays.indexOf(todayIso);
   const [dayIdx, setDayIdx] = useState(todayIdx >= 0 ? todayIdx : 0);
@@ -125,7 +127,7 @@ export function PlanningDayList({
                   <span className={cn("block text-[13.5px] font-bold leading-snug tracking-tight", meta.title)}>
                     {title || (isAdmin ? "— başlık ekle" : "—")}
                   </span>
-                  <KimBadges ids={ids} kim={kim} collaboratorIds={collabIds} memberNames={memberNames} className="ml-0 mt-1" />
+                  <KimBadges ids={ids} kim={kim} collaboratorIds={collabIds} memberNames={memberNames} className="ml-0 mt-1" personHex={personHex} />
                   {content && (
                     <span className="mt-1 block whitespace-pre-line text-[12px] leading-snug text-ink/70">
                       {content}
@@ -147,7 +149,7 @@ export function PlanningDayList({
                         {t.task_id && (
                           <CheckCircle2 size={12} className="ml-1 inline shrink-0 text-emerald-600" aria-label="Göreve atandı" />
                         )}
-                        <KimBadges ids={t.participant_ids} kim={t.kim} collaboratorIds={t.collaborator_ids} memberNames={memberNames} />
+                        <KimBadges ids={t.participant_ids} kim={t.kim} collaboratorIds={t.collaborator_ids} memberNames={memberNames} personHex={personHex} />
                         {t.due_date && (
                           <span className="ml-1 whitespace-nowrap text-[11px] tabular-nums text-subtle">
                             {format(parseISO(t.due_date), "d MMM", { locale: tr })}

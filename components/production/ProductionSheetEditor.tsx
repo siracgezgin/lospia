@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 import {
-  ClipboardList, ArrowLeft, Plus, Trash2, Save, User, Clock, Loader2, FileDown, Printer, AlertTriangle,
+  ClipboardList, ArrowLeft, Plus, Trash2, Save, User, Clock, Loader2, FileDown, Printer, AlertTriangle, ChevronDown,
   CheckCircle2, Ruler, Wallet, Layers,
 } from "lucide-react";
 import {
@@ -464,6 +464,27 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
               {isDeleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
               <span className="hidden sm:inline">Sil</span>
             </button>
+          )}
+          {/* DURUM föyün İÇERİĞİ değil KÜNYESİ — Aslı Hanım (2026-08-24):
+              "Föy içinde DURUM kısmı ne alaka, onu anlamadım." Ürün sekmesinin
+              altında bir bölüm olarak duruyordu ve föyün bir parçasıymış gibi
+              okunuyordu. Yetenek kaybolmadı: künye bilgisi künyenin yanına,
+              üst çubuğa alındı. */}
+          {isAdmin && !isNew && (
+            <label className="relative inline-flex items-center">
+              <span className="sr-only">Föy durumu</span>
+              <select
+                value={form.status}
+                onChange={(e) => set("status", e.target.value as ProductionSheetInput["status"])}
+                className="h-[38px] appearance-none rounded-lg border border-line bg-surface pl-3 pr-7 text-[13px] font-medium text-muted shadow-xs transition-colors duration-150 hover:border-line-strong hover:text-ink focus:outline-none focus:ring-2 focus:ring-brand-ring/40"
+                title="Föy durumu"
+              >
+                <option value="draft">Taslak</option>
+                <option value="active">Aktif</option>
+                <option value="archived">Arşiv</option>
+              </select>
+              <ChevronDown size={13} className="pointer-events-none absolute right-2 text-subtle" />
+            </label>
           )}
           {/* TEK SAYFA CIKTI — Asli Hanim (2026-08-23): "cikti aldigin zaman tek
               sayfada ciksin ve her sey gorunsun… firmaya vereyim." Ekrandaki
@@ -1101,22 +1122,6 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
         )}
       </>)}
 
-      {/* Durum — sekmeden bağımsız, föyün kimliğine ait; her sekmede altta durur. */}
-      {tab === "urun" && isAdmin && !isNew && (
-          <Section title="Durum">
-            <label className="block max-w-xs">
-              <select
-                className={inputCls}
-                value={form.status}
-                onChange={(e) => set("status", e.target.value as ProductionSheetInput["status"])}
-              >
-                <option value="draft">Taslak</option>
-                <option value="active">Aktif</option>
-                <option value="archived">Arşiv</option>
-              </select>
-            </label>
-          </Section>
-        )}
       </div>
     </div>
   );

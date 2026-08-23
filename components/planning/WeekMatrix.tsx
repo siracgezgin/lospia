@@ -11,6 +11,8 @@ import type { PlanningWeekMatrixRow } from "@/types";
 interface Props {
   rows: PlanningWeekMatrixRow[];
   memberNames: Record<string, string>;
+  /** Kişi rengi (profiles.id → hex) — baş harf rozetleri kendi renginde. */
+  personHex?: Record<string, string>;
   /** Tablo henüz migrate edilmediyse bölüm bilgi notuyla kapanır. */
   available: boolean;
 }
@@ -20,7 +22,7 @@ interface Props {
  * Geniş ekranda Excel'deki tablo; dar ekranda gün gün kart (6 sütunlu tablo
  * telefonda 1200px'lik bir kaydırma alanına dönüşüyordu).
  */
-export function WeekMatrix({ rows, memberNames, available }: Props) {
+export function WeekMatrix({ rows, memberNames, personHex = {}, available }: Props) {
   if (!available) {
     return (
       <Wrap>
@@ -82,7 +84,7 @@ export function WeekMatrix({ rows, memberNames, available }: Props) {
                     )}
                   >
                     {row?.text}
-                    {row && <KimBadges ids={row.participant_ids} kim={row.kim} memberNames={memberNames} />}
+                    {row && <KimBadges ids={row.participant_ids} kim={row.kim} memberNames={memberNames} personHex={personHex} />}
                   </div>
                 );
               })}
@@ -113,7 +115,7 @@ export function WeekMatrix({ rows, memberNames, available }: Props) {
                       </span>
                       <span className="min-w-0 flex-1 text-[12.5px] leading-snug text-ink/90">
                         {row?.text}
-                        {row && <KimBadges ids={row.participant_ids} kim={row.kim} memberNames={memberNames} />}
+                        {row && <KimBadges ids={row.participant_ids} kim={row.kim} memberNames={memberNames} personHex={personHex} />}
                       </span>
                     </li>
                   );
