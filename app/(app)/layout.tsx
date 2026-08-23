@@ -152,13 +152,18 @@ export default async function AppLayout({
 
   return (
     <div className="flex h-screen bg-app overflow-hidden">
+      {/* no-print: kâğıtta kabuk yok — tek sayfa rapor A4'e sığsın. */}
+      <div className="no-print contents">
       <AppSidebar
         workspace={workspace}
         brand={brand}
         userId={user.id}
         userRole={userRole}
       />
+      </div>
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+        {/* no-print: sayfa başlığı çubuğu kâğıtta yer yer. */}
+        <div className="no-print contents">
         <AppHeader
           workspace={workspace}
           unreadCount={unreadCount}
@@ -169,6 +174,7 @@ export default async function AppLayout({
           deadTaskIds={deadTaskIds}
           userRole={userRole}
         />
+        </div>
         {/* pb-bottom-nav keeps content clear of the fixed mobile bottom nav (incl.
             iOS safe-area inset); overflow-x-hidden stops stray wide children from
             producing a horizontal page scroll on phones. */}
@@ -214,7 +220,7 @@ export default async function AppLayout({
           )}
         </main>
       </div>
-      <MobileNav isAdmin={isAdmin} />
+      <div className="no-print contents"><MobileNav isAdmin={isAdmin} /></div>
       {/* Task-detail drawer slot (intercepting route). Empty on normal routes. */}
       {modal}
     </div>

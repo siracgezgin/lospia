@@ -199,6 +199,42 @@ body {
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
+   Yazdırma — kişi bazlı tek sayfa rapor.
+
+   Aslı Hanım (2026-08-19): "Beş sayfa gönderince o insanlar o beş sayfayı
+   okumuyor bile, kendileriyle ilgili olanı… Tek sayfalık, kişi bazlı böyle
+   şey yapabiliriz. Sadece bir sayfada okusun kendisiyle ilgili detayları."
+
+   .no-print → ekranda var, kâğıtta yok (sidebar, başlık çubuğu, düğmeler).
+   .print-page → kâğıda basılan asıl blok; kenarlık ve gölge kâğıtta gürültü.
+   ────────────────────────────────────────────────────────────────────────── */
+@media print {
+  .no-print { display: none !important; }
+
+  /* Kâğıt beyaz: ekran arka planları mürekkep yakar ve gri basar. */
+  html, body { background: #fff !important; }
+
+  /* Kabuk kaydırma kapları kâğıtta içeriği KIRPIYOR — hepsi serbest bırakılır. */
+  body * { overflow: visible !important; }
+  main, .print-page { height: auto !important; max-height: none !important; }
+
+  .print-page {
+    box-shadow: none !important;
+    border: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Bir kalem satırının ortasından sayfa bölünmesin. */
+  li, tr, .print-keep { break-inside: avoid; page-break-inside: avoid; }
+}
+
+@page {
+  size: A4 portrait;
+  margin: 14mm;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
    Mobile safe-area + bottom-nav helpers
    The bottom navigation is 3.5rem tall plus the iOS home-indicator inset.
    Content panes pad past it with .pb-bottom-nav; the nav itself pads its own

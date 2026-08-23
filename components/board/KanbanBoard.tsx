@@ -33,7 +33,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  GripVertical, Plus, FileSpreadsheet, Search, X, Check, CalendarDays,
+  GripVertical, Plus, FileSpreadsheet, FileText, Search, X, Check, CalendarDays,
   ChevronLeft, ChevronRight, ChevronDown, MoreVertical, Pencil, Copy, Archive, Trash2, AlertTriangle, Lock, ShieldCheck,
 } from "lucide-react";
 import { ADMIN_ONLY_CHIP_LABEL, asVisibility, VISIBILITY_LABELS, type TaskVisibility } from "@/lib/utils/visibility";
@@ -2061,6 +2061,19 @@ export function KanbanBoard({
               <span className="truncate text-[15px] font-semibold tracking-tight text-ink">
                 {getPersonDisplayName(selectedPerson.name)}
               </span>
+              {/* Tek sayfa rapor — Aslı Hanım (2026-08-19): "Tek sayfalık, kişi
+                  bazlı… sadece bir sayfada kendisiyle ilgili detayları okusun."
+                  Yalnız sistem kullanıcısı olan kişide anlamlı (CRM kişisinin
+                  görevi/toplantısı olmaz). */}
+              {selectedPerson.filterKey.startsWith("member:") && (
+                <Link
+                  href={`/reports/${selectedPerson.id}`}
+                  className="ml-1 inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1 text-[12.5px] font-medium text-muted transition-all duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
+                  title="Bu kişinin tek sayfalık özeti — yazdırılabilir"
+                >
+                  <FileText size={13} /> Tek sayfa özet
+                </Link>
+              )}
             </span>
           ) : (
             <span className="truncate text-[15px] font-semibold tracking-tight text-ink">Tüm işler</span>
