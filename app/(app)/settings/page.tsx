@@ -6,6 +6,7 @@ import { CreateAccountPanel } from "@/components/settings/CreateAccountPanel";
 import { DepartmentsManager } from "@/components/settings/DepartmentsManager";
 import { ManufacturersManager, type ManagerManufacturer } from "@/components/settings/ManufacturersManager";
 import { SeasonsManager, type ManagerSeason } from "@/components/settings/SeasonsManager";
+import { MaterialsManager, type ManagerMaterial } from "@/components/settings/MaterialsManager";
 import { canManageSettings, canRenameWorkspace, canManageMembers, canManageWorkspace } from "@/lib/auth/permissions";
 import { roleLabel } from "@/lib/utils/roles";
 import { getDisplayNotificationEmail } from "@/lib/utils/notification-email";
@@ -50,7 +51,7 @@ export default async function SettingsPage() {
 
   const [wsResult, membersResult, profileResult, invitesResult,
          deptsResult, deptMembersResult, manufacturersResult, sheetProducerResult,
-         seasonsResult, sheetSeasonResult] =
+         seasonsResult, sheetSeasonResult, materialsResult, bomUsageResult, suppliersResult] =
     await Promise.all([
       supabase.from("workspaces").select("*").eq("id", workspaceId).single(),
       supabase
@@ -101,6 +102,24 @@ export default async function SettingsPage() {
         .select("season_id")
         .eq("workspace_id", workspaceId)
         .not("season_id", "is", null),
+      // Hammadde kütüphanesi — föy reçetelerinin kaynağı (20240310).
+      supabase
+        .from("workspace_materials")
+        .select("id, code, name, category, supplier_id, composition, width_cm, unit, unit_price, currency, notes, is_active")
+        .eq("workspace_id", workspaceId)
+        .order("is_active", { ascending: false })
+        .order("category")
+        .order("name"),
+      supabase
+        .from("production_sheet_materials")
+        .select("material_id")
+        .eq("workspace_id", workspaceId),
+      supabase
+        .from("workspace_suppliers")
+        .select("id, name")
+        .eq("workspace_id", workspaceId)
+        .eq("is_active", true)
+        .order("name"),
     ]);
 
   const manufacturers = (manufacturersResult.data ?? []) as ManagerManufacturer[];
@@ -115,6 +134,14 @@ export default async function SettingsPage() {
   const seasonCounts: Record<string, number> = {};
   for (const r of (sheetSeasonResult.data ?? []) as { season_id: string | null }[]) {
     if (r.season_id) seasonCounts[r.season_id] = (seasonCounts[r.season_id] ?? 0) + 1;
+  }
+
+  const materials = (materialsResult.data ?? []) as ManagerMaterial[];
+  const materialsAvailable = !materialsResult.error;
+  const suppliers = (suppliersResult.data ?? []) as { id: string; name: string }[];
+  const materialUsage: Record<string, number> = {};
+  for (const r of (bomUsageResult.data ?? []) as { material_id: string }[]) {
+    materialUsage[r.material_id] = (materialUsage[r.material_id] ?? 0) + 1;
   }
 
   const workspace: Workspace | null = wsResult.data;
@@ -364,6 +391,34 @@ export default async function SettingsPage() {
                 <ManufacturersManager
                   manufacturers={manufacturers}
                   sheetCounts={sheetCounts}
+                  canManage={canManageDepts}
+                />
+              </Card>
+            </section>
+          )}
+
+          {/* Hammadde — föy reçetelerinin kaynağı. Malzeme burada BİR KEZ
+              tanımlanır; fiyatı değişince tüm föylerin maliyeti güncellenir. */}
+          {materialsAvailable && (
+            <section className="space-y-3">
+              <Card className="p-5 space-y-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <h2 className="text-base font-semibold text-ink">Hammadde</h2>
+                    <p className="text-[13px] text-muted mt-0.5">
+                      Kumaş ve aksesuarlar burada bir kez tanımlanır. Föyün reçetesine eklenince
+                      maliyet <b className="font-semibold text-ink">hesaplanır</b>; fiyat burada
+                      değişince tüm föyler güncellenir.
+                    </p>
+                  </div>
+                  <span className="text-xs text-muted bg-surface-sunken px-2.5 py-1 rounded-full tabular-nums shrink-0">
+                    {materials.length} malzeme
+                  </span>
+                </div>
+                <MaterialsManager
+                  materials={materials}
+                  suppliers={suppliers}
+                  usageCounts={materialUsage}
                   canManage={canManageDepts}
                 />
               </Card>

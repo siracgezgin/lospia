@@ -8,20 +8,30 @@ import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { updateProductionSheetPricing } from "@/lib/actions/production";
 import {
   totalQuantity, formatMoney, COST_ITEM_DEFS, emptyCostItems, unitCostOf,
+  MATERIAL_COST_KEY, bomLineCost,
 } from "@/lib/collection/cost";
 import { CollectionTabs } from "./PaymentTable";
 import { SeasonSwitch, type SwitchSeason } from "./SeasonSwitch";
-import type { ProductionSheet, ProductionPricing, CostItemKey } from "@/types";
+import type { ProductionSheet, ProductionPricing, CostItemKey, MaterialCategory } from "@/types";
 
 type Row = Pick<
   ProductionSheet,
   "id" | "title" | "product_kind" | "producer" | "category" | "subcategory" | "pricing" | "size_distribution"
 >;
 
+/** Maliyet tablosunun ihtiyaç duyduğu sade reçete satırı. */
+export type BomLite = {
+  consumption: number;
+  waste_pct: number;
+  material: { id: string; category: MaterialCategory; unit_price: number | null } | null;
+};
+
 interface Props {
   rows: Row[];
   /** Sezon bağlamı — Koleksiyon ile aynı seçim. */
   seasons?: SwitchSeason[];
+  /** föy id → reçete satırları. Malzeme kalemleri buradan hesaplanır. */
+  bomBySheet?: Record<string, BomLite[]>;
 }
 
 const cellInput =
@@ -40,7 +50,7 @@ const thSticky = "sticky top-0 z-10 border-b-2 border-line-strong bg-surface-mut
  *
  * Ustaya yapılan ödeme burada DEĞİL — o "Ödeme Tablosu"nda yaşar.
  */
-export function CostBreakdownTable({ rows, seasons = [] }: Props) {
+export function CostBreakdownTable({ rows, seasons = [], bomBySheet = {} }: Props) {
   const [pricing, setPricing] = useState<Record<string, ProductionPricing>>(() => {
     const m: Record<string, ProductionPricing> = {};
     for (const r of rows) {
@@ -54,10 +64,35 @@ export function CostBreakdownTable({ rows, seasons = [] }: Props) {
   const [savedId, setSavedId] = useState<string | null>(null);
   const [, startSave] = useTransition();
 
+  /** Föyün reçetesinden gelen kalem tutarları (kalem anahtarına göre). */
+  const bomOf = (id: string): Partial<Record<CostItemKey, number>> => {
+    const out: Partial<Record<CostItemKey, number>> = {};
+    for (const r of bomBySheet[id] ?? []) {
+      const key = MATERIAL_COST_KEY[r.material?.category ?? "diger"] ?? "diger";
+      // bomLineCost föy ekranıyla AYNI formülü kullansın diye uyumlu biçime sokulur.
+      out[key] = (out[key] ?? 0) + bomLineCost({
+        consumption: r.consumption, waste_pct: r.waste_pct,
+        material: { unit_price: r.material?.unit_price ?? null },
+      } as never);
+    }
+    return out;
+  };
+
   const amountOf = (id: string, key: CostItemKey) =>
     pricing[id]?.cost_items?.find((i) => i.key === key)?.amount ?? "";
 
-  const unitCost = (id: string) => unitCostOf(pricing[id]);
+  const unitCost = (id: string) => {
+    const bom = bomOf(id);
+    const items = pricing[id]?.cost_items;
+    if (items?.length) {
+      const sum = items.reduce(
+        (a, it) => a + (bom[it.key] != null ? bom[it.key]! : Number(String(it.amount).replace(/[^\d.,-]/g, "").replace(",", ".") || 0)),
+        0,
+      );
+      if (sum > 0) return sum;
+    }
+    return unitCostOf(pricing[id]);
+  };
   const qtyOf = (r: Row) => totalQuantity(r.size_distribution);
   const lineTotal = (r: Row) => qtyOf(r) * unitCost(r.id);
 
@@ -169,18 +204,32 @@ export function CostBreakdownTable({ rows, seasons = [] }: Props) {
                       </Link>
                       {r.producer && <span className="ml-2 text-[12px] text-subtle">{r.producer}</span>}
                     </td>
-                    {COST_ITEM_DEFS.map((d) => (
-                      <td key={d.key} className={cn("px-0.5 py-1", colBorder)}>
-                        <input
-                          className={cellInput}
-                          value={amountOf(r.id, d.key)}
-                          onChange={(e) => setAmount(r.id, d.key, e.target.value)}
-                          onBlur={() => save(r.id)}
-                          placeholder="·"
-                          inputMode="decimal"
-                        />
-                      </td>
-                    ))}
+                    {COST_ITEM_DEFS.map((d) => {
+                      const fromBom = bomOf(r.id)[d.key];
+                      return (
+                        <td key={d.key} className={cn("px-0.5 py-1", colBorder)}>
+                          {fromBom != null ? (
+                            // Reçeteden hesaplanıyor — elle değiştirilemez,
+                            // yoksa iki kaynak çakışır.
+                            <span
+                              className="block px-1.5 py-1 text-right text-[12.5px] tabular-nums text-brand-strong"
+                              title="Reçeteden hesaplanıyor"
+                            >
+                              {formatMoney(fromBom)}
+                            </span>
+                          ) : (
+                            <input
+                              className={cellInput}
+                              value={amountOf(r.id, d.key)}
+                              onChange={(e) => setAmount(r.id, d.key, e.target.value)}
+                              onBlur={() => save(r.id)}
+                              placeholder="·"
+                              inputMode="decimal"
+                            />
+                          )}
+                        </td>
+                      );
+                    })}
                     <td className={cn("px-2 py-1.5 text-right font-semibold tabular-nums text-ink", colBorder)}>
                       {unitCost(r.id) ? formatMoney(unitCost(r.id)) : "—"}
                     </td>

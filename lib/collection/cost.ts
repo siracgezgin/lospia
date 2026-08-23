@@ -1,7 +1,10 @@
 // Maliyet yardımcıları — föy pricing + beden dağılımından tutarlı sayı/para türet.
 // Koleksiyon tarayıcısı ve Maliyet tablosu AYNI hesabı kullansın diye tek yer.
 
-import type { ProductionSheet, SizeDistribution, ProductionPricing, CostItem, CostItemKey } from "@/types";
+import type {
+  ProductionSheet, SizeDistribution, ProductionPricing, CostItem, CostItemKey,
+  SheetMaterialWithMaterial, MaterialCategory,
+} from "@/types";
 
 /** "₺500.00", "500,00 TL", "1.800" → 500 / 1800. Boş/geçersiz → 0. */
 export function parseMoney(raw: string | null | undefined): number {
@@ -151,15 +154,79 @@ export function emptyCostItems(): CostItem[] {
 }
 
 /**
+ * Hammadde kategorisi → maliyet kalemi.
+ *
+ * Reçeteden (BOM) gelen tutar doğru kaleme yazılsın diye. Tela/iplik/etiket
+ * ayrı bir maliyet kalemi hak etmiyor — hepsi "aksesuar"da toplanır; kalem
+ * listesi Aslı Hanım'ın saydığı kadar kalsın ("kumaş, dikim, fermuar, ütü
+ * paketi, kalıp, genel giderler").
+ */
+export const MATERIAL_COST_KEY: Record<MaterialCategory, CostItemKey> = {
+  kumas: "kumas",
+  fermuar: "fermuar",
+  aksesuar: "aksesuar",
+  tela: "aksesuar",
+  iplik: "aksesuar",
+  etiket: "aksesuar",
+  diger: "diger",
+};
+
+/** Bir reçete satırının birim maliyeti: tüketim × fiyat × (1 + fire). */
+export function bomLineCost(row: SheetMaterialWithMaterial): number {
+  const price = Number(row.material?.unit_price ?? 0);
+  const qty = Number(row.consumption ?? 0);
+  const waste = Number(row.waste_pct ?? 0) / 100;
+  if (!Number.isFinite(price) || !Number.isFinite(qty)) return 0;
+  return qty * price * (1 + (Number.isFinite(waste) ? waste : 0));
+}
+
+/**
+ * Reçeteden gelen maliyet kalemleri.
+ *
+ * Aslı Hanım (2026-08-19) maliyeti kalem kalem istedi; kalemleri elle
+ * giriyorduk. Reçete varsa MALZEME kalemleri (kumaş, fermuar, aksesuar) artık
+ * hesaplanır — kumaş fiyatı değişince tüm föyler kendiliğinden güncellenir.
+ * Dikim, ütü/paket, kalıp ve genel giderler elle kalır: onlar malzeme değil.
+ */
+export function bomCostByKey(rows: SheetMaterialWithMaterial[]): Partial<Record<CostItemKey, number>> {
+  const out: Partial<Record<CostItemKey, number>> = {};
+  for (const r of rows) {
+    const key = MATERIAL_COST_KEY[r.material?.category ?? "diger"] ?? "diger";
+    out[key] = (out[key] ?? 0) + bomLineCost(r);
+  }
+  return out;
+}
+
+/** Reçetenin toplam birim maliyeti. */
+export function bomTotal(rows: SheetMaterialWithMaterial[]): number {
+  return rows.reduce((a, r) => a + bomLineCost(r), 0);
+}
+
+/**
+ * Ürünün BİRİM maliyeti = kalemlerin toplamı./**
  * Ürünün BİRİM maliyeti = kalemlerin toplamı.
  *
  * Kalem yoksa eski `unit_price` alanına düşer (geri uyum): mevcut föylerde
  * girilmiş tek rakam kaybolmasın.
  */
-export function unitCostOf(pricing: ProductionPricing | null | undefined): number {
+export function unitCostOf(
+  pricing: ProductionPricing | null | undefined,
+  /** Reçete satırları. Verilirse malzeme kalemleri BURADAN hesaplanır. */
+  bom?: SheetMaterialWithMaterial[],
+): number {
+  const fromBom = bom?.length ? bomCostByKey(bom) : null;
   const items = pricing?.cost_items;
   if (Array.isArray(items) && items.length) {
-    const sum = items.reduce((acc, it) => acc + parseMoney(it.amount), 0);
+    const sum = items.reduce((acc, it) => {
+      // Reçeteden gelen kalem elle girilenin YERİNE geçer — iki kaynak
+      // toplanırsa maliyet iki katına çıkardı.
+      const bomVal = fromBom?.[it.key];
+      return acc + (bomVal != null ? bomVal : parseMoney(it.amount));
+    }, 0);
+    if (sum > 0) return sum;
+  }
+  if (fromBom) {
+    const sum = Object.values(fromBom).reduce((a, v) => a + (v ?? 0), 0);
     if (sum > 0) return sum;
   }
   return parseMoney(pricing?.unit_price);

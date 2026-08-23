@@ -182,6 +182,77 @@ export type OperationSpreadsheet = {
   updated_at: string;
 };
 
+/** Hammadde kategorisi — maliyet kalemine eşlenir (bkz. MATERIAL_COST_KEY). */
+export type MaterialCategory =
+  | "kumas" | "aksesuar" | "fermuar" | "tela" | "iplik" | "etiket" | "diger";
+
+export type MaterialUnit = "m" | "adet" | "kg" | "takım" | "paket";
+
+/** Tedarikçi — hammaddenin kaynağı (20240310). */
+export type Supplier = {
+  id: string;
+  workspace_id: string;
+  name: string;
+  city: string | null;
+  country: string | null;
+  currency: string;
+  lead_time_days: number | null;
+  contact_name: string | null;
+  phone: string | null;
+  email: string | null;
+  notes: string | null;
+  is_active: boolean;
+  position: number;
+  created_at: string;
+  updated_at: string;
+};
+
+/**
+ * Hammadde (20240310).
+ *
+ * Kumaş/aksesuar BİR KEZ tanımlanır, tüm föylerde yeniden kullanılır. Birim
+ * fiyat tek yerde durur — değişince tüm föylerin maliyeti kendiliğinden
+ * güncellenir. Eskiden her föyde serbest metin olarak tekrar yazılıyordu.
+ */
+export type Material = {
+  id: string;
+  workspace_id: string;
+  code: string | null;
+  name: string;
+  category: MaterialCategory;
+  supplier_id: string | null;
+  composition: string | null;
+  width_cm: number | null;
+  unit: MaterialUnit;
+  unit_price: number | null;
+  currency: string;
+  photo_url: string | null;
+  notes: string | null;
+  is_active: boolean;
+  position: number;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Reçete satırı (BOM) — föy ↔ malzeme + birim başına tüketim + fire. */
+export type SheetMaterial = {
+  id: string;
+  workspace_id: string;
+  sheet_id: string;
+  material_id: string;
+  consumption: number;
+  waste_pct: number;
+  note: string | null;
+  position: number;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Reçete satırı + bağlı malzeme — ekranın çalıştığı birleşik biçim. */
+export type SheetMaterialWithMaterial = SheetMaterial & {
+  material: Pick<Material, "id" | "name" | "code" | "category" | "unit" | "unit_price" | "currency" | "width_cm">;
+};
+
 /**
  * Sezon — 20240309 migration.
  *

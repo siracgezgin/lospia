@@ -2,7 +2,8 @@ import { redirect } from "next/navigation";
 import { requireModuleMember } from "@/lib/modules/context";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { ProductionSheetEditor } from "@/components/production/ProductionSheetEditor";
-import type { ProductionSheet, Manufacturer } from "@/types";
+import type { ProductionSheet, Manufacturer, SheetMaterialWithMaterial } from "@/types";
+import type { PickableMaterial } from "@/components/production/SheetBom";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,16 @@ export default async function ProductionSheetPage({
     .order("name", { ascending: false });
   const seasons = (seasonsResult.data ?? []) as { id: string; name: string; is_current: boolean }[];
 
+  // Hammadde kütüphanesi — reçeteye eklenebilecekler.
+  const materialsResult = await supabase
+    .from("workspace_materials")
+    .select("id, name, code, category, unit, unit_price, currency")
+    .eq("workspace_id", workspaceId)
+    .eq("is_active", true)
+    .order("category")
+    .order("name");
+  const materials = (materialsResult.data ?? []) as PickableMaterial[];
+
   // "new" → boş föy oluşturma modu.
   if (id === "new") {
     return (
@@ -59,6 +70,8 @@ export default async function ProductionSheetPage({
         memberNames={memberNames}
         manufacturers={manufacturers}
         seasons={seasons}
+        materials={materials}
+        bom={[]}
         isAdmin={isAdmin}
         currentUserId={user.id}
       />
@@ -76,12 +89,22 @@ export default async function ProductionSheetPage({
     redirect("/production");
   }
 
+  // Reçete (BOM) — malzemeyle birlikte; maliyet bundan hesaplanır.
+  const bomResult = await supabase
+    .from("production_sheet_materials")
+    .select("*, material:workspace_materials(id, name, code, category, unit, unit_price, currency, width_cm)")
+    .eq("sheet_id", id)
+    .order("position");
+  const bom = (bomResult.data ?? []) as unknown as SheetMaterialWithMaterial[];
+
   return (
     <ProductionSheetEditor
       sheet={data as unknown as ProductionSheet}
       memberNames={memberNames}
       manufacturers={manufacturers}
       seasons={seasons}
+      materials={materials}
+      bom={bom}
       isAdmin={isAdmin}
       currentUserId={user.id}
     />

@@ -8,6 +8,7 @@ import { SetupRequiredNotice } from "@/components/modules/SetupRequiredNotice";
 import { maybeDatabaseSetupRequired } from "@/lib/utils/supabase-errors";
 import { CostBreakdownTable } from "@/components/collection/CostBreakdownTable";
 import type { ProductionSheet } from "@/types";
+import type { BomLite } from "@/components/collection/CostBreakdownTable";
 
 export const dynamic = "force-dynamic";
 
@@ -71,5 +72,16 @@ export default async function CostPage({
     "id" | "title" | "product_kind" | "producer" | "category" | "subcategory" | "pricing" | "size_distribution" | "status"
   >[];
 
-  return <CostBreakdownTable rows={rows} seasons={seasons} />;
+  // Tüm föylerin reçeteleri — maliyetin malzeme kalemleri buradan gelir.
+  // Tablo migrate edilmemişse boş dizi; tablo elle girilen kalemlere düşer.
+  const bomRes = await supabase
+    .from("production_sheet_materials")
+    .select("sheet_id, consumption, waste_pct, material:workspace_materials(id, category, unit_price)")
+    .eq("workspace_id", workspaceId);
+  const bomBySheet: Record<string, BomLite[]> = {};
+  for (const r of (bomRes.data ?? []) as unknown as (BomLite & { sheet_id: string })[]) {
+    (bomBySheet[r.sheet_id] ??= []).push(r);
+  }
+
+  return <CostBreakdownTable rows={rows} seasons={seasons} bomBySheet={bomBySheet} />;
 }

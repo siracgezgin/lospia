@@ -17,15 +17,16 @@ import {
 import { cn } from "@/lib/utils/cn";
 import { ImageUploader } from "./ImageUploader";
 import { SheetReadiness } from "./SheetReadiness";
+import { SheetBom, type PickableMaterial } from "./SheetBom";
 import { checkSheet } from "@/lib/production/completeness";
 import { COLLECTION_TAXONOMY, subcategoriesOf } from "@/lib/collection/taxonomy";
 import {
   totalQuantity, parseMoney, formatMoney, STANDARD_SIZES, normalizeToStandardSizes,
-  DEFAULT_SIZE_GROUPS, emptyCostItems, costItemLabel,
+  DEFAULT_SIZE_GROUPS, emptyCostItems, costItemLabel, bomCostByKey,
 } from "@/lib/collection/cost";
 import type {
   ProductionSheet, MeasurementRow, DeliveredItemRow, SizeDistribution, ProductionCategory,
-  CostItem, Manufacturer,
+  CostItem, Manufacturer, SheetMaterialWithMaterial,
 } from "@/types";
 
 /** Föydeki "Üretici" seçicisini besleyen sade usta kaydı. */
@@ -40,6 +41,10 @@ interface Props {
   manufacturers?: SheetManufacturer[];
   /** Sezon listesi. Boşsa alan serbest metne düşer. */
   seasons?: { id: string; name: string; is_current: boolean }[];
+  /** Hammadde kütüphanesi — reçeteye eklenebilecekler. */
+  materials?: PickableMaterial[];
+  /** Bu föyün reçetesi (BOM). Maliyetin malzeme kalemleri bundan hesaplanır. */
+  bom?: SheetMaterialWithMaterial[];
   isAdmin: boolean;
   currentUserId: string;
 }
@@ -214,7 +219,7 @@ function Section({ title, children, className }: { title: string; children: Reac
   );
 }
 
-export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], seasons = [], isAdmin, currentUserId }: Props) {
+export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], seasons = [], materials = [], bom = [], isAdmin, currentUserId }: Props) {
   const router = useRouter();
   const [form, setForm] = useState<ProductionSheetInput>(() => (sheet ? fromSheet(sheet) : emptyState()));
   const [error, setError] = useState<string | null>(null);
@@ -801,6 +806,12 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
       </>)}
 
       {tab === "maliyet" && (<>
+        {/* REÇETE (BOM) — maliyetin KAYNAĞI, o yüzden maliyet tablosunun
+            ÜSTÜNDE. Nedensel sıra: reçete → maliyet. */}
+        <Section title="Reçete — Bu üründe ne kadar malzeme gidiyor">
+          <SheetBom sheetId={sheet?.id ?? null} rows={bom} materials={materials} canEdit={isAdmin} />
+        </Section>
+
         {/* MALİYET — kalem kalem. Aslı Hanım (2026-08-19):
             "Maliyet şöyle hesaplanıyor: kumaşın fiyatına ayrı giriyorsun,
              dikim fiyatına ayrı, fermuar fiyatına ayrı, ütü paketi ayrı,
@@ -811,7 +822,14 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
             const p = form.pricing;
             const qty = totalQuantity(form.size_distribution);
             const items = p.cost_items?.length ? p.cost_items : emptyCostItems();
-            const unitCost = items.reduce((a, it) => a + parseMoney(it.amount), 0);
+            // Reçeteden gelen kalemler ELLE GİRİLEMEZ: tutar hesaplanır ve
+            // elle girilenin YERİNE geçer. İkisi toplanırsa maliyet iki katına
+            // çıkardı. Reçetede olmayan kalemler (dikim, ütü/paket, kalıp,
+            // genel gider) elle kalır — onlar malzeme değil.
+            const fromBom = bom.length ? bomCostByKey(bom) : {};
+            const amountOf = (it: CostItem) =>
+              fromBom[it.key] != null ? fromBom[it.key]! : parseMoney(it.amount);
+            const unitCost = items.reduce((a, it) => a + amountOf(it), 0);
             const setP = (patch: Partial<typeof p>) => set("pricing", { ...p, ...patch });
             const setItem = (i: number, patch: Partial<CostItem>) =>
               setP({ cost_items: items.map((it, ix) => (ix === i ? { ...it, ...patch } : it)) });
@@ -845,13 +863,25 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
                             )}
                           </td>
                           <td className="border border-line p-0">
-                            <input
-                              className="w-full bg-transparent px-2 py-1.5 text-right tabular-nums text-ink focus:bg-surface focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-ring"
-                              value={it.amount}
-                              onChange={(e) => setItem(i, { amount: e.target.value })}
-                              inputMode="decimal"
-                              placeholder="—"
-                            />
+                            {fromBom[it.key] != null ? (
+                              <span
+                                className="flex items-center justify-end gap-1.5 px-2 py-1.5 text-right tabular-nums text-ink"
+                                title="Reçeteden hesaplanıyor — elle değiştirilemez"
+                              >
+                                <span className="rounded bg-brand-soft px-1 py-px text-[10px] font-semibold uppercase tracking-wide text-brand-strong">
+                                  reçete
+                                </span>
+                                {formatMoney(fromBom[it.key]!)}
+                              </span>
+                            ) : (
+                              <input
+                                className="w-full bg-transparent px-2 py-1.5 text-right tabular-nums text-ink focus:bg-surface focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-ring"
+                                value={it.amount}
+                                onChange={(e) => setItem(i, { amount: e.target.value })}
+                                inputMode="decimal"
+                                placeholder="—"
+                              />
+                            )}
                           </td>
                         </tr>
                       ))}
