@@ -28,6 +28,21 @@ function suggestMember(contact: WorkspaceContact, members: CrmMember[]): CrmMemb
     const byName = members.find((m) => normalizePersonName(m.name) === nameKey);
     if (byName) return byName;
   }
+  /* İLK AD ÖNERİSİ.
+     Aynı insan iki kayıtta farklı YAZILABİLİYOR: "Aslı Filinta" sistem
+     hesabı, "Aslı Hanım" CRM kişisi (Aslı Hanım, 2026-08-24: "Aslı Filinta ve
+     Aslı Hanım aynı kişi"). Tam ad eşleşmesi bunları yakalamadığı için panel
+     "Eşleşmedi" diyordu ve kimse mükerrer kaydı fark etmiyordu — o kişinin
+     işleri panoda iki ayrı karta bölünüyordu.
+     Yalnız ilk ad TEK bir üyeye denk geliyorsa önerilir; iki "Ali" varsa
+     öneri yapılmaz, seçim kullanıcıya bırakılır. Öneri hiçbir zaman
+     kendiliğinden uygulanmaz — yönetici "Eşleştir"e basmalıdır. */
+  const firstOf = (n: string) => normalizePersonName(n).split(" ")[0] ?? "";
+  const contactFirst = firstOf(contact.name);
+  if (contactFirst.length >= 2) {
+    const hits = members.filter((m) => firstOf(m.name) === contactFirst);
+    if (hits.length === 1) return hits[0];
+  }
   return null;
 }
 

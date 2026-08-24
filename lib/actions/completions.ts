@@ -136,6 +136,8 @@ export async function toggleMyCompletion(taskId: string): Promise<{ ok: true } |
   await recomputeReview(sb, taskId, c.workspaceId, c.user.id);
   revalidatePath(`/tasks/${taskId}`);
   revalidatePath("/board");
+  revalidatePath("/list");
+  revalidatePath("/home");
   return { ok: true };
 }
 
@@ -227,6 +229,47 @@ export async function setTaskParticipants(
       .in("id", toRemove)
       .eq("task_id", taskId);
     if (rmErr) return { error: toActionErrorMessage(rmErr, REMOVE_FAILED) };
+  }
+
+  /* assignee_id KATILIMCI KÜMESİYLE SENKRON TUTULUR.
+     Sorumluluğun kanonik kaydı task_member_completions'tır; assignee_id ise
+     tek kişilik ESKİ alandır. Ama sistemin yarısı hâlâ o eski alanı okuyor:
+     Ana Sayfa'daki "Bana atanan görevler", Liste'nin "Bana atananlar"
+     merceği, CRM'deki "X görev" sayıları, kart renkleri.
+     "Görev oluştur" penceresi sorumluyu yalnız katılımcı olarak yazıp
+     assignee_id'yi null bıraktığı için panelden açılan HER görev o
+     ekranlarda kayboluyordu — Aslı Hanım (2026-08-24): "Tüm işler kısmına
+     giriyorum her kişinin görevi var, ama board'da kişi adına basıp girince
+     görev yok."
+     Bu yüzden assignee_id burada, katılımcı kümesinin TEK sahibi olarak
+     güncellenir: ilk sorumlu assignee olur, kimse kalmazsa null'a döner.
+     Zaten geçerli bir assignee listede duruyorsa dokunulmaz (kullanıcının
+     seçtiği sıra korunur). */
+  const { data: finalRows } = await sb
+    .from("task_member_completions")
+    .select("member_id")
+    .eq("task_id", taskId);
+  const finalMemberIds = (finalRows ?? []).map((r) => r.member_id as string);
+
+  let assigneeUserId: string | null = null;
+  if (finalMemberIds.length > 0) {
+    const { data: finalMembers } = await sb
+      .from("workspace_members")
+      .select("id, user_id")
+      .in("id", finalMemberIds);
+    const userIdByMember = new Map((finalMembers ?? []).map((m) => [m.id as string, m.user_id as string]));
+    const currentAssignee = (vTask.assignee_id as string | null) ?? null;
+    const stillResponsible =
+      currentAssignee != null &&
+      finalMemberIds.some((id) => userIdByMember.get(id) === currentAssignee);
+    assigneeUserId = stillResponsible
+      ? currentAssignee
+      : (wantIds.map((id) => userIdByMember.get(id)).find(Boolean)
+         ?? userIdByMember.get(finalMemberIds[0])
+         ?? null);
+  }
+  if (assigneeUserId !== ((vTask.assignee_id as string | null) ?? null)) {
+    await writer.from("tasks").update({ assignee_id: assigneeUserId }).eq("id", taskId);
   }
 
   // Notify + audit-log the handoff (resolve member_id → user_id so the activity

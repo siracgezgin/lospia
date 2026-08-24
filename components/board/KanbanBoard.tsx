@@ -83,10 +83,17 @@ const DeptMetaContext = createContext<Record<string, DeptMeta>>({});
 const PersonColorContext = createContext<Record<string, string>>({});
 function useTaskPersonColor(task: Task): string | null {
   const map = useContext(PersonColorContext);
+  const participants = useContext(ParticipantsContext)[task.id];
   // Sorumluluk kuralı panonun geri kalanıyla AYNI olmalı (applyPersonFilter):
-  // atanan → katılımcı → dış kişi. Yalnız assignee'ye bakınca katılımcıyla
-  // yürüyen görevler renksiz kalıyordu.
+  // atanan → KATILIMCI → iş birliği → dış kişi. Katılımcı adımı yorumu vardı
+  // ama kodu yoktu; sorumlusu yalnız katılımcı satırında yazan görevler
+  // renksiz (nötr gri) çiziliyordu.
   if (task.assignee_id && map[task.assignee_id]) return map[task.assignee_id]!;
+  if (participants) {
+    for (const p of participants) {
+      if (map[p.userId]) return map[p.userId]!;
+    }
+  }
   const collabs = (task.custom_fields as Record<string, unknown> | undefined)?.collaborators;
   if (Array.isArray(collabs)) {
     for (const id of collabs) {
@@ -384,23 +391,57 @@ const VIEW_DESCRIPTIONS: Record<string, string> = {
   "waiting-approval": "Kontrol/onay bekleyen tüm görevler — haftadan bağımsız",
 };
 
-function applyPersonFilter(tasks: Task[], personFilter: string): Task[] {
+/**
+ * Kişi süzgeci — panonun "bu kimin işi?" kuralı.
+ *
+ * SORUMLULUK ÜÇ YERDE YAZILI OLABİLİR, üçüne de bakmak zorundayız:
+ *   1. tasks.assignee_id              — tek kişilik eski alan
+ *   2. custom_fields.collaborators    — iş birliği yapanlar
+ *   3. task_member_completions        — KANONİK kayıt (katılımcılar)
+ *
+ * Üçüncüsü buradan eksikti ve şu hataya yol açıyordu: "Görev oluştur"
+ * penceresi sorumluları YALNIZCA katılımcı satırı olarak yazıyor
+ * (createTask → setTaskParticipants; assignee_id null kalıyor). Dolayısıyla
+ * panelden oluşturulan HER görev "Tüm işler"de görünüyor ama hiçbir kişinin
+ * kartında çıkmıyordu.
+ * (Aslı Hanım, 2026-08-24: "Tüm işler kısmına giriyorum her kişinin görevi
+ *  var, ama board'da kişi adına basıp girince görev yok.")
+ *
+ * DÖRDÜNCÜSÜ — birleştirilmiş CRM kişisi: aynı insan hem üye hem CRM kişisi
+ * olarak kayıtlıysa (Aslı Filinta = Aslı Hanım) ızgarada TEK kart çıkar
+ * (buildAssignablePeople birleştirir). O tek kart üyeyi temsil eder; ama iş
+ * eski CRM kaydına atanmış olabilir. mergedContactOf o bağı taşır, yoksa
+ * birleştirilen kişinin işleri hiçbir kartta görünmezdi.
+ */
+function applyPersonFilter(
+  tasks: Task[],
+  personFilter: string,
+  participantUserIds: Record<string, string[]> = {},
+  mergedContactOf: Record<string, string> = {},
+): Task[] {
   if (!personFilter) return tasks;
+
+  const hasCollab = (t: Task, id: string) => {
+    const collabs = (t.custom_fields as Record<string, unknown>)?.collaborators;
+    return Array.isArray(collabs) && collabs.includes(id);
+  };
+  const isParticipant = (t: Task, userId: string) =>
+    (participantUserIds[t.id] ?? []).includes(userId);
+
   if (personFilter.startsWith("member:")) {
     const id = personFilter.slice(7);
-    return tasks.filter((t) => {
-      if (t.assignee_id === id) return true;
-      const collabs = (t.custom_fields as Record<string, unknown>)?.collaborators;
-      return Array.isArray(collabs) && collabs.includes(id);
-    });
+    const contactId = mergedContactOf[id];
+    return tasks.filter(
+      (t) =>
+        t.assignee_id === id ||
+        isParticipant(t, id) ||
+        hasCollab(t, id) ||
+        (contactId != null && t.responsible_contact_id === contactId),
+    );
   }
   if (personFilter.startsWith("contact:")) {
     const id = personFilter.slice(8);
-    return tasks.filter((t) => {
-      if (t.responsible_contact_id === id) return true;
-      const collabs = (t.custom_fields as Record<string, unknown>)?.collaborators;
-      return Array.isArray(collabs) && collabs.includes(id);
-    });
+    return tasks.filter((t) => t.responsible_contact_id === id || hasCollab(t, id));
   }
   return tasks;
 }
@@ -1461,16 +1502,42 @@ export function KanbanBoard({
   // normalized-name match — the member entry wins). The same builder feeds the
   // task-detail Sorumlu kişiler panel and the create form, so every assignment
   // UI shows the SAME people. Department membership never filters this list.
-  const pickerContacts = useMemo(() => {
+  /* Görev → katılımcı userId listesi. Kişi süzgecinin ÜÇÜNCÜ kaynağı
+     (task_member_completions); "Görev oluştur" penceresi sorumluyu yalnız
+     buraya yazıyor. */
+  const participantUserIds = useMemo(() => {
+    const out: Record<string, string[]> = {};
+    for (const [taskId, list] of Object.entries(participantsByTask)) {
+      out[taskId] = list.map((p) => p.userId);
+    }
+    return out;
+  }, [participantsByTask]);
+
+  const assignablePeople = useMemo(() => {
     const memberInputs = members.length > 0
       ? members
       : profiles.map((p) => ({ memberId: p.id, userId: p.id, name: p.full_name ?? p.email ?? "—" }));
-    const people = buildAssignablePeople({ members: memberInputs, contacts });
+    return buildAssignablePeople({ members: memberInputs, contacts });
+  }, [members, profiles, contacts]);
+
+  const pickerContacts = useMemo(() => {
     const soloContactIds = new Set(
-      people.filter((p) => p.type === "contact").map((p) => p.contactId),
+      assignablePeople.filter((p) => p.type === "contact").map((p) => p.contactId),
     );
     return contacts.filter((c) => soloContactIds.has(c.id));
-  }, [members, profiles, contacts]);
+  }, [assignablePeople, contacts]);
+
+  /* Üyeye BİRLEŞTİRİLEN CRM kişisi (userId → contactId).
+     Aynı insan iki kayıtta olabiliyor; ızgarada tek kart çıkar ve o kart
+     üyeyi temsil eder. Eski CRM kaydına atanmış işler bu harita olmadan
+     hiçbir kartta görünmezdi. */
+  const mergedContactOf = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const p of assignablePeople) {
+      if (p.type === "user" && p.userId && p.contactId) out[p.userId] = p.contactId;
+    }
+    return out;
+  }, [assignablePeople]);
 
   function handleAddTask(colId: BoardColId) {
     const col = BOARD_COLUMNS.find((c) => c.id === colId);
@@ -1560,10 +1627,10 @@ export function KanbanBoard({
       const allowed = deptMatchIds[departmentFilter] ?? new Set([departmentFilter]);
       tasks = tasks.filter((t) => t.department_id != null && allowed.has(t.department_id));
     }
-    if (!adminBoard) tasks = applyPersonFilter(tasks, personFilter);
+    if (!adminBoard) tasks = applyPersonFilter(tasks, personFilter, participantUserIds, mergedContactOf);
     tasks = tasks.filter((t) => matchesSearch(t, search, responsibleNames));
     return tasks;
-  }, [adminBoard, adminVisibility, adminManager, managerUserIdSet, optimisticTasks, effectiveSlug, userId, weekStart, weekOnly, departmentFilter, deptMatchIds, personFilter, search, responsibleNames]);
+  }, [adminBoard, adminVisibility, adminManager, managerUserIdSet, optimisticTasks, effectiveSlug, userId, weekStart, weekOnly, departmentFilter, deptMatchIds, personFilter, participantUserIds, mergedContactOf, search, responsibleNames]);
 
   // Distribute filtered tasks into columns
   const tasksByCol = useMemo(() => {
