@@ -20,10 +20,17 @@
 --
 -- Kural: assignee_id boş VE en az bir katılımcı varsa, en eski katılımcı
 -- (görevin ilk sorumlusu) assignee olur. Dolu assignee_id'ye DOKUNULMAZ.
--- Idempotent: ikinci çalıştırma 0 satır günceller.
+-- Idempotent: ikinci çalıştırma 0 satır günceller. Fonksiyon olarak yazıldı ki
+-- yerel `supabase db reset`'te seed.sql sonunda da çağrılabilsin (migration'lar
+-- seed'den önce koşuyor, o an onarılacak satır yok).
 -- ============================================================================
 
-do $$
+create or replace function public.backfill_assignee_from_participants()
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $fn$
 declare v_fixed int;
 begin
   with ilk_sorumlu as (
@@ -44,5 +51,9 @@ begin
      and t.assignee_id is null;
 
   get diagnostics v_fixed = row_count;
-  raise notice 'assignee_id onarıldı: % görev katılımcısına bağlandı.', v_fixed;
-end $$;
+  return format('assignee_id onarımı: %s görev katılımcısına bağlandı.', v_fixed);
+end $fn$;
+
+select public.backfill_assignee_from_participants();
+
+grant execute on function public.backfill_assignee_from_participants() to service_role;

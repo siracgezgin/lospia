@@ -670,4 +670,11 @@ begin
   -- çağrılır; idempotenttir.
   select public.planning_open_items_to_tasks() into v_msg;
   raise notice '%', v_msg;
+  -- Sorumlusu yalnız katılımcı satırında yazan görevleri onar (20240318).
+  select public.backfill_assignee_from_participants() into v_msg;
+  raise notice '%', v_msg;
+  -- Aynı insanın mükerrer CRM kaydını sistem hesabına bağla (20240319).
+  -- Aslı Hanım: "Aslı Filinta ve Aslı Hanım aynı kişi", "Nisa / Nisa Hanım aynı kişi".
+  select public.link_duplicate_contacts() into v_msg;
+  raise notice '%', v_msg;
 end $$;
