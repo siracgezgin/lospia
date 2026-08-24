@@ -2,17 +2,12 @@
 
 import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Table2, Pencil, Save, Lock, Info } from "lucide-react";
+import { Table2, Pencil, Save, Info } from "lucide-react";
 import { saveSpreadsheetSnapshot } from "@/lib/actions/sheets";
-import {
-  sheetTypeLabel, sheetStatusLabel, SHEET_STATUS_TONE,
-} from "@/lib/office/constants";
-import {
-  parseSnapshot, workbookToGrid, emptyLightSnapshot, type LightSnapshot,
-} from "@/lib/utils/sheet-snapshot";
+import { emptyGrid, fromLegacy, type GridSnapshot } from "@/lib/sheets/model";
 import { cn } from "@/lib/utils/cn";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
-import { LightSheetEditor, type SheetEditorApi } from "./LightSheetEditor";
+import { SpreadsheetEditor, type SheetEditorApi } from "./SpreadsheetEditor";
 import { SheetFormModal } from "./SheetFormModal";
 import type { OperationSpreadsheet, WorkspaceDepartment } from "@/types";
 
@@ -44,13 +39,13 @@ export function SheetDetailView({
   const readOnly = contentLocked || (!isAdmin && !authorEditable);
   const canEditMeta = isAdmin || authorEditable;
 
-  // Any stored snapshot renders in the light grid: univer-engine snapshots are
-  // degraded to values-only (workbookToGrid) so no sheet is ever unreadable.
-  const initialGrid = useMemo<LightSnapshot>(() => {
-    const parsed = parseSnapshot(sheet.snapshot);
-    if (!parsed) return emptyLightSnapshot();
-    return parsed.engine === "light" ? parsed : workbookToGrid(parsed.workbook);
-  }, [sheet.snapshot]);
+  /* Kayıtlı her biçim okunur: yeni "grid", eski "light" (başlıklar 1. satıra
+     iner) ve hiç yazılmamış "univer" biçimi. Böylece kayıtlı hiçbir tablo
+     okunamaz hâle gelmez. */
+  const initialGrid = useMemo<GridSnapshot>(
+    () => fromLegacy(sheet.snapshot) ?? emptyGrid(),
+    [sheet.snapshot],
+  );
 
   function handleSave() {
     const api = apiRef.current;
@@ -77,9 +72,9 @@ export function SheetDetailView({
         description={sheet.description ?? undefined}
         icon={Table2}
         backHref="/sheets"
-        backLabel="Tablo Merkezi’ne dön"
+        backLabel="Sheets’e dön"
         secondaryBackHref="/modules"
-        secondaryBackLabel="Operasyon Modülleri"
+        secondaryBackLabel="Operation Modules"
         rightSlot={
           <>
             {canEditMeta && (
@@ -108,21 +103,10 @@ export function SheetDetailView({
         }
       />
 
-      {/* Status row */}
-      <div className="mb-3 flex flex-wrap items-center gap-1.5">
-        <span className="rounded-md bg-surface-muted px-2 py-0.5 text-[12px] font-medium text-muted">
-          {sheetTypeLabel(sheet.sheet_type)}
-        </span>
-        <span className={cn("inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[12px] font-medium", SHEET_STATUS_TONE[sheet.status])}>
-          {sheet.status === "locked" && <Lock size={10} />}
-          {sheetStatusLabel(sheet.status)}
-        </span>
-        {(sheet.tags ?? []).map((t) => (
-          <span key={t} className="rounded bg-surface-muted px-1.5 py-0.5 text-[12px] text-muted">
-            {t}
-          </span>
-        ))}
-      </div>
+      {/* Tür/durum/etiket çipleri KALDIRILDI — Aslı Hanım'ın sadelik kuralı
+          ("boş laf istemiyorum"): "Serbest çalışma · Taslak" her tabloda aynı
+          şeyi yazıyordu. Kilitli/arşiv durumu zaten aşağıdaki uyarı satırında
+          söyleniyor; gerisi "Bilgileri düzenle"nin içinde. */}
 
       {readOnly && (
         <div className="anim-fade-up mb-3 flex items-start gap-2 rounded-xl border border-line bg-surface-muted/60 px-3.5 py-2.5 text-[13.5px] leading-relaxed text-muted">
@@ -135,12 +119,16 @@ export function SheetDetailView({
         </div>
       )}
 
-      <LightSheetEditor
-        initialSnapshot={initialGrid}
-        readOnly={readOnly}
-        onReady={(api) => { apiRef.current = api; }}
-        onDirty={() => setDirty(true)}
-      />
+      {/* Tam yükseklik: hesap tablosu ekranın kalanını doldursun, sayfa
+          kaydırmasın — Excel'de olduğu gibi ızgaranın KENDİSİ kayar. */}
+      <div className="h-[calc(100vh-15rem)] min-h-[420px]">
+        <SpreadsheetEditor
+          initialSnapshot={initialGrid}
+          readOnly={readOnly}
+          onReady={(api) => { apiRef.current = api; }}
+          onDirty={() => setDirty(true)}
+        />
+      </div>
 
       {message && (
         <div

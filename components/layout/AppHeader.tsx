@@ -40,7 +40,6 @@ const PAGE_TITLES: { match: (p: string) => boolean; title: string }[] = [
   { match: (p) => p.startsWith("/finance"), title: "Finance" },
   { match: (p) => p.startsWith("/modules"), title: "Operation Modules" },
   { match: (p) => p.startsWith("/documents"), title: "Documents" },
-  { match: (p) => p.startsWith("/templates"), title: "Templates" },
   { match: (p) => p.startsWith("/sheets"), title: "Sheets" },
   { match: (p) => p.startsWith("/creative"), title: "Creative Links" },
   { match: (p) => p.startsWith("/crm"), title: "CRM" },

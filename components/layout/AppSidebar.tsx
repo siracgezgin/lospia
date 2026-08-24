@@ -15,7 +15,6 @@ import {
   Boxes,
   CalendarRange,
   Contact,
-  FileText,
   FolderOpen,
   Home,
   Palette,
@@ -75,7 +74,6 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     items: [
       { href: "/collection", label: "Collection",     icon: Boxes,      adminOnly: false },
       { href: "/documents",  label: "Documents",      icon: FolderOpen, adminOnly: false },
-      { href: "/templates",  label: "Templates",      icon: FileText,   adminOnly: false },
       { href: "/sheets",     label: "Sheets",         icon: Table2,     adminOnly: false },
       { href: "/creative",   label: "Creative Links", icon: Palette,    adminOnly: false },
       { href: "/crm",        label: "CRM",            icon: Contact,    adminOnly: false },

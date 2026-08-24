@@ -160,15 +160,6 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
     group: "urun",
   },
   {
-    key: "templates",
-    title: "Templates",
-    description: "Hazır iletişim formatları — kopyala, uyarla, gönder.",
-    href: "/templates",
-    icon: FileText,
-    access: "all",
-    group: "urun",
-  },
-  {
     key: "sheets",
     title: "Sheets",
     description: "Excel/CSV düzenleri ve operasyon tabloları.",
