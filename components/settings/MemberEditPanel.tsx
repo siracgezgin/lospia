@@ -7,6 +7,7 @@ import { Input, Select, Field } from "@/components/ui/Input";
 import { ASSIGNABLE_ROLE_OPTIONS } from "@/lib/utils/roles";
 import { PERSON_TONES, isHexColor } from "@/lib/design/person-colors";
 import type { IdentityMember } from "@/components/settings/PersonIdentityManager";
+import { AvatarUploader } from "@/components/settings/AvatarUploader";
 
 export type MemberDraft = {
   fullName: string;
@@ -141,9 +142,25 @@ export function MemberEditPanel({
             />
           </div>
 
-          {/* İkon seçici kaldırıldı — kişiler artık fotoğraf ya da
-              baş harfle çiziliyor (Aslı Hanım, 2026-08-24). Renk seçici kalıyor:
-              kart ve takvim renkleri ondan besleniyor. */}
+          {/* FOTOĞRAF — ikon seçicisinin yerine.
+              Aslı Hanım (2026-08-24): "İkon kalkıp herkesin resmi gelecek."
+              Yönetici ekibin fotoğraflarını buradan girer; kişi kendisininkini
+              Profil sayfasından da değiştirebilir. Fotoğraf yoksa kişi kendi
+              renginde baş harfleriyle çıkar — renk seçici bu yüzden kalıyor. */}
+          {member && (
+            <div className="mt-3 border-t border-hairline pt-3">
+              <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-muted">
+                Fotoğraf
+              </span>
+              <AvatarUploader
+                userId={member.userId}
+                name={member.name}
+                photoUrl={member.avatarUrl ?? null}
+                colorHex={isHexColor(d.colorKey) ? d.colorKey : null}
+                disabled={busy}
+              />
+            </div>
+          )}
 
         </div>
       )}
@@ -157,7 +174,7 @@ export function MemberEditPanel({
             className="mr-auto inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[12.5px] font-medium text-muted transition-colors hover:border-line-strong hover:text-ink disabled:opacity-50"
             title="Renk ve ikonu otomatik atamaya bırak"
           >
-            <RotateCcw size={12} /> Otomatik renk/ikon
+            <RotateCcw size={12} /> Otomatik renk
           </button>
         )}
         <button

@@ -240,7 +240,7 @@ export default async function SettingsPage() {
                 <div className="xl:col-span-2">
                 <SettingsSection
                   title="Ekip"
-                  description="Roller, kullanıcı adları, bildirim e-postaları ve kişi kimlikleri (renk + ikon). Görev kartları da kişinin rengini taşır — panoda kimin işi olduğu renkten okunur."
+                  description="Roller, kullanıcı adları, bildirim e-postaları ve kişi kimlikleri (renk + fotoğraf). Görev kartları da kişinin rengini taşır — panoda kimin işi olduğu renkten okunur."
                   aside={<CountChip n={memberCount} birim="kişi" />}
                 >
                   {/* MembersManager yetkiyi KENDİ içinde denetler (userRole

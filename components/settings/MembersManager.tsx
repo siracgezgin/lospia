@@ -40,7 +40,7 @@ interface Props {
   pendingGrants: WorkspaceInvite[];
   departments?: WorkspaceDepartment[];
   deptMembers?: DepartmentMember[];
-  /** Kişi kimlikleri (renk + ikon). Ayrı bir liste DEĞİL — Aslı Hanım
+  /** Kişi kimlikleri (renk + fotoğraf). Ayrı bir liste DEĞİL — Aslı Hanım
    *  (2026-08-23): "Burayı neden tek başlık altında toplamıyoruz." */
   identities?: IdentityMember[];
   canManageIdentity?: boolean;
@@ -65,7 +65,7 @@ export function MembersManager({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  /* KİMLİK (renk + ikon) — ayrı bölüm değil, üyenin kendi satırında.
+  /* KİMLİK (renk + fotoğraf) — ayrı bölüm değil, üyenin kendi satırında.
      Önce iki ayrı kart aynı sekiz kişiyi iki kez listeliyordu. */
   const { tones, usedColors, clashes } = usePersonIdentities(identities);
   const identityOf = new Map(identities.map((i) => [i.id, i]));
