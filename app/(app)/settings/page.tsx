@@ -185,6 +185,8 @@ export default async function SettingsPage() {
     roleLabel: roleLabel(m.role),
     colorKey: (m as { color_key?: string | null }).color_key ?? null,
     iconKey: (m as { icon_key?: string | null }).icon_key ?? null,
+    // Fotoğraf — rozet ve yükleyici bunu okur.
+    avatarUrl: m.profiles?.avatar_url ?? null,
   })).sort((a, b) => a.name.localeCompare(b.name, "tr"));
 
   /* Başka kişilerde KULLANILAN renkler — "Kişi ekle" formu aynı rengi ikinci

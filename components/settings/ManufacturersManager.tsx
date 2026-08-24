@@ -2,14 +2,14 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import { Plus, Trash2, Loader2, Save, Pencil, Scissors, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import {
   createManufacturer, updateManufacturer, deleteManufacturer,
   type ManufacturerInput,
 } from "@/lib/actions/manufacturers";
-import { assignPersonTones, assignPersonIcons } from "@/lib/design/person-colors";
+import { assignPersonTones } from "@/lib/design/person-colors";
+import { PersonAvatar } from "@/components/ui/PersonAvatar";
 import type { Manufacturer } from "@/types";
 
 export type ManagerManufacturer = Pick<
@@ -74,7 +74,6 @@ export function ManufacturersManager({ manufacturers, sheetCounts, canManage }: 
   const [busy, startWork] = useTransition();
 
   const tones = assignPersonTones(manufacturers.map((m) => m.id));
-  const icons = assignPersonIcons(manufacturers.map((m) => m.id));
 
   function run(fn: () => Promise<{ error?: string } | unknown>, after?: () => void) {
     setError(null);
@@ -177,7 +176,6 @@ export function ManufacturersManager({ manufacturers, sheetCounts, canManage }: 
         <ul className="space-y-2">
           {manufacturers.map((m) => {
             const tone = tones[m.id]!;
-            const Icon = icons[m.id]!;
             const count = sheetCounts[m.id] ?? 0;
             if (editingId === m.id) return <li key={m.id}>{form}</li>;
             return (
@@ -188,13 +186,14 @@ export function ManufacturersManager({ manufacturers, sheetCounts, canManage }: 
                   m.is_active ? tone.border : "border-line opacity-70",
                 )}
               >
-                {m.photo_url ? (
-                  <Image src={m.photo_url} alt="" width={36} height={36} className="h-9 w-9 shrink-0 rounded-full object-cover" unoptimized />
-                ) : (
-                  <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-full text-white", m.is_active ? tone.solid : "bg-subtle")}>
-                    <Icon size={16} strokeWidth={1.9} />
-                  </span>
-                )}
+                {/* Fotoğraf, yoksa baş harf — sembol ikonlar kaldırıldı
+                    (Aslı Hanım, 2026-08-24). */}
+                <PersonAvatar
+                  name={m.name}
+                  photoUrl={m.photo_url}
+                  colorHex={m.is_active ? tone.hex : null}
+                  size="md"
+                />
 
                 <span className="min-w-0 flex-1">
                   <span className="flex flex-wrap items-center gap-2">

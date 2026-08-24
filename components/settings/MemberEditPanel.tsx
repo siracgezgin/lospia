@@ -5,7 +5,7 @@ import { Loader2, RotateCcw, Save, X } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Input, Select, Field } from "@/components/ui/Input";
 import { ASSIGNABLE_ROLE_OPTIONS } from "@/lib/utils/roles";
-import { PERSON_TONES, PERSON_ICONS, isHexColor } from "@/lib/design/person-colors";
+import { PERSON_TONES, isHexColor } from "@/lib/design/person-colors";
 import type { IdentityMember } from "@/components/settings/PersonIdentityManager";
 
 export type MemberDraft = {
@@ -141,29 +141,10 @@ export function MemberEditPanel({
             />
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="w-[52px] shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted">İkon</span>
-            {PERSON_ICONS.map(({ key, label, Icon }) => {
-              const selected = d.iconKey === key;
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => set("iconKey", selected ? "" : key)}
-                  disabled={busy}
-                  title={label}
-                  className={cn(
-                    "tap-target grid h-7 w-7 place-items-center rounded-lg border transition-colors duration-150",
-                    selected
-                      ? "border-ink bg-ink text-white"
-                      : "border-line text-muted hover:border-line-strong hover:bg-surface-muted hover:text-ink",
-                  )}
-                >
-                  <Icon size={14} />
-                </button>
-              );
-            })}
-          </div>
+          {/* İkon seçici kaldırıldı — kişiler artık fotoğraf ya da
+              baş harfle çiziliyor (Aslı Hanım, 2026-08-24). Renk seçici kalıyor:
+              kart ve takvim renkleri ondan besleniyor. */}
+
         </div>
       )}
 

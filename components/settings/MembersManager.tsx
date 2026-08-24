@@ -22,7 +22,7 @@ import { Card } from "@/components/ui/Card";
 import { buildDeptMeta } from "@/lib/utils/departments";
 import { getDepartmentBadge } from "@/lib/design/semantics";
 import { cn } from "@/lib/utils/cn";
-import { personStyles } from "@/lib/design/person-colors";
+import { PersonAvatar } from "@/components/ui/PersonAvatar";
 import { saveMemberIdentity } from "@/lib/actions/member-identity";
 import { usePersonIdentities, type IdentityMember } from "@/components/settings/PersonIdentityManager";
 import { MemberEditPanel } from "@/components/settings/MemberEditPanel";
@@ -67,7 +67,7 @@ export function MembersManager({
 
   /* KİMLİK (renk + ikon) — ayrı bölüm değil, üyenin kendi satırında.
      Önce iki ayrı kart aynı sekiz kişiyi iki kez listeliyordu. */
-  const { tones, icons, usedColors, clashes } = usePersonIdentities(identities);
+  const { tones, usedColors, clashes } = usePersonIdentities(identities);
   const identityOf = new Map(identities.map((i) => [i.id, i]));
   const [addOpen, setAddOpen] = useState(false);
 
@@ -225,22 +225,23 @@ export function MembersManager({
           return (
             <div key={m.id} className="px-4 py-3 transition-colors duration-150 hover:bg-surface-hover sm:px-5">
             <div className="flex items-start justify-between gap-3">
-              {/* Kimlik rozeti — panodaki, rapordaki ve görev kartındakiyle AYNI
-                  renk ve ikon. Kişiyi listede gözle bulmanın en hızlı yolu. */}
+              {/* Kimlik rozeti — panodaki, rapordaki ve görev kartındakiyle
+                  AYNI. Fotoğraf varsa fotoğraf, yoksa kişinin kendi renginde
+                  baş harfleri (Aslı Hanım, 2026-08-24: "ikon kalkıp herkesin
+                  resmi gelecek… resmi olmayan yine aynı şekilde"). */}
               {(() => {
                 const ident = identityOf.get(m.id);
                 if (!ident) return null;
                 const tone = tones[ident.userId];
-                const Icon = icons[ident.userId];
-                if (!tone || !Icon) return null;
+                if (!tone) return null;
                 return (
-                  <span
-                    className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full"
-                    style={personStyles(tone.hex).solid}
-                    title={tone.label}
-                  >
-                    <Icon size={16} />
-                  </span>
+                  <PersonAvatar
+                    name={ident.name}
+                    photoUrl={ident.avatarUrl ?? null}
+                    colorHex={tone.hex}
+                    size="md"
+                    className="mt-0.5"
+                  />
                 );
               })()}
               <div className="flex-1 min-w-0">

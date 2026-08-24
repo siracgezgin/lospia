@@ -677,4 +677,7 @@ begin
   -- Aslı Hanım: "Aslı Filinta ve Aslı Hanım aynı kişi", "Nisa / Nisa Hanım aynı kişi".
   select public.link_duplicate_contacts() into v_msg;
   raise notice '%', v_msg;
+  -- Kreatif bağlantıları Dokümanlar'a taşı (20240320).
+  select public.migrate_creative_to_documents() into v_msg;
+  raise notice '%', v_msg;
 end $$;

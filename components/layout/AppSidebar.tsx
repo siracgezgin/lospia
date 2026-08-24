@@ -17,7 +17,6 @@ import {
   Contact,
   FolderOpen,
   Home,
-  Palette,
   Table2,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
@@ -75,7 +74,6 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { href: "/collection", label: "Collection",     icon: Boxes,      adminOnly: false },
       { href: "/documents",  label: "Documents",      icon: FolderOpen, adminOnly: false },
       { href: "/sheets",     label: "Sheets",         icon: Table2,     adminOnly: false },
-      { href: "/creative",   label: "Creative Links", icon: Palette,    adminOnly: false },
       { href: "/crm",        label: "CRM",            icon: Contact,    adminOnly: false },
     ],
   },

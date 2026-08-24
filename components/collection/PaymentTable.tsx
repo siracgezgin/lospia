@@ -13,7 +13,8 @@ import { updateProductionSheetPricing } from "@/lib/actions/production";
 import {
   totalQuantity, formatMoney, ustaUnitPaymentOf,
 } from "@/lib/collection/cost";
-import { assignPersonTones, assignPersonIcons } from "@/lib/design/person-colors";
+import { assignPersonTones } from "@/lib/design/person-colors";
+import { getPersonInitials } from "@/lib/utils/person-display";
 import { SeasonSwitch, type SwitchSeason } from "./SeasonSwitch";
 import type { ProductionSheet, ProductionPricing, Manufacturer } from "@/types";
 
@@ -107,7 +108,6 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
   }, [rows, pricing, byId]);
 
   const tones = useMemo(() => assignPersonTones(ustalar.map((u) => u.key)), [ustalar]);
-  const icons = useMemo(() => assignPersonIcons(ustalar.map((u) => u.key)), [ustalar]);
   const grandTotal = ustalar.reduce((a, u) => a + u.total, 0);
 
   const flash = (id: string) => {
@@ -249,7 +249,6 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
           <div className="stagger-children grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {ustalar.map((u) => {
               const tone = tones[u.key]!;
-              const Icon = icons[u.key]!;
               return (
                 <button
                   key={u.key}
@@ -275,7 +274,7 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
                       />
                     ) : (
                       <span className={cn("grid h-12 w-12 shrink-0 place-items-center rounded-full text-white ring-2 ring-surface", tone.solid)}>
-                        {u.name === UNKNOWN ? <Scissors size={20} strokeWidth={1.9} /> : <Icon size={20} strokeWidth={1.9} />}
+                        {u.name === UNKNOWN ? <Scissors size={20} strokeWidth={1.9} /> : getPersonInitials(u.name)}
                       </span>
                     )}
                     <span className="min-w-0 flex-1">

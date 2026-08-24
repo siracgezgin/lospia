@@ -1,11 +1,11 @@
 "use client";
 
 import { useMemo } from "react";
-import Image from "next/image";
 import { LayoutList } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import { getPersonDisplayName, getPersonInitials } from "@/lib/utils/person-display";
-import { assignPersonTones, assignPersonIcons, personStyles, type PersonChoice } from "@/lib/design/person-colors";
+import { getPersonDisplayName } from "@/lib/utils/person-display";
+import { PersonAvatar } from "@/components/ui/PersonAvatar";
+import { assignPersonTones, personStyles, type PersonChoice } from "@/lib/design/person-colors";
 
 export type GridPerson = {
   /** personFilter değeri — "member:<uuid>" ya da "contact:<uuid>". */
@@ -38,6 +38,10 @@ interface Props {
  * ("Üretim ve Tedarik Zinciri", "Finans ve Operasyon") burada bilerek yoktur —
  * "yoruyor onlar bizi".
  *
+ * Kart kimliği FOTOĞRAFTIR; fotoğrafı olmayan kişi kendi renginde bir daire
+ * içinde baş harfleriyle çıkar (eskiden rastgele sembol ikonlarla çiziliyordu —
+ * sembol kimseyi tanıtmıyordu).
+ *
  * KART ÜZERİNDE RAKAM YOKTUR. Bir süre kartın altında "devam / bitti /
  * gecikti / zamanında" şeridi ve sağda büyük bir açık-iş sayısı duruyordu;
  * Aslı Hanım (2026-08-24) ikisini de kaldırttı:
@@ -60,8 +64,6 @@ export function PeopleGrid({ people, meKey, onPick, onShowAll, choices }: Props)
     for (const [id, t] of Object.entries(tones)) out[id] = personStyles(t.hex);
     return out;
   }, [tones]);
-  const icons = useMemo(() => assignPersonIcons(people.map((p) => p.id), choices), [people, choices]);
-
   // Sıra: önce ben, sonra alfabetik — kart yeri sabit kalsın.
   const ordered = useMemo(() => {
     return [...people].sort((a, b) => {
@@ -106,7 +108,6 @@ export function PeopleGrid({ people, meKey, onPick, onShowAll, choices }: Props)
         <div className="stagger-children grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 lg:gap-5">
           {ordered.map((p) => {
             const st = styles[p.id]!;
-            const Icon = icons[p.id]!;
             const isMe = p.filterKey === meKey;
             return (
               <button
@@ -122,29 +123,16 @@ export function PeopleGrid({ people, meKey, onPick, onShowAll, choices }: Props)
                     (tailwind-merge border-l renklerini yutuyor: proje kuralı). */}
                 <span aria-hidden className="absolute inset-x-0 top-0 h-1.5" style={{ backgroundColor: st.hex }} />
 
-                {/* Fotoğraf varsa fotoğraf; yoksa kişiye özel ikon + baş harf.
-                    Aslı Hanım: "Ekip fotoğrafları olsun… Sen yap, sonra
-                    değiştiririz." */}
-                {p.avatarUrl ? (
-                  <Image
-                    src={p.avatarUrl}
-                    alt=""
-                    width={96}
-                    height={96}
-                    className="h-20 w-20 shrink-0 rounded-full object-cover ring-4 ring-surface sm:h-24 sm:w-24"
-                    unoptimized
-                  />
-                ) : (
-                  <span
-                    className="relative grid h-20 w-20 shrink-0 place-items-center rounded-full ring-4 ring-surface sm:h-24 sm:w-24"
-                    style={st.solid}
-                  >
-                    <Icon size={34} strokeWidth={1.8} />
-                    <span className="absolute -bottom-1 -right-1 grid h-7 min-w-7 place-items-center rounded-full bg-surface px-1.5 text-[11px] font-bold tracking-tight text-ink ring-1 ring-line">
-                      {getPersonInitials(p.name)}
-                    </span>
-                  </span>
-                )}
+                {/* FOTOĞRAF, yoksa baş harf. (Aslı Hanım, 2026-08-24: "ikon
+                    kalkıp herkesin resmi gelecek… resmi olmayan yine aynı
+                    şekilde, mesela Siraç Gezgin SG gibi.") */}
+                <PersonAvatar
+                  name={p.name}
+                  photoUrl={p.avatarUrl}
+                  colorHex={st.hex}
+                  size="xl"
+                  ring
+                />
 
                 <span className="w-full min-w-0">
                   <span className="block truncate text-[19px] font-semibold tracking-tight text-ink" title={p.name}>

@@ -3,9 +3,10 @@
 import { useMemo, useState } from "react";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { AvatarUploader } from "@/components/settings/AvatarUploader";
 import {
-  PERSON_TONES, PERSON_ICONS,
-  assignPersonTones, assignPersonIcons, isHexColor,
+  PERSON_TONES,
+  assignPersonTones, isHexColor,
   type PersonChoice,
 } from "@/lib/design/person-colors";
 
@@ -18,6 +19,8 @@ export type IdentityMember = {
   roleLabel: string;
   colorKey: string | null;
   iconKey: string | null;
+  /** profiles.avatar_url — fotoğraf yükleyici için. */
+  avatarUrl?: string | null;
 };
 
 /**
@@ -107,7 +110,6 @@ export function usePersonIdentities(members: IdentityMember[]) {
     }
     return {
       tones,
-      icons: assignPersonIcons(seeds, choices),
       usedColors: used,
       clashes: [...byTone.values()].filter((names) => names.length > 1),
     };
@@ -115,7 +117,7 @@ export function usePersonIdentities(members: IdentityMember[]) {
 }
 
 /**
- * Bir kişinin renk + ikon seçicisi.
+ * Bir kişinin renk + fotoğraf seçicisi.
  *
  * Ayrı bir "Kişi Kimliği" listesi olarak DEĞİL, Üyeler satırının içinde yaşar —
  * Aslı Hanım (2026-08-23): "Burayı neden tek başlık altında toplamıyoruz."
@@ -128,7 +130,7 @@ export function PersonIdentityEditor({
   tone: { hex: string; label: string };
   usedColors: Map<string, string>;
   busy: boolean;
-  onSave: (_next: { colorKey?: string | null; iconKey?: string | null }) => void;
+  onSave: (_next: { colorKey?: string | null }) => void;
 }) {
   const m = member;
   return (
@@ -168,29 +170,21 @@ export function PersonIdentityEditor({
         />
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5">
+      {/* FOTOĞRAF — ikon seçicisinin yerine geçti.
+          Aslı Hanım (2026-08-24): "İkon kalkıp herkesin resmi gelecek."
+          Sembol ikonları (kedi, şemsiye, gitar…) kimseyi tanıtmıyordu.
+          Fotoğraf yoksa kişi kendi renginde baş harfleriyle çıkar. */}
+      <div className="flex flex-wrap items-center gap-2">
         <span className="w-[52px] shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted">
-          İkon
+          Fotoğraf
         </span>
-        {PERSON_ICONS.map(({ key, label, Icon: Opt }) => {
-          const selected = m.iconKey === key;
-          return (
-            <button
-              key={key}
-              onClick={() => onSave({ iconKey: selected ? "" : key })}
-              disabled={busy}
-              title={label}
-              className={cn(
-                "tap-target grid h-7 w-7 place-items-center rounded-lg border transition-colors duration-150",
-                selected
-                  ? "border-ink bg-ink text-white"
-                  : "border-line text-muted hover:border-line-strong hover:bg-surface-muted hover:text-ink",
-              )}
-            >
-              <Opt size={14} />
-            </button>
-          );
-        })}
+        <AvatarUploader
+          userId={m.userId}
+          name={m.name}
+          photoUrl={m.avatarUrl ?? null}
+          colorHex={tone.hex}
+          disabled={busy}
+        />
       </div>
     </div>
   );

@@ -169,17 +169,6 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
     group: "urun",
   },
   {
-    key: "creative",
-    title: "Creative Links",
-    description: "Canva, Drive, Figma ve lookbook bağlantıları tek listede.",
-    href: "/creative",
-    icon: Palette,
-    access: "all",
-    group: "urun",
-  },
-
-  // ── İlişkiler — herkes görür, yönetici düzenler ───────────────────────────
-  {
     key: "crm",
     title: "CRM",
     description: "Müşteri, tedarikçi ve influencer ilişkileri tek rehberde.",

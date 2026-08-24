@@ -5,7 +5,8 @@ import Link from "next/link";
 import { ArrowLeft, Printer } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { getPersonDisplayName, getPersonInitials } from "@/lib/utils/person-display";
-import { assignPersonTones, assignPersonIcons } from "@/lib/design/person-colors";
+import { assignPersonTones } from "@/lib/design/person-colors";
+import { PersonAvatar } from "@/components/ui/PersonAvatar";
 
 type ReportTask = {
   id: string;
@@ -67,7 +68,6 @@ export function PersonReport({
     (teamIdentity ?? []).map((m) => [m.id, { colorKey: m.colorKey, iconKey: m.iconKey }]),
   );
   const tone = assignPersonTones(seeds, choices)[person.id] ?? assignPersonTones([person.id])[person.id]!;
-  const Icon = assignPersonIcons(seeds, choices)[person.id] ?? assignPersonIcons([person.id])[person.id]!;
 
   const open = tasks.filter((t) => t.status !== "done");
   const overdue = open.filter((t) => t.due_date && t.due_date < today);
@@ -101,16 +101,13 @@ export function PersonReport({
       <article className="print-page mx-auto max-w-3xl rounded-2xl border border-line bg-surface p-6 shadow-card sm:p-8">
         {/* Kimlik */}
         <header className="flex items-center gap-4 border-b border-line-strong pb-4">
-          {person.avatarUrl ? (
-            <Image src={person.avatarUrl} alt="" width={56} height={56} className="h-14 w-14 shrink-0 rounded-full object-cover" unoptimized />
-          ) : (
-            <span className={cn("relative grid h-14 w-14 shrink-0 place-items-center rounded-full text-white", tone.solid)}>
-              <Icon size={22} strokeWidth={1.9} />
-              <span className="absolute -bottom-0.5 -right-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-surface px-1 text-[9.5px] font-bold text-ink ring-1 ring-line">
-                {getPersonInitials(person.name)}
-              </span>
-            </span>
-          )}
+          {/* Fotoğraf, yoksa kişinin renginde baş harfleri. */}
+          <PersonAvatar
+            name={person.name}
+            photoUrl={person.avatarUrl}
+            colorHex={tone.hex}
+            size="lg"
+          />
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-2xl font-semibold tracking-tight text-ink">
               {getPersonDisplayName(person.name)}
