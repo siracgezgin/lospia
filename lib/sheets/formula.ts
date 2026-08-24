@@ -20,7 +20,7 @@
  *    (#BÖL/0!, #AD?, #DEĞER!) — ekran dili Türkçe.
  */
 
-import { getCell, key, parseA1, type GridSnapshot } from "./model";
+import { getCell, key, parseA1, sheetByName, type Sheet, type WorkbookSnapshot } from "./model";
 
 export type FormulaError = "#BÖL/0!" | "#AD?" | "#DEĞER!" | "#BAŞV!" | "#DÖNGÜ!" | "#YOK";
 export type Scalar = number | string | boolean | FormulaError;
@@ -54,7 +54,7 @@ function toNum(s: string): number | null {
 type Tok =
   | { t: "num"; v: number }
   | { t: "str"; v: string }
-  | { t: "ref"; v: string }
+  | { t: "ref"; v: string; sheet?: string }
   | { t: "name"; v: string }
   | { t: "op"; v: string }
   | { t: "("; }
@@ -105,11 +105,36 @@ function tokenize(src: string): Tok[] | null {
       continue;
     }
 
-    // Ad / referans
+    // Tırnaklı sayfa adı: 'Ürün Listesi'!A1
+    if (ch === "'") {
+      let j = i + 1;
+      let nm = "";
+      while (j < src.length && src[j] !== "'") { nm += src[j]; j++; }
+      if (j >= src.length || src[j + 1] !== "!") return null;
+      j += 2;
+      let k2 = j;
+      while (k2 < src.length && /[A-Za-z0-9$]/.test(src[k2])) k2++;
+      const refWord = src.slice(j, k2);
+      if (!parseA1(refWord)) return null;
+      out.push({ t: "ref", v: refWord, sheet: nm });
+      i = k2;
+      continue;
+    }
+
+    // Ad / referans (Sayfa2!A1 dahil)
     if (/[A-Za-z_$ÇĞİÖŞÜçğıöşü]/.test(ch)) {
       let j = i;
       while (j < src.length && /[A-Za-z0-9_.$ÇĞİÖŞÜçğıöşü]/.test(src[j])) j++;
       const word = src.slice(i, j);
+      if (src[j] === "!") {
+        let k2 = j + 1;
+        while (k2 < src.length && /[A-Za-z0-9$]/.test(src[k2])) k2++;
+        const refWord = src.slice(j + 1, k2);
+        if (!parseA1(refWord)) return null;
+        out.push({ t: "ref", v: refWord, sheet: word });
+        i = k2;
+        continue;
+      }
       out.push(parseA1(word) ? { t: "ref", v: word } : { t: "name", v: word.toUpperCase() });
       i = j;
       continue;
@@ -125,8 +150,8 @@ function tokenize(src: string): Tok[] | null {
 type Node =
   | { k: "num"; v: number }
   | { k: "str"; v: string }
-  | { k: "ref"; r: number; c: number }
-  | { k: "range"; r1: number; c1: number; r2: number; c2: number }
+  | { k: "ref"; r: number; c: number; sheet?: string }
+  | { k: "range"; r1: number; c1: number; r2: number; c2: number; sheet?: string }
   | { k: "un"; op: string; a: Node }
   | { k: "bin"; op: string; a: Node; b: Node }
   | { k: "pct"; a: Node }
@@ -243,7 +268,7 @@ class Parser {
 
     if (t.t === "ref") {
       const a = parseA1(t.v)!;
-      // Aralık? A1:B9
+      // Aralık? A1:B9  (sayfa adı baştaki referanstan alınır)
       if (this.peek()?.t === ":") {
         this.eat();
         const t2 = this.eat();
@@ -253,9 +278,10 @@ class Parser {
           k: "range",
           r1: Math.min(a.r, b.r), c1: Math.min(a.c, b.c),
           r2: Math.max(a.r, b.r), c2: Math.max(a.c, b.c),
+          sheet: t.sheet,
         };
       }
-      return { k: "ref", r: a.r, c: a.c };
+      return { k: "ref", r: a.r, c: a.c, sheet: t.sheet };
     }
 
     if (t.t === "name") {
@@ -284,24 +310,40 @@ class Parser {
 // ── Değerlendirici ──────────────────────────────────────────────────────────
 
 type EvalCtx = {
-  grid: GridSnapshot;
+  /** Formülün YAŞADIĞI sayfa — sayfa adı verilmemiş referanslar buna bakar. */
+  sheet: Sheet;
+  /** Kitabın tamamı; "Sayfa2!A1" için gerekli. */
+  wb: WorkbookSnapshot;
+  /** Önbellek anahtarı "sayfaId|satır:sütun" — sayfalar arası karışmasın. */
   cache: Map<string, Scalar>;
   visiting: Set<string>;
 };
 
-/** Bir hücrenin HESAPLANMIŞ değeri (formülse çözülür). */
-function cellValue(ctx: EvalCtx, r: number, c: number): Scalar {
-  const k = key(r, c);
+const ck = (sheetId: string, r: number, c: number) => `${sheetId}|${key(r, c)}`;
+
+/**
+ * Bir hücrenin HESAPLANMIŞ değeri (formülse çözülür).
+ * `sheetName` verilirse o sayfadan okur (sayfa yoksa #BAŞV!).
+ */
+function cellValue(ctx: EvalCtx, r: number, c: number, sheetName?: string): Scalar {
+  let sheet = ctx.sheet;
+  if (sheetName) {
+    const found = sheetByName(ctx.wb, sheetName);
+    if (!found) return "#BAŞV!";
+    sheet = found;
+  }
+  const k = ck(sheet.id, r, c);
   const cached = ctx.cache.get(k);
   if (cached !== undefined) return cached;
   if (ctx.visiting.has(k)) return "#DÖNGÜ!";
 
-  const cell = getCell(ctx.grid, r, c);
+  const cell = getCell(sheet, r, c);
   if (!cell) return "";
 
   if (cell.f && cell.f.trim().startsWith("=")) {
     ctx.visiting.add(k);
-    const out = evalFormula(ctx, cell.f);
+    // Formül KENDİ sayfasının bağlamında çözülür.
+    const out = evalFormula({ ...ctx, sheet }, cell.f);
     ctx.visiting.delete(k);
     ctx.cache.set(k, out);
     return out;
@@ -318,7 +360,7 @@ function flatten(ctx: EvalCtx, node: Node): Scalar[] {
   if (node.k === "range") {
     const out: Scalar[] = [];
     for (let r = node.r1; r <= node.r2; r++)
-      for (let c = node.c1; c <= node.c2; c++) out.push(cellValue(ctx, r, c));
+      for (let c = node.c1; c <= node.c2; c++) out.push(cellValue(ctx, r, c, node.sheet));
     return out;
   }
   return [evalNode(ctx, node)];
@@ -343,10 +385,10 @@ function evalNode(ctx: EvalCtx, node: Node): Scalar {
   switch (node.k) {
     case "num": return node.v;
     case "str": return node.v;
-    case "ref": return cellValue(ctx, node.r, node.c);
+    case "ref": return cellValue(ctx, node.r, node.c, node.sheet);
     case "range": {
       // Tek hücrelik aralık skalerdir; çok hücreli aralık skaler bağlamda hata.
-      if (node.r1 === node.r2 && node.c1 === node.c2) return cellValue(ctx, node.r1, node.c1);
+      if (node.r1 === node.r2 && node.c1 === node.c2) return cellValue(ctx, node.r1, node.c1, node.sheet);
       return "#DEĞER!";
     }
     case "pct": {
@@ -521,9 +563,9 @@ function callFn(ctx: EvalCtx, node: Extract<Node, { k: "call" }>): Scalar {
       const w = rangeNode.c2 - rangeNode.c1;
       for (let dr = 0; dr <= h; dr++) {
         for (let dc = 0; dc <= w; dc++) {
-          const v = cellValue(ctx, rangeNode.r1 + dr, rangeNode.c1 + dc);
+          const v = cellValue(ctx, rangeNode.r1 + dr, rangeNode.c1 + dc, rangeNode.sheet);
           if (!matchCriteria(v, crit)) continue;
-          const sv = cellValue(ctx, sumNode.r1 + dr, sumNode.c1 + dc);
+          const sv = cellValue(ctx, sumNode.r1 + dr, sumNode.c1 + dc, sumNode.sheet);
           const n = num(sv);
           if (!isError(n)) total += n;
         }
@@ -537,7 +579,7 @@ function callFn(ctx: EvalCtx, node: Extract<Node, { k: "call" }>): Scalar {
       let n = 0;
       for (let r = rangeNode.r1; r <= rangeNode.r2; r++)
         for (let c = rangeNode.c1; c <= rangeNode.c2; c++)
-          if (matchCriteria(cellValue(ctx, r, c), crit)) n++;
+          if (matchCriteria(cellValue(ctx, r, c, rangeNode.sheet), crit)) n++;
       return n;
     }
     default:
@@ -585,16 +627,89 @@ function evalFormula(ctx: EvalCtx, formula: string): Scalar {
  * Dönen harita: "satır:sütun" → hesaplanmış skaler. Yalnız DOLU hücreler
  * bulunur; boş hücre haritada yoktur.
  */
-export function evaluateGrid(grid: GridSnapshot): Map<string, Scalar> {
-  const ctx: EvalCtx = { grid, cache: new Map(), visiting: new Set() };
-  for (const k of Object.keys(grid.cells)) {
+export function evaluateSheet(wb: WorkbookSnapshot, sheet: Sheet): Map<string, Scalar> {
+  const ctx: EvalCtx = { sheet, wb, cache: new Map(), visiting: new Set() };
+  for (const k of Object.keys(sheet.cells)) {
     const [r, c] = k.split(":").map(Number);
     if (Number.isFinite(r) && Number.isFinite(c)) cellValue(ctx, r, c);
   }
-  return ctx.cache;
+  // Dışarıya SADE anahtar ("satır:sütun") döndür — çizim tarafı sayfa
+  // önekiyle uğraşmasın.
+  const out = new Map<string, Scalar>();
+  const prefix = `${sheet.id}|`;
+  for (const [k, v] of ctx.cache) {
+    if (k.startsWith(prefix)) out.set(k.slice(prefix.length), v);
+  }
+  return out;
 }
 
-/** Tek bir ifadeyi ızgara bağlamında hesaplar (durum çubuğu toplamları için). */
-export function evaluateOne(grid: GridSnapshot, formula: string): Scalar {
-  return evalFormula({ grid, cache: new Map(), visiting: new Set() }, formula);
+/** Tek bir ifadeyi sayfa bağlamında hesaplar. */
+export function evaluateOne(wb: WorkbookSnapshot, sheet: Sheet, formula: string): Scalar {
+  return evalFormula({ sheet, wb, cache: new Map(), visiting: new Set() }, formula);
+}
+
+// ── Doldurma için referans kaydırma ─────────────────────────────────────────
+
+/**
+ * Formüldeki GÖRECELİ referansları kaydırır — doldurma tutamağının temeli.
+ * "=A1*B1" bir satır aşağı çekilince "=A2*B2" olmalı; "$A$1" sabit kalır.
+ * Metin sabitleri ("...") ve sayfa adları korunur.
+ */
+export function shiftFormula(formula: string, dr: number, dc: number): string {
+  if (!formula.startsWith("=") || (dr === 0 && dc === 0)) return formula;
+  let out = "";
+  let i = 1;
+  const src = formula;
+  while (i < src.length) {
+    const ch = src[i];
+    // Metin sabiti — dokunma
+    if (ch === '"') {
+      let j = i + 1;
+      while (j < src.length && !(src[j] === '"' && src[j + 1] !== '"')) j += src[j] === '"' ? 2 : 1;
+      out += src.slice(i, Math.min(j + 1, src.length));
+      i = j + 1;
+      continue;
+    }
+    // Sayfa adı öneki — olduğu gibi taşı ("Sayfa2!" ya da "'Ad'!")
+    if (ch === "'") {
+      const close = src.indexOf("'", i + 1);
+      if (close > 0 && src[close + 1] === "!") {
+        out += src.slice(i, close + 2);
+        i = close + 2;
+        continue;
+      }
+    }
+    // Referans?
+    const m = /^(\$?)([A-Za-z]{1,3})(\$?)(\d{1,7})/.exec(src.slice(i));
+    if (m && !/[A-Za-z0-9_]/.test(src[i - 1] ?? "")) {
+      const [whole, colAbs, colTxt, rowAbs, rowTxt] = m;
+      // Fonksiyon adı olabilir (SUM( gibi) — ardından "(" geliyorsa referans değil
+      const after = src[i + whole.length];
+      if (after !== "(") {
+        const c0 = colToIndex(colTxt);
+        const r0 = Number(rowTxt) - 1;
+        const nc = colAbs ? c0 : c0 + dc;
+        const nr = rowAbs ? r0 : r0 + dr;
+        if (nc < 0 || nr < 0) { out += "#BAŞV!"; i += whole.length; continue; }
+        out += `${colAbs}${indexToCol(nc)}${rowAbs}${nr + 1}`;
+        i += whole.length;
+        continue;
+      }
+    }
+    out += ch;
+    i++;
+  }
+  return "=" + out;
+}
+
+function colToIndex(name: string): number {
+  let n = 0;
+  for (const ch of name.toUpperCase()) n = n * 26 + (ch.charCodeAt(0) - 64);
+  return n - 1;
+}
+function indexToCol(index: number): string {
+  let name = "";
+  let i = index;
+  do { name = String.fromCharCode(65 + (i % 26)) + name; i = Math.floor(i / 26) - 1; } while (i >= 0);
+  return name;
 }

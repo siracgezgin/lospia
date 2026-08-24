@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Table2, Pencil, Save, Info } from "lucide-react";
+import { Table2, Pencil, Save, Info, Loader2, Check } from "lucide-react";
 import { saveSpreadsheetSnapshot } from "@/lib/actions/sheets";
-import { emptyGrid, fromLegacy, type GridSnapshot } from "@/lib/sheets/model";
+import { emptyWorkbook, fromLegacy, type WorkbookSnapshot } from "@/lib/sheets/model";
 import { cn } from "@/lib/utils/cn";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { SpreadsheetEditor, type SheetEditorApi } from "./SpreadsheetEditor";
@@ -42,28 +42,50 @@ export function SheetDetailView({
   /* Kayıtlı her biçim okunur: yeni "grid", eski "light" (başlıklar 1. satıra
      iner) ve hiç yazılmamış "univer" biçimi. Böylece kayıtlı hiçbir tablo
      okunamaz hâle gelmez. */
-  const initialGrid = useMemo<GridSnapshot>(
-    () => fromLegacy(sheet.snapshot) ?? emptyGrid(),
+  const initialGrid = useMemo<WorkbookSnapshot>(
+    () => fromLegacy(sheet.snapshot) ?? emptyWorkbook(),
     [sheet.snapshot],
   );
 
-  function handleSave() {
+  /* OTOMATİK KAYDETME.
+     Aslı Hanım (2026-08-24): kaydetme "kendiliğinden olsun". Elle "Kaydet"
+     düğmesi vardı ve kaydetmeyi unutmak veri kaybı demekti.
+     Yazma durunca 1,2 saniye sonra kaydeder (debounce): her tuşta sunucuya
+     gitmez, ama kullanıcı sekmeyi kapatmadan önce kaydedilmiş olur.
+     router.refresh() BİLEREK çağrılmıyor — her kayıtta sayfayı tazelemek
+     düzenleyiciyi sıfırlar ve imleci kaybettirir. */
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSaved = useRef<string | null>(null);
+
+  const doSave = useCallback(() => {
     const api = apiRef.current;
     if (!api || readOnly) return;
-    setMessage(null);
-    const snapshotJson = JSON.stringify(api.getSnapshot());
+    const json = JSON.stringify(api.getSnapshot());
+    if (json === lastSaved.current) { setDirty(false); return; }
     startSave(async () => {
-      const result = await saveSpreadsheetSnapshot(sheet.id, snapshotJson);
-      if ("error" in result) {
-        setMessage({ kind: "error", text: result.error });
-        return;
-      }
+      const result = await saveSpreadsheetSnapshot(sheet.id, json);
+      if ("error" in result) { setMessage({ kind: "error", text: result.error }); return; }
+      lastSaved.current = json;
       setDirty(false);
-      setMessage({ kind: "ok", text: "Tablo kaydedildi." });
-      window.setTimeout(() => setMessage(null), 2500);
-      router.refresh();
+      setSavedAt(Date.now());
+      setMessage(null);
     });
-  }
+  }, [readOnly, sheet.id]);
+
+  const scheduleSave = useCallback(() => {
+    if (readOnly) return;
+    setDirty(true);
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(doSave, 1200);
+  }, [readOnly, doSave]);
+
+  // Sekme kapanırken bekleyen değişikliği kaydet.
+  useEffect(() => {
+    function flush() { if (saveTimer.current) { clearTimeout(saveTimer.current); doSave(); } }
+    window.addEventListener("beforeunload", flush);
+    return () => { window.removeEventListener("beforeunload", flush); flush(); };
+  }, [doSave]);
 
   return (
     <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
@@ -87,17 +109,21 @@ export function SheetDetailView({
               </button>
             )}
             {!readOnly && (
-              <button
-                onClick={handleSave}
-                disabled={isSaving || !dirty}
+              <span
                 className={cn(
-                  "inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[13px] font-medium text-white transition-colors duration-150 active:scale-[0.98]",
-                  isSaving || !dirty ? "bg-brand/50 cursor-not-allowed" : "bg-brand hover:bg-brand-strong",
+                  "inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-medium",
+                  isSaving || dirty ? "text-muted" : "text-success",
                 )}
+                aria-live="polite"
               >
-                <Save size={14} />
-                {isSaving ? "Kaydediliyor…" : dirty ? "Kaydet" : "Kaydedildi"}
-              </button>
+                {isSaving ? (
+                  <><Loader2 size={13} className="animate-spin" /> Kaydediliyor…</>
+                ) : dirty ? (
+                  <><Save size={13} /> Değişiklikler bekliyor</>
+                ) : savedAt ? (
+                  <><Check size={13} /> Kaydedildi</>
+                ) : null}
+              </span>
             )}
           </>
         }
@@ -126,7 +152,7 @@ export function SheetDetailView({
           initialSnapshot={initialGrid}
           readOnly={readOnly}
           onReady={(api) => { apiRef.current = api; }}
-          onDirty={() => setDirty(true)}
+          onDirty={scheduleSave}
         />
       </div>
 

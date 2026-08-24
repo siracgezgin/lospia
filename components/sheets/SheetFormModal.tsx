@@ -8,7 +8,7 @@ import {
 } from "@/lib/actions/sheets";
 import { SHEET_TYPES, SHEET_STATUSES } from "@/lib/office/constants";
 import { parseCsv, normalizeGrid } from "@/lib/utils/csv-to-sheet";
-import { gridFromRows } from "@/lib/sheets/model";
+import { workbookFromRows } from "@/lib/sheets/model";
 import { cn } from "@/lib/utils/cn";
 import type { OperationSpreadsheet, SpreadsheetType, WorkspaceDepartment } from "@/types";
 
@@ -72,7 +72,7 @@ export function SheetFormModal({
       const grid = normalizeGrid(parseCsv(text));
       if (grid.length === 0) return setError("CSV dosyası boş görünüyor.");
       // CSV doğrudan hesap tablosu ızgarasına girer; ilk satır kalın yazılır.
-      const snapshot = gridFromRows(grid);
+      const snapshot = workbookFromRows(grid);
       setImportedSnapshotJson(JSON.stringify(snapshot));
       setImportInfo({ name: file.name, rows: grid.length - 1, cols: grid[0].length });
       if (!form.title.trim()) set("title", file.name.replace(/\.csv$/i, ""));

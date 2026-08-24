@@ -4,9 +4,9 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Plus, Search, Table2, Pencil, Archive, ArrowUpRight, Lock,
+  Plus, Search, Table2, Pencil, Archive, ArrowUpRight, Lock, Trash2,
 } from "lucide-react";
-import { archiveOperationSpreadsheet } from "@/lib/actions/sheets";
+import { archiveOperationSpreadsheet, deleteOperationSpreadsheet } from "@/lib/actions/sheets";
 import {
   SHEET_TYPES, SHEET_STATUSES, sheetTypeLabel, sheetStatusLabel, SHEET_STATUS_TONE,
 } from "@/lib/office/constants";
@@ -49,7 +49,8 @@ export function SheetsView({
   const [showArchived, setShowArchived] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<SheetListItem | null>(null);
-  const [isArchiving, startArchive] = useTransition();
+  const [isBusy, startWork] = useTransition();
+  const [error, setError] = useState<string | null>(null);
 
   const deptName = useMemo(
     () => new Map(departments.map((d) => [d.id, d.name])),
@@ -80,8 +81,24 @@ export function SheetsView({
 
   function handleArchive(s: SheetListItem) {
     if (!confirm(`"${s.title}" tablosunu arşivlemek istiyor musunuz?`)) return;
-    startArchive(async () => {
-      await archiveOperationSpreadsheet(s.id);
+    setError(null);
+    startWork(async () => {
+      const res = await archiveOperationSpreadsheet(s.id);
+      if (res && "error" in res) { setError(res.error); return; }
+      router.refresh();
+    });
+  }
+
+  /* SİLME. Aslı Hanım (2026-08-24): "sil kısmı yok."
+     Arşivleme vardı ama silme hiç bağlanmamıştı — server action
+     (deleteOperationSpreadsheet) yazılmış, arayüzden çağrılmıyordu.
+     Geri alınamaz olduğu için onay metni tablonun adını söyler. */
+  function handleDelete(s: SheetListItem) {
+    if (!confirm(`"${s.title}" tablosu kalıcı olarak silinsin mi?\n\nBu işlem geri alınamaz. Sadece gözden kaldırmak için "Arşivle"yi kullanın.`)) return;
+    setError(null);
+    startWork(async () => {
+      const res = await deleteOperationSpreadsheet(s.id);
+      if (res && "error" in res) { setError(res.error); return; }
       router.refresh();
     });
   }
@@ -118,18 +135,10 @@ export function SheetsView({
             className="h-9 w-full rounded-lg border border-line bg-surface pl-9 pr-3 text-sm text-ink placeholder:text-subtle transition-colors duration-150 hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40"
           />
         </div>
-        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className={selectCls}>
-          <option value="">Tüm türler</option>
-          {SHEET_TYPES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
-        </select>
-        <select value={status} onChange={(e) => setStatus(e.target.value)} className={selectCls}>
-          <option value="">Tüm durumlar</option>
-          {SHEET_STATUSES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-        </select>
-        <select value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)} className={selectCls}>
-          <option value="">Tüm departmanlar</option>
-          {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-        </select>
+        {/* Tür / durum / departman açılır listeleri KALDIRILDI — üç ayrı süzgeç
+            bir avuç tablo için fazlaydı ve arama kutusunu bastırıyordu.
+            Departman süzgeci ancak birden fazla departmana tablo dağılmışsa
+            anlamlı; o zaman da arama yeterli. (Sadelik kuralı.) */}
         <label className="flex h-9 cursor-pointer select-none items-center gap-1.5 rounded-lg px-2 text-[12.5px] text-muted transition-colors duration-150 hover:text-ink">
           <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} className="h-3.5 w-3.5 accent-brand" />
           Arşivi göster
@@ -160,52 +169,63 @@ export function SheetsView({
           />
         </div>
       ) : (
-        <div className="stagger-children grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+        /* KARTIN TAMAMI TIKLANABİLİR.
+           Aslı Hanım (2026-08-24): "bu kısım çok kötü, mesela nereye
+           basacağım belli değil, sil kısmı yok."
+           Eskiden yalnız BAŞLIK bir bağlantıydı; kartın gövdesine tıklamak
+           hiçbir şey yapmıyordu. Şimdi yayılmış bir Link kartın tamamını
+           kaplıyor, aksiyon düğmeleri onun ÜSTÜNDE kardeş olarak duruyor.
+           (İç içe <a> yasak — proje kuralı, hydration hatası veriyor.)
+           Tür/durum çipleri kalktı: her kartta aynı şeyi yazıyorlardı.
+           Kilitli/arşiv gibi GERÇEKTEN farklı bir durum varsa tek rozet çıkar. */
+        <div className="stagger-children grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filtered.map((s) => (
-            <div key={s.id} className="group flex flex-col rounded-2xl border border-line bg-surface p-4 shadow-card transition-all duration-200 ease-standard hover:-translate-y-0.5 hover:border-line-strong hover:shadow-card-hover">
-              <div className="mb-2 flex items-start justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="rounded-md bg-surface-muted px-2 py-0.5 text-[12px] font-medium text-muted">
-                    {sheetTypeLabel(s.sheet_type)}
-                  </span>
+            <div
+              key={s.id}
+              className="group relative flex flex-col rounded-2xl border border-line bg-surface p-4 shadow-card transition-all duration-200 ease-standard hover:-translate-y-0.5 hover:border-line-strong hover:shadow-card-hover"
+            >
+              <Link
+                href={`/sheets/${s.id}`}
+                aria-label={s.title}
+                className="absolute inset-0 z-[1] rounded-2xl focus-visible:outline-2 focus-visible:outline-brand-ring"
+              />
+
+              <div className="mb-2 flex min-h-6 items-start justify-between gap-2">
+                {s.status === "locked" || s.status === "archived" ? (
                   <span className={cn("inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[12px] font-medium", SHEET_STATUS_TONE[s.status])}>
                     {s.status === "locked" && <Lock size={10} />}
                     {sheetStatusLabel(s.status)}
                   </span>
-                </div>
-                <div className="flex shrink-0 items-center gap-0.5">
+                ) : <span />}
+
+                {/* Aksiyonlar — kart bağlantısının üstünde, fare gelince belirir */}
+                <div className="z-[2] flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover:opacity-100">
                   {canMutate(s) && (
                     <button onClick={() => openEdit(s)} className="rounded-md p-1.5 text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-95" title="Bilgileri düzenle">
                       <Pencil size={13} />
                     </button>
                   )}
                   {isAdmin && s.status !== "archived" && (
-                    <button onClick={() => handleArchive(s)} disabled={isArchiving} className="rounded-md p-1.5 text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-95 disabled:pointer-events-none disabled:opacity-50" title="Arşivle">
+                    <button onClick={() => handleArchive(s)} disabled={isBusy} className="rounded-md p-1.5 text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-95 disabled:pointer-events-none disabled:opacity-50" title="Arşivle">
                       <Archive size={13} />
+                    </button>
+                  )}
+                  {canMutate(s) && (
+                    <button onClick={() => handleDelete(s)} disabled={isBusy} className="rounded-md p-1.5 text-subtle transition-colors duration-150 hover:bg-[#fbe6e2] hover:text-danger active:scale-95 disabled:pointer-events-none disabled:opacity-50" title="Sil">
+                      <Trash2 size={13} />
                     </button>
                   )}
                 </div>
               </div>
 
-              <Link href={`/sheets/${s.id}`} className="min-w-0">
-                <h3 className="flex items-start justify-between gap-2 text-sm font-medium leading-snug text-ink transition-colors duration-150 group-hover:text-brand-strong">
-                  <span className="min-w-0">{s.title}</span>
-                  <ArrowUpRight size={14} className="mt-0.5 shrink-0 text-subtle opacity-0 transition-opacity duration-150 group-hover:opacity-100" />
-                </h3>
-              </Link>
+              <h3 className="flex items-start justify-between gap-2 text-sm font-medium leading-snug text-ink transition-colors duration-150 group-hover:text-brand-strong">
+                <span className="min-w-0">{s.title}</span>
+                <ArrowUpRight size={14} className="mt-0.5 shrink-0 text-subtle opacity-0 transition-opacity duration-150 group-hover:opacity-100" />
+              </h3>
               {s.department_id && deptName.get(s.department_id) && (
                 <p className="mt-0.5 text-[12px] text-subtle">{deptName.get(s.department_id)}</p>
               )}
               {s.description && <p className="mt-1 line-clamp-2 text-[12.5px] text-muted">{s.description}</p>}
-              {(s.tags ?? []).length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {s.tags.map((t) => (
-                    <span key={t} className="rounded bg-surface-muted px-1.5 py-0.5 text-[12px] text-muted">
-                      {t}
-                    </span>
-                  ))}
-                </div>
-              )}
 
               <div className="mt-3 flex items-center justify-between border-t border-hairline pt-2.5 text-[12px] text-subtle">
                 <span className="truncate">
@@ -220,7 +240,11 @@ export function SheetsView({
         </div>
       )}
 
-      <p className="mt-3 px-1 text-[12px] tabular-nums text-subtle">{filtered.length} tablo gösteriliyor</p>
+      {error && (
+        <p role="alert" className="anim-fade-down mt-3 rounded-lg border border-danger/20 bg-danger/10 px-3 py-2 text-[12.5px] text-danger">
+          {error}
+        </p>
+      )}
 
       {modalOpen && (
         <SheetFormModal
