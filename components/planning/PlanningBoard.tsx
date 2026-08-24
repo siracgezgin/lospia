@@ -8,17 +8,11 @@ import { CalendarRange, ChevronLeft, ChevronRight } from "lucide-react";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { PLANNING_BANDS, TOPIC_ROWS, WEEKDAY_LONG_TR } from "@/lib/planning/bands";
 import { MeetingEditor } from "./MeetingEditor";
-import { OpenItemsBoard } from "./OpenItemsBoard";
-import { WeekMatrix } from "./WeekMatrix";
-import { ProcessSteps } from "./ProcessSteps";
 import { PlanningWeekGrid } from "./PlanningWeekGrid";
 import { PlanningDayList } from "./PlanningDayList";
 import { CalendarViewSwitch } from "./CalendarViewSwitch";
 import type { Member } from "./MemberMultiSelect";
-import type {
-  PlanningMeetingWithTopics, PlanningOpenItem,
-  PlanningWeekMatrixRow, PlanningProcessStep, PlanningTopic,
-} from "@/types";
+import type { PlanningMeetingWithTopics, PlanningTopic } from "@/types";
 
 interface Props {
   meetings: PlanningMeetingWithTopics[];
@@ -29,22 +23,27 @@ interface Props {
   /** Kişi rengi (profiles.id → hex) — baş harf rozetleri kendi renginde. */
   personHex?: Record<string, string>;
   isAdmin: boolean;
-  currentUserId: string;
-  openItems: PlanningOpenItem[];
-  openItemsAvailable: boolean;
-  matrix: PlanningWeekMatrixRow[];
-  matrixAvailable: boolean;
-  processSteps: PlanningProcessStep[];
-  processStepsAvailable: boolean;
 }
 
 /** Hiç konusu olmayan şeritte bile çizilen taban "Konu" satırı sayısı. */
 const MIN_TOPIC_ROWS = 3;
 
+/**
+ * Calendar — SADECE takvim.
+ *
+ * Sayfa bir zamanlar dört bloktu: takvim + "Tarih/Saat × departman" matrisi +
+ * "Kişi sütunları" (açık işler) + "Adımlar / Operasyon Kurgusu". Aslı Hanım
+ * (2026-08-24) alttaki üçünü kaldırttı:
+ *   "Bunun altında yazılar iş bölümü — mesela bak Gül'ün işlerini oraya
+ *    alacaksın, boarduna alacaksın. Buradan çıkacak bunlar."
+ * Yani kişinin işi tek yerde yaşar: Pano. Takvim yalnız "ne zaman"ı söyler.
+ *
+ * NOT: planning_week_matrix / planning_open_items / planning_process_steps
+ * satırları veritabanında DURUYOR — yalnız bu sayfadan çizilmiyor. Görev
+ * olarak Pano'ya taşınmaları ayrı bir iş.
+ */
 export function PlanningBoard({
   meetings, weekDays, weekStart, members, memberNames, personHex = {}, isAdmin,
-  currentUserId, openItems, openItemsAvailable, matrix, matrixAvailable,
-  processSteps, processStepsAvailable,
 }: Props) {
   const router = useRouter();
   const [editor, setEditor] = useState<
@@ -156,15 +155,9 @@ export function PlanningBoard({
         }
       />
 
-      {/* Blok 1 — takvim. Geniş ekranda Excel ızgarası, dar ekranda gün gün liste.
-          Sayfa dört ayrı bloktan oluşuyor; hepsi numaralı ve ayraçlı başlıkla
-          işaretli (bkz. PlanningSection) — "bunlar ayrı şeyler" bakışta okunsun.
-          Bu birinci blok sayfa başlığının hemen altında olduğu için kendi
-          ayracını taşımaz, yalnız numarasını gösterir. */}
-      <div className="mb-2 flex items-center gap-2">
-        <span className="text-[12px] font-bold tabular-nums text-subtle">1</span>
-        <h2 className="text-[16px] font-semibold tracking-tight text-ink">Haftalık Toplantı Izgarası</h2>
-      </div>
+      {/* Sayfada tek blok var: takvim. Numaralı başlık ("1 — Haftalık Toplantı
+          Izgarası") de kalktı; numaralandırma ancak birden fazla blok varken
+          anlamlıydı. */}
       <PlanningWeekGrid
         weekDays={weekDays}
         byCell={byCell}
@@ -194,21 +187,6 @@ export function PlanningBoard({
           ? "Bir hücreye tıklayınca o gün-saatin toplantısı ve konuları açılır. Baş harf rozetleri Excel'deki “Kim” sütunudur."
           : "Takvim salt görüntüleme — konular ve sorumlular hücrelerin içinde listelenir."}
       </p>
-
-      {/* Blok 2 — Tarih/Saat × departman matrisi */}
-      <WeekMatrix rows={matrix} memberNames={memberNames} personHex={personHex} available={matrixAvailable} />
-
-      {/* Blok 3 — Kişi sütunları */}
-      <OpenItemsBoard
-        items={openItems}
-        members={members}
-        currentUserId={currentUserId}
-        isAdmin={isAdmin}
-        available={openItemsAvailable}
-      />
-
-      {/* Blok 4 — Adımlar / Operasyon Kurgusu */}
-      <ProcessSteps steps={processSteps} memberNames={memberNames} personHex={personHex} available={processStepsAvailable} />
 
       {editor && (
         <MeetingEditor

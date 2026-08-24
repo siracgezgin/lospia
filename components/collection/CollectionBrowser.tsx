@@ -4,11 +4,10 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Boxes, Plus, Search, ChevronRight, FileDown, Printer,
-  FileSpreadsheet, ClipboardList, ShieldCheck, AlertTriangle, CheckCircle2,
+  FileSpreadsheet, ClipboardList, ShieldCheck, AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { CollectionTabs } from "./PaymentTable";
-import { missingOf } from "@/lib/production/completeness";
 import { SeasonSwitch, type SwitchSeason } from "./SeasonSwitch";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { COLLECTION_TAXONOMY, categoryLabel, subcategoryLabel } from "@/lib/collection/taxonomy";
@@ -27,7 +26,6 @@ export type CollectionItem = Pick<
 
 interface Props {
   sheets: CollectionItem[];
-  memberNames: Record<string, string>;
   isAdmin: boolean;
   /** Sezon bağlamı — boşsa seçici çizilmez (tablo migrate edilmemiş). */
   seasons?: SwitchSeason[];
@@ -42,10 +40,27 @@ function norm(s: string): string {
     .replace(/ı/g, "i").replace(/ö/g, "o").replace(/ç/g, "c").replace(/İ/g, "i");
 }
 
+/**
+ * Kapak görseli — ÜRÜNÜN KENDİ FOTOĞRAFI (dekupe).
+ *
+ * Aslı Hanım (2026-08-24): "Buradaki ana sayfadaki fotoğraflar dekupeler olsun.
+ * Yani denim yelek kod kumaşı olmasın — denim yeleğin fotoğrafı olsun."
+ *
+ * Liste eskiden teknik çizimi öne alıyordu; kapakta ürün yerine kalıp krokisi
+ * ya da kumaş kodu görünüyordu. Sıralama artık şu: önce ürün fotoğrafı
+ * (general), sonra süsleme/aksesuar gibi ürün üstü çekimler, kumaş swatch'ı ve
+ * teknik çizim ise EN SON — başka hiçbir görsel yoksa.
+ */
+const COVER_PRIORITY = ["general", "embellishments", "accessories", "sewing", "fabric"] as const;
+
 function coverImage(s: CollectionItem): string | null {
-  const imgs = Array.isArray(s.photo_refs) ? s.photo_refs : [];
-  const drawing = imgs.find((i) => i?.section === "technical_drawing" && i?.url);
-  return (drawing ?? imgs.find((i) => i?.url))?.url ?? null;
+  const imgs = (Array.isArray(s.photo_refs) ? s.photo_refs : []).filter((i) => i?.url);
+  for (const section of COVER_PRIORITY) {
+    const hit = imgs.find((i) => i.section === section);
+    if (hit) return hit.url;
+  }
+  // Hiç ürün görseli yoksa teknik çizim boş kapaktan iyidir.
+  return imgs[0]?.url ?? null;
 }
 
 export function CollectionBrowser({ sheets, seasons = [] }: Props) {
@@ -288,7 +303,9 @@ export function CollectionBrowser({ sheets, seasons = [] }: Props) {
                     className="absolute inset-0 z-[1] rounded-2xl focus-visible:outline-2 focus-visible:outline-brand-ring"
                   />
                   {/* Görsel — katalog hissi: hover'da yumuşak zoom, kart içinde kırpılır */}
-                  <div className="aspect-square w-full overflow-hidden bg-surface-muted">
+                  {/* Kare yerine 3/4 dikey — giysi fotoğrafı kare çerçevede
+                      baştan ayaktan kırpılıyordu. */}
+                  <div className="aspect-[3/4] w-full overflow-hidden bg-surface-muted">
                     {coverImage(s) ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -321,35 +338,22 @@ export function CollectionBrowser({ sheets, seasons = [] }: Props) {
                       <FileDown size={13} />
                     </a>
                   </div>
-                  {/* Hazırlık rozeti — Nisa hangi föyün konfirmeye hazır
-                      olduğunu listeden görsün (Aslı Hanım, 2026-08-21:
-                      "Nisa'yla konfirme ederek bana göstermenizi istiyorum").
-                      Konfirme > eksiksiz > eksik sırasıyla tek rozet. */}
-                  {(() => {
-                    const eksik = missingOf(s).length;
-                    if (s.confirmed_at) {
-                      return (
-                        <span className="absolute left-2 top-2 z-[2] inline-flex items-center gap-1 rounded-md bg-emerald-600/95 px-1.5 py-0.5 text-[10.5px] font-semibold text-white shadow-sm">
-                          <ShieldCheck size={10} /> Konfirme
-                        </span>
-                      );
-                    }
-                    if (eksik > 0) {
-                      return (
-                        <span
-                          className="absolute left-2 top-2 z-[2] inline-flex items-center gap-1 rounded-md bg-amber-500/95 px-1.5 py-0.5 text-[10.5px] font-semibold text-white shadow-sm tabular-nums"
-                          title={`${eksik} zorunlu alan eksik`}
-                        >
-                          <AlertTriangle size={10} /> {eksik} eksik
-                        </span>
-                      );
-                    }
-                    return (
-                      <span className="absolute left-2 top-2 z-[2] inline-flex items-center gap-1 rounded-md bg-surface/95 px-1.5 py-0.5 text-[10.5px] font-semibold text-emerald-700 shadow-sm backdrop-blur">
-                        <CheckCircle2 size={10} /> Hazır
-                      </span>
-                    );
-                  })()}
+                  {/* KONFİRME dışında rozet yok.
+                      Kart eskiden üç durumdan birini gösteriyordu: "Konfirme" /
+                      "N eksik" / "Hazır". Aslı Hanım (2026-08-24): "tamamlandı,
+                      tamamlanmadı, eksik kaldı, geç kaldı… Öyle bir şey
+                      istemiyoruz ki." Katalog ekranı ürünü göstermek içindir,
+                      föyün ne kadar dolduğunu değil.
+                      Konfirme damgası kalıyor — o bir sayaç değil, Aslı
+                      Hanım'ın 2026-08-21'de istediği imza: "Nisa'yla beraber
+                      konfirme ederek bana göstermenizi istiyorum."
+                      Eksik alanların LİSTESİ föyün kendi sayfasında duruyor
+                      (SheetReadiness) — dolduran kişi zaten orada çalışıyor. */}
+                  {s.confirmed_at && (
+                    <span className="absolute left-2 top-2 z-[2] inline-flex items-center gap-1 rounded-md bg-emerald-600/95 px-1.5 py-0.5 text-[10.5px] font-semibold text-white shadow-sm">
+                      <ShieldCheck size={10} /> Konfirme
+                    </span>
+                  )}
                   <div className="border-t border-hairline p-3">
                     <h3 className="truncate text-sm font-medium tracking-tight text-ink transition-colors duration-150 group-hover:text-brand-strong">
                       {s.title}
@@ -363,7 +367,6 @@ export function CollectionBrowser({ sheets, seasons = [] }: Props) {
             </div>
           )}
 
-          <p className="mt-3 px-1 text-[12px] tabular-nums text-subtle">{filtered.length} ürün gösteriliyor</p>
         </div>
       </div>
     </div>

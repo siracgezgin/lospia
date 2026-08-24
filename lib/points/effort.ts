@@ -8,13 +8,14 @@
  * Özellik kullanıcı geri bildirimiyle gizlendi; veri, tablolar ve sunucu
  * mantığı korunuyor — bu bayrak `true` olunca her yüzey geri gelir.
  *
- * Kapattığı yüzeyler (2026-08-20'de üçü de açıkta kalmıştı):
+ * Kapattığı yüzey (2026-08-24 itibarıyla tek kalan):
  *   • Görev detayı → TaskEffortPanel
- *   • Görev oluştur → "Efor" seçicisi
- *   • Raporlar → PointsMotivationSection (zaten `false &&` ile kapalıydı)
  *
- * Panolardaki `{false && …}` blokları da buraya bağlandı ki bir dahaki sefere
- * yüzeylerden biri unutulmasın.
+ * Raporlardaki PointsMotivationSection ve Görev oluştur'daki "Efor" seçicisi
+ * artık kodda da YOK — Aslı Hanım (2026-08-24): "Kimseyi orada puanlamak
+ * istemiyorum." Bileşenler silindi; sunucu tarafı (lib/points/queries.ts,
+ * lib/actions/points.ts, puan tabloları) dokunulmadan duruyor, bayrak `true`
+ * olursa arayüz yeniden yazılabilir.
  */
 export const POINTS_UI_ENABLED = false;
 

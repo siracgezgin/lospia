@@ -51,13 +51,41 @@ export const getAuthUser = cache(async function getAuthUser() {
  */
 export const getMembership = cache(async function getMembership(userId: string) {
   const supabase = await createClient();
+  /* Çalışma alanının ADI da bu turda gelir (gömülü ilişki).
+     Kabuk eskiden önce üyeliği çekip workspace_id'yi öğreniyor, SONRA ikinci
+     bir turla workspaces satırını alıyordu — iki bağımlı tur, her gezinmede.
+     Supabase uzaktayken bu tek başına ~60ms'ti. */
   const { data } = await supabase
     .from("workspace_members")
-    .select("workspace_id, role, notification_email")
+    .select("workspace_id, role, notification_email, workspaces(id, name)")
     .eq("user_id", userId)
     .limit(1)
     .maybeSingle();
-  return (data ?? null) as
-    | { workspace_id: string; role: string; notification_email: string | null }
-    | null;
+  if (!data) return null;
+  const row = data as unknown as {
+    workspace_id: string; role: string; notification_email: string | null;
+    workspaces: { id: string; name: string } | { id: string; name: string }[] | null;
+  };
+  const ws = Array.isArray(row.workspaces) ? row.workspaces[0] ?? null : row.workspaces;
+  return {
+    workspace_id: row.workspace_id,
+    role: row.role,
+    notification_email: row.notification_email,
+    workspace: ws,
+  };
+});
+
+/**
+ * Kullanıcının profil satırı — istek başına TEK sorgu.
+ * Kabuk (ad + e-posta) ve Ana Sayfa (selamlama) aynı satırı ayrı ayrı
+ * çekiyordu; her gezinmede iki profiles isteği görünüyordu.
+ */
+export const getProfile = cache(async function getProfile(userId: string) {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("profiles")
+    .select("full_name, email")
+    .eq("id", userId)
+    .maybeSingle();
+  return (data ?? null) as { full_name: string | null; email: string | null } | null;
 });

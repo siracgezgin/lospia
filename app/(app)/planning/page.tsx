@@ -14,8 +14,7 @@ import { assignPersonTones } from "@/lib/design/person-colors";
 import { CalendarYearView, type YearDayLoad } from "@/components/planning/CalendarYearView";
 import { CalendarView } from "@/components/calendar/CalendarView";
 import type {
-  PlanningMeeting, PlanningTopic, PlanningMeetingWithTopics, PlanningTemplate,
-  PlanningOpenItem, PlanningWeekMatrixRow, PlanningProcessStep,
+  PlanningMeeting, PlanningTopic, PlanningMeetingWithTopics,
   Task, Profile, WorkspaceContact, WorkspaceDepartment,
 } from "@/types";
 
@@ -42,11 +41,14 @@ export default async function CalendarPage({
   const sp = await searchParams;
   const scale = asCalendarScale(sp.v);
 
-  // Sistemdeki üyeler — her ölçekte lazım (Kim rozetleri, kişi seçimi).
-  const membersRes = await supabase
+  /* Sistemdeki üyeler — her ölçekte lazım (Kim rozetleri, kişi seçimi).
+     Sorgu burada BAŞLATILIR ama beklenmez: aşağıdaki toplantı sorgusuyla
+     paralel gitsin diye promise olarak tutuluyor. */
+  const membersPromise = supabase
     .from("workspace_members")
     .select("id, user_id, role, color_key, icon_key, profiles(id, full_name, email, avatar_url)")
     .eq("workspace_id", workspaceId);
+  const membersRes = await membersPromise;
   type ProfileLite = Pick<Profile, "id" | "full_name" | "email" | "avatar_url">;
   type MemberRow = { id: string; user_id: string; role: string; color_key: string | null; icon_key: string | null; profiles: ProfileLite | ProfileLite[] | null };
   const memberRowsData = (membersRes.data ?? []) as unknown as MemberRow[];
@@ -185,20 +187,32 @@ export default async function CalendarPage({
   const weekStart = isoDays[0];
   const weekEnd = isoDays[6];
 
-  // Her hafta AYNI iskeletle açılır — boşsa şablondan sessizce kurulur.
-  // (Aslı Hanım, 2026-08-20: "Ben tek tek uğraşmayayım.")
-  await ensureWeekScaffold(supabase, {
-    workspaceId, userId: user.id, isAdmin, weekStart, weekEnd,
-  });
+  /* TOPLANTILAR + KONULARI TEK TURDA.
+     Sayfa eskiden üç adım sırayla bekliyordu: iskelet yoklaması → toplantılar
+     → konular. Konular gömülü ilişkiyle aynı sorguda geliyor; iskelet
+     yoklaması da kalktı, çünkü hafta dolu mu boş mu zaten bu sorgunun
+     sonucundan belli. İskelet ancak hafta GERÇEKTEN boşken kurulur ve o nadir
+     durumda bir kez daha okuruz. */
+  const weekQuery = () =>
+    supabase
+      .from("planning_meetings")
+      .select("*, planning_topics(*)")
+      .eq("workspace_id", workspaceId)
+      .gte("meeting_date", weekStart)
+      .lte("meeting_date", weekEnd)
+      .order("time_slot", { ascending: true })
+      .order("position", { ascending: true });
 
-  const meetingsRes = await supabase
-    .from("planning_meetings")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .gte("meeting_date", weekStart)
-    .lte("meeting_date", weekEnd)
-    .order("time_slot", { ascending: true })
-    .order("position", { ascending: true });
+  let meetingsRes = await weekQuery();
+
+  // Her hafta AYNI iskeletle açılır — boşsa sessizce kurulur.
+  // (Aslı Hanım, 2026-08-20: "Ben tek tek uğraşmayayım.")
+  if (!meetingsRes.error && (meetingsRes.data ?? []).length === 0) {
+    const added = await ensureWeekScaffold(supabase, {
+      workspaceId, userId: user.id, isAdmin, weekStart, weekEnd,
+    });
+    if (added > 0) meetingsRes = await weekQuery();
+  }
 
   const setup = maybeDatabaseSetupRequired(meetingsRes.error);
   if (setup.setupRequired) {
@@ -214,56 +228,19 @@ export default async function CalendarPage({
     );
   }
 
-  const meetings = (meetingsRes.data ?? []) as unknown as PlanningMeeting[];
-  const ids = meetings.map((m) => m.id);
-  let topics: PlanningTopic[] = [];
-  if (ids.length) {
-    const topicsRes = await supabase
-      .from("planning_topics")
-      .select("*")
-      .in("meeting_id", ids)
-      .order("position", { ascending: true });
-    topics = (topicsRes.data ?? []) as unknown as PlanningTopic[];
-  }
-
-  const byMeeting = new Map<string, PlanningTopic[]>();
-  for (const t of topics) {
-    if (!byMeeting.has(t.meeting_id)) byMeeting.set(t.meeting_id, []);
-    byMeeting.get(t.meeting_id)!.push(t);
-  }
-  const withTopics: PlanningMeetingWithTopics[] = meetings.map((m) => ({
-    ...m,
-    topics: byMeeting.get(m.id) ?? [],
+  type MeetingWithEmbedded = PlanningMeeting & { planning_topics?: PlanningTopic[] | null };
+  const meetings = (meetingsRes.data ?? []) as unknown as MeetingWithEmbedded[];
+  const withTopics: PlanningMeetingWithTopics[] = meetings.map(({ planning_topics, ...m }) => ({
+    ...(m as PlanningMeeting),
+    // Gömülü ilişki sırayı garanti etmez — konu sırası burada uygulanır.
+    topics: [...(planning_topics ?? [])].sort((a, b) => (a.position ?? 0) - (b.position ?? 0)),
   }));
 
-  // "Tamamlanmamış Eksik Konular" — haftadan bağımsız açık konu defteri. Tablo
-  // henüz migrate edilmediyse bölüm kendi içinde bilgi notu gösterir, sayfa
-  // çalışmaya devam eder.
-  const openItemsRes = await supabase
-    .from("planning_open_items")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .order("done", { ascending: true })
-    .order("position", { ascending: true });
-  const openItems = (openItemsRes.data ?? []) as unknown as PlanningOpenItem[];
-
-  // Takvimin altındaki "Tarih/Saat × departman" matrisi — haftaya bağlı.
-  const matrixRes = await supabase
-    .from("planning_week_matrix")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .eq("week_start", weekStart)
-    .order("weekday", { ascending: true })
-    .order("position", { ascending: true });
-  const matrix = (matrixRes.data ?? []) as unknown as PlanningWeekMatrixRow[];
-
-  // "Adımlar / Operasyon Kurgusu" — haftadan bağımsız sabit akış.
-  const stepsRes = await supabase
-    .from("planning_process_steps")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .order("position", { ascending: true });
-  const processSteps = (stepsRes.data ?? []) as unknown as PlanningProcessStep[];
+  /* Takvimin ALTINDAKİ üç blok (açık konular · hafta matrisi · operasyon
+     adımları) kaldırıldı — Aslı Hanım, 2026-08-24: "Bunun altında yazılar iş
+     bölümü… Gül'ün işlerini boarduna alacaksın. Buradan çıkacak bunlar."
+     Üç sorgu da bu yüzden burada YOK; sayfa üç round-trip daha hızlı açılıyor.
+     Satırlar veritabanında duruyor, yalnız çizilmiyor. */
 
   return (
     <PlanningBoard
@@ -274,13 +251,6 @@ export default async function CalendarPage({
       memberNames={memberNames}
       personHex={personHex}
       isAdmin={isAdmin}
-      currentUserId={user.id}
-      openItems={openItems}
-      openItemsAvailable={!openItemsRes.error}
-      matrix={matrix}
-      matrixAvailable={!matrixRes.error}
-      processSteps={processSteps}
-      processStepsAvailable={!stepsRes.error}
     />
   );
 }

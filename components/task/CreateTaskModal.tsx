@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { X, Check } from "lucide-react";
+import { X, Check, ChevronDown } from "lucide-react";
 import { createTask } from "@/lib/actions/tasks";
 import {
   STATUS_LABELS,
@@ -14,7 +14,7 @@ import {
 import { Avatar } from "@/components/ui/Avatar";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { cn } from "@/lib/utils/cn";
-import { EFFORT_OPTIONS, EFFORT_LABELS, POINTS_UI_ENABLED, type EffortSize } from "@/lib/points/effort";
+import { type EffortSize } from "@/lib/points/effort";
 import {
   TASK_VISIBILITIES, VISIBILITY_LABELS, VISIBILITY_DESCRIPTIONS,
   DEFAULT_VISIBILITY, type TaskVisibility,
@@ -74,12 +74,22 @@ export function CreateTaskModal({
   const [dueDate, setDueDate] = useState(defaultDueDate);
   const [status, setStatus] = useState<TaskStatus>(defaultStatus);
   const [priority, setPriority] = useState<TaskPriority>("medium");
-  const [effort, setEffort] = useState<EffortSize>("medium");
+  // Efor alanı çizilmiyor (Puan & Motivasyon kapalı) ama sözleşme korunuyor.
+  const [effort] = useState<EffortSize>("medium");
   // Visibility is admin-only; members always create 'workspace' tasks. Yönetici
   // Pano pre-selects the visibility that matches the active tab.
   const [visibility, setVisibility] = useState<TaskVisibility>(
     isAdmin ? defaultVisibility : "workspace",
   );
+  /* AYRINTILAR KAPALI AÇILIR.
+     Pencere on alanla açılıyordu (başlık, açıklama, departman, sorumlular,
+     başlangıç, teslim, durum, öncelik, efor, görünürlük) ve altısı zorunlu
+     görünüyordu. Aslı Hanım (2026-08-24): "İsmi, işi, tarihi bu kadar…
+     Bize ne kadar fazla bilgi verirsen o kadar yavaşlarız."
+     Görünen üç alan artık tam olarak bu üçü: İŞ · KİM · NE ZAMAN. Gerisi
+     "Daha fazla"nın arkasında ve hepsi isteğe bağlı — başlangıç tarihi zaten
+     bugüne dolu geliyor, kimse elle girmek zorunda değil. */
+  const [showMore, setShowMore] = useState(false);
 
   const topDepts = useMemo(() => departments.filter((d) => d.parent_id === null), [departments]);
   const childDepts = useMemo(() => {
@@ -118,8 +128,8 @@ export function CreateTaskModal({
 
   const workspaceIdMissing = !workspaceId || workspaceId.length < 10;
 
-  // Start + due date are both mandatory for a manually created task.
-  const datesMissing = !startDate || !dueDate;
+  // Teslim tarihi zorunlu; başlangıç tarihi bugüne dolu gelir (elle girilmez).
+  const datesMissing = !dueDate;
   const dateOrderInvalid = !!startDate && !!dueDate && startDate > dueDate;
 
   function handleSubmit(e: React.FormEvent) {
@@ -127,7 +137,6 @@ export function CreateTaskModal({
     if (!title.trim() || workspaceIdMissing) return;
     setError(null);
 
-    if (!startDate) { setError("Başlangıç tarihi zorunludur."); return; }
     if (!dueDate) { setError("Teslim tarihi zorunludur."); return; }
     if (dateOrderInvalid) { setError("Başlangıç tarihi teslim tarihinden sonra olamaz."); return; }
 
@@ -194,133 +203,133 @@ export function CreateTaskModal({
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-          {/* 1. İş başlığı */}
+          {/* ── 1. İŞ ─────────────────────────────────────────────────────── */}
           <div>
-            <label className={labelCls}>İş başlığı <span className="text-danger">*</span></label>
+            <label className={labelCls}>İş <span className="text-danger">*</span></label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Görev / iş başlığı"
+              placeholder="Ne yapılacak?"
               required
               autoFocus
               className={inputCls}
             />
           </div>
 
-          {/* 2. Açıklama / Stratejik adım */}
+          {/* ── 2. KİM — sorumlu kişiler. Departman ASLA daraltmaz. ───────── */}
           <div>
-            <label className={labelCls}>Açıklama / Stratejik adım</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              placeholder="Açıklama, hedef veya stratejik adım…"
-              className={cn(inputCls, "resize-none")}
-            />
-          </div>
-
-          {/* 3. Departman */}
-          <div>
-            <label className={labelCls}>Departman</label>
-            <select
-              value={departmentId}
-              onChange={(e) => handleDepartmentChange(e.target.value)}
-              className={selectCls}
-            >
-              <option value="">— Departman seçin</option>
-              {topDepts.map((d) => (
-                <optgroup key={d.id} label={d.name}>
-                  <option value={d.id}>{d.name} (genel)</option>
-                  {(childDepts[d.id] ?? []).map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-          </div>
-
-          {/* 4. Sorumlu kişiler — multi-select over ALL workspace members
-              (department never filters assignment) */}
-          <div>
-            <label className={labelCls}>Sorumlu kişiler</label>
+            <label className={labelCls}>Kim</label>
             {eligibleMembers.length === 0 ? (
               <p className="text-xs text-subtle bg-surface-muted border border-hairline rounded-lg px-3 py-2">
                 Çalışma alanında üye yok.
               </p>
             ) : (
-              <>
-                <div className="flex flex-wrap gap-2">
-                  {eligibleMembers.map((m) => {
-                    const on = responsibleIds.includes(m.memberId);
-                    return (
-                      <button
-                        key={m.memberId}
-                        type="button"
-                        onClick={() => toggleResponsible(m.memberId)}
-                        aria-pressed={on}
-                        className={cn(
-                          "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs border transition-colors duration-150 active:scale-[0.98]",
-                          on
-                            ? "bg-brand-soft border-brand-ring text-brand-strong font-medium"
-                            : "bg-surface border-line text-muted hover:bg-surface-hover hover:border-line-strong",
-                        )}
-                      >
-                        <Avatar name={m.name} size="xs" />
-                        {getPersonDisplayName(m.name)}
-                        {on && <Check size={12} />}
-                      </button>
-                    );
-                  })}
-                </div>
-              </>
+              <div className="flex flex-wrap gap-2">
+                {eligibleMembers.map((m) => {
+                  const on = responsibleIds.includes(m.memberId);
+                  return (
+                    <button
+                      key={m.memberId}
+                      type="button"
+                      onClick={() => toggleResponsible(m.memberId)}
+                      aria-pressed={on}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs border transition-colors duration-150 active:scale-[0.98]",
+                        on
+                          ? "bg-brand-soft border-brand-ring text-brand-strong font-medium"
+                          : "bg-surface border-line text-muted hover:bg-surface-hover hover:border-line-strong",
+                      )}
+                    >
+                      <Avatar name={m.name} size="xs" />
+                      {getPersonDisplayName(m.name)}
+                      {on && <Check size={12} />}
+                    </button>
+                  );
+                })}
+              </div>
             )}
           </div>
 
-          {/* 6 + 7. Başlangıç tarihi + Teslim tarihi — both mandatory */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Başlangıç tarihi <span className="text-danger">*</span></label>
-              <input
-                type="date"
-                value={startDate}
-                required
-                onChange={(e) => setStartDate(e.target.value)}
-                className={cn(selectCls, "tabular-nums")}
-              />
-            </div>
-            <div>
-              <label className={labelCls}>Teslim tarihi <span className="text-danger">*</span></label>
-              <input
-                type="date"
-                value={dueDate}
-                min={startDate || undefined}
-                required
-                onChange={(e) => setDueDate(e.target.value)}
-                className={cn(selectCls, "tabular-nums")}
-              />
-            </div>
+          {/* ── 3. NE ZAMAN — teslim tarihi. Tek zorunlu tarih. ───────────── */}
+          <div>
+            <label className={labelCls}>Ne zaman <span className="text-danger">*</span></label>
+            <input
+              type="date"
+              value={dueDate}
+              min={startDate || undefined}
+              required
+              onChange={(e) => setDueDate(e.target.value)}
+              className={cn(selectCls, "tabular-nums")}
+            />
           </div>
-          {dateOrderInvalid && (
-            <p className="anim-fade-down text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-              Başlangıç tarihi teslim tarihinden sonra olamaz.
-            </p>
-          )}
 
-          {/* 8 + 9. Durum + Öncelik */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* ── Daha fazla — hepsi isteğe bağlı ───────────────────────────── */}
+          <button
+            type="button"
+            onClick={() => setShowMore((v) => !v)}
+            className="inline-flex items-center gap-1 text-[13px] font-medium text-muted transition-colors duration-150 hover:text-ink"
+          >
+            {showMore ? "Daha az" : "Daha fazla"}
+            <ChevronDown size={13} className={cn("transition-transform duration-200 ease-standard", showMore && "rotate-180")} />
+          </button>
+
+          {showMore && (
+          <div className="anim-fade-down space-y-4 border-t border-hairline pt-4">
             <div>
-              <label className={labelCls}>Durum</label>
+              <label className={labelCls}>Açıklama</label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={3}
+                placeholder="Gerekiyorsa birkaç satır…"
+                className={cn(inputCls, "resize-none")}
+              />
+            </div>
+
+            <div>
+              <label className={labelCls}>Departman</label>
               <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as TaskStatus)}
+                value={departmentId}
+                onChange={(e) => handleDepartmentChange(e.target.value)}
                 className={selectCls}
               >
-                {SIMPLE_STATUS_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
+                <option value="">— Departman seçin</option>
+                {topDepts.map((d) => (
+                  <optgroup key={d.id} label={d.name}>
+                    <option value={d.id}>{d.name} (genel)</option>
+                    {(childDepts[d.id] ?? []).map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
             </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>Başlangıç tarihi</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className={cn(selectCls, "tabular-nums")}
+                />
+              </div>
+              <div>
+                <label className={labelCls}>Durum</label>
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as TaskStatus)}
+                  className={selectCls}
+                >
+                  {SIMPLE_STATUS_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
             <div>
               <label className={labelCls}>Öncelik</label>
               <select
@@ -333,78 +342,56 @@ export function CreateTaskModal({
                 ))}
               </select>
             </div>
-          </div>
-
-          {/* Efor — Puan & Motivasyon kapalıyken çizilmez (POINTS_UI_ENABLED). */}
-          {POINTS_UI_ENABLED && isAdmin && (
-            <div>
-              <label className={labelCls}>Efor</label>
-              <div className="flex gap-2">
-                {EFFORT_OPTIONS.map((e) => (
-                  <button
-                    key={e}
-                    type="button"
-                    onClick={() => setEffort(e)}
-                    aria-pressed={effort === e}
-                    className={cn(
-                      "flex-1 rounded-lg border px-3 py-2 text-sm transition-colors duration-150 active:scale-[0.98]",
-                      effort === e
-                        ? "bg-brand-soft border-brand-ring text-brand-strong font-medium"
-                        : "bg-surface border-line text-muted hover:bg-surface-hover hover:border-line-strong",
-                    )}
-                  >
-                    {EFFORT_LABELS[e]}
-                  </button>
-                ))}
+            {/* Görünürlük — admin-only. Members always create 'workspace' tasks. */}
+            {isAdmin && (
+              <div>
+                <label className={labelCls}>Görünürlük</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {TASK_VISIBILITIES.map((v) => {
+                    const on = visibility === v;
+                    return (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => handleVisibilityChange(v)}
+                        aria-pressed={on}
+                        className={cn(
+                          "text-left rounded-lg border px-3 py-2 transition-colors duration-150",
+                          on
+                            ? "bg-amber-50 border-amber-300"
+                            : "bg-surface border-line hover:bg-surface-hover hover:border-line-strong",
+                        )}
+                      >
+                        <span className={cn("flex items-center gap-1.5 text-sm font-medium", on ? "text-amber-800" : "text-ink")}>
+                          {v === "admin_only" && <Lock size={12} />}
+                          {VISIBILITY_LABELS[v]}
+                        </span>
+                        <span className="block text-[11px] text-muted mt-0.5 leading-snug">
+                          {VISIBILITY_DESCRIPTIONS[v]}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {visibility === "admin_only" && (
+                  <p className="anim-fade-down text-[11px] text-amber-700 mt-1.5">
+                    Bu görevde yalnızca yönetici kişiler sorumlu olarak seçilebilir.
+                  </p>
+                )}
               </div>
-              <p className="text-[11px] text-subtle mt-1.5">
-                Puan yalnızca yönetici onayından sonra kesinleşir.
+            )}
+
+            {workspaceIdMissing && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                Çalışma alanı bilgisi yüklenemedi. Sayfayı yenileyin.
               </p>
-            </div>
+            )}
+          </div>
           )}
 
-          {/* Görünürlük — admin-only. Members always create 'workspace' tasks. */}
-          {isAdmin && (
-            <div>
-              <label className={labelCls}>Görünürlük</label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {TASK_VISIBILITIES.map((v) => {
-                  const on = visibility === v;
-                  return (
-                    <button
-                      key={v}
-                      type="button"
-                      onClick={() => handleVisibilityChange(v)}
-                      aria-pressed={on}
-                      className={cn(
-                        "text-left rounded-lg border px-3 py-2 transition-colors duration-150",
-                        on
-                          ? "bg-amber-50 border-amber-300"
-                          : "bg-surface border-line hover:bg-surface-hover hover:border-line-strong",
-                      )}
-                    >
-                      <span className={cn("flex items-center gap-1.5 text-sm font-medium", on ? "text-amber-800" : "text-ink")}>
-                        {v === "admin_only" && <Lock size={12} />}
-                        {VISIBILITY_LABELS[v]}
-                      </span>
-                      <span className="block text-[11px] text-muted mt-0.5 leading-snug">
-                        {VISIBILITY_DESCRIPTIONS[v]}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-              {visibility === "admin_only" && (
-                <p className="anim-fade-down text-[11px] text-amber-700 mt-1.5">
-                  Bu görevde yalnızca yönetici kişiler sorumlu olarak seçilebilir.
-                </p>
-              )}
-            </div>
-          )}
-
-          {workspaceIdMissing && (
-            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-              Çalışma alanı bilgisi yüklenemedi. Sayfayı yenileyin.
+          {dateOrderInvalid && (
+            <p className="anim-fade-down text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              Başlangıç tarihi teslim tarihinden sonra olamaz.
             </p>
           )}
 

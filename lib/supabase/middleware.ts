@@ -27,10 +27,19 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  // Refresh session — IMPORTANT: do not remove this call
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  /* Oturum doğrulama — getUser() DEĞİL getClaims().
+     getUser() her istekte Supabase Auth'a gerçek bir HTTP turu atar. Bu proxy
+     TÜM isteklerde çalışır (sayfa gezinmeleri, RSC prefetch'leri, server
+     action'lar), yani o tur her tıklamaya biniyordu; üstüne kabuk bir tur daha
+     atıyordu (aynı istekte iki kez /auth/v1/user görülüyordu).
+     getClaims() asimetrik imzalı projelerde JWT'yi WebCrypto ile YERELDE
+     doğrular (JWKS bir kez çekilip önbelleğe alınır) — ağ turu yok. Token'ın
+     süresi dolmak üzereyse oturumu yine kendisi tazeler, yani çerez yenileme
+     davranışı korunur. Simetrik gizli anahtar kullanan projede kütüphane
+     kendiliğinden getUser() gibi sunucuya sorar: en kötü ihtimalle eskisi
+     kadar, daha yavaş değil. */
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const user = claimsData?.claims ? { id: claimsData.claims.sub } : null;
 
   // Protect authenticated routes
   const pathname = request.nextUrl.pathname;

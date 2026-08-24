@@ -71,12 +71,20 @@ types/
 ```
 
 ## UI kuralları
+- **SADELİK KURALI (Aslı Hanım, 2026-08-24): "İsmi, işi, tarihi bu kadar."**
+  Ekrana bir sayı ya da durum etiketi eklemeden önce şu testi uygula:
+  *bir kişiyi ya da bir işi PUANLIYOR mu?* (4 görev, 3 gecikti, 2 eksik,
+  N puan, "bu hafta tamamlandı") → **ekleme**. *Baktığın listeyi TARİF mi
+  ediyor?* (kategori ağacındaki ürün adedi, filtrelenmiş tablonun satır
+  sayısı) → serbest. Kart başına EN FAZLA bir rozet; durumu sütun/sayfa zaten
+  söylüyorsa çip tekrardır. "Mühendis gibi hissetmek istemiyorum."
 - Giriş rotası /home (Ana Sayfa) — tüm roller; kısayol kartları registry'den
-  role göre filtrelenir. /modules yönetici genel-bakış hub'ıdır (sayaçlı).
-- Sidebar 3 sabit grup (Çalışma / Ürün / Yönetim); yeni modülün kapısı Ana
-  Sayfa kısayolları + /modules hub'ıdır — sidebar'a başlık eklemek kullanıcı
-  onayı ister.
-- Tek terminoloji: aynı ekran her yerde aynı adla (registry MODULE_DIRECTORY ↔
+  role göre filtrelenir. /modules genel-bakış hub'ıdır — kartlarda sayaç yok.
+- Sidebar 3 sabit grup (Core Operations / Product & Office / Admin); yeni
+  modülün kapısı Ana Sayfa kısayolları + /modules hub'ıdır — sidebar'a başlık
+  eklemek kullanıcı onayı ister.
+- Sayfa ADLARI İngilizce, içerik Türkçe (Aslı Hanım, 2026-08-20). Tek
+  terminoloji: aynı ekran her yerde aynı adla (registry MODULE_DIRECTORY ↔
   AppHeader PAGE_TITLES ↔ sidebar ↔ page metadata.title).
 - `app/(app)/layout.tsx`'e sorgu EKLEME — kabuk her gezinmede çalışır.
 - Font Inter (variable, `--font-sans-face`); hizalı rakamlar `tabular-nums`.

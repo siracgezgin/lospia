@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, Printer, CheckCircle2, Activity, AlertTriangle, CalendarClock } from "lucide-react";
+import { ArrowLeft, Printer } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { getPersonDisplayName, getPersonInitials } from "@/lib/utils/person-display";
 import { assignPersonTones, assignPersonIcons } from "@/lib/design/person-colors";
@@ -29,7 +29,6 @@ interface Props {
   meetings: ReportMeeting[];
   departments: string[];
   today: string;      // yyyy-MM-dd
-  weekStart: string;  // yyyy-MM-dd (pazartesi)
   /** Ekibin tamamının kimliği — renk panodakiyle aynı çıksın diye. */
   teamIdentity?: { id: string; colorKey: string | null; iconKey: string | null }[];
 }
@@ -47,13 +46,18 @@ const trTarih = (iso: string) => {
  * okumuyor bile… Tek sayfalık, kişi bazlı — sadece bir sayfada kendisiyle
  * ilgili detayları okusun."
  *
- * Biçim yine onun tarifi: "Instagram'da yapıyorlar ya, önce dikkati çekiyor,
- * daha fazlasını isteyince veriyor." Sayfa ÜÇ BÜYÜK RAKAMLA açılıyor; detay
- * altta ve kısa. Gecikmiş iş varsa en üste çıkıyor — okunmayacak tek şey o
- * olmamalı.
+ * Sayfa bir zamanlar ÜÇ BÜYÜK RAKAMLA açılıyordu (açık iş · devam eden ·
+ * gecikmiş) ve altında "bu hafta tamamlanan / toplam tamamlanan" sayaçları
+ * vardı. Aslı Hanım (2026-08-24) o dili kaldırttı:
+ *   "tamamlandı, tamamlanmadı, eksik kaldı, geç kaldı, sıfır, bir bir…
+ *    Öyle bir şey istemiyoruz ki. İsmi, işi, tarihi bu kadar."
+ *   "Kimseyi orada puanlamak istemiyorum."
+ * Rapor artık doğrudan işin kendisiyle açılıyor: gecikmişler en üstte, sonra
+ * yaklaşan teslimler, toplantılar ve tarihsizler. Yazdırılabilir: A4 tek
+ * sayfa (bkz. globals.css @media print).
  */
 export function PersonReport({
-  person, tasks, meetings, departments, today, weekStart, teamIdentity,
+  person, tasks, meetings, departments, today, teamIdentity,
 }: Props) {
   /* Renk EKİP GENELİ atamadan gelir. Tek kişi için hesaplamak, panoda çakışma
      yüzünden kayan tonu ve yöneticinin Ayarlar'daki seçimini görmez; kişinin
@@ -65,11 +69,8 @@ export function PersonReport({
   const tone = assignPersonTones(seeds, choices)[person.id] ?? assignPersonTones([person.id])[person.id]!;
   const Icon = assignPersonIcons(seeds, choices)[person.id] ?? assignPersonIcons([person.id])[person.id]!;
 
-  const done = tasks.filter((t) => t.status === "done");
   const open = tasks.filter((t) => t.status !== "done");
-  const inProgress = open.filter((t) => ["in_progress", "review"].includes(t.status));
   const overdue = open.filter((t) => t.due_date && t.due_date < today);
-  const doneThisWeek = done.filter((t) => t.completed_at && t.completed_at.slice(0, 10) >= weekStart);
 
   // Yaklaşanlar: tarihi olan açık işler, gecikmişler hariç, en yakın 8.
   const upcoming = open
@@ -123,18 +124,6 @@ export function PersonReport({
           </span>
         </header>
 
-        {/* ÜÇ BÜYÜK RAKAM — "önce dikkati çek" */}
-        <section className="print-keep grid grid-cols-3 gap-3 border-b border-line py-5">
-          <Stat n={open.length} label="açık iş" tone="text-ink" />
-          <Stat n={inProgress.length} label="devam eden" tone="text-info" icon={<Activity size={13} />} />
-          <Stat
-            n={overdue.length}
-            label="gecikmiş"
-            tone={overdue.length ? "text-danger" : "text-subtle"}
-            icon={overdue.length ? <AlertTriangle size={13} /> : undefined}
-          />
-        </section>
-
         {/* Gecikmişler EN ÜSTTE — okunmayacak tek şey bu olmamalı. */}
         {overdue.length > 0 && (
           <Block title="Gecikmiş işler" tone="danger">
@@ -180,34 +169,12 @@ export function PersonReport({
           </Block>
         )}
 
-        <footer className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3 text-[12px] text-subtle">
-          <span className="inline-flex items-center gap-1.5">
-            <CheckCircle2 size={12} className="text-success" />
-            Bu hafta tamamlanan: <b className="font-semibold text-ink tabular-nums">{doneThisWeek.length}</b>
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <CalendarClock size={12} />
-            Toplam tamamlanan: <b className="font-semibold text-ink tabular-nums">{done.length}</b>
-          </span>
-        </footer>
-
         {open.length === 0 && meetings.length === 0 && (
           <p className="mt-4 rounded-lg border border-line bg-surface-muted px-3 py-4 text-center text-[13px] text-subtle">
             Açık iş ve toplantı yok.
           </p>
         )}
       </article>
-    </div>
-  );
-}
-
-function Stat({ n, label, tone, icon }: { n: number; label: string; tone: string; icon?: React.ReactNode }) {
-  return (
-    <div className="text-center">
-      <div className={cn("text-3xl font-semibold tabular-nums leading-none", tone)}>{n}</div>
-      <div className="mt-1.5 inline-flex items-center gap-1 text-[12px] text-muted">
-        {icon}{label}
-      </div>
     </div>
   );
 }

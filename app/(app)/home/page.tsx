@@ -8,16 +8,16 @@ import {
 } from "lucide-react";
 import { startOfWeek, addDays, format } from "date-fns";
 import { requireModuleMember } from "@/lib/modules/context";
+import { getProfile } from "@/lib/supabase/server";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { ShortcutCard } from "@/components/home/ShortcutCard";
-import { StatTile } from "@/components/home/StatTile";
 import {
   MODULE_GROUP_TITLES,
   modulesForRole,
   type ModuleGroup,
 } from "@/lib/modules/registry";
 import { categoryMeta } from "@/lib/planning/categories";
-import { STATUS_LABELS, PRIORITY_LABELS } from "@/lib/utils/task-constants";
+import { PRIORITY_LABELS } from "@/lib/utils/task-constants";
 import { cn } from "@/lib/utils/cn";
 import type { TaskPriority, TaskStatus } from "@/types";
 
@@ -104,7 +104,7 @@ export default async function HomePage() {
     .limit(50);
   if (!isAdmin) myTasksQuery.eq("visibility", "workspace");
 
-  const [myTasksRes, meetingsRes, profileRes, reviewCountRes, paymentCountRes] = await Promise.all([
+  const [myTasksRes, meetingsRes, profile] = await Promise.all([
     myTasksQuery,
     supabase
       .from("planning_meetings")
@@ -115,69 +115,33 @@ export default async function HomePage() {
       .order("meeting_date", { ascending: true })
       .order("time_slot", { ascending: true })
       .order("position", { ascending: true }),
-    supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
-    /* "Onay bekleyen" tanımı PANONUNKİYLE aynı olmalı (applyBoardView →
-       waiting-approval): yalnız status='review' değil; onay gerektiren ya da
-       birini/bir kişiyi bekleyen işler de sayılır. Dar tanım Ana Sayfa ile
-       Pano'ya farklı rakam yazdırıyordu. */
-    isAdmin
-      ? supabase
-          .from("tasks")
-          .select("id", { count: "exact", head: true })
-          .eq("workspace_id", workspaceId)
-          .not("status", "in", "(done,archived)")
-          .or("status.eq.review,approval_required.is.true,waiting_on_member_id.not.is.null,waiting_on_contact_id.not.is.null")
-          .is("deleted_at", null)
-          .is("archived_at", null)
-      : Promise.resolve({ count: null }),
-    isAdmin
-      ? supabase
-          .from("finance_payments")
-          .select("id", { count: "exact", head: true })
-          .eq("workspace_id", workspaceId)
-          .eq("status", "bekliyor")
-      : Promise.resolve({ count: null, error: null }),
+    // Kabuk aynı satırı zaten çekti — getProfile react/cache'li, ikinci
+    // istek gitmez.
+    getProfile(user.id),
   ]);
 
   const myTasks = (myTasksRes.data ?? []) as MyTask[];
-  const overdueCount = myTasks.filter((t) => t.due_date && t.due_date.slice(0, 10) < todayIso).length;
   const visibleTasks = myTasks.slice(0, 8);
 
-  // Takvim tablosu migrate edilmemişse sessizce boş kalır — Home Page çökmez.
+  // Takvim tablosu migrate edilmemişse sessizce boş kalır — Ana Sayfa çökmez.
   const weekMeetings = (meetingsRes.error ? [] : (meetingsRes.data ?? [])) as HomeMeeting[];
   const todayMeetings = weekMeetings.filter((m) => m.meeting_date === todayIso);
 
-  const fullName = (profileRes.data?.full_name as string | null) ?? null;
+  const fullName = profile?.full_name ?? null;
   const firstName = fullName?.trim().split(/\s+/)[0] ?? null;
 
-  const reviewCount = "count" in reviewCountRes ? (reviewCountRes.count ?? null) : null;
-  const paymentCount =
-    "error" in paymentCountRes && paymentCountRes.error
-      ? null
-      : ((paymentCountRes as { count: number | null }).count ?? null);
-
-  /* DURUM ŞERİDİ — "şu an ne durumdayım" ilk satırda.
-     Aslı Hanım (2026-08-24): "Home Page daha profesyonel ve daha anlaşılır
-     olabilir; bu haliyle her şey aynı geliyor, karmaşık geliyor."
-     Sıfır olan karo sönük çizilir (StatTile), böylece göz yalnız DOLU olana
-     takılır. Yöneticinin iki sayısı eskiden ayrı bir "Yönetici özeti" kartında
-     tekrar ediyordu — o kart kaldırıldı, sayılar buraya taşındı. */
-  /* Bağlantı parametresi `view` — Liste sayfası `lens` diye bir şey OKUMUYOR.
-     Karolara tıklanınca filtre uygulanmıyordu, liste her şeyi gösteriyordu. */
-  const tiles: { label: string; value: number; href: string; tone: "ink" | "brand" | "danger" | "warning" | "muted" }[] = [
-    { label: "Açık işim", value: myTasks.length, href: "/list?view=mine", tone: "ink" },
-    { label: "Geciken", value: overdueCount, href: "/list?view=overdue", tone: overdueCount > 0 ? "danger" : "muted" },
-    { label: "Bugünkü toplantı", value: todayMeetings.length, href: "/planning", tone: todayMeetings.length > 0 ? "brand" : "muted" },
-  ];
-  if (isAdmin) {
-    tiles.push({ label: "Onay bekleyen", value: reviewCount ?? 0, href: "/list?view=waiting-approval", tone: (reviewCount ?? 0) > 0 ? "warning" : "muted" });
-    tiles.push({ label: "Bekleyen ödeme", value: paymentCount ?? 0, href: "/finance", tone: (paymentCount ?? 0) > 0 ? "warning" : "muted" });
-  } else {
-    tiles.push({ label: "Bu hafta toplantı", value: weekMeetings.length, href: "/planning", tone: "muted" });
-  }
+  /* DURUM ŞERİDİ KALDIRILDI.
+     Sayfanın ilk satırında beş sayaç karosu duruyordu: "Açık işim · Geciken ·
+     Bugünkü toplantı · Onay bekleyen · Bekleyen ödeme". Aslı Hanım
+     (2026-08-24): "Boş laf istemiyorum. Boş hesap istemiyorum… Mühendis gibi
+     hissetmek istemiyorum. İsmi, işi, tarihi bu kadar."
+     Karolar zaten hemen altındaki iki listenin sayımıydı — rakam işin
+     kendisinin önünde duruyordu. Yöneticinin iki sayacı (onay/ödeme) da
+     buradan kalktı; ikisi de kendi modülünde yaşıyor. Yan fayda: sayfa iki
+     sorgu daha az atıyor. */
 
   const shortcuts = modulesForRole(isAdmin);
-  const groups: ModuleGroup[] = ["calisma", "urun", "ofis", "yonetim"];
+  const groups: ModuleGroup[] = ["calisma", "urun", "yonetim"];
 
   return (
     <div className="w-full px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
@@ -190,23 +154,6 @@ export default async function HomePage() {
         <p className="mt-1 text-sm text-muted">{longDate}</p>
       </div>
 
-      {/* DURUM ŞERİDİ — "şu an ne durumdayım" tek bakışta.
-          Aslı Hanım (2026-08-24): "Home Page daha profesyonel ve daha anlaşılır
-          olabilir; bu haliyle her şey aynı geliyor, karmaşık geliyor."
-          Sayfa 17 birbirinin aynı kısayol kartıyla açılıyordu; asıl bilgi
-          (kaç işim var, kaçı gecikti) onların arasında kayboluyordu. Önce
-          rakamlar, sonra iş, en sonda gezinme. */}
-      <div
-        className={cn(
-          "mb-5 grid grid-cols-2 gap-3 lg:mb-6",
-          tiles.length === 5 ? "lg:grid-cols-5" : "lg:grid-cols-4",
-        )}
-      >
-        {tiles.map((t) => (
-          <StatTile key={t.label} label={t.label} value={t.value} href={t.href} tone={t.tone} />
-        ))}
-      </div>
-
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-3 lg:gap-5 2xl:gap-6">
         {/* Bana atanan görevler */}
         <section className="lg:col-span-2 rounded-2xl border border-line bg-surface p-5 shadow-card lg:p-6">
@@ -216,16 +163,6 @@ export default async function HomePage() {
               <h2 className="text-[15px] font-semibold tracking-tight text-ink">
                 Bana atanan görevler
               </h2>
-            </div>
-            <div className="flex items-center gap-2 text-[12px]">
-              <span className="rounded-md bg-brand-soft px-2 py-0.5 font-medium tabular-nums text-brand-strong">
-                {myTasks.length} açık
-              </span>
-              {overdueCount > 0 && (
-                <span className="rounded-md bg-red-50 px-2 py-0.5 font-medium tabular-nums text-red-700">
-                  {overdueCount} geciken
-                </span>
-              )}
             </div>
           </div>
 
@@ -244,7 +181,7 @@ export default async function HomePage() {
               {visibleTasks.map((t) => {
                 const due = t.due_date ? t.due_date.slice(0, 10) : null;
                 const isOverdue = due !== null && due < todayIso;
-                const urgent = t.priority === "urgent" || t.priority === "high";
+                const urgent = t.priority === "urgent";
                 return (
                   <li key={t.id}>
                     <Link
@@ -255,14 +192,13 @@ export default async function HomePage() {
                       <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink transition-colors duration-150 group-hover:text-brand-strong">
                         {t.title}
                       </span>
+                      {/* Durum etiketi satırdan KALKTI — "iş ve tarih" yeter.
+                          Yalnız Acil kalıyor; o bir durum değil, bir uyarı. */}
                       {urgent && t.priority && (
-                        <span className="hidden sm:inline rounded-md bg-amber-50 px-1.5 py-0.5 text-[12px] font-medium text-amber-800">
+                        <span className="hidden shrink-0 rounded-md bg-amber-50 px-1.5 py-0.5 text-[12px] font-medium text-amber-800 sm:inline">
                           {PRIORITY_LABELS[t.priority]}
                         </span>
                       )}
-                      <span className="hidden sm:inline text-[12px] text-subtle">
-                        {STATUS_LABELS[t.status]}
-                      </span>
                       <span
                         className={cn(
                           "w-16 text-right text-[12px] tabular-nums",
@@ -300,9 +236,6 @@ export default async function HomePage() {
                 <CalendarRange size={16} className="text-brand" />
                 <h2 className="text-[15px] font-semibold tracking-tight text-ink">Bugün</h2>
               </div>
-              <span className="text-[12px] tabular-nums text-subtle">
-                bu hafta {weekMeetings.length} toplantı
-              </span>
             </div>
             {todayMeetings.length === 0 ? (
               <p className="rounded-xl border border-dashed border-line bg-surface-muted px-4 py-5 text-center text-sm text-muted">
@@ -347,8 +280,7 @@ export default async function HomePage() {
       <div className="mt-8 lg:mt-10">
         <h2 className="mb-1 text-base font-semibold tracking-tight text-ink">Kısayollar</h2>
         <p className="mb-4 text-[13px] text-muted">
-          Sol menüyle aynı adlar. Ne işe yaradığını görmek için üzerine gelin;
-          tam dizin <span className="font-medium text-ink">Operation Modules</span>’ta.
+          Sol menüyle aynı adlar.
         </p>
         {groups.map((group) => {
           const items = shortcuts.filter((m) => m.group === group);

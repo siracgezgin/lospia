@@ -1,25 +1,23 @@
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { cn } from "@/lib/utils/cn";
 
 interface Props {
   title: string;
   description: string;
   href: string;
   icon: LucideIcon;
-  /** Live record count; null → the backing table is not migrated yet. */
-  count: number | null;
-  countLabel: string;
 }
 
 /**
- * An Ofis Merkezi tile on the Operasyon Modülleri hub — the answer to "Word
- * nerede, Excel nerede?". Always clickable: when the backing table is not
- * migrated yet the target page shows its own controlled setup notice, so the
- * card only swaps the count chip for a "Kurulum bekleniyor" badge.
+ * Operation Modules hub kartı — "Word nerede, Excel nerede?" sorusunun cevabı.
+ *
+ * Kartın altında canlı bir kayıt sayacı vardı ("3 föy", "12 kayıt"); Aslı
+ * Hanım (2026-08-24) "boş hesap istemiyorum" dedikten sonra kalktı. Kart bir
+ * kapı: ne olduğunu söyler, içinde kaç şey olduğunu değil. Tablosu henüz
+ * migrate edilmemiş modülde hedef sayfa kendi kurulum uyarısını gösterir.
  */
-export function OfficeCenterCard({ title, description, href, icon: Icon, count, countLabel }: Props) {
+export function OfficeCenterCard({ title, description, href, icon: Icon }: Props) {
   return (
     <Link
       href={href}
@@ -35,18 +33,6 @@ export function OfficeCenterCard({ title, description, href, icon: Icon, count, 
         {title}
       </h3>
       <p className="mt-1 flex-1 text-[13px] leading-relaxed text-muted">{description}</p>
-      <div className="mt-3">
-        <span
-          className={cn(
-            "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium tabular-nums",
-            count === null
-              ? "bg-surface-sunken text-subtle"
-              : "bg-brand-soft text-brand-strong",
-          )}
-        >
-          {count === null ? "Kurulum bekleniyor" : `${count} ${countLabel}`}
-        </span>
-      </div>
     </Link>
   );
 }

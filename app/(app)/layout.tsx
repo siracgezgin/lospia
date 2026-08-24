@@ -1,12 +1,15 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
-import { createClient, getAuthUser, getMembership } from "@/lib/supabase/server";
+import { createClient, getAuthUser, getMembership, getProfile } from "@/lib/supabase/server";
 import { getAppBrandForHost } from "@/lib/branding";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { pickDisplayEmail } from "@/lib/utils/display-identity";
 import type { Workspace, Notification, WorkspaceRole } from "@/types";
+
+/** Kabuğun workspace'ten ihtiyaç duyduğu tek şey: kimlik + ad. */
+export type ShellWorkspace = Pick<Workspace, "id" | "name">;
 
 // Co-locate serverless functions with the Supabase project (eu-north-1, Stockholm).
 // Vercel's "arn1" is Stockholm; this removes the cross-region (fra1↔eu-north-1)
@@ -36,8 +39,26 @@ export default async function AppLayout({
     redirect("/login");
   }
 
-  // Fetch workspace membership (aynı istekte sayfa ile paylaşılır)
-  const membership = await getMembership(user.id);
+  /* KABUK EN FAZLA İKİ TUR ATAR.
+     Eskiden dört adım SIRAYLA bekliyordu: membership → [workspace+bildirim+
+     profil] → "hangi görev silinmiş?" sorgusu. Kabuk her gezinmede çalıştığı
+     için bu gecikme TÜM sayfalara biniyordu (Supabase uzakta; her tur ~60ms).
+     Bildirim ve profil sorguları yalnız user.id'ye ihtiyaç duyar — workspaceId'yi
+     beklemelerine gerek yok. Bu yüzden membership ile AYNI dalgada gidiyorlar;
+     geriye tek bir bağımlı sorgu kalıyor (workspaces, workspaceId gerektirir). */
+  const [membership, notifResult, profile] = await Promise.all([
+    getMembership(user.id),
+    supabase
+      .from("notifications")
+      // Silinmiş görevi olan bildirim pasif çizilir ve okunmadı sayılmaz.
+      // Bu bilgi ARTIK AYNI SORGUDA geliyor (gömülü ilişki) — eskiden ardından
+      // ikinci bir "bu id'ler hâlâ duruyor mu?" turu atılıyordu.
+      .select("*, task:tasks(id, deleted_at)")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(30),
+    getProfile(user.id),
+  ]);
 
   let workspaceId: string | null = membership?.workspace_id ?? null;
   const userRole: WorkspaceRole = (membership?.role as WorkspaceRole | undefined) ?? "member";
@@ -74,7 +95,7 @@ export default async function AppLayout({
     }
   }
 
-  let workspace: Workspace | null = null;
+  let workspace: ShellWorkspace | null = null;
   let unreadCount = 0;
   let notifications: Notification[] = [];
   // task_ids whose task is soft-deleted or gone → their notifications are passive.
@@ -89,55 +110,41 @@ export default async function AppLayout({
     notificationEmail: membership?.notification_email ?? null,
   });
 
+  /* Çalışma alanı adı üyelik sorgusuyla AYNI turda geldi (bkz. getMembership) —
+     ayrı bir workspaces turu yok. Tek istisna: kullanıcı bu istekte erişim
+     davetiyle YENİ katıldıysa üyelik satırı okunduğunda henüz yoktu; o nadir
+     durumda adı burada bir kez çekiyoruz. */
+  workspace = membership?.workspace ?? null;
+  if (workspaceId && !workspace) {
+    const { data } = await supabase
+      .from("workspaces")
+      .select("id, name")
+      .eq("id", workspaceId)
+      .single();
+    workspace = data;
+  }
+
   if (workspaceId) {
     // NOT: saved_views sorgusu kabuktan kaldırıldı — sidebar'daki "Kaydedilen
     // görünümler" bölümü kalktı; pano/liste kendi sekme verisini kendisi çeker.
-    const [wsResult, notifResult, profileResult] = await Promise.all([
-      supabase
-        .from("workspaces")
-        .select("*")
-        .eq("id", workspaceId)
-        .single(),
-      supabase
-        .from("notifications")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(30),
-      supabase
-        .from("profiles")
-        .select("full_name, email")
-        .eq("id", user.id)
-        .maybeSingle(),
-    ]);
-
-    workspace = wsResult.data;
-    notifications = notifResult.data ?? [];
-
-    // A notification may point at a task that has since been soft-deleted
-    // (deleted_at set) or hard-removed. Such a notification must not act as a live
-    // link into a dead task, nor keep nagging the bell badge. Resolve which
-    // referenced tasks are still live; the rest are treated as "silinmiş görev"
-    // (rendered passive + excluded from the unread count).
-    const notifTaskIds = [
-      ...new Set(notifications.map((n) => n.task_id).filter((id): id is string => !!id)),
-    ];
-    if (notifTaskIds.length > 0) {
-      const { data: liveRows } = await supabase
-        .from("tasks")
-        .select("id")
-        .in("id", notifTaskIds)
-        .is("deleted_at", null);
-      const liveIds = new Set((liveRows ?? []).map((r) => r.id as string));
-      deadTaskIds = notifTaskIds.filter((id) => !liveIds.has(id));
-    }
+    /* Bildirimler yukarıdaki dalgada geldi. Gömülü `task` ilişkisi null ise
+       görev tamamen silinmiş, deleted_at doluysa çöpe atılmış — ikisi de
+       "ölü": pasif çizilir ve okunmadı rozetini şişirmez. */
+    type NotifRow = Notification & { task?: { id: string; deleted_at: string | null } | null };
+    const notifRows = (notifResult.data ?? []) as unknown as NotifRow[];
+    deadTaskIds = notifRows
+      .filter((n) => n.task_id != null && (!n.task || n.task.deleted_at != null))
+      .map((n) => n.task_id as string);
     const deadSet = new Set(deadTaskIds);
-    const isDeadNotif = (n: Notification) => n.task_id != null && deadSet.has(n.task_id);
 
-    unreadCount = notifications.filter((n: Notification) => !n.is_read && !isDeadNotif(n)).length;
-    userName = profileResult.data?.full_name ?? userName;
+    notifications = notifRows.map(({ task: _task, ...n }) => n as Notification);
+    unreadCount = notifRows.filter(
+      (n) => !n.is_read && !(n.task_id != null && deadSet.has(n.task_id)),
+    ).length;
+
+    userName = profile?.full_name ?? userName;
     displayEmail = pickDisplayEmail({
-      profileEmail: profileResult.data?.email ?? null,
+      profileEmail: profile?.email ?? null,
       authEmail: user.email,
       notificationEmail: membership?.notification_email ?? null,
     });

@@ -47,10 +47,8 @@ import {
 import { PRIORITY_LABELS, STATUS_LABELS } from "@/lib/utils/task-constants";
 import {
   getTaskCardStyleByPerson,
-  getDepartmentCardStyle,
   getTaskStateMarkers,
   PRIORITY_CHIP,
-  PRIORITY_SHOW_ON_BOARD,
   STATUS_CHIP_TONE,
   BOARD_COL_HEADER_TONE,
 } from "@/lib/design/semantics";
@@ -61,7 +59,7 @@ import { formatDateTR } from "@/lib/utils/format-date";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { buildAssignablePeople } from "@/lib/people/assignable";
 import { buildDeptMeta, type DeptMeta } from "@/lib/utils/departments";
-import { PeopleGrid, buildPersonLoads, type GridPerson } from "./PeopleGrid";
+import { PeopleGrid, type GridPerson } from "./PeopleGrid";
 import { assignPersonTones } from "@/lib/design/person-colors";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
 import { CsvImportModal } from "@/components/task/CsvImportModal";
@@ -77,11 +75,6 @@ import type { TaskParticipant } from "@/types";
 
 // Department metadata (id → {name, color}) shared with all card renderers.
 const DeptMetaContext = createContext<Record<string, DeptMeta>>({});
-function useTaskDept(task: Task): DeptMeta | undefined {
-  const meta = useContext(DeptMetaContext);
-  return task.department_id ? meta[task.department_id] : undefined;
-}
-
 /* Kişi rengi — kart kimliğinin kaynağı.
    Aslı Hanım (2026-08-23): "Görevlerde de renk kişinin renginde olsun. Sadece
    tamamlananlar yeşil olacak." Kart artık departmanın değil SORUMLUNUN rengini
@@ -306,19 +299,6 @@ function formatWeekLabel(monday: Date): string {
 }
 
 // ── Filter helpers ─────────────────────────────────────────────────────────────
-
-function weekEnd(monday: Date): Date {
-  const d = new Date(monday);
-  d.setDate(d.getDate() + 6);
-  d.setHours(23, 59, 59, 999);
-  return d;
-}
-
-function isInWeek(ts: string | null, monday: Date): boolean {
-  if (!ts) return false;
-  const d = new Date(ts);
-  return d >= monday && d <= weekEnd(monday);
-}
 
 function applyViewFilter(tasks: Task[], slug: string, userId: string, monday: Date): Task[] {
   const today = localISO(new Date());
@@ -823,6 +803,7 @@ function CardContent({
   canArchiveCard = true,
   canDeleteCard = true,
   showMenu = true,
+  showStatus = false,
 }: {
   task: Task;
   profiles: Pick<Profile, "id" | "full_name" | "email">[];
@@ -835,10 +816,11 @@ function CardContent({
   canArchiveCard?: boolean;
   canDeleteCard?: boolean;
   showMenu?: boolean;
+  /** Durum çipi YALNIZ mobil kartta çizilir — orada sürükleme yok, durumu
+   *  değiştirmenin başka yolu kalmıyor. Masaüstünde kartın hangi sütunda
+   *  durduğu zaten durumudur; çip orada sadece tekrardı. */
+  showStatus?: boolean;
 }) {
-  // Department drives the card identity chip (even on a done card).
-  const dept = useTaskDept(task);
-  const deptStyle = getDepartmentCardStyle(dept?.color);
   // Detail link keeps the originating board's context (so "← geri" returns here).
   const boardCtx = useContext(BoardContext);
   const hrefSuffix = boardCtx?.taskHrefSuffix ?? "";
@@ -855,51 +837,39 @@ function CardContent({
     responsibleNames[task.assignee_id ?? ""] ??
     responsibleNames[task.responsible_contact_id ?? ""];
 
-  const waitingOnName =
-    responsibleNames[task.waiting_on_member_id ?? ""] ??
-    responsibleNames[task.waiting_on_contact_id ?? ""] ??
-    null;
-
   // State is an OVERLAY only: a chip + due-date color. Never the card color.
   const markers = getTaskStateMarkers(task);
-  const showPriority = PRIORITY_SHOW_ON_BOARD[task.priority];
   // Note-workflow signal (max ONE chip: Aksiyon bekliyor > Onay bekliyor >
   // Sorumlu değişti > Yeni not > Güncellendi) — never crowds the Acil frame.
   const noteSignal = useContext(NoteSignalsContext)[task.id];
 
+  /* TEK ROZET KURALI.
+     Kartın üstünde bir zamanlar beş rozet birden durabiliyordu: departman +
+     durum ("Gecikti"/"Bekliyor"/"Onay") + öncelik + not sinyali + gizli işaret.
+     Aslı Hanım (2026-08-24): "İsmi, işi, tarihi bu kadar… Mühendis gibi
+     hissetmek istemiyorum."
+     Artık kart en fazla BİR rozet taşır ve sırası şudur:
+       Acil  >  not sinyali (aksiyon/onay bekleyen)  >  gizli
+     Departman rozeti kalktı — kartın rengi zaten kimin işi olduğunu söylüyor.
+     Durum rozeti kalktı — hangi sütunda durduğu zaten durumudur. */
+  const soleChip: { label: string; className: string; icon?: boolean } | null =
+    task.priority === "urgent"
+      ? { label: PRIORITY_LABELS.urgent, className: PRIORITY_CHIP.urgent, icon: true }
+      : noteSignal
+      ? { label: noteSignal.label, className: noteSignal.className }
+      : (task as unknown as { visibility?: string }).visibility === "admin_only"
+      ? { label: ADMIN_ONLY_CHIP_LABEL, className: "bg-amber-50 text-amber-700 border border-amber-200" }
+      : null;
+
   return (
     <div className="flex-1 min-w-0">
-      {/* Top row: department chip (identity) + state chip (overlay) + menu */}
-      <div className="flex items-start justify-between gap-1 mb-1.5">
-        <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
-          {dept && (
-            <Badge size="xs" dot={deptStyle.dot} className={cn("max-w-36 truncate", deptStyle.chip)}>
-              {dept.name}
-            </Badge>
-          )}
-          {markers.chip && (
-            <Badge size="xs" className={cn("max-w-32 truncate", markers.chip.className)}>
-              {markers.chip.label === "Bekliyor" && waitingOnName ? `Bekliyor · ${waitingOnName}` : markers.chip.label}
-            </Badge>
-          )}
-          {/* Priority lives up here (secondary) so the bottom row stays for people.
-              Urgent gets an alarm icon so it reads as "Acil" at a glance. */}
-          {showPriority && (
-            <Badge size="xs" className={cn("shrink-0 inline-flex items-center gap-0.5", PRIORITY_CHIP[task.priority])}>
-              {task.priority === "urgent" && <AlertTriangle size={9} strokeWidth={2.5} />}
-              {PRIORITY_LABELS[task.priority]}
-            </Badge>
-          )}
-          {noteSignal && (
-            <Badge size="xs" className={cn("shrink-0", noteSignal.className)}>
-              {noteSignal.label}
-            </Badge>
-          )}
-          {/* Admin_only marker. Members never receive these tasks, so this chip
-              is, by construction, only ever visible to owner/admin. */}
-          {(task as unknown as { visibility?: string }).visibility === "admin_only" && (
-            <Badge size="xs" className="shrink-0 bg-amber-50 text-amber-700 border border-amber-200">
-              <Lock size={9} className="mr-0.5" /> {ADMIN_ONLY_CHIP_LABEL}
+      {/* Üst satır: tek rozet (varsa) + kart menüsü */}
+      <div className="flex items-start justify-between gap-1">
+        <div className="min-w-0 flex-1">
+          {soleChip && (
+            <Badge size="xs" className={cn("mb-1.5 max-w-full truncate inline-flex items-center gap-0.5", soleChip.className)}>
+              {soleChip.icon && <AlertTriangle size={9} strokeWidth={2.5} />}
+              {soleChip.label}
             </Badge>
           )}
         </div>
@@ -934,27 +904,19 @@ function CardContent({
         {task.title}
       </Link>
 
-      {/* Description (one line) — muted (secondary) but readable, never the
-          near-invisible placeholder grey */}
-      {task.description && (
-        <p className="text-[11px] text-muted mt-1 line-clamp-1 leading-snug">
-          {task.description}
-        </p>
-      )}
+      {/* Açıklama satırı KALDIRILDI — kartta iş başlığı yeter; ayrıntı görevin
+          kendi sayfasında. ("Bize ne kadar fazla bilgi verirsen o kadar
+          yavaşlarız." — Aslı Hanım, 2026-08-24) */}
 
-      {/* No creator line here — the board card focuses on department, urgency
-          and the RESPONSIBLE people. "Oluşturan" lives in the task detail. */}
-
-      {/* Bottom row: status (clickable) + due + people chips (bottom-right) */}
+      {/* Alt satır: TARİH + KİŞİ. Durum çipi masaüstünde yok — sütun zaten durum. */}
       <div className="flex items-center gap-1.5 mt-2.5 flex-wrap">
-        {/* Status chip — clickable dropdown for users who don't drag */}
-        {interactive ? (
+        {showStatus && (interactive ? (
           <CardStatusChip task={task} />
         ) : (
           <span className={cn("text-[10px] rounded px-1.5 py-0.5 leading-none font-medium", STATUS_CHIP_TONE[task.status] ?? "bg-surface-sunken text-muted")}>
             {STATUS_LABELS[task.status]}
           </span>
-        )}
+        ))}
 
         {task.due_date && (
           <span className={cn("text-[10px] font-medium tabular-nums flex items-center gap-0.5", markers.dueDateClass)}>
@@ -1194,6 +1156,7 @@ function MobileTaskCard({
         canArchiveCard={canArchiveCard}
         canDeleteCard={canDeleteCard}
         showMenu={showMenu}
+        showStatus
       />
     </div>
   );
@@ -1724,7 +1687,12 @@ export function KanbanBoard({
     });
   }, [optimisticTasks, tasksByCol]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const hasActiveFilter = (isAdminBoard ? adminManager !== "all" : !!personFilter) || !!search || !!departmentFilter;
+  /* "✕ Temizle" yalnız GERÇEK bir filtre varken çıkar. personFilter artık
+     filtre değil, panonun hangi kişide açıldığıdır (giriş ızgarasından gelir)
+     — ondan çıkış yolu soldaki "Kişiler" düğmesi. Onu da filtre sayınca
+     düğme her zaman görünüyor ve araç çubuğunda hiç sönmeyen bir uyarı gibi
+     duruyordu. */
+  const hasActiveFilter = (isAdminBoard && adminManager !== "all") || !!search || !!departmentFilter;
 
   // Manager-board task detail links carry the originating context so the detail
   // page's "← geri" returns to the right Yönetici Pano tab.
@@ -1768,11 +1736,6 @@ export function KanbanBoard({
     return [...fromMembers, ...fromContacts];
   }, [members, profiles, pickerContacts]);
 
-  const personLoads = useMemo(
-    () => buildPersonLoads(optimisticTasks, gridPeople, localISO(new Date())),
-    [optimisticTasks, gridPeople],
-  );
-
   /* Kimlik seçimleri (Ayarlar → Kişi Kimliği). Anahtar profiles.id — pano,
      liste ve raporlar aynı tohumu kullanmalı, yoksa kişinin rengi ekranlar
      arasında tutmaz. */
@@ -1799,27 +1762,6 @@ export function KanbanBoard({
     () => gridPeople.find((p) => p.filterKey === personFilter) ?? null,
     [gridPeople, personFilter],
   );
-
-  // Person workload summary (computed from raw tasks, not view-filtered). Not
-  // shown on the manager board (its person filter lists managers, not members).
-  const personStats = useMemo(() => {
-    if (isAdminBoard || !personFilter) return null;
-    const today = localISO(new Date());
-    const thisMonday = getMondayOf(new Date());
-    const personName = personFilter.startsWith("member:")
-      ? responsibleNames[personFilter.slice(7)] ?? ""
-      : personFilter.startsWith("contact:")
-      ? responsibleNames[personFilter.slice(8)] ?? ""
-      : "";
-    const personTasks = applyPersonFilter(optimisticTasks, personFilter);
-    return {
-      name: personName,
-      completedThisWeek: personTasks.filter((t) => t.status === "done" && isInWeek(t.completed_at, thisMonday)).length,
-      inProgress: personTasks.filter((t) => ["in_progress", "review"].includes(t.status)).length,
-      waiting: personTasks.filter((t) => t.status === "blocked" || t.waiting_on_member_id != null || t.waiting_on_contact_id != null).length,
-      overdue: personTasks.filter((t) => t.due_date != null && t.due_date < today && t.status !== "done").length,
-    };
-  }, [isAdminBoard, personFilter, optimisticTasks, responsibleNames]);
 
   const boardCtx = useMemo<BoardCtxValue>(
     () => ({ canComplete, isResponsible, canDeleteTask: canDeleteTaskFn, showToast, taskHrefSuffix }),
@@ -2086,9 +2028,7 @@ export function KanbanBoard({
         <PeopleGrid
           people={gridPeople}
           choices={personChoices}
-          loadOf={personLoads}
           meKey={`member:${userId}`}
-          totalTasks={optimisticTasks.length}
           onPick={(key) => { setPersonFilter(key); setPeopleEntry(false); }}
           onShowAll={() => { setPersonFilter(""); setPeopleEntry(false); }}
         />
@@ -2178,7 +2118,12 @@ export function KanbanBoard({
           {/* Person filter. Manager board lists ONLY owner/admin people and
               filters by canonical responsibility; the normal board keeps the
               member/contact assignee filter. */}
-          {isAdminBoard ? (
+          {/* Kişi seçimi araç çubuğunda DEĞİL — panonun kapısı kişi ızgarası,
+              geri dönüş yolu da soldaki "Kişiler" düğmesi. Aynı işi yapan
+              ikinci bir açılır liste araç çubuğunu kalabalıklaştırıyordu.
+              Yönetici panosunda yönetici seçici kalıyor: orada giriş ızgarası
+              yok. */}
+          {isAdminBoard && (
             <select
               value={adminManager}
               onChange={(e) => { setAdminManager(e.target.value); syncAdminUrl(adminVisibility, e.target.value); }}
@@ -2192,32 +2137,6 @@ export function KanbanBoard({
               {(adminBoard?.managers ?? []).map((m) => (
                 <option key={m.userId} value={m.userId}>{getPersonDisplayName(m.name)}</option>
               ))}
-            </select>
-          ) : (
-            <select
-              value={personFilter}
-              onChange={(e) => setPersonFilter(e.target.value)}
-              className={cn(
-                "text-sm border rounded-lg px-2.5 py-1.5 bg-surface transition-colors duration-150 cursor-pointer",
-                personFilter ? "border-brand text-brand" : "border-line text-muted hover:border-line-strong hover:text-ink",
-              )}
-              aria-label="Kişiye göre filtrele"
-            >
-              <option value="">Kişi</option>
-              {profiles.length > 0 && (
-                <optgroup label="Üyeler">
-                  {profiles.map((p) => (
-                    <option key={p.id} value={`member:${p.id}`}>{p.full_name ?? p.email}</option>
-                  ))}
-                </optgroup>
-              )}
-              {pickerContacts.length > 0 && (
-                <optgroup label="Kişiler">
-                  {pickerContacts.map((c) => (
-                    <option key={c.id} value={`contact:${c.id}`}>{c.name}</option>
-                  ))}
-                </optgroup>
-              )}
             </select>
           )}
 
@@ -2241,7 +2160,7 @@ export function KanbanBoard({
           {hasActiveFilter && (
             <button
               onClick={() => {
-                setPersonFilter(""); setDepartmentFilter(""); setSearch("");
+                setDepartmentFilter(""); setSearch("");
                 if (isAdminBoard) { setAdminManager("all"); syncAdminUrl(adminVisibility, "all"); }
               }}
               className="text-[13px] text-muted hover:text-ink px-1.5 py-1 rounded-md hover:bg-surface-muted transition-colors duration-150 whitespace-nowrap"
@@ -2254,28 +2173,12 @@ export function KanbanBoard({
       </div>
       )}
 
-      {/* ── Person workload summary strip ───────────────────────────────── */}
-      {!peopleEntry && personStats && (
-        <div className="flex items-center gap-4 px-4 py-2 bg-brand-soft/40 border-b border-brand-soft text-xs shrink-0 flex-wrap tabular-nums anim-fade">
-          <span className="font-semibold text-brand-strong">{personStats.name}</span>
-          <span className="text-muted">
-            <span className="font-medium text-success">{personStats.completedThisWeek}</span> bu hafta tamamlandı
-          </span>
-          <span className="text-muted">
-            <span className="font-medium text-info">{personStats.inProgress}</span> devam ediyor
-          </span>
-          {personStats.waiting > 0 && (
-            <span className="text-muted">
-              <span className="font-medium text-warning">{personStats.waiting}</span> bekliyor
-            </span>
-          )}
-          {personStats.overdue > 0 && (
-            <span className="font-medium text-danger">
-              ⚠ {personStats.overdue} gecikmiş
-            </span>
-          )}
-        </div>
-      )}
+      {/* Kişi yük özeti şeridi ("N bu hafta tamamlandı · N devam ediyor ·
+          N bekliyor · ⚠ N gecikmiş") KALDIRILDI — Aslı Hanım, 2026-08-24:
+          "tamamlandı, tamamlanmadı, eksik kaldı, geç kaldı, sıfır, bir bir…
+           Öyle bir şey istemiyoruz ki. İsmi, işi, tarihi bu kadar."
+          Kimin sayfasında olduğumuzu bir üstteki seçili-kişi şeridi zaten
+          söylüyor; sayılar işin kendisinin önüne geçiyordu. */}
 
       {/* ── Pre-mount: static (no DnD) — desktop/tablet only ─────────────── */}
       {!peopleEntry && !mounted && (

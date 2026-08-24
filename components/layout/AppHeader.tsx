@@ -13,7 +13,7 @@ import { signOut } from "@/lib/actions/auth";
 import type { Workspace, Notification, WorkspaceRole } from "@/types";
 
 interface Props {
-  workspace: Workspace | null;
+  workspace: Pick<Workspace, "id" | "name"> | null;
   unreadCount: number;
   userId: string;
   userName?: string | null;

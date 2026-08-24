@@ -3,10 +3,8 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { formatDistanceToNow } from "date-fns";
-import { tr } from "date-fns/locale";
 import {
-  Plus, Search, ClipboardList, Archive, ArrowUpRight, User, Clock, FileDown, FileSpreadsheet,
+  Plus, Search, ClipboardList, Archive, FileDown, FileSpreadsheet,
 } from "lucide-react";
 import { archiveProductionSheet } from "@/lib/actions/production";
 import { cn } from "@/lib/utils/cn";
@@ -21,11 +19,27 @@ export type ProductionListItem = Pick<
   | "archived_at" | "created_at" | "updated_at"
 >;
 
-/** Kapak görseli — önce teknik çizim, yoksa ilk görsel. */
+/**
+ * Kapak görseli — ÜRÜNÜN KENDİ FOTOĞRAFI (dekupe).
+ *
+ * Aslı Hanım (2026-08-24): "Buradaki ana sayfadaki fotoğraflar dekupeler olsun.
+ * Yani denim yelek kod kumaşı olmasın — denim yeleğin fotoğrafı olsun."
+ *
+ * Liste eskiden teknik çizimi öne alıyordu; kapakta ürün yerine kalıp krokisi
+ * ya da kumaş kodu görünüyordu. Sıralama artık şu: önce ürün fotoğrafı
+ * (general), sonra süsleme/aksesuar gibi ürün üstü çekimler, kumaş swatch'ı ve
+ * teknik çizim ise EN SON — başka hiçbir görsel yoksa.
+ */
+const COVER_PRIORITY = ["general", "embellishments", "accessories", "sewing", "fabric"] as const;
+
 function coverImage(s: ProductionListItem): string | null {
-  const imgs = Array.isArray(s.photo_refs) ? s.photo_refs : [];
-  const drawing = imgs.find((i) => i?.section === "technical_drawing" && i?.url);
-  return (drawing ?? imgs.find((i) => i?.url))?.url ?? null;
+  const imgs = (Array.isArray(s.photo_refs) ? s.photo_refs : []).filter((i) => i?.url);
+  for (const section of COVER_PRIORITY) {
+    const hit = imgs.find((i) => i.section === section);
+    if (hit) return hit.url;
+  }
+  // Hiç ürün görseli yoksa teknik çizim boş kapaktan iyidir.
+  return imgs[0]?.url ?? null;
 }
 
 interface Props {
@@ -53,7 +67,7 @@ const STATUS_LABEL: Record<ProductionSheet["status"], string> = {
   archived: "Arşiv",
 };
 
-export function ProductionSheetsView({ sheets, memberNames, isAdmin }: Props) {
+export function ProductionSheetsView({ sheets, isAdmin }: Props) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [showArchived, setShowArchived] = useState(false);
@@ -77,16 +91,6 @@ export function ProductionSheetsView({ sheets, memberNames, isAdmin }: Props) {
       router.refresh();
     });
   }
-
-  function relTime(iso: string): string {
-    try {
-      return formatDistanceToNow(new Date(iso), { addSuffix: true, locale: tr });
-    } catch {
-      return "";
-    }
-  }
-
-  const nameOf = (id: string | null) => (id && memberNames[id]) || "—";
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -154,25 +158,59 @@ export function ProductionSheetsView({ sheets, memberNames, isAdmin }: Props) {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((s) => (
-            <div key={s.id} className="group flex flex-col rounded-2xl border border-line bg-surface p-4 shadow-card transition-shadow hover:shadow-pop">
-              <div className="mb-2 flex items-start justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {s.product_kind && (
-                    <span className="rounded-md bg-surface-muted px-2 py-0.5 text-[10.5px] font-medium text-muted">
-                      {s.product_kind}
-                    </span>
-                  )}
-                  <span className={cn("inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10.5px] font-medium", STATUS_TONE[s.status])}>
-                    {STATUS_LABEL[s.status]}
-                  </span>
-                </div>
-                <div className="flex shrink-0 items-center gap-0.5">
+        /* GÖRSEL ÖNCE.
+           Kart eskiden 56px'lik bir küçük resim + üstünde iki rozet + altında
+           iki satır iz kaydı taşıyordu; ürün, kendi föyünün kartında en küçük
+           öğeydi. Aslı Hanım (2026-08-24): "Buradaki fotoğraflar dekupeler
+           olsun… denim yeleğin fotoğrafı olsun." Ekibi görsel çalışıyor: kart
+           artık büyük ürün fotoğrafıyla açılıyor, yazı fotoğrafın altında.
+           Durum rozeti yalnız Taslak/Arşiv için çizilir — "Aktif" rozeti her
+           kartta tekrarlayan, hiçbir şey söylemeyen bir etiketti. */
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          {filtered.map((s) => {
+            const cover = coverImage(s);
+            return (
+              <div key={s.id} className="group relative flex flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-card transition-shadow hover:shadow-pop">
+                <Link href={`/production/${s.id}`} className="flex min-w-0 flex-1 flex-col">
+                  <div className="relative aspect-[3/4] w-full overflow-hidden bg-surface-muted">
+                    {cover ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={cover}
+                        alt=""
+                        className="h-full w-full object-cover transition-transform duration-300 ease-standard group-hover:scale-[1.03]"
+                      />
+                    ) : (
+                      <div className="grid h-full w-full place-items-center text-subtle">
+                        <ClipboardList size={26} strokeWidth={1.5} />
+                      </div>
+                    )}
+                    {s.status !== "active" && (
+                      <span className={cn("absolute left-2 top-2 rounded-md px-2 py-0.5 text-[10.5px] font-medium shadow-sm", STATUS_TONE[s.status])}>
+                        {STATUS_LABEL[s.status]}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="min-w-0 flex-1 px-3 pb-3 pt-2.5">
+                    <h3 className="truncate text-[13.5px] font-medium leading-snug text-ink transition-colors group-hover:text-brand-strong" title={s.title}>
+                      {s.title}
+                    </h3>
+                    {/* Kod ve teslim tarihi — föyün kimliği ve tarihi. Üretici,
+                        ürün türü ve iz kaydı (kim oluşturdu / kim son girdi)
+                        kartta değil, föyün kendi sayfasında. */}
+                    <p className="mt-0.5 truncate text-[12px] text-subtle">
+                      {[s.product_code, s.delivery_date].filter(Boolean).join(" · ") || "—"}
+                    </p>
+                  </div>
+                </Link>
+
+                {/* İndir / arşivle — fotoğrafın üstünde, yalnız fare gelince */}
+                <div className="absolute right-2 top-2 flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
                   <a
                     href={`/production/${s.id}/export`}
                     onClick={(e) => e.stopPropagation()}
-                    className="rounded-md p-1 text-subtle transition-colors hover:bg-surface-muted hover:text-ink"
+                    className="rounded-md bg-surface/90 p-1.5 text-muted shadow-sm backdrop-blur transition-colors hover:text-ink"
                     title="Föyü Excel (.xlsx) olarak indir"
                   >
                     <FileDown size={13} />
@@ -181,7 +219,7 @@ export function ProductionSheetsView({ sheets, memberNames, isAdmin }: Props) {
                     <button
                       onClick={() => handleArchive(s)}
                       disabled={isArchiving}
-                      className="rounded-md p-1 text-subtle transition-colors hover:bg-surface-muted hover:text-ink"
+                      className="rounded-md bg-surface/90 p-1.5 text-muted shadow-sm backdrop-blur transition-colors hover:text-ink"
                       title="Arşivle"
                     >
                       <Archive size={13} />
@@ -189,52 +227,11 @@ export function ProductionSheetsView({ sheets, memberNames, isAdmin }: Props) {
                   )}
                 </div>
               </div>
-
-              <Link href={`/production/${s.id}`} className="flex min-w-0 items-start gap-3">
-                {/* Kapak görseli — hızlı görsel tanıma için küçük önizleme */}
-                {coverImage(s) ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={coverImage(s)!}
-                    alt=""
-                    className="h-14 w-14 shrink-0 rounded-lg border border-line object-cover"
-                  />
-                ) : (
-                  <div className="grid h-14 w-14 shrink-0 place-items-center rounded-lg border border-dashed border-line bg-surface-muted text-subtle">
-                    <ClipboardList size={18} />
-                  </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <h3 className="flex items-start justify-between gap-2 text-[14px] font-medium leading-snug text-ink transition-colors group-hover:text-brand-strong">
-                    <span className="min-w-0">{s.title}</span>
-                    <ArrowUpRight size={14} className="mt-0.5 shrink-0 text-subtle opacity-0 transition-opacity group-hover:opacity-100" />
-                  </h3>
-                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11.5px] text-subtle">
-                    {s.product_code && <span>Kod: {s.product_code}</span>}
-                    {s.producer && <span>Üretici: {s.producer}</span>}
-                    {s.delivery_date && <span>Teslim: {s.delivery_date}</span>}
-                  </div>
-                </div>
-              </Link>
-
-              {/* Kim girdi — föy düzeyi iz */}
-              <div className="mt-3 space-y-1 border-t border-line/60 pt-2.5 text-[11px] text-subtle">
-                <span className="flex items-center gap-1.5">
-                  <User size={11} className="shrink-0 text-subtle" />
-                  Oluşturan: <span className="font-medium text-muted">{nameOf(s.created_by)}</span>
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <Clock size={11} className="shrink-0 text-subtle" />
-                  Son giren: <span className="font-medium text-muted">{nameOf(s.updated_by)}</span>
-                  <span className="text-subtle">· {relTime(s.updated_at)}</span>
-                </span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
-      <p className="mt-3 px-1 text-[12px] text-subtle">{filtered.length} föy gösteriliyor</p>
     </div>
   );
 }

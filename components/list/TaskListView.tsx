@@ -266,10 +266,6 @@ function MobileTaskCard({
         </span>
       </div>
 
-      {task.description && (
-        <p className="text-xs text-subtle mt-1 line-clamp-1">{task.description}</p>
-      )}
-
       <div className="flex items-center gap-2 mt-2.5 flex-wrap">
         {meta && badge && (
           <span className={cn(
@@ -314,10 +310,16 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
 
   const [sorting, setSorting] = useState<SortingState>([{ id: "updated_at", desc: true }]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  /* Varsayılan sütunlar: İş · Departman · Konu · Durum · Teslim · Sorumlu ·
+     İş birliği. Açıklama sütunu kapalı — başlığın yanında ikinci bir metin
+     sütunu tabloyu okunmaz yapıyordu ve ayrıntı zaten görevin sayfasında.
+     (Aslı Hanım, 2026-08-24: "Bize ne kadar fazla bilgi verirsen o kadar
+     yavaşlarız.") */
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({
     created_at: false,
     updated_at: false,
     priority: false,
+    description: false,
   });
 
   const [search, setSearch] = useState("");

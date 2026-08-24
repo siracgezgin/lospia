@@ -13,9 +13,11 @@
  * varyantları (?segment=, ?provider=) ayrı kart olmaz; hedef sayfanın kendi
  * filtresi olarak yaşar.
  *
+ * KURAL 5 (2026-08-24): kartlarda SAYAÇ YOK. Hub bir dizindir, gösterge
+ * paneli değil (Aslı Hanım: "boş hesap istemiyorum").
+ *
  * Tüketiciler: /home kısayol ızgarası (role göre filtreler) ve /modules
- * yönetici hub'ı (sayaçlı kartlar). UI is Turkish; no technical enum values
- * reach the user.
+ * genel-bakış hub'ı. UI is Turkish; no technical enum values reach the user.
  */
 
 import type { LucideIcon } from "lucide-react";
@@ -45,8 +47,13 @@ import {
  *  owner/admin (veri düzeyinde de kapalı: Finans, Arşiv, Çöp…). */
 export type ModuleAccess = "all" | "admin";
 
-/** Sidebar ve hub ile aynı bölüm dili. */
-export type ModuleGroup = "calisma" | "urun" | "ofis" | "iliskiler" | "yonetim";
+/** Sidebar ve hub ile aynı bölüm dili — ÜÇ sabit grup.
+ *  Beş grup vardı; ikisinde tek madde duruyordu ("Product" → yalnız
+ *  Collection, "Relations" → yalnız CRM). Tek maddelik başlık bir yapı değil,
+ *  bir engel: göz beş başlık okuyup on iki maddeyi buluyordu. Ofis ve CRM
+ *  ürünle aynı gruba girdi. (Aslı Hanım, 2026-08-24: "olabildiğince sade
+ *  anlaşılır olmalı"; ayrıca CLAUDE.md'nin "3 sabit grup" kuralı.) */
+export type ModuleGroup = "calisma" | "urun" | "yonetim";
 
 export interface ModuleEntry {
   key: string;
@@ -61,9 +68,7 @@ export interface ModuleEntry {
 
 export const MODULE_GROUP_TITLES: Record<ModuleGroup, string> = {
   calisma: "Core Operations",
-  urun: "Product",
-  ofis: "Office",
-  iliskiler: "Relations",
+  urun: "Product & Office",
   yonetim: "Admin",
 };
 
@@ -152,7 +157,7 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
     href: "/documents",
     icon: FolderOpen,
     access: "all",
-    group: "ofis",
+    group: "urun",
   },
   {
     key: "templates",
@@ -161,7 +166,7 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
     href: "/templates",
     icon: FileText,
     access: "all",
-    group: "ofis",
+    group: "urun",
   },
   {
     key: "sheets",
@@ -170,7 +175,7 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
     href: "/sheets",
     icon: Table2,
     access: "all",
-    group: "ofis",
+    group: "urun",
   },
   {
     key: "creative",
@@ -179,7 +184,7 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
     href: "/creative",
     icon: Palette,
     access: "all",
-    group: "ofis",
+    group: "urun",
   },
 
   // ── İlişkiler — herkes görür, yönetici düzenler ───────────────────────────
@@ -190,7 +195,7 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
     href: "/crm",
     icon: Contact,
     access: "all",
-    group: "iliskiler",
+    group: "urun",
   },
 
   // ── Yönetim — yalnız yönetici (veri düzeyinde de kapalı) ──────────────────

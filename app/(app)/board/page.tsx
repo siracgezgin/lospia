@@ -69,7 +69,14 @@ export default async function BoardPage({
     .is("deleted_at", null);
   if (!isAdmin) tasksQuery.eq("visibility", "workspace");
 
-  const [tasksResult, viewsResult, profilesResult, contactsResult, notesResult, rulesResult, deptsResult, completionsResult, deptMembersResult] = await Promise.all([
+  /* TEK DALGA.
+     Sayfa eskiden üç adım SIRAYLA bekliyordu: [9 sorgu] → not akışı →
+     not makbuzları. Üçü de yalnız workspaceId'ye bağlı; birbirini beklemeleri
+     için hiçbir sebep yoktu. Supabase uzaktayken her sıralı adım bir tur
+     gecikme demek — kabuktaki iki turla birlikte Pano'yu açan bekleme buydu.
+     Makbuz sorgusu eskiden "not var mı?" kontrolünden sonra atılıyordu; artık
+     koşulsuz ve paralel gidiyor: not yoksa boş döner, duvar saatinde bedava. */
+  const [tasksResult, viewsResult, profilesResult, contactsResult, notesResult, rulesResult, deptsResult, completionsResult, deptMembersResult, feedResult, ackResult] = await Promise.all([
     tasksQuery.order("fractional_index"),
     supabase
       .from("saved_views")
@@ -117,6 +124,21 @@ export default async function BoardPage({
       .from("department_members")
       .select("department_id, member_id")
       .eq("workspace_id", workspaceId),
+    // Haftanın Not Akışı
+    supabase
+      .from("task_notes")
+      .select("*, task:tasks!inner(id, title, department_id, due_date, archived_at, deleted_at, visibility), author:profiles!task_notes_author_id_fkey(id, full_name, email)")
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: false })
+      .limit(150),
+    // Kullanıcının kendi makbuzları (RLS: kendi satırları; yönetici hepsini
+    // görür — panoda yalnız "bunu gördüm/üstlendim mi?" lazım). Tablo migrate
+    // edilmemişse sessizce boş döner.
+    supabase
+      .from("task_note_acknowledgements")
+      .select("note_id, user_id, action")
+      .eq("workspace_id", workspaceId)
+      .limit(1000),
   ]);
 
   const tasks: Task[] = tasksResult.data ?? [];
@@ -185,12 +207,7 @@ export default async function BoardPage({
     task: FeedTaskRow | FeedTaskRow[] | null;
     author: Pick<Profile, "id" | "full_name" | "email"> | Pick<Profile, "id" | "full_name" | "email">[] | null;
   };
-  const { data: feedRows } = await supabase
-    .from("task_notes")
-    .select("*, task:tasks!inner(id, title, department_id, due_date, archived_at, deleted_at, visibility), author:profiles!task_notes_author_id_fkey(id, full_name, email)")
-    .eq("workspace_id", workspaceId)
-    .order("created_at", { ascending: false })
-    .limit(150);
+  const feedRows = feedResult.data;
 
   const nameOfUser = (id: string | null | undefined): string | null => {
     if (!id) return null;
@@ -231,17 +248,7 @@ export default async function BoardPage({
     })
     .filter((x): x is BoardNoteFeedItem => x !== null);
 
-  // Current user's own receipts (RLS: own rows; admins see all — we only need
-  // "did I see/claim this" on the board). Missing table pre-migration → empty.
-  let noteAcks: { note_id: string; user_id: string; action: string }[] = [];
-  if (noteFeed.length > 0) {
-    const { data: ackRows } = await supabase
-      .from("task_note_acknowledgements")
-      .select("note_id, user_id, action")
-      .eq("workspace_id", workspaceId)
-      .limit(1000);
-    noteAcks = (ackRows ?? []) as { note_id: string; user_id: string; action: string }[];
-  }
+  const noteAcks = (ackResult.data ?? []) as { note_id: string; user_id: string; action: string }[];
 
   const viewSlug = params.view ?? null;
 

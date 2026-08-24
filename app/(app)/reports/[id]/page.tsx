@@ -110,7 +110,6 @@ export default async function PersonReportPage({
       meetings={meetings}
       departments={[...new Set(deptNames)]}
       today={today}
-      weekStart={weekStart}
     />
   );
 }

@@ -81,19 +81,11 @@ export default async function CollectionPage({
     );
   }
 
-  const membersResult = await supabase
-    .from("workspace_members")
-    .select("user_id, profiles(id, full_name, email)")
-    .eq("workspace_id", workspaceId);
-
+  /* workspace_members sorgusu KALDIRILDI: `memberNames` yalnızca prop olarak
+     geçiliyordu, CollectionBrowser onu hiç okumuyor (kartlardaki "Oluşturan /
+     Son giren" satırı kalktığından beri ölü). Her Koleksiyon açılışına bedava
+     bir tur biniyordu. */
   const sheets = (sheetsResult.data ?? []) as unknown as ProductionSheet[];
-  const memberNames: Record<string, string> = {};
-  for (const m of membersResult.data ?? []) {
-    const p = (Array.isArray(m.profiles) ? m.profiles[0] : m.profiles) as
-      | { id: string; full_name: string | null; email: string | null }
-      | null;
-    if (p) memberNames[m.user_id as string] = p.full_name || p.email || "—";
-  }
 
-  return <CollectionBrowser sheets={sheets} memberNames={memberNames} isAdmin={isAdmin} seasons={seasons} />;
+  return <CollectionBrowser sheets={sheets} isAdmin={isAdmin} seasons={seasons} />;
 }
