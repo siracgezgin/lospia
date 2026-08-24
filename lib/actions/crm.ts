@@ -25,6 +25,10 @@ const nullableText = (max: number) => z.string().max(max).optional().nullable();
 
 const CrmFieldsSchema = z.object({
   name: z.string().min(1, "İsim gerekli").max(200),
+  /* Kayıt türü. "team" = ekip (Pano'da atanabilir, CRM'de görünmez),
+     "external" = dış ilişki (CRM'de görünür). Aslı Hanım (2026-08-24):
+     "CRM'de neden sistemde kayıtlı çalışanlar var?" */
+  kind: z.enum(["team", "external"]).optional(),
   organization: nullableText(200),
   segment: nullableText(40),
   crm_status: nullableText(40),

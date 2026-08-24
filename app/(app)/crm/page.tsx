@@ -28,6 +28,12 @@ export default async function CrmPage({
     supabase
       .from("workspace_contacts")
       .select("*")
+      /* YALNIZ DIŞ İLİŞKİLER. Aslı Hanım (2026-08-24): "CRM'de neden sistemde
+         kayıtlı çalışanlar var? Bu kısımda bir mantık hatası var gibi."
+         workspace_contacts iki iş birden yapıyordu (atanabilir ekip + CRM
+         ilişkisi); artık `kind` ayırıyor. Ekip kayıtları Pano'da atanabilir
+         kalır ama müşteri listesinde görünmez. */
+      .eq("kind", "external")
       .eq("workspace_id", workspaceId)
       .order("name"),
     supabase

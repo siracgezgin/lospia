@@ -31,6 +31,7 @@ export function CrmContactModal({ onClose, onSaved, members, contact }: Props) {
   const [form, setForm] = useState({
     name: contact?.name ?? "",
     organization: contact?.organization ?? "",
+    kind: (((contact as { kind?: string } | null | undefined)?.kind === "team") ? "team" : "external") as "team" | "external",
     segment: contact?.segment ?? "",
     crm_status: contact?.crm_status ?? "",
     source_channel: contact?.source_channel ?? "",
@@ -97,6 +98,17 @@ export function CrmContactModal({ onClose, onSaved, members, contact }: Props) {
           </div>
 
           <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Tür</label>
+              <select className={inputCls} value={form.kind} onChange={(e) => set("kind", e.target.value as "team" | "external")}>
+                <option value="external">Dış ilişki (müşteri, tedarikçi, basın…)</option>
+                <option value="team">Ekip — CRM&apos;de görünmez, Pano&apos;da iş atanabilir</option>
+              </select>
+              <p className="mt-1 text-[11.5px] text-subtle">
+                Ekip seçilirse kayıt CRM listesinden çıkar ama Pano&apos;daki kişi kartı durur.
+              </p>
+            </div>
+
             <div>
               <label className={labelCls}>Segment</label>
               <select className={inputCls} value={form.segment} onChange={(e) => set("segment", e.target.value)}>

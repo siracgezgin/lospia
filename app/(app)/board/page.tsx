@@ -93,6 +93,10 @@ export default async function BoardPage({
     supabase
       .from("workspace_contacts")
       .select("*")
+      /* Panonun kişi ızgarası EKİBİ gösterir. Dış ilişkiler (müşteri,
+         tedarikçi, basın) CRM'de yaşar; pano kapısında müşteri kartı
+         çıkmamalı. Ayrım `kind` ile (bkz. 20240322). */
+      .eq("kind", "team")
       .eq("workspace_id", workspaceId)
       .order("created_at"),
     supabase

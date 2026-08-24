@@ -680,4 +680,8 @@ begin
   -- Kreatif bağlantıları Dokümanlar'a taşı (20240320).
   select public.migrate_creative_to_documents() into v_msg;
   raise notice '%', v_msg;
+  -- CRM: ekip / dış ilişki ayrımı (20240322). Görevler kurulduktan SONRA
+  -- çalışmalı — "üzerinde görev olan kişi ekiptir" kuralı ona bakıyor.
+  select public.classify_contact_kinds() into v_msg;
+  raise notice '%', v_msg;
 end $$;
