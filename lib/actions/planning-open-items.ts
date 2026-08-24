@@ -212,15 +212,62 @@ export async function assignOpenItemAsTask(
 
   const { data: item } = await supabase
     .from("planning_open_items")
-    .select("id, text, owner_user_id, task_id")
+    .select("id, text, owner_user_id, owner_label, task_id")
     .eq("id", itemId)
     .eq("workspace_id", ctx.workspaceId)
     .maybeSingle();
   if (!item) return { error: NOT_FOUND };
 
-  const ownerId = item.owner_user_id as string | null;
-  if (!ownerId) {
-    return { error: "Bu sütunun sahibi sistemde kayıtlı bir kullanıcı değil — göreve dönüştürülemez." };
+  /* SAHİP: önce üye, olmazsa CRM kişisi.
+     Burada eskiden yalnız owner_user_id'ye bakılıyordu ve dolmamışsa işlem
+     "sistemde kayıtlı kullanıcı değil" diyerek reddediliyordu. Ama Aslı
+     Hanım'ın Excel'inden gelen sütun sahipleri (Selen Ergül, Gül Özerdekli,
+     Kısmet Yalçın…) CRM KİŞİSİ olarak kayıtlı — sonuç: 61 konunun 61'i de
+     hiç göreve dönüşemedi. Oysa Pano kişi ızgarası zaten üyeler ∪ CRM
+     kişileriyle çalışıyor ve tasks.responsible_contact_id tam bunun için var.
+     Üye önceliklidir: yalnız üyenin girişi, bildirimi ve "Bana atananlar"
+     merceği vardır. (Aynı çözüm SQL tarafında da var:
+     supabase/migrations/20240317000000_open_items_to_board.sql) */
+  const label = ((item.owner_label as string | null) ?? "").trim();
+  const firstWord = label.split(/\s+/)[0]?.toLowerCase() ?? "";
+
+  let ownerId = item.owner_user_id as string | null;
+  if (!ownerId && firstWord) {
+    const { data: members } = await supabase
+      .from("workspace_members")
+      .select("user_id, profiles(id, full_name)")
+      .eq("workspace_id", ctx.workspaceId);
+    for (const m of (members ?? []) as unknown as {
+      user_id: string; profiles: { id: string; full_name: string | null } | { id: string; full_name: string | null }[] | null;
+    }[]) {
+      const prof = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
+      const name = (prof?.full_name ?? "").trim().toLowerCase();
+      if (!name) continue;
+      if (name === label.toLowerCase() || name.split(/\s+/)[0] === firstWord) {
+        ownerId = m.user_id;
+        break;
+      }
+    }
+  }
+
+  let contactId: string | null = null;
+  if (!ownerId && label) {
+    const { data: contacts } = await supabase
+      .from("workspace_contacts")
+      .select("id, name")
+      .eq("workspace_id", ctx.workspaceId);
+    // Tam eşleşme önce, sonra "etiket kişi adıyla başlıyor" (Selen Ergül → Selen).
+    const list = (contacts ?? []) as { id: string; name: string }[];
+    const exact = list.find((c) => c.name.trim().toLowerCase() === label.toLowerCase());
+    const prefix = list
+      .filter((c) => c.name.trim().length >= 3 && label.toLowerCase().startsWith(c.name.trim().toLowerCase() + " "))
+      .sort((a, b) => a.name.length - b.name.length)[0];
+    const firstNameHit = list.find((c) => c.name.trim().toLowerCase().split(/\s+/)[0] === firstWord);
+    contactId = (exact ?? prefix ?? firstNameHit)?.id ?? null;
+  }
+
+  if (!ownerId && !contactId) {
+    return { error: `"${label || "Bu sütun"}" ne ekipte ne de Kişiler'de bulunamadı — önce kişiyi ekleyin.` };
   }
 
   const title = (item.text as string).trim();
@@ -233,7 +280,12 @@ export async function assignOpenItemAsTask(
     if (existing) {
       const upd = await supabase
         .from("tasks")
-        .update({ title, assignee_id: ownerId, due_date: dueDate })
+        .update({
+          title,
+          assignee_id: ownerId,
+          responsible_contact_id: ownerId ? null : contactId,
+          due_date: dueDate,
+        })
         .eq("id", taskId);
       if (upd.error) return { error: toActionErrorMessage(upd.error) };
     } else {
@@ -247,6 +299,7 @@ export async function assignOpenItemAsTask(
         workspace_id: ctx.workspaceId,
         title,
         assignee_id: ownerId,
+        responsible_contact_id: ownerId ? null : contactId,
         due_date: dueDate,
         start_date: today,
         created_by: ctx.userId,
@@ -264,12 +317,14 @@ export async function assignOpenItemAsTask(
 
   // Sorumluluk modeli: sahibi katılımcı olarak da yazılır (assignTopicAsTask ile
   // aynı yol — kısıtlı RLS başkasını ekleyen üyeyi reddettiği için service-role).
-  const { data: wm } = await supabase
-    .from("workspace_members")
-    .select("id")
-    .eq("workspace_id", ctx.workspaceId)
-    .eq("user_id", ownerId)
-    .maybeSingle();
+  const { data: wm } = ownerId
+    ? await supabase
+        .from("workspace_members")
+        .select("id")
+        .eq("workspace_id", ctx.workspaceId)
+        .eq("user_id", ownerId)
+        .maybeSingle()
+    : { data: null };
   const memberId = (wm as { id: string } | null)?.id ?? null;
   if (memberId) {
     const { data: existingComps } = await supabase
@@ -287,15 +342,18 @@ export async function assignOpenItemAsTask(
     }
   }
 
-  const { notifyTaskEvent } = await import("@/lib/notifications/notify");
-  await notifyTaskEvent(supabase, {
-    workspaceId: ctx.workspaceId,
-    taskId,
-    event: "task_assigned",
-    taskTitle: title,
-    recipientUserIds: [ownerId],
-    actorId: ctx.userId,
-  });
+  // Bildirim yalnız ÜYEYE gider — CRM kişisinin hesabı yok.
+  if (ownerId) {
+    const { notifyTaskEvent } = await import("@/lib/notifications/notify");
+    await notifyTaskEvent(supabase, {
+      workspaceId: ctx.workspaceId,
+      taskId,
+      event: "task_assigned",
+      taskTitle: title,
+      recipientUserIds: [ownerId],
+      actorId: ctx.userId,
+    });
+  }
 
   revalidatePath("/planning");
   revalidatePath("/board");

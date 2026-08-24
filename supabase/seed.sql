@@ -665,4 +665,9 @@ begin
   -- Aynısı sezon için (20240309).
   select public.af_backfill_seasons() into v_msg;
   raise notice '%', v_msg;
+  -- Açık konular Pano'ya taşınır (20240317). Aslı Hanım: "Gül'ün işlerini
+  -- boarduna alacaksın." Aktarım yukarıda daha yeni koştuğu için EN SONDA
+  -- çağrılır; idempotenttir.
+  select public.planning_open_items_to_tasks() into v_msg;
+  raise notice '%', v_msg;
 end $$;
