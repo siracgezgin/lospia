@@ -146,7 +146,10 @@ export function PeopleGrid({ people, meKey, onPick, onShowAll, choices }: Props)
                       kendi ünvanı yazar. Ünvan girilmemişse eski etikete
                       düşülür, kart hiçbir zaman boş kalmaz. */}
                   <span className="mt-1 block text-[13px] text-muted">
-                    {p.jobTitle?.trim() || (isMe ? "Ben" : p.isAdmin ? "Yönetici" : "Ekip")}
+                    {/* Ünvan varsa o; yoksa yalnız "Ben". Rol etiketi ("Yönetici") ve
+                        uydurma "Ekip" kaldırıldı — rol bir yetki bilgisidir,
+                        kimlik değil (2026-08-29). */}
+                    {p.jobTitle?.trim() || (isMe ? "Ben" : "")}
                   </span>
                 </span>
               </button>

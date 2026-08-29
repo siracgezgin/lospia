@@ -178,6 +178,7 @@ export default async function AppLayout({
           userName={userName}
           userEmail={displayEmail}
           userAvatarUrl={profile?.avatar_url ?? null}
+          userJobTitle={membership?.job_title ?? null}
           notifications={notifications}
           deadTaskIds={deadTaskIds}
           userRole={userRole}

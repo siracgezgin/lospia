@@ -7,7 +7,7 @@ import { ChevronDown, LogOut, Mail, Shield, Settings, UserRound, Bell } from "lu
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { PersonAvatar } from "@/components/ui/PersonAvatar";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
-import { ROLE_LABELS } from "@/lib/utils/roles";
+import { ROLE_LABELS, personTitle } from "@/lib/utils/roles";
 import { canManageSettings } from "@/lib/auth/permissions";
 import { signOut } from "@/lib/actions/auth";
 import type { Workspace, Notification, WorkspaceRole } from "@/types";
@@ -20,6 +20,8 @@ interface Props {
   userEmail?: string | null;
   /** profiles.avatar_url — kişinin kendi fotoğrafı. */
   userAvatarUrl?: string | null;
+  /** workspace_members.job_title — rol yerine bunu yazarız (bkz. personTitle). */
+  userJobTitle?: string | null;
   notifications?: Notification[];
   deadTaskIds?: string[];
   userRole?: WorkspaceRole;
@@ -73,12 +75,18 @@ function ProfileMenu({
   email,
   role,
   photoUrl,
+  jobTitle,
 }: {
   displayName: string;
   email: string | null;
   role: WorkspaceRole;
   photoUrl: string | null;
+  jobTitle: string | null;
 }) {
+  /* Rol bir YETKİ bilgisidir. Ünvan yazılmışsa o görünür; yazılmamışsa rol
+     yalnız yöneticiye çıkar (bkz. lib/utils/roles.ts → personTitle). */
+  const viewerIsAdmin = canManageSettings(role);
+  const subtitle = personTitle({ jobTitle, role, viewerIsAdmin });
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -105,12 +113,12 @@ function ProfileMenu({
         className="flex items-center gap-2 rounded-lg border-l border-line py-1 pl-3 pr-1.5 transition-colors duration-150 hover:bg-surface-muted active:bg-surface-sunken"
         aria-haspopup="menu"
         aria-expanded={open}
-        title={`${displayName} · ${ROLE_LABELS[role]}`}
+        title={subtitle ? `${displayName} · ${subtitle}` : displayName}
       >
         <PersonAvatar name={displayName} photoUrl={photoUrl} size="sm" />
         <div className="hidden flex-col text-left leading-tight sm:flex">
           <span className="max-w-[140px] truncate text-xs font-medium text-ink">{displayName}</span>
-          <span className="text-[10px] text-subtle">{ROLE_LABELS[role]}</span>
+          {subtitle && <span className="max-w-[140px] truncate text-[10px] text-subtle">{subtitle}</span>}
         </div>
         <ChevronDown
           size={13}
@@ -137,12 +145,16 @@ function ProfileMenu({
             </div>
           </div>
 
-          <div className="border-b border-line px-4 py-2.5">
-            <div className="flex items-center gap-2 text-[12px] text-muted">
-              <Shield size={13} className="shrink-0 text-subtle" />
-              <span>{ROLE_LABELS[role]}</span>
+          {/* Rol satırı YALNIZ yöneticide. Üye kendi ünvanını Profil'den yazar
+              ve her yerde onunla görünür. */}
+          {viewerIsAdmin && (
+            <div className="border-b border-line px-4 py-2.5">
+              <div className="flex items-center gap-2 text-[12px] text-muted">
+                <Shield size={13} className="shrink-0 text-subtle" />
+                <span>{ROLE_LABELS[role]}</span>
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="py-1">
             <MenuLink href="/profile" icon={UserRound} label="Profilim" onGo={() => setOpen(false)} />
@@ -184,7 +196,7 @@ function MenuLink({
 }
 
 export function AppHeader({
-  unreadCount, userId, userName, userEmail, userAvatarUrl = null, notifications = [], deadTaskIds = [], userRole = "member",
+  unreadCount, userId, userName, userEmail, userAvatarUrl = null, userJobTitle = null, notifications = [], deadTaskIds = [], userRole = "member",
 }: Props) {
   const pathname = usePathname();
   const title = PAGE_TITLES.find((t) => t.match(pathname))?.title ?? "";
@@ -226,6 +238,7 @@ export function AppHeader({
             email={userEmail ?? null}
             role={userRole}
             photoUrl={userAvatarUrl}
+            jobTitle={userJobTitle}
           />
         </div>
       </div>

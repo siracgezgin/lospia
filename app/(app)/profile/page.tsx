@@ -9,7 +9,7 @@ import { AvatarUploader } from "@/components/settings/AvatarUploader";
 import { ProfileForm } from "@/components/profile/ProfileForm";
 import { assignPersonTones } from "@/lib/design/person-colors";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
-import { roleLabel } from "@/lib/utils/roles";
+import { roleLabel, personTitle } from "@/lib/utils/roles";
 import { canManageSettings } from "@/lib/auth/permissions";
 import { signOut } from "@/lib/actions/auth";
 import type { WorkspaceRole } from "@/types";
@@ -92,7 +92,7 @@ export default async function ProfilePage() {
             <div className="min-w-0 flex-1">
               <p className="truncate text-[17px] font-semibold tracking-tight text-ink">{displayName}</p>
               <p className="truncate text-[13px] text-muted">
-                {me?.job_title?.trim() || roleLabel(role)}
+                {personTitle({ jobTitle: me?.job_title, role, viewerIsAdmin: canManageSettings(role) }) ?? "Ünvan eklenmedi"}
               </p>
             </div>
           </div>
@@ -114,12 +114,16 @@ export default async function ProfilePage() {
               Hesap
             </h2>
             <dl className="divide-y divide-hairline">
-              <Row icon={Shield} label="Rol" value={roleLabel(role)} />
+              {/* Rol YALNIZ yöneticide. Üye kendi ünvanını yukarıdan yazar ve
+                  her ekranda onunla görünür (2026-08-29). */}
+              {canManageSettings(role) && <Row icon={Shield} label="Rol" value={roleLabel(role)} />}
               <Row icon={AtSign} label="Giriş adresi" value={profile?.email ?? user.email ?? "—"} />
               {profile?.username && <Row icon={AtSign} label="Kullanıcı adı" value={profile.username} />}
             </dl>
             <p className="border-t border-hairline px-5 py-3 text-[11.5px] leading-snug text-subtle">
-              Rolü ve erişimleri yalnız yönetici değiştirebilir.
+              {canManageSettings(role)
+                ? "Rolü ve erişimleri yalnız yönetici değiştirebilir."
+                : "Ekranlarda adınızın altında ünvanınız yazar. Erişimlerinizi yönetici belirler."}
             </p>
           </section>
 

@@ -57,13 +57,15 @@ export const getMembership = cache(async function getMembership(userId: string) 
      Supabase uzaktayken bu tek başına ~60ms'ti. */
   const { data } = await supabase
     .from("workspace_members")
-    .select("workspace_id, role, notification_email, workspaces(id, name)")
+    // job_title: kabuk rol yerine ÜNVANI yazar (bkz. lib/utils/roles.ts).
+    .select("workspace_id, role, notification_email, job_title, workspaces(id, name)")
     .eq("user_id", userId)
     .limit(1)
     .maybeSingle();
   if (!data) return null;
   const row = data as unknown as {
     workspace_id: string; role: string; notification_email: string | null;
+    job_title?: string | null;
     workspaces: { id: string; name: string } | { id: string; name: string }[] | null;
   };
   const ws = Array.isArray(row.workspaces) ? row.workspaces[0] ?? null : row.workspaces;
@@ -71,6 +73,7 @@ export const getMembership = cache(async function getMembership(userId: string) 
     workspace_id: row.workspace_id,
     role: row.role,
     notification_email: row.notification_email,
+    job_title: row.job_title ?? null,
     workspace: ws,
   };
 });
