@@ -202,13 +202,10 @@ export function AppHeader({
   const title = PAGE_TITLES.find((t) => t.match(pathname))?.title ?? "";
   const displayName = getPersonDisplayName(userName ?? userEmail ?? null);
 
-  // Mobile profile access lives in the bottom nav (members get a Profil tab),
-  // so the top-right avatar is redundant on phones for members — and on the
-  // /profile page itself for everyone. Admins keep it on mobile (their bottom
-  // nav shows Ayarlar, not Profil). Desktop always shows it.
-  const isAdmin = userRole === "owner" || userRole === "admin";
-  const onProfile = pathname.startsWith("/profile");
-  const showProfileOnMobile = isAdmin && !onProfile;
+  /* Telefonda profil kartı ÇİZİLMEZ: kimlik satırları (Profilim · Çıkış yap)
+     artık mobil menü çekmecesinin altında duruyor. İkisini birden göstermek,
+     aynı işi iki ayrı yerden yaptıran o "her şey her yerde" hissini üretiyordu
+     (2026-08-29). Masaüstünde sol menüde kimlik yok, orada tek kapı bu. */
 
   return (
     /* KATMAN SIRASI (tek yerde tanımlı):
@@ -232,7 +229,7 @@ export function AppHeader({
 
       <div className="flex items-center gap-3">
         <NotificationBell unreadCount={unreadCount} userId={userId} notifications={notifications} deadTaskIds={deadTaskIds} />
-        <div className={showProfileOnMobile ? "block" : "hidden md:block"}>
+        <div className="hidden md:block">
           <ProfileMenu
             displayName={displayName}
             email={userEmail ?? null}

@@ -94,8 +94,15 @@ types/
   + bugünün ve haftanın toplantıları. KISAYOL IZGARASI YOK (2026-08-29:
   "zaten yanda var her şey") — gezinme sol menü ve /modules hub'ıdır.
 - Sidebar 3 sabit grup (Core Operations / Product & Office / Admin); yeni
-  modülün kapısı Ana Sayfa kısayolları + /modules hub'ıdır — sidebar'a başlık
-  eklemek kullanıcı onayı ister.
+  modülün kapısı /modules hub'ıdır — sidebar'a başlık eklemek kullanıcı onayı
+  ister. Gezinme listesi ELLE YAZILMAZ: `lib/nav/app-nav.ts` tek kaynaktır ve
+  satırları MODULE_DIRECTORY'den türetir; sol menü, mobil menü çekmecesi ve
+  /modules hub'ı hep aynı adı/ikonu/bölümü gösterir. Admin bölümü YALNIZ
+  yöneticinin müdahale ettiği yüzeylerdir; "Operation Modules" bir modül değil
+  DİZİN olduğu için gruplara girmez, menünün altında ayrı durur.
+- Mobil: alt gezinme dört sekme + "Menu" (soldan açılan tam menü çekmecesi;
+  masaüstü menüsüyle aynı bölümler + Profilim/Çıkış). Telefonda erişilemeyen
+  ekran BIRAKMA — kısayol ızgarası yok, tek kapı bu çekmece.
 - Sayfa ADLARI İngilizce, içerik Türkçe (Aslı Hanım, 2026-08-20). Tek
   terminoloji: aynı ekran her yerde aynı adla (registry MODULE_DIRECTORY ↔
   AppHeader PAGE_TITLES ↔ sidebar ↔ page metadata.title).
@@ -105,6 +112,14 @@ types/
   globals.css'teki `anim-*`/`stagger-children` sınıflarıyla (yeni bağımlılık yok).
 - tailwind-merge cn() içindeki border-l renklerini yutar → renkli sol kenarı
   cn() dışında ver ya da absolute 3px bar kullan.
+
+## Yedekleme
+Ayarlar → Yedekleme: `/api/backup` (yalnız yönetici) çalışma alanının tüm
+tablolarını JSON + CSV olarak, `?files=1` ile depolamadaki dosyalarla birlikte
+tek bir .zip'e akıtır. ZIP yazıcısı bağımlılıksızdır (`lib/backup/zip.ts`),
+kapsam `lib/backup/collect.ts`'te tanımlıdır — **yeni tablo eklediğinde o
+listeye de ekle**, yoksa yedeğe girmez. Her indirme `workspace_backups`'a
+yazılır; Ayarlar ve Ana Sayfa "7 günden eski yedek" uyarısını oradan okur.
 
 ## Feature flags
 All default to `false`. Set in `.env.local`:

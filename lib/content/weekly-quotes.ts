@@ -1754,9 +1754,18 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   },
 ];
 
+/**
+ * Sol menüdeki "Haftanın Notu" kartı ÜÇ satır çizer (line-clamp-3, ~264px
+ * sütun). Bundan uzun bir söz ekranda yarıda kesiliyor ve kart bozuk
+ * görünüyordu — tasarımcı için "en ufak çizgi bile fark ettirir"
+ * (bkz. feedback-control-equality). Uzunluk artık editoryal bir ölçüt:
+ * karta sığmayan söz UI'ya çıkmaz.
+ */
+const CARD_MAX_CHARS = 108;
+
 /** UI'da gösterilmesi editoryal olarak onaylanmış sözler. */
 export const APPROVED_WEEKLY_QUOTES: WeeklyQuote[] = WEEKLY_QUOTES.filter(
-  (q) => q.approvedForUi,
+  (q) => q.approvedForUi && q.quoteTr.length <= CARD_MAX_CHARS,
 );
 
 /**

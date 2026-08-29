@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, ShieldAlert } from "lucide-react";
 import { startOfWeek, addDays, format } from "date-fns";
 import { requireModuleMember } from "@/lib/modules/context";
 import { getProfile } from "@/lib/supabase/server";
@@ -118,7 +118,20 @@ export default async function HomePage() {
     .limit(100);
   if (!isAdmin) myTasksQuery.eq("visibility", "workspace");
 
-  const [myTasksRes, meetingsRes, profile] = await Promise.all([
+  /* YEDEK HATIRLATMASI — yalnız yöneticiye, yalnız süresi geçtiyse.
+     Sıraç (2026-08-29): "Haftada bir bu yedeği alıp indirmemiz gerekiyor."
+     Ayarlar'daki şerit ancak oraya giren görür; ritmi ayakta tutan şey giriş
+     ekranındaki tek satırlık hatırlatmadır. Üye bu sorguyu HİÇ çalıştırmaz. */
+  const lastBackupQuery = isAdmin
+    ? supabase
+        .from("workspace_backups")
+        .select("created_at")
+        .eq("workspace_id", workspaceId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+    : Promise.resolve({ data: [] as { created_at: string }[] });
+
+  const [myTasksRes, meetingsRes, profile, lastBackupRes] = await Promise.all([
     myTasksQuery,
     supabase
       .from("planning_meetings")
@@ -132,7 +145,20 @@ export default async function HomePage() {
     // Kabuk aynı satırı zaten çekti — getProfile react/cache'li, ikinci
     // istek gitmez.
     getProfile(user.id),
+    lastBackupQuery,
   ]);
+
+  /* Kaç gün önce yedek alındı? Tablo henüz canlıya taşınmadıysa sorgu hata
+     döner ve `data` boş gelir — hatırlatma o durumda da doğru davranır
+     ("hiç alınmamış" gibi okunur). */
+  const lastBackupIso =
+    (lastBackupRes?.data?.[0] as { created_at?: string } | undefined)?.created_at ?? null;
+  const backupAgeDays = lastBackupIso
+    ? Math.floor(
+        (new Date(`${todayIso}T12:00:00`).getTime() - new Date(lastBackupIso).getTime()) / 86_400_000,
+      )
+    : null;
+  const backupDue = isAdmin && (backupAgeDays === null || backupAgeDays >= 7);
 
   const myTasks = (myTasksRes.data ?? []) as MyTask[];
 
@@ -236,6 +262,25 @@ export default async function HomePage() {
         </h1>
         <p className="mt-0.5 text-[13px] text-muted sm:text-sm">{longDate}</p>
       </header>
+
+      {/* Yedek hatırlatması — tek satır, yalnız zamanı geldiğinde. */}
+      {backupDue && (
+        <Link
+          href="/settings"
+          className="anim-fade mb-4 flex items-center justify-between gap-3 rounded-xl border border-warning/30 bg-warning/5 px-4 py-2.5 transition-colors duration-150 hover:bg-warning/10"
+        >
+          <span className="flex min-w-0 items-center gap-2.5 text-[13.5px] text-ink">
+            <ShieldAlert size={16} className="shrink-0 text-warning" />
+            <span className="truncate">
+              {backupAgeDays === null
+                ? "Sistemin yedeği hiç alınmadı."
+                : `Son yedek ${backupAgeDays} gün önce alındı.`}{" "}
+              <span className="text-muted">Haftalık yedeği indirin.</span>
+            </span>
+          </span>
+          <ArrowRight size={15} className="shrink-0 text-warning" />
+        </Link>
+      )}
 
       {nothingAtAll ? (
         <div className="rounded-2xl border border-dashed border-line bg-surface px-6 py-14 text-center">

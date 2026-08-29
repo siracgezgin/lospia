@@ -93,15 +93,6 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
     group: "calisma",
   },
   {
-    key: "admin-board",
-    title: "Admin Board",
-    description: "Yönetici görünümü — sorumluya göre kolonlar ve gizli görevler.",
-    href: "/admin-board",
-    icon: ShieldCheck,
-    access: "admin",
-    group: "calisma",
-  },
-  {
     key: "list",
     title: "List",
     description: "Tüm görevler tablo halinde — filtrele, sırala, düzenle.",
@@ -183,6 +174,18 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
   },
 
   // ── Yönetim — yalnız yönetici (veri düzeyinde de kapalı) ──────────────────
+  // Admin Board buraya AİT: sol menüde Yönetim bölümündeyken hub'da Çalışma
+  // bölümünde duruyordu ve aynı ekran iki ayrı yere bağlı görünüyordu
+  // (2026-08-29: "bazı başlıklar başka yerlerde tekrarlanmamalı").
+  {
+    key: "admin-board",
+    title: "Admin Board",
+    description: "Yönetici görünümü — sorumluya göre kolonlar ve gizli görevler.",
+    href: "/admin-board",
+    icon: ShieldCheck,
+    access: "admin",
+    group: "yonetim",
+  },
   {
     key: "finance",
     title: "Finance",

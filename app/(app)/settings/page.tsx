@@ -8,6 +8,7 @@ import { DepartmentsManager } from "@/components/settings/DepartmentsManager";
 import type { IdentityMember } from "@/components/settings/PersonIdentityManager";
 import { SettingsTabs, SettingsTab } from "@/components/settings/SettingsTabs";
 import { SettingsSection, CountChip } from "@/components/settings/SettingsSection";
+import { BackupPanel, type LastBackup } from "@/components/settings/BackupPanel";
 import { assignPersonTones } from "@/lib/design/person-colors";
 import { canManageSettings, canRenameWorkspace, canManageWorkspace } from "@/lib/auth/permissions";
 import { roleLabel } from "@/lib/utils/roles";
@@ -49,7 +50,7 @@ export default async function SettingsPage() {
   const canManageDepts = canManageWorkspace(userRole);   // owner + admin (departments)
 
   const [wsResult, membersResult, profileResult, invitesResult,
-         deptsResult, deptMembersResult] =
+         deptsResult, deptMembersResult, backupResult] =
     await Promise.all([
       supabase.from("workspaces").select("*").eq("id", workspaceId).single(),
       supabase
@@ -74,10 +75,49 @@ export default async function SettingsPage() {
         .from("department_members")
         .select("*, workspace_members(profiles(id, full_name, email))")
         .eq("workspace_id", workspaceId),
+      /* Son yedek — Yedekleme sekmesindeki durum şeridini besler. Tek satır.
+         Migration henüz canlıya uygulanmadıysa sorgu hata döner; hata YUTULUR
+         ve panel "henüz yedek alınmadı" der (indirme yine de çalışır). */
+      supabase
+        .from("workspace_backups")
+        .select("created_at, kind, profiles:created_by(full_name)")
+        .eq("workspace_id", workspaceId)
+        .order("created_at", { ascending: false })
+        .limit(1),
       // NOT: sezon / usta / hammadde sorguları BURADAN KALKTI — üçü de
       // Koleksiyon > Product Data sayfasına taşındı (2026-08-29). Bunlar bir
       // ayar değil ürün verisi; Ayarlar her açılışta yedi sorgu fazla atıyordu.
     ]);
+
+  /* Şimdi — bir kez okunur ve hesaplarda o kullanılır (render sırasında
+     Date.now() çağırmak saf değildir; ayrıca aynı sayfada iki farklı "an"
+     olmasın). */
+  const now = new Date();
+
+  /* Son yedek satırı — gömülü profil adı dizi ya da nesne gelebilir. */
+  type BackupRow = {
+    created_at: string;
+    kind: string;
+    profiles?: { full_name: string | null } | { full_name: string | null }[] | null;
+  };
+  const backupRow = (backupResult?.data?.[0] ?? null) as BackupRow | null;
+  const lastBackup: LastBackup | null = backupRow
+    ? {
+        // Tarih ve "kaç gün önce" SUNUCUDA hesaplanır: istemcide hesaplanınca
+        // render saf olmuyor ve saat dilimi farkı hydration uyuşmazlığı veriyor.
+        formattedAt: new Date(backupRow.created_at).toLocaleString("tr-TR", {
+          timeZone: "Europe/Istanbul",
+        }),
+        ageDays: Math.max(
+          0,
+          Math.floor((now.getTime() - new Date(backupRow.created_at).getTime()) / 86_400_000),
+        ),
+        kind: backupRow.kind === "full" ? "full" : "data",
+        personName:
+          (Array.isArray(backupRow.profiles) ? backupRow.profiles[0] : backupRow.profiles)
+            ?.full_name ?? null,
+      }
+    : null;
 
   const workspace: Workspace | null = wsResult.data;
   const profile: Profile | null = profileResult.data;
@@ -281,6 +321,16 @@ export default async function SettingsPage() {
                   </div>
                 </SettingsSection>
               </div>
+        </SettingsTab>
+        <SettingsTab label="Yedekleme">
+              {/* Sıraç (2026-08-29): "Kayıtların kesinlikle tutulması lazım…
+                  yedekleme haftada bir." Tek bölüm, tek iş: yedeği indir. */}
+              <SettingsSection
+                title="Yedekleme"
+                description="Çalışma alanındaki bütün kayıtları (istenirse yüklenen dosyalarla birlikte) tek bir .zip dosyası olarak indirin. Haftada bir alıp sistemin dışında saklayın."
+              >
+                <BackupPanel last={lastBackup} />
+              </SettingsSection>
         </SettingsTab>
       </SettingsTabs>
     </div>

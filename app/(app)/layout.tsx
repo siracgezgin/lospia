@@ -229,7 +229,14 @@ export default async function AppLayout({
           )}
         </main>
       </div>
-      <div className="no-print contents"><MobileNav isAdmin={isAdmin} /></div>
+      <div className="no-print contents">
+        <MobileNav
+          isAdmin={isAdmin}
+          workspaceName={workspace?.name ?? null}
+          brandIcon={brand.icon}
+          brandName={brand.name}
+        />
+      </div>
       {/* Task-detail drawer slot (intercepting route). Empty on normal routes. */}
       {modal}
     </div>

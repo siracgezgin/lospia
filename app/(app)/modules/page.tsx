@@ -1,103 +1,96 @@
 import { redirect } from "next/navigation";
-import { LayoutGrid } from "lucide-react";
 import { requireModuleMember } from "@/lib/modules/context";
 import { AccessDenied } from "@/components/modules/AccessDenied";
-import { getModuleEntry } from "@/lib/modules/registry";
+import {
+  MODULE_GROUP_TITLES,
+  modulesForRole,
+  type ModuleGroup,
+} from "@/lib/modules/registry";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { OfficeCenterCard } from "@/components/modules/OfficeCenterCard";
 
 export const dynamic = "force-dynamic";
-
-/** Registry kaydını hub kartına çevirir — isim/ikon TEK kaynaktan. */
-function hubCard(key: string) {
-  const m = getModuleEntry(key);
-  return (
-    <OfficeCenterCard
-      key={m.key}
-      title={m.title}
-      description={m.description}
-      href={m.href}
-      icon={m.icon}
-    />
-  );
-}
-
-function SectionHeading({ title, note }: { title: string; note?: string }) {
-  return (
-    <div className="mb-3">
-      <h2 className="text-[13px] font-semibold uppercase tracking-wide text-subtle">{title}</h2>
-      {note && <p className="mt-1 text-[13px] text-muted">{note}</p>}
-    </div>
-  );
-}
-
 export const metadata = { title: "Operation Modules" };
 
+/** Bölüm sırası sol menüdekiyle AYNI — göz aynı sırayı iki kez öğrenmesin. */
+const GROUP_ORDER: ModuleGroup[] = ["calisma", "urun", "yonetim"];
+
+/** Bölümün ne işe yaradığı — tek satır, ekran adlarını TEKRARLAMADAN. */
+const GROUP_NOTES: Record<ModuleGroup, string> = {
+  calisma: "Günün ritmi: ne yapılacak, ne zaman, hangi aşamada.",
+  urun: "Üzerinde çalışılan şeyler: koleksiyon, dosyalar, kişiler.",
+  yonetim: "Yalnız yönetici: para akışı, hareket kaydı, arşiv ve çalışma alanı.",
+};
+
 /**
- * Operation Modules — "ne nerede" dizini.
+ * Operation Modules — sistemin DİZİNİ.
  *
- * Her kartın köşesinde canlı bir sayaç çipi vardı ("3 föy", "12 kayıt",
- * "5 üye") ve sayfa bunun için 11 sayım sorgusu atıyordu. Aslı Hanım
- * (2026-08-24): "Boş hesap istemiyorum… Mühendis gibi hissetmek istemiyorum."
- * Rakamlar kalktı; hub bir DİZİN, bir gösterge paneli değil. Sayfa artık hiç
- * sayım sorgusu atmıyor — 11 round-trip eksildi.
+ * Sıraç (2026-08-29): "Operasyon modülü kısmında çoğu başlık aynı linklere
+ * farklı bir alt başlıkla gidiyor… ben neyin nerede olduğunun belli olmasını
+ * istiyorum."
  *
- * Tablosu henüz migrate edilmemiş modüller sessizce listelenir; hedef sayfanın
- * kendi kurulum uyarısı zaten devrede.
+ * İki kusur vardı ve ikisi de elle seçilmiş kart listesinden geliyordu:
+ *   • BÖLÜM DİLİ AYRIŞMIŞTI. Sol menü "Core Operations · Product & Office ·
+ *     Admin" derken bu sayfa "Çekirdek Operasyon · AF Teamwork · Yönetim"
+ *     diyordu. Aynı yapı, iki ayrı isim — "her şey her yerde" hissinin
+ *     birebir kaynağı.
+ *   • DİZİN EKSİKTİ. Board, List, Reports, Admin Board, Product Data ve
+ *     Payment Table registry'de kayıtlıydı ama burada hiç çizilmiyordu; "ne
+ *     nerede" sorusunun cevabı olduğunu iddia eden sayfa yarım listeydi.
+ *
+ * Artık kartlar doğrudan MODULE_DIRECTORY'den, bölüm adları
+ * MODULE_GROUP_TITLES'tan geliyor. Sol menü ile bu sayfa AYNI kaynaktan
+ * beslendiği için ayrışmaları imkânsız: menü sık kullanılanı taşır, burası
+ * hepsini listeler.
+ *
+ * Sayaç yok (Aslı Hanım, 2026-08-24: "boş hesap istemiyorum") — sayfa hiç
+ * sayım sorgusu atmaz.
  */
 export default async function ModulesPage() {
-  // Herkes görür ("ekip olarak herkes her şeyi görebilmeli") — yalnız Yönetim
-  // bölümü ve Finans kartı yönetici-only kalır (veri düzeyinde de kapalılar).
+  // Herkes görür; yalnız Yönetim bölümü yöneticiye çıkar (veri düzeyinde de kapalı).
   const { workspaceId, isAdmin, gate } = await requireModuleMember();
   if (gate === "login") redirect("/login");
   if (gate !== "ok" || !workspaceId) return <AccessDenied />;
 
+  const modules = modulesForRole(isAdmin);
+
   return (
     <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
-      {/* Page header */}
-      <ModulePageHeader
-        title="Operation Modules"
-        description="Tüm modüllerin genel bakışı — her ekran sistemde TEK isimle yaşar; buradaki kartlar sol menüyle aynı adı taşır."
-        icon={LayoutGrid}
-        badge={isAdmin ? "Yönetici düzenler" : "Görüntüleme"}
-      />
+      <ModulePageHeader title="Operation Modules" />
 
-      {/* Çekirdek Operasyon — haftalık ritim + ürün. */}
-      <SectionHeading title="Çekirdek Operasyon" />
-      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-        {hubCard("planning")}
-        {hubCard("collection")}
-        {hubCard("maliyet")}
-        {hubCard("crm")}
+      {/* Tek satırlık yön tarifi: menü ile bu sayfanın işi FARKLI. */}
+      <p className="mb-6 text-[13.5px] text-muted">
+        Sol menü her gün açtığınız ekranları taşır; burası sistemdeki her ekranın listesidir.
+        Bir ekran sistemde tek isimle yaşar — buradaki ad, menüdeki ad ve sayfanın başlığı hep aynıdır.
+      </p>
+
+      <div className="space-y-8">
+        {GROUP_ORDER.map((group) => {
+          const items = modules.filter((m) => m.group === group);
+          if (items.length === 0) return null;
+          return (
+            <section key={group}>
+              <div className="mb-3 border-b border-hairline pb-2">
+                <h2 className="text-[11px] font-semibold uppercase tracking-[0.13em] text-subtle">
+                  {MODULE_GROUP_TITLES[group]}
+                </h2>
+                <p className="mt-1 text-[13px] text-muted">{GROUP_NOTES[group]}</p>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                {items.map((m) => (
+                  <OfficeCenterCard
+                    key={m.key}
+                    title={m.title}
+                    description={m.description}
+                    href={m.href}
+                    icon={m.icon}
+                  />
+                ))}
+              </div>
+            </section>
+          );
+        })}
       </div>
-
-      {/* AF Teamwork — Word/Excel ihtiyacının sistemdeki karşılığı.
-          "sheets" kartı KALKTI: tablo artık ayrı bir modül değil, AF
-          Teamwork'te klasörün içinde açılan bir öğe (2026-08-29). */}
-      <SectionHeading
-        title="AF Teamwork"
-        note="Klasörler, yazılar, tablolar, dosyalar ve dış bağlantılar — hepsi tek yerde."
-      />
-      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-        {hubCard("documents")}
-      </div>
-
-      {/* Yönetim — yalnız yönetici: para akışı + denetim + düzen. */}
-      {isAdmin && (
-        <>
-          <SectionHeading
-            title="Yönetim"
-            note="Yalnız yönetici — ödemeler, hareket kaydı, arşiv/çöp ve çalışma alanı ayarları."
-          />
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-            {hubCard("finance")}
-            {hubCard("activity")}
-            {hubCard("archive")}
-            {hubCard("trash")}
-            {hubCard("settings")}
-          </div>
-        </>
-      )}
     </div>
   );
 }

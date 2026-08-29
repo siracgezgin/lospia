@@ -388,6 +388,7 @@ body {
 @keyframes anim-fade-down { from { opacity: 0; transform: translateY(-4px) } to { opacity: 1; transform: none } }
 @keyframes anim-scale-in  { from { opacity: 0; transform: scale(0.97) }      to { opacity: 1; transform: none } }
 @keyframes anim-drawer-in { from { opacity: 0; transform: translateX(24px) } to { opacity: 1; transform: none } }
+@keyframes anim-drawer-left { from { transform: translateX(-100%) } to { transform: none } }
 @keyframes anim-slide-up  { from { opacity: 0; transform: translateY(20px) } to { opacity: 1; transform: none } }
 @keyframes anim-shimmer   { from { background-position: 200% 0 } to { background-position: -200% 0 } }
 
@@ -397,6 +398,8 @@ body {
   .anim-fade-down { animation: anim-fade-down 200ms var(--ease-standard) both; }   /* menüler, popover */
   .anim-scale-in  { animation: anim-scale-in  160ms var(--ease-emphasized) both; } /* modal/diyalog */
   .anim-drawer-in { animation: anim-drawer-in 280ms var(--ease-emphasized) both; } /* sağ çekmece */
+  /* Soldan gelen mobil menü — sol menünün telefondaki karşılığı. */
+  .anim-drawer-left { animation: anim-drawer-left 260ms var(--ease-emphasized) both; }
   .anim-slide-up  { animation: anim-slide-up  260ms var(--ease-emphasized) both; } /* mobil sheet */
 
   /* Yükleme iskeletleri — bileşen bg-gradient verir, bu sınıf hareket ettirir. */

@@ -2,93 +2,45 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
-import {
-  LayoutDashboard,
-  Kanban,
-  Settings,
-  ChevronLeft,
-  ChevronRight,
-  Quote,
-  ShieldCheck,
-  LayoutGrid,
-  Boxes,
-  CalendarRange,
-  Contact,
-  FolderOpen,
-  Home,
-  Table2,
-} from "lucide-react";
+import { useState, useSyncExternalStore } from "react";
+import { ChevronLeft, ChevronRight, Quote } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Wordmark } from "@/components/ui/Wordmark";
 import { LOSPIA_BRAND, type AppBrand } from "@/lib/branding";
 import { getWeeklyQuote } from "@/lib/content/weekly-quotes";
 import { canViewDestructivePages, canManageSettings } from "@/lib/auth/permissions";
+import {
+  NAV_DIRECTORY,
+  activeNavHref,
+  navSectionsForRole,
+  type NavLink as NavLinkItem,
+} from "@/lib/nav/app-nav";
 import type { Workspace, WorkspaceRole } from "@/types";
 
-type NavItem = {
-  href: string;
-  label: string;
-  icon: typeof Kanban;
-  adminOnly: boolean;
-  children?: NavItem[];
-};
-
-// Bilgi mimarisi — bölüm dili hub (/modules) ile BİREBİR aynı:
-//   Çekirdek Operasyon → günlük ritim ve iş takibi (herkes)
-//   Ürün               → koleksiyon/föy + maliyet (herkes)
-//   Ofis Merkezi       → doküman/şablon/tablo/kreatif (herkes görür)
-//   İlişkiler          → CRM (herkes görür, yönetici düzenler)
-//   Yönetim            → müdahale yüzeyleri (Yönetici Pano, Ayarlar: admin;
-//                        hub genel bakışı herkese açık). Finans/Aktivite/
-//                        Arşiv/Çöp sidebar'dan hub'a taşındı — sidebar'da
-//                        yalnız sık kullanılan müdahale kapıları kalır.
-// Kural: bir ekran TEK isimle yaşar (lib/modules/registry.ts kanonik kaynak).
 /**
- * ÜÇ SABİT GRUP.
+ * SOL MENÜ.
  *
- * Beş başlık vardı ve ikisi tek maddeliydi ("Product" → yalnız Collection,
- * "Relations" → yalnız CRM); göz beş başlık okuyup on iki maddeyi buluyordu.
- * Ofis ekranları ve CRM ürünle aynı gruba girdi. Bölüm dili registry'deki
- * MODULE_GROUP_TITLES ile birebir aynı olmalı (tek terminoloji kuralı).
+ * Sıraç (2026-08-29): "Sol taraftaki başlıkların olduğu kısım dümdüz yazı gibi
+ * duruyor, ayırt edilemiyor, karmaşık duruyor… daha net, daha belirgin, daha
+ * kolay olmalı; insan dokununca kaymak gibi hissetmeli."
+ *
+ * Üç şey düzeltildi:
+ *  1. HİYERARŞİ — bölüm başlığı satırlarla aynı gri tonda, aynı hizada, aynı
+ *     boydaydı; göz "başlık mı bağlantı mı" ayıramıyordu. Artık her bölümün
+ *     üstünde ince bir ayraç, başlık kendi satırında ve daha küçük/aralıklı;
+ *     bağlantılar ise daha iri ve koyu. Başlık ile bağlantı artık BENZEMİYOR.
+ *  2. AKTİF DURUM — soft dolgu tek başına zayıftı. Şimdi dolgu + sol kenar
+ *     çubuğu + koyulaşan yazı + marka rengine dönen ikon birlikte çalışıyor;
+ *     nerede olduğun ekranın karşısından okunuyor.
+ *  3. GRUPLAMA — "Operation Modules" yönetici bölümünün içinde, Ayarlar'ın
+ *     yanında duruyordu; oysa o herkese açık bir DİZİN. Gruptan çıkarılıp
+ *     menünün altına, kendi ayracıyla alındı. Yönetim bölümünde artık yalnız
+ *     yöneticinin müdahale ettiği üç yüzey var (Admin Board · Finance ·
+ *     Settings) ve üyede bölüm hiç çizilmiyor.
+ *
+ * Satır listesi buraya YAZILMAZ: lib/nav/app-nav.ts tek kaynaktır ve o da
+ * MODULE_DIRECTORY'den türer (mobil menü aynı listeyi kullanır).
  */
-const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
-  {
-    title: "Core Operations",
-    items: [
-      // Home Page = kişisel komuta merkezi (bana atananlar + kısayollar).
-      // Calendar = TEK takvim: hafta ızgarası + ay + yıl aynı ekranda
-      // (Aslı Hanım, 2026-08-19: "Bence tek takvim yap"). Liste kaldırıldı
-      // ("buna gerek olmayabilir") — rota duruyor, hub'dan erişilir.
-      { href: "/home",      label: "Home Page", icon: Home,            adminOnly: false },
-      { href: "/planning",  label: "Calendar",  icon: CalendarRange,   adminOnly: false },
-      { href: "/board",     label: "Board",     icon: Kanban,          adminOnly: false },
-      { href: "/dashboard", label: "Reports",   icon: LayoutDashboard, adminOnly: false },
-    ],
-  },
-  {
-    // Maliyet ve Ödeme Tablosu, Collection sayfasının içindeki sekmelerdir —
-    // sol bara ikinci giriş verilmez (kullanıcı isteği, 2026-07-27).
-    title: "Product & Office",
-    items: [
-      // Sheets ve Library sol bardan KALKTI: ikisi de AF Teamwork'ün giriş
-      // kutucukları (Aslı Hanım, 2026-08-28 — "Bir gireyim, bir kutucuk format
-      // olsun, bir kutucuk lookbook olsun"). Rotalar duruyor; hub ve Ana Sayfa
-      // kısayolları da erişim veriyor.
-      { href: "/collection", label: "Collection",     icon: Boxes,      adminOnly: false },
-      { href: "/documents",  label: "AF Teamwork",    icon: FolderOpen, adminOnly: false },
-      { href: "/crm",        label: "CRM",            icon: Contact,    adminOnly: false },
-    ],
-  },
-  {
-    title: "Admin",
-    items: [
-      { href: "/modules",     label: "Operation Modules", icon: LayoutGrid,  adminOnly: false },
-      { href: "/admin-board", label: "Admin Board",       icon: ShieldCheck, adminOnly: true  },
-      { href: "/settings",    label: "Settings",          icon: Settings,    adminOnly: true  },
-    ],
-  },
-];
 
 interface Props {
   workspace: Pick<Workspace, "id" | "name"> | null;
@@ -98,36 +50,68 @@ interface Props {
   userRole?: WorkspaceRole;
 }
 
+const COLLAPSE_KEY = "af.sidebar.collapsed";
+
+/* Daraltma tercihi TARAYICIDA yaşar (kullanıcı başına, cihaz başına) ve
+   sunucuda okunamaz. useSyncExternalStore, SSR anlık görüntüsünü ayrı
+   vermemize izin verdiği için hydration uyuşmazlığı olmadan okunur: sunucu
+   her zaman "açık" çizer, tarayıcı ilk boyamadan hemen sonra tercihi uygular.
+   (Effect içinde setState yapan sürüm React'ın basamaklı render uyarısını
+   veriyordu.) */
+function subscribeCollapse(onChange: () => void) {
+  window.addEventListener("storage", onChange);
+  return () => window.removeEventListener("storage", onChange);
+}
+function readCollapse(): boolean {
+  try {
+    return window.localStorage.getItem(COLLAPSE_KEY) === "1";
+  } catch {
+    return false; // gizli sekmede storage kapalı olabilir
+  }
+}
+
 export function AppSidebar({
   workspace, brand = LOSPIA_BRAND, userRole = "member",
 }: Props) {
   const isAdmin = canViewDestructivePages(userRole) || canManageSettings(userRole);
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
+  /* Kayıtlı tercih + bu oturumdaki seçim. Kullanıcı düğmeye bastığında
+     `override` kazanır; başka bir sekmede değiştirilirse storage olayı
+     üzerinden kayıtlı değer güncellenir. */
+  const stored = useSyncExternalStore(subscribeCollapse, readCollapse, () => false);
+  const [override, setOverride] = useState<boolean | null>(null);
+  const collapsed = override ?? stored;
   const wsName = workspace?.name ?? "Operasyon";
   const weeklyQuote = getWeeklyQuote();
+  const sections = navSectionsForRole(isAdmin);
+  const activeHref = activeNavHref(pathname);
 
-  // Aktif öğe = EN UZUN eşleşen href (tek kazanan) — /collection/maliyet
-  // açıkken hem "Koleksiyon" hem "Maliyet Tablosu" yanmasın.
-  const activeHref =
-    NAV_GROUPS.flatMap((g) => g.items.map((i) => i.href))
-      .filter((h) => pathname === h || pathname.startsWith(h + "/"))
-      .sort((a, b) => b.length - a.length)[0] ?? null;
+  function toggle() {
+    const next = !collapsed;
+    setOverride(next);
+    try {
+      window.localStorage.setItem(COLLAPSE_KEY, next ? "1" : "0");
+    } catch {
+      /* yoksay — tercih yalnız bu oturumda yaşar */
+    }
+  }
 
   return (
     <aside
       className={cn(
-        // w-72 — beş gruplu menü + Haftanın Notu kartı rahat nefes alsın
-        // (240px'te uzun etiketler ve alt kart sıkışıyordu).
-        "relative hidden md:flex flex-col bg-surface border-r border-line transition-[width] duration-200 ease-standard shrink-0",
-        collapsed ? "w-14" : "w-72",
+        "relative hidden md:flex flex-col bg-surface border-r border-line shrink-0",
+        "transition-[width] duration-[280ms] ease-emphasized",
+        collapsed ? "w-[4.5rem]" : "w-[16.5rem]",
       )}
     >
-      {/* Brand row — host-aware product/pilot icon + workspace wordmark. The icon
-          is the brand mark (collapsed state shows it alone); the wordmark is the
-          tenant/workspace name and stays a separate concern. w-auto so a
-          non-square pilot mark (AF) isn't distorted. */}
-      <div className={cn("flex items-center gap-2.5 h-14 border-b border-line", collapsed ? "justify-center px-0" : "px-4")}>
+      {/* Marka satırı — başlık çubuğuyla aynı yükseklikte (h-14) durur ki
+          menü ile içerik aynı çizgide başlasın. */}
+      <div
+        className={cn(
+          "flex h-14 shrink-0 items-center gap-2.5 border-b border-line",
+          collapsed ? "justify-center px-0" : "px-4",
+        )}
+      >
         <img
           src={brand.icon}
           alt={brand.name}
@@ -137,134 +121,72 @@ export function AppSidebar({
         {!collapsed && <Wordmark name={wsName} />}
       </div>
 
-      {/* Nav groups */}
-      <nav className="flex-1 px-2 py-3 space-y-4 overflow-y-auto">
-        {NAV_GROUPS.map((group, groupIndex) => {
-          const items = group.items.filter((i) => !i.adminOnly || isAdmin);
-          if (items.length === 0) return null;
-          return (
-            <div key={group.title} className="space-y-0.5">
-              {collapsed ? (
-                // Daraltıldığında başlık yerine sessiz bir ayraç — gruplar
-                // ikon sütununda da okunur kalır.
-                groupIndex > 0 && (
-                  <div className="mx-2.5 mb-2 border-t border-hairline" aria-hidden />
-                )
-              ) : (
-                <p className="px-2 mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-subtle select-none">
-                  {group.title}
-                </p>
-              )}
-              {items.map(({ href, label, icon: Icon, children }) => {
-                const active = href === activeHref;
-                const kids = (children ?? []).filter((c) => !c.adminOnly || isAdmin);
-                // Alt linkleri, bu bölümdeyken (parent veya çocuk aktif) ve panel
-                // açıkken göster (web nav'daki gibi kategori açılımı).
-                const showKids = kids.length > 0 && !collapsed && active;
-                return (
-                  <div key={href}>
-                    <Link
-                      href={href}
-                      aria-current={active ? "page" : undefined}
-                      className={cn(
-                        "group relative flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm font-medium transition-colors duration-150",
-                        active
-                          ? "bg-brand-soft text-brand-strong"
-                          : "text-muted hover:bg-surface-muted hover:text-ink",
-                        collapsed && "justify-center px-2",
-                      )}
-                      title={collapsed ? label : undefined}
-                    >
-                      {active && (
-                        <span
-                          aria-hidden
-                          className="absolute left-0 top-1/2 -translate-y-1/2 h-4 w-[3px] rounded-full bg-brand anim-fade"
-                        />
-                      )}
-                      <Icon
-                        size={16}
-                        className={cn(
-                          "shrink-0 transition-colors duration-150",
-                          active ? "text-brand" : "text-subtle group-hover:text-muted",
-                        )}
-                      />
-                      {!collapsed && <span className="truncate">{label}</span>}
-                    </Link>
-                    {showKids && (
-                      <div className="ml-4 mt-0.5 space-y-0.5 border-l border-line pl-2 anim-fade-down">
-                        {kids.map(({ href: kHref, label: kLabel, icon: KIcon }) => {
-                          // Tam eşleşme — /collection çocuğu /collection/maliyet'te aktif kalmasın.
-                          const kActive = pathname === kHref;
-                          return (
-                            <Link
-                              key={kHref}
-                              href={kHref}
-                              aria-current={kActive ? "page" : undefined}
-                              className={cn(
-                                "group flex items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] font-medium transition-colors duration-150",
-                                kActive
-                                  ? "bg-brand-soft text-brand-strong"
-                                  : "text-muted hover:bg-surface-muted hover:text-ink",
-                              )}
-                            >
-                              <KIcon
-                                size={14}
-                                className={cn(
-                                  "shrink-0 transition-colors duration-150",
-                                  kActive ? "text-brand" : "text-subtle group-hover:text-muted",
-                                )}
-                              />
-                              <span className="truncate">{kLabel}</span>
-                            </Link>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+      <nav
+        className={cn(
+          "flex-1 overflow-y-auto overflow-x-hidden py-3",
+          collapsed ? "px-2" : "px-2.5",
+        )}
+      >
+        {sections.map((section, i) => (
+          <div key={section.title} className={i > 0 ? "mt-4 pt-4 border-t border-hairline" : ""}>
+            {collapsed ? null : (
+              <p className="mb-1.5 px-2.5 text-[10.5px] font-semibold uppercase tracking-[0.13em] text-subtle select-none">
+                {section.title}
+              </p>
+            )}
+            <div className="space-y-0.5">
+              {section.items.map((item) => (
+                <SidebarLink
+                  key={item.href}
+                  item={item}
+                  active={item.href === activeHref}
+                  collapsed={collapsed}
+                />
+              ))}
             </div>
-          );
-        })}
+          </div>
+        ))}
       </nav>
 
-      {/* Bottom stack: weekly quote. (Logout lives in the top-right profile
-          menu.) Kart kompakt tutulur ve kısa ekranlarda tamamen gizlenir —
-          menü maddelerinin önünü asla kesmez. */}
+      {/* Dizin kapısı — bir modül değil, modüllerin haritası. Bu yüzden
+          bölümlerin İÇİNDE değil, ayraçla ayrılmış olarak menünün altında. */}
+      <div className={cn("shrink-0 border-t border-hairline py-2", collapsed ? "px-2" : "px-2.5")}>
+        <SidebarLink
+          item={NAV_DIRECTORY}
+          active={NAV_DIRECTORY.href === activeHref}
+          collapsed={collapsed}
+          muted
+        />
+      </div>
+
+      {/* Haftanın Notu + marka imzası. Kısa ekranlarda tamamen gizlenir —
+          menü satırlarının önünü asla kesmez. */}
       {!collapsed && (
-        <div className="px-3 pt-2 pb-3 mt-auto space-y-2.5 hidden [@media(min-height:47.5rem)]:block">
-          {/* Haftanın Notu — geniş sütunda tek nefeslik editoryal kart. */}
-          <div className="group relative rounded-2xl border border-brand-soft bg-gradient-to-br from-[#f7ede9] via-brand-soft/40 to-surface px-4 pt-3 pb-3.5 overflow-hidden shadow-card transition-shadow duration-200 ease-standard hover:shadow-card-hover">
+        <div className="hidden shrink-0 space-y-2.5 px-3 pb-3 pt-1 [@media(min-height:47.5rem)]:block">
+          <div className="group relative overflow-hidden rounded-2xl border border-brand-soft bg-gradient-to-br from-[#f7ede9] via-brand-soft/40 to-surface px-4 pb-3.5 pt-3 shadow-card transition-shadow duration-200 ease-standard hover:shadow-card-hover">
             <Quote
               size={32}
               strokeWidth={1.5}
-              className="absolute -top-1 -right-1 text-brand/15 rotate-180 transition-colors duration-300 ease-standard group-hover:text-brand/25"
+              className="absolute -right-1 -top-1 rotate-180 text-brand/15 transition-colors duration-300 ease-standard group-hover:text-brand/25"
             />
-            <p className="text-[9.5px] font-semibold uppercase tracking-[0.16em] text-brand-strong select-none">
+            <p className="select-none text-[9.5px] font-semibold uppercase tracking-[0.16em] text-brand-strong">
               Haftanın Notu
             </p>
-            {/* Editoryal ayraç — etiketle alıntı arasında kısa bir marka çizgisi. */}
-            <span aria-hidden className="mt-1.5 mb-2 block h-px w-8 rounded-full bg-brand/20" />
+            <span aria-hidden className="mb-2 mt-1.5 block h-px w-8 rounded-full bg-brand/20" />
             <p
-              className="relative text-[12px] leading-[1.65] text-ink/85 italic font-medium line-clamp-3"
+              className="relative line-clamp-3 text-[12px] font-medium italic leading-[1.65] text-ink/85"
               title={weeklyQuote.quoteTr}
             >
               “{weeklyQuote.quoteTr}”
             </p>
           </div>
 
-          {/* Brand sign-off — anchors the expanded sidebar with the full
-              product/pilot logo (host-aware). A deliberate lockup, not a
-              watermark: a hairline separates it from the content above, and its
-              height is brand-driven (AF's wide wordmark reads small, so it sits
-              taller than the Lospia lockup). Only rendered when expanded (this
-              block is inside the !collapsed branch). */}
-          <div className="mt-1 border-t border-hairline pt-4 pb-1 flex justify-center">
+          <div className="flex justify-center border-t border-hairline pb-1 pt-4">
             <img
               src={brand.logo}
               alt={brand.name}
               className={cn(
-                "w-auto max-w-[75%] object-contain opacity-90 transition-opacity duration-200 hover:opacity-100 select-none",
+                "w-auto max-w-[75%] select-none object-contain opacity-90 transition-opacity duration-200 hover:opacity-100",
                 brand.footerLogoHeightClass,
               )}
               draggable={false}
@@ -273,17 +195,70 @@ export function AppSidebar({
         </div>
       )}
 
-      {/* Floating edge control — vertically centered on the sidebar/content
-          boundary. Subtle by default, fully visible on hover. Anchored to the
-          sidebar's right edge so it tracks the width transition with no jump. */}
+      {/* Kenardaki daraltma düğmesi — genişlik geçişini takip etsin diye
+          menünün sağ kenarına sabitli. */}
       <button
-        onClick={() => setCollapsed((c) => !c)}
-        className="absolute top-1/2 -right-3 -translate-y-1/2 z-20 grid h-6 w-6 place-items-center rounded-full bg-surface border border-line shadow-card text-subtle opacity-60 hover:opacity-100 hover:text-muted hover:border-line-strong hover:shadow-card-hover active:scale-95 transition-all duration-150 ease-standard"
+        onClick={toggle}
+        className="absolute -right-3 top-1/2 z-20 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full border border-line bg-surface text-subtle opacity-60 shadow-card transition-all duration-150 ease-standard hover:border-line-strong hover:text-muted hover:opacity-100 hover:shadow-card-hover focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-brand-ring active:scale-95"
         aria-label={collapsed ? "Kenar çubuğunu genişlet" : "Kenar çubuğunu daralt"}
         title={collapsed ? "Genişlet" : "Daralt"}
       >
         {collapsed ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
       </button>
     </aside>
+  );
+}
+
+/**
+ * Menü satırı — açık ve daralmış durumun TEK gövdesi.
+ *
+ * `muted` yalnız dizin kapısında kullanılır: aynı satır dilini korur ama bir
+ * ton geride durur, çünkü o bir ekran değil bir harita.
+ */
+function SidebarLink({
+  item, active, collapsed, muted = false,
+}: {
+  item: NavLinkItem;
+  active: boolean;
+  collapsed: boolean;
+  muted?: boolean;
+}) {
+  const { href, label, icon: Icon } = item;
+  return (
+    <Link
+      href={href}
+      aria-current={active ? "page" : undefined}
+      title={collapsed ? label : undefined}
+      className={cn(
+        "group relative flex items-center gap-2.5 rounded-lg text-[13.5px] transition-colors duration-150 ease-standard",
+        "focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring",
+        collapsed ? "justify-center px-0 py-2.5" : "px-2.5 py-[9px]",
+        active
+          ? "bg-brand-soft font-semibold text-brand-strong"
+          : cn(
+              "font-medium hover:bg-surface-muted hover:text-ink",
+              muted ? "text-subtle" : "text-muted",
+            ),
+      )}
+    >
+      {active && (
+        <span
+          aria-hidden
+          className={cn(
+            "absolute top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full bg-brand",
+            collapsed ? "left-0" : "-left-0.5",
+          )}
+        />
+      )}
+      <Icon
+        size={17}
+        strokeWidth={active ? 2.2 : 1.9}
+        className={cn(
+          "shrink-0 transition-colors duration-150",
+          active ? "text-brand" : "text-subtle group-hover:text-muted",
+        )}
+      />
+      {!collapsed && <span className="truncate">{label}</span>}
+    </Link>
   );
 }
