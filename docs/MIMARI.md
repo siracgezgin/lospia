@@ -5,7 +5,7 @@ istek nereden nereye gider, veri nerede durur, ekran dili hangi kurallara
 uyar. Ürün kararlarının *gerekçeleri* kodun içindeki yorumlarda ve
 `CLAUDE.md`'de yaşar; burası yapının haritasıdır.
 
-Son güncelleme: 2026-08-29.
+Son güncelleme: 2026-08-30.
 
 ---
 
@@ -132,7 +132,7 @@ flowchart TD
 
 | Bölüm | İçerik | Kim görür |
 |---|---|---|
-| **Core Operations** | Home Page · Calendar · Board · Reports | herkes |
+| **Core Operations** | Home Page · Calendar · Board · **List** | herkes |
 | **Product & Office** | Collection · AF Teamwork · CRM | herkes |
 | **Admin** | Admin Board · Finance · Settings | yalnız owner/admin (üyede bölüm hiç çizilmez) |
 
@@ -175,7 +175,7 @@ Neredeyse tamamı `workspace_id` taşır; kiracı sınırı budur.
 |---|---|
 | `owner` | Her şey + üye yönetimi + çalışma alanını yeniden adlandırma |
 | `admin` | Yönetim yüzeyleri, onay, silme, ayarlar, finans |
-| `member` | Görev oluşturma; kendi/atandığı işlerde düzenleme; takvimi okur |
+| `member` | Görev oluşturma; kendi/atandığı işlerde düzenleme; takvimi okur. **AF Teamwork'te kendi eklediği yazı/tablo/dosyayı siler, kendi klasörünü açar ve yönetir** (20240334) |
 | `viewer` | Salt okur |
 
 - **Görev "done" iki yönde de yöneticiye aittir**: üye işi "Kontrol/Onay"a
@@ -183,6 +183,14 @@ Neredeyse tamamı `workspace_id` taşır; kiracı sınırı budur.
 - **Sorumluluk** = katılımcılar ∪ atanan (`lib/people/assignable.ts`,
   `canManageTaskAssignment`). Üye kendini bir işe *ekleyemez* — bu, "kendimi
   atayıp düzenleme hakkı kazanma" açığıydı.
+- **AF Teamwork'te SAHİPLİK** (20240334): yönetici her kaydı, üye YALNIZ KENDİ
+  oluşturduğunu yönetir — kendi yazısını/tablosunu/dosyasını siler, kendi
+  klasörünü açar, adlandırır, siler. `visibility` (`'all' | 'admin'`,
+  varsayılan `'all'`) artık klasörün yanı sıra `operation_documents` ve
+  `operation_spreadsheets`'te de var: "tüm üyelere göster" dört varlıkta aynı
+  cümle. UI karşılığı `DriveBrowser.canManage()`.
+  *Yüklenen dosya ayrı tablo değildir — `operation_documents` satırıdır
+  (`document_type='file'`).*
 - **Veri düzeyinde kapalı** (RLS ile, yalnız yönetici): Finans, Aktivite,
   Arşiv, Çöp, Ayarlar, Yedekleme.
 - **Maliyet ekibe açıktır** (föy fiyatları + Maliyet Tablosu) — Excel'de de
@@ -275,12 +283,12 @@ giriş ekranı `TileGrid`'dir. Süzgeç kalıbı: **başlık · tür · departma
 | **Ana Sayfa** | `/home` | Zamana göre gruplu işler + toplantılar; admin'e yedek hatırlatması |
 | **Calendar** | `/planning` | Tek takvim (hafta/ay/yıl), sürükle-bırak, şeritler düzenlenebilir. Kayıtlı saat **New York**'tur, İstanbul hesaplanır (`lib/planning/timezones.ts`). Yazım admin-only |
 | **Board / Admin Board** | `/board`, `/admin-board` | Kişi kartlarından girilen Kanban; hafta süzgeci `due_date`-only |
-| **Collection** | `/collection` (+ `maliyet`, `odeme`, `veri`) | Üretim föyü = merkez ürün kaydı; düzenlenebilir kategori taksonomisi |
+| **Collection** | `/collection` (+ `maliyet`, `odeme`, `veri`) | Üretim föyü = merkez ürün kaydı; düzenlenebilir **üç kademeli** kategori taksonomisi (Accessories › Hats › Bucket Hat). Föy iki alan taşır (`category` + `subcategory`); anahtarlar çalışma alanında tekil olduğu için `subcategory` üçüncü seviyeyi de tutar, yol `subPath()` ile çözülür |
 | **Production** | `/production/[id]` | Föy editörü + XLSX/yazdırma; üreticiye **mail** gider, sisteme erişim verilmez |
 | **AF Teamwork** | `/documents` (+ `sheets`, `library`) | Klasör · yazı · tablo · dosya · dış bağlantı. Word benzeri editör, gövde sunucuda `sanitize-html` ile temizlenir |
 | **CRM** | `/crm` | Kişi rehberi + yedi adımlı influencer seeding |
 | **Finance** | `/finance` | Ödeme takibi, admin-only (RLS dahil) |
-| **Reports** | `/dashboard` | Departman/durum özetleri, kişi raporu |
+| **Reports** | `/dashboard` | Departman/durum özetleri, kişi raporu. **List yüzeyinin son SEKMESİ** (`components/shared/SurfaceTabs`): menüde kendi satırı yoktur, `/list` ile aynı şeridi paylaşır. Rotalar ayrı kalır — rapor sorguları liste açılışına binmesin |
 | **Settings** | `/settings` | Ekip · Hesabım · **Yedekleme** |
 
 ---
@@ -361,8 +369,9 @@ supabase gen types typescript --local > types/database.ts
 
 | Konu | Durum |
 |---|---|
-| `workspace_backups` migration'ı | Local'de uygulandı, **prod'a elle push bekliyor** |
-| `types/database.ts` | 46 tabloyu tanıyor; `workspace_backups` için `supabase gen types` çalıştırılmalı |
+| `workspace_backups` migration'ı | ✅ prod'a uygulandı (2026-08-30) |
+| `20240334` üye sahipliği + görünürlük | ✅ prod'a uygulandı (2026-08-30) |
+| `types/database.ts` | ✅ `supabase gen types` ile yeniden üretildi (visibility sütunları dahil) |
 | Ölü kod | `components/modules/DepartmentCard.tsx`, `components/home/ShortcutCard.tsx`, `ProductionSheetsView.tsx`, registry'deki `DEPARTMENT_MODULES` — silme onayı bekliyor |
 | Designer's note maili | Karar netleşmedi (WordPress mi sistem mi) — yazılmadı |
 | Dosya boyutu sınırı | 25 MB; lookbook PDF'i aşabilir — depolama maliyeti kararı |
