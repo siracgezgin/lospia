@@ -230,7 +230,12 @@ export async function setOperationDocumentVisibility(
 
   const { error } = await supabase
     .from("operation_documents")
-    .update({ visibility, updated_by: ctx.userId })
+    /* `updated_by` YAZILMAZ: bu tabloda öyle bir sütun yok (yalnız
+       document_folders'ta var). Yazmaya çalışmak PostgREST'ten "column not
+       found" (PGRST204) döndürüyordu ve arayüz bunu "migration bekleniyor"
+       diye okuyordu — oysa şema eksik değildi. `updated_at`i tablo kendi
+       trigger'ıyla günceller. */
+    .update({ visibility })
     .eq("id", documentId)
     .eq("workspace_id", ctx.workspaceId);
   if (error) return { error: toActionErrorMessage(error) };
