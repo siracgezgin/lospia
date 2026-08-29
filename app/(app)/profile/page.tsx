@@ -7,9 +7,11 @@ import {
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { AvatarUploader } from "@/components/settings/AvatarUploader";
 import { ProfileForm } from "@/components/profile/ProfileForm";
+import { Button } from "@/components/ui/Button";
 import { assignPersonTones } from "@/lib/design/person-colors";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { roleLabel, personTitle } from "@/lib/utils/roles";
+import { isPlaceholderEmail } from "@/lib/utils/notification-email";
 import { canManageSettings } from "@/lib/auth/permissions";
 import { signOut } from "@/lib/actions/auth";
 import type { WorkspaceRole } from "@/types";
@@ -74,6 +76,13 @@ export default async function ProfilePage() {
     Object.fromEntries(team.map((m) => [m.user_id, { colorKey: m.color_key, iconKey: m.icon_key }])),
   )[user.id];
 
+  const isAdmin = canManageSettings(role);
+
+  /* Yer tutucu (@lospia.local) bir e-posta değil, iç giriş anahtarıdır —
+     kişinin adresi diye gösterilmez (bkz. lib/utils/display-identity). */
+  const rawLogin = profile?.email ?? user.email ?? null;
+  const loginAddress = rawLogin && !isPlaceholderEmail(rawLogin) ? rawLogin : null;
+
   return (
     <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
       {/* Başlık uygulama çubuğunda zaten yazıyor. */}
@@ -81,14 +90,14 @@ export default async function ProfilePage() {
 
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
         {/* ── Kimlik + düzenlenebilir alanlar ──────────────────────────── */}
-        <section className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card lg:col-span-2">
+        <section className="overflow-hidden rounded-card border border-line bg-surface shadow-card lg:col-span-2">
           {/* TEK SATIR: rozet · ad + ünvan · "Fotoğraf yükle".
               Önce fotoğraf yükleyici solda, isim sağdaydı — karta bakan önce
               bir yükleme düğmesi görüyordu. Sonra isim üste alındı ama bu kez
               fotoğraf alt satıra düştü (2026-08-29: "alt satır değil ya, ikon
               ismin solunda olsun, fotoğraf yükle sağında olsun, tek satırda
               bitir işi"). */}
-          <div className="border-b border-hairline bg-surface-muted/50 px-5 py-3.5">
+          <div className="border-b border-hairline px-5 py-4">
             <AvatarUploader
               userId={user.id}
               name={displayName}
@@ -98,14 +107,14 @@ export default async function ProfilePage() {
                 <>
                   <p className="truncate text-[16px] font-semibold tracking-tight text-ink">{displayName}</p>
                   <p className="truncate text-[12.5px] text-muted">
-                    {personTitle({ jobTitle: me?.job_title, role, viewerIsAdmin: canManageSettings(role) }) ?? "Ünvan eklenmedi"}
+                    {personTitle({ jobTitle: me?.job_title, role, viewerIsAdmin: isAdmin }) ?? "Ünvan eklenmedi"}
                   </p>
                 </>
               }
             />
           </div>
 
-          <div className="px-5 py-4">
+          <div className="px-5 py-5">
             <ProfileForm
               memberId={me?.id ?? null}
               fullName={profile?.full_name ?? ""}
@@ -117,46 +126,50 @@ export default async function ProfilePage() {
 
         {/* ── Hesap + kısayollar ───────────────────────────────────────── */}
         <div className="space-y-4">
-          <section className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
-            <h2 className="border-b border-hairline px-5 py-3 text-[11.5px] font-semibold uppercase tracking-[0.1em] text-subtle">
+          <section className="overflow-hidden rounded-card border border-line bg-surface shadow-card">
+            <h2 className="border-b border-hairline px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle">
               Hesap
             </h2>
             <dl className="divide-y divide-hairline">
               {/* Rol YALNIZ yöneticide. Üye kendi ünvanını yukarıdan yazar ve
                   her ekranda onunla görünür (2026-08-29). */}
-              {canManageSettings(role) && <Row icon={Shield} label="Rol" value={roleLabel(role)} />}
-              <Row icon={AtSign} label="Giriş adresi" value={profile?.email ?? user.email ?? "—"} />
+              {isAdmin && <Row icon={Shield} label="Rol" value={roleLabel(role)} />}
+              {/* GİRİŞ ADRESİ — yalnız GERÇEK adres yazılır.
+                  Yöneticinin açtığı hesaplar `<kullanıcı>@lospia.local` iç
+                  yer tutucusuyla giriş yapar; bu bir e-posta değil, sistemin
+                  kendi anahtarıdır. Ekranda "alev.elmas@lospia.local" görmek
+                  kişiye kendi adresi diye yanlış bir şey söylüyordu
+                  (Sıraç, 2026-08-29: "çok saçma olmuş, kişinin kendi maili var
+                  zaten"). Yer tutucuysa satır hiç çizilmez — kullanıcı adı
+                  satırı zaten hesabı tarif ediyor. */}
+              {loginAddress && <Row icon={AtSign} label="Giriş adresi" value={loginAddress} />}
               {profile?.username && <Row icon={AtSign} label="Kullanıcı adı" value={profile.username} />}
             </dl>
-            <p className="border-t border-hairline px-5 py-3 text-[11.5px] leading-snug text-subtle">
-              {canManageSettings(role)
-                ? "Rolü ve erişimleri yalnız yönetici değiştirebilir."
-                : "Ekranlarda adınızın altında ünvanınız yazar. Erişimlerinizi yönetici belirler."}
-            </p>
           </section>
 
-          <section className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
-            <h2 className="border-b border-hairline px-5 py-3 text-[11.5px] font-semibold uppercase tracking-[0.1em] text-subtle">
+          <section className="overflow-hidden rounded-card border border-line bg-surface shadow-card">
+            <h2 className="border-b border-hairline px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle">
               Kısayollar
             </h2>
             <div className="divide-y divide-hairline">
               <Shortcut href="/home" icon={Home} label="Ana Sayfa" />
               <Shortcut href="/list?view=mine" icon={ListChecks} label="İşlerim" />
               <Shortcut href="/planning" icon={CalendarDays} label="Calendar" />
-              {canManageSettings(role) && (
-                <Shortcut href="/settings" icon={SettingsIcon} label="Ayarlar" />
-              )}
+              {isAdmin && <Shortcut href="/settings" icon={SettingsIcon} label="Ayarlar" />}
             </div>
           </section>
 
+          {/* Çıkış — yıkıcı değil ama sayfanın Kaydet'iyle yarışmasın:
+              çerçeveli ikincil düğme, kırmızı metin. */}
           <form action={signOut}>
-            <button
+            <Button
               type="submit"
-              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-line bg-surface px-4 py-3 text-sm font-medium text-danger shadow-card transition-colors duration-150 hover:bg-danger/10"
+              variant="secondary"
+              className="w-full text-danger hover:bg-danger/10 hover:text-danger"
             >
-              <LogOut size={16} />
+              <LogOut size={15} aria-hidden />
               Çıkış yap
-            </button>
+            </Button>
           </form>
         </div>
       </div>
@@ -169,10 +182,10 @@ function Row({ icon: Icon, label, value }: { icon: LucideIcon; label: string; va
   return (
     <div className="flex items-center justify-between gap-3 px-5 py-2.5">
       <dt className="flex shrink-0 items-center gap-2 text-[13px] text-muted">
-        <Icon size={14} className="shrink-0 text-subtle" />
+        <Icon size={14} className="shrink-0 text-subtle" aria-hidden />
         {label}
       </dt>
-      <dd className="min-w-0 truncate text-[13px] font-medium text-ink">{value}</dd>
+      <dd className="min-w-0 truncate text-[13.5px] font-medium text-ink">{value}</dd>
     </div>
   );
 }
@@ -184,7 +197,7 @@ function Shortcut({ href, icon: Icon, label }: { href: string; icon: LucideIcon;
       href={href}
       className="flex items-center gap-2.5 px-5 py-2.5 text-[13.5px] text-muted transition-colors duration-150 hover:bg-surface-hover hover:text-ink"
     >
-      <Icon size={15} className="shrink-0 text-subtle" />
+      <Icon size={15} className="shrink-0 text-subtle" aria-hidden />
       {label}
     </Link>
   );

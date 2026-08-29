@@ -1,10 +1,11 @@
 /**
  * YEDEK TOPLAYICI — çalışma alanının tüm kayıtları, tablo tablo.
  *
- * Kapsam kuralı: bir tablo ya `workspace_id` taşır (çoğu), ya çalışma alanının
- * kendisidir, ya da workspace'e bir üst kayıt üzerinden bağlıdır (sürüm
- * tabloları). Üçü de burada tek listede tanımlıdır; yeni tablo eklendiğinde
- * yedeğe girmesi için BU listeye de eklenmesi gerekir.
+ * Kapsam kuralı: bir tablo ya `workspace_id` taşır (çoğu → WORKSPACE_TABLES),
+ * ya çalışma alanının kendisidir, ya da workspace'e bir ÜST KAYIT üzerinden
+ * bağlıdır (profiller ve sürüm tabloları → collectWorkspaceData'nın sonundaki
+ * `in` blokları). Yeni tablo eklendiğinde yedeğe girmesi için ikisinden birine
+ * eklenmesi gerekir; hangisi olduğunu tablonun sütunları söyler.
  *
  * Okuma NORMAL istemciyle, yani RLS ile yapılır (proje güvenlik kuralı:
  * uygulama okumaları için RLS atlanmaz). Yedeği alan kişi yöneticidir; yönetici
@@ -74,10 +75,15 @@ const WORKSPACE_TABLES = [
   "workspace_suppliers",
 ] as const;
 
-/* Yedeğe GİRMEYENLER ve nedenleri:
+/* Yedeğe GİRMEYENLER ve nedenleri — üçü de "gereksiz log" sınıfıdır, işin
+   kendisi değil (Sıraç, 2026-08-29: "her şey olsun, sadece gereksiz loglar
+   olmasın"). Klasörler, üretim föyleri, belgeler ve tabloların sürümleri
+   yedeğe GİRER:
      notifications   → türetilmiş ve kişiye özel; RLS yalnız yedeği alan kişinin
                        satırlarını verir, yani dosyaya "eksik ama tam görünen"
                        bir liste yazardı.
+     workspace_backups → indirme günlüğü; yedeğin kendi geçmişini yedeklemenin
+                       geri yüklemede bir karşılığı yok.
      webhook_events  → teknik kuyruk kaydı, geri yüklemede bir anlamı yok.
      request_access_leads → pazarlama sitesinin formu; çalışma alanına ait değil. */
 
@@ -141,7 +147,10 @@ export async function collectWorkspaceData(
     }),
   );
 
-  // Sürüm tabloları — üst kayıt üzerinden bağlı.
+  // SÜRÜM TABLOLARI — belgelerin ve tabloların içeriğinin geçmişi; yedekte
+  // olmaları şart. `workspace_id` sütunları YOKTUR (bkz. types/database.ts),
+  // bu yüzden WORKSPACE_TABLES'a taşınamazlar: orada okuma workspace_id ile
+  // daraltılır ve sorgu hata döner. Üst kaydın kimliği üzerinden toplanırlar.
   results.push(
     await readAll(supabase, "document_template_versions", {
       by: "in",

@@ -1,4 +1,5 @@
 import { Sparkles } from "lucide-react";
+import { SurfaceTabs } from "@/components/shared/SurfaceTabs";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Tile, TileGrid } from "@/components/ui/TileGrid";
@@ -69,21 +70,26 @@ export function DashboardView({ dueSoonTasks, nameOf, people }: Props) {
   const orderedPeople = [...people].sort((a, b) => a.name.localeCompare(b.name, "tr"));
 
   return (
-    <div className="w-full p-4 sm:p-6">
+    <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
       {/* Başlık uygulama çubuğunda; "Geri" bölüm başlığıyla aynı satırda —
           tek başına bir satır açmasın (2026-08-29). */}
       <h1 className="sr-only">Reports</h1>
+
+      {/* Liste ile AYNI şerit — Raporlar burada bir sekmedir, ayrı bir ada değil. */}
+      <div className="-mx-4 mb-4 border-b border-line px-4 pb-2 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+        <SurfaceTabs />
+      </div>
 
       {/* ── Kapı: kişiler ─────────────────────────────────────────────────── */}
       {orderedPeople.length > 0 && (
         <div className="mb-5">
           <div className="mb-3">
             <BackLink />
-            <h2 className="mt-1 text-lg font-semibold tracking-tight text-ink">
+            <h2 className="mt-1 text-[15px] font-semibold tracking-tight text-ink">
               Kim, neyi, ne zaman teslim edecek?
             </h2>
             <p className="mt-0.5 text-[13px] text-muted">
-              Bir kişiye tıklayın, tek sayfalık raporu açılsın.
+              Kişiye tıklayın; tek sayfalık raporu açılır.
             </p>
           </div>
 
@@ -112,12 +118,12 @@ export function DashboardView({ dueSoonTasks, nameOf, people }: Props) {
 
       {/* ── Neyi, ne zaman: TÜM açık işler, tek tablo, sıralanabilir ──────── */}
       {dueSoonTasks.length === 0 ? (
-        <Card className="p-5">
+        <Card>
           <EmptyState
+            compact
             icon={Sparkles}
             title="Açık iş yok"
             description="Herkesin masası temiz."
-            className="py-8"
           />
         </Card>
       ) : (

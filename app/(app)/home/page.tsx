@@ -267,7 +267,7 @@ export default async function HomePage() {
       {backupDue && (
         <Link
           href="/settings"
-          className="anim-fade mb-4 flex items-center justify-between gap-3 rounded-xl border border-warning/30 bg-warning/5 px-4 py-2.5 transition-colors duration-150 hover:bg-warning/10"
+          className="anim-fade mb-4 flex items-center justify-between gap-3 rounded-card border border-warning/30 bg-warning/5 px-4 py-2.5 transition-colors duration-150 hover:bg-warning/10"
         >
           <span className="flex min-w-0 items-center gap-2.5 text-[13.5px] text-ink">
             <ShieldAlert size={16} className="shrink-0 text-warning" />
@@ -283,7 +283,7 @@ export default async function HomePage() {
       )}
 
       {nothingAtAll ? (
-        <div className="rounded-2xl border border-dashed border-line bg-surface px-6 py-14 text-center">
+        <div className="rounded-card border border-dashed border-line bg-surface px-6 py-14 text-center">
           <p className="text-sm font-medium text-ink">Bugün için planlanmış bir şey yok.</p>
           <p className="mt-1 text-[13px] text-muted">
             <Link href="/board" className="font-medium text-brand hover:text-brand-strong">Pano</Link>
@@ -294,9 +294,9 @@ export default async function HomePage() {
       ) : (
         <div className="space-y-4">
           {/* ── 1. BUGÜN — sayfanın en değerli yeri ────────────────────── */}
-          <section className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
+          <section className="overflow-hidden rounded-card border border-line bg-surface shadow-card">
             <div className="flex items-center justify-between gap-2 border-b border-hairline px-5 py-3">
-              <h2 className="text-[11.5px] font-semibold uppercase tracking-[0.1em] text-brand-strong">Bugün</h2>
+              <h2 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-brand-strong">Bugün</h2>
               <span className="text-[12px] text-subtle">{weekdayTr(todayIso)}</span>
             </div>
             <div className="grid grid-cols-1 divide-y divide-hairline md:grid-cols-2 md:divide-x md:divide-y-0">
@@ -307,7 +307,7 @@ export default async function HomePage() {
                   <SeeAll href="/planning" label="Calendar" />
                 </div>
                 {todayMeetings.length === 0 ? (
-                  <p className="text-[13px] text-subtle">Planlı toplantı yok.</p>
+                  <p className="text-[13.5px] text-subtle">Planlı toplantı yok.</p>
                 ) : (
                   <ul className="space-y-2">
                     {todayMeetings.map((m) => (
@@ -324,7 +324,7 @@ export default async function HomePage() {
                   <SeeAll href="/list?view=mine" label="İşlerim" />
                 </div>
                 {today.length === 0 ? (
-                  <p className="text-[13px] text-subtle">Bugün teslim edilecek iş yok.</p>
+                  <p className="text-[13.5px] text-subtle">Bugün teslim edilecek iş yok.</p>
                 ) : (
                   <ul className="divide-y divide-hairline">
                     {today.map((t) => (
@@ -354,7 +354,15 @@ export default async function HomePage() {
                 <div
                   key={p.key}
                   className={cn(
-                    "h-full",
+                    /* min-w-0 ŞART: ızgara hücresi varsayılan olarak
+                       `min-width: auto` taşır, yani içeriğinin min-content
+                       genişliğinin altına İNMEZ. Satır başlıkları `truncate`
+                       (white-space: nowrap) olduğu için min-content = başlığın
+                       tam genişliği; hücre telefonda ekranı aşıyor, başlık ve
+                       tarih sağdan kırpılıyordu. html/body'deki `overflow-x:
+                       clip` bunu sessizce gizlediği için yatay kaydırma bile
+                       görünmüyordu (2026-08-29 mobil taraması). */
+                    "h-full min-w-0",
                     // Tek sayıda kutu varsa SONUNCUSU tam genişlik alır.
                     panels.length % 2 === 1 && i === panels.length - 1 && "lg:col-span-2",
                   )}
@@ -380,11 +388,11 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <section className="flex h-full flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
+    <section className="flex h-full flex-col overflow-hidden rounded-card border border-line bg-surface shadow-card">
       <div className="flex items-center justify-between gap-2 border-b border-hairline px-5 py-3">
         <h2
           className={cn(
-            "text-[11.5px] font-semibold uppercase tracking-[0.1em]",
+            "text-[12px] font-semibold uppercase tracking-[0.08em]",
             tone === "danger" ? "text-danger" : "text-subtle",
           )}
         >
@@ -411,7 +419,7 @@ function TaskRow({ task, overdue = false }: { task: MyTask; overdue?: boolean })
         </span>
         {/* Acil bir DURUM değil, bir uyarı — tek rozet kuralı. */}
         {task.priority === "urgent" && (
-          <span className="hidden shrink-0 rounded-md bg-amber-50 px-1.5 py-0.5 text-[11.5px] font-medium text-amber-800 sm:inline">
+          <span className="hidden shrink-0 rounded-md bg-urgent/10 px-1.5 py-0.5 text-[12px] font-medium text-urgent sm:inline">
             Acil
           </span>
         )}
@@ -457,7 +465,7 @@ function MoreLink({ href }: { href: string }) {
 function MeetingRow({ meeting, day }: { meeting: HomeMeeting; day?: string }) {
   const meta = categoryMeta(meeting.category);
   return (
-    <li className="flex items-baseline gap-2.5 text-[13px]">
+    <li className="flex items-baseline gap-2.5 text-[13.5px]">
       <span className="w-11 shrink-0 font-semibold tabular-nums text-ink">
         {meeting.time_slot.slice(0, 5)}
       </span>
@@ -465,7 +473,7 @@ function MeetingRow({ meeting, day }: { meeting: HomeMeeting; day?: string }) {
       <span className="min-w-0 flex-1 truncate text-ink">
         {meeting.title?.trim() || meta.label}
       </span>
-      {day && <span className="shrink-0 text-[11.5px] text-subtle">{day}</span>}
+      {day && <span className="shrink-0 text-[12px] text-subtle">{day}</span>}
     </li>
   );
 }

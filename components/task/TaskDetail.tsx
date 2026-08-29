@@ -3,8 +3,7 @@
 import { useState, useMemo, useTransition, useRef, useEffect, useContext } from "react";
 import { useRouter } from "next/navigation";
 import { formatDateTimeTR, formatDateOnlyTR } from "@/lib/utils/format-date";
-import Link from "next/link";
-import { ArrowLeft, History, Save, X, Check, AlertCircle, Lock, Pencil, Users, Building2, CalendarDays } from "lucide-react";
+import { ArrowLeft, History, Check, AlertCircle, Lock, Users, CalendarDays } from "lucide-react";
 import type {
   Task,
   TaskActivity,
@@ -23,9 +22,12 @@ import {
 import { updateTask } from "@/lib/actions/tasks";
 import { activityMessage } from "@/components/task/activity-messages";
 import {
-  STATUS_CHIP_TONE, PRIORITY_CHIP, getTaskStateMarkers,
+  STATUS_CHIP_TONE, PRIORITY_SHOW_ON_BOARD, getTaskStateMarkers,
 } from "@/lib/design/semantics";
 import { Avatar } from "@/components/ui/Avatar";
+import { Button } from "@/components/ui/Button";
+import { Field, FieldGrid, TextInput, TextArea, SelectInput } from "@/components/ui/Field";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { cn } from "@/lib/utils/cn";
 import { BackLink } from "@/components/modules/BackLink";
@@ -87,26 +89,26 @@ function draftFromTask(task: Task): Draft {
   };
 }
 
-// ---- Field wrapper ----
-
-function FieldRow({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
-  return (
-    <div className={className}>
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-subtle mb-1">{label}</p>
-      {children}
-    </div>
-  );
+/* Sunucudan gelen hata bazen ham Postgres/İngilizce metindir. Kullanıcıya
+   Türkçe, ne yapacağını söyleyen cümle gösterilir; teknik metin konsola düşer. */
+const TECHNICAL_ERROR = /duplicate key|violates|permission denied|jwt|pgrst|relation|column|null value|syntax|invalid input|not authenticated|not found|fetch failed|network|unexpected/i;
+function friendlyError(msg: string | undefined): string {
+  if (!msg || TECHNICAL_ERROR.test(msg)) {
+    if (msg) console.error("[updateTask]", msg);
+    return "Değişiklikler kaydedilemedi. Lütfen tekrar deneyin.";
+  }
+  return msg;
 }
 
-const inputCls = "w-full text-sm text-ink bg-surface border border-line rounded-lg px-2.5 py-1.5 placeholder:text-subtle transition-[color,background-color,border-color,box-shadow] duration-150 ease-standard hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40 disabled:bg-surface-sunken disabled:text-subtle disabled:hover:border-line";
-// Read-only metadata (Oluşturan, Giriş tarihi) rendered in the same box shape as
-// the editable inputs so every field reads as one consistent UI.
-const readOnlyCls = "block w-full text-sm text-muted bg-surface-muted border border-hairline rounded-lg px-2.5 py-1.5 truncate";
+/* Sayfa ile çekmece aynı iç boşluğu kullanır; üst çubuk bu boşluğu negatif
+   kenarla geri alıp kenardan kenara oturur. */
+const PAGE_PAD = "px-4 py-4 sm:px-6 lg:px-8";
+const BAR_BLEED = "-mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8";
 
 // ---- Editor (remounts via key when the server task changes) ----
 
 function TaskEditor({
-  task, departments, canEdit, canComplete, isAdmin, backHref, backLabel,
+  task, departments, canEdit, canComplete, isAdmin, backHref,
   responsiblePeople, participantsSlot, notesSlot, effortSlot, activitySlot,
 }: {
   task: Task; departments: WorkspaceDepartment[]; canEdit: boolean; canComplete: boolean;
@@ -182,10 +184,10 @@ function TaskEditor({
     startSaving(async () => {
       const res = await updateTask(updates);
       if (res && "error" in res) {
-        setFeedback({ kind: "err", msg: res.error || "Değişiklikler kaydedilemedi." });
+        setFeedback({ kind: "err", msg: friendlyError(res.error) });
         return;
       }
-      setFeedback({ kind: "ok", msg: "Değişiklikler kaydedildi." });
+      setFeedback({ kind: "ok", msg: "Kaydedildi." });
       router.refresh();
     });
   }
@@ -196,23 +198,38 @@ function TaskEditor({
   const departmentName = draft.department_id
     ? departments.find((d) => d.id === draft.department_id)?.name ?? null
     : null;
+  const saveHint = !canEdit
+    ? "Düzenleme yetkiniz yok"
+    : doneLocked ? "Tamamlanmış görevi yalnızca yönetici değiştirebilir" : undefined;
+
+  const feedbackNode = feedback && (
+    <span
+      role={feedback.kind === "err" ? "alert" : "status"}
+      className={cn(
+        "anim-fade inline-flex items-center gap-1 text-[12.5px]",
+        feedback.kind === "ok" ? "text-success" : "text-danger",
+      )}
+    >
+      {feedback.kind === "ok" ? <Check size={13} aria-hidden /> : <AlertCircle size={13} aria-hidden />}
+      {feedback.msg}
+    </span>
+  );
 
   return (
     <>
-      {/* ── Top action bar: back link + explicit Save / Cancel ─────────────── */}
+      {/* ── Top action bar: back + explicit Save / Cancel ───────────────────
+          Düz zemin (bulanık katman yok). Ekranın TEK primary'si "Kaydet";
+          değişiklik yokken nötr, değişiklik olunca marka rengi. */}
       <div className={cn(
-        "sticky top-0 z-20 -mx-4 px-4 py-2 bg-app/90 backdrop-blur border-b border-line/60 flex items-center justify-between gap-3 flex-wrap",
+        "sticky top-0 z-20 -mt-4 py-2 bg-app border-b border-line/60 flex items-center justify-between gap-3 flex-wrap",
+        BAR_BLEED,
         // Keep the drawer's pinned close button clear of the action buttons.
-        drawer && "pr-12",
+        drawer && "pr-14 sm:pr-14 lg:pr-14",
       )}>
         {drawer ? (
-          <button
-            type="button"
-            onClick={drawer.close}
-            className="group inline-flex items-center gap-1 text-sm text-muted hover:text-ink transition-colors duration-150"
-          >
-            <ArrowLeft size={14} className="transition-transform duration-150 ease-standard group-hover:-translate-x-0.5" /> Kapat
-          </button>
+          <Button variant="ghost" size="sm" onClick={drawer.close} className="-ml-2">
+            <ArrowLeft size={15} aria-hidden /> Kapat
+          </Button>
         ) : (
           /* GERÇEK geri — Aslı Hanım (2026-08-28): "normal geldiği yerden geri
              dönün." Görev Takvim'den ya da Ana Sayfa'dan açıldığında da
@@ -221,111 +238,92 @@ function TaskEditor({
           <BackLink href={backHref} />
         )}
         <div className="flex items-center gap-2 ml-auto">
-          {feedback && (
-            <span className={cn(
-              "anim-fade hidden sm:inline-flex items-center gap-1 text-xs mr-1",
-              feedback.kind === "ok" ? "text-success" : "text-danger",
-            )}>
-              {feedback.kind === "ok" ? <Check size={13} /> : <AlertCircle size={13} />}
-              {feedback.msg}
-            </span>
-          )}
+          <span className="hidden sm:inline-flex">{feedbackNode}</span>
           {canSave && (
-            <button
-              onClick={cancel}
-              disabled={saving}
-              className="anim-fade inline-flex items-center gap-1 text-sm font-medium text-muted hover:text-ink px-3 py-1.5 rounded-lg border border-line bg-surface shadow-xs hover:bg-surface-muted hover:border-line-strong active:scale-[0.98] disabled:opacity-60 disabled:pointer-events-none transition-all duration-150"
-            >
-              <X size={14} /> Vazgeç
-            </button>
+            <Button variant="secondary" size="sm" onClick={cancel} disabled={saving} className="anim-fade">
+              Vazgeç
+            </Button>
           )}
-          <button
+          <Button
+            size="sm"
             onClick={save}
-            disabled={!canSave || saving}
-            title={!canEdit ? "Düzenleme yetkiniz yok" : doneLocked ? "Tamamlanmış görevi yalnızca yönetici değiştirebilir" : undefined}
-            className={cn(
-              "inline-flex items-center gap-1.5 text-sm font-medium px-3.5 py-1.5 rounded-lg transition-all duration-150",
-              canSave && !saving
-                ? "text-white bg-brand shadow-xs hover:bg-brand-strong active:scale-[0.98]"
-                : "text-subtle bg-surface-sunken cursor-not-allowed",
-            )}
+            loading={saving}
+            disabled={!canSave}
+            title={saveHint}
           >
-            <Save size={14} /> {saving ? "Kaydediliyor…" : "Değişiklikleri Kaydet"}
-          </button>
+            Kaydet
+          </Button>
         </div>
       </div>
 
-      {/* ── Header card: title + responsible people + state badges ─────────── */}
-      <div className="bg-surface rounded-card border border-line shadow-card p-5 space-y-3 mt-5">
-        <div className="group relative">
-          <textarea
-            ref={titleRef}
-            value={draft.title}
-            onChange={(e) => set("title", e.target.value)}
-            disabled={fieldsDisabled}
-            rows={1}
-            placeholder="Görev başlığı"
-            aria-label="Görev başlığı"
-            className={cn(
-              "w-full resize-none overflow-hidden text-xl sm:text-2xl font-semibold tracking-tight text-ink bg-transparent outline-none pr-8 pb-1 leading-tight break-words transition-colors",
-              fieldsDisabled
-                ? "border-b border-transparent text-muted"
-                : "border-b border-dashed border-line hover:border-line-strong focus:border-solid focus:border-brand-ring",
-            )}
-          />
-          {!fieldsDisabled && (
-            <Pencil
-              size={15}
-              className="absolute right-0 top-2 text-subtle group-hover:text-muted group-focus-within:text-brand transition-colors pointer-events-none"
-            />
+      {/* ── Header card: title + compact meta row ──────────────────────────
+          Hiyerarşi: başlık → durum · sorumlu · teslim (tek satır). Tek rozet
+          (durum); gerisi düz metin. Öncelik yalnız yüksek/acil ise yazılır,
+          form zaten alanı gösteriyor. */}
+      <div className="bg-surface rounded-card border border-line shadow-card p-5 space-y-3 mt-4">
+        <textarea
+          ref={titleRef}
+          value={draft.title}
+          onChange={(e) => set("title", e.target.value)}
+          disabled={fieldsDisabled}
+          rows={1}
+          placeholder="Görev başlığı"
+          aria-label="Görev başlığı"
+          className={cn(
+            "w-full resize-none overflow-hidden -mx-1 px-1 text-xl sm:text-2xl font-semibold tracking-tight bg-transparent rounded-control outline-none pb-1 leading-tight break-words transition-colors",
+            "focus-visible:ring-2 focus-visible:ring-brand-ring/40",
+            fieldsDisabled
+              ? "text-muted border-b border-transparent"
+              : "text-ink border-b border-dashed border-line hover:border-line-strong focus:border-solid focus:border-brand-ring",
           )}
-        </div>
+        />
 
-        {/* Responsible people — the primary "whose work is this" signal. */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="inline-flex items-center gap-1 text-xs font-medium text-muted">
-            <Users size={13} /> Sorumlu:
-          </span>
-          {responsiblePeople.length === 0 ? (
-            <span className="text-xs text-subtle italic">Sorumlu atanmadı</span>
-          ) : (
-            responsiblePeople.map((name) => (
-              <span
-                key={name}
-                className="inline-flex items-center gap-1.5 rounded-full bg-surface-muted border border-line pl-1 pr-2.5 py-0.5 text-xs font-medium text-ink"
-              >
-                <Avatar name={name} size="xs" />
-                {getPersonDisplayName(name)}
-              </span>
-            ))
-          )}
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className={cn("text-[11px] rounded-full px-2 py-0.5 font-medium", STATUS_CHIP_TONE[draft.status])}>
+        <div className="flex items-center gap-x-3 gap-y-2 flex-wrap text-[12.5px] text-muted">
+          <span className={cn("inline-flex h-[22px] items-center rounded-md px-2 text-[12px] font-medium", STATUS_CHIP_TONE[draft.status])}>
             {STATUS_LABELS[draft.status]}
           </span>
-          <span className={cn("text-[11px] rounded-full px-2 py-0.5 font-medium", PRIORITY_CHIP[draft.priority])}>
-            {PRIORITY_LABELS[draft.priority]}
+
+          {/* Responsible people — the primary "whose work is this" signal. */}
+          <span className="inline-flex items-center gap-1.5 min-w-0">
+            <Users size={13} className="shrink-0 text-subtle" aria-hidden />
+            {responsiblePeople.length === 0 ? (
+              <span className="text-subtle">Sorumlu atanmadı</span>
+            ) : (
+              <span className="flex items-center gap-1.5 flex-wrap">
+                {responsiblePeople.map((name) => (
+                  <span key={name} className="inline-flex items-center gap-1 text-ink font-medium">
+                    <Avatar name={name} size="xs" />
+                    {getPersonDisplayName(name)}
+                  </span>
+                ))}
+              </span>
+            )}
           </span>
+
           {draft.due_date && (
-            <span className={cn("inline-flex items-center gap-1 text-[11px] rounded-full px-2 py-0.5 bg-surface-muted border border-hairline tabular-nums", markers.dueDateClass)}>
-              <CalendarDays size={11} /> Teslim: {formatDateOnlyTR(draft.due_date)}
+            <span className={cn("inline-flex items-center gap-1 tabular-nums whitespace-nowrap", markers.dueDateClass)}>
+              <CalendarDays size={13} className="shrink-0" aria-hidden /> {formatDateOnlyTR(draft.due_date)}
             </span>
           )}
+
           {departmentName && (
-            <span className="inline-flex items-center gap-1 text-[11px] rounded-full px-2 py-0.5 bg-surface-muted border border-hairline text-muted">
-              <Building2 size={11} /> {departmentName}
+            <span className="truncate">{departmentName}</span>
+          )}
+
+          {PRIORITY_SHOW_ON_BOARD[draft.priority] && (
+            <span className={cn("font-medium", draft.priority === "urgent" ? "text-urgent" : "text-overdue")}>
+              {PRIORITY_LABELS[draft.priority]}
             </span>
           )}
+
           {doneLocked && (
-            <span className="inline-flex items-center gap-1 text-[11px] text-muted bg-surface-sunken rounded-full px-2 py-0.5">
-              <Lock size={11} /> Tamamlandı — yalnızca yönetici değiştirebilir
+            <span className="inline-flex items-center gap-1 text-subtle">
+              <Lock size={12} aria-hidden /> Yalnızca yönetici değiştirebilir
             </span>
           )}
           {isAdmin && draft.visibility === "admin_only" && (
-            <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
-              <Lock size={11} /> {ADMIN_ONLY_CHIP_LABEL}
+            <span className="inline-flex items-center gap-1 text-warning">
+              <Lock size={12} aria-hidden /> {ADMIN_ONLY_CHIP_LABEL}
             </span>
           )}
         </div>
@@ -336,72 +334,73 @@ function TaskEditor({
           → Sorumlu kişiler → Notlar → Puan & Motivasyon → Aktivite. The audit
           trail is ALWAYS last (never a right sidebar) and notes always sit
           above it. */}
-      <div className="mt-5 flex flex-col gap-5">
+      <div className="mt-4 flex flex-col gap-4">
 
-          {/* Görev bilgileri */}
-          <div className="bg-surface rounded-card border border-line shadow-card p-5">
-            <h3 className="text-sm font-semibold tracking-tight text-ink mb-4">Görev bilgileri</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FieldRow label="Açıklama" className="sm:col-span-2">
-                <textarea
-                  value={draft.description}
-                  onChange={(e) => set("description", e.target.value)}
-                  disabled={fieldsDisabled}
-                  rows={4}
-                  placeholder="Açıklama ekle…"
-                  className={cn(inputCls, "resize-y")}
-                />
-              </FieldRow>
+        {/* Görev bilgileri — ortak Field primitifleri; yan yana yalnız
+            anlamlı çiftler (durum·öncelik, başlangıç·teslim). */}
+        <div className="bg-surface rounded-card border border-line shadow-card p-5">
+          <h3 className="text-sm font-semibold tracking-tight text-ink mb-4">Görev bilgileri</h3>
+          <div className="space-y-4">
+            <Field label="Açıklama">
+              <TextArea
+                value={draft.description}
+                onChange={(e) => set("description", e.target.value)}
+                disabled={fieldsDisabled}
+                rows={4}
+                placeholder="Açıklama ekle…"
+              />
+            </Field>
 
-              <FieldRow label="Durum">
-                <select
+            <FieldGrid>
+              <Field label="Durum">
+                <SelectInput
                   value={USER_STATUS_OPTIONS.find((o) => o.value === draft.status)?.value ?? "ready"}
                   onChange={(e) => set("status", e.target.value as TaskStatus)}
                   disabled={fieldsDisabled}
-                  className={inputCls}
                 >
                   {statusOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-              </FieldRow>
+                </SelectInput>
+              </Field>
 
-              <FieldRow label="Öncelik">
-                <select
+              <Field label="Öncelik">
+                <SelectInput
                   value={draft.priority}
                   onChange={(e) => set("priority", e.target.value as TaskPriority)}
                   disabled={fieldsDisabled}
-                  className={inputCls}
                 >
                   {TASK_PRIORITIES.map((p) => <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>)}
-                </select>
-              </FieldRow>
+                </SelectInput>
+              </Field>
+            </FieldGrid>
 
-              {/* Başlangıç + Teslim: always side by side from sm up. */}
-              <FieldRow label="Başlangıç tarihi">
-                <input
+            <FieldGrid>
+              <Field label="Başlangıç tarihi">
+                <TextInput
                   type="date"
                   value={draft.start_date}
                   onChange={(e) => set("start_date", e.target.value)}
                   disabled={fieldsDisabled}
-                  className={inputCls}
+                  className="tabular-nums"
                 />
-              </FieldRow>
-              <FieldRow label="Teslim tarihi">
-                <input
+              </Field>
+              <Field label="Teslim tarihi">
+                <TextInput
                   type="date"
                   value={draft.due_date}
                   min={draft.start_date || undefined}
                   onChange={(e) => set("due_date", e.target.value)}
                   disabled={fieldsDisabled}
-                  className={inputCls}
+                  className="tabular-nums"
                 />
-              </FieldRow>
+              </Field>
+            </FieldGrid>
 
-              <FieldRow label="Departman" className="sm:col-span-2">
-                <select
+            <FieldGrid>
+              <Field label="Departman">
+                <SelectInput
                   value={draft.department_id}
                   onChange={(e) => set("department_id", e.target.value)}
                   disabled={fieldsDisabled}
-                  className={inputCls}
                 >
                   <option value="">— Departman yok —</option>
                   {topLevel.map((dept) => (
@@ -412,80 +411,81 @@ function TaskEditor({
                       <option value={dept.id}>{dept.name} (genel)</option>
                     </optgroup>
                   ))}
-                </select>
-              </FieldRow>
+                </SelectInput>
+              </Field>
 
               {/* "Oluşturan" satırı geri bildirimle kaldırıldı — sorumlu kişiler
-                  aşağıdaki panelde gösterilir. */}
-              <FieldRow label="Giriş tarihi">
-                <span className={cn(readOnlyCls, "tabular-nums")}>{formatDateTimeTR(task.created_at)}</span>
-              </FieldRow>
+                  aşağıdaki panelde gösterilir. Giriş tarihi salt-okunur alan. */}
+              <Field label="Giriş tarihi">
+                <TextInput
+                  readOnly
+                  tabIndex={-1}
+                  value={formatDateTimeTR(task.created_at)}
+                  className="bg-surface-muted text-muted tabular-nums hover:border-line"
+                />
+              </Field>
+            </FieldGrid>
 
-              {/* Görünürlük — admin-only. Members never see or edit this. */}
-              {isAdmin && (
-                <FieldRow label="Görünürlük" className="sm:col-span-2">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {TASK_VISIBILITIES.map((v) => {
-                      const on = draft.visibility === v;
-                      return (
-                        <button
-                          key={v}
-                          type="button"
-                          onClick={() => set("visibility", v)}
-                          disabled={!canEdit}
-                          className={cn(
-                            "text-left rounded-lg border px-3 py-2 transition-colors duration-150 disabled:opacity-60 disabled:pointer-events-none",
-                            on
-                              ? "bg-amber-50 border-amber-300"
-                              : "bg-surface border-line hover:bg-surface-hover hover:border-line-strong",
-                          )}
-                        >
-                          <span className={cn("flex items-center gap-1.5 text-sm font-medium", on ? "text-amber-800" : "text-ink")}>
-                            {v === "admin_only" && <Lock size={12} />}
-                            {VISIBILITY_LABELS[v]}
-                          </span>
-                          <span className="block text-[11px] text-muted mt-0.5 leading-snug">
-                            {VISIBILITY_DESCRIPTIONS[v]}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <p className="text-[11px] text-subtle mt-1.5">
-                    Değişiklik &quot;Değişiklikleri Kaydet&quot; ile uygulanır. Yöneticiye özel
-                    görevlerde yalnızca yönetici kişiler sorumlu olabilir.
-                  </p>
-                </FieldRow>
-              )}
-            </div>
-
-            {/* Inline feedback (also visible on mobile, where the top bar hides it). */}
-            {feedback && (
-              <p className={cn(
-                "anim-fade-down mt-4 inline-flex items-center gap-1.5 text-sm sm:hidden",
-                feedback.kind === "ok" ? "text-success" : "text-danger",
-              )}>
-                {feedback.kind === "ok" ? <Check size={14} /> : <AlertCircle size={14} />}
-                {feedback.msg}
-              </p>
-            )}
-            {!canEdit && !doneLocked && (
-              <p className="mt-4 text-xs text-subtle">Bu görevi düzenleme yetkiniz yok.</p>
+            {/* Görünürlük — admin-only. Members never see or edit this. */}
+            {isAdmin && (
+              <div>
+                <p className="mb-1 block text-[12.5px] font-medium text-muted">Görünürlük</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" role="group" aria-label="Görünürlük">
+                  {TASK_VISIBILITIES.map((v) => {
+                    const on = draft.visibility === v;
+                    return (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => set("visibility", v)}
+                        disabled={!canEdit}
+                        aria-pressed={on}
+                        className={cn(
+                          "text-left rounded-control border px-3 py-2 transition-colors duration-150 disabled:pointer-events-none disabled:text-subtle",
+                          on
+                            ? "bg-brand-soft border-brand-ring"
+                            : "bg-surface border-line hover:bg-surface-hover hover:border-line-strong",
+                        )}
+                      >
+                        <span className={cn("flex items-center gap-1.5 text-[13.5px] font-medium", on ? "text-brand-strong" : "text-ink")}>
+                          {v === "admin_only" && <Lock size={12} aria-hidden />}
+                          {VISIBILITY_LABELS[v]}
+                          {on && <Check size={13} className="ml-auto shrink-0" aria-hidden />}
+                        </span>
+                        <span className="block text-[12px] text-muted mt-0.5 leading-snug">
+                          {VISIBILITY_DESCRIPTIONS[v]}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[12px] text-subtle mt-1.5 leading-relaxed">
+                  Değişiklik &quot;Kaydet&quot; ile uygulanır. Yöneticiye özel görevlerde
+                  yalnızca yönetici kişiler sorumlu olabilir.
+                </p>
+              </div>
             )}
           </div>
 
-          {/* Sorumlu kişiler — active assignment management, right under the
-              task details (never a passive side card). */}
-          {participantsSlot}
+          {/* Inline feedback (also visible on mobile, where the top bar hides it). */}
+          {feedback && <div className="mt-4 sm:hidden">{feedbackNode}</div>}
+          {!canEdit && !doneLocked && (
+            <p className="mt-4 text-[12px] text-subtle">Bu görevi düzenleme yetkiniz yok.</p>
+          )}
+        </div>
 
-          {/* Notlar — the main working area. */}
-          {notesSlot}
+        {/* Sorumlu kişiler — active assignment management, right under the
+            task details (never a passive side card). */}
+        {participantsSlot}
 
-          {/* Puan & Motivasyon — compact, above the audit trail. */}
-          {effortSlot}
+        {/* Notlar — the main working area. */}
+        {notesSlot}
 
-          {/* Aktivite — audit trail, intentionally the very last block. */}
-          {activitySlot}
+        {/* Puan & Motivasyon — compact, above the audit trail. */}
+        {effortSlot}
+
+        {/* Aktivite — audit trail, intentionally the very last block. */}
+        {activitySlot}
       </div>
     </>
   );
@@ -511,29 +511,25 @@ function ActivityLogSection({
   return (
     <div className="bg-surface rounded-card border border-line shadow-card p-5 space-y-4">
       <h3 className="text-sm font-semibold tracking-tight text-ink flex items-center gap-1.5">
-        <History size={14} className="text-muted" /> Aktivite
+        <History size={14} className="text-muted" aria-hidden /> Aktivite
       </h3>
 
       {logs.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-line bg-surface-muted/40 px-4 py-6 text-center text-sm text-subtle">
-          Henüz kayıtlı aktivite yok. Bundan sonraki değişiklikler burada görünecek.
-        </p>
+        <EmptyState compact title="Henüz aktivite yok." description="Bundan sonraki değişiklikler burada görünecek." />
       ) : (
         <ol className="-mx-2">
           {logs.map((log) => {
             const actorName = log.actor?.full_name ?? log.actor?.email
               ?? (log.actor_id ? "Bilinmeyen kullanıcı" : "Sistem");
             return (
-              <li key={log.id} className="flex gap-3 text-sm rounded-lg px-2 py-1.5 hover:bg-surface-hover transition-colors duration-150">
-                <div className="h-6 w-6 rounded-full bg-surface-sunken ring-1 ring-hairline text-muted text-[11px] font-medium flex items-center justify-center shrink-0 mt-0.5">
-                  {actorName[0]?.toUpperCase() ?? "?"}
-                </div>
+              <li key={log.id} className="flex gap-3 text-[13.5px] rounded-control px-2 py-1.5 hover:bg-surface-hover transition-colors duration-150">
+                <Avatar name={actorName} size="xs" tone={log.actor_id ? "color" : "neutral"} className="mt-0.5" />
                 <div className="flex-1 min-w-0">
                   <p className="text-muted leading-snug">
                     <span className="font-medium text-ink">{actorName}</span>{" "}
                     {activityMessage(log, resolveName)}
                   </p>
-                  <p className="text-xs text-subtle mt-0.5 tabular-nums">
+                  <p className="text-[12px] text-subtle mt-0.5 tabular-nums">
                     {formatDateTimeTR(log.created_at)}
                   </p>
                 </div>
@@ -572,7 +568,8 @@ export function TaskDetail({
   const version = `${task.id}:${task.updated_at}`;
 
   return (
-    <div className="max-w-4xl mx-auto py-6 px-4">
+    // Tam genişlik (max-w kapağı yok) — çekmecede zaten 720–760px'e sığar.
+    <div className={cn("w-full", PAGE_PAD)}>
       <TaskEditor
         key={version}
         task={task}

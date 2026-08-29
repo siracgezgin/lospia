@@ -40,9 +40,9 @@ export function BackLink({
   return (
     <Link
       href={target}
-      className="group inline-flex items-center gap-1.5 rounded-md py-0.5 text-[13px] text-muted transition-colors duration-150 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
+      className="tap-target inline-flex h-8 items-center gap-1.5 rounded-control px-1 text-[13.5px] font-medium text-muted transition-colors duration-150 hover:text-ink"
     >
-      <ArrowLeft size={14} className="shrink-0 transition-transform duration-150 ease-standard group-hover:-translate-x-0.5" />
+      <ArrowLeft size={15} className="shrink-0" aria-hidden />
       Geri
     </Link>
   );

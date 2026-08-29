@@ -12,15 +12,21 @@ import {
   isSameMonth,
   isSameDay,
   isToday as dfnsIsToday,
+  isBefore,
   isValid,
   addMonths,
   subMonths,
   parseISO,
+  startOfToday,
 } from "date-fns";
 import { tr } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, X, Plus, CalendarDays, ChevronDown, Lock } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, CalendarDays, ChevronDown, Lock } from "lucide-react";
 import type { TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceDepartment } from "@/types";
 import { cn } from "@/lib/utils/cn";
+import { Button, IconButton } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { CalendarToolbar } from "@/components/planning/CalendarToolbar";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
 import { buildDeptMeta } from "@/lib/utils/departments";
@@ -55,8 +61,6 @@ interface Props {
   initialDate?: string | null;
 }
 
-const DONE_CLS = "line-through text-subtle";
-
 // Mount detection via useSyncExternalStore — tells client from server render
 // without a setState-in-effect (which the lint rules reject).
 const _subscribeMounted = () => () => {};
@@ -77,9 +81,17 @@ function safeParseISO(value: string | null | undefined): Date | null {
   }
 }
 
+/** Teslim tarihi geçmiş ve bitmemiş iş — takvimde ayrı okunmalı. Tarih-bazlı
+ *  karşılaştırma: bugünün işi "gecikmiş" sayılmaz. */
+function isOverdue(t: CalTask): boolean {
+  if (t.status === "done") return false;
+  const due = safeParseISO(t.due_date);
+  return !!due && isBefore(due, startOfToday());
+}
+
 /** Compact month/year picker — integrated into the month label, Safari-safe
  *  (no native <input type="month">). Lets the user jump straight to 2028+. */
-function MonthYearPicker({ value, onChange }: { value: Date; onChange: (d: Date) => void }) {
+function MonthYearPicker({ value, onChange }: { value: Date; onChange: (_d: Date) => void }) {
   const [open, setOpen] = useState(false);
   // The popover browses a year independently of the calendar so the user can
   // page to 2028 and pick a month there in one go — no month-by-month clicking.
@@ -122,12 +134,12 @@ function MonthYearPicker({ value, onChange }: { value: Date; onChange: (d: Date)
   }
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative h-full">
       <button
         type="button"
         data-testid="calendar-month-picker-button"
         onClick={toggle}
-        className="flex h-9 w-40 items-center justify-center gap-1.5 border-x border-line text-[13px] font-semibold capitalize tracking-tight text-ink transition-colors duration-150 hover:bg-surface-hover active:bg-surface-sunken focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-ring"
+        className="flex h-full w-36 items-center justify-center gap-1.5 border-x border-line text-[13px] font-semibold capitalize tracking-tight text-ink transition-colors duration-150 hover:bg-surface-hover active:bg-surface-sunken focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-ring sm:w-40"
         aria-label="Ay ve yıl seç"
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -139,34 +151,25 @@ function MonthYearPicker({ value, onChange }: { value: Date; onChange: (d: Date)
         />
       </button>
       {open && (
+        /* z-30: kabuğun (z-40) altında, yapışkan gün başlığının (z-10) üstünde. */
         <div
           role="dialog"
           aria-label="Ay ve yıl seçici"
           data-testid="calendar-month-picker-popover"
-          className="anim-fade-down absolute left-1/2 -translate-x-1/2 top-full mt-2 z-50 w-80 rounded-xl border border-line bg-surface shadow-pop p-4"
+          className="anim-fade-down absolute left-1/2 top-full z-30 mt-2 w-[min(20rem,calc(100vw-2rem))] -translate-x-1/2 rounded-card border border-line bg-surface p-3 shadow-pop"
         >
           {/* Year navigation */}
-          <div className="flex items-center justify-between mb-3">
-            <button
-              type="button"
-              onClick={() => setViewYear((y) => y - 1)}
-              className="p-1.5 rounded-lg text-muted hover:bg-surface-hover hover:text-ink active:bg-surface-sunken transition-colors duration-150"
-              aria-label="Önceki yıl"
-            >
-              <ChevronLeft size={18} />
-            </button>
-            <span className="text-base font-semibold tracking-tight text-ink tabular-nums" aria-live="polite">{viewYear}</span>
-            <button
-              type="button"
-              onClick={() => setViewYear((y) => y + 1)}
-              className="p-1.5 rounded-lg text-muted hover:bg-surface-hover hover:text-ink active:bg-surface-sunken transition-colors duration-150"
-              aria-label="Sonraki yıl"
-            >
-              <ChevronRight size={18} />
-            </button>
+          <div className="mb-2 flex items-center justify-between">
+            <IconButton size="sm" aria-label="Önceki yıl" onClick={() => setViewYear((y) => y - 1)}>
+              <ChevronLeft size={16} />
+            </IconButton>
+            <span className="text-[14px] font-semibold tracking-tight text-ink tabular-nums" aria-live="polite">{viewYear}</span>
+            <IconButton size="sm" aria-label="Sonraki yıl" onClick={() => setViewYear((y) => y + 1)}>
+              <ChevronRight size={16} />
+            </IconButton>
           </div>
           {/* Month grid */}
-          <div className="grid grid-cols-3 gap-1.5">
+          <div className="grid grid-cols-3 gap-1">
             {TR_MONTHS.map((m, i) => {
               const isSelected = i === month && viewYear === selectedYear;
               const isCurrent = i === todayMonth && viewYear === todayYear;
@@ -175,12 +178,13 @@ function MonthYearPicker({ value, onChange }: { value: Date; onChange: (d: Date)
                   key={m}
                   type="button"
                   onClick={() => pick(i)}
+                  aria-pressed={isSelected}
                   className={cn(
-                    "text-sm py-2 rounded-lg transition-colors duration-150 font-medium",
+                    "h-9 rounded-control text-[13.5px] font-medium transition-colors duration-150",
                     isSelected
-                      ? "bg-brand text-white shadow-xs"
+                      ? "bg-brand text-white"
                       : isCurrent
-                        ? "bg-brand-soft text-brand-strong ring-1 ring-brand-ring/50 hover:ring-brand-ring"
+                        ? "bg-brand-soft text-brand-strong ring-1 ring-inset ring-brand-ring/50"
                         : "text-muted hover:bg-surface-hover hover:text-ink active:bg-surface-sunken",
                   )}
                 >
@@ -218,7 +222,6 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
   const [current, setCurrent] = useState(seedDay);
   // Default the agenda to the seed day so the side panel is never empty on load.
   const [selectedDay, setSelectedDay] = useState<Date>(seedDay);
-  const [showMobilePanel, setShowMobilePanel] = useState(false);
   const [createModalDate, setCreateModalDate] = useState<string | null>(null);
 
   // The whole grid is derived from `new Date()`, which differs between the
@@ -244,35 +247,28 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
     });
   }
 
-  function selectDay(day: Date) {
-    setSelectedDay(day);
-    setShowMobilePanel(true);
-  }
-
   const selectedDayTasks = getTasksForDay(selectedDay);
+  const selectedIsToday = dfnsIsToday(selectedDay);
   // The view is "on today" when today is the selected day AND we're looking at
-  // today's month — drives the filled/active state of the Bugün button.
-  const viewingToday = dfnsIsToday(selectedDay) && isSameMonth(selectedDay, current);
+  // today's month — drives the pressed state of the Bugün button.
+  const viewingToday = selectedIsToday && isSameMonth(selectedDay, current);
+
+  const outerCls = cn("flex flex-col", embedded ? "h-full min-h-0 gap-0" : "h-full gap-4 p-4 sm:p-6");
 
   // Server / pre-hydration skeleton — same outer shape so layout doesn't jump.
   if (!mounted) {
     return (
-      <div className={cn("flex flex-col", embedded ? "h-full min-h-0 gap-0" : "h-full gap-4 p-4 sm:p-6")}>
-        {!embedded && (
-          <div className="flex items-center gap-3 shrink-0">
-            <h1 className="text-2xl font-semibold tracking-tight text-ink">Calendar</h1>
-          </div>
-        )}
-        <div className="flex-1 min-h-0 rounded-xl border border-line anim-shimmer bg-gradient-to-r from-surface-sunken via-surface-muted to-surface-sunken" />
+      <div className={outerCls}>
+        {!embedded && <h1 className="text-2xl font-semibold tracking-tight text-ink">Calendar</h1>}
+        <div className={cn("flex min-h-0 flex-1 flex-col", embedded && "p-3 sm:p-4")}>
+          <Skeleton className="min-h-0 flex-1 rounded-card" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className={cn("flex flex-col", embedded ? "h-full min-h-0 gap-0" : "h-full gap-4 p-4 sm:p-6")}>
-      {/* Header — a single month/year control next to the title (no duplicates).
-          The month label itself opens the month/year picker for jumping ahead.
-          Gömülü modda başlık üstteki sayfa başlığıdır; burada tekrar edilmez. */}
+    <div className={outerCls}>
       {/* Gömülü modda (Calendar sayfası) araç çubuğu HAFTA GÖRÜNÜMÜYLE AYNI
           gövdedir: solda gezinme, sağda ölçek seçici, üstte tek çerçeveli bar
           (2026-08-29: "hepsi aynı yerde olsun"). Tek başına kullanıldığında
@@ -285,52 +281,62 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
             (rendered at top-full, outside this box) and the picker would appear
             to "do nothing" on click. End buttons are rounded individually. */}
         {/* h-9 — uygulama genelindeki araç çubuğu yüksekliği. */}
-        <div className="flex h-9 items-center rounded-lg border border-line bg-surface shadow-xs">
+        <div className="flex h-9 items-stretch rounded-control border border-line bg-surface">
           <button
+            type="button"
             onClick={() => setCurrent((d) => subMonths(d, 1))}
-            className="p-1.5 rounded-l-lg text-muted hover:bg-surface-hover hover:text-ink active:bg-surface-sunken transition-colors duration-150"
+            className="tap-target inline-flex w-9 items-center justify-center rounded-l-control text-muted transition-colors duration-150 hover:bg-surface-hover hover:text-ink active:bg-surface-sunken"
             aria-label="Önceki ay"
           >
-            <ChevronLeft size={18} />
+            <ChevronLeft size={16} />
           </button>
           <MonthYearPicker value={current} onChange={(d) => setCurrent(isValid(d) ? d : new Date())} />
           <button
+            type="button"
             onClick={() => setCurrent((d) => addMonths(d, 1))}
-            className="p-1.5 rounded-r-lg text-muted hover:bg-surface-hover hover:text-ink active:bg-surface-sunken transition-colors duration-150"
+            className="tap-target inline-flex w-9 items-center justify-center rounded-r-control text-muted transition-colors duration-150 hover:bg-surface-hover hover:text-ink active:bg-surface-sunken"
             aria-label="Sonraki ay"
           >
-            <ChevronRight size={18} />
+            <ChevronRight size={16} />
           </button>
         </div>
 
-        <button
+        {/* "Bugün" İKİNCİL kontrol: ekranın tek birincil eylemi "Bu güne görev
+            ekle". Eskiden bugünden uzaklaşınca marka rengine dönüyor ve
+            ızgarayla yarışıyordu. Bugündeyken basılı (seçili) durur. */}
+        <Button
+          variant="secondary"
           onClick={() => { setCurrent(new Date()); setSelectedDay(new Date()); }}
-          aria-pressed={!viewingToday}
-          className={cn(
-            "inline-flex h-9 items-center rounded-lg border px-3 text-[13px] font-medium transition-all duration-150 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring focus-visible:ring-offset-1",
-            viewingToday
-              ? "bg-surface border-line text-subtle hover:bg-surface-muted hover:text-muted"
-              : "bg-brand border-brand text-white shadow-xs hover:bg-brand-strong",
-          )}
+          aria-pressed={viewingToday}
+          className={cn(viewingToday && "border-line-strong bg-surface-muted")}
         >
           Bugün
-        </button>
+        </Button>
       </ToolbarShell>
 
-      {/* Body: calendar grid + agenda side panel */}
-      <div className={cn("flex min-h-0 flex-1 gap-4", embedded && "p-3 sm:p-4")}>
+      {/* GÖVDE: masaüstünde ızgara + sağda gün paneli yan yana ve sabit
+          yükseklik; telefonda ALT ALTA ve sayfa kayar — ızgara kompakt
+          (yalnız gün numarası + renk noktaları), seçili günün listesi hemen
+          altında. Eskiden telefonda alttan açılan bir yaprak vardı; masaüstü
+          ızgarasının küçültülmüşü içinde 7 sütuna sıkışmış okunmaz çipler
+          kalıyordu. */}
+      <div className={cn(
+        "flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto lg:flex-row lg:gap-4 lg:overflow-hidden",
+        embedded && "p-3 sm:p-4",
+      )}>
         {/* Calendar */}
-        <div className="flex-1 min-w-0 flex flex-col bg-surface rounded-xl border border-line shadow-card overflow-hidden">
+        <div className="flex shrink-0 flex-col overflow-hidden rounded-card border border-line bg-surface lg:min-h-0 lg:min-w-0 lg:flex-1">
           {/* Day-of-week headers */}
-          <div className="grid grid-cols-7 border-b border-line bg-surface-muted/60 shrink-0">
+          <div className="grid shrink-0 grid-cols-7 border-b border-line bg-surface-muted/60">
             {["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"].map((d) => (
-              <div key={d} className="text-center text-[11px] font-semibold text-subtle py-2 uppercase tracking-wider">{d}</div>
+              <div key={d} className="py-1.5 text-center text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle">{d}</div>
             ))}
           </div>
 
-          {/* Grid — fills remaining height evenly across the real week count */}
+          {/* Grid — masaüstünde kalan yüksekliği hafta sayısına eşit böler;
+              telefonda satırlar içeriğe göre (44px taban) eşit yükseklikte. */}
           <div
-            className="grid grid-cols-7 flex-1 min-h-0"
+            className="grid grid-cols-7 lg:min-h-0 lg:flex-1"
             style={{ gridTemplateRows: `repeat(${weekCount}, minmax(0, 1fr))` }}
           >
             {days.map((day) => {
@@ -339,175 +345,136 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
               const inMonth = isSameMonth(day, current);
               const isSelected = isSameDay(day, selectedDay);
               const MAX_SHOWN = 4;
+              const MAX_DOTS = 3;
 
               return (
                 <button
                   key={day.toISOString()}
-                  onClick={() => selectDay(day)}
+                  type="button"
+                  onClick={() => setSelectedDay(day)}
                   aria-current={isToday ? "date" : undefined}
                   aria-pressed={isSelected}
+                  aria-label={`${format(day, "d MMMM EEEE", { locale: tr })}${dayTasks.length ? `, ${dayTasks.length} iş` : ""}`}
                   className={cn(
-                    "relative border-r border-b border-hairline p-1.5 text-left transition-colors duration-150 flex flex-col gap-1 min-h-0 overflow-hidden",
+                    "relative flex min-h-[44px] min-w-0 flex-col gap-1 overflow-hidden border-b border-r border-hairline p-1 text-left transition-colors duration-150 sm:p-1.5 lg:min-h-0",
                     !inMonth && "bg-surface-muted/60",
-                    // Selected wins; today (unselected) keeps a soft persistent tint;
-                    // everything else gets a clear hover affordance.
+                    // Seçili > bugün > diğer. Bugün sürekli yumuşak zemin;
+                    // seçili gün iç halka; ikisi bir aradaysa halka koyulaşır.
                     isToday && isSelected
                       ? "bg-brand-soft ring-2 ring-inset ring-brand"
                       : isSelected
-                        ? "ring-2 ring-inset ring-brand-ring bg-brand-soft/50"
+                        ? "bg-brand-soft/50 ring-2 ring-inset ring-brand-ring"
                         : isToday
-                          ? "bg-brand-soft/60 ring-1 ring-inset ring-brand-ring/70 hover:bg-brand-soft"
+                          ? "bg-brand-soft/60 hover:bg-brand-soft"
                           : inMonth && "hover:bg-surface-hover",
                   )}
                 >
                   <span className={cn(
-                    "text-xs font-medium tabular-nums h-6 w-6 flex items-center justify-center rounded-full shrink-0 transition-colors duration-150",
-                    isToday && "bg-brand text-white font-semibold shadow-xs",
-                    !isToday && isSelected && "bg-brand-soft text-brand-strong font-semibold ring-1 ring-brand-ring/60",
+                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[12px] font-medium tabular-nums transition-colors duration-150",
+                    isToday && "bg-brand font-semibold text-white",
+                    !isToday && isSelected && "bg-brand-soft font-semibold text-brand-strong ring-1 ring-brand-ring/60",
                     !isToday && !isSelected && inMonth && "text-muted",
                     !isToday && !isSelected && !inMonth && "text-subtle/60",
                   )}>
                     {format(day, "d")}
                   </span>
-                  <div className="flex flex-col gap-0.5 overflow-hidden">
-                    {dayTasks.slice(0, MAX_SHOWN).map((task) => (
-                      <span
-                        key={task.id}
-                        className={cn(
-                          "flex items-center gap-1 text-[11px] leading-tight rounded-md px-1.5 py-0.5 bg-surface-muted border border-hairline",
-                          task.status === "done" && DONE_CLS,
-                        )}
-                      >
-                        <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", dotFor(task))} />
-                        {task.visibility === "admin_only" && <Lock size={9} className="shrink-0 text-warning" />}
-                        <span className="truncate text-muted">{task.title}</span>
-                      </span>
-                    ))}
+
+                  {/* Telefon: renk noktaları — başlık okunmuyorsa çip gürültüdür. */}
+                  {dayTasks.length > 0 && (
+                    <span className="flex items-center gap-0.5 px-0.5 lg:hidden" aria-hidden>
+                      {dayTasks.slice(0, MAX_DOTS).map((task) => (
+                        <span key={task.id} className={cn("h-1.5 w-1.5 shrink-0 rounded-full", dotFor(task))} />
+                      ))}
+                      {dayTasks.length > MAX_DOTS && (
+                        <span className="text-[12px] leading-none text-subtle tabular-nums">+{dayTasks.length - MAX_DOTS}</span>
+                      )}
+                    </span>
+                  )}
+
+                  {/* Masaüstü: başlık çipleri. */}
+                  <span className="hidden min-w-0 flex-col gap-0.5 overflow-hidden lg:flex">
+                    {dayTasks.slice(0, MAX_SHOWN).map((task) => {
+                      const late = isOverdue(task);
+                      return (
+                        <span
+                          key={task.id}
+                          title={late ? `${task.title} — gecikmiş` : task.title}
+                          className={cn(
+                            "flex items-center gap-1 rounded-md border border-hairline bg-surface-muted px-1.5 py-0.5 text-[12px] leading-tight",
+                            late && "border-overdue/30 bg-overdue/10",
+                          )}
+                        >
+                          <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", dotFor(task))} />
+                          {task.visibility === "admin_only" && <Lock size={11} className="shrink-0 text-warning" aria-label="Yalnız yönetici" />}
+                          <span className={cn(
+                            "truncate",
+                            task.status === "done" ? "text-subtle line-through" : late ? "font-medium text-overdue" : "text-muted",
+                          )}>
+                            {task.title}
+                          </span>
+                        </span>
+                      );
+                    })}
                     {dayTasks.length > MAX_SHOWN && (
-                      <span className="self-start text-[10px] text-brand-strong font-semibold tabular-nums bg-brand-soft rounded-md px-1.5 py-0.5 leading-none">
+                      <span className="self-start rounded-md bg-brand-soft px-1.5 py-0.5 text-[12px] font-semibold leading-none text-brand-strong tabular-nums">
                         +{dayTasks.length - MAX_SHOWN} daha
                       </span>
                     )}
-                  </div>
+                  </span>
                 </button>
               );
             })}
           </div>
         </div>
 
-        {/* Agenda side panel (lg+) */}
-        <aside className="w-80 shrink-0 hidden lg:flex flex-col bg-surface rounded-xl border border-line shadow-card overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-hairline shrink-0">
-            <CalendarDays size={15} className="text-brand" />
-            <h2 className="text-sm font-semibold tracking-tight text-ink capitalize">
+        {/* Seçili günün listesi — masaüstünde sağ panel, telefonda ızgaranın
+            altında. TEK gövde, iki yerleşim. */}
+        <aside className="flex shrink-0 flex-col overflow-hidden rounded-card border border-line bg-surface lg:min-h-0 lg:w-80">
+          <div className="flex shrink-0 items-center gap-2 border-b border-hairline px-4 py-3">
+            <CalendarDays size={15} className="shrink-0 text-brand" aria-hidden />
+            <h2 className="min-w-0 flex-1 truncate text-[14px] font-semibold capitalize tracking-tight text-ink">
               {format(selectedDay, "d MMMM EEEE", { locale: tr })}
             </h2>
-            {dfnsIsToday(selectedDay) && (
-              <span className="text-[10px] bg-brand-soft text-brand-strong rounded-full px-2 py-0.5 font-medium">Bugün</span>
-            )}
+            {selectedIsToday && <Badge className="bg-brand-soft text-brand-strong">Bugün</Badge>}
           </div>
-          <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1.5">
+          <div className="space-y-1.5 px-3 py-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
             {selectedDayTasks.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-center gap-1 py-10 anim-fade">
-                <CalendarDays size={28} className="text-subtle/40" />
-                <p className="text-sm text-subtle">Bu tarihte iş yok.</p>
-              </div>
+              <EmptyState compact icon={CalendarDays} title="Bu tarihte iş yok." />
             ) : (
-              selectedDayTasks.map((task) => (
-                <Link
-                  key={task.id}
-                  prefetch={false}
-                  href={`/tasks/${task.id}`}
-                  className={cn(
-                    "flex items-center gap-2.5 p-2.5 rounded-lg border border-hairline hover:border-line hover:bg-surface-hover transition-colors duration-150 group",
-                    task.status === "done" && "opacity-60",
-                  )}
-                >
-                  <span className={cn("h-2.5 w-2.5 rounded-full shrink-0", dotFor(task))} />
-                  {task.visibility === "admin_only" && <Lock size={12} className="shrink-0 text-warning" />}
-                  <span className={cn(
-                    "text-sm text-ink group-hover:text-brand-strong flex-1 truncate",
-                    task.status === "done" && "line-through text-subtle",
-                  )}>
-                    {task.title}
-                  </span>
-                </Link>
-              ))
-            )}
-          </div>
-          <div className="px-3 py-3 border-t border-hairline shrink-0">
-            <button
-              onClick={() => setCreateModalDate(format(selectedDay, "yyyy-MM-dd"))}
-              className="flex items-center justify-center gap-2 w-full px-3 py-2 bg-brand text-white text-sm font-medium rounded-lg shadow-xs hover:bg-brand-strong active:scale-[0.98] transition-all duration-150"
-            >
-              <Plus size={14} />
-              Bu güne görev ekle
-            </button>
-          </div>
-        </aside>
-      </div>
-
-      {/* Mobile day panel (bottom sheet) — only below lg, where there is no side
-          panel. z-50 so it sits ABOVE the fixed bottom nav (z-40); otherwise the
-          sticky footer "Bu güne görev ekle" button is painted over by the nav and
-          only peeks through when the sheet is dragged. dvh (not vh) keeps the
-          height correct against the mobile browser's dynamic toolbar. */}
-      {showMobilePanel && (
-        <div className="anim-fade fixed inset-0 z-50 flex items-end justify-center bg-ink/45 backdrop-blur-[2px] lg:hidden" onClick={() => setShowMobilePanel(false)}>
-          <div
-            className="anim-slide-up flex max-h-[85dvh] w-full flex-col rounded-t-modal border border-line bg-surface shadow-drawer"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-hairline">
-              <h2 className="text-sm font-semibold tracking-tight text-ink capitalize">
-                {format(selectedDay, "d MMMM EEEE", { locale: tr })}
-              </h2>
-              <button onClick={() => setShowMobilePanel(false)} className="text-subtle hover:text-ink hover:bg-surface-muted p-1 rounded-lg transition-colors duration-150">
-                <X size={16} />
-              </button>
-            </div>
-            {/* Scrollable list — min-h-0 lets it shrink so the footer stays put */}
-            <div className="flex-1 min-h-0 overflow-y-auto px-5 py-3 space-y-2">
-              {selectedDayTasks.length === 0 ? (
-                <p className="text-sm text-subtle py-6 text-center">Bu tarihte iş yok.</p>
-              ) : (
-                selectedDayTasks.map((task) => (
+              selectedDayTasks.map((task) => {
+                const late = isOverdue(task);
+                return (
                   <Link
                     key={task.id}
                     prefetch={false}
                     href={`/tasks/${task.id}`}
-                    onClick={() => setShowMobilePanel(false)}
                     className={cn(
-                      "flex items-center gap-2 p-2.5 rounded-lg hover:bg-surface-hover transition-colors duration-150 group",
-                      task.status === "done" && "opacity-60",
+                      "group flex min-h-[44px] items-center gap-2.5 rounded-control border border-hairline px-2.5 py-2 transition-colors duration-150 hover:border-line hover:bg-surface-hover",
                     )}
                   >
-                    <span className={cn("h-2.5 w-2.5 rounded-full shrink-0", dotFor(task))} />
-                    {task.visibility === "admin_only" && <Lock size={12} className="shrink-0 text-warning" />}
-                    <span className={cn("text-sm text-ink group-hover:text-brand-strong flex-1 truncate", task.status === "done" && "line-through")}>
+                    <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", dotFor(task))} aria-hidden />
+                    {task.visibility === "admin_only" && <Lock size={12} className="shrink-0 text-warning" aria-label="Yalnız yönetici" />}
+                    <span className={cn(
+                      "min-w-0 flex-1 truncate text-[13.5px] text-ink group-hover:text-brand-strong",
+                      task.status === "done" && "text-subtle line-through",
+                      late && "text-overdue",
+                    )}>
                       {task.title}
                     </span>
+                    {late && <Badge className="bg-overdue/10 text-overdue">Gecikmiş</Badge>}
                   </Link>
-                ))
-              )}
-            </div>
-            {/* Sticky footer — always visible the moment the sheet opens. Extra
-                bottom padding clears the iOS home-indicator safe area. */}
-            <div className="shrink-0 px-5 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] border-t border-hairline">
-              <button
-                onClick={() => {
-                  setCreateModalDate(format(selectedDay, "yyyy-MM-dd"));
-                  setShowMobilePanel(false);
-                }}
-                className="flex items-center justify-center gap-2 w-full px-3 py-2.5 bg-brand text-white text-sm font-medium rounded-lg shadow-xs hover:bg-brand-strong active:scale-[0.98] transition-all duration-150"
-              >
-                <Plus size={14} />
-                Bu güne görev ekle
-              </button>
-            </div>
+                );
+              })
+            )}
           </div>
-        </div>
-      )}
+          <div className="shrink-0 border-t border-hairline px-3 py-3">
+            <Button className="w-full" onClick={() => setCreateModalDate(format(selectedDay, "yyyy-MM-dd"))}>
+              <Plus size={14} aria-hidden />
+              Bu güne görev ekle
+            </Button>
+          </div>
+        </aside>
+      </div>
 
       {/* Create task modal with prefilled due date */}
       {createModalDate && (

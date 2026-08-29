@@ -7,6 +7,8 @@ import { maybeDatabaseSetupRequired } from "@/lib/utils/supabase-errors";
 import type { WorkspaceContact, Profile } from "@/types";
 
 export const dynamic = "force-dynamic";
+// Sekme adı uygulama çubuğuyla aynı (PAGE_TITLES ↔ registry).
+export const metadata = { title: "CRM" };
 
 export default async function CrmPage({
   searchParams,

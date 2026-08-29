@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { UserCheck, UserPlus, X, Check } from "lucide-react";
 import { linkContactToUser, unlinkContactUser } from "@/lib/actions/crm";
 import { normalizePersonName } from "@/lib/utils/task-person-match";
-import { cn } from "@/lib/utils/cn";
+import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
+import { SelectInput } from "@/components/ui/Field";
 import type { WorkspaceContact } from "@/types";
 import type { CrmMember } from "./CrmView";
 
@@ -81,58 +83,51 @@ function MatchRow({ contact, members }: { contact: WorkspaceContact; members: Cr
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2.5 transition-colors duration-150 hover:bg-surface-hover">
       {/* Contact identity */}
       <div className="min-w-[160px] flex-1">
-        <div className="truncate text-[13px] font-medium text-ink">{contact.name}</div>
-        <div className="truncate text-[11.5px] text-subtle">{contact.email || "e-posta yok"}</div>
+        <div className="truncate text-[13.5px] font-medium text-ink">{contact.name}</div>
+        <div className="truncate text-[12px] text-subtle">{contact.email || "e-posta yok"}</div>
       </div>
 
-      {/* Link status + controls */}
+      {/* Link status + controls. Renkler token'dan: yeşil = bağlı (tamamlanmış
+          eşleşme), mavi = öneri (bilgi). Metin her zaman yanında. */}
       {linkedMember ? (
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-md bg-[#dcf0e6] px-2 py-1 text-[12px] font-medium text-[#1f6e4d]">
-            <UserCheck size={13} />
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge className="bg-success/10 text-success">
+            <UserCheck size={13} aria-hidden />
             Sistem hesabı: {linkedMember.name}
-          </span>
-          <button
+          </Badge>
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={doUnlink}
             disabled={isPending}
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] font-medium text-muted transition-colors duration-150 hover:bg-[#fbe6e2] hover:text-danger active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
+            className="hover:bg-danger/10 hover:text-danger"
           >
-            <X size={13} /> Eşleşmeyi kaldır
-          </button>
+            <X size={13} aria-hidden /> Eşleşmeyi kaldır
+          </Button>
         </div>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
           {suggestion ? (
-            <span className="inline-flex items-center gap-1 rounded-md bg-[#e3effb] px-2 py-1 text-[12px] font-medium text-[#1f5fa8]">
-              Öneri: {suggestion.name}
-            </span>
+            <Badge className="bg-info/10 text-info">Öneri: {suggestion.name}</Badge>
           ) : (
-            <span className="inline-flex items-center rounded-md bg-surface-sunken px-2 py-1 text-[12px] text-subtle">
-              Eşleşmedi
-            </span>
+            <Badge className="bg-surface-sunken text-subtle">Eşleşmedi</Badge>
           )}
-          <select
+          <SelectInput
             value={selected}
             onChange={(e) => setSelected(e.target.value)}
-            className="rounded-md border border-line bg-surface px-2 py-1 text-[12.5px] text-muted transition-colors duration-150 hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40"
+            aria-label={`${contact.name} için sistem hesabı`}
+            className="h-8 w-auto min-w-[160px] text-[12.5px] text-muted"
           >
             <option value="">Sistem hesabı seç…</option>
             {members.map((m) => (
               <option key={m.userId} value={m.userId}>{m.name}</option>
             ))}
-          </select>
-          <button
-            onClick={() => doLink(selected)}
-            disabled={isPending || !selected}
-            className={cn(
-              "inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[12.5px] font-medium transition-colors duration-150 active:scale-[0.98]",
-              !selected || isPending
-                ? "bg-surface-sunken text-subtle cursor-not-allowed"
-                : "bg-brand text-white hover:bg-brand-strong",
-            )}
-          >
-            <Check size={13} /> Eşleştir
-          </button>
+          </SelectInput>
+          {/* Satır başına bir "Eşleştir" — ekranın ana eylemi bu panelde satır
+              düzeyinde yaşar; seçim yokken nötr kapalı durur. */}
+          <Button variant="secondary" size="sm" onClick={() => doLink(selected)} disabled={isPending || !selected}>
+            <Check size={13} aria-hidden /> Eşleştir
+          </Button>
         </div>
       )}
 
@@ -150,17 +145,18 @@ export function ContactMatchingPanel({ contacts, members }: Props) {
   const unlinked = contacts.filter((c) => !c.user_id).length;
 
   return (
-    <div className="anim-fade-up mb-4 overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
+    <div className="anim-fade-up mb-4 overflow-hidden rounded-card border border-line bg-surface shadow-card">
       <div className="flex items-center gap-2 border-b border-hairline bg-surface-muted px-4 py-2.5">
-        <UserPlus size={15} className="text-brand" />
-        <h2 className="text-[13px] font-semibold tracking-tight text-ink">Kişi eşleştirme</h2>
+        <UserPlus size={15} className="text-brand" aria-hidden />
+        <h2 className="text-[13.5px] font-semibold tracking-tight text-ink">Kişi eşleştirme</h2>
+        {/* Listeyi tarif eden sayı: kaç kayıt bağlı. */}
         <span className="text-[12px] tabular-nums text-subtle">
           {contacts.length - unlinked}/{contacts.length} eşleşti
         </span>
       </div>
-      <p className="px-4 pt-2.5 text-[12px] text-muted">
-        CRM kişilerini sistem kullanıcılarıyla eşleştirin. Eşleştirme el ile yapılır; e-posta
-        veya isim yalnızca öneri için kullanılır, otomatik uygulanmaz.
+      <p className="px-4 pt-2.5 text-[12.5px] leading-relaxed text-muted">
+        CRM kişilerini sistem kullanıcılarıyla eşleştirin. E-posta ve isim yalnız öneri içindir;
+        eşleşme el ile onaylanır.
       </p>
       <div className="mt-1 max-h-[420px] divide-y divide-hairline overflow-y-auto">
         {contacts.length === 0 ? (

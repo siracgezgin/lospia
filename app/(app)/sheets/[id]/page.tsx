@@ -1,5 +1,4 @@
 import { redirect, notFound } from "next/navigation";
-import { Table2 } from "lucide-react";
 import { requireModuleMember } from "@/lib/modules/context";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
@@ -31,19 +30,14 @@ export default async function SheetDetailPage({
   if (setup.setupRequired) {
     return (
       <div className="mx-auto w-full max-w-3xl px-4 py-4 sm:px-6 lg:px-8">
-        <ModulePageHeader
-          title="Sheets"
-          description="Excel/CSV düzenlerini ve operasyon tablolarını Lospia içinde güvenli şekilde takip edin."
-          icon={Table2}
-          backHref="/sheets"
-          backLabel="Tablo Merkezi’ne dön"
-        />
+        {/* Tablolar AF Teamwork klasöründe yaşıyor; "Geri" oraya döner. */}
+        <ModulePageHeader title="Sheets" backHref="/documents" />
         <SetupRequiredNotice
           variant="block"
-          title="Tablo Merkezi tablosu henüz oluşturulmadı"
+          title="Tablolar henüz oluşturulmadı"
           message={
             setup.message ??
-            "Tablo Merkezi için veritabanı güncellemesi bekleniyor. Migration uygulandıktan sonra bu ekran aktif olacak."
+            "Tablolar için veritabanı güncellemesi bekleniyor. Güncelleme uygulandığında bu ekran açılacak."
           }
           technicalDetail={isAdmin ? setup.technicalDetail : null}
         />

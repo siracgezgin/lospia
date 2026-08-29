@@ -2,10 +2,11 @@
 
 import { useMemo } from "react";
 import { LayoutList } from "lucide-react";
-import { cn } from "@/lib/utils/cn";
-import { getPersonDisplayName } from "@/lib/utils/person-display";
-import { PersonAvatar } from "@/components/ui/PersonAvatar";
-import { assignPersonTones, personStyles, type PersonChoice } from "@/lib/design/person-colors";
+import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Tile, TileGrid } from "@/components/ui/TileGrid";
+import { getPersonDisplayName, getPersonInitials } from "@/lib/utils/person-display";
+import { assignPersonTones, type PersonChoice } from "@/lib/design/person-colors";
 
 export type GridPerson = {
   /** personFilter değeri — "member:<uuid>" ya da "contact:<uuid>". */
@@ -55,17 +56,15 @@ interface Props {
  *
  * Sıralama da bu yüzden yüke göre DEĞİL alfabetiktir: kartlar her açılışta
  * aynı yerde dursun, kişi aradığı ismi ezberlediği noktada bulsun.
+ *
+ * KART, ORTAK `Tile` PRİMİTİFİDİR (2026-08-29). Bu ızgara TileGrid'in
+ * referansıydı ama kendi kopyasını çiziyordu (rounded-2xl, hover'da
+ * yukarı kayma…); iki kopya zamanla ayrışıyordu. Artık Koleksiyon, AF
+ * Teamwork ve Library ile BİREBİR aynı karttan çizilir — "bir tasarımı her
+ * yerde devam ettirmen gerekiyor" (Aslı Hanım, 2026-08-28).
  */
 export function PeopleGrid({ people, meKey, onPick, onShowAll, choices }: Props) {
   const tones = useMemo(() => assignPersonTones(people.map((p) => p.id), choices), [people, choices]);
-  /* Renk katmanı hex'ten türer: hazır palet ile serbest renk (Ayarlar'daki
-     hex seçici) birebir aynı görünsün. Tailwind sınıfı çalışma anında
-     üretilemediği için satır içi stil tek doğru yol. */
-  const styles = useMemo(() => {
-    const out: Record<string, ReturnType<typeof personStyles>> = {};
-    for (const [id, t] of Object.entries(tones)) out[id] = personStyles(t.hex);
-    return out;
-  }, [tones]);
   // Sıra: önce ben, sonra alfabetik — kart yeri sabit kalsın.
   const ordered = useMemo(() => {
     return [...people].sort((a, b) => {
@@ -86,76 +85,44 @@ export function PeopleGrid({ people, meKey, onPick, onShowAll, choices }: Props)
             Bir kişiye tıklayın, işleri açılsın.
           </p>
         </div>
-        <button
-          onClick={onShowAll}
-          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-[13px] font-medium text-muted transition-all duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
-        >
+        <Button variant="secondary" onClick={onShowAll} className="text-muted">
           <LayoutList size={14} />
           Tüm işler
-        </button>
+        </Button>
       </div>
 
       {ordered.length === 0 ? (
-        <p className="rounded-xl border border-line bg-surface px-4 py-6 text-center text-[13px] text-muted">
-          Henüz ekip üyesi yok. Ayarlar → Ekip’ten kişi ekleyin.
-        </p>
+        <EmptyState
+          compact
+          title="Henüz ekip üyesi yok"
+          description="Ayarlar → Ekip’ten kişi ekleyin."
+        />
       ) : (
         /* BÜYÜK KARTLAR. Aslı Hanım (2026-08-24): "kişi kartları daha büyük
            olmalı" — ve 2026-08-19'da: "Ortada sıralansın. Büyük büyük. Seçelim
-           bir tanesini, onun sayfasına gitsin."
-           Beş sütuna kadar sıkışan küçük kartlar yerine en fazla dört sütun;
-           kart artık dikey (fotoğraf üstte, isim altta ortalı), yüz 96px ve
-           isim 19px. Tıklama alanı da büyüdü — telefonda tek elle isabet
-           ettirmek kolaylaştı. */
-        <div className="stagger-children grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 lg:gap-5">
+           bir tanesini, onun sayfasına gitsin." Kırılımlar TileGrid'de
+           (2 / 3 / 4 sütun); yüz 96px, isim 18px. */
+        <TileGrid>
           {ordered.map((p) => {
-            const st = styles[p.id]!;
             const isMe = p.filterKey === meKey;
             return (
-              <button
+              <Tile
                 key={p.filterKey}
                 onClick={() => onPick(p.filterKey)}
-                className={cn(
-                  "group relative flex flex-col items-center gap-3 overflow-hidden rounded-2xl border bg-surface px-4 pb-6 pt-8 text-center shadow-card transition-all duration-200 ease-standard",
-                  "hover:-translate-y-0.5 hover:shadow-card-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
-                )}
-                style={{ ...st.border, ...st.soft }}
-              >
-                {/* Kimlik çubuğu — kişinin rengi. cn() dışında absolute bar
-                    (tailwind-merge border-l renklerini yutuyor: proje kuralı). */}
-                <span aria-hidden className="absolute inset-x-0 top-0 h-1.5" style={{ backgroundColor: st.hex }} />
-
-                {/* FOTOĞRAF, yoksa baş harf. (Aslı Hanım, 2026-08-24: "ikon
-                    kalkıp herkesin resmi gelecek… resmi olmayan yine aynı
-                    şekilde, mesela Siraç Gezgin SG gibi.") */}
-                <PersonAvatar
-                  name={p.name}
-                  photoUrl={p.avatarUrl}
-                  colorHex={st.hex}
-                  size="xl"
-                  ring
-                />
-
-                <span className="w-full min-w-0">
-                  <span className="block truncate text-[19px] font-semibold tracking-tight text-ink" title={p.name}>
-                    {getPersonDisplayName(p.name)}
-                  </span>
-                  {/* ÜNVAN — sistem rolü DEĞİL. Aslı Hanım (2026-08-28):
-                      "Bana da tasarımcı yazarsan; ben yönetici olmak
-                      istemiyorum çünkü." Rol bir izin ayarıdır; kartta kişinin
-                      kendi ünvanı yazar. Ünvan girilmemişse eski etikete
-                      düşülür, kart hiçbir zaman boş kalmaz. */}
-                  <span className="mt-1 block text-[13px] text-muted">
-                    {/* Ünvan varsa o; yoksa yalnız "Ben". Rol etiketi ("Yönetici") ve
-                        uydurma "Ekip" kaldırıldı — rol bir yetki bilgisidir,
-                        kimlik değil (2026-08-29). */}
-                    {p.jobTitle?.trim() || (isMe ? "Ben" : "")}
-                  </span>
-                </span>
-              </button>
+                title={getPersonDisplayName(p.name)}
+                /* ÜNVAN — sistem rolü DEĞİL. Aslı Hanım (2026-08-28): "Bana da
+                   tasarımcı yazarsan; ben yönetici olmak istemiyorum çünkü."
+                   Ünvan girilmemişse yalnız "Ben"; rol etiketi yazılmaz. */
+                meta={p.jobTitle?.trim() || (isMe ? "Ben" : "")}
+                /* FOTOĞRAF, yoksa baş harf (Aslı Hanım, 2026-08-24: "resmi
+                   olmayan yine aynı şekilde, mesela Siraç Gezgin SG gibi"). */
+                photoUrl={p.avatarUrl}
+                initials={getPersonInitials(p.name)}
+                colorHex={tones[p.id]?.hex}
+              />
             );
           })}
-        </div>
+        </TileGrid>
       )}
     </div>
   );

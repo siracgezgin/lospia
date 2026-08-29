@@ -63,6 +63,6 @@ export function DownloadLink({
 
 /** Yardımcı: yalnız ikon taşıyan köşe düğmelerinin ortak biçimi. */
 export const downloadIconCls = cn(
-  "tap-target rounded-md bg-surface/90 p-1.5 text-subtle shadow-sm backdrop-blur",
+  "tap-target rounded-md bg-surface p-1.5 text-subtle shadow-card",
   "transition-[color,transform] duration-150 hover:text-ink active:scale-95",
 );

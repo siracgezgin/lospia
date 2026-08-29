@@ -1,28 +1,21 @@
 import { cn } from "@/lib/utils/cn";
 import { getPersonInitials } from "@/lib/utils/person-display";
-
-const COLORS = [
-  "bg-blue-500",
-  "bg-green-500",
-  "bg-purple-500",
-  "bg-orange-500",
-  "bg-pink-500",
-  "bg-teal-500",
-  "bg-indigo-500",
-  "bg-rose-500",
-];
+import { PERSON_TONES } from "@/lib/design/person-colors";
 
 // Initials follow the shared person-display rule (first + last word, Turkish-aware).
 const getInitials = (name: string): string => getPersonInitials(name);
 
-function colorFor(name: string): string {
+/* Renk verilmediğinde addan deterministik bir ton türetilir — kişi kimliği
+   paletinden (person-colors), rastgele Tailwind renklerinden değil: aynı kişi
+   her yerde aynı aileyle görünsün. */
+function hexFor(name: string): string {
   let hash = 0;
   for (const c of name) hash = ((hash * 31) + c.charCodeAt(0)) & 0x7fffffff;
-  return COLORS[hash % COLORS.length]!;
+  return PERSON_TONES[hash % PERSON_TONES.length]!.hex;
 }
 
 // tone controls the badge fill:
-//   "color"   → hashed brand color (default; used everywhere except task cards)
+//   "color"   → person color (default; used everywhere except task cards)
 //   "neutral" → light/neutral chip; a person assigned to an UNFINISHED task must
 //               NOT look "done", so card people badges start neutral, not green.
 //   "done"    → green; the person completed their part / the task is done.
@@ -42,16 +35,14 @@ export function Avatar({
   title?: string;
   className?: string;
   /**
-   * Kişinin GERÇEK rengi (hex).
-   *
-   * Verilmezse addan türetilen yedek palete düşülür. Bu bileşen kişi kimliği
-   * sisteminden habersiz doğdu ve kendi paletini kullanıyordu; aynı kişi
-   * Ayarlar'da mor, panoda turkuaz görünüyordu. Rengi bilen çağıran buradan
-   * geçirir — kimlik tek kaynaktan okunur. Serbest renk seçilebildiği için
-   * değer Tailwind sınıfı değil ham hex'tir; sınıf çalışma anında üretilemez.
+   * Kişinin GERÇEK rengi (hex). Verilmezse addan türetilen tona düşülür.
+   * Serbest renk seçilebildiği için değer Tailwind sınıfı değil ham hex'tir.
    */
   colorHex?: string;
 }) {
+  /* Baş harf rozeti küçük bir daire; 16–20px'lik kutuda yazı zorunlu olarak
+     küçük. Bu bir metin satırı değil, bir simgedir — tipografi tabanı burada
+     uygulanmaz; kişinin adı `title` ile ayrıca verilir. */
   const sizeClass =
     size === "xs" ? "w-4 h-4 text-[8px]"
     : size === "sm" ? "w-5 h-5 text-[9px]"
@@ -61,8 +52,8 @@ export function Avatar({
     tone === "neutral"
       ? "bg-surface border border-line-strong text-muted"
       : tone === "done"
-        ? "bg-green-500 border border-green-600 text-white"
-        : cn("text-white", !colorHex && colorFor(name));
+        ? "bg-success text-white"
+        : "text-white";
   return (
     <span
       className={cn(
@@ -71,7 +62,7 @@ export function Avatar({
         toneClass,
         className
       )}
-      style={colorHex && tone === "color" ? { backgroundColor: colorHex } : undefined}
+      style={tone === "color" ? { backgroundColor: colorHex ?? hexFor(name) } : undefined}
       title={title ?? name}
     >
       {getInitials(name)}

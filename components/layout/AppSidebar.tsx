@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
-import { ChevronLeft, ChevronRight, Quote } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Wordmark } from "@/components/ui/Wordmark";
 import { LOSPIA_BRAND, type AppBrand } from "@/lib/branding";
@@ -34,9 +34,11 @@ import type { Workspace, WorkspaceRole } from "@/types";
  *     nerede olduğun ekranın karşısından okunuyor.
  *  3. GRUPLAMA — "Operation Modules" yönetici bölümünün içinde, Ayarlar'ın
  *     yanında duruyordu; oysa o herkese açık bir DİZİN. Gruptan çıkarılıp
- *     menünün altına, kendi ayracıyla alındı. Yönetim bölümünde artık yalnız
- *     yöneticinin müdahale ettiği üç yüzey var (Admin Board · Finance ·
- *     Settings) ve üyede bölüm hiç çizilmiyor.
+ *     gezinme listesinin SONUNA, kendi ince ayracıyla alındı — menünün dibine
+ *     sabitlenmedi, çünkü öyleyken kısa menülerde son bölümle satır arasına
+ *     kocaman bir boşluk giriyordu (Sıraç, 2026-08-29). Yönetim bölümünde
+ *     artık yalnız yöneticinin müdahale ettiği üç yüzey var (Admin Board ·
+ *     Finance · Settings) ve üyede bölüm hiç çizilmiyor.
  *
  * Satır listesi buraya YAZILMAZ: lib/nav/app-nav.ts tek kaynaktır ve o da
  * MODULE_DIRECTORY'den türer (mobil menü aynı listeyi kullanır).
@@ -130,7 +132,7 @@ export function AppSidebar({
         {sections.map((section, i) => (
           <div key={section.title} className={i > 0 ? "mt-4 pt-4 border-t border-hairline" : ""}>
             {collapsed ? null : (
-              <p className="mb-1.5 px-2.5 text-[10.5px] font-semibold uppercase tracking-[0.13em] text-subtle select-none">
+              <p className="mb-1.5 px-2.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle select-none">
                 {section.title}
               </p>
             )}
@@ -146,35 +148,33 @@ export function AppSidebar({
             </div>
           </div>
         ))}
-      </nav>
 
-      {/* Dizin kapısı — bir modül değil, modüllerin haritası. Bu yüzden
-          bölümlerin İÇİNDE değil, ayraçla ayrılmış olarak menünün altında. */}
-      <div className={cn("shrink-0 border-t border-hairline py-2", collapsed ? "px-2" : "px-2.5")}>
-        <SidebarLink
-          item={NAV_DIRECTORY}
-          active={NAV_DIRECTORY.href === activeHref}
-          collapsed={collapsed}
-          muted
-        />
-      </div>
+        {/* Dizin kapısı — bir modül değil, modüllerin haritası. Bölümlerin
+            İÇİNDE değil ama listenin AKIŞINDA: bölümler arası ayracın aynısıyla
+            (mt-4 pt-4) son bölümün hemen altında durur. Menü uzasa da kısalsa
+            da satır yerinden oynamaz; mobil menüde de dizilim böyledir. */}
+        <div className="mt-4 border-t border-hairline pt-4">
+          <SidebarLink
+            item={NAV_DIRECTORY}
+            active={NAV_DIRECTORY.href === activeHref}
+            collapsed={collapsed}
+            muted
+          />
+        </div>
+      </nav>
 
       {/* Haftanın Notu + marka imzası. Kısa ekranlarda tamamen gizlenir —
           menü satırlarının önünü asla kesmez. */}
       {!collapsed && (
         <div className="hidden shrink-0 space-y-2.5 px-3 pb-3 pt-1 [@media(min-height:47.5rem)]:block">
-          <div className="group relative overflow-hidden rounded-2xl border border-brand-soft bg-gradient-to-br from-[#f7ede9] via-brand-soft/40 to-surface px-4 pb-3.5 pt-3 shadow-card transition-shadow duration-200 ease-standard hover:shadow-card-hover">
-            <Quote
-              size={32}
-              strokeWidth={1.5}
-              className="absolute -right-1 -top-1 rotate-180 text-brand/15 transition-colors duration-300 ease-standard group-hover:text-brand/25"
-            />
-            <p className="select-none text-[9.5px] font-semibold uppercase tracking-[0.16em] text-brand-strong">
+          {/* Haftanın Notu — düz yüzey, dekor yok. Not bir içerik, bir süs değil:
+              zemin bir ton koyu, sol kenarda ince marka çizgisi, o kadar. */}
+          <div className="rounded-card border border-line bg-surface-muted px-3.5 py-3">
+            <p className="select-none text-[12px] font-semibold uppercase tracking-[0.08em] text-brand-strong">
               Haftanın Notu
             </p>
-            <span aria-hidden className="mb-2 mt-1.5 block h-px w-8 rounded-full bg-brand/20" />
             <p
-              className="relative line-clamp-3 text-[12px] font-medium italic leading-[1.65] text-ink/85"
+              className="mt-1.5 line-clamp-3 text-[12.5px] leading-[1.6] text-muted"
               title={weeklyQuote.quoteTr}
             >
               “{weeklyQuote.quoteTr}”

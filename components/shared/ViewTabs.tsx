@@ -55,6 +55,12 @@ export type ViewTabItem = {
   dividerBefore?: boolean;
 };
 
+/** Sekme görünümü — şeride DIŞARIDAN eklenen sekmeler (ör. Raporlar) aynı
+ *  dili konuşsun diye dışa açılır. */
+export function tabClass(active: boolean): string {
+  return cn(BASE_TAB, active ? ACTIVE_TAB : INACTIVE_TAB);
+}
+
 interface Props {
   items: ViewTabItem[];
   /** Link mode — renders <a href>. Used by the Board (full navigation). */
@@ -64,10 +70,16 @@ interface Props {
   className?: string;
   /** Show the leading icon on every tab (default: only the divided "Bu hafta"). */
   iconsEverywhere?: boolean;
+  /** Şeridin SONUNA eklenen sekme(ler) — başka bir rotaya giden bağlantılar
+   *  (Raporlar gibi). Ayraçla ayrılır: aynı şerit, farklı sayfa. */
+  trailing?: React.ReactNode;
 }
 
+/* Segment sekmesi: birincil arayüz metni 13.5px (ANA VİZYON tipografi tabanı),
+   kontrol yarıçapı. Seçili sekme dolgu + kenarlık + koyu metinle tereddütsüz;
+   seçili olmayan yalnız hover'da yüzey alır. Hover'da hareket yok. */
 const BASE_TAB =
-  "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 min-h-10 md:min-h-0 text-[13px] font-medium whitespace-nowrap border " +
+  "inline-flex items-center gap-1.5 rounded-control px-3 py-1.5 min-h-10 md:min-h-0 md:h-8 text-[13.5px] font-medium whitespace-nowrap border " +
   "transition-[background-color,border-color,color,box-shadow,transform] duration-150 ease-standard active:scale-[0.98]";
 const ACTIVE_TAB = "bg-brand-soft text-brand-strong border-brand-ring shadow-xs";
 const INACTIVE_TAB =
@@ -77,7 +89,7 @@ const INACTIVE_TAB =
  * ViewTabs — segmented, Monday-style toolbar of the six task views, shared by
  * Board and List so the two surfaces are visually and semantically identical.
  */
-export function ViewTabs({ items, getHref, onSelect, className, iconsEverywhere }: Props) {
+export function ViewTabs({ items, getHref, onSelect, className, iconsEverywhere, trailing }: Props) {
   return (
     <div className={cn("flex items-center gap-1 overflow-x-auto no-scrollbar", className)}>
       {items.map((item) => {
@@ -86,7 +98,7 @@ export function ViewTabs({ items, getHref, onSelect, className, iconsEverywhere 
         const cls = cn(BASE_TAB, item.active ? ACTIVE_TAB : INACTIVE_TAB);
         const inner = (
           <>
-            {showIcon && Icon && <Icon size={14} className="shrink-0" />}
+            {showIcon && Icon && <Icon size={14} className="shrink-0" aria-hidden />}
             {item.label}
           </>
         );
@@ -108,7 +120,7 @@ export function ViewTabs({ items, getHref, onSelect, className, iconsEverywhere 
                 type="button"
                 onClick={() => onSelect?.(item.slug)}
                 className={cls}
-                aria-current={item.active ? "page" : undefined}
+                aria-pressed={item.active}
               >
                 {inner}
               </button>
@@ -116,6 +128,12 @@ export function ViewTabs({ items, getHref, onSelect, className, iconsEverywhere 
           </Fragment>
         );
       })}
+      {trailing && (
+        <>
+          <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-line" />
+          {trailing}
+        </>
+      )}
     </div>
   );
 }

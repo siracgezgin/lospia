@@ -82,7 +82,7 @@ export function MobileNav({
 
   return (
     <>
-      <nav className="safe-bottom fixed bottom-0 left-0 right-0 z-40 border-t border-line bg-surface/95 backdrop-blur md:hidden">
+      <nav className="safe-bottom fixed bottom-0 left-0 right-0 z-40 border-t border-line bg-surface md:hidden">
         <div className="flex h-14 items-stretch justify-around">
           {TABS.map(({ href, label, icon: Icon }) => (
             <TabButton
@@ -140,7 +140,7 @@ function TabButton(
         <Icon
           size={20}
           strokeWidth={active ? 2.2 : 2}
-          className={cn("transition-transform duration-200 ease-standard", active ? "scale-110 text-brand" : "scale-100")}
+          className={cn(active ? "text-brand" : "")}
         />
       </span>
       <span className={cn(active && "font-semibold")}>{label}</span>
@@ -148,7 +148,7 @@ function TabButton(
   );
   const className = cn(
     // 44px+ dokunma hedefi, hücrenin tamamı.
-    "group relative flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors duration-150",
+    "group relative flex flex-1 flex-col items-center justify-center gap-0.5 text-[12px] font-medium leading-none transition-colors duration-150",
     active ? "text-brand-strong" : "text-muted active:text-ink",
   );
 
@@ -201,7 +201,7 @@ function MobileMenu({
 
   return createPortal(
     <div
-      className="anim-fade fixed inset-0 z-[100] bg-ink/45 backdrop-blur-[2px] md:hidden"
+      className="anim-fade fixed inset-0 z-[100] bg-ink/50 md:hidden"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -220,7 +220,7 @@ function MobileMenu({
           <button
             onClick={onClose}
             aria-label="Kapat"
-            className="-mr-1.5 shrink-0 rounded-lg p-1.5 text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
+            className="-mr-2 grid size-10 shrink-0 place-items-center rounded-control text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
           >
             <X size={18} strokeWidth={2} />
           </button>
@@ -229,7 +229,7 @@ function MobileMenu({
         <nav className="flex-1 overflow-y-auto px-2.5 py-3">
           {sections.map((section, i) => (
             <div key={section.title} className={i > 0 ? "mt-4 border-t border-hairline pt-4" : ""}>
-              <p className="mb-1.5 select-none px-2.5 text-[10.5px] font-semibold uppercase tracking-[0.13em] text-subtle">
+              <p className="mb-1.5 select-none px-2.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle">
                 {section.title}
               </p>
               <div className="space-y-0.5">

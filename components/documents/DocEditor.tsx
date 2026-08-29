@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import {
   Bold, Italic, Underline, List, ListOrdered, Quote, Heading1, Heading2,
   Link2, Undo2, Redo2, Loader2, Check, FileDown, Printer, Eraser,
-  Palette, ImagePlus, Highlighter,
+  Palette, ImagePlus, Highlighter, type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { IconButton } from "@/components/ui/Button";
 import { saveTeamworkDoc, uploadDocImage } from "@/lib/actions/documents";
 
 interface Props {
@@ -18,6 +19,18 @@ interface Props {
   initialBody: string;
   readOnly?: boolean;
 }
+
+/** İmlecin bulunduğu yerdeki biçim — araç çubuğu "seçili"yi buradan okur. */
+type Fmt = {
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
+  ul: boolean;
+  ol: boolean;
+  /** formatBlock değeri: "h2" · "h3" · "blockquote" · "p" · "" */
+  block: string;
+};
+const NO_FMT: Fmt = { bold: false, italic: false, underline: false, ul: false, ol: false, block: "" };
 
 /**
  * YAZI EDİTÖRÜ — AF Teamwork'ün Word'ü.
@@ -37,6 +50,10 @@ interface Props {
  * güvenilmez, yapıştırma da düz metne indirgenir.
  *
  * Otomatik kaydetme: yazmayı bıraktıktan 1,5 sn sonra ve alandan çıkınca.
+ *
+ * ARAÇ ÇUBUĞU: eşit kare düğmeler, imlecin olduğu yerdeki biçim SEÇİLİ
+ * görünür (Word'de "Kalın"ın basılı durması gibi). Önce hiçbir düğme durum
+ * göstermiyordu; kalın bir kelimenin içinde miyim, bilinmiyordu.
  */
 export function DocEditor({
   docId, initialTitle, initialBody, readOnly = false, backSlot,
@@ -52,6 +69,7 @@ export function DocEditor({
   const imageRef = useRef<HTMLInputElement>(null);
   const [palette, setPalette] = useState<"text" | "mark" | null>(null);
   const [busyImage, setBusyImage] = useState(false);
+  const [fmt, setFmt] = useState<Fmt>(NO_FMT);
 
   /* Gövde YALNIZ ilk boyamada yazılır. React her render'da innerHTML'i
      tazelerse imleç her tuş vuruşunda başa atlar — contentEditable'ın klasik
@@ -61,6 +79,35 @@ export function DocEditor({
       bodyRef.current.innerHTML = initialBody || "";
     }
   }, [initialBody]);
+
+  /** İmleç nerede, orada hangi biçim var? Yalnız seçim gövdenin İÇİNDEYSE
+   *  okunur; başlık alanındayken araç çubuğu sönük kalır. Değer değişmediyse
+   *  state de değişmez — her imleç hareketinde yeniden çizim olmasın. */
+  const refreshFmt = useCallback(() => {
+    const el = bodyRef.current;
+    if (!el || readOnly) return;
+    const s = window.getSelection();
+    const inside = !!s?.anchorNode && el.contains(s.anchorNode);
+    const q = (c: string) => { try { return inside && document.queryCommandState(c); } catch { return false; } };
+    let block = "";
+    if (inside) {
+      try { block = String(document.queryCommandValue("formatBlock") ?? "").toLowerCase(); } catch { /* eski tarayıcı */ }
+    }
+    const next: Fmt = {
+      bold: q("bold"), italic: q("italic"), underline: q("underline"),
+      ul: q("insertUnorderedList"), ol: q("insertOrderedList"), block,
+    };
+    setFmt((prev) =>
+      prev.bold === next.bold && prev.italic === next.italic && prev.underline === next.underline &&
+      prev.ul === next.ul && prev.ol === next.ol && prev.block === next.block ? prev : next,
+    );
+  }, [readOnly]);
+
+  useEffect(() => {
+    if (readOnly) return;
+    document.addEventListener("selectionchange", refreshFmt);
+    return () => document.removeEventListener("selectionchange", refreshFmt);
+  }, [refreshFmt, readOnly]);
 
   const save = useCallback(() => {
     if (readOnly) return;
@@ -105,6 +152,13 @@ export function DocEditor({
     }
     document.execCommand(command, false, value);
     touch();
+    refreshFmt();
+  }
+
+  /** Başlık/alıntı düğmesi: zaten o bloktaysa paragrafa döner (Word'de
+   *  ikinci basış biçimi kaldırır). */
+  function block(tag: "H2" | "H3" | "BLOCKQUOTE") {
+    cmd("formatBlock", fmt.block === tag.toLowerCase() ? "P" : tag);
   }
 
   /** Seçili metne renk uygular ve paleti kapatır. */
@@ -174,31 +228,35 @@ export function DocEditor({
         onChange={(e) => { setTitle(e.target.value); touch(); }}
         onBlur={() => dirty && save()}
         disabled={readOnly}
+        aria-label="Yazı başlığı"
         placeholder="Yazı başlığı"
-        className="w-full rounded-xl border border-transparent bg-transparent px-2 py-1 text-[24px] font-semibold tracking-tight text-ink outline-none transition-colors duration-150 placeholder:text-subtle hover:border-line focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40 disabled:hover:border-transparent"
+        className="w-full rounded-control border border-transparent bg-transparent px-2 py-1 text-[24px] font-semibold tracking-tight text-ink transition-colors duration-150 placeholder:text-subtle hover:border-line focus:border-brand-ring focus:outline-none focus:ring-2 focus:ring-brand-ring/40 disabled:hover:border-transparent"
       />
 
       {error && (
-        <p role="alert" className="anim-fade-down rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-[12.5px] font-medium text-danger">
+        <p role="alert" className="anim-fade-down rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[12.5px] font-medium text-danger">
           {error}
         </p>
       )}
 
-      <div className="overflow-hidden rounded-2xl border border-line-strong bg-surface shadow-card">
-        {/* Araç çubuğu — bir satır, ikon. "Minimum yazı, maksimum kullanılabilir." */}
-        <div className="flex flex-wrap items-center gap-0.5 border-b border-line bg-surface-muted px-2 py-1.5">
+      <div className="overflow-hidden rounded-card border border-line bg-surface shadow-card">
+        {/* Araç çubuğu — bir satır, ikon. "Minimum yazı, maksimum kullanılabilir."
+            Zemin kartın kendi yüzeyi: gri bir şerit araç çubuğunu "ayrı bir
+            panel" gibi gösteriyor, düğme hover'ı da zeminle aynı renge
+            düşüp kayboluyordu. */}
+        <div role="toolbar" aria-label="Biçim" className="flex flex-wrap items-center gap-0.5 border-b border-hairline px-2 py-1.5">
           {!readOnly && (
             <>
-              <Btn icon={Bold} label="Kalın" onClick={() => cmd("bold")} />
-              <Btn icon={Italic} label="İtalik" onClick={() => cmd("italic")} />
-              <Btn icon={Underline} label="Altı çizili" onClick={() => cmd("underline")} />
+              <Btn icon={Bold} label="Kalın" active={fmt.bold} onClick={() => cmd("bold")} />
+              <Btn icon={Italic} label="İtalik" active={fmt.italic} onClick={() => cmd("italic")} />
+              <Btn icon={Underline} label="Altı çizili" active={fmt.underline} onClick={() => cmd("underline")} />
               <Sep />
-              <Btn icon={Heading1} label="Başlık 1" onClick={() => cmd("formatBlock", "H2")} />
-              <Btn icon={Heading2} label="Başlık 2" onClick={() => cmd("formatBlock", "H3")} />
-              <Btn icon={Quote} label="Alıntı" onClick={() => cmd("formatBlock", "BLOCKQUOTE")} />
+              <Btn icon={Heading1} label="Başlık 1" active={fmt.block === "h2"} onClick={() => block("H2")} />
+              <Btn icon={Heading2} label="Başlık 2" active={fmt.block === "h3"} onClick={() => block("H3")} />
+              <Btn icon={Quote} label="Alıntı" active={fmt.block === "blockquote"} onClick={() => block("BLOCKQUOTE")} />
               <Sep />
-              <Btn icon={List} label="Madde listesi" onClick={() => cmd("insertUnorderedList")} />
-              <Btn icon={ListOrdered} label="Numaralı liste" onClick={() => cmd("insertOrderedList")} />
+              <Btn icon={List} label="Madde listesi" active={fmt.ul} onClick={() => cmd("insertUnorderedList")} />
+              <Btn icon={ListOrdered} label="Numaralı liste" active={fmt.ol} onClick={() => cmd("insertOrderedList")} />
               <Btn
                 icon={Link2}
                 label="Bağlantı"
@@ -210,16 +268,19 @@ export function DocEditor({
               <Btn
                 icon={Palette}
                 label="Yazı rengi"
+                active={palette === "text"}
                 onClick={() => setPalette((p) => (p === "text" ? null : "text"))}
               />
               <Btn
                 icon={Highlighter}
                 label="Vurgu rengi"
+                active={palette === "mark"}
                 onClick={() => setPalette((p) => (p === "mark" ? null : "mark"))}
               />
               <Btn
                 icon={busyImage ? Loader2 : ImagePlus}
                 label="Görsel ekle"
+                busy={busyImage}
                 onClick={() => !busyImage && imageRef.current?.click()}
               />
               <Btn icon={Eraser} label="Biçimi temizle" onClick={() => cmd("removeFormat")} />
@@ -233,11 +294,11 @@ export function DocEditor({
           <Btn icon={Printer} label="Yazdır / PDF" onClick={() => window.print()} />
 
           {/* Kaydetme durumu — sağda, tek işaret. */}
-          <span className="ml-auto inline-flex items-center gap-1.5 pr-1 text-[12px] text-subtle">
+          <span className="ml-auto inline-flex items-center gap-1.5 pr-1 text-[12px] text-subtle" aria-live="polite">
             {isSaving ? (
-              <><Loader2 size={13} className="animate-spin" /> kaydediliyor</>
+              <><Loader2 size={13} className="animate-spin" aria-hidden /> kaydediliyor</>
             ) : saved ? (
-              <><Check size={13} className="text-success" /> kaydedildi</>
+              <><Check size={13} className="text-success" aria-hidden /> kaydedildi</>
             ) : dirty ? (
               "kaydedilmedi"
             ) : readOnly ? (
@@ -248,8 +309,8 @@ export function DocEditor({
 
         {/* Renk paleti — araç çubuğunun altında, istenince açılır tek satır. */}
         {palette && !readOnly && (
-          <div className="anim-fade-down flex flex-wrap items-center gap-1.5 border-b border-line bg-surface-muted/60 px-3 py-2">
-            <span className="mr-1 text-[11.5px] font-medium text-muted">
+          <div className="anim-fade-down flex flex-wrap items-center gap-1.5 border-b border-hairline bg-surface-muted px-3 py-2">
+            <span className="mr-1 text-[12px] font-medium text-muted">
               {palette === "mark" ? "Vurgu" : "Yazı rengi"}
             </span>
             {DOC_COLORS.map((c) => (
@@ -260,7 +321,7 @@ export function DocEditor({
                 onClick={() => applyColor(c.hex)}
                 title={c.label}
                 aria-label={c.label}
-                className="h-5 w-5 rounded-full ring-1 ring-inset ring-black/15 transition-transform duration-150 hover:scale-110"
+                className="tap-target size-6 rounded-full ring-1 ring-inset ring-line transition-[box-shadow] duration-150 hover:ring-2 hover:ring-line-strong"
                 style={{ backgroundColor: c.hex }}
               />
             ))}
@@ -268,7 +329,7 @@ export function DocEditor({
               type="button"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => { cmd("removeFormat"); setPalette(null); }}
-              className="ml-1 rounded-md px-2 py-0.5 text-[12px] font-medium text-subtle transition-colors hover:text-ink"
+              className="ml-1 h-7 rounded-control px-2 text-[12px] font-medium text-muted transition-colors duration-150 hover:bg-surface hover:text-ink"
             >
               Rengi kaldır
             </button>
@@ -296,9 +357,11 @@ export function DocEditor({
           onInput={touch}
           onBlur={() => dirty && save()}
           onPaste={onPaste}
+          onFocus={refreshFmt}
           role="textbox"
           aria-multiline="true"
           aria-label="Yazı gövdesi"
+          aria-readonly={readOnly || undefined}
           data-placeholder="Yazmaya başlayın…"
           className={cn(
             "doc-body min-h-[60vh] w-full px-5 py-6 text-[15px] leading-[1.75] text-ink outline-none sm:px-8",
@@ -307,7 +370,7 @@ export function DocEditor({
             "[&_p]:mb-3 [&_ul]:mb-3 [&_ol]:mb-3 [&_ul]:list-disc [&_ol]:list-decimal [&_ul]:pl-5 [&_ol]:pl-5",
             "[&_blockquote]:my-3 [&_blockquote]:border-l-2 [&_blockquote]:border-line-strong [&_blockquote]:pl-3 [&_blockquote]:text-muted",
             "[&_a]:text-brand [&_a]:underline",
-            "[&_img]:my-3 [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-lg",
+            "[&_img]:my-3 [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-card",
             "empty:before:text-subtle empty:before:content-[attr(data-placeholder)]",
           )}
         />
@@ -332,22 +395,25 @@ const DOC_COLORS: { hex: string; label: string }[] = [
   { hex: "#cc2e93", label: "Magenta" },
 ];
 
-/** Araç çubuğu düğmesi. Bileşen DIŞARIDA tanımlı: render içinde tanımlanan
- *  bileşen her çizimde yeniden yaratılır, React ağacı söker ve odak kaçar. */
+/** Araç çubuğu düğmesi — eşit kare (32px), seçiliyken marka zemini.
+ *  Bileşen DIŞARIDA tanımlı: render içinde tanımlanan bileşen her çizimde
+ *  yeniden yaratılır, React ağacı söker ve odak kaçar. */
 function Btn({
-  icon: Icon, label, onClick,
-}: { icon: typeof Bold; label: string; onClick: () => void }) {
+  icon: Icon, label, active, busy, onClick,
+}: { icon: LucideIcon; label: string; active?: boolean; busy?: boolean; onClick: () => void }) {
   return (
-    <button
-      type="button"
+    <IconButton
+      size="sm"
+      aria-label={label}
+      title={label}
+      aria-pressed={active}
+      aria-busy={busy || undefined}
       onMouseDown={(e) => e.preventDefault()}  // seçim kaybolmasın
       onClick={onClick}
-      title={label}
-      aria-label={label}
-      className="tap-target rounded-md p-1.5 text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-95"
+      className={cn(active && "bg-brand-soft text-brand-strong hover:bg-brand-soft hover:text-brand-strong")}
     >
-      <Icon size={15} />
-    </button>
+      <Icon size={15} className={cn(busy && "animate-spin")} aria-hidden />
+    </IconButton>
   );
 }
 

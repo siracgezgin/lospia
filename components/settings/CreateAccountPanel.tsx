@@ -2,11 +2,11 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { UserPlus, Check } from "lucide-react";
+import { Check } from "lucide-react";
 import { createMemberAccount } from "@/lib/actions/workspace";
 import { ASSIGNABLE_ROLE_OPTIONS } from "@/lib/utils/roles";
 import { Button } from "@/components/ui/Button";
-import { Input, Select, Field } from "@/components/ui/Input";
+import { Field, FieldGrid, TextInput, SelectInput } from "@/components/ui/Field";
 import { cn } from "@/lib/utils/cn";
 import { PERSON_TONES } from "@/lib/design/person-colors";
 import type { WorkspaceDepartment } from "@/types";
@@ -21,6 +21,9 @@ interface Props {
 // Admin-created account form. Replaces the old self-signup ("Ekip erişimi") flow:
 // an owner/admin sets the person's name, username, password and role; the person
 // then signs in directly with that username + password — no registration step.
+//
+// Yüzey: "Kişi ekle" ile açılan bir form; bölüm kartının içinde ikinci bir kart
+// değil, yumuşak dolgu (MemberEditPanel ile aynı dil).
 export function CreateAccountPanel({ workspaceId, departments = [], takenColors = [] }: Props) {
   const router = useRouter();
   const [fullName, setFullName] = useState("");
@@ -79,82 +82,71 @@ export function CreateAccountPanel({ workspaceId, departments = [], takenColors 
   }
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-card border border-line bg-surface shadow-card p-5 space-y-3">
-      <div className="flex items-center gap-2.5">
-        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand">
-          <UserPlus size={15} />
-        </span>
-        <h3 className="text-sm font-semibold tracking-tight text-ink">Kullanıcı Hesabı Oluştur</h3>
+    <form onSubmit={handleSubmit} className="space-y-4 rounded-card bg-surface-sunken/60 p-4 sm:p-5">
+      <div>
+        <h3 className="text-[14px] font-semibold tracking-tight text-ink">Yeni kişi</h3>
+        <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted">
+          Kişi bu kullanıcı adı ve şifreyle doğrudan giriş yapar; kayıt adımı yok. Şifre yalnız
+          hesap açılırken kullanılır, saklanmaz.
+        </p>
       </div>
-      <p className="text-xs text-subtle leading-relaxed">
-        Kişi adına hesap oluşturun. Oluşturulan kullanıcı, kaydolmadan doğrudan verilen kullanıcı
-        adı ve şifre ile giriş yapar. Şifre yalnızca hesap oluşturulurken kullanılır, hiçbir yerde
-        saklanmaz.
-      </p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Field label="Ad Soyad">
-          <Input
+      <FieldGrid>
+        <Field label="Ad Soyad" required>
+          <TextInput
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
             placeholder="Ör. Sıraç Gezgin"
             required
             disabled={isPending}
-            className="h-8"
           />
         </Field>
-        <Field label="Kullanıcı adı">
-          <Input
+        <Field label="Kullanıcı adı" required>
+          <TextInput
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             placeholder="ör. sirac.gezgin"
             autoComplete="off"
             required
             disabled={isPending}
-            className="h-8"
           />
         </Field>
-        <Field label="Şifre">
-          <Input
+        <Field label="Şifre" required hint="En az 6 karakter.">
+          <TextInput
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="En az 6 karakter"
             autoComplete="new-password"
             required
             disabled={isPending}
-            className="h-8"
           />
         </Field>
-        <Field label="Bildirim e-postası (opsiyonel)">
-          <Input
+        <Field label="Bildirim e-postası" hint="İsteğe bağlı.">
+          <TextInput
             type="email"
             value={notificationEmail}
             onChange={(e) => setNotificationEmail(e.target.value)}
             placeholder="ornek@aslifilinta.com"
             disabled={isPending}
-            className="h-8"
           />
         </Field>
         <Field label="Rol">
-          <Select
+          <SelectInput
             value={role}
             onChange={(e) => setRole(e.target.value as "admin" | "member")}
             disabled={isPending}
-            className="h-8"
           >
             {ASSIGNABLE_ROLE_OPTIONS.map((r) => (
               <option key={r.value} value={r.value}>{r.label}</option>
             ))}
-          </Select>
+          </SelectInput>
         </Field>
         {topLevel.length > 0 && (
-          <Field label="Departman ataması (opsiyonel)" className="sm:col-span-2">
-            <Select
+          <Field label="Departman" hint="İsteğe bağlı.">
+            <SelectInput
               value={departmentId}
               onChange={(e) => setDepartmentId(e.target.value)}
               disabled={isPending}
-              className="h-8"
             >
               <option value="">— Departman yok —</option>
               {topLevel.map((dept) => (
@@ -165,62 +157,62 @@ export function CreateAccountPanel({ workspaceId, departments = [], takenColors 
                   <option value={dept.id}>{dept.name} (genel)</option>
                 </optgroup>
               ))}
-            </Select>
+            </SelectInput>
           </Field>
         )}
+      </FieldGrid>
 
-        {/* Renk ve ikon — üye satırındakiyle AYNI seçenekler. Boş bırakılırsa
-            otomatik atanır. */}
-        <div className="sm:col-span-2 space-y-2 rounded-xl border border-line bg-surface-sunken/50 p-3">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="w-[52px] shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted">Renk</span>
-            {PERSON_TONES.map((t) => {
-              const taken = takenColors.includes(t.key);
-              const selected = colorKey === t.key;
-              return (
-                <button
-                  key={t.key}
-                  type="button"
-                  onClick={() => setColorKey(selected ? "" : t.key)}
-                  disabled={isPending || taken}
-                  title={taken ? `${t.label} — başka kişide kullanılıyor` : t.label}
-                  className={cn(
-                    "tap-target grid h-7 w-7 place-items-center rounded-full transition-transform duration-150",
-                    selected ? "ring-2 ring-ink ring-offset-2" : "hover:scale-110",
-                    taken && "cursor-not-allowed opacity-25",
-                  )}
-                  style={{ backgroundColor: t.hex }}
-                >
-                  {selected && <Check size={13} className="text-white" strokeWidth={3} />}
-                </button>
-              );
-            })}
-            <span className="ml-1 text-[11.5px] text-subtle">
-              {colorKey ? "" : "boş = otomatik"}
-            </span>
-          </div>
-          {/* İkon seçici kaldırıldı — kişiler artık fotoğraf ya da
-              baş harfle çiziliyor (Aslı Hanım, 2026-08-24). Renk seçici kalıyor:
-              kart ve takvim renkleri ondan besleniyor. */}
-
+      {/* Renk — üye düzenleme panelindekiyle AYNI kutucuklar. Boş bırakılırsa
+          otomatik atanır. İkon seçici kaldırıldı — kişiler fotoğraf ya da baş
+          harfle çiziliyor (Aslı Hanım, 2026-08-24). */}
+      <div>
+        <p className="mb-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle">
+          Renk <span className="font-normal normal-case tracking-normal">· boş bırakılırsa otomatik</span>
+        </p>
+        <div role="group" aria-label="Kişi rengi" className="flex flex-wrap items-center gap-2">
+          {PERSON_TONES.map((t) => {
+            const taken = takenColors.includes(t.key);
+            const selected = colorKey === t.key;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setColorKey(selected ? "" : t.key)}
+                disabled={isPending || taken}
+                aria-pressed={selected}
+                aria-label={taken ? `${t.label} — başka kişide kullanılıyor` : t.label}
+                title={taken ? `${t.label} — başka kişide kullanılıyor` : t.label}
+                className={cn(
+                  "tap-target grid size-8 place-items-center rounded-full transition-[box-shadow] duration-150 ease-standard",
+                  "ring-offset-2 ring-offset-surface-sunken",
+                  selected ? "ring-2 ring-ink" : "hover:ring-2 hover:ring-line-strong",
+                  taken && "cursor-not-allowed opacity-25",
+                )}
+                style={{ backgroundColor: t.hex }}
+              >
+                {selected && <Check size={14} className="text-white" strokeWidth={3} aria-hidden />}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {error && <p role="alert" className="anim-fade-down text-xs text-danger">{error}</p>}
+      {error && <p role="alert" className="anim-fade-down text-[12.5px] text-danger">{error}</p>}
       {created && (
-        <p className="anim-fade-down text-xs text-success bg-success/10 border border-success/20 rounded-lg px-3 py-2 inline-flex items-center gap-1.5">
-          <Check size={13} className="shrink-0" /> <span><strong>@{created}</strong> hesabı oluşturuldu. Kişi bu kullanıcı adı ve şifre ile giriş yapabilir.</span>
+        <p className="anim-fade-down inline-flex items-center gap-1.5 text-[12.5px] font-medium text-success">
+          <Check size={14} className="shrink-0" aria-hidden />
+          <span><strong>@{created}</strong> hesabı açıldı. Kişi bu kullanıcı adı ve şifreyle giriş yapabilir.</span>
         </p>
       )}
 
-      <div>
+      <div className="flex justify-end">
         <Button
           type="submit"
           size="sm"
           loading={isPending}
           disabled={!fullName.trim() || !username.trim() || !password}
         >
-          {isPending ? "Oluşturuluyor…" : "Hesap oluştur"}
+          Hesap oluştur
         </Button>
       </div>
     </form>

@@ -15,9 +15,15 @@ import { cn } from "@/lib/utils/cn";
  * alıp indirmemiz gerekiyor ki sistemde olan şeyler yanımızda kaybolmasın."
  *
  * Panel iki soruyu cevaplar ve fazlasını söylemez: SON YEDEK NE ZAMAN alındı,
- * ve YENİSİNİ nasıl alırım. Yedeğin içinde ne olduğu arşivin içindeki
- * OKUBENI.txt dosyasında yazar — burada bir tablo dökümü göstermek paneli bir
- * rapora çevirirdi.
+ * ve YENİSİNİ nasıl alırım. Yedeğin içinde ne olduğu (JSON/CSV, özet dosyası)
+ * arşivin içindeki OKUBENI.txt'de yazar — ekranda teknik döküm yok.
+ *
+ * HİYERARŞİ DÜZELTMESİ (2026-08-29): birincil düğme "yalnız kayıtlar"dı,
+ * dosyalı indirme ikincildi. Beklenen davranışın tersiydi — "her şey
+ * yedeklensin" diyen kişi öndeki düğmeye basıyor ve içinde föy görselleri,
+ * klasörler, yüklenen belgeler OLMAYAN bir arşiv iniyordu. Artık birincil
+ * düğme TAM yedektir (?files=1); yalnız kayıt indirmek nadir bir istisna
+ * olduğu için sessiz (ghost) seçenek olarak durur.
  *
  * "Kaç gün önce" bir kişiyi ya da işi puanlamaz, sistemin durumunu tarif eder
  * (CLAUDE.md sadelik kuralının ayırt edici testi) — bu yüzden yazılır.
@@ -46,10 +52,10 @@ export function BackupPanel({ last }: { last: LastBackup | null }) {
 
   async function download(withFiles: boolean) {
     const ok = await ask({
-      title: withFiles ? "Dosyalarla birlikte yedek" : "Yedek indir",
+      title: withFiles ? "Tam yedek indir" : "Yalnız kayıtları indir",
       message: withFiles
-        ? "Kayıtlar ve sisteme yüklenmiş bütün dosyalar tek bir .zip dosyası olarak bilgisayarınıza inecek. Dosya büyükse hazırlanması birkaç dakika sürebilir; bu sekmeyi kapatmayın."
-        : "Çalışma alanındaki bütün kayıtlar tek bir .zip dosyası olarak bilgisayarınıza inecek. İndirilen dosyayı sistemin dışında bir yerde saklayın.",
+        ? "Bütün kayıtlar ve sisteme yüklenmiş dosyalar tek bir .zip olarak inecek. Hazırlanması birkaç dakika sürebilir; bu sekmeyi kapatmayın."
+        : "Yalnız kayıtlar iner — yüklenen dosyalar (föy görselleri, belgeler) bu arşivde olmaz. Tamamı için Tam yedek indir düğmesini kullanın.",
       confirmLabel: "İndir",
       tone: "default",
     });
@@ -69,17 +75,18 @@ export function BackupPanel({ last }: { last: LastBackup | null }) {
 
   return (
     <div className="space-y-4">
-      {/* Durum şeridi — tek satır, tek bilgi. */}
+      {/* Durum satırı — tek satır, tek bilgi. Taze yedek renksiz kalır (yeşil
+          yalnız "tamamlandı" içindir); eskimişse sakin bir warning yüzeyi. */}
       <div
         className={cn(
-          "flex items-start gap-3 rounded-xl border px-4 py-3",
-          stale ? "border-warning/30 bg-warning/5" : "border-success/25 bg-success/5",
+          "flex items-start gap-3 rounded-card px-4 py-3",
+          stale ? "border border-warning/30 bg-warning/5" : "bg-surface-muted",
         )}
       >
         {stale ? (
-          <TriangleAlert size={17} className="mt-px shrink-0 text-warning" />
+          <TriangleAlert size={17} className="mt-px shrink-0 text-warning" aria-hidden />
         ) : (
-          <ShieldCheck size={17} className="mt-px shrink-0 text-success" />
+          <ShieldCheck size={17} className="mt-px shrink-0 text-muted" aria-hidden />
         )}
         <div className="min-w-0 text-[13.5px] leading-relaxed">
           {last ? (
@@ -89,8 +96,10 @@ export function BackupPanel({ last }: { last: LastBackup | null }) {
                 {last.personName ? ` · ${last.personName}` : ""}
               </p>
               <p className="text-muted">
+                {/* Düğmelerle AYNI iki kelime: "tam yedek" / "yalnız kayıtlar".
+                    Farklı sözcük kullanınca insan iki ayrı şey sanıyor. */}
                 {last.formattedAt} ·{" "}
-                {last.kind === "full" ? "dosyalarla birlikte" : "yalnız kayıtlar"}
+                {last.kind === "full" ? "tam yedek" : "yalnız kayıtlar"}
                 {stale && " — haftalık yedeğin zamanı geldi."}
               </p>
             </>
@@ -98,35 +107,29 @@ export function BackupPanel({ last }: { last: LastBackup | null }) {
             <>
               <p className="font-medium text-ink">Henüz yedek alınmadı</p>
               <p className="text-muted">
-                Haftada bir yedek alıp bilgisayarınızda saklayın; sisteme yüklenen her şeyin
-                elinizde ikinci bir kopyası olsun.
+                Haftada bir yedek alıp bilgisayarınızda saklayın.
               </p>
             </>
           )}
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <Button onClick={() => download(false)} loading={busy === "data"} disabled={busy !== null}>
-          {busy !== "data" && <Download size={15} />}
-          Yedeği indir
+      {/* TEK primary: tam yedek. Yalnız kayıt indirmek sessiz istisna. */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <Button onClick={() => download(true)} loading={busy === "full"} disabled={busy !== null}>
+          {busy !== "full" && <HardDriveDownload size={15} aria-hidden />}
+          Tam yedek indir
         </Button>
         <Button
-          variant="secondary"
-          onClick={() => download(true)}
-          loading={busy === "full"}
+          variant="ghost"
+          onClick={() => download(false)}
+          loading={busy === "data"}
           disabled={busy !== null}
         >
-          {busy !== "full" && <HardDriveDownload size={15} />}
-          Dosyalarla birlikte indir
+          {busy !== "data" && <Download size={15} aria-hidden />}
+          Yalnız kayıtları indir
         </Button>
       </div>
-
-      <p className="text-[12.5px] leading-relaxed text-subtle">
-        Arşivin içinde her kaydın hem JSON hem CSV hâli bulunur — CSV dosyaları Excel&apos;de
-        doğrudan açılır. Ne alındığının dökümü <span className="font-medium text-muted">ozet.json</span>,
-        açıklaması <span className="font-medium text-muted">OKUBENI.txt</span> dosyasındadır.
-      </p>
 
       {dialog}
     </div>

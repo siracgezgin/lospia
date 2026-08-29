@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, RotateCcw, Save, X } from "lucide-react";
+import { Check, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import { Input, Select, Field } from "@/components/ui/Input";
+import { Field, FieldGrid, TextInput, SelectInput } from "@/components/ui/Field";
+import { Button } from "@/components/ui/Button";
 import { ASSIGNABLE_ROLE_OPTIONS } from "@/lib/utils/roles";
 import { PERSON_TONES, isHexColor } from "@/lib/design/person-colors";
 import type { IdentityMember } from "@/components/settings/PersonIdentityManager";
@@ -34,6 +35,9 @@ export type MemberDraft = {
  * Kaydetme YALNIZ DEĞİŞENİ gönderir — dokunulmayan alan için sunucuya istek
  * gitmez (isim değişmeden kullanıcı adı kaydetmek gereksiz yazma ve gereksiz
  * çakışma riski).
+ *
+ * Yüzey: bölüm kartının içinde İKİNCİ bir kart değil, yumuşak bir dolgu
+ * (kenarlık ve gölge yok) — "düzenleniyor" hissini verir, katman eklemez.
  */
 export function MemberEditPanel({
   member, draft: initial, canManageRole, canManageIdentity, usedColors, busy, onCancel, onSave, onResetIdentity,
@@ -54,106 +58,111 @@ export function MemberEditPanel({
   const auto = !d.colorKey && !d.iconKey;
 
   return (
-    <div className="anim-fade-down mt-3 space-y-3 rounded-xl border border-line bg-surface-sunken/60 p-3.5">
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Ad Soyad">
-          <Input
+    <div className="anim-fade-down mt-3 space-y-4 rounded-card bg-surface-sunken/60 p-4">
+      <FieldGrid>
+        <Field label="Ad Soyad" required>
+          <TextInput
             value={d.fullName}
             onChange={(e) => set("fullName", e.target.value)}
             disabled={busy}
-            className="h-8"
           />
         </Field>
         <Field label="Kullanıcı adı">
-          <Input
+          <TextInput
             value={d.username}
             onChange={(e) => set("username", e.target.value.toLowerCase())}
             placeholder="kullanici.adi"
             spellCheck={false}
             disabled={busy}
-            className="h-8"
           />
         </Field>
         {/* ÜNVAN — Pano kartında bu yazar. Aslı Hanım (2026-08-28): "Bana da
             tasarımcı yazarsan; ben yönetici olmak istemiyorum çünkü."
             Boş bırakılırsa kart eskisi gibi sistem rolünü yazar. */}
-        <Field label="Ünvan">
-          <Input
+        <Field label="Ünvan" hint="Boşsa kartta rol yazar.">
+          <TextInput
             value={d.jobTitle}
             onChange={(e) => set("jobTitle", e.target.value)}
             placeholder="Tasarımcı, Üretim Sorumlusu…"
             disabled={busy || !canManageIdentity}
-            className="h-8"
           />
         </Field>
         <Field label="Bildirim e-postası">
-          <Input
+          <TextInput
             type="email"
             value={d.notificationEmail}
             onChange={(e) => set("notificationEmail", e.target.value)}
             placeholder="ornek@aslifilinta.com"
             disabled={busy}
-            className="h-8"
           />
         </Field>
         {canManageRole && (
           <Field label="Rol">
-            <Select
+            <SelectInput
               value={d.role}
               onChange={(e) => set("role", e.target.value as MemberDraft["role"])}
               disabled={busy}
-              className="h-8"
             >
               {ASSIGNABLE_ROLE_OPTIONS.map((r) => (
                 <option key={r.value} value={r.value}>{r.label}</option>
               ))}
-            </Select>
+            </SelectInput>
           </Field>
         )}
-      </div>
+      </FieldGrid>
 
       {canManageIdentity && member && (
-        <div className="space-y-2 border-t border-hairline pt-3">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="w-[52px] shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted">Renk</span>
-            {PERSON_TONES.map((t) => {
-              const owner = usedColors.get(t.key);
-              const takenByOther = !!owner && owner !== member.name;
-              const selected = d.colorKey === t.key;
-              return (
-                <button
-                  key={t.key}
-                  type="button"
-                  onClick={() => set("colorKey", selected ? "" : t.key)}
-                  disabled={busy || takenByOther}
-                  title={takenByOther ? `${t.label} — ${owner} kullanıyor` : t.label}
-                  className={cn(
-                    "tap-target h-7 w-7 rounded-full transition-transform duration-150",
-                    selected ? "ring-2 ring-ink ring-offset-2" : "hover:scale-110",
-                    takenByOther && "cursor-not-allowed opacity-25",
-                  )}
-                  style={{ backgroundColor: t.hex }}
-                />
-              );
-            })}
-            {/* Serbest renk — hazır palet dışında istenen her ton. */}
-            <input
-              type="color"
-              value={isHexColor(d.colorKey) ? d.colorKey : "#2563c9"}
-              disabled={busy}
-              onChange={(e) => set("colorKey", e.target.value)}
-              className="tap-target h-7 w-7 cursor-pointer rounded-full border border-line bg-surface p-0"
-              title="Serbest renk"
-              aria-label="Serbest renk"
-            />
-            <input
-              value={d.colorKey}
-              onChange={(e) => set("colorKey", e.target.value.trim())}
-              placeholder="#2563c9"
-              spellCheck={false}
-              disabled={busy}
-              className="w-[86px] rounded-md border border-line bg-surface px-1.5 py-1 font-mono text-[11px] tabular-nums text-ink focus:outline-none focus:ring-2 focus:ring-brand-ring/40"
-            />
+        <div className="space-y-4 border-t border-hairline pt-4">
+          {/* RENK — eşit kutucuklar, seçili olan halkayla ve tikle belli;
+              klavyeyle gezilir (düğme + aria-pressed). Hover'da büyüme yok. */}
+          <div>
+            <p className="mb-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle">Renk</p>
+            <div role="group" aria-label="Kişi rengi" className="flex flex-wrap items-center gap-2">
+              {PERSON_TONES.map((t) => {
+                const owner = usedColors.get(t.key);
+                const takenByOther = !!owner && owner !== member.name;
+                const selected = d.colorKey === t.key;
+                return (
+                  <button
+                    key={t.key}
+                    type="button"
+                    onClick={() => set("colorKey", selected ? "" : t.key)}
+                    disabled={busy || takenByOther}
+                    aria-pressed={selected}
+                    aria-label={takenByOther ? `${t.label} — ${owner} kullanıyor` : t.label}
+                    title={takenByOther ? `${t.label} — ${owner} kullanıyor` : t.label}
+                    className={cn(
+                      "tap-target grid size-8 place-items-center rounded-full transition-[box-shadow] duration-150 ease-standard",
+                      "ring-offset-2 ring-offset-surface-sunken",
+                      selected ? "ring-2 ring-ink" : "hover:ring-2 hover:ring-line-strong",
+                      takenByOther && "cursor-not-allowed opacity-25",
+                    )}
+                    style={{ backgroundColor: t.hex }}
+                  >
+                    {selected && <Check size={14} className="text-white" strokeWidth={3} aria-hidden />}
+                  </button>
+                );
+              })}
+              {/* Serbest renk — hazır palet dışında istenen her ton. */}
+              <input
+                type="color"
+                value={isHexColor(d.colorKey) ? d.colorKey : "#2563c9"}
+                disabled={busy}
+                onChange={(e) => set("colorKey", e.target.value)}
+                className="tap-target size-8 cursor-pointer rounded-full border border-line bg-surface p-0"
+                title="Serbest renk"
+                aria-label="Serbest renk"
+              />
+              <TextInput
+                value={d.colorKey}
+                onChange={(e) => set("colorKey", e.target.value.trim())}
+                placeholder="#2563c9"
+                spellCheck={false}
+                disabled={busy}
+                aria-label="Renk kodu (hex)"
+                className="h-8 w-[104px] font-mono text-[12.5px] tabular-nums"
+              />
+            </div>
           </div>
 
           {/* FOTOĞRAF — ikon seçicisinin yerine.
@@ -161,52 +170,45 @@ export function MemberEditPanel({
               Yönetici ekibin fotoğraflarını buradan girer; kişi kendisininkini
               Profil sayfasından da değiştirebilir. Fotoğraf yoksa kişi kendi
               renginde baş harfleriyle çıkar — renk seçici bu yüzden kalıyor. */}
-          {member && (
-            <div className="mt-3 border-t border-hairline pt-3">
-              <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-muted">
-                Fotoğraf
-              </span>
-              <AvatarUploader
-                userId={member.userId}
-                name={member.name}
-                photoUrl={member.avatarUrl ?? null}
-                colorHex={isHexColor(d.colorKey) ? d.colorKey : null}
-                disabled={busy}
-              />
-            </div>
-          )}
-
+          <div>
+            <p className="mb-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle">Fotoğraf</p>
+            <AvatarUploader
+              userId={member.userId}
+              name={member.name}
+              photoUrl={member.avatarUrl ?? null}
+              colorHex={isHexColor(d.colorKey) ? d.colorKey : null}
+              disabled={busy}
+            />
+          </div>
         </div>
       )}
 
+      {/* Kaydet sağda primary, Vazgeç solunda ghost; "Otomatik renk" en solda
+          ikincil — üçü aynı ağırlıkta durmuyor. */}
       <div className="flex flex-wrap items-center justify-end gap-2 border-t border-hairline pt-3">
         {canManageIdentity && !auto && (
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
+            className="mr-auto"
             onClick={() => { set("colorKey", ""); set("iconKey", ""); onResetIdentity(); }}
             disabled={busy}
-            className="mr-auto inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[12.5px] font-medium text-muted transition-colors hover:border-line-strong hover:text-ink disabled:opacity-50"
-            title="Renk ve ikonu otomatik atamaya bırak"
+            title="Rengi otomatik atamaya bırak"
           >
-            <RotateCcw size={12} /> Otomatik renk
-          </button>
+            <RotateCcw size={13} aria-hidden /> Otomatik renk
+          </Button>
         )}
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={busy}
-          className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[12.5px] font-medium text-muted transition-colors hover:text-ink disabled:opacity-50"
-        >
-          <X size={13} /> Vazgeç
-        </button>
-        <button
-          type="button"
+        <Button variant="ghost" size="sm" onClick={onCancel} disabled={busy}>
+          Vazgeç
+        </Button>
+        <Button
+          size="sm"
           onClick={() => onSave(d)}
-          disabled={busy || !d.fullName.trim()}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-[12.5px] font-medium text-white transition-colors hover:bg-brand-strong disabled:pointer-events-none disabled:opacity-60"
+          loading={busy}
+          disabled={!d.fullName.trim()}
         >
-          {busy ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Kaydet
-        </button>
+          Kaydet
+        </Button>
       </div>
     </div>
   );

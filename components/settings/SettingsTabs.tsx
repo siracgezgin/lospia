@@ -48,12 +48,13 @@ export function SettingsTabs({ children }: { children: React.ReactNode }) {
             return (
               <button
                 key={t.props.label}
+                type="button"
                 role="tab"
                 aria-selected={on}
                 onClick={() => setActive(i)}
                 className={cn(
-                  "inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-[13.5px] font-medium",
-                  "transition-colors duration-150",
+                  "inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-control px-3 text-[13.5px] font-medium",
+                  "transition-colors duration-150 ease-standard",
                   on ? "bg-ink text-white" : "text-muted hover:bg-surface-muted hover:text-ink",
                 )}
               >
@@ -61,7 +62,7 @@ export function SettingsTabs({ children }: { children: React.ReactNode }) {
                 {t.props.count !== undefined && (
                   <span
                     className={cn(
-                      "rounded-full px-1.5 text-[11px] tabular-nums",
+                      "rounded-full px-1.5 text-[12px] tabular-nums",
                       on ? "bg-white/20 text-white" : "bg-surface-sunken text-subtle",
                     )}
                   >
@@ -74,7 +75,7 @@ export function SettingsTabs({ children }: { children: React.ReactNode }) {
         </div>
       </div>
 
-      <div className="anim-fade-down">{current}</div>
+      <div role="tabpanel" className="anim-fade-down">{current}</div>
     </div>
   );
 }

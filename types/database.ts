@@ -608,6 +608,7 @@ export type Database = {
           title: string
           updated_at: string
           url: string | null
+          visibility: string
           workspace_id: string
         }
         Insert: {
@@ -635,6 +636,7 @@ export type Database = {
           title: string
           updated_at?: string
           url?: string | null
+          visibility?: string
           workspace_id: string
         }
         Update: {
@@ -662,6 +664,7 @@ export type Database = {
           title?: string
           updated_at?: string
           url?: string | null
+          visibility?: string
           workspace_id?: string
         }
         Relationships: [
@@ -779,6 +782,7 @@ export type Database = {
           tags: string[]
           title: string
           updated_at: string
+          visibility: string
           workspace_id: string
         }
         Insert: {
@@ -801,6 +805,7 @@ export type Database = {
           tags?: string[]
           title: string
           updated_at?: string
+          visibility?: string
           workspace_id: string
         }
         Update: {
@@ -823,6 +828,7 @@ export type Database = {
           tags?: string[]
           title?: string
           updated_at?: string
+          visibility?: string
           workspace_id?: string
         }
         Relationships: [
@@ -2480,6 +2486,60 @@ export type Database = {
           },
           {
             foreignKeyName: "workspace_activity_logs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspace_backups: {
+        Row: {
+          byte_size: number | null
+          created_at: string
+          created_by: string | null
+          file_count: number | null
+          id: string
+          kind: string
+          note: string | null
+          row_count: number | null
+          table_count: number | null
+          workspace_id: string
+        }
+        Insert: {
+          byte_size?: number | null
+          created_at?: string
+          created_by?: string | null
+          file_count?: number | null
+          id?: string
+          kind?: string
+          note?: string | null
+          row_count?: number | null
+          table_count?: number | null
+          workspace_id: string
+        }
+        Update: {
+          byte_size?: number | null
+          created_at?: string
+          created_by?: string | null
+          file_count?: number | null
+          id?: string
+          kind?: string
+          note?: string | null
+          row_count?: number | null
+          table_count?: number | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_backups_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workspace_backups_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"

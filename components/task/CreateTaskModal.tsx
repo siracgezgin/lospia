@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import { useState, useTransition, useMemo, useId } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, Lock } from "lucide-react";
 import { createTask } from "@/lib/actions/tasks";
 import {
   STATUS_LABELS,
@@ -15,12 +15,13 @@ import { Avatar } from "@/components/ui/Avatar";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { cn } from "@/lib/utils/cn";
 import { Overlay } from "@/components/ui/Overlay";
+import { Button } from "@/components/ui/Button";
+import { Field, FieldGrid, TextInput, TextArea, SelectInput } from "@/components/ui/Field";
 import { type EffortSize } from "@/lib/points/effort";
 import {
   TASK_VISIBILITIES, VISIBILITY_LABELS, VISIBILITY_DESCRIPTIONS,
   DEFAULT_VISIBILITY, type TaskVisibility,
 } from "@/lib/utils/visibility";
-import { Lock } from "lucide-react";
 import type { TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceDepartment } from "@/types";
 
 type BoardMember = { memberId: string; userId: string; name: string; isAdmin?: boolean };
@@ -50,6 +51,24 @@ interface Props {
 
 const SIMPLE_STATUS_OPTIONS = CARD_STATUS_OPTIONS;
 
+/* Sunucudan gelen hata bazen ham Postgres/İngilizce metindir ("duplicate key…",
+   "Not authenticated"). Kullanıcıya yalnız Türkçe, ne yapacağını söyleyen
+   cümle gösterilir; teknik metin konsola düşer. */
+const TECHNICAL_ERROR = /duplicate key|violates|permission denied|jwt|pgrst|relation|column|null value|syntax|invalid input|not authenticated|not found|fetch failed|network|unexpected/i;
+function friendlyError(msg: string): string {
+  if (!msg || TECHNICAL_ERROR.test(msg)) {
+    if (msg) console.error("[createTask]", msg);
+    return "Görev oluşturulamadı. Lütfen tekrar deneyin.";
+  }
+  return msg;
+}
+
+/* Kişi seçme çipi: seçili = marka dolgusu + onay işareti. */
+const PICK_CHIP =
+  "inline-flex items-center gap-1.5 rounded-full border pl-1 pr-2.5 py-1 text-[12.5px] transition-colors duration-150 ease-standard active:scale-[0.98]";
+const PICK_ON = "bg-brand-soft border-brand-ring text-brand-strong font-medium";
+const PICK_OFF = "bg-surface border-line text-muted hover:bg-surface-hover hover:border-line-strong";
+
 export function CreateTaskModal({
   onClose,
   workspaceId,
@@ -63,6 +82,7 @@ export function CreateTaskModal({
   defaultResponsibleIds = [],
 }: Props) {
   const router = useRouter();
+  const formId = useId();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -132,6 +152,7 @@ export function CreateTaskModal({
   // Teslim tarihi zorunlu; başlangıç tarihi bugüne dolu gelir (elle girilmez).
   const datesMissing = !dueDate;
   const dateOrderInvalid = !!startDate && !!dueDate && startDate > dueDate;
+  const canSubmit = !isPending && !!title.trim() && !workspaceIdMissing && !datesMissing && !dateOrderInvalid;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -165,7 +186,7 @@ export function CreateTaskModal({
       });
 
       if ("error" in result) {
-        setError(result.error);
+        setError(friendlyError(result.error));
         return;
       }
       router.refresh(); // pull the newly created task into the board immediately
@@ -173,110 +194,103 @@ export function CreateTaskModal({
     });
   }
 
-  const inputCls =
-    "w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-subtle " +
-    "transition-[color,background-color,border-color,box-shadow] duration-150 ease-standard " +
-    "hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40";
-  const selectCls =
-    "w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-ink " +
-    "transition-[color,background-color,border-color,box-shadow] duration-150 ease-standard " +
-    "hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40";
-  const labelCls = "block text-[12px] font-medium text-muted mb-1";
-
   return (
-    <Overlay open onClose={onClose} title="Görev oluştur" size="md" dismissOnBackdrop={false}>
-      <form onSubmit={handleSubmit} className="space-y-4">
-          {/* ── 1. İŞ ─────────────────────────────────────────────────────── */}
-          <div>
-            <label className={labelCls}>İş <span className="text-danger">*</span></label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Ne yapılacak?"
-              required
-              autoFocus
-              className={inputCls}
-            />
-          </div>
+    <Overlay
+      open
+      onClose={onClose}
+      title="Görev oluştur"
+      size="md"
+      dismissOnBackdrop={false}
+      // Eylemler Overlay'in sabit alt çubuğunda: uzun formda "Oluştur" ekranın
+      // altına düşmez. Düğme <form> dışında olduğu için `form` özniteliğiyle bağlı.
+      footer={
+        <>
+          <Button type="button" variant="ghost" onClick={onClose}>Vazgeç</Button>
+          <Button type="submit" form={formId} loading={isPending} disabled={!canSubmit}>
+            Görev oluştur
+          </Button>
+        </>
+      }
+    >
+      <form id={formId} onSubmit={handleSubmit} className="space-y-4">
+        {/* ── 1. İŞ ─────────────────────────────────────────────────────── */}
+        <Field label="İş" required>
+          <TextInput
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Ne yapılacak?"
+            required
+            autoFocus
+          />
+        </Field>
 
-          {/* ── 2. KİM — sorumlu kişiler. Departman ASLA daraltmaz. ───────── */}
-          <div>
-            <label className={labelCls}>Kim</label>
-            {eligibleMembers.length === 0 ? (
-              <p className="text-xs text-subtle bg-surface-muted border border-hairline rounded-lg px-3 py-2">
-                Çalışma alanında üye yok.
-              </p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {eligibleMembers.map((m) => {
-                  const on = responsibleIds.includes(m.memberId);
-                  return (
-                    <button
-                      key={m.memberId}
-                      type="button"
-                      onClick={() => toggleResponsible(m.memberId)}
-                      aria-pressed={on}
-                      className={cn(
-                        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs border transition-colors duration-150 active:scale-[0.98]",
-                        on
-                          ? "bg-brand-soft border-brand-ring text-brand-strong font-medium"
-                          : "bg-surface border-line text-muted hover:bg-surface-hover hover:border-line-strong",
-                      )}
-                    >
-                      <Avatar name={m.name} size="xs" />
-                      {getPersonDisplayName(m.name)}
-                      {on && <Check size={12} />}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+        {/* ── 2. KİM — sorumlu kişiler. Departman ASLA daraltmaz. ───────── */}
+        <div>
+          <p className="mb-1 block text-[12.5px] font-medium text-muted">Kim</p>
+          {eligibleMembers.length === 0 ? (
+            <p className="text-[12.5px] text-subtle bg-surface-muted border border-hairline rounded-control px-3 py-2">
+              Çalışma alanında üye yok.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Sorumlu kişiler">
+              {eligibleMembers.map((m) => {
+                const on = responsibleIds.includes(m.memberId);
+                return (
+                  <button
+                    key={m.memberId}
+                    type="button"
+                    onClick={() => toggleResponsible(m.memberId)}
+                    aria-pressed={on}
+                    className={cn(PICK_CHIP, on ? PICK_ON : PICK_OFF)}
+                  >
+                    <Avatar name={m.name} size="xs" />
+                    {getPersonDisplayName(m.name)}
+                    {on && <Check size={12} aria-hidden />}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
-          {/* ── 3. NE ZAMAN — teslim tarihi. Tek zorunlu tarih. ───────────── */}
-          <div>
-            <label className={labelCls}>Ne zaman <span className="text-danger">*</span></label>
-            <input
-              type="date"
-              value={dueDate}
-              min={startDate || undefined}
-              required
-              onChange={(e) => setDueDate(e.target.value)}
-              className={cn(selectCls, "tabular-nums")}
-            />
-          </div>
+        {/* ── 3. NE ZAMAN — teslim tarihi. Tek zorunlu tarih. ───────────── */}
+        <Field label="Ne zaman" required error={dateOrderInvalid ? "Başlangıç tarihi teslim tarihinden sonra olamaz." : undefined}>
+          <TextInput
+            type="date"
+            value={dueDate}
+            min={startDate || undefined}
+            required
+            onChange={(e) => setDueDate(e.target.value)}
+            className="tabular-nums"
+          />
+        </Field>
 
-          {/* ── Daha fazla — hepsi isteğe bağlı ───────────────────────────── */}
-          <button
-            type="button"
-            onClick={() => setShowMore((v) => !v)}
-            className="inline-flex items-center gap-1 text-[13px] font-medium text-muted transition-colors duration-150 hover:text-ink"
-          >
-            {showMore ? "Daha az" : "Daha fazla"}
-            <ChevronDown size={13} className={cn("transition-transform duration-200 ease-standard", showMore && "rotate-180")} />
-          </button>
+        {/* ── Daha fazla — hepsi isteğe bağlı ───────────────────────────── */}
+        <button
+          type="button"
+          onClick={() => setShowMore((v) => !v)}
+          aria-expanded={showMore}
+          className="inline-flex items-center gap-1 text-[13.5px] font-medium text-muted transition-colors duration-150 hover:text-ink"
+        >
+          {showMore ? "Daha az" : "Daha fazla"}
+          <ChevronDown size={14} className={cn("transition-transform duration-200 ease-standard", showMore && "rotate-180")} aria-hidden />
+        </button>
 
-          {showMore && (
+        {showMore && (
           <div className="anim-fade-down space-y-4 border-t border-hairline pt-4">
-            <div>
-              <label className={labelCls}>Açıklama</label>
-              <textarea
+            <Field label="Açıklama">
+              <TextArea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={3}
                 placeholder="Gerekiyorsa birkaç satır…"
-                className={cn(inputCls, "resize-none")}
+                className="resize-none"
               />
-            </div>
+            </Field>
 
-            <div>
-              <label className={labelCls}>Departman</label>
-              <select
-                value={departmentId}
-                onChange={(e) => handleDepartmentChange(e.target.value)}
-                className={selectCls}
-              >
+            <Field label="Departman">
+              <SelectInput value={departmentId} onChange={(e) => handleDepartmentChange(e.target.value)}>
                 <option value="">— Departman seçin</option>
                 {topDepts.map((d) => (
                   <optgroup key={d.id} label={d.name}>
@@ -286,50 +300,40 @@ export function CreateTaskModal({
                     ))}
                   </optgroup>
                 ))}
-              </select>
-            </div>
+              </SelectInput>
+            </Field>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className={labelCls}>Başlangıç tarihi</label>
-                <input
+            <FieldGrid>
+              <Field label="Başlangıç tarihi">
+                <TextInput
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className={cn(selectCls, "tabular-nums")}
+                  className="tabular-nums"
                 />
-              </div>
-              <div>
-                <label className={labelCls}>Durum</label>
-                <select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value as TaskStatus)}
-                  className={selectCls}
-                >
+              </Field>
+              <Field label="Durum">
+                <SelectInput value={status} onChange={(e) => setStatus(e.target.value as TaskStatus)}>
                   {SIMPLE_STATUS_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>{o.label}</option>
                   ))}
-                </select>
-              </div>
-            </div>
+                </SelectInput>
+              </Field>
+            </FieldGrid>
 
-            <div>
-              <label className={labelCls}>Öncelik</label>
-              <select
-                value={priority}
-                onChange={(e) => setPriority(e.target.value as TaskPriority)}
-                className={selectCls}
-              >
+            <Field label="Öncelik">
+              <SelectInput value={priority} onChange={(e) => setPriority(e.target.value as TaskPriority)}>
                 {TASK_PRIORITIES.map((p) => (
                   <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>
                 ))}
-              </select>
-            </div>
+              </SelectInput>
+            </Field>
+
             {/* Görünürlük — admin-only. Members always create 'workspace' tasks. */}
             {isAdmin && (
               <div>
-                <label className={labelCls}>Görünürlük</label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <p className="mb-1 block text-[12.5px] font-medium text-muted">Görünürlük</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" role="group" aria-label="Görünürlük">
                   {TASK_VISIBILITIES.map((v) => {
                     const on = visibility === v;
                     return (
@@ -339,17 +343,18 @@ export function CreateTaskModal({
                         onClick={() => handleVisibilityChange(v)}
                         aria-pressed={on}
                         className={cn(
-                          "text-left rounded-lg border px-3 py-2 transition-colors duration-150",
+                          "text-left rounded-control border px-3 py-2 transition-colors duration-150",
                           on
-                            ? "bg-amber-50 border-amber-300"
+                            ? "bg-brand-soft border-brand-ring"
                             : "bg-surface border-line hover:bg-surface-hover hover:border-line-strong",
                         )}
                       >
-                        <span className={cn("flex items-center gap-1.5 text-sm font-medium", on ? "text-amber-800" : "text-ink")}>
-                          {v === "admin_only" && <Lock size={12} />}
+                        <span className={cn("flex items-center gap-1.5 text-[13.5px] font-medium", on ? "text-brand-strong" : "text-ink")}>
+                          {v === "admin_only" && <Lock size={12} aria-hidden />}
                           {VISIBILITY_LABELS[v]}
+                          {on && <Check size={13} className="ml-auto shrink-0" aria-hidden />}
                         </span>
-                        <span className="block text-[11px] text-muted mt-0.5 leading-snug">
+                        <span className="block text-[12px] text-muted mt-0.5 leading-snug">
                           {VISIBILITY_DESCRIPTIONS[v]}
                         </span>
                       </button>
@@ -357,52 +362,24 @@ export function CreateTaskModal({
                   })}
                 </div>
                 {visibility === "admin_only" && (
-                  <p className="anim-fade-down text-[11px] text-amber-700 mt-1.5">
+                  <p className="anim-fade-down text-[12px] text-muted mt-1.5">
                     Bu görevde yalnızca yönetici kişiler sorumlu olarak seçilebilir.
                   </p>
                 )}
               </div>
             )}
-
-            {workspaceIdMissing && (
-              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                Çalışma alanı bilgisi yüklenemedi. Sayfayı yenileyin.
-              </p>
-            )}
           </div>
-          )}
+        )}
 
-          {dateOrderInvalid && (
-            <p className="anim-fade-down text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-              Başlangıç tarihi teslim tarihinden sonra olamaz.
-            </p>
-          )}
+        {workspaceIdMissing && (
+          <p className="text-[12.5px] text-warning bg-warning/10 border border-warning/30 rounded-control px-3 py-2">
+            Çalışma alanı bilgisi yüklenemedi. Sayfayı yenileyin.
+          </p>
+        )}
 
-          {error && (
-            <p role="alert" className="anim-fade-down text-xs text-danger bg-danger/10 border border-danger/20 rounded-lg px-3 py-2">{error}</p>
-          )}
-
-          <div className="flex items-center justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-muted hover:text-ink hover:bg-surface-muted active:scale-[0.98] rounded-lg transition-colors duration-150"
-            >
-              İptal
-            </button>
-            <button
-              type="submit"
-              disabled={isPending || !title.trim() || workspaceIdMissing || datesMissing || dateOrderInvalid}
-              className={cn(
-                "px-4 py-2 text-sm font-medium rounded-lg transition-all duration-150",
-                isPending || !title.trim() || workspaceIdMissing || datesMissing || dateOrderInvalid
-                  ? "bg-surface-sunken text-subtle cursor-not-allowed"
-                  : "bg-brand text-white shadow-xs hover:bg-brand-strong active:scale-[0.98]",
-              )}
-            >
-              {isPending ? "Oluşturuluyor…" : "Görev oluştur"}
-            </button>
-          </div>
+        {error && (
+          <p role="alert" className="anim-fade-down text-[12.5px] text-danger bg-danger/10 border border-danger/20 rounded-control px-3 py-2">{error}</p>
+        )}
       </form>
     </Overlay>
   );

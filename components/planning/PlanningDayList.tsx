@@ -5,6 +5,7 @@ import { format, parseISO } from "date-fns";
 import { tr } from "date-fns/locale";
 import { CheckCircle2, Clock, Pencil, Plus } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { IconButton } from "@/components/ui/Button";
 import { categoryMeta } from "@/lib/planning/categories";
 import { WEEKDAY_LONG_TR, WEEKDAY_SHORT_TR, type RuntimeBand } from "@/lib/planning/bands";
 import { BandEditor } from "./BandEditor";
@@ -68,41 +69,48 @@ export function PlanningDayList({
 
   return (
     <div className="lg:hidden">
-      {/* Gün seçici — yatayda kayar, seçili gün ortada kalır */}
+      {/* Gün seçici — HAFTANIN TAMAMI tek bakışta, yedi sütun.
+          Önce yatay kayan bir şeritti (7 × 64px = 484px, 390px'lik telefonu
+          aşıyordu): hafta sonu ekranın dışında kalıyor, üstelik SEÇİLİ gün
+          kenarda yarım görünüyordu — kullanıcı hangi günde olduğunu görmek
+          için kaydırmak zorundaydı. Izgara hem kaydırmayı bitiriyor hem de
+          "bu hafta" sorusuna bakışta cevap veriyor. Hücre dar ekranda ~46px,
+          dokunma hedefi yüksekliğiyle (52px) rahat kalır. */}
       <div
         role="tablist"
         aria-label="Haftanın günleri"
-        className="-mx-1 mb-3 flex snap-x gap-1.5 overflow-x-auto px-1 pb-1"
+        className="mb-3 grid grid-cols-7 gap-1"
       >
         {weekDays.map((d, i) => {
           const active = i === dayIdx;
-          const count = slots.reduce(
-            (n, s) => n + (byCell.get(`${d}|${s}`)?.length ?? 0), 0,
-          );
+          const isToday = d === todayIso;
+          const hasItems = slots.some((s) => (byCell.get(`${d}|${s}`) ?? []).some((m) => m.title || m.content)
+            || (topicRows.get(`${d}|${s}`) ?? []).some(Boolean));
           return (
             <button
               key={d}
               role="tab"
               aria-selected={active}
+              aria-current={isToday ? "date" : undefined}
               onClick={() => setDayIdx(i)}
               className={cn(
-                "flex min-w-[64px] shrink-0 snap-start flex-col items-center rounded-xl border px-2.5 py-1.5 transition-all duration-150 active:scale-[0.97]",
+                "flex min-h-[52px] min-w-0 flex-col items-center justify-center rounded-card border px-0.5 py-1.5 transition-colors duration-150 active:scale-[0.97]",
                 active
-                  ? "border-brand bg-brand text-white shadow-card"
-                  : "border-line bg-surface text-muted hover:border-line-strong hover:text-ink",
+                  ? "border-brand bg-brand text-white"
+                  : isToday
+                    ? "border-brand-ring bg-brand-soft/60 text-brand-strong hover:border-brand"
+                    : "border-line bg-surface text-muted hover:border-line-strong hover:text-ink",
               )}
             >
-              <span className="text-[11px] font-semibold uppercase tracking-wide">
+              <span className="text-[12px] font-semibold uppercase tracking-[0.06em]">
                 {WEEKDAY_SHORT_TR[i]}
               </span>
-              <span className={cn("text-[13px] font-bold tabular-nums", !active && d === todayIso && "text-brand")}>
+              <span className="text-[13.5px] font-semibold tabular-nums">
                 {format(parseISO(d), "d")}
               </span>
+              {/* Dolu gün noktası — sayı değil, "burada bir şey var" işareti. */}
               <span
-                className={cn(
-                  "mt-0.5 h-1 w-1 rounded-full",
-                  count > 0 ? (active ? "bg-white/70" : "bg-brand/50") : "bg-transparent",
-                )}
+                className={cn("mt-0.5 h-1 w-1 rounded-full", hasItems ? (active ? "bg-white/70" : "bg-brand/60") : "bg-transparent")}
                 aria-hidden
               />
             </button>
@@ -125,88 +133,100 @@ export function PlanningDayList({
           const kim = cell.map((m) => m.kim).filter(Boolean).join(", ");
           const collabIds = [...new Set(cell.flatMap((m) => m.collaborator_ids ?? []))];
           const topics = (topicRows.get(`${iso}|${slot}`) ?? []).filter(Boolean) as PlanningTopic[];
+          const ist = istanbulLabel(iso, slot);
 
           // Boş şeridi üyeye gösterme — yönetici ekleyebilsin diye ona kalır.
           if (!title && !content && topics.length === 0 && !isAdmin) return null;
 
           if (isAdmin && band && editingBand === slot) {
             return (
-              <div key={slot} className="overflow-hidden rounded-xl border border-brand-ring bg-surface shadow-card">
+              <div key={slot} className="overflow-hidden rounded-card border border-brand-ring bg-surface">
                 <BandEditor band={band} refDay={weekRefDay} onClose={() => setEditingBand(null)} />
               </div>
             );
           }
 
+          /* Başlık gövdesi — yöneticide düğme (toplantıyı açar), üyede düz
+             kutu. Salt-okur tarafta devre dışı bir düğme çizmek "tıklanabilir
+             ama çalışmıyor" hissi veriyordu. */
+          const head = (
+            <>
+              {/* Saat çifti — kayıtlı New York saati ve İstanbul karşılığı
+                  (Aslı Hanım, 2026-08-28). */}
+              <span className="mt-px shrink-0 rounded-md bg-ink/[0.07] px-1.5 py-0.5 text-center leading-tight">
+                <span className="block text-[12px] font-semibold tabular-nums text-ink/75">{slot}</span>
+                {ist && (
+                  <span className="block text-[12px] font-medium tabular-nums text-ink/50">
+                    {AWAY_LABEL} {ist}
+                  </span>
+                )}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className={cn("block text-[12px] font-semibold uppercase tracking-[0.08em] opacity-70", meta.title)}>
+                  {band?.label ?? meta.label}
+                </span>
+                <span className={cn("block text-[13.5px] font-semibold leading-snug tracking-tight", meta.title)}>
+                  {title || "—"}
+                </span>
+                <KimBadges ids={ids} kim={kim} collaboratorIds={collabIds} memberNames={memberNames} className="ml-0 mt-1" personHex={personHex} />
+                {content && (
+                  <span className="mt-1 block whitespace-pre-line text-[12.5px] leading-snug text-ink/70">
+                    {content}
+                  </span>
+                )}
+              </span>
+            </>
+          );
+          const headCls = cn("flex w-full items-start gap-2 px-3 py-2 text-left", meta.cell, isAdmin && band && "pr-12");
+
           return (
             <section
               key={slot}
-              className="relative overflow-hidden rounded-xl border border-line bg-surface shadow-card"
+              className="relative overflow-hidden rounded-card border border-line bg-surface"
             >
-              <button
-                onClick={isAdmin ? () => onOpen(iso, slot, dayIdx) : undefined}
-                disabled={!isAdmin}
-                className={cn(
-                  "flex w-full items-start gap-2 px-3 py-2 text-left",
-                  meta.cell,
-                  isAdmin && "transition-[filter] duration-150 active:brightness-95",
-                )}
-              >
-                {/* Saat çifti — kayıtlı New York saati ve İstanbul karşılığı
-                    (Aslı Hanım, 2026-08-28). */}
-                <span className="mt-px shrink-0 rounded bg-ink/[0.07] px-1.5 py-0.5 text-center leading-tight">
-                  <span className="block text-[11px] font-bold tabular-nums text-ink/70">{slot}</span>
-                  {istanbulLabel(iso, slot) && (
-                    <span className="block text-[9.5px] font-medium tabular-nums text-ink/45">
-                      {AWAY_LABEL} {istanbulLabel(iso, slot)}
-                    </span>
-                  )}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className={cn("block text-[10px] font-bold uppercase tracking-[0.12em] opacity-70", meta.title)}>
-                    {band?.label ?? meta.label}
-                  </span>
-                  <span className={cn("block text-[13.5px] font-bold leading-snug tracking-tight", meta.title)}>
-                    {title || "—"}
-                  </span>
-                  <KimBadges ids={ids} kim={kim} collaboratorIds={collabIds} memberNames={memberNames} className="ml-0 mt-1" personHex={personHex} />
-                  {content && (
-                    <span className="mt-1 block whitespace-pre-line text-[12px] leading-snug text-ink/70">
-                      {content}
-                    </span>
-                  )}
-                </span>
-              </button>
+              {isAdmin ? (
+                <button
+                  type="button"
+                  onClick={() => onOpen(iso, slot, dayIdx)}
+                  className={cn(headCls, "transition-colors duration-150 active:bg-ink/[0.04]")}
+                >
+                  {head}
+                </button>
+              ) : (
+                <div className={headCls}>{head}</div>
+              )}
 
               {/* Şeridi düzenle — toplantı açan gövdeden AYRI bir düğme.
                   İç içe <button> geçersiz HTML'dir, bu yüzden kardeş olarak
-                  ve mutlak konumda durur. */}
+                  ve mutlak konumda durur. Yalnız yöneticide çizilir. */}
               {isAdmin && band && (
-                <button
+                <IconButton
+                  size="sm"
+                  aria-label={`${band.label || meta.label} şeridini düzenle`}
+                  title="Şeridi düzenle — ad, saat, renk"
                   onClick={() => setEditingBand(slot)}
-                  title={`${band.label || meta.label} — saati ve adını düzenle`}
-                  aria-label="Şeridi düzenle"
-                  className="absolute right-1.5 top-1.5 rounded-md p-1.5 text-ink/35 transition-colors duration-150 hover:bg-surface/70 hover:text-ink"
+                  className="absolute right-1.5 top-1.5 text-ink/50 hover:bg-surface/70"
                 >
-                  <Pencil size={13} />
-                </button>
+                  <Pencil size={14} />
+                </IconButton>
               )}
 
               {topics.length > 0 ? (
                 <ol className="divide-y divide-hairline">
                   {topics.map((t, i) => (
                     <li key={t.id} className="flex items-start gap-2 px-3 py-2">
-                      <span className="mt-px shrink-0 text-[11px] font-semibold tabular-nums text-subtle">
+                      <span className="mt-px shrink-0 text-[12px] font-semibold tabular-nums text-subtle">
                         {i + 1}.
                       </span>
-                      <span className="min-w-0 flex-1 text-[13px] leading-snug text-ink/90">
+                      <span className="min-w-0 flex-1 text-[13.5px] leading-snug text-ink/90">
                         {t.text}
                         {t.task_id && (
-                          <CheckCircle2 size={12} className="ml-1 inline shrink-0 text-emerald-600" aria-label="Göreve atandı" />
+                          <CheckCircle2 size={12} className="ml-1 inline shrink-0 text-success" aria-label="Göreve atandı" />
                         )}
                         <KimBadges ids={t.participant_ids} kim={t.kim} collaboratorIds={t.collaborator_ids} memberNames={memberNames} personHex={personHex} />
                         {/* Yalnız o günden FARKLI teslim tarihi yazılır. */}
                         {t.due_date && t.due_date.slice(0, 10) !== iso && (
-                          <span className="ml-1 whitespace-nowrap text-[11px] tabular-nums text-subtle">
+                          <span className="ml-1 whitespace-nowrap text-[12px] tabular-nums text-subtle">
                             {format(parseISO(t.due_date), "d MMM", { locale: tr })}
                           </span>
                         )}
@@ -217,10 +237,11 @@ export function PlanningDayList({
               ) : (
                 isAdmin && (
                   <button
+                    type="button"
                     onClick={() => onOpen(iso, slot, dayIdx)}
-                    className="flex w-full items-center justify-center gap-1 border-t border-hairline py-2 text-[12.5px] font-medium text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-brand"
+                    className="flex min-h-[40px] w-full items-center justify-center gap-1 border-t border-hairline py-2 text-[12.5px] font-medium text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-brand"
                   >
-                    <Plus size={12} /> Konu ekle
+                    <Plus size={13} aria-hidden /> Konu ekle
                   </button>
                 )
               )}
@@ -233,7 +254,7 @@ export function PlanningDayList({
             yeni bir saat açabilmeli (2026-08-29: "Saat ekle nerede?"). */}
         {isAdmin && (
           editingBand === "new" ? (
-            <div className="overflow-hidden rounded-xl border border-brand-ring bg-surface shadow-card">
+            <div className="overflow-hidden rounded-card border border-brand-ring bg-surface">
               <BandEditor
                 band={{ id: null, slot: "13:00", category: "other", label: "", topicRows: 3, columns: [] }}
                 refDay={weekRefDay}
@@ -244,9 +265,9 @@ export function PlanningDayList({
             <button
               type="button"
               onClick={() => setEditingBand("new")}
-              className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-line bg-surface/60 py-2.5 text-[12.5px] font-medium text-subtle transition-colors duration-150 hover:border-brand-ring hover:bg-brand-soft/30 hover:text-brand"
+              className="flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-card border border-dashed border-line bg-surface/60 py-2.5 text-[13px] font-medium text-subtle transition-colors duration-150 hover:border-brand-ring hover:bg-brand-soft/30 hover:text-brand"
             >
-              <Clock size={13} /> Saat ekle
+              <Clock size={14} aria-hidden /> Saat ekle
             </button>
           )
         )}

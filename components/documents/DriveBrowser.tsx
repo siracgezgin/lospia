@@ -1,18 +1,22 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   FolderPlus, Upload, Trash2, Loader2, Download, ChevronRight, Home,
   Lock, Users, Pencil, Plus, FileText, Table2, Link2 as LinkIcon,
-  List as ListIcon, LayoutGrid, Check, X,
+  List as ListIcon, LayoutGrid, Check, X, MoreHorizontal, FolderOpen,
+  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { useConfirm } from "@/components/ui/useConfirm";
+import { Button, IconButton } from "@/components/ui/Button";
+import { TextInput } from "@/components/ui/Field";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { PersonAvatar } from "@/components/ui/PersonAvatar";
 import { personTone } from "@/lib/design/person-colors";
-import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { Tile, TileGrid } from "@/components/ui/TileGrid";
 import { SortHeader } from "@/components/ui/SortHeader";
 import {
@@ -23,8 +27,8 @@ import {
   saveFolder, deleteFolder, uploadDocumentFile,
   getDocumentDownloadUrl, deleteDocumentFile,
 } from "@/lib/actions/document-files";
-import { createTeamworkDoc, deleteOperationDocument } from "@/lib/actions/documents";
-import { createSheetInFolder, deleteOperationSpreadsheet } from "@/lib/actions/sheets";
+import { createTeamworkDoc, deleteOperationDocument, setOperationDocumentVisibility } from "@/lib/actions/documents";
+import { createSheetInFolder, deleteOperationSpreadsheet, setOperationSpreadsheetVisibility } from "@/lib/actions/sheets";
 
 export type DocFolder = {
   id: string;
@@ -43,6 +47,8 @@ export type DocItem = {
   preview: string;
   created_by: string | null;
   updated_at: string;
+  /** "all" = tüm üyeler görür · "admin" = yalnız yönetici (20240334). */
+  visibility?: "all" | "admin";
 };
 
 export type SheetItem = {
@@ -51,6 +57,7 @@ export type SheetItem = {
   folder_id: string | null;
   created_by: string | null;
   updated_at: string;
+  visibility?: "all" | "admin";
 };
 
 export type LinkItem = {
@@ -71,6 +78,7 @@ export type DocFile = {
   file_mime: string | null;
   created_by: string | null;
   created_at: string;
+  visibility?: "all" | "admin";
   /** Görsel dosyalar için imzalı önizleme adresi (sunucuda üretilir). */
   thumbUrl?: string | null;
 };
@@ -78,6 +86,8 @@ export type DocFile = {
 /** Izgara ve listenin ORTAK biçimi — her tür buna indirgenir. */
 type DriveItem = {
   key: string;
+  /** Aksiyon meşguliyetini eşlemek için kaydın kendi kimliği. */
+  id: string;
   kind: FileKind;
   name: string;
   /** Kartın/satırın ikinci satırı için ek not (klasörde "3 öğe · yalnız yönetici"). */
@@ -99,6 +109,14 @@ type DriveItem = {
   fileId?: string;
 };
 
+/** ⋯ menüsünün bir satırı. */
+type MenuAction = {
+  label: string;
+  icon: LucideIcon;
+  onSelect: () => void;
+  danger?: boolean;
+};
+
 interface Props {
   folders: DocFolder[];
   files: DocFile[];
@@ -110,6 +128,8 @@ interface Props {
   memberNames: Record<string, string>;
   /** profiles.id → fotoğraf; klasör kartındaki "kim oluşturdu" rozeti için. */
   memberAvatars?: Record<string, string | null>;
+  /** Oturumdaki kişi — KENDİ eklediğini yönetebilsin diye (20240334). */
+  currentUserId?: string | null;
   isAdmin: boolean;
   rootLabel?: string;
   /** Araç çubuğunun başına konur (ör. "← Geri"). Ayrı bir satır açmamak için:
@@ -133,15 +153,21 @@ interface Props {
  * — hepsi de aynı nötr kartla çizilmişti. Ortak bir zihin modeli yoktu.
  *
  * Şimdi ızgarada YALNIZ İÇERİK var (klasör · yazı · tablo · dosya) ve her tür
- * kendi ikonu ve rengiyle çizilir (lib/office/file-kind.ts). Üretim tek
- * Üretim düğmeleri araç çubuğunda AÇIK durur (Klasör · Word · Excel ·
- * Bağlantı · Yükle) ve her biri, üreteceği şeyin listedeki ikonuyla aynı
- * rengi taşır. Nereye tıklarsan ne olacağı ikondan bellidir.
+ * kendi ikonu ve rengiyle çizilir (lib/office/file-kind.ts). Üretim düğmeleri
+ * araç çubuğunda AÇIK durur (Klasör · Word · Excel · Bağlantı · Yükle) ve her
+ * biri, üreteceği şeyin listedeki ikonuyla aynı rengi taşır. Nereye tıklarsan
+ * ne olacağı ikondan bellidir.
+ *
+ * İKİNCİL EYLEMLER TEK ⋯ MENÜSÜNDE. Bir süre kartın üstünde fare gelince
+ * beliren üç küçük ikon vardı: telefonda hover yok, dolayısıyla klasör
+ * silinemiyor, dosya indirilemiyordu; masaüstünde de "Yalnız yöneticiye
+ * kapat" gibi bir eylemi tek başına bir kilit simgesinden çözmek gerekiyordu.
+ * Menü her cihazda görünür, her satırı adıyla yazar.
  *
  * Sıra Drive'ın sırası: önce klasörler, sonra dosyalar — ada göre.
  */
 export function DriveBrowser({
-  folders, files, docs = [], sheets = [], links = [], memberNames, memberAvatars = {}, isAdmin,
+  folders, files, docs = [], sheets = [], links = [], memberNames, memberAvatars = {}, currentUserId = null, isAdmin,
   rootLabel = "AF Teamwork", leading, onNewLink, onEditLink,
 }: Props) {
   const { ask, dialog } = useConfirm();
@@ -154,8 +180,8 @@ export function DriveBrowser({
   const [cwd, setCwd] = useState<string | null>(null);   // null = kök
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  /** Yeni klasörün adı yazılıyor — kart, klasörlerin başında yerinde açılır. */
   const [naming, setNaming] = useState(false);
-  const [folderName, setFolderName] = useState("");
   /** Kartın içinde adı düzenlenen klasörün id'si. */
   const [renaming, setRenaming] = useState<string | null>(null);
   /* Görünüm — Drive'ın iki modu (2026-08-29):
@@ -201,6 +227,7 @@ export function DriveBrowser({
         folders.filter((x) => x.parent_id === f.id).length;
       return {
         key: `f-${f.id}`,
+        id: f.id,
         kind: KIND_FOLDER,
         name: f.name,
         /* "Klasör" yazmıyoruz — simge zaten söylüyor. Yerine KİM ve NE ZAMAN
@@ -217,23 +244,26 @@ export function DriveBrowser({
     });
 
     const docItems: DriveItem[] = childDocs.map((d) => ({
-      key: `d-${d.id}`, kind: KIND_DOC, name: d.title, ownerId: d.created_by,
+      key: `d-${d.id}`, id: d.id, kind: KIND_DOC, name: d.title, ownerId: d.created_by,
       date: d.updated_at, href: `/documents/${d.id}`, docId: d.id,
+      restricted: d.visibility === "admin",
     }));
 
     const sheetItems: DriveItem[] = childSheets.map((x) => ({
-      key: `s-${x.id}`, kind: KIND_SHEET, name: x.title, ownerId: x.created_by,
+      key: `s-${x.id}`, id: x.id, kind: KIND_SHEET, name: x.title, ownerId: x.created_by,
       date: x.updated_at, href: `/sheets/${x.id}`, sheetId: x.id,
+      restricted: x.visibility === "admin",
     }));
 
     const linkItems: DriveItem[] = childLinks.map((l) => ({
-      key: `l-${l.id}`, kind: linkKindOf(l.document_type), name: l.title,
+      key: `l-${l.id}`, id: l.id, kind: linkKindOf(l.document_type), name: l.title,
       ownerId: null, date: l.updated_at,
       href: l.url ?? undefined, external: !!l.url, linkId: l.id,
     }));
 
     const fileItems: DriveItem[] = childFiles.map((d) => ({
       key: `x-${d.id}`,
+      id: d.id,
       kind: fileKindOf(d.file_mime, d.file_name ?? d.title),
       name: d.file_name ?? d.title,
       ownerId: d.created_by,
@@ -241,6 +271,7 @@ export function DriveBrowser({
       size: d.file_size,
       thumbUrl: d.thumbUrl ?? null,
       fileId: d.id,
+      restricted: d.visibility === "admin",
       onOpen: () => download(d.id),
     }));
 
@@ -319,139 +350,201 @@ export function DriveBrowser({
     });
   }
 
-  /** Öğeye göre aksiyonlar — liste ve ızgara AYNI düğmeleri kullanır. */
-  function rowActions(it: DriveItem) {
+  /** Bu öğe üzerinde bir iş sürüyor mu? Meşguliyet anahtarları `önek-id`. */
+  const isItemBusy = (it: DriveItem) => busy !== null && busy.endsWith(`-${it.id}`);
+
+  /** SAHİPLİK — yönetici her şeyi, üye KENDİ EKLEDİĞİNİ yönetir.
+   *  Sıraç (2026-08-30): "Üye kendi eklediği yazıyı, klasörü vs silebilme
+   *  yetkisi olsun." Aynı kural RLS'te de yazılı (20240334); buradaki kontrol
+   *  yalnız yapamayacağı bir seçeneği hiç göstermemek için. */
+  const canManage = (it: DriveItem) =>
+    isAdmin || (!!currentUserId && !!it.ownerId && it.ownerId === currentUserId);
+
+  /** Görünürlük satırı — klasör, yazı, tablo ve dosyada AYNI cümle.
+   *  Sıraç (2026-08-30): "klasördeki gibi diğerlerinde de tüm üyelere göster
+   *  kısmı da olsun." */
+  const visibilityAction = (
+    it: DriveItem,
+    apply: (next: "all" | "admin") => Promise<{ error?: string } | unknown>,
+    key: string,
+  ): MenuAction => ({
+    label: it.restricted ? "Tüm üyelere göster" : "Yalnız yöneticiye kapat",
+    icon: it.restricted ? Users : Lock,
+    onSelect: () => run(key, () => apply(it.restricted ? "all" : "admin")),
+  });
+
+  /** Öğeye göre ⋯ menüsünün satırları — liste ve ızgara AYNI menüyü kullanır.
+   *  Boş dizi = menü çizilmez (kişinin dokunamadığı öğe). */
+  function itemActions(it: DriveItem): MenuAction[] {
     if (it.isFolder && it.folder) {
       const f = it.folder;
-      if (!isAdmin) return null;
-      return (
-        <>
-          <IconBtn title="Yeniden adlandır" onClick={() => setRenaming(f.id)}>
-            <Pencil size={13} />
-          </IconBtn>
-          <IconBtn
-            title={f.visibility === "admin" ? "Tüm ekibe aç" : "Yalnız yöneticiye kapat"}
-            onClick={() =>
-              run(`f-${f.id}`, () =>
-                saveFolder(f.id, {
-                  name: f.name,
-                  parent_id: f.parent_id,
-                  visibility: f.visibility === "admin" ? "all" : "admin",
-                  section: f.section ?? section,
-                }),
-              )
-            }
-          >
-            {f.visibility === "admin" ? <Users size={13} /> : <Lock size={13} />}
-          </IconBtn>
-          {/* ONAY ŞART. Klasör tek tıkla siliniyordu — geri alınamaz bir işlem
-              için hiçbir soru sorulmuyordu (2026-08-29: "klasör sil yapınca
-              direkt siliniyor, hiçbir popup çıkmıyor"). Diğer türlerde onay
-              zaten vardı; eksik olan buydu. */}
-          <IconBtn title="Sil (yalnız boş klasör)" danger busy={busy === `d-${f.id}`}
-            onClick={async () => {
-              if (!(await ask({
-                title: "Klasör silinsin mi?",
-                message: `"${f.name}" kalıcı olarak silinir.\n\nYalnız BOŞ klasör silinebilir; içinde bir şey varsa işlem reddedilir.`,
-              }))) return;
-              run(`d-${f.id}`, () => deleteFolder(f.id));
-            }}>
-            <Trash2 size={13} />
-          </IconBtn>
-        </>
-      );
+      if (!canManage(it)) return [];
+      return [
+        { label: "Yeniden adlandır", icon: Pencil, onSelect: () => setRenaming(f.id) },
+        {
+          label: f.visibility === "admin" ? "Tüm üyelere göster" : "Yalnız yöneticiye kapat",
+          icon: f.visibility === "admin" ? Users : Lock,
+          onSelect: () =>
+            run(`f-${f.id}`, () =>
+              saveFolder(f.id, {
+                name: f.name,
+                parent_id: f.parent_id,
+                visibility: f.visibility === "admin" ? "all" : "admin",
+                section: f.section ?? section,
+              }),
+            ),
+        },
+        /* ONAY ŞART. Klasör tek tıkla siliniyordu — geri alınamaz bir işlem
+           için hiçbir soru sorulmuyordu (2026-08-29: "klasör sil yapınca
+           direkt siliniyor, hiçbir popup çıkmıyor"). */
+        {
+          label: "Sil",
+          icon: Trash2,
+          danger: true,
+          onSelect: async () => {
+            if (!(await ask({
+              title: "Klasör silinsin mi?",
+              message: `"${f.name}" kalıcı olarak silinir.\n\nYalnız BOŞ klasör silinebilir; içinde bir şey varsa işlem reddedilir.`,
+            }))) return;
+            run(`d-${f.id}`, () => deleteFolder(f.id));
+          },
+        },
+      ];
     }
 
     if (it.fileId) {
       const id = it.fileId;
-      return (
-        <>
-          <IconBtn title="İndir" busy={busy === `dl-${id}`} onClick={() => download(id)}>
-            <Download size={13} />
-          </IconBtn>
-          <IconBtn title="Sil" danger busy={busy === `x-${id}`}
-            onClick={() => run(`x-${id}`, () => deleteDocumentFile(id))}>
-            <Trash2 size={13} />
-          </IconBtn>
-        </>
-      );
+      if (!canManage(it)) return [{ label: "İndir", icon: Download, onSelect: () => download(id) }];
+      return [
+        { label: "İndir", icon: Download, onSelect: () => download(id) },
+        visibilityAction(it, (next) => setOperationDocumentVisibility(id, next), `v-${id}`),
+        /* Dosya silme de sorar — diğer türlerde onay vardı, yalnız yüklenen
+           dosyada eksikti. */
+        {
+          label: "Sil",
+          icon: Trash2,
+          danger: true,
+          onSelect: async () => {
+            if (!(await ask({ message: `"${it.name}" dosyası kalıcı olarak silinsin mi?` }))) return;
+            run(`x-${id}`, () => deleteDocumentFile(id));
+          },
+        },
+      ];
     }
 
     if (it.linkId) {
       const id = it.linkId;
-      return (
-        <>
-          {onEditLink && (
-            <IconBtn title="Düzenle" onClick={() => onEditLink(id)}><Pencil size={13} /></IconBtn>
-          )}
-          {isAdmin && (
-            <IconBtn title="Sil" danger busy={busy === `lk-${id}`}
-              onClick={async () => {
-                if (!(await ask({ message: `"${it.name}" bağlantısı silinsin mi?` }))) return;
-                run(`lk-${id}`, () => deleteOperationDocument(id));
-              }}>
-              <Trash2 size={13} />
-            </IconBtn>
-          )}
-        </>
-      );
+      const out: MenuAction[] = [];
+      if (onEditLink && canManage(it)) out.push({ label: "Düzenle", icon: Pencil, onSelect: () => onEditLink(id) });
+      if (canManage(it)) {
+        out.push(visibilityAction(it, (next) => setOperationDocumentVisibility(id, next), `v-${id}`));
+        out.push({
+          label: "Sil",
+          icon: Trash2,
+          danger: true,
+          onSelect: async () => {
+            if (!(await ask({ message: `"${it.name}" bağlantısı silinsin mi?` }))) return;
+            run(`lk-${id}`, () => deleteOperationDocument(id));
+          },
+        });
+      }
+      return out;
     }
 
-    if (!isAdmin) return null;
+    if (!canManage(it)) return [];
     if (it.docId) {
       const id = it.docId;
-      return (
-        <IconBtn title="Sil" danger busy={busy === `doc-${id}`}
-          onClick={async () => {
-            if (!(await ask({ message: `"${it.name}" yazısı kalıcı olarak silinsin mi?` }))) return;
-            run(`doc-${id}`, () => deleteOperationDocument(id));
-          }}>
-          <Trash2 size={13} />
-        </IconBtn>
-      );
+      return [
+      visibilityAction(it, (next) => setOperationDocumentVisibility(id, next), `v-${id}`),
+      {
+        label: "Sil",
+        icon: Trash2,
+        danger: true,
+        onSelect: async () => {
+          if (!(await ask({ message: `"${it.name}" yazısı kalıcı olarak silinsin mi?` }))) return;
+          run(`doc-${id}`, () => deleteOperationDocument(id));
+        },
+      }];
     }
     if (it.sheetId) {
       const id = it.sheetId;
-      return (
-        <IconBtn title="Sil" danger busy={busy === `sh-${id}`}
-          onClick={async () => {
-            if (!(await ask({ message: `"${it.name}" tablosu kalıcı olarak silinsin mi?` }))) return;
-            run(`sh-${id}`, () => deleteOperationSpreadsheet(id));
-          }}>
-          <Trash2 size={13} />
-        </IconBtn>
-      );
+      return [
+      visibilityAction(it, (next) => setOperationSpreadsheetVisibility(id, next), `v-${id}`),
+      {
+        label: "Sil",
+        icon: Trash2,
+        danger: true,
+        onSelect: async () => {
+          if (!(await ask({ message: `"${it.name}" tablosu kalıcı olarak silinsin mi?` }))) return;
+          run(`sh-${id}`, () => deleteOperationSpreadsheet(id));
+        },
+      }];
     }
-    return null;
+    return [];
   }
+
+  /** Satırın/kartın ⋯ menüsü; eylem yoksa hiç çizilmez. */
+  function renderMenu(it: DriveItem) {
+    const actions = itemActions(it);
+    if (actions.length === 0) return null;
+    return <ItemMenu label={`${it.name} — seçenekler`} actions={actions} busy={isItemBusy(it)} />;
+  }
+
+  /* YENİ KLASÖR — kartın yerinde. Sayfanın tepesinde tam genişlikte bir kutu
+     açılıyordu; yeniden adlandırma nasıl klasörün kendi kartında yapılıyorsa
+     (2026-08-29: "neden klasörde yapamıyoruz bunu"), yeni klasör de
+     klasörlerin başında, kendi boyunda bir kart olarak açılır. */
+  const namingTile = naming ? (
+    <FolderNameTile
+      key="new-folder"
+      initialName=""
+      placeholder="Klasör adı"
+      busy={busy === "folder"}
+      onSave={(name) =>
+        run(
+          "folder",
+          /* Varsayılan "all": klasör açan kişi aksini söylemedikçe ekip görür.
+             "admin" varsayılanı, üyenin açtığı klasörü ekipten gizliyordu. */
+          () => saveFolder(null, { name, parent_id: cwd, visibility: "all", section }),
+          () => setNaming(false),
+        )
+      }
+      onCancel={() => setNaming(false)}
+    />
+  ) : null;
+
+  const listItems = view === "list" ? [...items.folders, ...items.files] : items.files;
 
   return (
     <section className="space-y-3">
-      {/* Kırıntı yolu + tek "Yeni" kapısı */}
+      {/* Kırıntı yolu + üretim düğmeleri */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        {/* TEK SATIR: Geri · kırıntı yolu · görünüm · Yeni.
+        {/* TEK SATIR: Geri · kırıntı yolu · görünüm · üretim.
             Üç ayrı satır vardı ("← Geri", ev simgesi, araç çubuğu) ve ikisi
             neredeyse boştu. Kökteyken kırıntı yolu hiç çizilmez — nerede
             olduğunu uygulama çubuğu zaten söylüyor. */}
-        <nav className="flex min-w-0 flex-wrap items-center gap-1 text-[13px]">
+        <nav aria-label="Klasör yolu" className="flex min-w-0 flex-wrap items-center gap-1 text-[13.5px]">
           {leading}
           {trail.length > 0 && (
             <>
               <button
+                type="button"
                 onClick={() => setCwd(null)}
                 title={rootLabel}
                 aria-label={rootLabel}
-                className="ml-1 inline-flex items-center rounded-md px-1.5 py-1 text-muted transition-colors hover:text-ink"
+                className="tap-target ml-1 inline-flex h-8 items-center rounded-control px-1.5 text-muted transition-colors duration-150 hover:text-ink"
               >
                 <Home size={14} />
               </button>
               {trail.map((f, i) => (
                 <span key={f.id} className="inline-flex items-center gap-1">
-                  <ChevronRight size={12} className="text-subtle" />
+                  <ChevronRight size={12} className="text-subtle" aria-hidden />
                   <button
+                    type="button"
                     onClick={() => setCwd(f.id)}
+                    aria-current={i === trail.length - 1 ? "location" : undefined}
                     className={cn(
-                      "rounded-md px-1.5 py-1 transition-colors",
+                      "inline-flex h-8 max-w-[14rem] items-center truncate rounded-control px-1.5 transition-colors duration-150",
                       i === trail.length - 1 ? "font-semibold text-ink" : "text-muted hover:text-ink",
                     )}
                   >
@@ -464,236 +557,279 @@ export function DriveBrowser({
         </nav>
 
         <div className="flex shrink-0 items-center gap-2">
-        {/* Görünüm — Drive'daki gibi liste / ızgara. */}
-        {/* h-9 — "Yeni" düğmesiyle aynı boy.
-            SIRA: önce KART (varsayılan), sonra LİSTE — açılıştaki mod solda
-            durur (2026-08-29: "iki ikonun da yerini değiştir"). */}
-        <div className="inline-flex h-9 items-center rounded-lg border border-line bg-surface p-0.5">
-          <button
-            onClick={() => setView("grid")}
-            title="Kart görünümü — klasörler kutu, dosyalar liste"
-            aria-pressed={view === "grid"}
-            className={cn(
-              "inline-flex h-full items-center rounded-md px-2.5 transition-colors",
-              view === "grid" ? "bg-surface-sunken text-ink" : "text-subtle hover:text-ink",
-            )}
-          >
-            <LayoutGrid size={15} />
-          </button>
-          <button
-            onClick={() => setView("list")}
-            title="Liste görünümü — klasör ve dosya tek tabloda"
-            aria-pressed={view === "list"}
-            className={cn(
-              "inline-flex h-full items-center rounded-md px-2.5 transition-colors",
-              view === "list" ? "bg-surface-sunken text-ink" : "text-subtle hover:text-ink",
-            )}
-          >
-            <ListIcon size={15} />
-          </button>
-        </div>
+          {/* Görünüm — Drive'daki gibi kart / liste.
+              SIRA: önce KART (varsayılan), sonra LİSTE — açılıştaki mod solda
+              durur (2026-08-29: "iki ikonun da yerini değiştir"). */}
+          <div role="group" aria-label="Görünüm" className="inline-flex h-9 items-center rounded-control border border-line bg-surface p-0.5">
+            <button
+              type="button"
+              onClick={() => setView("grid")}
+              title="Kart görünümü"
+              aria-label="Kart görünümü"
+              aria-pressed={view === "grid"}
+              className={cn(
+                "inline-flex h-full items-center rounded-[6px] px-2.5 transition-colors duration-150",
+                view === "grid" ? "bg-surface-sunken text-ink" : "text-subtle hover:text-ink",
+              )}
+            >
+              <LayoutGrid size={15} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setView("list")}
+              title="Liste görünümü"
+              aria-label="Liste görünümü"
+              aria-pressed={view === "list"}
+              className={cn(
+                "inline-flex h-full items-center rounded-[6px] px-2.5 transition-colors duration-150",
+                view === "list" ? "bg-surface-sunken text-ink" : "text-subtle hover:text-ink",
+              )}
+            >
+              <ListIcon size={15} />
+            </button>
+          </div>
 
-        {/* ÜRETİM DÜĞMELERİ — beşi de AÇIK, menü arkasında değil.
-            Sıraç (2026-08-29): "Bunları ayrı ayrı verelim sağ üstte, açık
-            olsun ve anlaşılır olsun. Klasör sarımsı, Excel yeşil, Word mavi
-            şeklinde olabilir."
+          {/* ÜRETİM DÜĞMELERİ — beşi de AÇIK, menü arkasında değil.
+              Sıraç (2026-08-29): "Bunları ayrı ayrı verelim sağ üstte, açık
+              olsun ve anlaşılır olsun. Klasör sarımsı, Excel yeşil, Word mavi
+              şeklinde olabilir."
 
-            Renkler uydurulmadı: listedeki dosya ikonlarının rengiyle AYNI
-            kaynaktan (lib/office/file-kind.ts) geliyor. Yani "yeşil düğmeyle
-            oluşturduğum şey listede yeşil ikonla duruyor" — düğme ile sonuç
-            arasında görsel bir söz var.
+              Renkler uydurulmadı: listedeki dosya ikonlarının rengiyle AYNI
+              kaynaktan (lib/office/file-kind.ts) geliyor. Yani "yeşil düğmeyle
+              oluşturduğum şey listede yeşil ikonla duruyor" — düğme ile sonuç
+              arasında görsel bir söz var.
 
-            Dar ekranda yazılar gizlenir, ikon kalır: beş düğme 180px'e sığar
-            ve araç çubuğu satır atlamaz. */}
-        <div className="flex shrink-0 items-center gap-1.5">
-          {isAdmin && (
+              Dar ekranda yazılar gizlenir, ikon kalır: beş düğme 180px'e sığar
+              ve araç çubuğu satır atlamaz. */}
+          <div className="flex shrink-0 items-center gap-1.5">
+            {/* KLASÖR herkese açık: üye de kendi çalışma alanını kurabilmeli
+                (Sıraç, 2026-08-30). Açtığı klasörü yalnız kendisi yönetir;
+                yönetici hepsini yönetir (bkz. canManage + RLS 20240334). */}
             <CreateButton
               icon={FolderPlus}
               label="Klasör"
-              title="Yeni klasör oluştur"
+              title="Yeni klasör"
               hex={KIND_FOLDER.hex}
-              onPick={() => { setNaming(true); setFolderName(""); }}
+              onPick={() => { setRenaming(null); setNaming(true); }}
             />
-          )}
-          <CreateButton
-            icon={FileText}
-            label="Word"
-            title="Yeni yazı (Word)"
-            hex={KIND_DOC.hex}
-            onPick={() =>
-              run("newdoc", async () => {
-                const res = await createTeamworkDoc({ title: "Adsız yazı", folder_id: cwd, section });
-                if ("error" in res) return res;
-                router.push(`/documents/${res.id}`);
-                return {};
-              })
-            }
-          />
-          <CreateButton
-            icon={Table2}
-            label="Excel"
-            title="Yeni tablo (Excel)"
-            hex={KIND_SHEET.hex}
-            onPick={() =>
-              run("newsheet", async () => {
-                const res = await createSheetInFolder({ title: "Adsız tablo", folder_id: cwd, section });
-                if ("error" in res) return res;
-                router.push(`/sheets/${res.id}`);
-                return {};
-              })
-            }
-          />
-          {onNewLink && (
             <CreateButton
-              icon={LinkIcon}
-              label="Bağlantı"
-              title="Bağlantı ekle (Drive, Canva…)"
-              hex="#5b6e8a"
-              onPick={() => onNewLink(cwd)}
+              icon={FileText}
+              label="Word"
+              title="Yeni yazı (Word)"
+              hex={KIND_DOC.hex}
+              busy={busy === "newdoc"}
+              onPick={() =>
+                run("newdoc", async () => {
+                  const res = await createTeamworkDoc({ title: "Adsız yazı", folder_id: cwd, section });
+                  if ("error" in res) return res;
+                  router.push(`/documents/${res.id}`);
+                  return {};
+                })
+              }
             />
-          )}
-          <CreateButton
-            icon={Upload}
-            label="Yükle"
-            title="Dosya yükle"
-            hex="#7c3aed"
-            onPick={openFilePicker}
-          />
-          <input ref={fileRef} type="file" className="hidden" onChange={onPick} />
-        </div>
+            <CreateButton
+              icon={Table2}
+              label="Excel"
+              title="Yeni tablo (Excel)"
+              hex={KIND_SHEET.hex}
+              busy={busy === "newsheet"}
+              onPick={() =>
+                run("newsheet", async () => {
+                  const res = await createSheetInFolder({ title: "Adsız tablo", folder_id: cwd, section });
+                  if ("error" in res) return res;
+                  router.push(`/sheets/${res.id}`);
+                  return {};
+                })
+              }
+            />
+            {onNewLink && (
+              <CreateButton
+                icon={LinkIcon}
+                label="Bağlantı"
+                title="Bağlantı ekle (Drive, Canva…)"
+                hex="#5b6e8a"
+                onPick={() => onNewLink(cwd)}
+              />
+            )}
+            <CreateButton
+              icon={Upload}
+              label="Yükle"
+              title="Dosya yükle"
+              hex="#7c3aed"
+              busy={busy === "upload"}
+              onPick={openFilePicker}
+            />
+            <input ref={fileRef} type="file" className="hidden" onChange={onPick} />
+          </div>
         </div>
       </div>
 
       {error && (
-        <p role="alert" className="anim-fade-down rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-[12.5px] font-medium text-danger">
+        <p role="alert" className="anim-fade-down rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[12.5px] font-medium text-danger">
           {error}
         </p>
       )}
 
-      {/* Üstteki satır artık YALNIZ yeni klasör içindir. Yeniden adlandırma
-          klasörün kendi kartında yapılıyor — sayfanın tepesinde tam genişlikte
-          bir kutu açmak, düzenlenen klasörden metrelerce uzaktaydı
-          (2026-08-29: "neden klasörde yapamıyoruz bunu"). */}
-      {naming && (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-brand-ring/50 bg-surface-muted/50 p-3">
-          <input
-            autoFocus
-            value={folderName}
-            onChange={(e) => setFolderName(e.target.value)}
-            placeholder="Klasör adı"
-            className="h-9 min-w-48 flex-1 rounded-lg border border-line bg-surface px-2.5 text-[13px] text-ink focus:border-brand-ring focus:outline-none focus:ring-2 focus:ring-brand-ring/40"
-          />
-          <button
-            onClick={() =>
-              run(
-                "folder",
-                () =>
-                  saveFolder(null, {
-                    name: folderName,
-                    parent_id: cwd,
-                    visibility: "admin",
-                    section,
-                  }),
-                () => { setNaming(false); setFolderName(""); },
-              )
-            }
-            disabled={!folderName.trim() || busy === "folder"}
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-brand px-3 text-[13px] font-medium text-white hover:bg-brand-strong disabled:opacity-60"
-          >
-            {busy === "folder" ? <Loader2 size={14} className="animate-spin" /> : null} Kaydet
-          </button>
-          <button
-            onClick={() => { setNaming(false); setFolderName(""); }}
-            className="h-9 rounded-lg px-2 text-[13px] font-medium text-muted hover:text-ink"
-          >
-            İptal
-          </button>
+      {isEmpty && !naming ? (
+        <EmptyState
+          icon={FolderOpen}
+          title={cwd ? "Bu klasör boş." : "Henüz dosya yok."}
+          description="Üstteki düğmelerle klasör, yazı ya da tablo oluşturun; bağlantı ekleyin ya da dosya yükleyin."
+          action={
+            <Button size="sm" variant="secondary" onClick={openFilePicker} loading={busy === "upload"}>
+              <Upload size={14} aria-hidden /> Dosya yükle
+            </Button>
+          }
+        />
+      ) : view === "list" ? (
+        /* LİSTE — tek tablo, klasörler üstte. Yeni klasör kartı listenin
+           üstünde açılır; liste satırı bir ad kutusu taşıyamaz. */
+        <div className="space-y-3">
+          {namingTile && <TileGrid row>{namingTile}</TileGrid>}
+          {listItems.length > 0 && (
+            <DriveList items={listItems} memberNames={memberNames} menu={renderMenu} />
+          )}
         </div>
-      )}
-
-      {isEmpty ? (
-        <p className="rounded-xl border border-dashed border-line bg-surface px-4 py-6 text-[13px] text-subtle">
-          Bu klasör boş. Üstteki düğmelerle klasör, yazı ya da tablo oluşturabilir;
-          bağlantı ekleyip dosya yükleyebilirsiniz.
-        </p>
       ) : (
-        view === "list" ? (
-          /* LİSTE — tek tablo, klasörler üstte. */
-          <DriveList
-            items={[...items.folders, ...items.files]}
-            memberNames={memberNames}
-            actions={rowActions}
-          />
-        ) : (
-          /* KART — klasörler kutu, dosyalar tablo. */
-          <div className="space-y-5">
-            {items.folders.length > 0 && (
-              <Section title="Klasörler">
-                <DriveGrid
-                  items={items.folders}
-                  actions={rowActions}
-                  memberNames={memberNames}
-                  memberAvatars={memberAvatars}
-                  renamingId={renaming}
-                  busy={busy}
-                  onCancelRename={() => setRenaming(null)}
-                  onRename={(f, name) =>
-                    run(
-                      `rn-${f.id}`,
-                      () =>
-                        saveFolder(f.id, {
-                          name,
-                          parent_id: f.parent_id,
-                          visibility: f.visibility,
-                          section: f.section ?? section,
-                        }),
-                      () => setRenaming(null),
-                    )
-                  }
-                />
-              </Section>
-            )}
-            {items.files.length > 0 && (
-              <Section title="Dosyalar">
-                <DriveList
-                  items={items.files}
-                  memberNames={memberNames}
-                  actions={rowActions}
-                />
-              </Section>
-            )}
-          </div>
-        )
+        /* KART — klasörler kutu, dosyalar tablo. */
+        <div className="space-y-5">
+          {(items.folders.length > 0 || naming) && (
+            <Section title="Klasörler">
+              <DriveGrid
+                items={items.folders}
+                leading={namingTile}
+                menu={renderMenu}
+                memberNames={memberNames}
+                memberAvatars={memberAvatars}
+                renamingId={renaming}
+                busy={busy}
+                onCancelRename={() => setRenaming(null)}
+                onRename={(f, name) =>
+                  run(
+                    `rn-${f.id}`,
+                    () =>
+                      saveFolder(f.id, {
+                        name,
+                        parent_id: f.parent_id,
+                        visibility: f.visibility,
+                        section: f.section ?? section,
+                      }),
+                    () => setRenaming(null),
+                  )
+                }
+              />
+            </Section>
+          )}
+          {items.files.length > 0 && (
+            <Section title="Dosyalar">
+              <DriveList items={items.files} memberNames={memberNames} menu={renderMenu} />
+            </Section>
+          )}
+        </div>
       )}
       {dialog}
     </section>
   );
 }
 
-/** Kartın üstünde beliren küçük aksiyon. <button> içinde <button> olmasın diye
- *  kartın KARDEŞİ olarak, mutlak konumda durur. */
-function IconBtn({
-  title, onClick, children, danger, busy,
-}: {
-  title: string;
-  onClick: () => void;
-  children: React.ReactNode;
-  danger?: boolean;
-  busy?: boolean;
-}) {
+/* ⋯ menüsünün ölçüleri — yerleşim ilk karede doğru çıksın diye tahmini boy. */
+const MENU_W = 208;
+const MENU_EST_H = 120;
+
+/**
+ * ⋯ MENÜSÜ — bir öğenin ikincil eylemleri.
+ *
+ * Portal ile <body>'ye çizilir: liste kabı köşeleri için `overflow-hidden`
+ * taşıyor ve son satırın menüsü kutunun içinde kesiliyordu. Sabit konum
+ * kaydırmayı takip edemez; kaydırma/yeniden boyutlanmada kapanır (Pano'daki
+ * görev menüsüyle aynı yaklaşım).
+ */
+function ItemMenu({ label, actions, busy }: { label: string; actions: MenuAction[]; busy?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const place = useCallback(() => {
+    const r = btnRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const height = menuRef.current?.offsetHeight ?? MENU_EST_H;
+    const left = Math.min(Math.max(8, r.right - MENU_W), Math.max(8, window.innerWidth - MENU_W - 8));
+    const below = r.bottom + 4;
+    const top = below + height > window.innerHeight - 8 ? Math.max(8, r.top - height - 4) : below;
+    setPos((p) => (p && p.top === top && p.left === left ? p : { top, left }));
+  }, []);
+
+  // Gerçek yükseklik bilinince bir kez daha yerleştir — çevrilen menü
+  // ekrandan sarkmasın.
+  useEffect(() => { if (open) place(); }, [open, place]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDown(e: MouseEvent) {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") { e.stopPropagation(); setOpen(false); btnRef.current?.focus(); }
+    }
+    const dismiss = () => setOpen(false);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", dismiss, true);
+    window.addEventListener("resize", dismiss);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", dismiss, true);
+      window.removeEventListener("resize", dismiss);
+    };
+  }, [open]);
+
   return (
-    <button
-      onClick={onClick}
-      disabled={busy}
-      title={title}
-      aria-label={title}
-      className={cn(
-        "tap-target rounded-md bg-surface/90 p-1.5 text-subtle shadow-sm backdrop-blur transition-colors disabled:opacity-50",
-        danger ? "hover:text-danger" : "hover:text-ink",
+    <>
+      <IconButton
+        ref={btnRef}
+        size="sm"
+        aria-label={label}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        disabled={busy}
+        onClick={() => { if (!open) place(); setOpen((o) => !o); }}
+        className={cn("bg-surface", open && "bg-surface-muted text-ink")}
+      >
+        {busy ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <MoreHorizontal size={15} aria-hidden />}
+      </IconButton>
+
+      {open && createPortal(
+        <div
+          ref={menuRef}
+          role="menu"
+          aria-label={label}
+          style={{ top: pos?.top ?? -9999, left: pos?.left ?? -9999, width: MENU_W }}
+          className="anim-fade-down fixed z-[100] origin-top-right rounded-card border border-line bg-surface py-1 shadow-pop"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          {actions.map((a) => (
+            <button
+              key={a.label}
+              type="button"
+              role="menuitem"
+              onClick={() => { setOpen(false); a.onSelect(); }}
+              className={cn(
+                "flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13.5px] font-medium transition-colors duration-150",
+                a.danger ? "text-danger hover:bg-danger/10" : "text-ink hover:bg-surface-muted",
+              )}
+            >
+              <a.icon size={14} className={cn("shrink-0", !a.danger && "text-muted")} aria-hidden />
+              {a.label}
+            </button>
+          ))}
+        </div>,
+        document.body,
       )}
-    >
-      {busy ? <Loader2 size={13} className="animate-spin" /> : children}
-    </button>
+    </>
   );
 }
 
@@ -708,14 +844,18 @@ function IconBtn({
  * ortak çerçevede kalır.
  */
 function CreateButton({
-  icon: Icon, label, title, hex, onPick,
-}: { icon: typeof Plus; label: string; title?: string; hex: string; onPick: () => void }) {
+  icon: Icon, label, title, hex, busy, onPick,
+}: { icon: LucideIcon; label: string; title?: string; hex: string; busy?: boolean; onPick: () => void }) {
+  const name = title ?? `Yeni ${label.toLocaleLowerCase("tr")}`;
   return (
     <button
+      type="button"
       onClick={onPick}
-      title={title ?? `Yeni ${label.toLocaleLowerCase("tr")}`}
-      aria-label={title ?? `Yeni ${label.toLocaleLowerCase("tr")}`}
-      className="group inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border border-line bg-surface pl-1.5 pr-2.5 text-[13px] font-medium text-muted transition-all duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98] sm:pr-3"
+      disabled={busy}
+      aria-busy={busy || undefined}
+      title={name}
+      aria-label={name}
+      className="inline-flex h-9 shrink-0 items-center gap-2 rounded-control border border-line bg-surface pl-1.5 pr-2.5 text-[13px] font-medium text-muted transition-[background-color,border-color,color,transform] duration-150 ease-standard hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98] disabled:pointer-events-none disabled:text-subtle sm:pr-3"
     >
       {/* ARTI ROZETİ — düğmeler "Word'e git" gibi okunuyordu (2026-08-29:
           "şu an sanki tıklayınca Word'e gidecekmiş gibi duruyor"). Rozet
@@ -723,14 +863,14 @@ function CreateButton({
           uzatmadan ("Yeni Word") satır dar kalır. */}
       <span className="relative shrink-0">
         <span
-          className="grid size-6 place-items-center rounded-md transition-colors duration-150"
+          className="grid size-6 place-items-center rounded-[6px]"
           style={{ backgroundColor: hex + "1F", color: hex }}
         >
-          <Icon size={14} strokeWidth={2} />
+          {busy ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Icon size={14} strokeWidth={2} aria-hidden />}
         </span>
         <span
           aria-hidden
-          className="absolute -bottom-1 -right-1 grid size-3.5 place-items-center rounded-full text-white ring-2 ring-surface transition-colors duration-150"
+          className="absolute -bottom-1 -right-1 grid size-3.5 place-items-center rounded-full text-white ring-2 ring-surface"
           style={{ backgroundColor: hex }}
         >
           <Plus size={9} strokeWidth={3.5} />
@@ -741,29 +881,42 @@ function CreateButton({
   );
 }
 
+/** Satırın tek meta satırı: tür · boyut · tarih (klasörde tür · içerik). */
+function metaOf(it: DriveItem): string {
+  return [
+    it.kind.label,
+    it.size ? humanSize(it.size) : null,
+    it.isFolder ? it.note ?? null : it.date ? new Date(it.date).toLocaleDateString("tr-TR") : null,
+  ].filter(Boolean).join(" · ");
+}
+
 /** Liste satırının ilk sütunu: küçük tür ikonu (ya da görsel önizlemesi) + ad.
- *  Tıklama alanı satırın tamamını kaplar — Drive'da da öyle. */
+ *  Dar ekranda sütunlar gizlenir; tür · boyut · tarih adın altında tek satır
+ *  olarak yazar ki telefonda da dosyanın ne olduğu görünsün. */
 function ItemName({ item }: { item: DriveItem }) {
   const Icon = item.kind.icon;
   const inner = (
     <>
       <span
-        className="grid size-7 shrink-0 place-items-center overflow-hidden rounded-md"
+        className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-[6px]"
         style={{ backgroundColor: item.kind.hex + "1A", color: item.kind.hex }}
       >
         {item.thumbUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={item.thumbUrl} alt="" className="h-full w-full object-cover" />
         ) : (
-          <Icon size={15} strokeWidth={1.9} />
+          <Icon size={15} strokeWidth={1.9} aria-hidden />
         )}
       </span>
-      <span className="min-w-0 truncate text-[13.5px] font-medium text-ink" title={item.name}>
-        {item.name}
+      <span className="min-w-0">
+        <span className="block truncate text-[13.5px] font-medium text-ink" title={item.name}>
+          {item.name}
+        </span>
+        <span className="block truncate text-[12px] text-muted sm:hidden">{metaOf(item)}</span>
       </span>
     </>
   );
-  const cls = "flex min-w-0 items-center gap-2.5 text-left";
+  const cls = "flex min-w-0 items-center gap-2.5 rounded-control text-left";
 
   if (item.href && item.external) {
     return <a href={item.href} target="_blank" rel="noopener noreferrer" className={cls}>{inner}</a>;
@@ -776,7 +929,7 @@ function ItemName({ item }: { item: DriveItem }) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <h3 className="mb-2 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-subtle">
+      <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle">
         {title}
       </h3>
       {children}
@@ -794,11 +947,11 @@ type SortKey = "name" | "kind" | "owner" | "date";
  * tıklayınca o sütuna göre, tekrar tıklayınca ters çevrilir.
  */
 function DriveList({
-  items, memberNames, actions,
+  items, memberNames, menu,
 }: {
   items: DriveItem[];
   memberNames: Record<string, string>;
-  actions: (_it: DriveItem) => React.ReactNode;
+  menu: (_it: DriveItem) => React.ReactNode;
 }) {
   const [sort, setSort] = useState<SortKey | null>(null);
   const [dir, setDir] = useState<"asc" | "desc">("asc");
@@ -825,19 +978,19 @@ function DriveList({
   }, [items, memberNames, sort, dir]);
 
   return (
-    <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">
-      <div className="hidden grid-cols-[1fr_120px_120px_100px_88px] gap-3 border-b border-line px-3 py-2 sm:grid">
+    <div className="overflow-hidden rounded-card border border-line bg-surface shadow-card">
+      <div className="hidden grid-cols-[1fr_120px_140px_100px_44px] gap-3 border-b border-line px-3 py-2 sm:grid">
         <SortHeader active={sort === "name"} dir={dir} onSort={() => toggle("name")}>Ad</SortHeader>
         <SortHeader active={sort === "kind"} dir={dir} onSort={() => toggle("kind")}>Tür</SortHeader>
         <SortHeader active={sort === "owner"} dir={dir} onSort={() => toggle("owner")}>Sahibi</SortHeader>
         <SortHeader active={sort === "date"} dir={dir} onSort={() => toggle("date")} align="right">Tarih</SortHeader>
-        <span />
+        <span aria-hidden />
       </div>
       <ul className="divide-y divide-hairline">
         {rows.map((it) => (
           <li
             key={it.key}
-            className="group/row grid grid-cols-[1fr_auto] items-center gap-3 px-3 py-2 transition-colors hover:bg-surface-hover sm:grid-cols-[1fr_120px_120px_100px_88px]"
+            className="grid grid-cols-[1fr_auto] items-center gap-3 px-3 py-2 transition-colors duration-150 hover:bg-surface-hover sm:grid-cols-[1fr_120px_140px_100px_44px]"
           >
             <ItemName item={it} />
             <span className="hidden truncate text-[12.5px] text-muted sm:block">{it.kind.label}</span>
@@ -847,9 +1000,7 @@ function DriveList({
             <span className="hidden whitespace-nowrap text-right text-[12.5px] tabular-nums text-subtle sm:block">
               {it.date ? new Date(it.date).toLocaleDateString("tr-TR") : (it.note ?? "—")}
             </span>
-            <span className="flex items-center justify-end gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/row:opacity-100">
-              {actions(it)}
-            </span>
+            <span className="flex items-center justify-end">{menu(it)}</span>
           </li>
         ))}
       </ul>
@@ -859,11 +1010,13 @@ function DriveList({
 
 /** IZGARA — Drive'ın kutuları: ikon solda, ad sağda. Görselde önizleme. */
 function DriveGrid({
-  items, actions, memberNames, memberAvatars,
+  items, leading, menu, memberNames, memberAvatars,
   renamingId, onRename, onCancelRename, busy,
 }: {
   items: DriveItem[];
-  actions: (_it: DriveItem) => React.ReactNode;
+  /** Izgaranın başına konan kart (yeni klasör adı kutusu). */
+  leading?: React.ReactNode;
+  menu: (_it: DriveItem) => React.ReactNode;
   memberNames: Record<string, string>;
   memberAvatars: Record<string, string | null>;
   /** Adı KART İÇİNDE düzenlenen klasör. */
@@ -874,80 +1027,105 @@ function DriveGrid({
 }) {
   return (
     <TileGrid row>
-      {items.map((it) =>
-        renamingId && it.folder?.id === renamingId ? (
-          <FolderRename
-            key={it.key}
-            folder={it.folder}
-            busy={busy === `rn-${it.folder.id}`}
-            onSave={(name) => onRename?.(it.folder!, name)}
-            onCancel={() => onCancelRename?.()}
-          />
-        ) : (
-        <div key={it.key} className="group/tile relative">
-          <Tile
-            layout="row"
-            href={it.href}
-            external={it.external}
-            onClick={it.href ? undefined : it.onOpen}
-            title={it.name}
-            /* Önce NE ZAMAN, sonra KİM. Avatar başta dururken klasör
-               simgesiyle dikey olarak çakışıyor, iki yuvarlak yan yana
-               okunmuyordu (2026-08-29). */
-            metaNode={
-              it.isFolder ? (
-                <span className="flex items-center gap-1.5">
-                  {it.date && (
-                    <span className="shrink-0 tabular-nums">
-                      {new Date(it.date).toLocaleDateString("tr-TR")}
-                    </span>
-                  )}
-                  {it.ownerId && <span className="text-subtle">·</span>}
-                  {it.ownerId && (
-                    <PersonAvatar
-                      name={memberNames[it.ownerId] ?? "—"}
-                      photoUrl={memberAvatars[it.ownerId] ?? null}
-                      colorHex={personTone(it.ownerId).hex}
-                      size="xs"
-                    />
-                  )}
-                  <span className="truncate">
-                    {it.ownerId ? getPersonDisplayName(memberNames[it.ownerId] ?? "—") : "—"}
+      {leading}
+      {items.map((it) => {
+        if (renamingId && it.folder?.id === renamingId) {
+          const folder = it.folder;
+          return (
+            <FolderNameTile
+              key={it.key}
+              initialName={folder.name}
+              placeholder="Klasör adı"
+              busy={busy === `rn-${folder.id}`}
+              onSave={(name) => onRename?.(folder, name)}
+              onCancel={() => onCancelRename?.()}
+            />
+          );
+        }
+        const actions = menu(it);
+        // Sahip: kimlik AVATARDAN okunur, ad METNİ yazılmaz (aşağıdaki not).
+        const ownerId = it.ownerId;
+        const ownerName = ownerId ? memberNames[ownerId] ?? null : null;
+        return (
+          /* ⋯ menüsü kartın KARDEŞİ: kart bir <a>/<button>, içine ikinci bir
+             düğme giremez. Kartın sağında menü kadar boşluk bırakılır
+             ([&>a]:pr-11) ki uzun ad düğmenin altında kalmasın. */
+          <div key={it.key} className={cn("relative", actions && "[&>a]:pr-11 [&>button]:pr-11")}>
+            <Tile
+              layout="row"
+              href={it.href}
+              external={it.external}
+              onClick={it.href ? undefined : it.onOpen}
+              title={it.name}
+              /* Önce NE ZAMAN, sonra KİM. Avatar başta dururken klasör
+                 simgesiyle dikey olarak çakışıyor, iki yuvarlak yan yana
+                 okunmuyordu (2026-08-29).
+                 AD METNİ YAZILMAZ (2026-08-29: "isim kırpılmış şekilde…
+                 ya resmi görünmeli ya da baş harfleri isim olmasın hiç"):
+                 kutucuğun meta satırı dar, ad tek harfe kırpılıyordu. Kimlik
+                 avatardan okunur (fotoğraf, yoksa kişinin renginde baş harf);
+                 tam ad üstüne gelince title'dan, ekran okuyucuda sr-only
+                 metinden gelir. */
+              metaNode={
+                it.isFolder ? (
+                  <span className="flex items-center gap-1.5">
+                    {it.date && (
+                      <span className="shrink-0 tabular-nums">
+                        {new Date(it.date).toLocaleDateString("tr-TR")}
+                      </span>
+                    )}
+                    {/* Ayraç yalnız iki yanı da doluyken çizilir. */}
+                    {it.date && ownerId && ownerName && (
+                      <span className="text-subtle" aria-hidden>·</span>
+                    )}
+                    {ownerId && ownerName && (
+                      <>
+                        <PersonAvatar
+                          name={ownerName}
+                          photoUrl={memberAvatars[ownerId] ?? null}
+                          colorHex={personTone(ownerId).hex}
+                          size="xs"
+                          title={ownerName}
+                        />
+                        <span className="sr-only">{ownerName}</span>
+                      </>
+                    )}
                   </span>
-                </span>
-              ) : undefined
-            }
-            /* GÖRÜNÜRLÜK simgenin köşesinde — Drive da klasörün paylaşım
-               durumunu böyle gösterir. Meta satırının sonundaki küçük gri
-               kilit fark edilmiyordu ("anlaşılmıyor"). */
-            iconBadge={
-              it.restricted ? (
-                <Lock
-                  size={10}
-                  strokeWidth={2.4}
-                  className="text-amber-700"
-                  aria-label="Yalnız yönetici görebilir"
-                />
-              ) : undefined
-            }
-            meta={[it.kind.label, it.size ? humanSize(it.size) : null, it.note ?? null]
-              .filter(Boolean).join(" · ")}
-            photoUrl={it.thumbUrl ?? undefined}
-            icon={it.kind.icon}
-            colorHex={it.kind.hex}
-          />
-          <span className="absolute right-1.5 top-1/2 z-[3] flex -translate-y-1/2 items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/tile:opacity-100">
-            {actions(it)}
-          </span>
-        </div>
-        ),
-      )}
+                ) : undefined
+              }
+              /* GÖRÜNÜRLÜK simgenin köşesinde — Drive da klasörün paylaşım
+                 durumunu böyle gösterir. Meta satırının sonundaki küçük gri
+                 kilit fark edilmiyordu ("anlaşılmıyor"). */
+              iconBadge={
+                it.restricted ? (
+                  <Lock
+                    size={10}
+                    strokeWidth={2.4}
+                    className="text-warning"
+                    aria-label="Yalnız yönetici görebilir"
+                  />
+                ) : undefined
+              }
+              meta={metaOf(it)}
+              photoUrl={it.thumbUrl ?? undefined}
+              icon={it.kind.icon}
+              colorHex={it.kind.hex}
+            />
+            {actions && (
+              <span className="absolute right-1.5 top-1/2 z-[3] flex -translate-y-1/2 items-center">
+                {actions}
+              </span>
+            )}
+          </div>
+        );
+      })}
     </TileGrid>
   );
 }
 
 /**
- * Klasör adını KARTIN YERİNDE düzenler.
+ * Klasör adını KARTIN YERİNDE yazar — yeni klasör için de, yeniden adlandırma
+ * için de aynı kart.
  *
  * Sıraç (2026-08-29): "Klasörü yeniden adlandırmak için üstte bu kadar büyük
  * şeyin çıkmasına gerek var mı? Neden klasörde yapamıyoruz bunu?"
@@ -956,21 +1134,24 @@ function DriveGrid({
  * klasör ekranın çok aşağısında kalıyordu — hangi klasörü adlandırdığın
  * görünmüyordu. Artık kart, aynı ölçüde bir metin alanına dönüşüyor.
  */
-function FolderRename({
-  folder, busy, onSave, onCancel,
+function FolderNameTile({
+  initialName, placeholder, busy, onSave, onCancel,
 }: {
-  folder: DocFolder;
+  initialName: string;
+  placeholder: string;
   busy: boolean;
   onSave: (_name: string) => void;
   onCancel: () => void;
 }) {
-  const [name, setName] = useState(folder.name);
+  const [name, setName] = useState(initialName);
   const commit = () => { if (name.trim()) onSave(name.trim()); };
 
   return (
-    <div className="flex items-center gap-1.5 rounded-xl border border-brand-ring bg-surface px-2 py-2 shadow-card">
-      <input
+    <div className="flex items-center gap-1 rounded-card border border-brand-ring bg-surface px-2 py-2 shadow-card">
+      <TextInput
         autoFocus
+        aria-label="Klasör adı"
+        placeholder={placeholder}
         value={name}
         onChange={(e) => setName(e.target.value)}
         onKeyDown={(e) => {
@@ -978,25 +1159,20 @@ function FolderRename({
           if (e.key === "Escape") onCancel();
         }}
         onFocus={(e) => e.currentTarget.select()}
-        className="min-w-0 flex-1 rounded-lg border border-line bg-surface px-2 py-1.5 text-[13.5px] font-medium text-ink focus:border-brand-ring focus:outline-none focus:ring-2 focus:ring-brand-ring/40"
+        className="h-8 flex-1 font-medium"
       />
-      <button
+      <IconButton
+        size="sm"
+        aria-label="Kaydet"
         onClick={commit}
         disabled={busy || !name.trim()}
-        title="Kaydet"
-        aria-label="Kaydet"
-        className="tap-target shrink-0 rounded-md p-1.5 text-brand transition-colors hover:bg-brand-soft disabled:opacity-50"
+        className="text-brand hover:bg-brand-soft hover:text-brand-strong"
       >
-        {busy ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-      </button>
-      <button
-        onClick={onCancel}
-        title="Vazgeç"
-        aria-label="Vazgeç"
-        className="tap-target shrink-0 rounded-md p-1.5 text-subtle transition-colors hover:text-ink"
-      >
-        <X size={14} />
-      </button>
+        {busy ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Check size={15} aria-hidden />}
+      </IconButton>
+      <IconButton size="sm" aria-label="Vazgeç" onClick={onCancel}>
+        <X size={15} aria-hidden />
+      </IconButton>
     </div>
   );
 }

@@ -2,19 +2,21 @@
 
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import {
   Wallet, ClipboardList, Check, Loader2, HandCoins, ChevronLeft, Scissors, Boxes,
   MapPin, Clock3, Package,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { updateProductionSheetPricing } from "@/lib/actions/production";
 import {
   totalQuantity, formatMoney, ustaUnitPaymentOf,
 } from "@/lib/collection/cost";
 import { assignPersonTones } from "@/lib/design/person-colors";
 import { getPersonInitials } from "@/lib/utils/person-display";
+import { Button } from "@/components/ui/Button";
+import { TextInput } from "@/components/ui/Field";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Tile, TileGrid } from "@/components/ui/TileGrid";
 import { SeasonSwitch, type SwitchSeason } from "./SeasonSwitch";
 import type { ProductionSheet, ProductionPricing, Manufacturer } from "@/types";
 
@@ -39,8 +41,16 @@ interface Props {
 /** Üreticisi girilmemiş föylerin toplandığı kova. */
 const UNKNOWN = "Usta atanmadı";
 
-const priceInput =
-  "w-full rounded-md border border-line bg-surface px-2 py-1 text-[13px] text-ink text-right tabular-nums transition-[border-color,box-shadow] duration-150 hover:border-line-strong focus:outline-none focus:ring-2 focus:ring-brand-ring focus:border-brand-ring";
+// Sticky başlık/dip hücreleri — tablo border-separate olduğundan çizgiler
+// hücrede yaşar (border-collapse sticky ile çizgiyi geride bırakır).
+const thSticky = "sticky top-0 z-10 border-b border-line-strong bg-surface py-2.5";
+const tfSticky = "sticky bottom-0 z-10 border-t border-line-strong bg-surface-muted px-2 py-2";
+const groupSep = "border-l border-hairline";
+
+/** Tablo hücresi girdisi — ortak TextInput'un kompakt hâli (h-8, sağa yaslı,
+ *  hizalı rakam). Çerçeve dinlenirken görünür: hücrenin yazılabilir olduğu
+ *  belli olsun. */
+const priceInput = "h-8 px-2 text-right tabular-nums";
 
 /**
  * Ödeme Tablosu — usta başına ödeme.
@@ -160,55 +170,77 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
       <CollectionTabs active="odeme" actions={<SeasonSwitch seasons={seasons} />} />
 
       {rows.length === 0 ? (
-        <EmptyBox text="Henüz ürün yok. Collection’a föy ekleyin." />
+        <EmptyState icon={HandCoins} className="anim-fade-up" title="Henüz ürün yok." description="Collection’a föy ekleyin; ustalar burada görünür." />
       ) : active ? (
         /* ── Bir ustanın sayfası — diktiği ürünler ─────────────────────── */
         <section className="anim-fade">
           <div className="mb-3 flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => setOpenUsta(null)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[13px] font-medium text-muted transition-all duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
-            >
+            <Button variant="secondary" size="sm" onClick={() => setOpenUsta(null)} className="shrink-0">
               <ChevronLeft size={14} /> Ustalar
-            </button>
+            </Button>
             <span className="flex min-w-0 items-center gap-2">
               <span aria-hidden className={`h-5 w-1.5 shrink-0 rounded-full ${tones[active.key]?.bar ?? "bg-brand"}`} />
-              <span className="truncate text-[15px] font-semibold tracking-tight text-ink">{active.name}</span>
+              <span className="min-w-0">
+                <span className="block truncate text-[15px] font-semibold tracking-tight text-ink">{active.name}</span>
+                {/* Teslim süresi + minimum adet + şehir — Zedonk'un
+                    Manufacturers sekmesinden. Sipariş verirken sorulan ilk
+                    sorular; ustanın ürünlerine bakarken burada durur, kart
+                    üstünde kalabalık etmez. */}
+                {(active.rec?.city || active.rec?.lead_time_days != null || active.rec?.min_order_qty != null) && (
+                  <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12px] text-subtle">
+                    {active.rec?.city && (
+                      <span className="inline-flex items-center gap-1"><MapPin size={12} aria-hidden />{active.rec.city}</span>
+                    )}
+                    {active.rec?.lead_time_days != null && (
+                      <span className="inline-flex items-center gap-1"><Clock3 size={12} aria-hidden />{active.rec.lead_time_days} gün</span>
+                    )}
+                    {active.rec?.min_order_qty != null && (
+                      <span className="inline-flex items-center gap-1"><Package size={12} aria-hidden />min {active.rec.min_order_qty}</span>
+                    )}
+                  </span>
+                )}
+                {!active.rec && active.name !== UNKNOWN && (
+                  <span className="block text-[12px] text-warning">Kayıtlı usta değil — Product Data’dan ekleyin</span>
+                )}
+              </span>
             </span>
             <span className="ml-auto text-[13px] tabular-nums text-muted">
               {active.qty} adet · <b className="font-semibold text-ink">{formatMoney(active.total)}</b>
             </span>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-line-strong bg-surface shadow-card">
+          <div className="overflow-hidden rounded-card border border-line bg-surface shadow-card">
             <div className="max-h-[70vh] overflow-auto">
               <table className="w-full min-w-[820px] border-separate border-spacing-0 text-sm">
                 <thead>
-                  <tr className="text-[11.5px] font-semibold uppercase tracking-wider text-muted">
-                    <th className="sticky top-0 z-10 min-w-[220px] border-b-2 border-line-strong bg-surface-muted px-3 py-2.5 text-left">Ürün</th>
-                    <th className="sticky top-0 z-10 border-b-2 border-l border-line-strong bg-surface-muted px-2 py-2.5 text-right">Adet</th>
-                    <th className="sticky top-0 z-10 w-36 border-b-2 border-l border-line-strong bg-surface-muted px-2 py-2.5 text-right">Birim ödeme</th>
-                    <th className="sticky top-0 z-10 min-w-[120px] border-b-2 border-l border-line-strong bg-surface-muted px-3 py-2.5 text-right">Toplam</th>
-                    <th className="sticky top-0 z-10 w-32 border-b-2 border-l border-line-strong bg-surface-muted px-2 py-2.5 text-left">Fatura no</th>
-                    <th className="sticky top-0 z-10 w-36 border-b-2 border-l border-line-strong bg-surface-muted px-2 py-2.5 text-right">Fatura tutarı</th>
-                    <th className="sticky top-0 z-10 w-8 border-b-2 border-line-strong bg-surface-muted px-2 py-2.5" />
+                  {/* Dikey çizgi yok; yalnız ÖDEME ile FATURA grubu arasında
+                      tek ince ayırıcı — iki ayrı defter olduğu okunsun. */}
+                  <tr className="text-[12px] font-semibold uppercase tracking-[0.06em] text-muted">
+                    <th className={cn(thSticky, "min-w-[220px] px-3 text-left")}>Ürün</th>
+                    <th className={cn(thSticky, "px-2 text-right")}>Adet</th>
+                    <th className={cn(thSticky, "w-36 px-2 text-right")}>Birim ödeme</th>
+                    <th className={cn(thSticky, "min-w-[120px] px-3 text-right")}>Toplam</th>
+                    <th className={cn(thSticky, groupSep, "w-32 px-2 text-left")}>Fatura no</th>
+                    <th className={cn(thSticky, "w-36 px-2 text-right")}>Fatura tutarı</th>
+                    <th className={cn(thSticky, "w-8 px-2")} />
                   </tr>
                 </thead>
                 <tbody className="[&>tr:last-child>td]:border-b-0 [&>tr>td]:border-b [&>tr>td]:border-b-hairline">
                   {active.rows.map((r) => (
-                    <tr key={r.id} className="transition-colors duration-150 hover:bg-surface-hover/60">
+                    <tr key={r.id} className="transition-colors duration-150 hover:bg-surface-hover">
                       <td className="px-3 py-1.5">
                         <Link href={`/production/${r.id}`} className="font-medium text-ink transition-colors duration-150 hover:text-brand-strong">
                           {r.title}
                         </Link>
                         {r.product_kind && <span className="ml-2 text-[12px] text-subtle">{r.product_kind}</span>}
                       </td>
-                      <td className="border-l border-line/70 px-2 py-1.5 text-right font-semibold tabular-nums text-ink">
+                      <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-ink">
                         {qtyOf(r) || "—"}
                       </td>
-                      <td className="border-l border-line/70 px-2 py-1">
-                        <input
+                      <td className="px-2 py-1">
+                        <TextInput
                           className={priceInput}
+                          aria-label={`${r.title} — birim ödeme`}
                           value={pricing[r.id]?.usta_unit_payment ?? ""}
                           onChange={(e) => setPayment(r.id, e.target.value)}
                           onBlur={() => savePayment(r.id)}
@@ -216,12 +248,13 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
                           inputMode="decimal"
                         />
                       </td>
-                      <td className="border-l border-line/70 px-3 py-1.5 text-right font-semibold tabular-nums text-ink">
+                      <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-ink">
                         {lineTotal(r) ? formatMoney(lineTotal(r)) : "—"}
                       </td>
-                      <td className="border-l border-line/70 px-2 py-1">
-                        <input
-                          className={cn(priceInput, "text-left tabular-nums")}
+                      <td className={cn(groupSep, "px-2 py-1")}>
+                        <TextInput
+                          className={cn(priceInput, "text-left")}
+                          aria-label={`${r.title} — fatura no`}
                           value={pricing[r.id]?.invoice_no ?? ""}
                           onChange={(e) => setInvoiceNo(r.id, e.target.value)}
                           onBlur={() => savePayment(r.id)}
@@ -229,9 +262,10 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
                           spellCheck={false}
                         />
                       </td>
-                      <td className="border-l border-line/70 px-2 py-1">
-                        <input
+                      <td className="px-2 py-1">
+                        <TextInput
                           className={priceInput}
+                          aria-label={`${r.title} — fatura tutarı`}
                           value={pricing[r.id]?.invoice_amount ?? ""}
                           onChange={(e) => setInvoiceAmount(r.id, e.target.value)}
                           onBlur={() => savePayment(r.id)}
@@ -250,16 +284,16 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="text-[13px] font-bold">
-                    <td className="sticky bottom-0 z-10 border-t-2 border-line-strong bg-surface-muted px-3 py-2 text-ink">Toplam</td>
-                    <td className="sticky bottom-0 z-10 border-l border-t-2 border-line-strong bg-surface-muted px-2 py-2 text-right tabular-nums text-ink">{active.qty}</td>
-                    <td className="sticky bottom-0 z-10 border-l border-t-2 border-line-strong bg-surface-muted px-2 py-2" />
-                    <td className="sticky bottom-0 z-10 border-l border-t-2 border-line-strong bg-surface-muted px-3 py-2 text-right tabular-nums text-ink">{formatMoney(active.total)}</td>
-                    <td className="sticky bottom-0 z-10 border-l border-t-2 border-line-strong bg-surface-muted px-2 py-2" />
-                    <td className="sticky bottom-0 z-10 border-l border-t-2 border-line-strong bg-surface-muted px-2 py-2 text-right tabular-nums text-ink">
+                  <tr className="text-[13px] font-semibold">
+                    <td className={cn(tfSticky, "px-3 text-ink")}>Toplam</td>
+                    <td className={cn(tfSticky, "px-2 text-right tabular-nums text-ink")}>{active.qty}</td>
+                    <td className={tfSticky} />
+                    <td className={cn(tfSticky, "px-3 text-right tabular-nums text-ink")}>{formatMoney(active.total)}</td>
+                    <td className={cn(tfSticky, groupSep)} />
+                    <td className={cn(tfSticky, "px-2 text-right tabular-nums text-ink")}>
                       {invoiceTotal(active.rows) ? formatMoney(invoiceTotal(active.rows)) : "—"}
                     </td>
-                    <td className="sticky bottom-0 z-10 border-t-2 border-line-strong bg-surface-muted px-2 py-2" />
+                    <td className={tfSticky} />
                   </tr>
                 </tfoot>
               </table>
@@ -281,76 +315,36 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
             </span>
           </div>
 
-          <div className="stagger-children grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {/* USTA KARTLARI = TileGrid. Pano'nun kişi kartıyla AYNI kart
+              (2026-08-28: "bir tasarımı yaptığın zaman o tasarımı her yerde
+              devam ettirmen gerekiyor"). Kartta yalnız ad + toplam ödeme +
+              kaç ürün; şehir/teslim süresi/minimum adet ustanın sayfasında,
+              başlığın altında durur. */}
+          <TileGrid>
             {ustalar.map((u) => {
               const tone = tones[u.key]!;
+              const unknown = u.name === UNKNOWN;
               return (
-                <button
+                <Tile
                   key={u.key}
                   onClick={() => setOpenUsta(u.key)}
-                  className={cn(
-                    "group relative flex flex-col overflow-hidden rounded-2xl border bg-surface text-left shadow-card transition-all duration-200 ease-standard",
-                    "hover:-translate-y-0.5 hover:shadow-card-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
-                    tone.border, tone.ring,
-                  )}
-                >
-                  <span aria-hidden className={`absolute inset-x-0 top-0 h-1 ${tone.bar}`} />
-                  <div className={cn("flex items-center gap-3 px-4 pb-3 pt-5", tone.soft)}>
-                    {/* Aslı Hanım: "Cihan diye bir fotoğraf, Hakan diye bir olsa."
-                        Fotoğraf varsa fotoğraf; yoksa ustaya özel ikon. */}
-                    {u.rec?.photo_url ? (
-                      <Image
-                        src={u.rec.photo_url}
-                        alt=""
-                        width={48}
-                        height={48}
-                        className="h-12 w-12 shrink-0 rounded-full object-cover ring-2 ring-surface"
-                        unoptimized
-                      />
-                    ) : (
-                      <span className={cn("grid h-12 w-12 shrink-0 place-items-center rounded-full text-white ring-2 ring-surface", tone.solid)}>
-                        {u.name === UNKNOWN ? <Scissors size={20} strokeWidth={1.9} /> : getPersonInitials(u.name)}
+                  title={u.name}
+                  photoUrl={u.rec?.photo_url ?? null}
+                  initials={unknown ? undefined : getPersonInitials(u.name)}
+                  icon={unknown ? Scissors : undefined}
+                  colorHex={tone.hex}
+                  metaNode={
+                    <>
+                      <span className={cn("font-semibold tabular-nums", u.total > 0 ? "text-ink" : "text-subtle")}>
+                        {formatMoney(u.total)}
                       </span>
-                    )}
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[15px] font-semibold tracking-tight text-ink" title={u.name}>
-                        {u.name}
-                      </span>
-                      <span className="mt-0.5 block text-[12px] text-muted">{u.rows.length} ürün · {u.qty} adet</span>
-                    </span>
-                  </div>
-                  <div className="border-t border-hairline px-4 py-2.5">
-                    <span className="block text-[11px] font-semibold uppercase tracking-wider text-subtle">Toplam ödeme</span>
-                    <span className={cn("block text-[17px] font-semibold tabular-nums", u.total > 0 ? tone.text : "text-subtle")}>
-                      {formatMoney(u.total)}
-                    </span>
-                    {/* Teslim süresi + minimum adet — Zedonk'un Manufacturers
-                        sekmesinden alınan iki alan ("Lead Time: 30 days",
-                        "Minimums: 50 units"). Sipariş verirken sorulan ilk iki
-                        soru bunlar; kartta durması aramayı bitirir. */}
-                    {(u.rec?.lead_time_days || u.rec?.min_order_qty || u.rec?.city) && (
-                      <span className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11.5px] text-subtle">
-                        {u.rec?.city && (
-                          <span className="inline-flex items-center gap-1"><MapPin size={11} />{u.rec.city}</span>
-                        )}
-                        {u.rec?.lead_time_days != null && (
-                          <span className="inline-flex items-center gap-1"><Clock3 size={11} />{u.rec.lead_time_days} gün</span>
-                        )}
-                        {u.rec?.min_order_qty != null && (
-                          <span className="inline-flex items-center gap-1"><Package size={11} />min {u.rec.min_order_qty}</span>
-                        )}
-                      </span>
-                    )}
-                    {!u.rec && u.name !== UNKNOWN && (
-                      <span className="mt-1.5 block text-[11.5px] text-warning">
-                        Kayıtlı usta değil — Ayarlar’dan ekleyin
-                      </span>
-                    )}
-                  </div>
-                </button>
+                      <span className="text-subtle"> · {u.rows.length} ürün</span>
+                    </>
+                  }
+                />
               );
             })}
-          </div>
+          </TileGrid>
         </section>
       )}
     </div>
@@ -384,7 +378,7 @@ export function CollectionTabs({
 
   return (
     <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-      <div className="inline-flex h-9 max-w-full items-center overflow-x-auto rounded-lg border border-line bg-surface-muted p-0.5 no-scrollbar">
+      <div className="inline-flex h-9 max-w-full items-center overflow-x-auto rounded-control border border-line bg-surface-muted p-0.5 no-scrollbar">
         {TABS.map((t, i) => {
           const isActive = t.key === active;
           /* AYIRICI: sekmeler bitişikken tek bir uzun düğme gibi okunuyordu
@@ -419,17 +413,6 @@ export function CollectionTabs({
       <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
         {actions}
       </div>
-    </div>
-  );
-}
-
-function EmptyBox({ text }: { text: string }) {
-  return (
-    <div className="anim-fade-up rounded-2xl border border-line bg-surface px-6 py-14 text-center shadow-card">
-      <div className="mx-auto mb-3 grid size-11 place-items-center rounded-full bg-surface-sunken text-subtle">
-        <Wallet size={20} />
-      </div>
-      <p className="text-[13.5px] text-subtle">{text}</p>
     </div>
   );
 }

@@ -14,7 +14,7 @@ import {
 import { useState, useOptimistic, useTransition, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowUp, ArrowDown, ArrowUpDown, ChevronDown, Plus, FileSpreadsheet, Lock, ClipboardList } from "lucide-react";
+import { ChevronDown, Plus, FileSpreadsheet, Lock, ClipboardList, Search, SlidersHorizontal, X, AlertCircle, LayoutDashboard } from "lucide-react";
 import { ADMIN_ONLY_CHIP_LABEL } from "@/lib/utils/visibility";
 import type { Task, SavedView, TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceDepartment } from "@/types";
 import {
@@ -24,16 +24,19 @@ import {
   CARD_STATUS_OPTIONS,
   SAVED_VIEW_SLUG_MAP,
 } from "@/lib/utils/task-constants";
-import { ViewTabs, VIEW_META, type ViewTabItem } from "@/components/shared/ViewTabs";
+import { ViewTabs, VIEW_META, tabClass, type ViewTabItem } from "@/components/shared/ViewTabs";
 import { FIELD_LABELS } from "@/lib/i18n/tr";
 import { updateTaskStatus } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils/cn";
 import { formatDateTR } from "@/lib/utils/format-date";
 import { buildDeptMeta } from "@/lib/utils/departments";
 import { resolvePersonDescriptor, resolvePersonName, taskMatchesPerson } from "@/lib/utils/task-person-match";
-import { getDepartmentBadge, STATUS_CHIP_TONE, PRIORITY_CHIP } from "@/lib/design/semantics";
+import { getDepartmentBadge, STATUS_CHIP_TONE, STATUS_DOT, PRIORITY_CHIP, PRIORITY_SHOW_ON_BOARD } from "@/lib/design/semantics";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { TextInput, SelectInput } from "@/components/ui/Field";
+import { PersonAvatar } from "@/components/ui/PersonAvatar";
+import { assignPersonTones } from "@/lib/design/person-colors";
+import { SortHeader } from "@/components/ui/SortHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
 import { CsvImportModal } from "@/components/task/CsvImportModal";
@@ -47,6 +50,8 @@ interface Props {
   contacts: WorkspaceContact[];
   departments?: WorkspaceDepartment[];
   members?: { memberId: string; userId: string; name: string }[];
+  /** Süzgeç şeridindeki kişi baloncukları — ekip üyeleri, kimlikleriyle. */
+  people?: { userId: string; name: string; photoUrl: string | null; colorKey: string | null }[];
   deptMembers?: { department_id: string; member_id: string }[];
   isAdmin?: boolean;
   // Person filter seed from the URL (?person=<member userId | contact id>).
@@ -177,8 +182,16 @@ function safeCategory(task: Task): string {
 
 const columnHelper = createColumnHelper<Task>();
 
-// ---- Status badge (inline editable) ----
-function StatusBadge({ task }: { task: Task }) {
+/* Tablo başlığı tipografisi — SortHeader ile birebir aynı (sıralanamayan
+   sütunlar da aynı ölçüde dursun). */
+const TH_TEXT = "text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle whitespace-nowrap";
+/* Sağa hizalı (tarih) sütunlar — sayı/tarih hep tabular ve sağda. */
+const RIGHT_ALIGNED = new Set(["due_date", "updated_at"]);
+
+// ---- Status cell (inline editable) ----
+// Minimum dekorasyon: renkli nokta + metin; dolgulu çip yok. Görünmez <select>
+// üstte durur, tıklayınca durum değişir (davranış korunuyor).
+function StatusCell({ task }: { task: Task }) {
   const [_isPending, startTransition] = useTransition();
   const [optimisticStatus, setOptimisticStatus] = useOptimistic<TaskStatus>(task.status);
 
@@ -190,16 +203,15 @@ function StatusBadge({ task }: { task: Task }) {
   }
 
   return (
-    <div className="group/status relative inline-flex items-center">
-      <span className={cn(
-        "inline-flex items-center gap-1 text-xs font-medium rounded-full pl-2.5 pr-1.5 py-0.5 whitespace-nowrap pointer-events-none",
-        STATUS_CHIP_TONE[optimisticStatus],
-      )}>
+    <div className="group/status relative inline-flex items-center rounded-control -ml-1.5 pl-1.5 pr-1 py-0.5 hover:bg-surface-sunken transition-colors duration-150">
+      <span className="inline-flex items-center gap-1.5 text-[13.5px] text-ink whitespace-nowrap pointer-events-none">
+        <span className={cn("h-2 w-2 rounded-full shrink-0", STATUS_DOT[optimisticStatus])} aria-hidden />
         {SIMPLIFIED_STATUS_LABEL[optimisticStatus]}
         <ChevronDown
-          size={10}
-          strokeWidth={2.5}
-          className="shrink-0 opacity-50 transition-opacity duration-150 group-hover/status:opacity-90"
+          size={12}
+          strokeWidth={2}
+          className="shrink-0 text-subtle opacity-60 transition-opacity duration-150 group-hover/status:opacity-100"
+          aria-hidden
         />
       </span>
       <select
@@ -221,7 +233,7 @@ function StatusBadge({ task }: { task: Task }) {
 function PriorityBadge({ priority }: { priority: TaskPriority }) {
   return (
     <span className={cn(
-      "text-xs font-medium rounded px-1.5 py-0.5 leading-none whitespace-nowrap",
+      "text-[12px] font-medium rounded-md px-1.5 py-0.5 leading-none whitespace-nowrap",
       PRIORITY_CHIP[priority],
     )}>
       {PRIORITY_LABELS[priority]}
@@ -229,7 +241,26 @@ function PriorityBadge({ priority }: { priority: TaskPriority }) {
   );
 }
 
+// ---- Due date (shared by table + mobile card) ----
+// Gecikme: renk TEK BAŞINA sinyal değil — yanında ikon; emoji yok.
+function DueDate({ value, done }: { value: string | null; done: boolean }) {
+  if (!value) return <span className="text-[12.5px] text-subtle">—</span>;
+  const today = new Date().toISOString().slice(0, 10);
+  const isOverdue = value < today && !done;
+  return (
+    <span className={cn(
+      "inline-flex items-center gap-1 text-[13.5px] tabular-nums whitespace-nowrap",
+      isOverdue ? "text-danger font-medium" : "text-muted",
+    )}>
+      {isOverdue && <AlertCircle size={12} aria-label="Gecikti" />}
+      {formatDateTR(value, { day: "numeric", month: "short" })}
+    </span>
+  );
+}
+
 // ---- Mobile task card (replaces the wide table below md) ----
+// Telefonda en önemli dört şey: başlık · durum · sorumlu · tarih. Departman
+// düz metin, öncelik yalnız yüksek/acilse. Kart başına TEK rozet (durum).
 function MobileTaskCard({
   task,
   deptMeta,
@@ -245,49 +276,47 @@ function MobileTaskCard({
     responsibleNames[task.assignee_id ?? ""] ??
     responsibleNames[(task as { responsible_contact_id?: string | null }).responsible_contact_id ?? ""] ??
     "";
-  const today = new Date().toISOString().slice(0, 10);
-  const isOverdue = !!task.due_date && task.due_date < today && task.status !== "done";
+  const done = task.status === "done";
 
   return (
     <Link
       prefetch={false}
       href={`/tasks/${task.id}`}
-      className="block rounded-card border border-line bg-surface p-3.5 shadow-card active:bg-surface-hover transition-colors duration-[var(--duration-fast)]"
+      className="block rounded-card border border-line bg-surface p-3.5 shadow-card active:bg-surface-hover transition-colors duration-150"
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-semibold text-ink line-clamp-2 leading-snug flex-1 min-w-0">
+        <p className={cn(
+          "text-[14px] font-medium leading-snug line-clamp-2 flex-1 min-w-0",
+          done ? "text-muted line-through" : "text-ink",
+        )}>
           {task.title}
         </p>
         <span className={cn(
-          "text-xs font-medium rounded-full px-2 py-0.5 whitespace-nowrap shrink-0",
+          "text-[12px] font-medium rounded-md px-2 py-0.5 whitespace-nowrap shrink-0",
           STATUS_CHIP_TONE[task.status],
         )}>
           {SIMPLIFIED_STATUS_LABEL[task.status]}
         </span>
       </div>
 
-      <div className="flex items-center gap-2 mt-2.5 flex-wrap">
+      <div className="flex items-center gap-x-3 gap-y-1 mt-2 flex-wrap text-[12.5px] text-muted">
+        <DueDate value={task.due_date} done={done} />
         {meta && badge && (
-          <span className={cn(
-            "inline-flex items-center gap-1 max-w-[60%] rounded-lg py-0.5 px-2 text-xs font-medium ring-1",
-            badge.chip, badge.ring,
-          )}>
-            <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", badge.dot)} />
+          <span className="inline-flex items-center gap-1.5 min-w-0">
+            <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", badge.dot)} aria-hidden />
             <span className="truncate">{meta.name}</span>
           </span>
         )}
-        <PriorityBadge priority={task.priority} />
-        {task.due_date && (
-          <span className={cn("text-xs font-medium whitespace-nowrap tabular-nums", isOverdue ? "text-danger" : "text-muted")}>
-            {isOverdue ? "⚠ " : ""}
-            {formatDateTR(task.due_date, { day: "numeric", month: "short" })}
+        {PRIORITY_SHOW_ON_BOARD[task.priority] && (
+          <span className={cn("font-medium", task.priority === "urgent" ? "text-urgent" : "text-overdue")}>
+            {PRIORITY_LABELS[task.priority]}
           </span>
         )}
       </div>
 
       {/* Sorumlu kişi en altta — "görev oluşturan" satırı geri bildirimle kaldırıldı. */}
       {responsible && (
-        <p className="mt-2 text-xs text-subtle truncate">
+        <p className="mt-1.5 text-[12.5px] text-subtle truncate">
           Sorumlu: <span className="font-medium text-muted">{responsible}</span>
         </p>
       )}
@@ -297,7 +326,7 @@ function MobileTaskCard({
 
 // ---- Main component ----
 
-export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles, contacts, departments = [], members = [], deptMembers = [], isAdmin = false, initialPerson = "", initialView = "" }: Props) {
+export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles, contacts, departments = [], members = [], people = [], deptMembers = [], isAdmin = false, initialPerson = "", initialView = "" }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const deptMeta = useMemo(() => buildDeptMeta(departments), [departments]);
@@ -307,6 +336,17 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
     contacts.forEach((c) => { map[c.id] = c.name; });
     return map;
   }, [profiles, contacts]);
+
+  /* Baloncukların rengi Pano'daki kişi kartıyla AYNI kaynaktan gelir: yönetici
+     Ayarlar'dan seçtiyse o renk, seçmediyse id'den deterministik atama. */
+  const personTones = useMemo(
+    () =>
+      assignPersonTones(
+        people.map((p) => p.userId),
+        Object.fromEntries(people.map((p) => [p.userId, { colorKey: p.colorKey }])),
+      ),
+    [people],
+  );
 
   const [sorting, setSorting] = useState<SortingState>([{ id: "updated_at", desc: true }]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -326,6 +366,9 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
   const [filterStatusKey, setFilterStatusKey] = useState<StatusFilterKey>("all");
   const [filterPriority, setFilterPriority] = useState<TaskPriority | "all">("all");
   const [personFilter, setPersonFilter] = useState(initialPerson);
+  /* Nadir süzgeçler (öncelik) "Filtreler"in arkasında; uygulanmışsa kendiliğinden
+     açık kalır ki gizli bir süzgeç listeyi sessizce daraltmasın. */
+  const [moreFilters, setMoreFilters] = useState(false);
   // Active view (same six as the Board). Unknown/legacy values fall back to the
   // full "Tüm işler" list so the table never opens filtered to nothing.
   const KNOWN_VIEW_SLUGS = ["all", "mine", "this-week", "overdue", "done", "waiting-approval"];
@@ -337,10 +380,11 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
 
   // Person dropdown options — same data source as the board's Kişi filter:
   // workspace members first, then contacts. Value is the bare id.
+  /* Yalnız DIŞ kişiler. Ekip üyeleri artık süzgeç şeridinde yüz olarak
+     duruyor (bkz. kişi baloncukları), bu yüzden burada ikinci kez listelenmez. */
   const personOptions = useMemo(() => ({
-    members: profiles.map((p) => ({ id: p.id, name: p.full_name ?? p.email ?? "—" })),
     contacts: contacts.map((c) => ({ id: c.id, name: c.name })),
-  }), [profiles, contacts]);
+  }), [contacts]);
 
   // Keep the selection in the URL (?person=…) so a refresh preserves the filter.
   const handlePersonChange = useCallback((value: string) => {
@@ -380,6 +424,16 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
     return true;
   }), [viewedTasks, allowedStatuses, filterPriority, personDescriptor, search]);
 
+  const hasActiveFilters =
+    !!search || filterStatusKey !== "all" || filterPriority !== "all" || !!personFilter;
+
+  function clearFilters() {
+    setSearch("");
+    setFilterStatusKey("all");
+    setFilterPriority("all");
+    if (personFilter) handlePersonChange("");
+  }
+
   // Switch view without a full reload: update local state + the URL (?view=…),
   // preserving the person filter already in the query string.
   const handleViewChange = useCallback((slug: string) => {
@@ -415,32 +469,37 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
     columnHelper.accessor("title", {
       id: "title",
       header: FIELD_LABELS.title,
-      cell: (info) => (
-        <div>
-          <Link
-            prefetch={false}
-            href={`/tasks/${info.row.original.id}`}
-            title={info.getValue()}
-            className="font-medium text-ink hover:text-brand text-sm line-clamp-2 block leading-snug break-words transition-colors duration-[var(--duration-fast)]"
-          >
-            {info.getValue()}
-          </Link>
-          {(info.row.original as unknown as { visibility?: string }).visibility === "admin_only" && (
-            <span className="inline-flex items-center gap-0.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-1 py-0.5 leading-none mt-1">
-              <Lock size={10} /> {ADMIN_ONLY_CHIP_LABEL}
-            </span>
-          )}
-          {(info.row.original.tags?.length ?? 0) > 0 && (
-            <div className="flex gap-1 mt-1 flex-wrap">
-              {[...new Set(info.row.original.tags)].slice(0, 3).map((tag, i) => (
-                <span key={`${info.row.original.id}-tag-${i}`} className="text-xs bg-brand-soft text-brand rounded px-1 py-0.5 leading-none">
-                  {tag}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      ),
+      cell: (info) => {
+        const t = info.row.original;
+        const done = t.status === "done";
+        const tags = [...new Set(t.tags ?? [])].slice(0, 3);
+        return (
+          <div className="min-w-0">
+            <Link
+              prefetch={false}
+              href={`/tasks/${t.id}`}
+              title={info.getValue()}
+              className={cn(
+                "font-medium text-[14px] line-clamp-2 block leading-snug break-words transition-colors duration-150 hover:text-brand",
+                done ? "text-muted line-through" : "text-ink",
+              )}
+            >
+              {info.getValue()}
+            </Link>
+            {/* Satır içi ikincil bilgi düz metin — rozet yığını yok. */}
+            {((t as unknown as { visibility?: string }).visibility === "admin_only" || tags.length > 0) && (
+              <p className="mt-0.5 flex items-center gap-1.5 flex-wrap text-[12px] text-subtle">
+                {(t as unknown as { visibility?: string }).visibility === "admin_only" && (
+                  <span className="inline-flex items-center gap-1 text-warning">
+                    <Lock size={11} aria-hidden /> {ADMIN_ONLY_CHIP_LABEL}
+                  </span>
+                )}
+                {tags.length > 0 && <span className="truncate">{tags.join(" · ")}</span>}
+              </p>
+            )}
+          </div>
+        );
+      },
       enableSorting: false,
     }),
     // Description column
@@ -450,8 +509,8 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
       cell: (info) => {
         const val = info.getValue();
         return val
-          ? <span className="text-[13px] text-muted line-clamp-1">{val}</span>
-          : <span className="text-xs text-subtle">—</span>;
+          ? <span className="text-[13.5px] text-muted line-clamp-1">{val}</span>
+          : <span className="text-[12.5px] text-subtle">—</span>;
       },
       enableSorting: false,
     }),
@@ -462,20 +521,20 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
       cell: (info) => {
         const row = info.row.original;
         const meta = row.department_id ? deptMeta[row.department_id] : undefined;
-        if (!meta) return <span className="text-xs text-subtle">—</span>;
+        if (!meta) return <span className="text-[12.5px] text-subtle">—</span>;
         const badge = getDepartmentBadge(meta.color);
-        // Soft, ringed pill in the department colour. Long names wrap to a
-        // controlled 2 lines instead of clipping mid-word.
+        // Departman rengi tasarım sistemi verisidir (semantics) — korunur.
+        // Uzun ad kesilmez, iki satıra sarar.
         return (
           <span
             className={cn(
-              "inline-flex items-start gap-1.5 max-w-[15rem] rounded-xl py-1 pl-2 pr-2.5 text-xs font-medium ring-1",
+              "inline-flex items-start gap-1.5 max-w-[15rem] rounded-md py-0.5 pl-2 pr-2 text-[12px] font-medium ring-1",
               badge.chip,
               badge.ring,
             )}
             title={meta.name}
           >
-            <span className={cn("mt-1 h-1.5 w-1.5 rounded-full shrink-0", badge.dot)} />
+            <span className={cn("mt-1.5 h-1.5 w-1.5 rounded-full shrink-0", badge.dot)} aria-hidden />
             <span className="line-clamp-2 leading-snug text-left">{meta.name}</span>
           </span>
         );
@@ -493,8 +552,8 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
       cell: (info) => {
         const val = info.getValue();
         return val
-          ? <span className="inline-block text-xs font-medium bg-[#eef0fb] text-[#4a4d9c] rounded-md px-2 py-0.5 max-w-[12rem] truncate align-middle" title={val}>{val}</span>
-          : <span className="text-xs text-subtle">—</span>;
+          ? <span className="block text-[13.5px] text-muted max-w-[12rem] truncate" title={val}>{val}</span>
+          : <span className="text-[12.5px] text-subtle">—</span>;
       },
       sortingFn: (a, b) => {
         const ca = safeCategory(a.original);
@@ -505,7 +564,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
     columnHelper.accessor("status", {
       id: "status",
       header: FIELD_LABELS.status,
-      cell: (info) => <StatusBadge task={info.row.original} />,
+      cell: (info) => <StatusCell task={info.row.original} />,
       sortingFn: (a, b) => {
         const order: TaskStatus[] = ["backlog", "ready", "in_progress", "review", "blocked", "done", "archived"];
         return order.indexOf(a.original.status) - order.indexOf(b.original.status);
@@ -521,18 +580,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
     columnHelper.accessor("due_date", {
       id: "due_date",
       header: FIELD_LABELS.dueDate,
-      cell: (info) => {
-        const val = info.getValue();
-        if (!val) return <span className="text-xs text-subtle">—</span>;
-        const today = new Date().toISOString().slice(0, 10);
-        const isOverdue = val < today;
-        return (
-          <span className={cn("text-[13px] tabular-nums whitespace-nowrap", isOverdue ? "text-danger font-medium" : "text-muted")}>
-            {isOverdue ? "⚠ " : ""}
-            {formatDateTR(val as string, { day: "numeric", month: "short" })}
-          </span>
-        );
-      },
+      cell: (info) => <DueDate value={info.getValue()} done={info.row.original.status === "done"} />,
       sortingFn: (a, b) => {
         const da = a.original.due_date ?? "9999-12-31";
         const db = b.original.due_date ?? "9999-12-31";
@@ -545,7 +593,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
       {
         id: "responsible",
         header: FIELD_LABELS.assignee,
-        cell: (info) => <span className="text-[13px] text-muted whitespace-nowrap">{info.getValue() || "—"}</span>,
+        cell: (info) => <span className="text-[13.5px] text-muted whitespace-nowrap">{info.getValue() || "—"}</span>,
         sortingFn: (a, b) => {
           const na = responsibleNames[a.original.assignee_id ?? ""] ?? responsibleNames[(a.original as { responsible_contact_id?: string | null }).responsible_contact_id ?? ""] ?? "";
           const nb = responsibleNames[b.original.assignee_id ?? ""] ?? responsibleNames[(b.original as { responsible_contact_id?: string | null }).responsible_contact_id ?? ""] ?? "";
@@ -553,16 +601,23 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
         },
       }
     ),
-    // Collaborators — reads custom_fields.collaborators (string[])
+    /* İŞ BİRLİĞİ — katılımcılar `custom_fields.collaborators` içinde KİŞİ
+       KİMLİĞİ (uuid) olarak durur. Değerler eskiden olduğu gibi birleştirilip
+       basılıyordu; haritada karşılığı olmayan bir kimlik ekrana ham uuid
+       olarak düşüyordu ("00000000-0000-…-41" — canlı taramada görüldü).
+       Kullanıcıya teknik değer gösterilmez: kimlik ada çevrilir, çevrilemeyen
+       kimlik hiç yazılmaz (satır "—" kalır). */
     columnHelper.accessor(
       (row) => {
         try {
           const cf = row.custom_fields;
           if (!cf || typeof cf !== "object" || Array.isArray(cf)) return "";
           const c = (cf as Record<string, unknown>).collaborators;
-          if (Array.isArray(c)) return c.join(", ");
-          if (typeof c === "string") return c;
-          return "";
+          const ids = Array.isArray(c) ? c : typeof c === "string" ? [c] : [];
+          return ids
+            .map((id) => (typeof id === "string" ? responsibleNames[id] : undefined))
+            .filter((n): n is string => !!n)
+            .join(", ");
         } catch { return ""; }
       },
       {
@@ -571,8 +626,8 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
         cell: (info) => {
           const val = info.getValue();
           return val
-            ? <span className="text-[13px] text-muted">{val}</span>
-            : <span className="text-xs text-subtle">—</span>;
+            ? <span className="text-[13.5px] text-muted">{val}</span>
+            : <span className="text-[13px] text-subtle">—</span>;
         },
         enableSorting: false,
       }
@@ -583,7 +638,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
       id: "updated_at",
       header: FIELD_LABELS.updatedAt,
       cell: (info) => (
-        <span className="text-[13px] text-muted tabular-nums whitespace-nowrap">
+        <span className="text-[13.5px] text-muted tabular-nums whitespace-nowrap">
           {formatDateTR(info.getValue() as string, { day: "numeric", month: "short" })}
         </span>
       ),
@@ -618,13 +673,11 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
     getFilteredRowModel: getFilteredRowModel(),
   });
 
-  function SortIcon({ isSorted }: { isSorted: "asc" | "desc" | false }) {
-    if (isSorted === "asc") return <ArrowUp size={12} className="ml-1 inline" />;
-    if (isSorted === "desc") return <ArrowDown size={12} className="ml-1 inline" />;
-    return <ArrowUpDown size={12} className="ml-1 inline opacity-30" />;
-  }
-
   const totalRows = table.getFilteredRowModel().rows.length;
+  /* Nadir süzgeçler: gizli bir süzgeç listeyi sessizce daraltmasın — öncelik
+     ya da DIŞ KİŞİ seçiliyse bölüm kendiliğinden açık kalır. */
+  const contactFilterActive = !!personFilter && contacts.some((c) => c.id === personFilter);
+  const showPriorityFilter = moreFilters || filterPriority !== "all" || contactFilterActive;
 
   return (
     // Desktop: fixed-height shell, table scrolls internally. Mobile (max-md):
@@ -635,15 +688,34 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
           Onay bekleyenler). Client-side selection keeps the person filter. */}
       {viewTabItems.length > 0 && (
         <div className="px-4 pt-3 pb-2 border-b border-line bg-surface shrink-0 space-y-1.5">
-          <ViewTabs iconsEverywhere items={viewTabItems} onSelect={handleViewChange} />
-          <p className="text-[13px] text-muted">{LIST_VIEW_DESCRIPTIONS[viewSlug] ?? ""}</p>
+          {/* RAPORLAR aynı şeridin son sekmesi.
+              Sıraç (2026-08-29): "reports kısmı burdaki olmalı, rapor
+              kısımlarını da buraya ekleyip entegre edelim."
+              Üye için Reports zaten bu tablonun anlattığını anlatıyordu
+              (bana atanan işler + teslim tarihleri). Artık iki yüzey tek şerit:
+              görevler burada, özetler bir sekme ötede. Ayrı ROTA kalır —
+              rapor sorguları liste açılışına binmesin (kabuk/hız kuralı). */}
+          <ViewTabs
+            iconsEverywhere
+            items={viewTabItems}
+            onSelect={handleViewChange}
+            trailing={
+              <Link href="/dashboard" className={tabClass(false)}>
+                <LayoutDashboard size={14} className="shrink-0" aria-hidden />
+                Raporlar
+              </Link>
+            }
+          />
+          <p className="text-[12.5px] text-muted">{LIST_VIEW_DESCRIPTIONS[viewSlug] ?? ""}</p>
         </div>
       )}
 
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-2.5 px-4 py-2.5 bg-surface border-b border-hairline shrink-0">
+      {/* Toolbar — tek primary (Görev oluştur), sonra en sık süzgeçler: arama ·
+          durum · kişi. Öncelik "Filtreler"in arkasında; "Temizle" yalnız bir
+          süzgeç uygulanmışken. Sağdaki sayı listeyi tarif eder. */}
+      <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 bg-surface border-b border-hairline shrink-0">
         <Button onClick={() => setModalOpen(true)}>
-          <Plus size={14} />
+          <Plus size={14} aria-hidden />
           Görev oluştur
         </Button>
         {/* CSV içe aktar — geri bildirimle şimdilik gizlendi (kod/action korunur). */}
@@ -653,76 +725,138 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
             CSV&apos;den içe aktar
           </Button>
         )}
-        <div className="w-px h-5 bg-line mx-1" />
-        <Input
-          type="search"
-          placeholder="Görev ara…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          aria-label="Görev ara"
-          className="h-9 w-64"
-        />
-        <select
+        <div className="hidden sm:block w-px h-5 bg-line mx-1" aria-hidden />
+
+        <div className="relative flex-1 min-w-[12rem] sm:flex-none sm:w-64">
+          <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-subtle" aria-hidden />
+          <TextInput
+            type="search"
+            placeholder="Görev ara…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            aria-label="Görev ara"
+            className="pl-8"
+          />
+        </div>
+
+        <SelectInput
           value={filterStatusKey}
           onChange={(e) => setFilterStatusKey(e.target.value as StatusFilterKey)}
-          className="h-9 rounded-lg border border-line bg-surface px-2.5 text-sm text-muted focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40 transition-colors"
+          aria-label="Duruma göre filtrele"
+          className={cn("w-auto", filterStatusKey !== "all" ? "text-ink font-medium" : "text-muted")}
         >
           {STATUS_FILTER_OPTIONS.map((o) => (
             <option key={o.key} value={o.key}>{o.label}</option>
           ))}
-        </select>
-        <select
-          value={filterPriority}
-          onChange={(e) => setFilterPriority(e.target.value as TaskPriority | "all")}
-          className="h-9 rounded-lg border border-line bg-surface px-2.5 text-sm text-muted focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40 transition-colors"
+        </SelectInput>
+
+        {/* KİŞİ SÜZGECİ — açılır liste değil, YÜZLER.
+            Sıraç (2026-08-29): "kişiler de filtrelerin yanında yuvarlak
+            baloncuk şeklinde olsun, tüm kişiler kısmını da kaldır alan açılsın."
+            "Tüm kişiler" kutusu satırda ~14rem yer kaplıyor ve kişiyi seçmek
+            için açılıp okunması gerekiyordu. Yüzler tek bakışta taranır, tek
+            tıkla süzer, ikinci tıkla bırakır. Ekip verisi PANO ile aynı
+            kaynaktan gelir; aynı kişi her yerde aynı renk ve fotoğrafla görünür.
+            Dış kişiler (tedarikçi/usta) ekip değildir — onlar "Filtreler"in
+            altında listelenir, satırı kalabalıklaştırmazlar. */}
+        {people.length > 0 && (
+          <div className="flex items-center gap-1" role="group" aria-label="Kişiye göre filtrele">
+            {people.map((p) => {
+              const on = personFilter === p.userId;
+              return (
+                <button
+                  key={p.userId}
+                  type="button"
+                  onClick={() => handlePersonChange(on ? "" : p.userId)}
+                  aria-pressed={on}
+                  aria-label={on ? `${p.name} süzgecini kaldır` : `${p.name} kişisinin işleri`}
+                  title={p.name}
+                  className={cn(
+                    "tap-target grid size-9 shrink-0 place-items-center rounded-full transition-[background-color,box-shadow] duration-150 ease-standard",
+                    on ? "ring-2 ring-brand ring-offset-1 ring-offset-surface" : "hover:bg-surface-muted",
+                    /* Seçili olmayan yüzler bir tık geride durur: satırın ana
+                       işi süzmek, yüzler bir gösterge panosu değil. */
+                    !on && personFilter ? "opacity-45 hover:opacity-100" : "",
+                  )}
+                >
+                  <PersonAvatar
+                    name={p.name}
+                    photoUrl={p.photoUrl}
+                    colorHex={personTones[p.userId]?.hex ?? null}
+                    size="sm"
+                  />
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {showPriorityFilter && (
+          <SelectInput
+            value={filterPriority}
+            onChange={(e) => setFilterPriority(e.target.value as TaskPriority | "all")}
+            aria-label="Önceliğe göre filtrele"
+            className={cn("anim-fade w-auto", filterPriority !== "all" ? "text-ink font-medium" : "text-muted")}
+          >
+            <option value="all">Tüm öncelikler</option>
+            {TASK_PRIORITIES.map((p) => (
+              <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>
+            ))}
+          </SelectInput>
+        )}
+
+        {/* Dış kişiler — usta, tedarikçi, influencer. Ekip yüzlerinin yanında
+            değil, nadir süzgeçlerin arasında: bir işin sorumlusu çoğu zaman
+            ekipten biridir. Seçiliyken açılır kalır ki gizli bir süzgeç listeyi
+            sessizce daraltmasın. */}
+        {showPriorityFilter && personOptions.contacts.length > 0 && (
+          <SelectInput
+            value={personOptions.contacts.some((c) => c.id === personFilter) ? personFilter : ""}
+            onChange={(e) => handlePersonChange(e.target.value)}
+            aria-label="Dış kişiye göre filtrele"
+            className={cn(
+              "anim-fade w-auto max-w-[13rem]",
+              personOptions.contacts.some((c) => c.id === personFilter) ? "border-brand-ring text-brand font-medium" : "text-muted",
+            )}
+          >
+            <option value="">Dış kişiler</option>
+            {personOptions.contacts.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </SelectInput>
+        )}
+
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setMoreFilters((v) => !v)}
+          aria-expanded={showPriorityFilter}
+          className="h-9"
         >
-          <option value="all">Tüm öncelikler</option>
-          {TASK_PRIORITIES.map((p) => (
-            <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>
-          ))}
-        </select>
-        {/* Kişi filtresi — seçilen kişinin (üye veya kişi) görevlerini gösterir. */}
-        <select
-          value={personFilter}
-          onChange={(e) => handlePersonChange(e.target.value)}
-          aria-label="Kişiye göre filtrele"
-          className={cn(
-            "h-9 rounded-lg border bg-surface px-2.5 text-sm focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40 transition-colors",
-            personFilter ? "border-brand-ring text-brand font-medium" : "border-line text-muted",
-          )}
-        >
-          <option value="">Tüm kişiler</option>
-          {personOptions.members.length > 0 && (
-            <optgroup label="Üyeler">
-              {personOptions.members.map((m) => (
-                <option key={m.id} value={m.id}>{m.name}</option>
-              ))}
-            </optgroup>
-          )}
-          {personOptions.contacts.length > 0 && (
-            <optgroup label="Kişiler">
-              {personOptions.contacts.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </optgroup>
-          )}
-        </select>
-        <span className="ml-auto text-[13px] font-medium text-muted self-center tabular-nums whitespace-nowrap">{totalRows} görev</span>
+          <SlidersHorizontal size={14} aria-hidden />
+          {showPriorityFilter ? "Daha az" : "Filtreler"}
+        </Button>
+
+        {hasActiveFilters && (
+          <Button variant="ghost" size="sm" onClick={clearFilters} className="anim-fade h-9">
+            <X size={14} aria-hidden />
+            Temizle
+          </Button>
+        )}
+
+        <span className="ml-auto text-[12.5px] font-medium text-muted self-center tabular-nums whitespace-nowrap">{totalRows} görev</span>
       </div>
 
       {/* Active person filter banner — makes a deep-link from CRM explicit and
           gives a one-click way to clear it. */}
       {personFilter && (
-        <div className="flex items-center justify-between gap-2 px-4 py-2 bg-brand-soft border-b border-brand-ring/30 shrink-0">
+        <div className="flex items-center justify-between gap-2 px-4 py-1.5 bg-brand-soft/60 border-b border-brand-ring/30 shrink-0">
           <span className="text-[13px] text-brand-strong">
             <span className="font-semibold">{personDisplayName ?? "Seçili kişi"}</span> ile ilişkili görevler
           </span>
-          <button
-            onClick={() => handlePersonChange("")}
-            className="text-[13px] font-medium text-brand hover:text-brand-strong underline underline-offset-2"
-          >
+          <Button variant="ghost" size="sm" onClick={() => handlePersonChange("")} className="text-brand hover:text-brand-strong">
             Filtreyi temizle
-          </button>
+          </Button>
         </div>
       )}
 
@@ -732,7 +866,8 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
           <EmptyState
             icon={ClipboardList}
             title="Görev bulunamadı"
-            description="Geçerli filtrelerle eşleşen görev yok."
+            description={hasActiveFilters ? "Geçerli filtrelerle eşleşen görev yok." : undefined}
+            action={hasActiveFilters ? <Button variant="secondary" size="sm" onClick={clearFilters}>Filtreleri temizle</Button> : undefined}
           />
         ) : (
           <div className="flex flex-col gap-2.5">
@@ -749,27 +884,40 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
       </div>
 
       {/* Table — desktop / tablet. Wide content scrolls INSIDE this wrapper
-          (overflow-x-auto); the page itself never scrolls horizontally. */}
+          (overflow-x-auto); the page itself never scrolls horizontally.
+          Gerçek tablo: yapışkan düz başlık, dikey kenarlık yok, tarih sağda. */}
       <div className="hidden md:block flex-1 overflow-x-auto overflow-y-auto bg-app">
-        <table className="w-full min-w-[56rem] text-sm border-collapse">
-          <thead className="bg-surface-muted/90 border-b border-hairline sticky top-0 z-10 backdrop-blur-sm">
+        <table className="w-full min-w-[56rem] text-[13.5px] border-collapse">
+          <thead className="sticky top-0 z-10 bg-surface shadow-[inset_0_-1px_0_var(--color-line)]">
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id}>
-                {hg.headers.map((header) => (
-                  <th
-                    key={header.id}
-                    className={cn(
-                      "text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted whitespace-nowrap select-none",
-                      header.column.getCanSort() && "cursor-pointer hover:text-ink transition-colors duration-[var(--duration-fast)]"
-                    )}
-                    onClick={header.column.getToggleSortingHandler()}
-                  >
-                    {flexRender(header.column.columnDef.header, header.getContext())}
-                    {header.column.getCanSort() && (
-                      <SortIcon isSorted={header.column.getIsSorted()} />
-                    )}
-                  </th>
-                ))}
+                {hg.headers.map((header) => {
+                  const right = RIGHT_ALIGNED.has(header.column.id);
+                  const sorted = header.column.getIsSorted();
+                  return (
+                    <th
+                      key={header.id}
+                      scope="col"
+                      aria-sort={sorted ? (sorted === "asc" ? "ascending" : "descending") : undefined}
+                      className={cn("px-4 py-2.5 select-none", right ? "text-right" : "text-left")}
+                    >
+                      {header.column.getCanSort() ? (
+                        <SortHeader
+                          active={!!sorted}
+                          dir={sorted === "desc" ? "desc" : "asc"}
+                          onSort={() => header.column.toggleSorting()}
+                          align={right ? "right" : "left"}
+                        >
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                        </SortHeader>
+                      ) : (
+                        <span className={TH_TEXT}>
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                        </span>
+                      )}
+                    </th>
+                  );
+                })}
               </tr>
             ))}
           </thead>
@@ -780,7 +928,8 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
                   <EmptyState
                     icon={ClipboardList}
                     title="Görev bulunamadı"
-                    description="Geçerli filtrelerle eşleşen görev yok."
+                    description={hasActiveFilters ? "Geçerli filtrelerle eşleşen görev yok." : undefined}
+                    action={hasActiveFilters ? <Button variant="secondary" size="sm" onClick={clearFilters}>Filtreleri temizle</Button> : undefined}
                   />
                 </td>
               </tr>
@@ -788,16 +937,14 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
               table.getRowModel().rows.map((row) => (
                 <tr
                   key={row.id}
-                  className={cn(
-                    "transition-colors duration-[var(--duration-fast)]",
-                    row.original.status === "done" ? "bg-green-50/50 hover:bg-green-50" : "hover:bg-surface-hover"
-                  )}
+                  className="transition-colors duration-150 hover:bg-surface-hover"
                 >
                   {row.getVisibleCells().map((cell) => (
                     <td
                       key={cell.id}
                       className={cn(
                         "px-4 py-2.5 align-middle",
+                        RIGHT_ALIGNED.has(cell.column.id) && "text-right",
                         cell.column.id === "title" && "w-full min-w-[16rem]",
                         cell.column.id === "description" && "min-w-[12rem]",
                         cell.column.id === "department" && "min-w-[11rem]",

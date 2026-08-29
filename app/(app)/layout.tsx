@@ -6,6 +6,7 @@ import { AppSidebar } from "@/components/layout/AppSidebar";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { pickDisplayEmail } from "@/lib/utils/display-identity";
+import { AlertTriangle, Lock } from "lucide-react";
 import type { Workspace, Notification, WorkspaceRole } from "@/types";
 
 /** Kabuğun workspace'ten ihtiyaç duyduğu tek şey: kimlik + ad. */
@@ -189,23 +190,23 @@ export default async function AppLayout({
             producing a horizontal page scroll on phones. */}
         <main className="flex-1 overflow-y-auto overflow-x-hidden pb-bottom-nav">
           {noAccess ? (
-            <div className="min-h-full flex items-center justify-center p-8">
-              <div className="max-w-md w-full bg-amber-50 border border-amber-200 rounded-xl p-8 text-center space-y-4">
-                <div className="text-4xl">🔒</div>
-                <h2 className="text-lg font-semibold text-amber-900">
-                  AF Operasyon erişimi yok
+            <div className="flex min-h-full items-center justify-center p-6 sm:p-8">
+              <div className="w-full max-w-md rounded-card border border-line bg-surface p-6 text-center shadow-card sm:p-8">
+                <div className="mx-auto mb-4 grid h-10 w-10 place-items-center rounded-full bg-surface-sunken text-muted">
+                  <Lock size={18} strokeWidth={1.75} aria-hidden />
+                </div>
+                <h2 className="text-[16px] font-semibold tracking-tight text-ink">
+                  Bu hesabın erişimi yok
                 </h2>
-                <p className="text-sm text-amber-800">
-                  Bu e-posta adresi için AF Operasyon erişimi tanımlı değil.
-                  Erişim için yöneticinizle iletişime geçin.
+                <p className="mx-auto mt-1.5 max-w-sm text-[13.5px] leading-relaxed text-muted">
+                  Bu e-posta için çalışma alanı erişimi tanımlı değil. Erişim için
+                  yöneticinize başvurun.
                 </p>
-                <p className="text-xs text-amber-600">
-                  Giriş yaptığınız hesap: {user.email}
-                </p>
-                <form action="/api/auth/signout" method="post">
+                <p className="mt-3 text-[12.5px] text-subtle">Giriş yapılan hesap: {user.email}</p>
+                <form action="/api/auth/signout" method="post" className="mt-5">
                   <button
                     type="submit"
-                    className="mt-2 text-sm text-amber-700 underline hover:text-amber-900"
+                    className="inline-flex h-9 items-center rounded-control border border-line bg-surface px-3.5 text-[13.5px] font-medium text-ink shadow-xs transition-colors duration-150 hover:bg-surface-muted"
                   >
                     Çıkış yap
                   </button>
@@ -213,15 +214,18 @@ export default async function AppLayout({
               </div>
             </div>
           ) : provisionError ? (
-            <div className="p-8">
-              <div className="max-w-md mx-auto bg-red-50 border border-red-200 rounded-xl p-6">
-                <h2 className="text-lg font-semibold text-red-800 mb-2">
-                  Çalışma alanı kurulumu başarısız
+            <div className="flex min-h-full items-center justify-center p-6 sm:p-8">
+              <div className="w-full max-w-md rounded-card border border-line bg-surface p-6 text-center shadow-card sm:p-8">
+                <div className="mx-auto mb-4 grid h-10 w-10 place-items-center rounded-full bg-danger/10 text-danger">
+                  <AlertTriangle size={18} strokeWidth={1.75} aria-hidden />
+                </div>
+                <h2 className="text-[16px] font-semibold tracking-tight text-ink">
+                  Çalışma alanına bağlanılamadı
                 </h2>
-                <p className="text-sm text-red-700 mb-4">{provisionError}</p>
-                <p className="text-xs text-red-500">
-                  Sayfayı yenilemeyi deneyin. Sorun devam ederse yöneticinize başvurun.
+                <p className="mx-auto mt-1.5 max-w-sm text-[13.5px] leading-relaxed text-muted">
+                  Sayfayı yenilemeyi deneyin. Sorun sürerse yöneticinize başvurun.
                 </p>
+                <p className="mt-3 text-[12px] text-subtle">{provisionError}</p>
               </div>
             </div>
           ) : (

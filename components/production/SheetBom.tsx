@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Plus, Trash2, Loader2, Info } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { addSheetMaterial, updateSheetMaterial, removeSheetMaterial } from "@/lib/actions/materials";
+import { Button, IconButton } from "@/components/ui/Button";
+import { TextInput, SelectInput } from "@/components/ui/Field";
 import { bomLineCost, bomTotal, formatMoney } from "@/lib/collection/cost";
 import type { Material, SheetMaterialWithMaterial } from "@/types";
 
@@ -24,10 +26,12 @@ const CATEGORY_LABEL: Record<string, string> = {
   tela: "Tela", iplik: "İplik", etiket: "Etiket", diger: "Diğer",
 };
 
+/** Izgara hücresi girdisi — ortak TextInput'un çerçevesiz, hücreyi dolduran
+ *  hâli (föy editörüyle aynı). */
 const cellInput =
-  "w-full min-w-0 rounded-md border border-transparent bg-transparent px-1.5 py-1 text-right text-[13px] tabular-nums text-ink " +
-  "transition-[border-color,background-color] duration-150 hover:border-line " +
-  "focus:border-brand-ring focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand-ring";
+  "h-8 rounded-none border-0 bg-transparent px-2 text-right tabular-nums shadow-none " +
+  "hover:border-0 focus:border-0 focus:bg-surface focus:ring-2 focus:ring-inset focus:ring-brand-ring";
+const TH_CLS = "border border-line-strong px-2 py-1.5 text-[12px] font-semibold uppercase tracking-[0.06em] text-subtle";
 
 /**
  * Reçete (BOM) — bir üründe hangi malzemeden ne kadar gidiyor.
@@ -67,7 +71,7 @@ export function SheetBom({ sheetId, rows, materials, canEdit }: Props) {
 
   if (!sheetId) {
     return (
-      <p className="rounded-lg border border-line bg-surface-muted px-3 py-2 text-[12.5px] text-muted">
+      <p className="rounded-control border border-line bg-surface-muted px-3 py-2 text-[13px] text-muted">
         Reçete, föy kaydedildikten sonra eklenebilir.
       </p>
     );
@@ -76,16 +80,16 @@ export function SheetBom({ sheetId, rows, materials, canEdit }: Props) {
   return (
     <div className="space-y-2">
       {error && (
-        <p className="anim-fade-down rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-[12.5px] font-medium text-danger">
+        <p role="alert" className="anim-fade-down rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] font-medium text-danger">
           {error}
         </p>
       )}
 
-      <p className="flex items-start gap-2 rounded-lg border border-line bg-surface-muted px-3 py-2 text-[12.5px] text-muted">
-        <Info size={14} className="mt-px shrink-0 text-subtle" />
+      <p className="flex items-start gap-2 rounded-control border border-line bg-surface-muted px-3 py-2 text-[12.5px] text-muted">
+        <Info size={14} className="mt-px shrink-0 text-subtle" aria-hidden />
         <span>
           Buraya girilen malzemelerin tutarı maliyet tablosuna <b className="font-semibold text-ink">otomatik</b> yazılır
-          (tüketim × birim fiyat × fire). Malzeme fiyatı Ayarlar’da değişince tüm föyler güncellenir.
+          (tüketim × birim fiyat × fire). Malzeme fiyatı Product Data’da değişince tüm föyler güncellenir.
         </span>
       </p>
 
@@ -97,18 +101,18 @@ export function SheetBom({ sheetId, rows, materials, canEdit }: Props) {
           </colgroup>
           <thead>
             <tr className="bg-surface-muted">
-              <th className="border border-line-strong px-2 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider text-subtle">Malzeme</th>
-              <th className="border border-line-strong px-1 py-1.5 text-right text-[11px] font-semibold uppercase tracking-wider text-subtle">Birim fiyat</th>
-              <th className="border border-line-strong px-1 py-1.5 text-right text-[11px] font-semibold uppercase tracking-wider text-subtle">Tüketim</th>
-              <th className="border border-line-strong px-1 py-1.5 text-right text-[11px] font-semibold uppercase tracking-wider text-subtle">Fire %</th>
-              <th className="border border-line-strong px-1 py-1.5 text-right text-[11px] font-semibold uppercase tracking-wider text-subtle">Tutar</th>
+              <th className={cn(TH_CLS, "text-left")}>Malzeme</th>
+              <th className={cn(TH_CLS, "text-right")}>Birim fiyat</th>
+              <th className={cn(TH_CLS, "text-right")}>Tüketim</th>
+              <th className={cn(TH_CLS, "text-right")}>Fire %</th>
+              <th className={cn(TH_CLS, "text-right")}>Tutar</th>
               <th className="w-9" />
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={6} className="border border-line px-3 py-4 text-center text-[12.5px] text-subtle">
+                <td colSpan={6} className="border border-line px-3 py-4 text-center text-[13px] text-subtle">
                   Reçete boş. Aşağıdan malzeme ekleyin — maliyet kendiliğinden hesaplanır.
                 </td>
               </tr>
@@ -118,9 +122,9 @@ export function SheetBom({ sheetId, rows, materials, canEdit }: Props) {
                   <td className="border border-line px-2 py-1.5">
                     <span className="block truncate font-medium text-ink">
                       {r.material?.name ?? "—"}
-                      {r.material?.code && <span className="ml-1.5 text-[11.5px] text-subtle">{r.material.code}</span>}
+                      {r.material?.code && <span className="ml-1.5 text-[12px] text-subtle">{r.material.code}</span>}
                     </span>
-                    <span className="text-[11.5px] text-subtle">
+                    <span className="text-[12px] text-subtle">
                       {CATEGORY_LABEL[r.material?.category ?? "diger"]} · {r.material?.unit}
                     </span>
                   </td>
@@ -128,8 +132,9 @@ export function SheetBom({ sheetId, rows, materials, canEdit }: Props) {
                     {r.material?.unit_price != null ? formatMoney(Number(r.material.unit_price)) : "—"}
                   </td>
                   <td className="border border-line p-0">
-                    <input
+                    <TextInput
                       className={cellInput}
+                      aria-label={`${r.material?.name ?? "Malzeme"} — tüketim`}
                       defaultValue={String(r.consumption ?? "")}
                       onBlur={(e) => run(r.id, () => updateSheetMaterial(r.id, { consumption: e.target.value }))}
                       disabled={!canEdit}
@@ -137,8 +142,9 @@ export function SheetBom({ sheetId, rows, materials, canEdit }: Props) {
                     />
                   </td>
                   <td className="border border-line p-0">
-                    <input
+                    <TextInput
                       className={cellInput}
+                      aria-label={`${r.material?.name ?? "Malzeme"} — fire yüzdesi`}
                       defaultValue={String(r.waste_pct ?? "")}
                       onBlur={(e) => run(r.id, () => updateSheetMaterial(r.id, { waste_pct: e.target.value }))}
                       disabled={!canEdit}
@@ -150,24 +156,26 @@ export function SheetBom({ sheetId, rows, materials, canEdit }: Props) {
                   </td>
                   <td className="border border-line text-center align-middle">
                     {canEdit && (
-                      <button
+                      <IconButton
+                        size="sm"
                         onClick={() => run(r.id, () => removeSheetMaterial(r.id))}
                         disabled={busyId === r.id}
-                        className="tap-target rounded-md p-1 text-subtle transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-50"
+                        className="text-subtle hover:bg-danger/10 hover:text-danger"
                         title="Reçeteden çıkar"
+                        aria-label={`${r.material?.name ?? "Malzemeyi"} reçeteden çıkar`}
                       >
-                        {busyId === r.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
-                      </button>
+                        {busyId === r.id ? <Loader2 size={13} className="animate-spin" aria-hidden /> : <Trash2 size={13} aria-hidden />}
+                      </IconButton>
                     )}
                   </td>
                 </tr>
               ))
             )}
             <tr className="bg-surface-muted">
-              <td colSpan={4} className="border border-line-strong px-2 py-1.5 text-[12px] font-bold uppercase tracking-wide text-ink">
+              <td colSpan={4} className="border border-line-strong px-2 py-1.5 text-[12px] font-semibold uppercase tracking-[0.06em] text-ink">
                 Reçete toplamı (birim)
               </td>
-              <td className="border border-line-strong px-2 py-1.5 text-right text-[13px] font-bold tabular-nums text-ink">
+              <td className="border border-line-strong px-2 py-1.5 text-right text-[13.5px] font-semibold tabular-nums text-ink">
                 {formatMoney(total)}
               </td>
               <td className="border border-line-strong" />
@@ -179,10 +187,10 @@ export function SheetBom({ sheetId, rows, materials, canEdit }: Props) {
       {canEdit && (
         available.length > 0 ? (
           <div className="flex flex-wrap items-center gap-2">
-            <select
+            <SelectInput
               value={pick}
               onChange={(e) => setPick(e.target.value)}
-              className="h-9 min-w-56 rounded-lg border border-line bg-surface px-2.5 text-[13px] text-ink focus:border-brand-ring focus:outline-none focus:ring-2 focus:ring-brand-ring/40"
+              className="w-auto min-w-56 max-w-full"
               aria-label="Reçeteye malzeme ekle"
             >
               <option value="">Malzeme seç…</option>
@@ -192,22 +200,20 @@ export function SheetBom({ sheetId, rows, materials, canEdit }: Props) {
                   {m.unit_price != null ? ` — ${formatMoney(Number(m.unit_price))}/${m.unit}` : ""}
                 </option>
               ))}
-            </select>
-            <button
+            </SelectInput>
+            <Button
+              variant="secondary"
               onClick={() => { if (pick) { run("add", () => addSheetMaterial(sheetId, pick)); setPick(""); } }}
-              disabled={!pick || busyId === "add"}
-              className={cn(
-                "inline-flex h-9 items-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-[13px] font-medium text-muted transition-all duration-150",
-                "hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50",
-              )}
+              disabled={!pick}
+              loading={busyId === "add"}
             >
-              {busyId === "add" ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Reçeteye ekle
-            </button>
+              {busyId !== "add" && <Plus size={14} aria-hidden />} Reçeteye ekle
+            </Button>
           </div>
         ) : (
-          <p className="text-[12.5px] text-subtle">
+          <p className="text-[13px] text-subtle">
             {materials.length === 0
-              ? "Henüz malzeme tanımlanmadı. Ayarlar → Hammadde’den ekleyin."
+              ? "Henüz malzeme tanımlanmadı. Collection → Product Data’dan ekleyin."
               : "Tüm malzemeler reçetede."}
           </p>
         )

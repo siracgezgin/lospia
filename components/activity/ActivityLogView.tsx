@@ -11,6 +11,7 @@ import { STATUS_LABELS, PRIORITY_LABELS } from "@/lib/utils/task-constants";
 import { EFFORT_LABELS, isEffortSize } from "@/lib/points/effort";
 import { VISIBILITY_LABELS } from "@/lib/utils/visibility";
 import { cn } from "@/lib/utils/cn";
+import { EmptyState } from "@/components/ui/EmptyState";
 import type { TaskStatus, TaskPriority } from "@/types";
 
 // One audit row, flattened on the server (actor/task joins resolved to scalars).
@@ -27,71 +28,76 @@ export type ActivityRow = {
 };
 
 // ── Action → visual identity (icon + tone + Turkish verb) ─────────────────────
-type Tone = "green" | "blue" | "amber" | "violet" | "rose" | "slate";
+/* Tonlar tasarım token'ından: yeşil YALNIZ tamamlanma, mavi bilgi/durum,
+   amber tarih-görünürlük gibi "dikkat", mor atama/not, kırmızı silme.
+   Önce ham palet (emerald-50, blue-700…) kullanılıyordu; uygulamanın geri
+   kalanıyla aynı renkleri konuşmuyordu. Renk hiçbir zaman tek başına anlam
+   taşımaz — ikon ve fiil hep yanında. */
+type Tone = "success" | "info" | "warning" | "approval" | "danger" | "neutral";
 
-const TONE_CLS: Record<Tone, { chip: string; icon: string }> = {
-  green:  { chip: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: "bg-emerald-100 text-emerald-600" },
-  blue:   { chip: "bg-blue-50 text-blue-700 border-blue-200",          icon: "bg-blue-100 text-blue-600" },
-  amber:  { chip: "bg-amber-50 text-amber-700 border-amber-200",       icon: "bg-amber-100 text-amber-600" },
-  violet: { chip: "bg-violet-50 text-violet-700 border-violet-200",    icon: "bg-violet-100 text-violet-600" },
-  rose:   { chip: "bg-rose-50 text-rose-700 border-rose-200",          icon: "bg-rose-100 text-rose-600" },
-  slate:  { chip: "bg-slate-100 text-slate-600 border-slate-200",      icon: "bg-slate-100 text-slate-500" },
+const TONE_CLS: Record<Tone, string> = {
+  success:  "bg-success/10 text-success",
+  info:     "bg-info/10 text-info",
+  warning:  "bg-warning/10 text-warning",
+  approval: "bg-approval/10 text-approval",
+  danger:   "bg-danger/10 text-danger",
+  neutral:  "bg-surface-sunken text-muted",
 };
 
-type ActionMeta = { label: string; verb: string; tone: Tone; icon: typeof Plus };
+type ActionMeta = { verb: string; tone: Tone; icon: typeof Plus };
 
 const ACTION_META: Record<string, ActionMeta> = {
-  task_created:                 { label: "Oluşturuldu",    verb: "görev oluşturdu",                tone: "green",  icon: Plus },
-  task_completed:               { label: "Tamamlandı",     verb: "görevi tamamladı",               tone: "green",  icon: CheckCircle2 },
-  participant_completed:        { label: "Tamamlandı",     verb: "kendi işini tamamladı",          tone: "green",  icon: CheckCircle2 },
-  auto_moved_to_review:         { label: "Durum",          verb: "görevi Kontrol / Onay'a taşıdı", tone: "blue",   icon: RefreshCw },
-  status_changed:               { label: "Durum",          verb: "durumu değiştirdi",              tone: "blue",   icon: RefreshCw },
-  task_reopened:                { label: "Yeniden açıldı",  verb: "görevi yeniden açtı",            tone: "amber",  icon: RotateCcw },
-  participant_uncompleted:      { label: "Yeniden açıldı",  verb: "tamamlamayı geri aldı",          tone: "amber",  icon: RotateCcw },
-  note_added:                   { label: "Not",            verb: "not ekledi",                     tone: "violet", icon: StickyNote },
-  assignee_changed:             { label: "Sorumlu",        verb: "sorumluyu değiştirdi",           tone: "violet", icon: Users },
-  responsible_contact_changed:  { label: "Sorumlu",        verb: "sorumlu kişiyi değiştirdi",      tone: "violet", icon: Users },
-  waiting_person_changed:       { label: "Sorumlu",        verb: "beklenen kişiyi değiştirdi",     tone: "violet", icon: Users },
-  priority_changed:             { label: "Öncelik",        verb: "önceliği değiştirdi",            tone: "rose",   icon: Flag },
-  due_date_changed:             { label: "Tarih",          verb: "teslim tarihini değiştirdi",     tone: "amber",  icon: CalendarClock },
-  visibility_changed:           { label: "Görünürlük",     verb: "görünürlüğü değiştirdi",         tone: "amber",  icon: Eye },
-  title_changed:                { label: "Güncelleme",     verb: "başlığı değiştirdi",             tone: "slate",  icon: Pencil },
-  description_changed:          { label: "Güncelleme",     verb: "açıklamayı güncelledi",          tone: "slate",  icon: Pencil },
-  category_changed:             { label: "Güncelleme",     verb: "konuyu değiştirdi",              tone: "slate",  icon: Pencil },
-  tags_changed:                 { label: "Güncelleme",     verb: "etiketleri güncelledi",          tone: "slate",  icon: Pencil },
-  effort_changed:               { label: "Efor",           verb: "eforu değiştirdi",               tone: "slate",  icon: Pencil },
-  approval_changed:             { label: "Güncelleme",     verb: "onay durumunu güncelledi",       tone: "slate",  icon: Pencil },
-  task_archived:                { label: "Arşiv",          verb: "görevi arşivledi",               tone: "slate",  icon: Archive },
-  task_unarchived:              { label: "Arşiv",          verb: "görevi arşivden çıkardı",        tone: "slate",  icon: Archive },
-  task_trashed:                 { label: "Çöp",            verb: "görevi çöpe taşıdı",             tone: "rose",   icon: Trash2 },
-  task_restored:                { label: "Geri yüklendi",  verb: "görevi geri yükledi",            tone: "blue",   icon: RotateCcw },
-  task_duplicated:              { label: "Çoğaltıldı",     verb: "görevi çoğalttı",                tone: "slate",  icon: Plus },
-  points_finalized:             { label: "Puan",           verb: "puanı kesinleştirdi",            tone: "green",  icon: Award },
-  points_revoked:               { label: "Puan",           verb: "kazanılan puanı geri aldı",      tone: "rose",   icon: Award },
-  points_self_approval_skipped: { label: "Puan",           verb: "kendi onayı nedeniyle puan verilmedi", tone: "slate", icon: Award },
+  task_created:                 { verb: "görev oluşturdu",                tone: "info",     icon: Plus },
+  task_completed:               { verb: "görevi tamamladı",               tone: "success",  icon: CheckCircle2 },
+  participant_completed:        { verb: "kendi işini tamamladı",          tone: "success",  icon: CheckCircle2 },
+  auto_moved_to_review:         { verb: "görevi Kontrol / Onay'a taşıdı", tone: "info",     icon: RefreshCw },
+  status_changed:               { verb: "durumu değiştirdi",              tone: "info",     icon: RefreshCw },
+  task_reopened:                { verb: "görevi yeniden açtı",            tone: "warning",  icon: RotateCcw },
+  participant_uncompleted:      { verb: "tamamlamayı geri aldı",          tone: "warning",  icon: RotateCcw },
+  note_added:                   { verb: "not ekledi",                     tone: "approval", icon: StickyNote },
+  assignee_changed:             { verb: "sorumluyu değiştirdi",           tone: "approval", icon: Users },
+  responsible_contact_changed:  { verb: "sorumlu kişiyi değiştirdi",      tone: "approval", icon: Users },
+  waiting_person_changed:       { verb: "beklenen kişiyi değiştirdi",     tone: "approval", icon: Users },
+  priority_changed:             { verb: "önceliği değiştirdi",            tone: "warning",  icon: Flag },
+  due_date_changed:             { verb: "teslim tarihini değiştirdi",     tone: "warning",  icon: CalendarClock },
+  visibility_changed:           { verb: "görünürlüğü değiştirdi",         tone: "warning",  icon: Eye },
+  title_changed:                { verb: "başlığı değiştirdi",             tone: "neutral",  icon: Pencil },
+  description_changed:          { verb: "açıklamayı güncelledi",          tone: "neutral",  icon: Pencil },
+  category_changed:             { verb: "konuyu değiştirdi",              tone: "neutral",  icon: Pencil },
+  tags_changed:                 { verb: "etiketleri güncelledi",          tone: "neutral",  icon: Pencil },
+  effort_changed:               { verb: "eforu değiştirdi",               tone: "neutral",  icon: Pencil },
+  approval_changed:             { verb: "onay durumunu güncelledi",       tone: "neutral",  icon: Pencil },
+  task_archived:                { verb: "görevi arşivledi",               tone: "neutral",  icon: Archive },
+  task_unarchived:              { verb: "görevi arşivden çıkardı",        tone: "neutral",  icon: Archive },
+  task_trashed:                 { verb: "görevi çöpe taşıdı",             tone: "danger",   icon: Trash2 },
+  task_restored:                { verb: "görevi geri yükledi",            tone: "info",     icon: RotateCcw },
+  task_duplicated:              { verb: "görevi çoğalttı",                tone: "neutral",  icon: Plus },
+  points_finalized:             { verb: "puanı kesinleştirdi",            tone: "success",  icon: Award },
+  points_revoked:               { verb: "kazanılan puanı geri aldı",      tone: "danger",   icon: Award },
+  points_self_approval_skipped: { verb: "kendi onayı nedeniyle puan verilmedi", tone: "neutral", icon: Award },
 
   /* GÖREV DIŞI OLAYLAR (workspace_activity_logs, 20240332).
      Sıraç (2026-08-29): "Bu indirme, silme kısımları da loglarda çıksın."
      Föy indirmek ve kategori/klasör silmek bir göreve bağlı değil; ayrı bir
      tabloda tutulur ama AYNI akışta okunur — denetim yaparken iki listeye
      bakmak istemezsiniz. */
-  sheet_downloaded:     { label: "İndirme", verb: "föyü Excel olarak indirdi",   tone: "blue",  icon: Download },
-  sheets_exported:      { label: "İndirme", verb: "tüm föyleri indirdi",         tone: "blue",  icon: Download },
-  sheet_printed:        { label: "Çıktı",   verb: "föyün çıktısını aldı",        tone: "blue",  icon: Download },
-  file_downloaded:      { label: "İndirme", verb: "dosya indirdi",               tone: "blue",  icon: Download },
-  sheet_sent:           { label: "Gönderim", verb: "föyü üreticiye gönderdi",    tone: "violet", icon: Users },
-  sheet_deleted:        { label: "Silme",   verb: "föyü sildi",                  tone: "rose",  icon: Trash2 },
-  sheet_archived:       { label: "Arşiv",   verb: "föyü arşivledi",              tone: "slate", icon: Archive },
-  category_created:     { label: "Kategori", verb: "kategori açtı",              tone: "green", icon: Plus },
-  category_renamed:     { label: "Kategori", verb: "kategoriyi yeniden adlandırdı", tone: "slate", icon: Pencil },
-  category_deleted:     { label: "Silme",   verb: "kategoriyi sildi",            tone: "rose",  icon: Trash2 },
-  document_deleted:     { label: "Silme",   verb: "dokümanı sildi",              tone: "rose",  icon: Trash2 },
-  folder_deleted:       { label: "Silme",   verb: "klasörü sildi",               tone: "rose",  icon: Trash2 },
-  spreadsheet_deleted:  { label: "Silme",   verb: "tabloyu sildi",               tone: "rose",  icon: Trash2 },
-  contact_deleted:      { label: "Silme",   verb: "ilişki kaydını sildi",        tone: "rose",  icon: Trash2 },
+  sheet_downloaded:     { verb: "föyü Excel olarak indirdi",      tone: "info",     icon: Download },
+  sheets_exported:      { verb: "tüm föyleri indirdi",            tone: "info",     icon: Download },
+  sheet_printed:        { verb: "föyün çıktısını aldı",           tone: "info",     icon: Download },
+  file_downloaded:      { verb: "dosya indirdi",                  tone: "info",     icon: Download },
+  sheet_sent:           { verb: "föyü üreticiye gönderdi",        tone: "approval", icon: Users },
+  sheet_deleted:        { verb: "föyü sildi",                     tone: "danger",   icon: Trash2 },
+  sheet_archived:       { verb: "föyü arşivledi",                 tone: "neutral",  icon: Archive },
+  category_created:     { verb: "kategori açtı",                  tone: "info",     icon: Plus },
+  category_renamed:     { verb: "kategoriyi yeniden adlandırdı",  tone: "neutral",  icon: Pencil },
+  category_deleted:     { verb: "kategoriyi sildi",               tone: "danger",   icon: Trash2 },
+  document_deleted:     { verb: "dokümanı sildi",                 tone: "danger",   icon: Trash2 },
+  folder_deleted:       { verb: "klasörü sildi",                  tone: "danger",   icon: Trash2 },
+  spreadsheet_deleted:  { verb: "tabloyu sildi",                  tone: "danger",   icon: Trash2 },
+  contact_deleted:      { verb: "ilişki kaydını sildi",           tone: "danger",   icon: Trash2 },
 };
 
-const FALLBACK_META: ActionMeta = { label: "Güncelleme", verb: "görevi güncelledi", tone: "slate", icon: ActivityIcon };
+const FALLBACK_META: ActionMeta = { verb: "görevi güncelledi", tone: "neutral", icon: ActivityIcon };
 
 function metaFor(action: string): ActionMeta {
   return ACTION_META[action] ?? FALLBACK_META;
@@ -100,17 +106,17 @@ function metaFor(action: string): ActionMeta {
 // ── Filters (user-facing groups → action sets) ────────────────────────────────
 type FilterKey = "all" | "created" | "status" | "completed" | "assignment" | "date" | "download" | "deleted";
 
-const FILTERS: { key: FilterKey; label: string; actions: string[]; icon: typeof Plus; tone: Tone }[] = [
-  { key: "all",        label: "Tümü",                 actions: [],                                                                   icon: ActivityIcon, tone: "slate" },
-  { key: "created",    label: "Görev oluşturma",       actions: ["task_created"],                                                    icon: Plus,         tone: "green" },
-  { key: "status",     label: "Durum değişiklikleri",  actions: ["status_changed", "auto_moved_to_review"],                          icon: RefreshCw,    tone: "blue" },
-  { key: "completed",  label: "Tamamlananlar",         actions: ["task_completed", "participant_completed"],                         icon: CheckCircle2, tone: "green" },
-  { key: "assignment", label: "Atamalar",              actions: ["assignee_changed", "responsible_contact_changed", "waiting_person_changed"], icon: Users, tone: "violet" },
-  { key: "date",       label: "Tarih değişiklikleri",  actions: ["due_date_changed"],                                                icon: CalendarClock, tone: "amber" },
+const FILTERS: { key: FilterKey; label: string; actions: string[]; icon: typeof Plus }[] = [
+  { key: "all",        label: "Tümü",              actions: [],                                                                   icon: ActivityIcon },
+  { key: "created",    label: "Oluşturma",         actions: ["task_created"],                                                    icon: Plus },
+  { key: "status",     label: "Durum",             actions: ["status_changed", "auto_moved_to_review"],                          icon: RefreshCw },
+  { key: "completed",  label: "Tamamlanan",        actions: ["task_completed", "participant_completed"],                         icon: CheckCircle2 },
+  { key: "assignment", label: "Atama",             actions: ["assignee_changed", "responsible_contact_changed", "waiting_person_changed"], icon: Users },
+  { key: "date",       label: "Tarih",             actions: ["due_date_changed"],                                                icon: CalendarClock },
   /* İki yeni süzgeç: denetimde en çok aranan iki soru "kim ne indirdi" ve
      "kim ne sildi" (2026-08-29). */
-  { key: "download",   label: "İndirmeler",            actions: ["sheet_downloaded", "sheets_exported", "sheet_printed", "file_downloaded"], icon: Download, tone: "blue" },
-  { key: "deleted",    label: "Silmeler",              actions: ["sheet_deleted", "category_deleted", "document_deleted", "folder_deleted", "spreadsheet_deleted", "contact_deleted", "task_trashed"], icon: Trash2, tone: "rose" },
+  { key: "download",   label: "İndirme",           actions: ["sheet_downloaded", "sheets_exported", "sheet_printed", "file_downloaded"], icon: Download },
+  { key: "deleted",    label: "Silme",             actions: ["sheet_deleted", "category_deleted", "document_deleted", "folder_deleted", "spreadsheet_deleted", "contact_deleted", "task_trashed"], icon: Trash2 },
 ];
 
 // ── Change-detail extraction (old → new) ──────────────────────────────────────
@@ -151,6 +157,29 @@ function changeDetail(row: ActivityRow): { label: string; from: string; to: stri
   }
 }
 
+/** "Durum: Yapılacak → Devam ediyor" — eskiden yeni. */
+function Transition({ detail }: { detail: { label: string; from: string; to: string } }) {
+  return (
+    <span className="text-muted">
+      {detail.label}:{" "}
+      <span className="text-subtle">{detail.from}</span>
+      <span className="mx-1 text-subtle" aria-hidden>→</span>
+      <span className="sr-only">sonra</span>
+      <span className="font-medium text-ink">{detail.to}</span>
+    </span>
+  );
+}
+
+/**
+ * ACTIVITY LOG — denetim akışı (yalnız yönetici).
+ *
+ * Bir SATIR = kim · ne yaptı · hangi işte · ne zaman; tek satırda okunur.
+ * Ekranın üstünde bir zamanlar altı büyük sayaç karosu (her biri ikon + iri
+ * rakam), sağda "Denetim merkezi" paneli ve sayfa başlığı bloğu vardı.
+ * Sayaçlar aslında süzgeçti — şimdi süzgeç şeridindeki küçük sayı olarak
+ * duruyorlar (listeyi tarif eder: "Silme 12"). Panel ve başlık gitti; başlık
+ * uygulama çubuğunda zaten yazıyor.
+ */
 export function ActivityLogView({ rows }: { rows: ActivityRow[] }) {
   const [filter, setFilter] = useState<FilterKey>("all");
 
@@ -194,79 +223,68 @@ export function ActivityLogView({ rows }: { rows: ActivityRow[] }) {
     return out;
   }, [visible]);
 
-  const latest = rows[0]?.created_at ?? null;
-
   return (
-    <div className="w-full py-6 px-4 sm:px-6 lg:px-8 space-y-5">
-      {/* ── Page header ─────────────────────────────────────────────────────── */}
-      <div className="flex items-start gap-3">
-        <div className="grid h-10 w-10 place-items-center rounded-xl bg-brand-soft text-brand shrink-0">
-          <ActivityIcon size={20} strokeWidth={1.75} />
-        </div>
-        <div className="min-w-0">
-          <h1 className="text-xl font-semibold tracking-tight text-ink">Activity Log</h1>
-          <p className="text-sm text-muted mt-0.5 leading-relaxed">
-            Kim, ne yaptı, hangi görevde — tüm çalışma alanı hareketleri. Yalnızca yöneticiler görür.
-          </p>
-        </div>
-      </div>
+    <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
+      <h1 className="sr-only">Activity Log</h1>
 
-      {/* ── Summary stat cards (double as filters) ──────────────────────────── */}
-      <div className="stagger-children grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+      {/* ── Süzgeç şeridi — segment düğmeleri; sayı listeyi tarif eder ──────── */}
+      <div
+        role="group"
+        aria-label="Hareket türü süzgeci"
+        className="-mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1 pb-1"
+      >
         {FILTERS.map((f) => {
           const active = filter === f.key;
-          const tone = TONE_CLS[f.tone];
           const Icon = f.icon;
           return (
             <button
               key={f.key}
+              type="button"
               onClick={() => setFilter(f.key)}
               aria-pressed={active}
               className={cn(
-                "flex flex-col items-start gap-2 rounded-xl border p-3 text-left transition-all duration-200 ease-standard active:scale-[0.98]",
+                "inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-[13px] font-medium",
+                "transition-[background-color,border-color,color] duration-150 ease-standard active:scale-[0.98]",
                 active
-                  ? "border-brand-ring bg-brand-soft shadow-card"
-                  : "border-line bg-surface shadow-card hover:shadow-card-hover hover:bg-surface-hover hover:border-line-strong",
+                  ? "border-brand bg-brand text-white"
+                  : "border-line bg-surface text-muted hover:border-line-strong hover:text-ink",
               )}
             >
-              <div className={cn("grid h-8 w-8 place-items-center rounded-lg shrink-0", tone.icon)}>
-                <Icon size={15} />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xl font-semibold tracking-tight text-ink tabular-nums leading-none">{counts[f.key]}</p>
-                <p className="text-xs text-muted mt-1 leading-tight line-clamp-2">{f.label}</p>
-              </div>
+              <Icon size={13} aria-hidden />
+              {f.label}
+              <span className={cn("text-[12px] tabular-nums", active ? "text-white/80" : "text-subtle")}>
+                {counts[f.key]}
+              </span>
             </button>
           );
         })}
       </div>
 
-      {/* ── Timeline + context rail ─────────────────────────────────────────── */}
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px] 2xl:grid-cols-[minmax(0,1fr)_320px] items-start">
-      <div key={filter} className="anim-fade bg-surface rounded-2xl border border-line shadow-card divide-y divide-hairline overflow-hidden">
+      {/* ── Akış ─────────────────────────────────────────────────────────────── */}
+      <div key={filter} className="anim-fade divide-y divide-hairline overflow-hidden rounded-card border border-line bg-surface shadow-card">
         {groups.length === 0 ? (
-          <p className="px-5 py-14 text-sm text-subtle text-center">Bu filtreyle eşleşen kayıt yok.</p>
+          <EmptyState compact title="Bu süzgeçle eşleşen kayıt yok." />
         ) : (
           groups.map((g) => {
             const head = g.rows[0];
             const headMeta = metaFor(head.action);
-            const headTone = TONE_CLS[headMeta.tone];
             const HeadIcon = headMeta.icon;
             const actorName = getPersonDisplayName(head.actor_name);
             const isGroup = g.rows.length > 1;
+            const headDetail = isGroup ? null : changeDetail(head);
 
             return (
-              <div key={g.key} className="flex items-start gap-3 px-4 py-3.5 hover:bg-surface-hover transition-colors duration-150">
-                <div className={cn("mt-0.5 grid h-8 w-8 place-items-center rounded-full shrink-0", headTone.icon)}>
-                  <HeadIcon size={15} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  {/* Header: actor + task (once per group) + latest time */}
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="text-sm text-muted leading-snug">
+              <div key={g.key} className="flex items-start gap-3 px-4 py-2.5 transition-colors duration-150 hover:bg-surface-hover">
+                <span className={cn("mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full", TONE_CLS[headMeta.tone])}>
+                  <HeadIcon size={14} aria-hidden />
+                </span>
+                <div className="min-w-0 flex-1">
+                  {/* Kim · ne · hangi iş — solda; ne zaman — sağda. Tek satır. */}
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="min-w-0 text-[13.5px] leading-snug text-muted">
                       <span className="font-semibold text-ink">{actorName}</span>{" "}
                       {isGroup ? (
-                        <span className="text-muted tabular-nums">{g.rows.length} değişiklik yaptı</span>
+                        <span className="tabular-nums">{g.rows.length} değişiklik yaptı</span>
                       ) : (
                         headMeta.verb
                       )}
@@ -276,88 +294,51 @@ export function ActivityLogView({ rows }: { rows: ActivityRow[] }) {
                           <Link
                             href={`/tasks/${head.task_id}`}
                             prefetch={false}
-                            className="font-medium text-ink hover:text-brand hover:underline underline-offset-2 break-words transition-colors duration-150"
+                            className="break-words font-medium text-ink underline-offset-2 transition-colors duration-150 hover:text-brand hover:underline"
                           >
                             {head.task_title}
                           </Link>
                         </>
                       )}
+                      {head.task_title && !head.task_id && (
+                        /* Göreve bağlı olmayan olay: nesnenin adı, bağlantı yok. */
+                        <>{" — "}<span className="font-medium text-ink">{head.task_title}</span></>
+                      )}
                     </p>
-                    <span className="text-xs text-subtle shrink-0 text-right tabular-nums">
+                    <time
+                      dateTime={head.created_at}
+                      className="shrink-0 whitespace-nowrap text-[12px] tabular-nums text-subtle"
+                    >
                       {formatDateTimeTR(head.created_at)}
-                    </span>
+                    </time>
                   </div>
 
-                  {isGroup ? (
+                  {headDetail && (
+                    <p className="mt-0.5 text-[12.5px] leading-snug"><Transition detail={headDetail} /></p>
+                  )}
+
+                  {isGroup && (
                     // Grouped: one compact line per change (no repeated actor/task).
-                    <ul className="mt-2 space-y-1.5">
+                    <ul className="mt-1 space-y-0.5">
                       {g.rows.map((r) => {
                         const m = metaFor(r.action);
+                        const RowIcon = m.icon;
                         const detail = changeDetail(r);
                         return (
-                          <li key={r.id} className="flex items-center gap-2 flex-wrap text-xs">
-                            <span className={cn("inline-flex items-center rounded-md border px-1.5 py-0.5 font-medium", TONE_CLS[m.tone].chip)}>
-                              {m.label}
-                            </span>
-                            <span className="text-muted">{m.verb}</span>
-                            {detail && (
-                              <span className="text-muted">
-                                {detail.label}:{" "}
-                                <span className="text-subtle">{detail.from}</span>
-                                <span className="mx-1 text-subtle/60">→</span>
-                                <span className="text-ink font-medium">{detail.to}</span>
-                              </span>
-                            )}
+                          <li key={r.id} className="flex flex-wrap items-baseline gap-x-1.5 text-[12.5px] leading-snug text-muted">
+                            <RowIcon size={12} className="relative top-px shrink-0 text-subtle" aria-hidden />
+                            <span>{m.verb}</span>
+                            {detail && <Transition detail={detail} />}
                           </li>
                         );
                       })}
                     </ul>
-                  ) : (
-                    // Single change: label + optional from → to detail.
-                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                      <span className={cn("inline-flex items-center rounded-md border px-1.5 py-0.5 text-xs font-medium", headTone.chip)}>
-                        {headMeta.label}
-                      </span>
-                      {changeDetail(head) && (
-                        <span className="text-xs text-muted">
-                          {changeDetail(head)!.label}:{" "}
-                          <span className="text-subtle">{changeDetail(head)!.from}</span>
-                          <span className="mx-1 text-subtle/60">→</span>
-                          <span className="text-ink font-medium">{changeDetail(head)!.to}</span>
-                        </span>
-                      )}
-                    </div>
                   )}
                 </div>
               </div>
             );
           })
         )}
-      </div>
-
-      {/* Context rail — what the log records + freshness */}
-      <aside className="hidden lg:flex flex-col gap-4 lg:sticky lg:top-6">
-        <div className="rounded-2xl border border-line bg-surface p-4 shadow-card">
-          <div className="flex items-center gap-2 mb-2.5">
-            <Eye size={15} className="text-brand" />
-            <h2 className="text-sm font-semibold text-ink">Denetim merkezi</h2>
-          </div>
-          <p className="text-[13px] text-muted leading-relaxed">
-            Bu günlük; görev oluşturma, durum ve öncelik değişiklikleri, atamalar,
-            tamamlamalar ve tarih güncellemelerini aktörüyle birlikte kaydeder.
-          </p>
-          {latest && (
-            <div className="mt-3 pt-3 border-t border-hairline">
-              <p className="text-xs uppercase tracking-wider font-semibold text-subtle">Son hareket</p>
-              <p className="text-[13px] text-ink mt-1 tabular-nums">{formatDateTimeTR(latest)}</p>
-            </div>
-          )}
-          <div className="mt-3 pt-3 border-t border-hairline flex items-center justify-between">
-            <span className="text-[13px] text-muted">Kayıtlı hareket</span>
-            <span className="text-[13px] font-semibold text-ink tabular-nums">{rows.length}</span>
-          </div>
-        </div>
-      </aside>
       </div>
     </div>
   );

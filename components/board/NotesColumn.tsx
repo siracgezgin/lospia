@@ -11,23 +11,59 @@ import {
   SortableContext, verticalListSortingStrategy, useSortable, arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Plus, Trash2, Pencil, StickyNote, Check, X, GripVertical, ArrowRightCircle, Undo2 } from "lucide-react";
+import { Plus, Trash2, Pencil, GripVertical, ArrowRightCircle, Undo2, X } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { createNote, updateNote, deleteNote, reorderNotes } from "@/lib/actions/notes";
 import { createTask, softDeleteTask } from "@/lib/actions/tasks";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Button, IconButton } from "@/components/ui/Button";
+import { TextArea, TextInput } from "@/components/ui/Field";
 import type { WorkspaceNote, NoteColor } from "@/types";
 
-// ── Note color palette — brand-derived warm tones ─────────────────────────────
-
-const NOTE_COLORS: Record<NoteColor, { bg: string; border: string; title: string; dot: string }> = {
-  yellow: { bg: "bg-[#faf6e3]", border: "border-[#d4cf9e]", title: "text-[#6b6748]", dot: "bg-[#c8c39e]" },
-  blue:   { bg: "bg-[#e8f1f4]", border: "border-[#a0c0cf]", title: "text-[#406775]", dot: "bg-[#5b8fa0]" },
-  green:  { bg: "bg-[#e8f0ea]", border: "border-[#90b898]", title: "text-[#3a6e42]", dot: "bg-[#60a070]" },
-  purple: { bg: "bg-[#f2edf8]", border: "border-[#b8a0d0]", title: "text-[#5c40a0]", dot: "bg-[#8060c0]" },
+// ── Not renkleri — durum token'larından, az doygun ───────────────────────────
+// Eskiden dört renk × dört ham hex'ti. Artık her not rengi bir tasarım
+// token'ına bağlanır (%10 dolgu, %35 kenarlık): sarı → hold, mavi → info,
+// mor → approval. "Yeşil" bilerek MARKA turkuazına eşlenir — yeşil yalnız
+// "tamamlandı" içindir (semantics.ts: green → teal). Başlık her zaman ink;
+// renk kenarlık ve noktada yaşar, metni boyamaz.
+const NOTE_COLORS: Record<NoteColor, { bg: string; border: string; dot: string; label: string }> = {
+  yellow: { bg: "bg-hold/10",     border: "border-hold/35",       dot: "bg-hold",     label: "Sarı" },
+  blue:   { bg: "bg-info/10",     border: "border-info/35",       dot: "bg-info",     label: "Mavi" },
+  green:  { bg: "bg-brand-soft",  border: "border-brand-ring/70", dot: "bg-brand",    label: "Turkuaz" },
+  purple: { bg: "bg-approval/10", border: "border-approval/35",   dot: "bg-approval", label: "Mor" },
 };
 
 const ALL_COLORS: NoteColor[] = ["yellow", "blue", "green", "purple"];
+
+/** Renk seçici noktaları — düzenleme ve ekleme formunda aynı. */
+function ColorDots({ value, onChange }: { value: NoteColor; onChange: (_c: NoteColor) => void }) {
+  return (
+    <div className="mb-0.5 flex items-center gap-1.5" role="radiogroup" aria-label="Not rengi">
+      {ALL_COLORS.map((c) => (
+        <button
+          key={c}
+          type="button"
+          role="radio"
+          aria-checked={value === c}
+          onClick={() => onChange(c)}
+          className={cn(
+            "tap-target h-3.5 w-3.5 rounded-full transition-[box-shadow,opacity] duration-150 ease-standard",
+            NOTE_COLORS[c].dot,
+            value === c ? "ring-2 ring-ink/40 ring-offset-1" : "opacity-60 hover:opacity-100",
+          )}
+          aria-label={NOTE_COLORS[c].label}
+        />
+      ))}
+    </div>
+  );
+}
+
+// Satır içi düzenleme alanları: ortak primitif, saydam zemin, yalnız alt
+// çizgi (kartın kendi rengi zaten çerçeve). twMerge ile boy/çerçeve ezilir.
+const INLINE_INPUT =
+  "h-8 rounded-none border-0 border-b border-line-strong bg-transparent px-0 text-[13.5px] font-medium focus:border-brand focus:ring-0";
+const INLINE_TEXTAREA =
+  "min-h-0 resize-none rounded-none border-0 bg-transparent px-0 py-0 text-[13px] text-muted focus:ring-0";
 
 // ── Note author resolution (created_by → display name) ────────────────────────
 const NoteAuthorsContext = createContext<Record<string, string>>({});
@@ -101,44 +137,34 @@ function NoteCardContent({
     return (
       <div
         className={cn(
-          "rounded-lg border-2 p-2.5 shadow-card flex flex-col gap-1.5 anim-scale-in",
+          "rounded-card border p-2.5 shadow-card flex flex-col gap-1.5 anim-scale-in",
           editColors.bg, editColors.border,
         )}
       >
-        <div className="flex items-center gap-1 mb-0.5">
-          {ALL_COLORS.map((c) => (
-            <button
-              key={c}
-              onClick={() => setColor(c)}
-              className={cn(
-                "w-3.5 h-3.5 rounded-full transition-[transform,opacity] duration-150 ease-standard",
-                NOTE_COLORS[c].dot,
-                color === c ? "ring-2 ring-offset-1 ring-gray-400 scale-110" : "opacity-60 hover:opacity-100 hover:scale-105",
-              )}
-              aria-label={c}
-            />
-          ))}
-        </div>
-        <input
+        <ColorDots value={color} onChange={setColor} />
+        <TextInput
           ref={titleRef}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") handleCancel(); }}
-          className={cn("text-sm font-medium bg-transparent border-b outline-none w-full pb-0.5", editColors.border)}
+          className={INLINE_INPUT}
           placeholder="Başlık"
+          aria-label="Not başlığı"
           maxLength={500}
         />
-        <textarea
+        <TextArea
           value={body}
           onChange={(e) => setBody(e.target.value)}
-          className="text-xs text-gray-600 bg-transparent outline-none w-full resize-none"
+          className={INLINE_TEXTAREA}
           placeholder="Not içeriği…"
+          aria-label="Not içeriği"
           rows={3}
           maxLength={5000}
         />
-        <div className="flex gap-1 justify-end">
-          <button onClick={handleCancel} className="p-1 text-gray-400 hover:text-gray-600 hover:bg-black/5 rounded transition-colors duration-150 active:scale-95" aria-label="Vazgeç"><X size={12} /></button>
-          <button onClick={handleSave} className="p-1 text-green-600 hover:text-green-700 hover:bg-green-600/10 rounded transition-colors duration-150 active:scale-95" aria-label="Kaydet"><Check size={12} /></button>
+        {/* Vazgeç solda (ghost), Kaydet sağda — form hiyerarşisi. */}
+        <div className="flex justify-end gap-1">
+          <Button variant="ghost" size="sm" onClick={handleCancel}>Vazgeç</Button>
+          <Button size="sm" onClick={handleSave} disabled={!title.trim()}>Kaydet</Button>
         </div>
       </div>
     );
@@ -149,58 +175,68 @@ function NoteCardContent({
       ref={containerRef}
       style={containerStyle}
       className={cn(
-        "rounded-lg border p-2.5 shadow-card group transition-shadow duration-200 ease-standard hover:shadow-card-hover",
+        "rounded-card border p-2.5 shadow-card group transition-shadow duration-200 ease-standard hover:shadow-card-hover",
         colors.bg, colors.border,
         isDragging && "opacity-40 shadow-pop",
       )}
     >
       <div className="flex items-start gap-1">
+        {/* Tutamaç her zaman görünür (soluk) — sürüklenebilirlik hover'a
+            saklanmaz. dnd-kit tutamacı: ham <button>, yalnız sınıf düzeltildi. */}
         {!readOnly ? (
           <button
             {...dragHandleProps}
-            className="mt-0.5 p-0.5 rounded text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity duration-150 shrink-0"
+            type="button"
+            className="mt-0.5 shrink-0 cursor-grab rounded p-0.5 text-subtle/70 transition-colors duration-150 hover:text-muted active:cursor-grabbing"
             aria-label="Sürükle"
             tabIndex={-1}
           >
-            <GripVertical size={11} />
+            <GripVertical size={13} />
           </button>
         ) : (
-          <span className="mt-0.5 p-0.5 shrink-0 text-transparent"><GripVertical size={11} /></span>
+          <span className="mt-0.5 p-0.5 shrink-0 text-transparent" aria-hidden><GripVertical size={13} /></span>
         )}
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-1">
-            <p className={cn("text-sm font-semibold leading-snug flex-1 min-w-0 break-words", colors.title)}>
+            <p className="text-[13.5px] font-semibold leading-snug flex-1 min-w-0 break-words text-ink">
               {note.title}
             </p>
+            {/* Eylemler her zaman görünür (soluk): hover'a bağlı işlev
+                telefonda erişilemezdi. Küçük ikon düğmeleri tap-target'lı. */}
             {!readOnly && canModify && (
-            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150 shrink-0">
-              <button
+            <div className="flex shrink-0 items-center gap-0.5">
+              <IconButton
+                size="sm"
+                className="size-6 rounded-md text-subtle hover:text-brand"
                 onClick={() => onConvertToTask(note.id, note.title, note.body ?? "")}
-                className="p-0.5 text-gray-400 hover:text-[#406775] hover:bg-black/5 rounded transition-colors duration-150 active:scale-95"
                 aria-label="Göreve dönüştür"
                 title="Göreve dönüştür"
               >
-                <ArrowRightCircle size={11} />
-              </button>
-              <button
+                <ArrowRightCircle size={13} />
+              </IconButton>
+              <IconButton
+                size="sm"
+                className="size-6 rounded-md text-subtle"
                 onClick={() => setEditing(true)}
-                className="p-0.5 text-gray-400 hover:text-gray-600 hover:bg-black/5 rounded transition-colors duration-150 active:scale-95"
                 aria-label="Notu düzenle"
+                title="Düzenle"
               >
-                <Pencil size={11} />
-              </button>
-              <button
+                <Pencil size={13} />
+              </IconButton>
+              <IconButton
+                size="sm"
+                className="size-6 rounded-md text-subtle hover:bg-danger/10 hover:text-danger"
                 onClick={() => onDelete(note.id)}
-                className="p-0.5 text-gray-400 hover:text-red-500 hover:bg-red-500/10 rounded transition-colors duration-150 active:scale-95"
                 aria-label="Notu sil"
+                title="Sil"
               >
-                <Trash2 size={11} />
-              </button>
+                <Trash2 size={13} />
+              </IconButton>
             </div>
             )}
           </div>
           {note.body && (
-            <p className="text-[11px] text-gray-500 mt-1 leading-relaxed break-words whitespace-pre-wrap line-clamp-4">
+            <p className="mt-1 line-clamp-4 whitespace-pre-wrap break-words text-[13px] leading-relaxed text-muted">
               {note.body}
             </p>
           )}
@@ -217,8 +253,8 @@ function NoteMeta({ note }: { note: WorkspaceNote }) {
   const author = note.created_by ? authors[note.created_by] ?? "Bilinmeyen kullanıcı" : "Bilinmeyen kullanıcı";
   const when = note.created_at ? formatNoteMeta(note.created_at) : "";
   return (
-    <p className="mt-1.5 text-[10px] text-gray-400 truncate">
-      <span className="font-medium text-gray-500">{author}</span>
+    <p className="mt-1.5 truncate text-[12px] text-subtle">
+      <span className="font-medium text-muted">{author}</span>
       {when && <span> · {when}</span>}
     </p>
   );
@@ -277,44 +313,32 @@ function AddNoteForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className={cn("rounded-lg border-2 p-2.5 shadow-sm flex flex-col gap-1.5", editColors.bg, editColors.border)}
+      className={cn("rounded-card border p-2.5 shadow-card flex flex-col gap-1.5 anim-scale-in", editColors.bg, editColors.border)}
     >
-      <div className="flex items-center gap-1 mb-0.5">
-        {ALL_COLORS.map((c) => (
-          <button
-            key={c}
-            type="button"
-            onClick={() => setColor(c)}
-            className={cn(
-              "w-3.5 h-3.5 rounded-full transition-transform",
-              NOTE_COLORS[c].dot,
-              color === c ? "ring-2 ring-offset-1 ring-gray-400 scale-110" : "opacity-60 hover:opacity-100",
-            )}
-            aria-label={c}
-          />
-        ))}
-      </div>
-      <input
+      <ColorDots value={color} onChange={setColor} />
+      <TextInput
         ref={inputRef}
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Escape") onCancel(); }}
-        className={cn("text-sm font-medium bg-transparent border-b outline-none w-full pb-0.5", editColors.border)}
+        className={INLINE_INPUT}
         placeholder="Not başlığı…"
+        aria-label="Not başlığı"
         maxLength={500}
         required
       />
-      <textarea
+      <TextArea
         value={body}
         onChange={(e) => setBody(e.target.value)}
-        className="text-xs text-gray-600 bg-transparent outline-none w-full resize-none"
+        className={INLINE_TEXTAREA}
         placeholder="Not içeriği (isteğe bağlı)…"
+        aria-label="Not içeriği"
         rows={2}
         maxLength={5000}
       />
-      <div className="flex gap-1 justify-end">
-        <button type="button" onClick={onCancel} className="p-1 text-gray-400 hover:text-gray-600 rounded"><X size={12} /></button>
-        <button type="submit" disabled={!title.trim()} className="p-1 text-green-600 hover:text-green-700 disabled:opacity-40 rounded"><Check size={12} /></button>
+      <div className="flex justify-end gap-1">
+        <Button type="button" variant="ghost" size="sm" onClick={onCancel}>Vazgeç</Button>
+        <Button type="submit" size="sm" disabled={!title.trim()}>Ekle</Button>
       </div>
     </form>
   );
@@ -513,7 +537,7 @@ export function NotesColumn({
 
   // No dashed placeholder box — an empty sticky-note list renders nothing (the
   // weekly feed above is the column's primary content).
-  const listCls = "flex flex-col gap-2 rounded-lg p-1";
+  const listCls = "flex flex-col gap-2 rounded-card p-1";
 
   const handlers: NoteHandlers = {
     onDelete: requestDelete,
@@ -532,10 +556,11 @@ export function NotesColumn({
           metni 21px sağa itiyordu; diğer dört başlık sütun kenarına bitişikti.
           Sayaç da yalnız burada eksikti. İkon kaldırıldı, sayaç eklendi —
           beş başlık aynı x'te başlıyor ve aynı biçimi taşıyor. */}
+      {/* Görev sütunlarıyla aynı eyebrow ölçüsü ve sayaç biçimi (12px). */}
       <div className="sticky top-0 z-20 flex h-11 items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <h3 className="truncate text-xs font-bold uppercase tracking-wider text-[#6b6748]">Notlar</h3>
-          <span className="inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-surface-sunken px-1.5 py-0.5 text-[10px] font-semibold leading-none text-muted tabular-nums">
+          <h3 className="truncate text-[12px] font-semibold uppercase tracking-[0.08em] text-muted">Notlar</h3>
+          <span className="inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-surface-sunken px-1.5 py-0.5 text-[12px] font-semibold leading-none text-muted tabular-nums">
             {optimisticNotes.length}
           </span>
         </div>
@@ -544,29 +569,27 @@ export function NotesColumn({
       {/* Haftanın Not Akışı — primary content */}
       {feed && (
         <div className="flex flex-col gap-1.5">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 px-1">
+          <p className="px-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle">
             {feedLabel}
           </p>
           {feed}
         </div>
       )}
 
-      {/* Pano notları (sticky quick notes) — secondary section */}
-      <div className="flex items-center justify-between px-1 mt-1">
-        <div className="flex items-center gap-1.5">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Pano notları</p>
-          <span className="text-[10px] text-[#6b6748] bg-[#f0ece4] rounded-full px-1.5 py-0.5 leading-none">
-            {optimisticNotes.length}
-          </span>
-        </div>
+      {/* Pano notları (sticky quick notes) — secondary section. Sayaç yalnız
+          üstteki sütun başlığında: aynı sayı iki kez yazılıyordu. */}
+      <div className="mt-1 flex items-center justify-between px-1">
+        <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle">Pano notları</p>
         {!readOnly && (
-          <button
+          <IconButton
+            size="sm"
+            className="size-7 text-subtle hover:bg-brand-soft hover:text-brand"
             onClick={() => setAdding(true)}
-            className="p-0.5 text-gray-300 hover:text-[#406775] rounded transition-colors"
             aria-label="Pano notu ekle"
+            title="Pano notu ekle"
           >
-            <Plus size={14} />
-          </button>
+            <Plus size={15} />
+          </IconButton>
         )}
       </div>
 
@@ -622,20 +645,24 @@ export function NotesColumn({
       />
 
       {/* Undo toast — recover a just-converted/deleted note within the session */}
+      {/* Panonun kendi bildirim kartıyla aynı dil (ink zemin, rounded-card);
+          telefonda alt gezinmenin üstünde durur. */}
       {undo && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] pointer-events-auto bg-[#1d2127] text-white text-sm px-4 py-2.5 rounded-lg shadow-pop flex items-center gap-3 max-w-sm">
+        <div className="pointer-events-auto anim-slide-up fixed left-1/2 bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] z-[100] flex w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 items-center gap-3 rounded-card bg-ink px-4 py-2.5 text-sm text-white shadow-drawer md:bottom-4">
           <span className="flex-1">
             {undo.kind === "convert" ? "Not göreve dönüştürüldü." : "Not silindi."}
           </span>
           <button
+            type="button"
             onClick={runUndo}
-            className="shrink-0 inline-flex items-center gap-1 font-medium text-[#8fc7d6] hover:text-white underline underline-offset-2"
+            className="inline-flex shrink-0 items-center gap-1 font-medium text-brand-ring underline underline-offset-2 transition-colors duration-150 hover:text-white"
           >
             <Undo2 size={13} /> Geri al
           </button>
           <button
+            type="button"
             onClick={() => setUndo(null)}
-            className="shrink-0 text-white/50 hover:text-white"
+            className="tap-target shrink-0 rounded-md text-white/60 transition-colors duration-150 hover:text-white"
             aria-label="Kapat"
           >
             <X size={14} />

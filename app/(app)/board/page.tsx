@@ -1,6 +1,7 @@
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { KanbanBoard } from "@/components/board/KanbanBoard";
+import { EmptyState } from "@/components/ui/EmptyState";
 import type { Task, SavedView, Profile, WorkspaceContact, WorkspaceNote, WorkspaceRole, WorkspaceDepartment, TaskParticipant, BoardNoteFeedItem } from "@/types";
 import { asNoteType, asNoteActionStatus } from "@/lib/notes/note-types";
 
@@ -45,17 +46,23 @@ export default async function BoardPage({
   const userRole = (memberRows?.[0]?.role ?? "member") as WorkspaceRole;
 
   if (!workspaceId) {
+    // Ortak boş durum (token renkleri; ham gray/blue yok). Sunucu bileşeni —
+    // EmptyState hook'suz, düğme düz bağlantı.
     return (
       <div className="flex h-full items-center justify-center p-8">
-        <div className="max-w-sm text-center">
-          <h2 className="text-base font-semibold text-gray-800 mb-2">Çalışma alanı bulunamadı</h2>
-          <p className="text-sm text-gray-500 mb-4">
-            Çalışma alanınız yüklenemedi. Bu genellikle geçici bir sorundur.
-          </p>
-          <a href="/board" className="inline-block text-sm text-blue-600 hover:underline">
-            Yenile
-          </a>
-        </div>
+        <EmptyState
+          className="max-w-md"
+          title="Çalışma alanı bulunamadı"
+          description="Çalışma alanınız yüklenemedi. Genellikle geçicidir; sayfayı yenileyin."
+          action={
+            <a
+              href="/board"
+              className="inline-flex h-8 items-center rounded-control border border-line bg-surface px-3 text-[13px] font-medium text-ink shadow-xs transition-[background-color,border-color] duration-150 hover:border-line-strong hover:bg-surface-muted"
+            >
+              Yenile
+            </a>
+          }
+        />
       </div>
     );
   }

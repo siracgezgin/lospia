@@ -5,11 +5,15 @@ import {
 } from "react";
 import {
   Plus, Pencil, Trash2, X, CheckCircle2, Circle, BookOpen, ChevronDown, ChevronUp,
-  Layers, CalendarCheck, ShieldCheck, Info,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { canManageRules } from "@/lib/auth/permissions";
 import { createRule, updateRule, deleteRule, toggleRule } from "@/lib/actions/rules";
+import { Button, IconButton } from "@/components/ui/Button";
+import { Field, SelectInput, TextArea, TextInput } from "@/components/ui/Field";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { useConfirm } from "@/components/ui/useConfirm";
+import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import type { WorkspaceRule, WorkspaceRole } from "@/types";
 
 // Rules are department-based. "Tüm çalışma alanı" = applies to everyone.
@@ -17,6 +21,12 @@ const ALL_WORKSPACE = "Tüm çalışma alanı";
 
 // ── Rule card ──────────────────────────────────────────────────────────────────
 
+/**
+ * Tek kural satırı. Düzenle/Sil düğmeleri HER ZAMAN görünür — önce yalnız
+ * fareyle üstüne gelince beliriyordu; telefonda hiç ulaşılamıyordu.
+ * Pasif kural soluk değil, OKUNUR gri + üstü çizili: "kapalı" ile "silik"
+ * karışmasın.
+ */
 function RuleCard({
   rule,
   onToggle,
@@ -32,49 +42,54 @@ function RuleCard({
 }) {
   return (
     <div className={cn(
-      "flex items-start gap-3 p-3 rounded-lg border transition-all duration-200 ease-standard group",
+      "flex items-start gap-3 rounded-card border p-3 transition-[border-color,box-shadow] duration-150 ease-standard",
       rule.is_active
-        ? "bg-surface border-line hover:border-line-strong hover:shadow-card"
-        : "bg-surface-muted border-hairline opacity-60",
+        ? "border-line bg-surface hover:border-line-strong"
+        : "border-hairline bg-surface-muted",
     )}>
       <button
+        type="button"
         onClick={() => canManage && onToggle(rule.id, !rule.is_active)}
         className={cn(
-          "shrink-0 mt-0.5 rounded-full transition-transform duration-150",
+          "tap-target mt-0.5 shrink-0 rounded-full transition-transform duration-150",
           canManage ? "active:scale-90" : "cursor-default",
         )}
-        aria-label={rule.is_active ? "Kural devre dışı bırak" : "Kural etkinleştir"}
+        aria-pressed={rule.is_active}
+        aria-label={rule.is_active ? "Kural etkin — devre dışı bırak" : "Kural devre dışı — etkinleştir"}
+        title={canManage ? (rule.is_active ? "Devre dışı bırak" : "Etkinleştir") : undefined}
         disabled={!canManage}
       >
         {rule.is_active
-          ? <CheckCircle2 size={16} className="text-success" />
-          : <Circle size={16} className="text-line-strong" />
+          ? <CheckCircle2 size={16} className="text-success" aria-hidden />
+          : <Circle size={16} className="text-line-strong" aria-hidden />
         }
       </button>
-      <div className="flex-1 min-w-0">
-        <p className={cn("text-sm font-medium leading-snug text-ink", !rule.is_active && "line-through text-subtle")}>
+      <div className="min-w-0 flex-1">
+        <p className={cn("text-[13.5px] font-medium leading-snug", rule.is_active ? "text-ink" : "text-subtle line-through")}>
           {rule.title}
         </p>
         {rule.body && (
-          <p className="text-xs text-muted mt-1 leading-relaxed whitespace-pre-wrap">{rule.body}</p>
+          <p className={cn("mt-1 whitespace-pre-wrap text-[12.5px] leading-relaxed", rule.is_active ? "text-muted" : "text-subtle")}>
+            {rule.body}
+          </p>
         )}
       </div>
-      {canManage && <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150 shrink-0">
-        <button
-          onClick={() => onEdit(rule)}
-          className="p-1 text-subtle hover:text-ink hover:bg-surface-muted rounded-md active:scale-95 transition-all duration-150"
-          aria-label="Düzenle"
-        >
-          <Pencil size={12} />
-        </button>
-        <button
-          onClick={() => onDelete(rule.id)}
-          className="p-1 text-subtle hover:text-danger hover:bg-danger/10 rounded-md active:scale-95 transition-all duration-150"
-          aria-label="Sil"
-        >
-          <Trash2 size={12} />
-        </button>
-      </div>}
+      {canManage && (
+        <div className="-mr-1 -mt-1 flex shrink-0 items-center gap-0.5">
+          <IconButton size="sm" aria-label="Düzenle" title="Düzenle" onClick={() => onEdit(rule)}>
+            <Pencil size={14} />
+          </IconButton>
+          <IconButton
+            size="sm"
+            aria-label="Sil"
+            title="Sil"
+            onClick={() => onDelete(rule.id)}
+            className="hover:bg-danger/10 hover:text-danger"
+          >
+            <Trash2 size={14} />
+          </IconButton>
+        </div>
+      )}
     </div>
   );
 }
@@ -114,37 +129,37 @@ function RuleForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="anim-fade-up border border-brand-ring/60 bg-brand-soft/40 rounded-xl p-3 flex flex-col gap-2 shadow-card">
-      <div className="flex items-center gap-2">
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          className="text-xs border border-line rounded-lg px-2 py-1 bg-surface text-muted transition-colors duration-150 hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40"
-        >
+    <form
+      onSubmit={handleSubmit}
+      aria-label={initial ? "Kuralı düzenle" : "Yeni kural"}
+      className="anim-fade-up flex flex-col gap-3.5 rounded-card border border-line-strong bg-surface p-4 shadow-card"
+    >
+      <Field label="Departman">
+        <SelectInput value={category} onChange={(e) => setCategory(e.target.value)}>
           {options.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
-      </div>
-      <input
-        ref={inputRef}
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Escape") onCancel(); }}
-        className="text-sm border border-line rounded-lg bg-surface px-2.5 py-1.5 text-ink placeholder:text-subtle transition-colors duration-150 hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40"
-        placeholder="Kural başlığı…"
-        maxLength={500}
-        required
-      />
-      <textarea
-        value={body}
-        onChange={(e) => setBody(e.target.value)}
-        className="text-xs border border-line rounded-lg bg-surface px-2.5 py-1.5 text-ink placeholder:text-subtle transition-colors duration-150 hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40 resize-none"
-        placeholder="Açıklama (isteğe bağlı)…"
-        rows={2}
-        maxLength={5000}
-      />
-      <div className="flex gap-1.5 justify-end">
-        <button type="button" onClick={onCancel} className="px-2.5 py-1 text-xs font-medium text-muted hover:text-ink hover:bg-surface-muted rounded-lg border border-line bg-surface active:scale-[0.98] transition-all duration-150">İptal</button>
-        <button type="submit" disabled={!title.trim()} className="px-2.5 py-1 text-xs font-medium bg-brand text-white rounded-lg hover:bg-brand-strong active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 transition-all duration-150">Kaydet</button>
+        </SelectInput>
+      </Field>
+      <Field label="Kural" required>
+        <TextInput
+          ref={inputRef}
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Escape") onCancel(); }}
+          maxLength={500}
+          required
+        />
+      </Field>
+      <Field label="Açıklama" hint="İsteğe bağlı.">
+        <TextArea
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          rows={2}
+          maxLength={5000}
+        />
+      </Field>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="ghost" size="sm" onClick={onCancel}>Vazgeç</Button>
+        <Button type="submit" size="sm" disabled={!title.trim()}>Kaydet</Button>
       </div>
     </form>
   );
@@ -168,26 +183,26 @@ function CategoryGroup({
   canManage?: boolean;
 }) {
   const [open, setOpen] = useState(true);
-  const activeCount = rules.filter((r) => r.is_active).length;
 
   return (
-    <div className="anim-fade-up border border-line bg-surface rounded-xl overflow-hidden shadow-card">
+    <div className="anim-fade-up overflow-hidden rounded-card border border-line bg-surface shadow-card">
+      {/* Katlanır başlık — segment düğmesi, class-only. */}
       <button
+        type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between px-4 py-2.5 bg-surface-muted select-none hover:bg-surface-hover transition-colors duration-150"
+        className="flex w-full select-none items-center justify-between gap-3 bg-surface-muted px-4 py-2.5 text-left transition-colors duration-150 hover:bg-surface-hover"
         aria-expanded={open}
       >
-        <div className="flex items-center gap-2">
-          <BookOpen size={13} className="text-subtle" />
-          <span className="text-sm font-semibold tracking-tight text-ink">{category}</span>
-          <span className="text-[10px] tabular-nums bg-surface border border-line text-muted rounded-full px-1.5 py-0.5 leading-none">
-            {activeCount}/{rules.length}
-          </span>
-        </div>
-        {open ? <ChevronUp size={13} className="text-subtle" /> : <ChevronDown size={13} className="text-subtle" />}
+        <span className="flex min-w-0 items-center gap-2">
+          <BookOpen size={14} className="shrink-0 text-subtle" aria-hidden />
+          <span className="truncate text-[13.5px] font-semibold tracking-tight text-ink">{category}</span>
+          {/* Listeyi tarif eden sayı: bu grupta kaç kural var. */}
+          <span className="shrink-0 text-[12px] tabular-nums text-subtle">{rules.length} kural</span>
+        </span>
+        {open ? <ChevronUp size={14} className="shrink-0 text-subtle" aria-hidden /> : <ChevronDown size={14} className="shrink-0 text-subtle" aria-hidden />}
       </button>
       {open && (
-        <div className="anim-fade p-2 flex flex-col gap-1.5 border-t border-hairline">
+        <div className="anim-fade flex flex-col gap-1.5 border-t border-hairline p-2">
           {rules.map((rule) => (
             <RuleCard
               key={rule.id}
@@ -206,6 +221,18 @@ function CategoryGroup({
 
 // ── Main view ─────────────────────────────────────────────────────────────────
 
+/**
+ * RULES — ekip standartları, departmana göre gruplu.
+ *
+ * Sayfa önce bir başlık bloğu (ikon + "Rules" + açıklama cümlesi), üç özet
+ * çipi ("Aktif kural 5/8", "Kategori 3", "Günlük kontrol") ve sağda iki
+ * öğüt paneliyle ("Kontrol disiplini", "Nasıl kullanılır?") açılıyordu.
+ * Başlık uygulama çubuğunda zaten yazıyor; çipler kuralları sayıp
+ * puanlıyordu; paneller ilk günden sonra okunmuyordu. Geriye kuralların
+ * kendisi kaldı — tam genişlikte.
+ *
+ * Silme artık ONAY SORAR (useConfirm) — önce tek tıkla, sessizce gidiyordu.
+ */
 export function RulesView({
   rules: initialRules,
   workspaceId,
@@ -218,6 +245,7 @@ export function RulesView({
   departmentNames?: string[];
 }) {
   const isManager = canManageRules(userRole);
+  const { ask, dialog } = useConfirm();
   const [_isPending, startTransition] = useTransition();
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<WorkspaceRule | null>(null);
@@ -286,7 +314,12 @@ export function RulesView({
     });
   }
 
-  function handleDelete(id: string) {
+  async function handleDelete(id: string) {
+    const rule = optimisticRules.find((r) => r.id === id);
+    if (!(await ask({
+      title: "Kural silinsin mi?",
+      message: rule ? `"${rule.title}" listeden kalıcı olarak kaldırılır.` : "Kural kalıcı olarak kaldırılır.",
+    }))) return;
     setActionError(null);
     startTransition(async () => {
       applyOptimistic({ type: "delete", id });
@@ -305,160 +338,83 @@ export function RulesView({
     return acc;
   }, {});
 
-  const activeTotal = optimisticRules.filter((r) => r.is_active).length;
-  const categoryCount = Object.keys(grouped).length;
+  const formOpen = adding || !!editing;
 
   return (
-    <div className="flex flex-col h-full">
-      {/* ── Page header: brand well + summary chips ─────────────────────────── */}
-      <div className="border-b border-line bg-surface shrink-0">
-        <div className="w-full px-6 py-5">
-          <div className="flex items-start justify-between gap-4 flex-wrap">
-            <div className="flex items-start gap-3 min-w-0">
-              <div className="grid h-10 w-10 place-items-center rounded-xl bg-brand-soft text-brand shrink-0">
-                <BookOpen size={20} strokeWidth={1.75} />
-              </div>
-              <div className="min-w-0">
-                <h1 className="text-xl font-semibold tracking-tight text-ink">Rules</h1>
-                <p className="text-sm text-muted mt-0.5 max-w-xl leading-relaxed">
-                  Operasyon kuralları, kalite standardını ve günlük kontrol disiplinini korur.
-                </p>
-              </div>
-            </div>
-            {isManager && (
-              <button
-                onClick={() => { setAdding(true); setEditing(null); setActionError(null); }}
-                className="flex items-center gap-1.5 text-sm bg-brand text-white rounded-lg px-3 py-2 hover:bg-brand-strong active:scale-[0.98] transition-all duration-150 shrink-0 font-medium"
-              >
-                <Plus size={14} /> Kural ekle
-              </button>
-            )}
-          </div>
+    <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
+      <ModulePageHeader
+        title="Rules"
+        rightSlot={
+          isManager ? (
+            /* Form açıkken ekranın ana eylemi "Kaydet"tir; ikinci bir primary
+               durmasın diye bu düğme o sırada kapalı. */
+            <Button
+              onClick={() => { setAdding(true); setEditing(null); setActionError(null); }}
+              disabled={formOpen}
+            >
+              <Plus size={15} aria-hidden /> Kural ekle
+            </Button>
+          ) : undefined
+        }
+      />
 
-          {/* Summary chips */}
-          <div className="stagger-children flex flex-wrap gap-2 mt-4">
-            <SummaryChip icon={CheckCircle2} label="Aktif kural" value={`${activeTotal}/${optimisticRules.length}`} tone="brand" />
-            <SummaryChip icon={Layers} label="Kategori" value={String(categoryCount)} tone="neutral" />
-            <SummaryChip icon={CalendarCheck} label="Günlük kontrol" value="Her gün gözden geçir" tone="neutral" />
+      <div className="flex flex-col gap-4">
+        {actionError && (
+          <div
+            role="alert"
+            className="anim-fade-down flex items-start justify-between gap-3 rounded-control border border-danger/25 bg-danger/8 px-3 py-2 text-[13px] leading-relaxed text-danger"
+          >
+            <span className="min-w-0 break-words py-1">{actionError}</span>
+            <IconButton size="sm" aria-label="Kapat" onClick={() => setActionError(null)} className="-mr-1 text-danger hover:bg-danger/10 hover:text-danger">
+              <X size={14} />
+            </IconButton>
           </div>
-        </div>
+        )}
+
+        {isManager && adding && (
+          <RuleForm
+            workspaceId={workspaceId}
+            ruleCount={optimisticRules.length}
+            departmentNames={departmentNames}
+            onSave={handleAdd}
+            onCancel={() => setAdding(false)}
+          />
+        )}
+
+        {isManager && editing && (
+          <RuleForm
+            initial={editing}
+            workspaceId={workspaceId}
+            ruleCount={optimisticRules.length}
+            departmentNames={departmentNames}
+            onSave={handleUpdate}
+            onCancel={() => setEditing(null)}
+          />
+        )}
+
+        {optimisticRules.length === 0 && !adding ? (
+          <div className="anim-fade-up rounded-card border border-line bg-surface shadow-card">
+            <EmptyState
+              icon={BookOpen}
+              title="Henüz kural yok."
+              description={isManager ? "Ekip standartlarını “Kural ekle” ile yazın." : undefined}
+            />
+          </div>
+        ) : (
+          Object.entries(grouped).map(([cat, catRules]) => (
+            <CategoryGroup
+              key={cat}
+              category={cat}
+              rules={catRules}
+              onToggle={handleToggle}
+              onEdit={(r) => { setEditing(r); setAdding(false); }}
+              onDelete={handleDelete}
+              canManage={isManager}
+            />
+          ))
+        )}
       </div>
-
-      {/* ── Content: rule categories + side discipline panel ─────────────────── */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="w-full px-6 py-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_308px] items-start">
-          <div className="flex flex-col gap-4 min-w-0">
-            {actionError && (
-              <div role="alert" className="anim-fade-down flex items-center justify-between border border-danger/25 bg-danger/10 rounded-lg px-4 py-2.5 text-sm font-medium text-danger">
-                <span className="min-w-0 break-words">{actionError}</span>
-                <button onClick={() => setActionError(null)} aria-label="Kapat" className="ml-3 shrink-0 rounded-md p-0.5 text-danger/70 hover:text-danger hover:bg-danger/15 active:scale-95 transition-all duration-150">
-                  <X size={14} />
-                </button>
-              </div>
-            )}
-            {isManager && adding && (
-              <RuleForm
-                workspaceId={workspaceId}
-                ruleCount={optimisticRules.length}
-                departmentNames={departmentNames}
-                onSave={handleAdd}
-                onCancel={() => setAdding(false)}
-              />
-            )}
-
-            {isManager && editing && (
-              <RuleForm
-                initial={editing}
-                workspaceId={workspaceId}
-                ruleCount={optimisticRules.length}
-                departmentNames={departmentNames}
-                onSave={handleUpdate}
-                onCancel={() => setEditing(null)}
-              />
-            )}
-
-            {optimisticRules.length === 0 && !adding ? (
-              <div className="anim-fade-up rounded-2xl border border-dashed border-line bg-surface text-center py-16 px-6">
-                <div className="grid h-12 w-12 place-items-center rounded-full bg-brand-soft text-brand ring-8 ring-brand-soft/35 mx-auto mb-4">
-                  <BookOpen size={20} strokeWidth={1.75} />
-                </div>
-                <p className="text-sm font-semibold tracking-tight text-ink">Henüz kural yok</p>
-                <p className="text-[13px] text-muted mt-1">Ekip standartlarını buraya ekleyin.</p>
-              </div>
-            ) : (
-              Object.entries(grouped).map(([cat, catRules]) => (
-                <CategoryGroup
-                  key={cat}
-                  category={cat}
-                  rules={catRules}
-                  onToggle={handleToggle}
-                  onEdit={(r) => { setEditing(r); setAdding(false); }}
-                  onDelete={handleDelete}
-                  canManage={isManager}
-                />
-              ))
-            )}
-          </div>
-
-          {/* Right rail — control discipline / how-to (static guidance) */}
-          <aside className="stagger-children flex flex-col gap-4 lg:sticky lg:top-6">
-            <div className="rounded-2xl border border-line bg-surface p-4 shadow-card">
-              <div className="flex items-center gap-2 mb-2.5">
-                <ShieldCheck size={15} className="text-brand" />
-                <h2 className="text-sm font-semibold tracking-tight text-ink">Kontrol disiplini</h2>
-              </div>
-              <p className="text-[13px] text-muted leading-relaxed">
-                Kurallar; her görevin aynı kalite çıtasında teslim edilmesini sağlar.
-                Aktif kurallar günlük kontrolün temelidir — düzenli gözden geçirin.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-line bg-surface p-4 shadow-card">
-              <div className="flex items-center gap-2 mb-2.5">
-                <Info size={15} className="text-brand" />
-                <h2 className="text-sm font-semibold tracking-tight text-ink">Nasıl kullanılır?</h2>
-              </div>
-              <ul className="space-y-2 text-[13px] text-muted leading-relaxed">
-                <li className="flex gap-2">
-                  <CheckCircle2 size={14} className="text-brand shrink-0 mt-0.5" />
-                  <span>Kurallar kategori (departman) bazında gruplanır.</span>
-                </li>
-                <li className="flex gap-2">
-                  <CheckCircle2 size={14} className="text-brand shrink-0 mt-0.5" />
-                  <span>Yuvarlak işareti tıklayarak bir kuralı aktif/pasif yapabilirsiniz.</span>
-                </li>
-                <li className="flex gap-2">
-                  <CheckCircle2 size={14} className="text-brand shrink-0 mt-0.5" />
-                  <span>Pasif kurallar listede kalır ama günlük kontrole dahil edilmez.</span>
-                </li>
-              </ul>
-            </div>
-          </aside>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Summary chip (header stat) ───────────────────────────────────────────────
-function SummaryChip({
-  icon: Icon,
-  label,
-  value,
-  tone = "neutral",
-}: {
-  icon: typeof CheckCircle2;
-  label: string;
-  value: string;
-  tone?: "brand" | "neutral";
-}) {
-  return (
-    <div className={cn(
-      "inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 shadow-xs",
-      tone === "brand" ? "border-brand-ring/60 bg-brand-soft" : "border-line bg-surface",
-    )}>
-      <Icon size={15} className={tone === "brand" ? "text-brand" : "text-subtle"} />
-      <span className="text-[13px] text-muted">{label}</span>
-      <span className={cn("text-[13px] font-semibold tabular-nums", tone === "brand" ? "text-brand-strong" : "text-ink")}>{value}</span>
+      {dialog}
     </div>
   );
 }

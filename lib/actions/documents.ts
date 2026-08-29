@@ -198,7 +198,57 @@ export async function archiveOperationDocument(
   return { ok: true };
 }
 
-// Hard delete: admin anything; a member only their own draft.
+/**
+ * GÖRÜNÜRLÜK — "tüm üyelere göster" / "yalnız yöneticiye kapat".
+ *
+ * Sıraç (2026-08-30): "Klasördeki gibi diğerlerinde de tüm üyelere göster
+ * kısmı da olsun." Klasörde vardı, yazı/tablo/dosyada yoktu; aynı Drive'ın
+ * içinde iki farklı kural işliyordu. Kaydı yönetebilen (yönetici ya da
+ * ekleyen) görünürlüğünü de belirler.
+ */
+export async function setOperationDocumentVisibility(
+  documentId: string,
+  visibility: "all" | "admin",
+): Promise<{ ok: true } | { error: string }> {
+  if (visibility !== "all" && visibility !== "admin") return { error: "Geçersiz görünürlük." };
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+
+  if (!isAdmin(ctx)) {
+    const { data: row } = await supabase
+      .from("operation_documents")
+      .select("created_by")
+      .eq("id", documentId)
+      .eq("workspace_id", ctx.workspaceId)
+      .maybeSingle();
+    if (!row) return { error: NOT_FOUND };
+    if ((row as { created_by: string | null }).created_by !== ctx.userId) {
+      return { error: PERM_DENIED };
+    }
+  }
+
+  const { error } = await supabase
+    .from("operation_documents")
+    .update({ visibility, updated_by: ctx.userId })
+    .eq("id", documentId)
+    .eq("workspace_id", ctx.workspaceId);
+  if (error) return { error: toActionErrorMessage(error) };
+
+  revalidatePath("/documents");
+  return { ok: true };
+}
+
+/**
+ * Kalıcı silme: yönetici her kaydı, ÜYE KENDİ EKLEDİĞİNİ siler.
+ *
+ * Sıraç (2026-08-30): "Üye kendi eklediği yazıyı, klasörü vs silebilme yetkisi
+ * olsun." Önceden üye yalnız TASLAK durumundaki kendi kaydını silebiliyordu:
+ * yüklediği dosya ya da yayımladığı yazı üzerinde hiçbir hakkı kalmıyordu ve
+ * yanlış yüklenen bir dosyayı kaldırmak için yöneticiye başvurmak gerekiyordu.
+ * Aynı kural RLS'te de yazılı (20240334); buradaki kontrol yalnız net bir hata
+ * mesajı verebilmek için.
+ */
 export async function deleteOperationDocument(
   documentId: string,
 ): Promise<{ ok: true } | { error: string }> {
@@ -207,9 +257,16 @@ export async function deleteOperationDocument(
   if (!ctx) return { error: AUTH_REQUIRED };
 
   if (!isAdmin(ctx)) {
-    const editable = await loadEditable(supabase, ctx, documentId);
-    if ("error" in editable) return editable;
-    if (editable.status !== "draft") return { error: PERM_DENIED };
+    const { data: row } = await supabase
+      .from("operation_documents")
+      .select("created_by")
+      .eq("id", documentId)
+      .eq("workspace_id", ctx.workspaceId)
+      .maybeSingle();
+    if (!row) return { error: NOT_FOUND };
+    if ((row as { created_by: string | null }).created_by !== ctx.userId) {
+      return { error: PERM_DENIED };
+    }
   }
 
   /* Silinen kaydın ADI önce okunur — satır gittikten sonra günlükte okunur

@@ -7,6 +7,8 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import type { WorkspaceDepartment, DepartmentMember, WorkspaceMember, Profile } from "@/types";
 import { Avatar, AvatarGroup } from "@/components/ui/Avatar";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Button, IconButton } from "@/components/ui/Button";
+import { TextInput, SelectInput } from "@/components/ui/Field";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { resolveDeptColorKey } from "@/lib/utils/departments";
 import { getDepartmentBadge } from "@/lib/design/semantics";
@@ -40,23 +42,25 @@ function DeptMemberRow({
 }: {
   dm: DepartmentMember & { profiles?: Partial<Profile> | null };
   canManage: boolean;
-  onRemove: (id: string) => void;
+  onRemove: (_id: string) => void;
 }) {
   const name = getPersonDisplayName(dm.profiles ?? dm.member_id.slice(0, 8));
   return (
-    <div className="flex items-center justify-between rounded-lg px-1.5 py-1 hover:bg-surface-hover transition-colors duration-150">
-      <div className="flex items-center gap-1.5 text-sm text-muted">
-        <Avatar name={name} size="xs" />
-        <span title={name}>{name}</span>
+    <div className="flex items-center justify-between gap-2 py-1">
+      <div className="flex min-w-0 items-center gap-2 text-[13.5px] text-ink">
+        <Avatar name={name} size="sm" />
+        <span className="truncate" title={name}>{name}</span>
       </div>
       {canManage && (
-        <button
+        <IconButton
+          size="sm"
           onClick={() => onRemove(dm.id)}
-          className="p-1 text-subtle hover:text-danger hover:bg-danger/10 rounded-md active:scale-95 transition-colors duration-150"
+          aria-label={`${name} — departmandan çıkar`}
           title="Departmandan çıkar"
+          className="hover:bg-danger/10 hover:text-danger"
         >
           <UserMinus size={13} />
-        </button>
+        </IconButton>
       )}
     </div>
   );
@@ -93,30 +97,27 @@ function AddMemberForm({
   }
 
   if (available.length === 0) {
-    return <p className="text-xs text-subtle mt-1">Tüm üyeler zaten eklendi.</p>;
+    return <p className="mt-1 text-[12.5px] text-subtle">Herkes bu departmanda.</p>;
   }
 
   return (
-    <div className="flex flex-wrap gap-2 mt-2 items-center">
-      <select
+    <div className="anim-fade mt-2 flex flex-wrap items-center gap-2">
+      <SelectInput
         value={selectedId}
         onChange={(e) => setSelectedId(e.target.value)}
-        className="text-xs border border-line rounded-lg px-2 py-1 text-muted bg-surface transition-colors duration-150 hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40"
+        aria-label="Eklenecek kişi"
+        className="h-8 w-auto min-w-[180px] flex-1 sm:flex-none"
       >
-        <option value="">Üye seç…</option>
+        <option value="">Kişi seç…</option>
         {available.map((m) => (
           <option key={m.id} value={m.id}>{memberName(m)}</option>
         ))}
-      </select>
-      <button
-        onClick={handleAdd}
-        disabled={!selectedId || pending}
-        className="text-xs font-medium bg-brand text-white px-2.5 py-1 rounded-lg hover:bg-brand-strong active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 transition-colors duration-150"
-      >
-        {pending ? "Ekleniyor…" : "Ekle"}
-      </button>
-      <button onClick={onDone} className="text-xs text-muted hover:text-ink px-1 rounded transition-colors duration-150">İptal</button>
-      {err && <p role="alert" className="anim-fade-down text-xs text-danger w-full">{err}</p>}
+      </SelectInput>
+      <Button size="sm" onClick={handleAdd} disabled={!selectedId} loading={pending}>
+        Ekle
+      </Button>
+      <Button size="sm" variant="ghost" onClick={onDone} disabled={pending}>Vazgeç</Button>
+      {err && <p role="alert" className="anim-fade-down w-full text-[12.5px] text-danger">{err}</p>}
     </div>
   );
 }
@@ -141,7 +142,7 @@ function DeptCard({
   colorKey: string | null;
   workspaceMembers: MemberRow[];
   canManage: boolean;
-  onDelete: (id: string) => void;
+  onDelete: (_id: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
@@ -190,67 +191,83 @@ function DeptCard({
 
   const isTopLevel = dept.parent_id === null;
 
+  /* Yüzey: kart DEĞİL. Bölüm kartının içinde her departman ayrı bir kutuydu
+     (kenarlık + gölge + hover gölgesi), alt departman da onun içinde ikinci bir
+     kutu — kart içinde kart. Artık üst düzey satırlar ince çizgiyle ayrılır,
+     alt düzey soldaki tek çizgiyle içeri girer. */
   return (
-    <div className={`border rounded-lg transition-shadow duration-200 ease-standard ${isTopLevel ? "border-line bg-surface shadow-card hover:shadow-card-hover" : "border-hairline bg-surface-muted ml-4"}`}>
-      <div
-        className="flex items-center gap-2 px-4 py-3 cursor-pointer select-none rounded-lg hover:bg-surface-hover transition-colors duration-150"
-        onClick={() => setOpen((o) => !o)}
-      >
-        <ChevronRight
-          size={14}
-          className={`text-subtle transition-transform duration-200 ease-standard shrink-0 ${open ? "rotate-90" : ""}`}
-        />
+    <div className={cn(!isTopLevel && "ml-3 border-l border-hairline pl-3")}>
+      <div className="flex items-center gap-1">
+        {/* Aç/kapat satırın kendisi bir DÜĞME (klavye + ekran okuyucu);
+            eylemler kardeş olarak yanında durur — düğme içinde düğme yok. */}
         {renaming ? (
-          <input
+          <TextInput
             autoFocus
             value={draftName}
             onChange={(e) => setDraftName(e.target.value)}
-            onClick={(e) => e.stopPropagation()}
             onBlur={commitRename}
             onKeyDown={(e) => {
               if (e.key === "Enter") commitRename();
               if (e.key === "Escape") { setDraftName(dept.name); setRenaming(false); }
             }}
             aria-label="Departman adı"
-            className="h-7 min-w-0 flex-1 rounded-control border border-brand-ring bg-surface px-2 text-xs font-semibold text-ink focus:outline-none focus:ring-2 focus:ring-brand-ring/40"
+            className="my-1 h-8 flex-1 font-medium"
           />
         ) : (
-          <span className={cn("inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-full ring-1", badge.chip, badge.ring, savingName && "opacity-60")}>
-            <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", badge.dot)} />
-            {dept.name}
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            aria-expanded={open}
+            className="-ml-1 flex min-w-0 flex-1 items-center gap-2 rounded-control py-2 pl-1 pr-2 text-left transition-colors duration-150 ease-standard hover:bg-surface-hover"
+          >
+            <ChevronRight
+              size={14}
+              aria-hidden
+              className={cn("shrink-0 text-subtle transition-transform duration-200 ease-standard", open && "rotate-90")}
+            />
+            {/* Departmanın rengi — satırdaki TEK rozet. */}
+            <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[12.5px] font-semibold ring-1", badge.chip, badge.ring, savingName && "opacity-60")}>
+              <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", badge.dot)} aria-hidden />
+              {dept.name}
+            </span>
+          </button>
+        )}
+        {/* "N kişi" listeyi tarif eder, kimseyi puanlamaz. Düğmenin DIŞINDA:
+            AvatarGroup blok öğe, düğme içinde geçersiz olurdu. */}
+        {!renaming && aggregateMembers.length > 0 && (
+          <span className="flex shrink-0 items-center gap-1.5 pr-1">
+            <AvatarGroup names={aggregateMembers.map((dm) => getPersonDisplayName(dm.profiles ?? dm.member_id.slice(0, 8)))} max={4} />
+            <span className="whitespace-nowrap text-[12px] tabular-nums text-subtle">{aggregateMembers.length} kişi</span>
           </span>
         )}
-        {aggregateMembers.length > 0 && (
-          <div className="flex items-center gap-1.5 ml-auto">
-            <AvatarGroup names={aggregateMembers.map((dm) => getPersonDisplayName(dm.profiles ?? dm.member_id.slice(0, 8)))} max={4} />
-            <span className="text-xs text-subtle tabular-nums whitespace-nowrap">{aggregateMembers.length} kişi</span>
-          </div>
-        )}
         {canManage && !renaming && (
-          <div className="ml-1 flex shrink-0 items-center gap-0.5">
-            <button
-              onClick={(e) => { e.stopPropagation(); setDraftName(dept.name); setRenaming(true); }}
-              className="rounded-md p-1 text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-95"
+          <div className="flex shrink-0 items-center">
+            <IconButton
+              size="sm"
+              onClick={() => { setDraftName(dept.name); setRenaming(true); }}
+              aria-label={`${dept.name} — yeniden adlandır`}
               title="Yeniden adlandır"
             >
-              <Pencil size={12} />
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); onDelete(dept.id); }}
-              className="rounded-md p-1 text-subtle transition-colors duration-150 hover:bg-danger/10 hover:text-danger active:scale-95"
+              <Pencil size={13} />
+            </IconButton>
+            <IconButton
+              size="sm"
+              onClick={() => onDelete(dept.id)}
+              aria-label={`${dept.name} — sil`}
               title="Sil"
+              className="hover:bg-danger/10 hover:text-danger"
             >
-              <Trash2 size={12} />
-            </button>
+              <Trash2 size={13} />
+            </IconButton>
           </div>
         )}
       </div>
 
       {open && (
-        <div className="anim-fade px-4 pb-3 space-y-1 border-t border-hairline pt-2">
+        <div className="anim-fade space-y-1 pb-2 pl-6">
           {/* Members of this dept */}
           {myMembers.length === 0 && (
-            <p className="text-xs text-subtle">Henüz üye yok.</p>
+            <p className="py-1 text-[12.5px] text-subtle">Henüz kimse yok.</p>
           )}
           {myMembers.map((dm) => (
             <DeptMemberRow
@@ -263,12 +280,9 @@ function DeptCard({
 
           {/* Add member toggle */}
           {canManage && !showAddMember && (
-            <button
-              onClick={() => setShowAddMember(true)}
-              className="flex items-center gap-1 text-xs font-medium text-brand hover:text-brand-strong mt-1 rounded transition-colors duration-150"
-            >
-              <UserPlus size={12} /> Üye ekle
-            </button>
+            <Button size="sm" variant="ghost" className="-ml-3" onClick={() => setShowAddMember(true)}>
+              <UserPlus size={13} aria-hidden /> Kişi ekle
+            </Button>
           )}
           {canManage && showAddMember && (
             <AddMemberForm
@@ -287,8 +301,9 @@ function DeptCard({
       <ConfirmDialog
         open={removeTarget !== null}
         pending={pendingRemove}
-        title="Silmek istediğinize emin misiniz?"
-        message={`${removeTarget?.name ?? "Bu kişi"} bu departmandan kaldırılacak.`}
+        title="Departmandan çıkarmak istiyor musunuz?"
+        confirmLabel="Çıkar"
+        message={`${removeTarget?.name ?? "Bu kişi"} bu departmandan çıkarılacak.`}
         onConfirm={confirmRemoveMember}
         onCancel={() => setRemoveTarget(null)}
       />
@@ -318,25 +333,22 @@ function AddDeptForm({
   }
 
   return (
-    <div className="anim-fade flex flex-wrap gap-2 items-center">
-      <input
+    <div className="anim-fade flex flex-wrap items-center gap-2">
+      <TextInput
         type="text"
         value={name}
         onChange={(e) => setName(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter") handleCreate(); if (e.key === "Escape") onDone(); }}
-        placeholder="Departman adı…"
+        placeholder={parentId ? "Alt alan adı" : "Departman adı"}
+        aria-label={parentId ? "Alt alan adı" : "Departman adı"}
         autoFocus
-        className="text-sm border border-line rounded-lg px-2.5 py-1 flex-1 min-w-0 bg-surface placeholder:text-subtle transition-colors duration-150 hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40"
+        className="h-8 min-w-0 flex-1"
       />
-      <button
-        onClick={handleCreate}
-        disabled={!name.trim() || pending}
-        className="text-sm font-medium bg-brand text-white px-3 py-1 rounded-lg hover:bg-brand-strong active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 transition-colors duration-150"
-      >
-        {pending ? "Oluşturuluyor…" : "Oluştur"}
-      </button>
-      <button onClick={onDone} className="text-sm text-muted hover:text-ink rounded transition-colors duration-150">İptal</button>
-      {err && <p role="alert" className="anim-fade-down text-xs text-danger w-full">{err}</p>}
+      <Button size="sm" onClick={handleCreate} disabled={!name.trim()} loading={pending}>
+        Oluştur
+      </Button>
+      <Button size="sm" variant="ghost" onClick={onDone} disabled={pending}>Vazgeç</Button>
+      {err && <p role="alert" className="anim-fade-down w-full text-[12.5px] text-danger">{err}</p>}
     </div>
   );
 }
@@ -404,21 +416,18 @@ export function DepartmentsManager({ departments, deptMembers, workspaceMembers,
 
   return (
     <div className="space-y-4">
-      {/* Provision AF departments button */}
+      {/* AF departman ağacı hiç yüklenmemişse: sakin bir uyarı + tek eylem.
+          Ham amber kutu ve amber düğme token'lı warning yüzeyine döndü. */}
       {canManage && departments.length === 0 && (
-        <div className="anim-fade-up bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
-          <p className="text-sm text-amber-800">
+        <div className="anim-fade-up space-y-3 rounded-card border border-warning/30 bg-warning/5 px-4 py-3.5">
+          <p className="text-[13.5px] text-ink">
             AF Operasyon departman ağacı henüz yüklenmemiş.
           </p>
-          <button
-            onClick={handleProvision}
-            disabled={provisioning}
-            className="text-sm font-medium bg-amber-700 text-white px-4 py-1.5 rounded-lg hover:bg-amber-800 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 transition-colors duration-150"
-          >
-            {provisioning ? "Eşitleniyor…" : "AF departman yapısını eşitle"}
-          </button>
-          {provisionErr && <p role="alert" className="anim-fade-down text-xs text-danger">{provisionErr}</p>}
-          {provisionOk && <p className="anim-fade-down text-xs text-success">Departman yapısı eşitlendi.</p>}
+          <Button variant="secondary" size="sm" onClick={handleProvision} loading={provisioning}>
+            Departman yapısını yükle
+          </Button>
+          {provisionErr && <p role="alert" className="anim-fade-down text-[12.5px] text-danger">{provisionErr}</p>}
+          {provisionOk && <p className="anim-fade-down text-[12.5px] text-success">Departman yapısı yüklendi.</p>}
         </div>
       )}
 
@@ -428,57 +437,56 @@ export function DepartmentsManager({ departments, deptMembers, workspaceMembers,
         <EmptyState
           icon={Building2}
           title="Henüz departman yok"
-          description="Departmanlar görevleri ekiplere göre gruplamak için kullanılır."
-          className="py-8"
+          description="Departmanlar görevleri ekiplere göre gruplar."
+          compact
         />
       )}
 
-      {/* Department tree */}
-      <div className="stagger-children space-y-2">
-        {topLevel.map((dept) => (
-          <div key={dept.id}>
-            <DeptCard
-              dept={dept}
-              deptMembers={deptMembers}
-              aggregateMembers={aggregateFor(dept.id)}
-              colorKey={colorFor(dept)}
-              workspaceMembers={workspaceMembers}
-              canManage={canManage}
-              onDelete={handleDelete}
-            >
-              {/* Sub-departments */}
-              {children(dept.id).map((child) => (
-                <DeptCard
-                  key={child.id}
-                  dept={child}
-                  deptMembers={deptMembers}
-                  aggregateMembers={aggregateFor(child.id)}
-                  colorKey={colorFor(child)}
-                  workspaceMembers={workspaceMembers}
-                  canManage={canManage}
-                  onDelete={handleDelete}
-                />
-              ))}
+      {/* Department tree — ince çizgiyle ayrılmış satırlar. */}
+      {topLevel.length > 0 && (
+        <div className="stagger-children divide-y divide-hairline border-t border-hairline">
+          {topLevel.map((dept) => (
+            <div key={dept.id} className="py-1">
+              <DeptCard
+                dept={dept}
+                deptMembers={deptMembers}
+                aggregateMembers={aggregateFor(dept.id)}
+                colorKey={colorFor(dept)}
+                workspaceMembers={workspaceMembers}
+                canManage={canManage}
+                onDelete={handleDelete}
+              >
+                {/* Sub-departments */}
+                {children(dept.id).map((child) => (
+                  <DeptCard
+                    key={child.id}
+                    dept={child}
+                    deptMembers={deptMembers}
+                    aggregateMembers={aggregateFor(child.id)}
+                    colorKey={colorFor(child)}
+                    workspaceMembers={workspaceMembers}
+                    canManage={canManage}
+                    onDelete={handleDelete}
+                  />
+                ))}
 
-              {/* Add sub-department */}
-              {canManage && (
-                <div className="ml-4 mt-1">
-                  {showAddChild === dept.id ? (
-                    <AddDeptForm parentId={dept.id} onDone={() => setShowAddChild(null)} />
-                  ) : (
-                    <button
-                      onClick={() => setShowAddChild(dept.id)}
-                      className="flex items-center gap-1 text-xs text-subtle hover:text-brand rounded transition-colors duration-150"
-                    >
-                      <Plus size={11} /> Alt alan ekle
-                    </button>
-                  )}
-                </div>
-              )}
-            </DeptCard>
-          </div>
-        ))}
-      </div>
+                {/* Add sub-department */}
+                {canManage && (
+                  <div className="ml-3 pl-3">
+                    {showAddChild === dept.id ? (
+                      <AddDeptForm parentId={dept.id} onDone={() => setShowAddChild(null)} />
+                    ) : (
+                      <Button size="sm" variant="ghost" className="-ml-3" onClick={() => setShowAddChild(dept.id)}>
+                        <Plus size={13} aria-hidden /> Alt alan ekle
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </DeptCard>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Add top-level department */}
       {canManage && (
@@ -486,12 +494,9 @@ export function DepartmentsManager({ departments, deptMembers, workspaceMembers,
           {showAddTop ? (
             <AddDeptForm parentId={null} onDone={() => setShowAddTop(false)} />
           ) : (
-            <button
-              onClick={() => setShowAddTop(true)}
-              className="flex items-center gap-1.5 text-sm font-medium text-brand hover:text-brand-strong rounded transition-colors duration-150"
-            >
-              <Plus size={14} /> Departman ekle
-            </button>
+            <Button size="sm" variant="secondary" onClick={() => setShowAddTop(true)}>
+              <Plus size={14} aria-hidden /> Departman ekle
+            </Button>
           )}
         </div>
       )}
@@ -499,7 +504,7 @@ export function DepartmentsManager({ departments, deptMembers, workspaceMembers,
       <ConfirmDialog
         open={deleteTarget !== null}
         pending={pendingDelete}
-        title="Silmek istediğinize emin misiniz?"
+        title="Departmanı silmek istiyor musunuz?"
         message={`${deleteTarget?.name ?? "Bu departman"} silinecek. Mevcut görevler korunur.`}
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}

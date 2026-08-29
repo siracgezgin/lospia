@@ -8,6 +8,7 @@ import {
   ClipboardList, Plus, Trash2, Loader2, Send, CheckCircle2, Check, Undo2, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { TextInput } from "@/components/ui/Field";
 import { initialsOf } from "@/lib/planning/initials";
 import { categoryMeta } from "@/lib/planning/categories";
 import {
@@ -142,7 +143,7 @@ export function OpenItemsBoard({ items, members, currentUserId, isAdmin, availab
   if (!available) {
     return (
       <Wrap open={0}>
-        <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] font-medium text-amber-900">
+        <p className="rounded-control border border-warning/40 bg-warning/10 px-3 py-2 text-[12.5px] font-medium text-ink">
           Bu bölüm için veritabanı güncellemesi bekleniyor (planning_open_items).
         </p>
       </Wrap>
@@ -155,7 +156,7 @@ export function OpenItemsBoard({ items, members, currentUserId, isAdmin, availab
       doneToggle={<DoneToggle done={totalDone} showDone={showDone} onToggle={() => setShowDone((s) => !s)} />}
     >
       {error && (
-        <div className="anim-fade-down mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] font-medium text-red-700">
+        <div role="alert" className="anim-fade-down mb-2 rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[12.5px] font-medium text-danger">
           {error}
         </div>
       )}
@@ -172,26 +173,17 @@ export function OpenItemsBoard({ items, members, currentUserId, isAdmin, availab
           <div
             key={col.key}
             className={cn(
-              "flex flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-card",
+              "flex flex-col overflow-hidden rounded-card border border-line bg-surface",
               withItems.length % 2 === 1 && i === withItems.length - 1 && "xl:col-span-2",
             )}
           >
             {/* Blok başlığı — kişi */}
             <div className="flex items-center gap-2 border-b border-hairline bg-surface-muted px-3 py-2">
-              <span className="inline-flex h-6 w-7 shrink-0 items-center justify-center rounded bg-surface text-[11px] font-semibold text-muted">
+              <span className="inline-flex h-6 w-7 shrink-0 items-center justify-center rounded bg-surface text-[11.5px] font-semibold text-muted">
                 {col.label === GENERAL ? "∷" : initialsOf(col.label)}
               </span>
               <span className="min-w-0 flex-1 truncate text-[13px] font-semibold tracking-tight text-ink" title={col.label}>
                 {col.label}
-              </span>
-              <span
-                className={cn(
-                  "rounded-md px-1.5 py-px text-[11px] font-semibold tabular-nums",
-                  col.openCount ? "bg-brand-soft text-brand-strong" : "bg-surface text-subtle",
-                )}
-                title="Açık konu"
-              >
-                {col.openCount}
               </span>
             </div>
 
@@ -207,7 +199,7 @@ export function OpenItemsBoard({ items, members, currentUserId, isAdmin, availab
                   className={cn("flex min-w-0 flex-col border-hairline", gi > 0 && "border-t")}
                 >
                   {g.role && (
-                    <div className="border-b border-hairline px-3 py-1.5 text-[11.5px] font-semibold leading-snug text-muted" title={g.role}>
+                    <div className="border-b border-hairline px-3 py-1.5 text-[12px] font-semibold leading-snug text-muted" title={g.role}>
                       {g.role}
                     </div>
                   )}
@@ -233,7 +225,7 @@ export function OpenItemsBoard({ items, members, currentUserId, isAdmin, availab
                         <button
                           onClick={() => run(it.id, () => setOpenItemDone(it.id, false))}
                           disabled={!canWrite(col) || busyId === it.id}
-                          className="tap-target mt-px shrink-0 rounded p-0.5 text-emerald-600 transition-colors hover:bg-emerald-50 disabled:opacity-50"
+                          className="tap-target mt-px shrink-0 rounded p-0.5 text-success transition-colors hover:bg-success/10 disabled:opacity-50"
                           title="Geri al"
                         >
                           {busyId === it.id ? <Loader2 size={13} className="animate-spin" /> : <Undo2 size={13} />}
@@ -267,7 +259,7 @@ export function OpenItemsBoard({ items, members, currentUserId, isAdmin, availab
       </div>
 
       {emptyLabels.length > 0 && (
-        <p className="mt-3 rounded-lg border border-line bg-surface-muted px-3 py-2 text-[12.5px] text-muted">
+        <p className="mt-3 rounded-control border border-line bg-surface-muted px-3 py-2 text-[12.5px] text-muted">
           <span className="font-medium text-ink">Açık konusu olmayanlar:</span>{" "}
           {emptyLabels.join(" · ")}
         </p>
@@ -315,10 +307,10 @@ function DoneToggle({
       onClick={onToggle}
       aria-pressed={showDone}
       className={cn(
-        "inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border px-3 text-[13px] font-semibold transition-all duration-150 active:scale-[0.98]",
+        "inline-flex h-9 items-center justify-center gap-1.5 rounded-control border px-3 text-[13px] font-semibold transition-colors duration-150 active:scale-[0.98]",
         showDone
-          ? "border-emerald-500 bg-emerald-500 text-white hover:bg-emerald-600"
-          : "border-emerald-200 bg-emerald-50 text-emerald-800 hover:border-emerald-400 hover:bg-emerald-100",
+          ? "border-success bg-success text-white"
+          : "border-success/30 bg-success/10 text-success hover:border-success/60",
       )}
       title={showDone ? "Tamamlananları gizle" : "Tamamlanan konuları göster — üstü çizili olarak listenin altına iner"}
     >
@@ -326,8 +318,8 @@ function DoneToggle({
       {showDone ? "Tamamlananları gizle" : "Tamamlananlar"}
       <span
         className={cn(
-          "rounded-md px-1.5 py-px text-[11.5px] font-bold tabular-nums",
-          showDone ? "bg-white/20 text-white" : "bg-emerald-600 text-white",
+          "rounded-md px-1.5 py-px text-[12px] font-semibold tabular-nums",
+          showDone ? "bg-white/20 text-white" : "bg-success text-white",
         )}
       >
         {done}
@@ -364,7 +356,7 @@ function ItemRow({
       <button
         onClick={onToggle}
         disabled={!canWrite || busy}
-        className="tap-target mt-[3px] inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[4px] border border-line-strong text-transparent transition-colors duration-150 hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-40"
+        className="tap-target mt-[3px] inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[4px] border border-line-strong text-transparent transition-colors duration-150 hover:border-success hover:bg-success/10 hover:text-success disabled:opacity-40"
         title={canWrite ? "Tamamlandı olarak işaretle" : "Bu sütuna yalnız sahibi veya yönetici yazar"}
         aria-label="Tamamlandı"
       >
@@ -372,8 +364,9 @@ function ItemRow({
       </button>
 
       {editing ? (
-        <input
+        <TextInput
           autoFocus
+          aria-label="Konu metni"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={commit}
@@ -381,7 +374,7 @@ function ItemRow({
             if (e.key === "Enter") commit();
             if (e.key === "Escape") { setDraft(item.text); setEditing(false); }
           }}
-          className="min-w-0 flex-1 rounded border border-brand-ring bg-surface px-1.5 py-0.5 text-[12.5px] text-ink focus:outline-none focus:ring-2 focus:ring-brand-ring"
+          className="h-7 min-w-0 flex-1 px-1.5 text-[12.5px]"
         />
       ) : (
         <button
@@ -413,23 +406,24 @@ function ItemRow({
         <Link
           href={`/tasks/${item.task_id}`}
           onClick={(e) => e.stopPropagation()}
-          className="tap-target inline-flex shrink-0 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-px text-[10.5px] font-medium text-emerald-700 transition-colors hover:border-emerald-300 hover:bg-emerald-100"
+          className="tap-target inline-flex shrink-0 items-center gap-1 rounded-md border border-success/30 bg-success/10 px-1.5 py-px text-[12px] font-medium text-success transition-colors hover:border-success/60"
           title="Panodaki görevi aç"
         >
-          <CheckCircle2 size={10} /> Board
+          <CheckCircle2 size={11} aria-hidden /> Board
         </Link>
       )}
 
-      <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/item:opacity-100">
+      <span className="flex shrink-0 items-center gap-0.5">
         {canAssign && (
           <button
             onClick={onAssign}
             disabled={busy}
             className={cn(
               "tap-target rounded p-1 transition-colors",
-              item.task_id ? "text-emerald-600 hover:bg-emerald-50" : "text-subtle hover:bg-surface-muted hover:text-brand",
+              item.task_id ? "text-success hover:bg-success/10" : "text-subtle hover:bg-surface-muted hover:text-brand",
             )}
             title={item.task_id ? "Görev oluşturuldu — güncelleyip tekrar bildir" : "Göreve dönüştür ve sahibine bildir"}
+            aria-label="Bildir"
           >
             <Send size={12} />
           </button>
@@ -438,8 +432,9 @@ function ItemRow({
           <button
             onClick={onDelete}
             disabled={busy}
-            className="tap-target rounded p-1 text-subtle transition-colors hover:bg-red-50 hover:text-red-600"
+            className="tap-target rounded p-1 text-subtle transition-colors hover:bg-danger/10 hover:text-danger"
             title="Sil"
+            aria-label="Sil"
           >
             <Trash2 size={12} />
           </button>
@@ -473,8 +468,9 @@ function AddRow({ onAdd, busy }: { onAdd: (_text: string) => void; busy: boolean
 
   return (
     <div className="flex items-center gap-1 border-t border-hairline px-2 py-1.5">
-      <input
+      <TextInput
         autoFocus
+        aria-label="Yeni konu"
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
@@ -482,20 +478,22 @@ function AddRow({ onAdd, busy }: { onAdd: (_text: string) => void; busy: boolean
           if (e.key === "Escape") { setText(""); setOpen(false); }
         }}
         placeholder="Yeni konu…"
-        className="min-w-0 flex-1 rounded border border-line bg-surface px-1.5 py-1 text-[12.5px] text-ink placeholder:text-subtle focus:border-brand-ring focus:outline-none focus:ring-2 focus:ring-brand-ring"
+        className="h-8 min-w-0 flex-1 px-1.5 text-[12.5px]"
       />
       <button
         onClick={submit}
         disabled={busy}
-        className="rounded p-1 text-brand transition-colors hover:bg-brand-soft disabled:opacity-60"
+        className="tap-target rounded p-1 text-brand transition-colors hover:bg-brand-soft disabled:opacity-60"
         title="Ekle"
+        aria-label="Ekle"
       >
         {busy ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
       </button>
       <button
         onClick={() => { setText(""); setOpen(false); }}
-        className="rounded p-1 text-subtle transition-colors hover:bg-surface-muted hover:text-ink"
+        className="tap-target rounded p-1 text-subtle transition-colors hover:bg-surface-muted hover:text-ink"
         title="Kapat"
+        aria-label="Kapat"
       >
         <X size={13} />
       </button>

@@ -1,89 +1,65 @@
 "use client";
 
 import { useActionState } from "react";
-import { AlertCircle, Loader2 } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import { signIn, type AuthFormState } from "@/lib/actions/auth";
-import { Input } from "@/components/ui/Input";
+import { Field, TextInput } from "@/components/ui/Field";
+import { Button } from "@/components/ui/Button";
 
 // Sign-in only. Public self-signup has been removed — accounts are created by an
 // owner/admin in Settings → "Hesap oluştur". The person signs in directly with
 // the username (or e-mail) + password they were given.
+//
+// Tek form, iki alan, tek düğme: Field + Button primitifleri (önce elle
+// yazılmış etiket/giriş/düğme üçlüsü ve alan başına ayrı giriş animasyonu
+// vardı). Hata alanların altında, insan diliyle.
 export function LoginForm({ initialEmail = "" }: { initialEmail?: string }) {
   const [state, action, pending] = useActionState<AuthFormState, FormData>(signIn, null);
 
   return (
     <div className="space-y-5">
       <form action={action} className="space-y-4">
-        <div
-          className="anim-fade-up space-y-1.5"
-          style={{ animationDelay: "140ms" }}
-        >
-          <label
-            htmlFor="identifier"
-            className="block text-[12.5px] font-medium text-muted"
-          >
-            Kullanıcı adı
-          </label>
-          <Input
+        <Field label="Kullanıcı adı" htmlFor="identifier">
+          <TextInput
             id="identifier"
             name="identifier"
             type="text"
             autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
             required
             defaultValue={initialEmail}
-            placeholder="Kullanıcı adı"
             className="h-10"
           />
-        </div>
+        </Field>
 
-        <div
-          className="anim-fade-up space-y-1.5"
-          style={{ animationDelay: "190ms" }}
-        >
-          <label
-            htmlFor="password"
-            className="block text-[12.5px] font-medium text-muted"
-          >
-            Şifre
-          </label>
-          <Input
+        <Field label="Şifre" htmlFor="password">
+          <TextInput
             id="password"
             name="password"
             type="password"
             autoComplete="current-password"
             required
-            placeholder="Şifre"
             className="h-10"
           />
-        </div>
+        </Field>
 
         {state?.error != null && (
           <div
             role="alert"
-            className="anim-fade-down flex items-start gap-2 rounded-lg border border-danger/30 bg-danger/[0.05] px-3 py-2.5 text-[12.5px] leading-relaxed text-danger"
+            className="anim-fade-down flex items-start gap-2 rounded-control border border-danger/25 bg-danger/8 px-3 py-2.5 text-[13px] leading-relaxed text-danger"
           >
-            <AlertCircle size={14} strokeWidth={2} className="mt-0.5 shrink-0" />
-            <span>{state.error || "Giriş yapılamadı. Lütfen tekrar deneyin."}</span>
+            <AlertCircle size={14} strokeWidth={2} className="mt-0.5 shrink-0" aria-hidden />
+            <span>{state.error || "Giriş yapılamadı. Kullanıcı adı ve şifreyi kontrol edip tekrar deneyin."}</span>
           </div>
         )}
 
-        <button
-          type="submit"
-          disabled={pending}
-          className="anim-fade-up inline-flex h-10 w-full select-none items-center justify-center gap-2 rounded-lg bg-brand text-sm font-semibold text-white shadow-card transition-[background-color,transform,box-shadow] duration-200 ease-standard hover:bg-brand-strong hover:shadow-card-hover active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60"
-          style={{ animationDelay: "240ms" }}
-        >
-          {pending && (
-            <Loader2 size={15} strokeWidth={2} className="animate-spin shrink-0" />
-          )}
+        <Button type="submit" loading={pending} className="h-10 w-full text-[14px]">
           {pending ? "Giriş yapılıyor…" : "Giriş yap"}
-        </button>
+        </Button>
       </form>
 
-      <p
-        className="anim-fade text-xs text-center text-subtle"
-        style={{ animationDelay: "320ms" }}
-      >
+      <p className="text-center text-[12.5px] text-subtle">
         Hesabınız yoksa yöneticinize başvurun.
       </p>
     </div>

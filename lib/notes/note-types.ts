@@ -21,13 +21,14 @@ export const NOTE_TYPE_LABELS: Record<TaskNoteType, string> = {
   approval_waiting: "Onay bekliyor",
 };
 
-// Small, corporate badge tones — aligned with the board chip palette (blue for
-// informational, amber for pending action, sky for handoff, violet for approval).
+// Not türü rozetleri — anlamsal token'lar (globals.css): bilgi=info, eylem
+// gerekli=hold (bekleyen iş), devir=marka, onay=approval. Ham Tailwind paleti
+// (blue-50, amber-700…) uygulamanın renk sisteminin dışında kalıyordu.
 export const NOTE_TYPE_BADGE: Record<TaskNoteType, string> = {
-  info: "bg-blue-50 text-blue-700 border border-blue-200",
-  action_required: "bg-amber-50 text-amber-700 border border-amber-200",
-  handoff: "bg-sky-50 text-sky-700 border border-sky-200",
-  approval_waiting: "bg-violet-50 text-violet-700 border border-violet-200",
+  info: "bg-info/10 text-info",
+  action_required: "bg-hold/10 text-hold",
+  handoff: "bg-brand-soft text-brand-strong",
+  approval_waiting: "bg-approval/10 text-approval",
 };
 
 export function isNoteType(v: unknown): v is TaskNoteType {

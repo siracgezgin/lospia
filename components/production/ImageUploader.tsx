@@ -9,6 +9,7 @@ import { compressImage } from "@/lib/utils/compress-image";
 import { cn } from "@/lib/utils/cn";
 import { useConfirm } from "@/components/ui/useConfirm";
 import { Overlay } from "@/components/ui/Overlay";
+import { Button, IconButton } from "@/components/ui/Button";
 import type { ProductionImage, ProductionImageSection } from "@/types";
 
 // Orijinal (sıkıştırma öncesi) dosya için üst sınır. UI'de "maks 5 MB" yazıyor.
@@ -107,7 +108,7 @@ export function ImageUploader({
   return (
     <div onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
       {label && (
-        <span className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-subtle">{label}</span>
+        <span className="mb-1.5 block text-[12px] font-semibold uppercase tracking-[0.06em] text-muted">{label}</span>
       )}
 
       {variant === "drawing" ? (
@@ -116,85 +117,105 @@ export function ImageUploader({
           {mine.length > 0 ? (
             <div className="space-y-2">
               {mine.map((img) => (
-                <div key={img.path} className="group relative overflow-hidden rounded-lg border border-line bg-surface-muted shadow-card transition-all duration-200 ease-standard hover:border-line-strong hover:shadow-card-hover">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={img.url}
-                    alt="Teknik çizim"
-                    className="max-h-[360px] w-full cursor-zoom-in object-contain"
-                    onClick={() => setLightbox(img.url)}
-                  />
+                <div key={img.path} className="group relative overflow-hidden rounded-card border border-line bg-surface-muted transition-[border-color] duration-150 ease-standard hover:border-line-strong">
+                  {/* Büyütme bir DÜĞMEDİR (klavye + ekran okuyucu); görsel
+                      dekoratif kalır. */}
                   <button
-                    onClick={() => handleRemove(img)}
-                    className="absolute right-2 top-2 rounded-md bg-white/90 p-1.5 text-subtle shadow-card opacity-0 transition-[opacity,color] duration-150 hover:text-danger focus-visible:opacity-100 group-hover:opacity-100"
-                    title="Görseli sil"
+                    type="button"
+                    onClick={() => setLightbox(img.url)}
+                    className="block w-full cursor-zoom-in"
+                    aria-label="Teknik çizimi büyüt"
                   >
-                    <Trash2 size={14} />
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={img.url} alt="" className="max-h-[360px] w-full object-contain" />
                   </button>
+                  {/* Sil: farede hover'da belirir, parmakta hep görünür
+                      (hover-only işlev telefonda erişilemezdi). */}
+                  <IconButton
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => handleRemove(img)}
+                    className="absolute right-2 top-2 text-subtle transition-opacity duration-150 hover:text-danger pointer-fine:opacity-0 pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100"
+                    title="Görseli sil"
+                    aria-label="Teknik çizimi sil"
+                  >
+                    <Trash2 size={14} aria-hidden />
+                  </IconButton>
                 </div>
               ))}
-              <button onClick={pick} disabled={busy} className="rounded-md text-[12.5px] font-medium text-brand transition-colors duration-150 hover:text-brand-strong disabled:pointer-events-none disabled:opacity-60">
-                {busy ? "Yükleniyor…" : "+ Başka görsel ekle"}
-              </button>
+              <Button variant="ghost" size="sm" onClick={pick} loading={busy} className="-ml-2 text-brand hover:bg-brand-soft hover:text-brand-strong">
+                {busy ? "Yükleniyor…" : <><ImagePlus size={13} aria-hidden /> Başka görsel ekle</>}
+              </Button>
             </div>
           ) : (
             <button
+              type="button"
               onClick={pick}
               disabled={busy}
               className={cn(
-                "flex min-h-[220px] w-full flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed transition-all duration-200 ease-standard disabled:pointer-events-none",
+                "flex min-h-[220px] w-full flex-col items-center justify-center gap-2 rounded-card border-2 border-dashed transition-[border-color,background-color,color] duration-150 ease-standard disabled:pointer-events-none",
                 dragOver
                   ? "border-brand bg-brand-soft/70 text-brand-strong"
                   : "border-line bg-surface-muted/40 text-subtle hover:border-brand-ring hover:bg-brand-soft/30 hover:text-muted",
-                busy && "anim-shimmer border-solid border-line bg-gradient-to-r from-surface-sunken via-surface-muted to-surface-sunken",
+                /* Yüklenirken düz kuyu zemin + spinner; gradient/shimmer yok. */
+                busy && "border-solid border-line bg-surface-sunken",
               )}
             >
-              {busy ? <Loader2 size={26} className="animate-spin" /> : <ImagePlus size={26} />}
-              <span className="text-[12.5px] font-medium">Teknik çizim / görsel yükle</span>
-              <span className="text-[11px]">PNG, JPG · maks 5 MB</span>
+              {busy ? <Loader2 size={26} className="animate-spin" aria-hidden /> : <ImagePlus size={26} aria-hidden />}
+              <span className="text-[13.5px] font-medium">{busy ? "Yükleniyor…" : "Teknik çizim / görsel yükle"}</span>
+              <span className="text-[12px]">PNG, JPG · maks 5 MB</span>
             </button>
           )}
         </div>
       ) : (
         // Galeri: küçük kareler + ekle butonu.
+        /* Referans görselleri 96px kare: 80px'te kumaş dokusu okunmuyordu.
+           Büyütme düğme, silme parmakta hep görünür. */
         <div className="flex flex-wrap gap-2">
           {mine.map((img) => (
-            <div key={img.path} className="group relative h-20 w-20 overflow-hidden rounded-lg border border-line bg-surface-muted shadow-card transition-all duration-200 ease-standard hover:border-line-strong hover:shadow-card-hover">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={img.url}
-                alt=""
-                className="h-full w-full cursor-zoom-in object-cover transition-transform duration-200 ease-standard group-hover:scale-[1.04]"
-                onClick={() => setLightbox(img.url)}
-              />
+            <div key={img.path} className="group relative size-24 overflow-hidden rounded-card border border-line bg-surface-muted transition-[border-color] duration-150 ease-standard hover:border-line-strong">
               <button
-                onClick={() => handleRemove(img)}
-                className="absolute right-0.5 top-0.5 rounded bg-white/90 p-1 text-subtle opacity-0 shadow-card transition-[opacity,color] duration-150 hover:text-danger focus-visible:opacity-100 group-hover:opacity-100"
-                title="Görseli sil"
+                type="button"
+                onClick={() => setLightbox(img.url)}
+                className="block h-full w-full cursor-zoom-in"
+                aria-label="Görseli büyüt"
               >
-                <Trash2 size={11} />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={img.url} alt="" className="h-full w-full object-cover" />
               </button>
+              <IconButton
+                size="sm"
+                variant="secondary"
+                onClick={() => handleRemove(img)}
+                className="absolute right-1 top-1 size-7 text-subtle transition-opacity duration-150 hover:text-danger pointer-fine:opacity-0 pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100"
+                title="Görseli sil"
+                aria-label="Görseli sil"
+              >
+                <Trash2 size={12} aria-hidden />
+              </IconButton>
             </div>
           ))}
           <button
+            type="button"
             onClick={pick}
             disabled={busy}
             className={cn(
-              "flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed transition-all duration-200 ease-standard disabled:pointer-events-none",
+              "flex size-24 flex-col items-center justify-center gap-1 rounded-card border-2 border-dashed transition-[border-color,background-color,color] duration-150 ease-standard disabled:pointer-events-none",
               dragOver
                 ? "border-brand bg-brand-soft/70 text-brand-strong"
                 : "border-line text-subtle hover:border-brand-ring hover:bg-brand-soft/40 hover:text-muted",
-              busy && "anim-shimmer border-solid border-line bg-gradient-to-r from-surface-sunken via-surface-muted to-surface-sunken",
+              busy && "border-solid border-line bg-surface-sunken",
             )}
             title="Görsel ekle"
+            aria-label="Görsel ekle"
           >
-            {busy ? <Loader2 size={18} className="animate-spin" /> : <ImagePlus size={18} />}
-            <span className="text-[10px]">Ekle</span>
+            {busy ? <Loader2 size={18} className="animate-spin" aria-hidden /> : <ImagePlus size={18} aria-hidden />}
+            <span className="text-[12px] font-medium">{busy ? "Yükleniyor" : "Ekle"}</span>
           </button>
         </div>
       )}
 
-      {err && <p className="anim-fade-down mt-1 text-[11.5px] font-medium text-danger">{err}</p>}
+      {err && <p role="alert" className="anim-fade-down mt-1.5 text-[12.5px] font-medium text-danger">{err}</p>}
 
       <input
         ref={inputRef}
@@ -212,7 +233,7 @@ export function ImageUploader({
           taşıyordu. */}
       <Overlay open={!!lightbox} onClose={() => setLightbox(null)} size="lg" floatingClose className="border-0 bg-transparent shadow-none">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={lightbox ?? ""} alt="" className="mx-auto max-h-[78dvh] w-auto rounded-lg object-contain shadow-drawer" />
+        <img src={lightbox ?? ""} alt="" className="mx-auto max-h-[78dvh] w-auto rounded-card object-contain shadow-drawer" />
       </Overlay>
       {dialog}
     </div>

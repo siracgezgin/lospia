@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import { FolderOpen } from "lucide-react";
 import { requireModuleMember } from "@/lib/modules/context";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
@@ -39,17 +38,14 @@ export default async function DocumentsPage() {
   if (setup.setupRequired) {
     return (
       <div className="mx-auto w-full max-w-3xl px-4 py-4 sm:px-6 lg:px-8">
-        <ModulePageHeader
-          title="AF Teamwork"
-          description="Ekibin bütün çalışma dosyaları — klasörler, tablolar ve dış bağlantılar tek yerde."
-          icon={FolderOpen}
-        />
+        {/* Başlık uygulama çubuğunda; burada yalnız ekran okuyucu <h1>'i. */}
+        <ModulePageHeader title="AF Teamwork" />
         <SetupRequiredNotice
           variant="block"
           title="AF Teamwork tablosu henüz oluşturulmadı"
           message={
             setup.message ??
-            "Doküman Merkezi için veritabanı güncellemesi bekleniyor. Migration uygulandıktan sonra bu ekran aktif olacak."
+            "AF Teamwork için veritabanı güncellemesi bekleniyor. Güncelleme uygulandığında bu ekran açılacak."
           }
           technicalDetail={isAdmin ? setup.technicalDetail : null}
         />
@@ -117,7 +113,7 @@ export default async function DocumentsPage() {
      (migration uygulanmamış) sorgu hata verir ve bölüm sessizce boş kalır. */
   const sheetsRes = await supabase
     .from("operation_spreadsheets")
-    .select("id, title, folder_id, created_by, updated_at")
+    .select("id, title, folder_id, created_by, updated_at, visibility")
     .eq("workspace_id", workspaceId)
     .eq("section", "teamwork")
     .neq("status", "archived")
@@ -152,6 +148,7 @@ export default async function DocumentsPage() {
         file_path: (r.file_path as string | null) ?? null,
         created_by: (r.created_by as string | null) ?? null,
         created_at: r.created_at as string,
+        visibility: ((r.visibility as string | null) ?? "all") as "all" | "admin",
         thumbUrl: null,
       };
     });
@@ -169,6 +166,7 @@ export default async function DocumentsPage() {
         preview: richTextPreview(r.body as string | null, 90),
         created_by: (r.created_by as string | null) ?? null,
         updated_at: r.updated_at as string,
+        visibility: ((r.visibility as string | null) ?? "all") as "all" | "admin",
       };
     });
 

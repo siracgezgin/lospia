@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, Loader2, Save, Pencil, Scissors, EyeOff } from "lucide-react";
+import { Plus, Trash2, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import {
   createManufacturer, updateManufacturer, deleteManufacturer,
@@ -10,6 +10,11 @@ import {
 } from "@/lib/actions/manufacturers";
 import { assignPersonTones } from "@/lib/design/person-colors";
 import { PersonAvatar } from "@/components/ui/PersonAvatar";
+import { Button, IconButton } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
+import { Field, FieldGrid, TextInput } from "@/components/ui/Field";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { useConfirm } from "@/components/ui/useConfirm";
 import type { Manufacturer } from "@/types";
 
 export type ManagerManufacturer = Pick<
@@ -24,11 +29,6 @@ interface Props {
   sheetCounts: Record<string, number>;
   canManage: boolean;
 }
-
-const inputCls =
-  "w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[13px] text-ink placeholder:text-subtle " +
-  "transition-[border-color,box-shadow] duration-150 hover:border-line-strong " +
-  "focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40";
 
 function emptyDraft(): ManufacturerInput {
   return {
@@ -64,9 +64,15 @@ function draftOf(m: ManagerManufacturer): ManufacturerInput {
  *
  * Teslim süresi ve minimum adet alanları Zedonk (rakip PLM) incelemesinden
  * geldi: sipariş verirken sorulan ilk iki soru bunlar.
+ *
+ * Yüzey: bölüm kartının içinde her usta ayrı bir kartken (kenarlık + gölge +
+ * renkli kenar) liste "kart içinde kart"tı. Artık ince çizgiyle ayrılmış
+ * satırlar; rengi rozet taşır. Form ham input yerine Field primitifleri.
+ * Silme onaysız gidiyordu — artık sorulur.
  */
 export function ManufacturersManager({ manufacturers, sheetCounts, canManage }: Props) {
   const router = useRouter();
+  const { ask, dialog } = useConfirm();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState<ManufacturerInput>(emptyDraft());
@@ -89,71 +95,73 @@ export function ManufacturersManager({ manufacturers, sheetCounts, canManage }: 
   const openEdit = (m: ManagerManufacturer) => { setDraft(draftOf(m)); setEditingId(m.id); setAdding(false); setError(null); };
   const close = () => { setAdding(false); setEditingId(null); setError(null); };
 
-  const form = (
-    <div className="space-y-2 rounded-xl border border-brand-ring/50 bg-surface-muted/50 p-3">
-      <div className="grid gap-2 sm:grid-cols-2">
-        <label className="block sm:col-span-2">
-          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">Usta adı *</span>
-          <input className={inputCls} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Hakan Günaydın" autoFocus />
-        </label>
-        <label className="block sm:col-span-2">
-          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">Fotoğraf bağlantısı</span>
-          <input className={inputCls} value={draft.photo_url ?? ""} onChange={(e) => setDraft({ ...draft, photo_url: e.target.value })} placeholder="https://…" />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">Şehir</span>
-          <input className={inputCls} value={draft.city ?? ""} onChange={(e) => setDraft({ ...draft, city: e.target.value })} placeholder="İstanbul" />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">Para birimi</span>
-          <input className={inputCls} value={draft.currency ?? "TL"} onChange={(e) => setDraft({ ...draft, currency: e.target.value })} placeholder="TL" />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">Teslim süresi (gün)</span>
-          <input className={inputCls} value={String(draft.lead_time_days ?? "")} onChange={(e) => setDraft({ ...draft, lead_time_days: e.target.value })} placeholder="30" inputMode="numeric" />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">Minimum adet</span>
-          <input className={inputCls} value={String(draft.min_order_qty ?? "")} onChange={(e) => setDraft({ ...draft, min_order_qty: e.target.value })} placeholder="50" inputMode="numeric" />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">İlgili kişi</span>
-          <input className={inputCls} value={draft.contact_name ?? ""} onChange={(e) => setDraft({ ...draft, contact_name: e.target.value })} />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">Telefon</span>
-          <input className={inputCls} value={draft.phone ?? ""} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} />
-        </label>
-        <label className="block sm:col-span-2">
-          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">Not</span>
-          <input className={inputCls} value={draft.notes ?? ""} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} />
-        </label>
-      </div>
+  async function remove(m: ManagerManufacturer) {
+    const ok = await ask({
+      title: "Ustayı silmek istiyor musunuz?",
+      message: `${m.name} silinecek. Föye bağlıysa silinmez; onun yerine pasif yapın.`,
+      confirmLabel: "Sil",
+    });
+    if (!ok) return;
+    run(() => deleteManufacturer(m.id));
+  }
 
-      <label className="flex items-center gap-2 text-[13px] text-ink">
+  const form = (
+    <div className="space-y-4 rounded-card bg-surface-sunken/60 p-4">
+      <FieldGrid>
+        <Field label="Usta adı" required className="sm:col-span-2">
+          <TextInput value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Hakan Günaydın" autoFocus />
+        </Field>
+        <Field label="Fotoğraf bağlantısı" className="sm:col-span-2">
+          <TextInput value={draft.photo_url ?? ""} onChange={(e) => setDraft({ ...draft, photo_url: e.target.value })} placeholder="https://…" />
+        </Field>
+        <Field label="Şehir">
+          <TextInput value={draft.city ?? ""} onChange={(e) => setDraft({ ...draft, city: e.target.value })} placeholder="İstanbul" />
+        </Field>
+        <Field label="Para birimi">
+          <TextInput value={draft.currency ?? "TL"} onChange={(e) => setDraft({ ...draft, currency: e.target.value })} placeholder="TL" />
+        </Field>
+        <Field label="Teslim süresi (gün)">
+          <TextInput value={String(draft.lead_time_days ?? "")} onChange={(e) => setDraft({ ...draft, lead_time_days: e.target.value })} placeholder="30" inputMode="numeric" className="tabular-nums" />
+        </Field>
+        <Field label="Minimum adet">
+          <TextInput value={String(draft.min_order_qty ?? "")} onChange={(e) => setDraft({ ...draft, min_order_qty: e.target.value })} placeholder="50" inputMode="numeric" className="tabular-nums" />
+        </Field>
+        <Field label="İlgili kişi">
+          <TextInput value={draft.contact_name ?? ""} onChange={(e) => setDraft({ ...draft, contact_name: e.target.value })} />
+        </Field>
+        <Field label="Telefon">
+          <TextInput type="tel" value={draft.phone ?? ""} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} className="tabular-nums" />
+        </Field>
+        <Field label="Not" className="sm:col-span-2">
+          <TextInput value={draft.notes ?? ""} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} />
+        </Field>
+      </FieldGrid>
+
+      <label className="flex items-start gap-2 text-[13.5px] leading-snug text-ink">
         <input
           type="checkbox"
           checked={draft.is_active}
           onChange={(e) => setDraft({ ...draft, is_active: e.target.checked })}
-          className="h-4 w-4 rounded border-line-strong accent-[var(--brand)]"
+          className="mt-0.5 h-4 w-4 shrink-0 rounded border-line-strong accent-[var(--brand)]"
         />
-        Aktif — pasif ustalar föy seçiminde “(pasif)” olarak görünür, geçmiş kayıtlar korunur.
+        <span>Aktif <span className="text-muted">— pasif usta föy seçiminde “(pasif)” görünür, geçmiş kayıtlar korunur.</span></span>
       </label>
 
-      <div className="flex items-center justify-end gap-2 pt-1">
-        <button onClick={close} className="rounded-lg px-3 py-1.5 text-[13px] font-medium text-muted hover:text-ink">İptal</button>
-        <button
+      <div className="flex items-center justify-end gap-2 border-t border-hairline pt-3">
+        <Button variant="ghost" size="sm" onClick={close} disabled={busy}>Vazgeç</Button>
+        <Button
+          size="sm"
           onClick={() =>
             run(
               () => (editingId ? updateManufacturer(editingId, draft) : createManufacturer(draft)),
               close,
             )
           }
-          disabled={busy || !draft.name.trim()}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3.5 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-brand-strong disabled:pointer-events-none disabled:opacity-60"
+          loading={busy}
+          disabled={!draft.name.trim()}
         >
-          {busy ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Kaydet
-        </button>
+          Kaydet
+        </Button>
       </div>
     </div>
   );
@@ -161,33 +169,27 @@ export function ManufacturersManager({ manufacturers, sheetCounts, canManage }: 
   return (
     <div className="space-y-3">
       {error && (
-        <p className="anim-fade-down rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-[12.5px] font-medium text-danger">
-          {error}
-        </p>
+        <p role="alert" className="anim-fade-down text-[12.5px] text-danger">{error}</p>
       )}
 
       {adding && form}
 
       {manufacturers.length === 0 && !adding ? (
-        <p className="rounded-xl border border-line bg-surface px-3 py-4 text-center text-[13px] text-subtle">
-          Henüz usta eklenmedi. Föylerdeki üretici adları kayda dönüşünce burada görünür.
-        </p>
+        <EmptyState
+          title="Henüz usta yok"
+          description="Föylerdeki üretici adları kayda dönüşünce burada görünür."
+          compact
+        />
       ) : (
-        <ul className="space-y-2">
+        <ul className="divide-y divide-hairline border-t border-hairline">
           {manufacturers.map((m) => {
             const tone = tones[m.id]!;
             const count = sheetCounts[m.id] ?? 0;
-            if (editingId === m.id) return <li key={m.id}>{form}</li>;
+            if (editingId === m.id) return <li key={m.id} className="py-3">{form}</li>;
             return (
-              <li
-                key={m.id}
-                className={cn(
-                  "flex items-center gap-3 rounded-xl border bg-surface px-3 py-2.5 shadow-card",
-                  m.is_active ? tone.border : "border-line opacity-70",
-                )}
-              >
+              <li key={m.id} className="flex items-center gap-3 py-3">
                 {/* Fotoğraf, yoksa baş harf — sembol ikonlar kaldırıldı
-                    (Aslı Hanım, 2026-08-24). */}
+                    (Aslı Hanım, 2026-08-24). Pasif usta renksiz kalır. */}
                 <PersonAvatar
                   name={m.name}
                   photoUrl={m.photo_url}
@@ -197,35 +199,37 @@ export function ManufacturersManager({ manufacturers, sheetCounts, canManage }: 
 
                 <span className="min-w-0 flex-1">
                   <span className="flex flex-wrap items-center gap-2">
-                    <span className="truncate text-[14px] font-semibold tracking-tight text-ink">{m.name}</span>
-                    {!m.is_active && (
-                      <span className="inline-flex items-center gap-1 rounded-md bg-surface-muted px-1.5 py-px text-[11px] font-medium text-subtle">
-                        <EyeOff size={10} /> pasif
-                      </span>
-                    )}
+                    <span className={cn("truncate text-[14px] font-semibold tracking-tight", m.is_active ? "text-ink" : "text-muted")}>
+                      {m.name}
+                    </span>
+                    {/* Satırdaki tek rozet: durum. */}
+                    {!m.is_active && <Badge className="bg-surface-sunken text-subtle">Pasif</Badge>}
                   </span>
-                  <span className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12px] text-muted">
-                    <span className="inline-flex items-center gap-1"><Scissors size={11} />{count} föy</span>
+                  {/* "N föy" listeyi tarif eder (o ustada kaç ürün dikiliyor). */}
+                  <span className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12.5px] text-muted">
+                    <span className="tabular-nums">{count} föy</span>
                     {m.city && <span>{m.city}</span>}
-                    {m.lead_time_days != null && <span>{m.lead_time_days} gün</span>}
-                    {m.min_order_qty != null && <span>min {m.min_order_qty} adet</span>}
+                    {m.lead_time_days != null && <span className="tabular-nums">{m.lead_time_days} gün teslim</span>}
+                    {m.min_order_qty != null && <span className="tabular-nums">min {m.min_order_qty} adet</span>}
                     {m.phone && <span className="tabular-nums">{m.phone}</span>}
                   </span>
                 </span>
 
                 {canManage && (
-                  <span className="flex shrink-0 items-center gap-1">
-                    <button onClick={() => openEdit(m)} className="tap-target rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-muted hover:text-ink" title="Düzenle">
+                  <span className="flex shrink-0 items-center">
+                    <IconButton size="sm" onClick={() => openEdit(m)} aria-label={`${m.name} — düzenle`} title="Düzenle">
                       <Pencil size={14} />
-                    </button>
-                    <button
-                      onClick={() => run(() => deleteManufacturer(m.id))}
+                    </IconButton>
+                    <IconButton
+                      size="sm"
+                      onClick={() => remove(m)}
                       disabled={busy}
-                      className="tap-target rounded-md p-1.5 text-subtle transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-50"
+                      aria-label={`${m.name} — sil`}
                       title={count > 0 ? "Föye bağlı — silmek yerine pasif yapın" : "Sil"}
+                      className="hover:bg-danger/10 hover:text-danger"
                     >
                       <Trash2 size={14} />
-                    </button>
+                    </IconButton>
                   </span>
                 )}
               </li>
@@ -235,13 +239,12 @@ export function ManufacturersManager({ manufacturers, sheetCounts, canManage }: 
       )}
 
       {canManage && !adding && (
-        <button
-          onClick={openAdd}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-[13px] font-medium text-muted transition-all duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
-        >
-          <Plus size={14} /> Usta ekle
-        </button>
+        <Button variant="secondary" size="sm" onClick={openAdd}>
+          <Plus size={14} aria-hidden /> Usta ekle
+        </Button>
       )}
+
+      {dialog}
     </div>
   );
 }

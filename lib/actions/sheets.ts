@@ -256,7 +256,43 @@ export async function archiveOperationSpreadsheet(
   return { ok: true };
 }
 
-// Hard delete: admin anything; a member only their own draft.
+/** Görünürlük — klasördekiyle aynı sözleşme (bkz. documents.ts). */
+export async function setOperationSpreadsheetVisibility(
+  sheetId: string,
+  visibility: "all" | "admin",
+): Promise<{ ok: true } | { error: string }> {
+  if (visibility !== "all" && visibility !== "admin") return { error: "Geçersiz görünürlük." };
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+
+  if (!isAdmin(ctx)) {
+    const { data: row } = await supabase
+      .from("operation_spreadsheets")
+      .select("created_by")
+      .eq("id", sheetId)
+      .eq("workspace_id", ctx.workspaceId)
+      .maybeSingle();
+    if (!row) return { error: NOT_FOUND };
+    if ((row as { created_by: string | null }).created_by !== ctx.userId) {
+      return { error: PERM_DENIED };
+    }
+  }
+
+  const { error } = await supabase
+    .from("operation_spreadsheets")
+    .update({ visibility, updated_by: ctx.userId })
+    .eq("id", sheetId)
+    .eq("workspace_id", ctx.workspaceId);
+  if (error) return { error: toActionErrorMessage(error) };
+
+  revalidatePath("/documents");
+  revalidatePath("/sheets");
+  return { ok: true };
+}
+
+/** Kalıcı silme: yönetici her tabloyu, ÜYE KENDİ EKLEDİĞİNİ siler
+ *  (bkz. deleteOperationDocument — aynı sahiplik kuralı, RLS 20240334). */
 export async function deleteOperationSpreadsheet(
   sheetId: string,
 ): Promise<{ ok: true } | { error: string }> {
@@ -265,9 +301,16 @@ export async function deleteOperationSpreadsheet(
   if (!ctx) return { error: AUTH_REQUIRED };
 
   if (!isAdmin(ctx)) {
-    const editable = await loadEditable(supabase, ctx, sheetId);
-    if ("error" in editable) return editable;
-    if (editable.status !== "draft") return { error: PERM_DENIED };
+    const { data: row } = await supabase
+      .from("operation_spreadsheets")
+      .select("created_by")
+      .eq("id", sheetId)
+      .eq("workspace_id", ctx.workspaceId)
+      .maybeSingle();
+    if (!row) return { error: NOT_FOUND };
+    if ((row as { created_by: string | null }).created_by !== ctx.userId) {
+      return { error: PERM_DENIED };
+    }
   }
 
   const { data: doomed } = await supabase

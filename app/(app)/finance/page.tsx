@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import { Wallet } from "lucide-react";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { SetupRequiredNotice } from "@/components/modules/SetupRequiredNotice";
@@ -9,6 +8,7 @@ import { FinanceView } from "@/components/finance/FinanceView";
 import type { FinancePayment } from "@/types";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Finance" };
 
 // Finans — Ödeme Takibi. Excel "Finans Ödeme Tablo" sekmesinin sistemdeki
 // karşılığı; okuma dahil admin-only (RLS + sayfa kapısı).
@@ -27,13 +27,10 @@ export default async function FinancePage() {
 
   const setup = maybeDatabaseSetupRequired(res.error);
   if (setup.setupRequired) {
+    /* Uyarı ekranı — dar kolon serbest (bilgi ekranı). */
     return (
       <div className="mx-auto w-full max-w-3xl px-4 py-4 sm:px-6 lg:px-8">
-        <ModulePageHeader
-          title="Finance"
-          description="Kime, ne kadar, ne zaman — ödemelerin tek listesi."
-          icon={Wallet}
-        />
+        <ModulePageHeader title="Finance" />
         <SetupRequiredNotice
           variant="block"
           title="Finans tablosu henüz oluşturulmadı"

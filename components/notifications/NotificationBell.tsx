@@ -1,13 +1,16 @@
 "use client";
 
-import { Bell, X, Check } from "lucide-react";
-import { useState, useTransition, useOptimistic } from "react";
+import { Bell, Check } from "lucide-react";
+import { useEffect, useRef, useState, useSyncExternalStore, useTransition, useOptimistic } from "react";
 import Link from "next/link";
 import { markAllNotificationsRead, markNotificationsRead } from "@/lib/actions/tasks";
 import type { Notification } from "@/types";
 import { cn } from "@/lib/utils/cn";
 import { formatNotificationTimeTR } from "@/lib/utils/format-date";
 import { normalizeNotificationDisplay } from "@/lib/notifications/normalize";
+import { Overlay } from "@/components/ui/Overlay";
+import { Button, IconButton } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
 
 interface Props {
   unreadCount: number;
@@ -18,11 +21,57 @@ interface Props {
   deadTaskIds?: string[];
 }
 
+/* Masaüstü (md+) → çana bağlı popover; telefon → Overlay'in alt yaprağı.
+   SSR'de "mobil" varsayılır; menü kapalı doğduğu için hidrasyon farkı yok. */
+const DESKTOP_MQ = "(min-width: 768px)";
+function subscribeDesktop(cb: () => void) {
+  const mq = window.matchMedia(DESKTOP_MQ);
+  mq.addEventListener("change", cb);
+  return () => mq.removeEventListener("change", cb);
+}
+function useIsDesktop() {
+  return useSyncExternalStore(
+    subscribeDesktop,
+    () => window.matchMedia(DESKTOP_MQ).matches,
+    () => false,
+  );
+}
+
+/**
+ * BİLDİRİM ÇANI.
+ *
+ * Önce iki elle yazılmış katman vardı: masaüstünde görünmez bir
+ * `fixed inset-0` arka plan (tıklayınca kapatmak için), telefonda elle
+ * kurulmuş bir alt yaprak. Popover artık DIŞARI TIKLAMA + Esc ile kapanır
+ * (katman yok, sayfa kaydırılabilir kalır); telefondaki yaprak ortak Overlay.
+ *
+ * Okunmamış satır: sol kenar + koyu başlık + "okundu işaretle" düğmesi;
+ * ekran okuyucuya ayrıca "Okunmadı" denir — renk tek başına sinyal değil.
+ */
 export function NotificationBell({ unreadCount: initialCount, notifications = [], deadTaskIds = [] }: Props) {
   const deadSet = new Set(deadTaskIds);
   const [open, setOpen] = useState(false);
   const [_pending, startTransition] = useTransition();
   const [optimisticCount, setOptimisticCount] = useOptimistic(initialCount);
+  const isDesktop = useIsDesktop();
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // Popover: dışarı tıklayınca ve Esc'te kapan.
+  useEffect(() => {
+    if (!open || !isDesktop) return;
+    function onDown(e: MouseEvent) {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open, isDesktop]);
 
   function handleMarkAllRead() {
     startTransition(async () => {
@@ -39,36 +88,34 @@ export function NotificationBell({ unreadCount: initialCount, notifications = []
     });
   }
 
-  // Header (shared between desktop dropdown + mobile sheet)
+  const countBadge = optimisticCount > 0 && (
+    <Badge size="xs" className="bg-danger text-white">{optimisticCount}</Badge>
+  );
+  const markAll = optimisticCount > 0 && (
+    <Button variant="ghost" size="sm" onClick={handleMarkAllRead} className="h-7 px-2 text-[12.5px] text-brand hover:text-brand-strong">
+      Tümünü okundu işaretle
+    </Button>
+  );
+
+  // Popover başlığı (masaüstü)
   const header = (
-    <div className="flex items-center justify-between px-4 py-3 border-b border-hairline shrink-0">
-      <h3 className="text-sm font-semibold tracking-tight text-ink flex items-center gap-2">
+    <div className="flex shrink-0 items-center justify-between gap-2 border-b border-hairline px-4 py-2.5">
+      <h3 className="flex items-center gap-2 text-[13.5px] font-semibold tracking-tight text-ink">
         Bildirimler
-        {optimisticCount > 0 && (
-          <span className="text-[10px] font-semibold tabular-nums text-white bg-danger rounded-full px-1.5 py-0.5 leading-none">
-            {optimisticCount}
-          </span>
-        )}
+        {countBadge}
       </h3>
-      {optimisticCount > 0 && (
-        <button
-          onClick={handleMarkAllRead}
-          className="text-xs font-medium text-brand hover:text-brand-strong px-1.5 py-1 rounded-md hover:bg-brand-soft/60 transition-colors duration-150"
-        >
-          Tümünü okundu işaretle
-        </button>
-      )}
+      {markAll}
     </div>
   );
 
   // List body (shared)
   const list = (
     notifications.length === 0 ? (
-      <div className="flex flex-col items-center gap-2.5 text-center px-4 py-10 anim-fade">
-        <div className="grid h-11 w-11 place-items-center rounded-full bg-surface-sunken">
-          <Bell size={20} className="text-subtle" />
+      <div className="anim-fade flex flex-col items-center gap-2.5 px-4 py-10 text-center">
+        <div className="grid h-10 w-10 place-items-center rounded-full bg-surface-sunken">
+          <Bell size={18} className="text-subtle" aria-hidden />
         </div>
-        <p className="text-sm text-subtle">Yeni bildiriminiz yok.</p>
+        <p className="text-[13.5px] text-subtle">Yeni bildiriminiz yok.</p>
       </div>
     ) : (
       notifications.slice(0, 20).map((n) => {
@@ -76,35 +123,34 @@ export function NotificationBell({ unreadCount: initialCount, notifications = []
         // The task this notification points at was deleted → passive row: kept for
         // history, tagged "Silinmiş görev", never a live link into a dead task.
         const dead = n.task_id != null && deadSet.has(n.task_id);
+        // A dead notification is never unread-emphasised (it's excluded from the
+        // badge count too), so it reads as resolved history.
+        const showUnread = !n.is_read && !dead;
         // The title/body/date column is the click target → go to the task and
         // mark this row read. The check button is a separate read-only action.
         const inner = (
           <>
             <div className="flex items-center gap-1.5">
+              {showUnread && <span className="sr-only">Okunmadı. </span>}
               <p className={cn(
-                "text-sm line-clamp-1 break-words min-w-0",
-                dead ? "text-subtle font-normal" : "text-ink",
-                !dead && !n.is_read ? "font-semibold" : "font-normal",
+                "min-w-0 line-clamp-1 break-words text-[13.5px]",
+                dead ? "font-normal text-subtle" : "text-ink",
+                showUnread ? "font-semibold" : "font-normal",
               )}>
                 {title}
               </p>
               {dead && (
-                <span className="shrink-0 text-[9px] font-medium uppercase tracking-wide text-subtle bg-surface-sunken rounded px-1 py-0.5 leading-none">
-                  Silinmiş görev
-                </span>
+                <Badge size="xs" className="shrink-0 bg-surface-sunken text-subtle">Silinmiş görev</Badge>
               )}
             </div>
             {body && (
-              <p className={cn("text-xs mt-0.5 line-clamp-2 break-words", dead ? "text-subtle" : "text-muted")}>{body}</p>
+              <p className={cn("mt-0.5 line-clamp-2 break-words text-[12.5px] leading-snug", dead ? "text-subtle" : "text-muted")}>{body}</p>
             )}
-            <p className="text-[10px] text-subtle mt-1 tabular-nums">
+            <p className="mt-1 text-[12px] tabular-nums text-subtle">
               {formatNotificationTimeTR(n.created_at)}
             </p>
           </>
         );
-        // A dead notification is never unread-emphasised (it's excluded from the
-        // badge count too), so it reads as resolved history.
-        const showUnread = !n.is_read && !dead;
         // border-l-* colour is swallowed by tailwind-merge inside cn() — the
         // accent classes are concatenated as a plain string on purpose.
         const accent = showUnread ? "border-l-2 border-l-info" : "border-l-2 border-l-transparent";
@@ -112,25 +158,21 @@ export function NotificationBell({ unreadCount: initialCount, notifications = []
           <div
             key={n.id}
             className={cn(
-              "px-4 py-2.5 border-b border-hairline last:border-b-0 flex gap-2.5 items-start transition-colors duration-150",
+              "flex items-start gap-2.5 border-b border-hairline px-4 py-2.5 transition-colors duration-150 last:border-b-0",
               showUnread ? "bg-info/5" : "bg-surface",
-              dead ? "opacity-80" : !showUnread && "hover:bg-surface-hover",
+              !dead && "hover:bg-surface-hover",
             ) + " " + accent}
           >
-            <div className={cn(
-              "h-2 w-2 rounded-full mt-1.5 shrink-0",
-              showUnread ? "bg-info" : "bg-transparent",
-            )} />
             {dead ? (
               // No navigation, no link — a deleted task has no detail page to open.
-              <div className="flex-1 min-w-0" title="Bu görev silinmiş">
+              <div className="min-w-0 flex-1" title="Bu görev silinmiş">
                 {inner}
               </div>
             ) : n.task_id ? (
               <Link
                 href={`/tasks/${n.task_id}`}
                 onClick={() => { setOpen(false); if (!n.is_read) handleMarkOneRead(n.id); }}
-                className="flex-1 min-w-0 group"
+                className="min-w-0 flex-1 rounded-control"
               >
                 {inner}
               </Link>
@@ -138,20 +180,21 @@ export function NotificationBell({ unreadCount: initialCount, notifications = []
               <button
                 type="button"
                 onClick={() => { if (!n.is_read) handleMarkOneRead(n.id); }}
-                className="flex-1 min-w-0 text-left"
+                className="min-w-0 flex-1 rounded-control text-left"
               >
                 {inner}
               </button>
             )}
             {showUnread && (
-              <button
-                onClick={() => handleMarkOneRead(n.id)}
-                className="text-subtle hover:text-info hover:bg-info/10 shrink-0 mt-0.5 p-1 rounded-md transition-colors duration-150"
-                title="Okundu işaretle"
+              <IconButton
+                size="sm"
                 aria-label="Okundu işaretle"
+                title="Okundu işaretle"
+                onClick={() => handleMarkOneRead(n.id)}
+                className="-mr-1 -mt-0.5 hover:bg-info/10 hover:text-info"
               >
                 <Check size={14} />
-              </button>
+              </IconButton>
             )}
           </div>
         );
@@ -160,69 +203,53 @@ export function NotificationBell({ unreadCount: initialCount, notifications = []
   );
 
   return (
-    <div className="relative">
+    <div ref={rootRef} className="relative">
       <button
+        type="button"
         onClick={() => setOpen((o) => !o)}
-        className="relative grid h-10 w-10 md:h-9 md:w-9 place-items-center rounded-lg text-muted hover:text-ink hover:bg-surface-muted active:scale-95 transition-all duration-150 ease-standard"
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        className="relative grid h-10 w-10 place-items-center rounded-control text-muted transition-[background-color,color,transform] duration-150 ease-standard hover:bg-surface-muted hover:text-ink active:scale-95 md:h-9 md:w-9"
         aria-label={`Bildirimler${optimisticCount > 0 ? ` (${optimisticCount} okunmamış)` : ""}`}
       >
-        <Bell size={18} />
+        <Bell size={18} aria-hidden />
         {optimisticCount > 0 && (
-          <span className="absolute top-0.5 right-0.5 h-4 min-w-4 px-1 rounded-full bg-danger text-white text-[10px] font-bold tabular-nums flex items-center justify-center leading-none ring-2 ring-surface">
+          /* Rozet içi sayı — Badge xs ile aynı ölçü (11.5px). */
+          <span className="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-danger px-1 text-[11.5px] font-semibold leading-none tabular-nums text-white ring-2 ring-surface">
             {optimisticCount > 99 ? "99+" : optimisticCount}
           </span>
         )}
       </button>
 
-      {open && (
-        <>
-          {/* Desktop / tablet: anchored dropdown */}
-          <div className="hidden md:block">
-            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-            <div className="absolute right-0 top-10 z-50 w-[min(100vw-1.5rem,22rem)] rounded-xl bg-surface shadow-pop border border-line overflow-hidden anim-fade-down">
-              {header}
-              <div className="overflow-y-auto max-h-80">{list}</div>
-            </div>
-          </div>
+      {/* Masaüstü / tablet: çana bağlı popover */}
+      {open && isDesktop && (
+        <div
+          role="dialog"
+          aria-label="Bildirimler"
+          className="anim-fade-down absolute right-0 top-11 z-50 w-[min(100vw-1.5rem,22rem)] overflow-hidden rounded-card border border-line bg-surface shadow-pop"
+        >
+          {header}
+          <div className="max-h-80 overflow-y-auto overscroll-contain">{list}</div>
+        </div>
+      )}
 
-          {/* Mobile: full-width bottom sheet (never clipped off-screen, z-50 above
-              the bottom nav). Backdrop dismisses on tap. */}
-          <div className="md:hidden fixed inset-0 z-50 flex items-end bg-ink/30 anim-fade" onClick={() => setOpen(false)}>
-            <div
-              className="w-full bg-surface rounded-t-2xl shadow-drawer flex flex-col max-h-[80dvh] anim-slide-up"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="mx-auto mt-2 h-1 w-9 rounded-full bg-line-strong shrink-0" aria-hidden />
-              <div className="flex items-center justify-between px-4 py-3 border-b border-hairline shrink-0">
-                <h3 className="text-sm font-semibold tracking-tight text-ink flex items-center gap-2">
-                  Bildirimler
-                  {optimisticCount > 0 && (
-                    <span className="text-[10px] font-semibold tabular-nums text-white bg-danger rounded-full px-1.5 py-0.5 leading-none">
-                      {optimisticCount}
-                    </span>
-                  )}
-                </h3>
-                <div className="flex items-center gap-3">
-                  {optimisticCount > 0 && (
-                    <button onClick={handleMarkAllRead} className="text-xs font-medium text-brand hover:text-brand-strong transition-colors duration-150">
-                      Tümünü okundu işaretle
-                    </button>
-                  )}
-                  <button
-                    onClick={() => setOpen(false)}
-                    className="grid h-8 w-8 place-items-center rounded-lg text-subtle hover:text-ink hover:bg-surface-muted active:scale-95 transition-all duration-150"
-                    aria-label="Kapat"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-              </div>
-              <div className="flex-1 min-h-0 overflow-y-auto pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))]">
-                {list}
-              </div>
+      {/* Telefon: ortak Overlay'in alt yaprağı */}
+      {open && !isDesktop && (
+        <Overlay
+          open
+          onClose={() => setOpen(false)}
+          size="sm"
+          titleNode={
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-[15px] font-semibold tracking-tight text-ink">Bildirimler</h2>
+              {countBadge}
+              {markAll}
             </div>
-          </div>
-        </>
+          }
+        >
+          {/* Satırlar kendi iç boşluğunu taşır; gövdenin dolgusu geri alınır. */}
+          <div className="-mx-5 -my-4">{list}</div>
+        </Overlay>
       )}
     </div>
   );

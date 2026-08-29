@@ -23,7 +23,7 @@ export function ProcessSteps({ steps, memberNames, personHex = {}, available }: 
   if (!available) {
     return (
       <Wrap>
-        <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] font-medium text-amber-900">
+        <p className="rounded-control border border-warning/40 bg-warning/10 px-3 py-2 text-[12.5px] font-medium text-ink">
           Bu bölüm için veritabanı güncellemesi bekleniyor (planning_process_steps).
         </p>
       </Wrap>
@@ -33,7 +33,7 @@ export function ProcessSteps({ steps, memberNames, personHex = {}, available }: 
   if (steps.length === 0) {
     return (
       <Wrap>
-        <p className="rounded-xl border border-line bg-surface px-3 py-2 text-[12.5px] text-subtle">
+        <p className="rounded-card border border-line bg-surface px-3 py-2 text-[12.5px] text-subtle">
           Henüz adım tanımlanmadı.
         </p>
       </Wrap>
@@ -42,13 +42,13 @@ export function ProcessSteps({ steps, memberNames, personHex = {}, available }: 
 
   return (
     <Wrap>
-      <ol className="overflow-hidden rounded-2xl border border-line-strong bg-surface shadow-card">
+      <ol className="overflow-hidden rounded-card border border-line-strong bg-surface">
         {steps.map((s) => (
           <li
             key={s.id}
             className="flex items-start gap-3 border-b border-hairline px-3 py-2.5 last:border-b-0 sm:px-4"
           >
-            <span className="mt-px inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-surface-muted text-[11px] font-bold tabular-nums text-muted">
+            <span className="mt-px inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-surface-muted text-[12px] font-semibold tabular-nums text-muted">
               {s.position}
             </span>
             <span className="min-w-0 flex-1">

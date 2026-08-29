@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 import {
-  ClipboardList, ArrowLeft, Plus, Trash2, Save, User, Clock, Loader2, FileDown, Printer, AlertTriangle, CheckCircle2, Ruler, Wallet, Layers,
+  ClipboardList, ArrowLeft, Plus, Trash2, Save, User, Clock, FileDown, Printer, AlertTriangle, CheckCircle2, Ruler, Wallet, Layers,
 } from "lucide-react";
 import {
   createProductionSheet, updateProductionSheet, updateProductionSheetImages,
@@ -16,6 +16,9 @@ import {
 import { cn } from "@/lib/utils/cn";
 import { useConfirm } from "@/components/ui/useConfirm";
 import { DownloadLink } from "@/components/ui/DownloadLink";
+import { Button, IconButton } from "@/components/ui/Button";
+import { TextInput, TextArea as UiTextArea, SelectInput } from "@/components/ui/Field";
+import { Badge } from "@/components/ui/Badge";
 import { SendToManufacturer } from "./SendToManufacturer";
 import { ImageUploader } from "./ImageUploader";
 import { SheetReadiness } from "./SheetReadiness";
@@ -24,6 +27,7 @@ import { SheetVariants, type SiblingSheet } from "./SheetVariants";
 import { checkSheet } from "@/lib/production/completeness";
 import { COLLECTION_TAXONOMY, type CategoryNode } from "@/lib/collection/taxonomy";
 import { subsOf } from "@/lib/collection/category-tree";
+import { flattenSubs } from "@/lib/collection/taxonomy";
 import {
   totalQuantity, parseMoney, formatMoney, STANDARD_SIZES, normalizeToStandardSizes,
   DEFAULT_SIZE_GROUPS, emptyCostItems, costItemLabel, bomCostByKey,
@@ -194,10 +198,41 @@ function fromSheet(s: ProductionSheet): ProductionSheetInput {
 }
 
 // ── Field primitives ─────────────────────────────────────────────────────────
-const inputCls =
-  "w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm text-ink placeholder:text-subtle " +
-  "transition-[color,background-color,border-color,box-shadow] duration-150 ease-standard " +
-  "hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40";
+/* Girdiler ortak TextInput / SelectInput / TextArea'dır (components/ui/Field):
+   aynı boy, aynı çerçeve, aynı odak halkası. Föy eskiden kendi inputCls'ini
+   taşıyordu ve uygulamanın geri kalanından bir tık farklı duruyordu. */
+
+/** DownloadLink kendi <button>'ını çizer; Button'ın `secondary` görünümü
+ *  sınıf olarak buraya taşınır ki üst çubuktaki düğmeler aynı boyda dursun. */
+const secondaryBtnCls =
+  "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-control border border-line bg-surface px-3.5 text-[13.5px] font-medium text-ink shadow-xs " +
+  "transition-[background-color,border-color,transform] duration-150 ease-standard hover:border-line-strong hover:bg-surface-muted active:scale-[0.98]";
+
+/** Bölüm eyebrow'u ve alan etiketi — föy boyunca TEK etiket dili. */
+const LABEL_CLS = "text-[12px] font-semibold uppercase tracking-[0.06em]";
+
+/** Izgara hücresi girdisi (ölçü, beden, teslim, kalem): çerçevesiz, hücreyi
+ *  doldurur; odakta içeri halka. Ortak TextInput'un üstüne yazılır ki metin
+ *  boyu, renk ve devre dışı hâli yine ortak kalsın. */
+const CELL_CLS =
+  "h-8 rounded-none border-0 bg-transparent px-2 shadow-none " +
+  "hover:border-0 focus:border-0 focus:bg-surface focus:ring-2 focus:ring-inset focus:ring-brand-ring";
+function CellInput({ className, ...props }: React.ComponentProps<typeof TextInput>) {
+  return <TextInput {...props} className={cn(CELL_CLS, className)} />;
+}
+
+/** Satır silme — küçük, sessiz, parmakta 40px hedef. */
+function RowDelete({ onClick, label }: { onClick: () => void; label: string }) {
+  return (
+    <IconButton size="sm" onClick={onClick} aria-label={label} title="Satırı sil" className="text-subtle hover:bg-danger/10 hover:text-danger">
+      <Trash2 size={13} aria-hidden />
+    </IconButton>
+  );
+}
+
+/** Izgara başlık hücresi — Excel çizgili ızgara (Aslı Hanım: "çizgi çizgi
+ *  kare kare"), 12px eyebrow. */
+const TH_CLS = cn("border border-line-strong px-2 py-1.5 text-subtle", LABEL_CLS);
 
 /** Etiket telefonda ÜSTTE (160px sabit sütun 390px'te girdiye yer bırakmıyordu),
  *  sm ve üstünde solda — Excel föyünün hizalı görünümü korunur. */
@@ -225,7 +260,7 @@ function FieldRow({
     <label
       data-check={checkKey}
       className={cn(
-        "@container block scroll-mt-24 rounded-lg transition-[box-shadow,background-color] duration-300",
+        "@container block scroll-mt-24 rounded-control transition-[box-shadow,background-color] duration-300",
         /* Şeritten atlandığında alan bir an vurgulanır — uzun föyde "hangisiydi"
            sorusu doğuyordu. Sınıf DOM'dan eklenir/çıkarılır (bkz. jumpTo). */
         className,
@@ -239,9 +274,10 @@ function FieldRow({
       >
         <span
           className={cn(
-            "inline-flex items-center gap-1 text-[11.5px] font-semibold uppercase tracking-wide @[23rem]:w-36 @[23rem]:shrink-0",
+            "inline-flex items-center gap-1 @[23rem]:w-36 @[23rem]:shrink-0",
+            LABEL_CLS,
             missing ? "text-warning" : "text-muted",
-            align === "start" && "@[23rem]:pt-1.5",
+            align === "start" && "@[23rem]:pt-2.5",
           )}
         >
           {label}
@@ -265,7 +301,7 @@ function LabeledField({
 }) {
   return (
     <FieldRow label={label} missing={missing} hint={hint} checkKey={checkKey}>
-      <input className={inputCls} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
+      <TextInput value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
     </FieldRow>
   );
 }
@@ -274,8 +310,7 @@ function TextArea({
   value, onChange, placeholder, rows = 3,
 }: { value: string; onChange: (_v: string) => void; placeholder?: string; rows?: number }) {
   return (
-    <textarea
-      className={cn(inputCls, "resize-y leading-relaxed")}
+    <UiTextArea
       rows={rows}
       value={value}
       onChange={(e) => onChange(e.target.value)}
@@ -294,13 +329,14 @@ function Section({ title, children, className, checkKey }: {
     <section
       data-check={checkKey}
       className={cn(
-        "overflow-hidden rounded-lg border border-line bg-surface shadow-card scroll-mt-24 transition-[box-shadow,background-color] duration-300 ease-standard",
+        "overflow-hidden rounded-card border border-line bg-surface scroll-mt-24 transition-[box-shadow,background-color] duration-300 ease-standard",
         className,
       )}
     >
-      <div className="flex items-center gap-2 border-b border-line bg-surface-muted px-3 py-2">
+      {/* Başlık + ince ayırıcı: teknik doküman gibi net bölüm sınırı. */}
+      <div className="flex items-center gap-2 border-b border-hairline bg-surface-muted/60 px-3 py-2">
         <span aria-hidden className="h-3.5 w-[3px] shrink-0 rounded-full bg-brand" />
-        <h2 className="text-[11.5px] font-semibold uppercase tracking-wider text-muted">{title}</h2>
+        <h2 className={cn(LABEL_CLS, "text-muted")}>{title}</h2>
       </div>
       <div className="p-3">{children}</div>
     </section>
@@ -355,8 +391,8 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
         if (!el) return;
         el.scrollIntoView({ behavior: "smooth", block: "center" });
         el.querySelector<HTMLElement>("input, select, textarea, button")?.focus({ preventScroll: true });
-        el.classList.add("bg-amber-50", "ring-2", "ring-amber-400");
-        window.setTimeout(() => el.classList.remove("bg-amber-50", "ring-2", "ring-amber-400"), 1500);
+        el.classList.add("bg-warning/10", "ring-2", "ring-warning");
+        window.setTimeout(() => el.classList.remove("bg-warning/10", "ring-2", "ring-warning"), 1500);
       }),
     );
   }
@@ -487,16 +523,12 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
     });
   }
 
+  /* TEK primary: Kaydet. Sil, çıktı, Excel, gönder hepsi ikincil. */
   const SaveBtn = (
-    <button
-      onClick={handleSave}
-      disabled={isSaving || isDeleting}
-      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-[13px] font-medium text-white shadow-xs transition-all duration-150 hover:bg-brand-strong active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60 disabled:shadow-none"
-    >
-      {isSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+    <Button onClick={handleSave} loading={isSaving} disabled={isDeleting} className="shrink-0">
+      {!isSaving && <Save size={15} />}
       {isNew ? "Föyü oluştur" : "Kaydet"}
-      {dialog}
-    </button>
+    </Button>
   );
 
   return (
@@ -505,41 +537,47 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
       <div
         aria-live="polite"
         className={cn(
-          "pointer-events-none fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-lg bg-ink px-4 py-2.5 text-[13px] font-medium text-white shadow-drawer transition-all duration-300",
+          "pointer-events-none fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-control bg-ink px-4 py-2.5 text-[13.5px] font-medium text-white shadow-drawer transition-[opacity,transform] duration-300",
           saved ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
         )}
       >
-        <CheckCircle2 size={16} className="text-emerald-400" /> Değişiklikler kaydedildi
+        <CheckCircle2 size={16} className="text-success" aria-hidden /> Kaydedildi.
       </div>
+      {dialog}
 
       {/* Üst bar — eylemler sabit kalır (sticky) ki uzun föyde her zaman erişilebilir */}
-      <div className="sticky top-0 z-20 -mx-4 mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-line bg-app/85 px-4 py-3 shadow-pop backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+      {/* Opak zemin, gölgesiz: bulanık/yarı saydam çubuk föyün üstünde yüzüyordu. */}
+      <div className="sticky top-0 z-20 -mx-4 mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-line bg-app px-4 py-3 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
         <div className="min-w-0">
-          <Link href="/collection" className="mb-1 inline-flex items-center gap-1 rounded-md text-[13px] text-subtle transition-colors duration-150 hover:text-ink">
-            <ArrowLeft size={13} /> Koleksiyon
+          <Link href="/collection" className="mb-1 inline-flex items-center gap-1 rounded-control text-[13.5px] text-subtle transition-colors duration-150 hover:text-ink">
+            <ArrowLeft size={14} aria-hidden /> Collection
           </Link>
           {!isNew && sheet && (
             <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[12px] text-subtle">
               <span className="flex items-center gap-1">
-                <User size={11} /> Oluşturan: <span className="font-medium text-muted">{nameOf(sheet.created_by)}</span>
+                <User size={12} aria-hidden /> Oluşturan: <span className="font-medium text-muted">{nameOf(sheet.created_by)}</span>
               </span>
               <span className="flex items-center gap-1">
-                <Clock size={11} /> Son giren: <span className="font-medium text-muted">{nameOf(sheet.updated_by)}</span> · {relTime(sheet.updated_at)}
+                <Clock size={12} aria-hidden /> Son giren: <span className="font-medium text-muted">{nameOf(sheet.updated_by)}</span> · {relTime(sheet.updated_at)}
               </span>
             </div>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {canDelete && (
-            <button
+            /* Yıkıcı eylem sessiz durur; kırmızı yalnız hover'da. */
+            <Button
+              variant="ghost"
               onClick={handleDelete}
-              disabled={isDeleting || isSaving}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-[13px] font-medium text-muted shadow-xs transition-all duration-150 hover:border-danger/40 hover:bg-danger/10 hover:text-danger active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60"
+              loading={isDeleting}
+              disabled={isSaving}
               title="Föyü sil"
+              aria-label="Föyü sil"
+              className="hover:bg-danger/10 hover:text-danger"
             >
-              {isDeleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+              {!isDeleting && <Trash2 size={15} aria-hidden />}
               <span className="hidden sm:inline">Sil</span>
-            </button>
+            </Button>
           )}
           {/* DURUM föyün İÇERİĞİ değil KÜNYESİ — Aslı Hanım (2026-08-24):
               "Föy içinde DURUM kısmı ne alaka, onu anlamadım." Ürün sekmesinin
@@ -554,10 +592,10 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                seçeneklerin karşılığı yazıyor. Ok GLOBAL select kuralından
                gelir — burada ayrıca çizilmez. */
             <label
-              className="inline-flex h-[38px] shrink-0 items-center gap-2 rounded-lg border border-line bg-surface pl-2.5 shadow-xs transition-colors duration-150 focus-within:border-brand-ring focus-within:ring-2 focus-within:ring-brand-ring/40 hover:border-line-strong"
+              className="inline-flex h-9 shrink-0 items-center gap-2 rounded-control border border-line bg-surface pl-2.5 shadow-xs transition-[border-color,box-shadow] duration-150 focus-within:border-brand-ring focus-within:ring-2 focus-within:ring-brand-ring/40 hover:border-line-strong"
               title="Föyün künye durumu — içeriğini değiştirmez"
             >
-              <span className="text-[10.5px] font-semibold uppercase tracking-wider text-subtle">Durum</span>
+              <span className={cn(LABEL_CLS, "text-subtle")}>Durum</span>
               <span
                 aria-hidden
                 className={cn(
@@ -565,16 +603,16 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                   form.status === "active" ? "bg-success" : form.status === "draft" ? "bg-warning" : "bg-subtle",
                 )}
               />
-              <select
+              <SelectInput
                 value={form.status}
                 onChange={(e) => set("status", e.target.value as ProductionSheetInput["status"])}
                 aria-label="Föy durumu"
-                className="h-full cursor-pointer border-0 bg-transparent pl-0 text-[13px] font-medium text-ink focus:outline-none"
+                className="h-full w-auto border-0 bg-transparent pl-0 font-medium shadow-none hover:border-0 focus:border-0 focus:ring-0"
               >
                 <option value="draft">Taslak — hazırlanıyor</option>
                 <option value="active">Aktif — üretimde</option>
                 <option value="archived">Arşiv — listeden kalkar</option>
-              </select>
+              </SelectInput>
             </label>
           )}
           {/* TEK SAYFA CIKTI — Asli Hanim (2026-08-23): "cikti aldigin zaman tek
@@ -586,9 +624,9 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               what={`“${sheet.title}” föyünün çıktısı`}
               label="Çıktı al"
               title="Föyün tamamı tek A4 sayfada — yazdır veya PDF olarak kaydet"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-muted shadow-xs transition-all duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
+              className={secondaryBtnCls}
             >
-              <Printer size={15} /> <span className="hidden sm:inline">Tek sayfa çıktı</span>
+              <Printer size={15} aria-hidden /> <span className="hidden sm:inline">Tek sayfa çıktı</span><span className="sr-only sm:hidden">Tek sayfa çıktı</span>
             </DownloadLink>
           )}
           {/* ÜRETİCİYE GÖNDER — Aslı Hanım (2026-08-28): "Üreticiye bu föy
@@ -608,9 +646,9 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               href={`/production/${sheet.id}/export`}
               what={`“${sheet.title}” föyünün Excel dosyası`}
               title="Föyü Excel (.xlsx) olarak indir"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-muted shadow-xs transition-all duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
+              className={secondaryBtnCls}
             >
-              <FileDown size={15} /> <span className="hidden sm:inline">Excel indir</span>
+              <FileDown size={15} aria-hidden /> <span className="hidden sm:inline">Excel indir</span><span className="sr-only sm:hidden">Excel indir</span>
             </DownloadLink>
           )}
           {SaveBtn}
@@ -618,10 +656,10 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
       </div>
 
       {error && (
-        <div className="anim-fade-down mb-4 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] font-medium text-danger">{error}</div>
+        <div role="alert" className="anim-fade-down mb-4 rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[13.5px] font-medium text-danger">{error}</div>
       )}
       {imgError && (
-        <div className="anim-fade-down mb-4 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] font-medium text-danger">Görsel kaydedilemedi: {imgError}</div>
+        <div role="alert" className="anim-fade-down mb-4 rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[13.5px] font-medium text-danger">Görsel kaydedilemedi: {imgError}</div>
       )}
 
       {/* ── Hazır mı? — eksiksizlik + Nisa konfirmasyonu ──────────────────
@@ -639,15 +677,15 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
       />
 
       {/* ── Föy belgesi ── */}
-      <div className="stagger-children space-y-3 rounded-2xl border border-line-strong bg-surface p-4 shadow-card sm:p-6">
+      <div className="stagger-children space-y-3 rounded-card border border-line bg-surface p-4 shadow-card sm:p-6">
         {/* Başlık şeridi. Aslı Hanım (2026-08-19): "Şu Aslı Filinta'yı yazma
             böyle… Logoya gerek yok kendi iç üretimimizde güzelim." — marka
             kimliği çıkarıldı; şerit yalnız belgenin adını taşır. Sağda ürün
             kodu, çıktıda sayfayı tanımlayan tek işaret olarak durur. */}
-        <div className="flex items-center justify-between gap-3 rounded-xl bg-ink px-5 py-3">
+        <div className="flex items-center justify-between gap-3 rounded-control bg-ink px-5 py-3">
           <div className="flex items-center gap-2.5 text-white">
-            <ClipboardList size={19} />
-            <span className="text-[15px] font-bold uppercase tracking-[0.18em]">Üretim Föyü</span>
+            <ClipboardList size={18} aria-hidden />
+            <span className="text-[14px] font-semibold uppercase tracking-[0.18em]">Üretim Föyü</span>
           </div>
           {form.product_code ? (
             <span className="text-[13px] font-semibold tabular-nums tracking-wide text-white/85">
@@ -675,21 +713,24 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                 aria-selected={on}
                 onClick={() => setTab(t.id)}
                 className={cn(
-                  "inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-[13px] transition-colors duration-150",
+                  "inline-flex h-10 items-center gap-1.5 border-b-2 px-3 text-[13.5px] transition-colors duration-150",
                   on
                     ? "border-brand font-semibold text-ink"
                     : "border-transparent font-medium text-muted hover:border-line-strong hover:text-ink",
                 )}
               >
-                <t.icon size={14} />
+                <t.icon size={14} aria-hidden />
                 {t.label}
+                {/* SAYI DEĞİL NOKTA: "2 eksik" sekmeyi puanlıyordu (sadelik
+                    kuralı). Kaç alanın eksik olduğunu üstteki şerit zaten
+                    söylüyor; sekmede yalnız "burada bir şey var" işareti. */}
                 {eksik > 0 && (
                   <span
-                    className="grid h-4 min-w-4 place-items-center rounded-full bg-amber-500 px-1 text-[10px] font-bold tabular-nums text-white"
-                    title={`${eksik} zorunlu alan eksik`}
-                  >
-                    {eksik}
-                  </span>
+                    className="size-1.5 shrink-0 rounded-full bg-warning"
+                    role="img"
+                    aria-label="Bu sekmede eksik alan var"
+                    title="Bu sekmede eksik alan var"
+                  />
                 )}
               </button>
             );
@@ -710,7 +751,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
         {/* Alan izgarasi ikiye YALNIZ kutu gercekten genisse bolunur — sabit
             ekran kirilimi 1024'te sutunu 122px'e dusuruyordu. */}
         <div className="@container">
-        <div className="grid grid-cols-1 gap-x-5 gap-y-2 rounded-lg border border-line p-3 @[49rem]:grid-cols-2">
+        <div className="grid grid-cols-1 gap-x-5 gap-y-2.5 rounded-card border border-line p-3 @[49rem]:grid-cols-2">
           <LabeledField checkKey="title" label="Föy başlığı *" value={form.title} onChange={(v) => set("title", v)} placeholder="Beyaz Dantel Etek" missing={missingKeys.has("title")} hint={hintOf.get("title")} />
           <LabeledField label="Üretim tarihi" value={form.production_date ?? ""} onChange={(v) => set("production_date", v)} />
           <LabeledField label="Ürün kodu" value={form.product_code ?? ""} onChange={(v) => set("product_code", v)} />
@@ -731,8 +772,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               föy her hâlükârda açılır. */}
           {manufacturers.length > 0 ? (
             <FieldRow checkKey="producer" label="Üretici" missing={missingKeys.has("producer")} hint={hintOf.get("producer")}>
-              <select
-                className={inputCls}
+              <SelectInput
                 value={form.manufacturer_id ?? ""}
                 onChange={(e) => {
                   const id = e.target.value || null;
@@ -749,7 +789,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                     {m.name}{m.is_active ? "" : " (pasif)"}
                   </option>
                 ))}
-              </select>
+              </SelectInput>
             </FieldRow>
           ) : (
             <LabeledField label="Üretici" value={form.producer ?? ""} onChange={(v) => set("producer", v)} />
@@ -759,8 +799,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               alanına düşer. Yeni föy varsayılan olarak AKTİF sezonda açılır. */}
           {seasons.length > 0 ? (
             <FieldRow label="Sezon">
-              <select
-                className={inputCls}
+              <SelectInput
                 value={form.season_id ?? ""}
                 onChange={(e) => {
                   const id = e.target.value || null;
@@ -773,15 +812,14 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                 {seasons.map((sn) => (
                   <option key={sn.id} value={sn.id}>{sn.name}{sn.is_current ? " ·" : ""}</option>
                 ))}
-              </select>
+              </SelectInput>
             </FieldRow>
           ) : (
             <LabeledField label="Sezon" value={form.season ?? ""} onChange={(v) => set("season", v)} placeholder="2026 RESORT" />
           )}
           {/* Koleksiyon kategorisi — web nav yapısı (One-of-a-Kind / Ready to Wear …) */}
           <FieldRow checkKey="category" label="Kategori" missing={missingKeys.has("category")} hint={hintOf.get("category")}>
-            <select
-              className={inputCls}
+            <SelectInput
               value={form.category ?? ""}
               onChange={(e) => {
                 const next = (e.target.value || null) as ProductionCategory | null;
@@ -799,20 +837,24 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               {tree.map((c) => (
                 <option key={c.key} value={c.key}>{c.label}</option>
               ))}
-            </select>
+            </SelectInput>
           </FieldRow>
           <FieldRow checkKey="subcategory" label="Alt kategori" missing={missingKeys.has("subcategory")} hint={hintOf.get("subcategory")}>
-            <select
-              className={cn(inputCls, subsOf(tree, form.category).length === 0 && "opacity-50")}
+            <SelectInput
               value={form.subcategory ?? ""}
               onChange={(e) => set("subcategory", e.target.value)}
               disabled={subsOf(tree, form.category).length === 0}
             >
               <option value="">{subsOf(tree, form.category).length === 0 ? "—" : "Seçiniz…"}</option>
-              {subsOf(tree, form.category).map((s) => (
-                <option key={s.key} value={s.key}>{s.label}</option>
+              {/* ÜÇ KADEME (Accessories › Hats › Bucket Hat): alt dallar
+                  girintiyle listelenir — ayrı bir ikinci seçici açmak formu
+                  uzatırdı ve föyde alt kategori TEK alandır. */}
+              {flattenSubs(subsOf(tree, form.category)).map(({ node, depth }) => (
+                <option key={node.key} value={node.key}>
+                  {depth > 0 ? `${"\u00A0\u00A0".repeat(depth)}↳ ${node.label}` : node.label}
+                </option>
               ))}
-            </select>
+            </SelectInput>
           </FieldRow>
           <LabeledField label="1 ürüne giden metraj" value={form.meterage ?? ""} onChange={(v) => set("meterage", v)} placeholder="1.60 CM" />
           <FieldRow checkKey="description" label="Ürünün açıklaması" align="start" className="@[49rem]:col-span-2" missing={missingKeys.has("description")} hint={hintOf.get("description")}>
@@ -866,9 +908,9 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               </colgroup>
               <thead>
                 <tr className="bg-surface-muted">
-                  <th className="border border-line-strong px-1 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wider text-subtle">No</th>
-                  <th className="border border-line-strong px-2 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider text-subtle">Ölçü</th>
-                  <th className="border border-line-strong px-1 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wider text-subtle">cm</th>
+                  <th className={cn(TH_CLS, "px-1 text-center")}>No</th>
+                  <th className={cn(TH_CLS, "text-left")}>Ölçü</th>
+                  <th className={cn(TH_CLS, "px-1 text-center")}>cm</th>
                   <th className="w-9" />
                 </tr>
               </thead>
@@ -879,22 +921,22 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                       {i + 1}
                     </td>
                     <td className="border border-line p-0">
-                      <input className="w-full bg-transparent px-2 py-1.5 text-[13px] text-ink focus:bg-surface focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-ring" value={row.label} onChange={(e) => updateMeasurement(i, { label: e.target.value })} placeholder="Ölçü adı" />
+                      <CellInput aria-label={`${i + 1}. ölçü adı`} value={row.label} onChange={(e) => updateMeasurement(i, { label: e.target.value })} placeholder="Ölçü adı" />
                     </td>
                     <td className="border border-line p-0">
-                      <input className="w-full bg-transparent px-1 py-1.5 text-center tabular-nums text-ink focus:bg-surface focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-ring" value={row.value} onChange={(e) => updateMeasurement(i, { value: e.target.value })} />
+                      <CellInput aria-label={`${i + 1}. ölçü (cm)`} className="px-1 text-right tabular-nums" value={row.value} onChange={(e) => updateMeasurement(i, { value: e.target.value })} inputMode="decimal" />
                     </td>
                     <td className="text-center align-middle">
-                      <button onClick={() => removeMeasurement(i)} className="tap-target rounded-md p-1 text-subtle transition-colors duration-150 hover:bg-danger/10 hover:text-danger" title="Satırı sil"><Trash2 size={12} /></button>
+                      <RowDelete onClick={() => removeMeasurement(i)} label={`${i + 1}. ölçü satırını sil`} />
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <button onClick={addMeasurement} className="mt-2 -ml-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[12px] font-medium text-brand transition-colors duration-150 hover:bg-brand-soft hover:text-brand-strong">
-            <Plus size={12} /> Satır ekle
-          </button>
+          <Button variant="ghost" size="sm" onClick={addMeasurement} className="mt-2 -ml-2 text-brand hover:bg-brand-soft hover:text-brand-strong">
+            <Plus size={13} aria-hidden /> Satır ekle
+          </Button>
         </Section>
 
         {/* BEDEN DAĞILIMI — sabit standart beden kolonları; hangisine istersen gir */}
@@ -908,7 +950,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
           </p>
           {/* Hizalı, çizgili ızgara — sabit başlıklar + eşit genişlikte kutucuklar */}
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] table-fixed border-collapse overflow-hidden rounded-lg text-[13px]">
+            <table className="w-full min-w-[720px] table-fixed border-collapse text-[13px]">
               <colgroup>
                 <col className="w-36" />
                 {sd.sizes.map((_, i) => <col key={i} />)}
@@ -917,13 +959,13 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               </colgroup>
               <thead>
                 <tr className="bg-surface-muted">
-                  <th className="border border-line-strong px-2 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider text-subtle">Satır</th>
+                  <th className={cn(TH_CLS, "text-left")}>Satır</th>
                   {sd.sizes.map((s, i) => (
-                    <th key={i} className="border border-line-strong px-1 py-1.5 text-center text-[12px] font-semibold text-ink">
+                    <th key={i} className="border border-line-strong px-1 py-1.5 text-center text-[12.5px] font-semibold text-ink">
                       {s}
                     </th>
                   ))}
-                  <th className="border border-line-strong px-1 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wider text-subtle">Toplam</th>
+                  <th className={cn(TH_CLS, "px-1 text-center")}>Toplam</th>
                   <th className="w-9" />
                 </tr>
                 {/* BEDEN GRUBU — Aslı Hanım (2026-08-19): "Bedenlerin altına
@@ -932,18 +974,19 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                     hepsinin işaretli olduğu one size." Hücreler düzenlenebilir:
                     grubu değiştirmek tek tık. */}
                 <tr className="bg-surface-sunken">
-                  <th className="border border-line-strong px-2 py-1 text-left text-[11px] font-semibold uppercase tracking-wider text-subtle">
+                  <th className={cn(TH_CLS, "py-1 text-left")}>
                     Grup
                   </th>
                   {sd.sizes.map((size, i) => (
                     <th key={i} className="border border-line-strong p-0">
-                      <input
-                        className="w-full bg-transparent px-1 py-1 text-center text-[12px] font-bold tabular-nums text-brand-strong focus:bg-surface focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-ring"
+                      <CellInput
+                        className="px-1 text-center font-semibold tabular-nums text-brand-strong"
                         value={sd.groups?.[size] ?? ""}
                         onChange={(e) => setSizeGroup(size, e.target.value)}
                         placeholder="—"
                         maxLength={8}
                         title={`${size} bedeninin grubu`}
+                        aria-label={`${size} bedeninin grubu`}
                       />
                     </th>
                   ))}
@@ -955,27 +998,27 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                 {sd.rows.map((row, ri) => (
                   <tr key={ri}>
                     <td className="border border-line p-0">
-                      <input className="w-full bg-transparent px-2 py-1.5 text-[13px] font-medium text-ink focus:bg-surface focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-ring" value={row.label} onChange={(e) => setDistLabel(ri, e.target.value)} placeholder="Satır adı" />
+                      <CellInput className="font-medium" aria-label={`${ri + 1}. satır adı`} value={row.label} onChange={(e) => setDistLabel(ri, e.target.value)} placeholder="Satır adı" />
                     </td>
-                    {sd.sizes.map((_, ci) => (
+                    {sd.sizes.map((size, ci) => (
                       <td key={ci} className="border border-line p-0">
-                        <input className="w-full bg-transparent px-1 py-1.5 text-center tabular-nums text-ink focus:bg-surface focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-ring" value={row.values[ci] ?? ""} onChange={(e) => setDistCell(ri, ci, e.target.value)} inputMode="numeric" />
+                        <CellInput className="px-1 text-center tabular-nums" aria-label={`${row.label || `${ri + 1}. satır`} — ${size}`} value={row.values[ci] ?? ""} onChange={(e) => setDistCell(ri, ci, e.target.value)} inputMode="numeric" />
                       </td>
                     ))}
                     <td className="border border-line p-0">
-                      <input className="w-full bg-transparent px-1 py-1.5 text-center font-semibold tabular-nums text-ink focus:bg-surface focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-ring" value={row.total} onChange={(e) => setDistTotal(ri, e.target.value)} placeholder="—" inputMode="numeric" />
+                      <CellInput className="px-1 text-center font-semibold tabular-nums" aria-label={`${row.label || `${ri + 1}. satır`} — toplam`} value={row.total} onChange={(e) => setDistTotal(ri, e.target.value)} placeholder="—" inputMode="numeric" />
                     </td>
                     <td className="text-center align-middle">
-                      <button onClick={() => removeDistRow(ri)} className="tap-target rounded-md p-1 text-subtle transition-colors duration-150 hover:bg-danger/10 hover:text-danger" title="Satırı sil"><Trash2 size={12} /></button>
+                      <RowDelete onClick={() => removeDistRow(ri)} label={`${row.label || `${ri + 1}. satır`} satırını sil`} />
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <button onClick={addDistRow} className="mt-2 -ml-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[12px] font-medium text-brand transition-colors duration-150 hover:bg-brand-soft hover:text-brand-strong">
-            <Plus size={12} /> Satır ekle
-          </button>
+          <Button variant="ghost" size="sm" onClick={addDistRow} className="mt-2 -ml-2 text-brand hover:bg-brand-soft hover:text-brand-strong">
+            <Plus size={13} aria-hidden /> Satır ekle
+          </Button>
         </Section>
 
         {/* TESLİM EDİLEN ÜRÜNLER — siparişin ALTINDA.
@@ -992,9 +1035,9 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               </colgroup>
               <thead>
                 <tr className="bg-surface-muted">
-                  <th className="border border-line-strong px-1 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wider text-subtle">No</th>
-                  <th className="border border-line-strong px-2 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider text-subtle">Ürün</th>
-                  <th className="border border-line-strong px-1 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wider text-subtle">Adet</th>
+                  <th className={cn(TH_CLS, "px-1 text-center")}>No</th>
+                  <th className={cn(TH_CLS, "text-left")}>Ürün</th>
+                  <th className={cn(TH_CLS, "px-1 text-right")}>Adet</th>
                   <th className="w-9" />
                 </tr>
               </thead>
@@ -1005,22 +1048,22 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                       {i + 1}
                     </td>
                     <td className="border border-line p-0">
-                      <input className="w-full bg-transparent px-2 py-1.5 text-[13px] text-ink focus:bg-surface focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-ring" value={row.label} onChange={(e) => updateDelivered(i, { label: e.target.value })} placeholder="Ürün (ör. Karton Etiket)" />
+                      <CellInput aria-label={`${i + 1}. teslim edilen ürün`} value={row.label} onChange={(e) => updateDelivered(i, { label: e.target.value })} placeholder="Ürün (ör. Karton Etiket)" />
                     </td>
                     <td className="border border-line p-0">
-                      <input className="w-full bg-transparent px-1 py-1.5 text-center tabular-nums text-ink focus:bg-surface focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-ring" value={row.qty} onChange={(e) => updateDelivered(i, { qty: e.target.value })} inputMode="numeric" />
+                      <CellInput className="px-1 text-right tabular-nums" aria-label={`${i + 1}. teslim edilen ürün — adet`} value={row.qty} onChange={(e) => updateDelivered(i, { qty: e.target.value })} inputMode="numeric" />
                     </td>
                     <td className="text-center align-middle">
-                      <button onClick={() => removeDelivered(i)} className="tap-target rounded-md p-1 text-subtle transition-colors duration-150 hover:bg-danger/10 hover:text-danger" title="Satırı sil"><Trash2 size={12} /></button>
+                      <RowDelete onClick={() => removeDelivered(i)} label={`${i + 1}. teslim satırını sil`} />
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <button onClick={addDelivered} className="mt-2 -ml-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[12px] font-medium text-brand transition-colors duration-150 hover:bg-brand-soft hover:text-brand-strong">
-            <Plus size={12} /> Satır ekle
-          </button>
+          <Button variant="ghost" size="sm" onClick={addDelivered} className="mt-2 -ml-2 text-brand hover:bg-brand-soft hover:text-brand-strong">
+            <Plus size={13} aria-hidden /> Satır ekle
+          </Button>
         </Section>
       </>)}
 
@@ -1062,17 +1105,17 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                     <colgroup><col /><col className="w-36" /></colgroup>
                     <thead>
                       <tr className="bg-surface-muted">
-                        <th className="border border-line-strong px-2 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider text-subtle">Maliyet kalemi</th>
-                        <th className="border border-line-strong px-2 py-1.5 text-right text-[11px] font-semibold uppercase tracking-wider text-subtle">Birim (₺)</th>
+                        <th className={cn(TH_CLS, "text-left")}>Maliyet kalemi</th>
+                        <th className={cn(TH_CLS, "text-right")}>Birim (₺)</th>
                       </tr>
                     </thead>
                     <tbody>
                       {items.map((it, i) => (
                         <tr key={`${it.key}-${i}`}>
-                          <td className="border border-line px-2 py-1.5">
+                          <td className={cn("border border-line", it.key === "diger" ? "p-0" : "px-2 py-1.5")}>
                             {it.key === "diger" ? (
-                              <input
-                                className="w-full bg-transparent text-[13px] text-ink focus:outline-none"
+                              <CellInput
+                                aria-label="Diğer gider adı"
                                 value={it.label ?? ""}
                                 onChange={(e) => setItem(i, { label: e.target.value })}
                                 placeholder="Diğer gider adı"
@@ -1084,17 +1127,16 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                           <td className="border border-line p-0">
                             {fromBom[it.key] != null ? (
                               <span
-                                className="flex items-center justify-end gap-1.5 px-2 py-1.5 text-right tabular-nums text-ink"
+                                className="flex h-8 items-center justify-end gap-1.5 px-2 text-right tabular-nums text-ink"
                                 title="Reçeteden hesaplanıyor — elle değiştirilemez"
                               >
-                                <span className="rounded bg-brand-soft px-1 py-px text-[10px] font-semibold uppercase tracking-wide text-brand-strong">
-                                  reçete
-                                </span>
+                                <Badge size="xs" className="bg-brand-soft text-brand-strong">reçete</Badge>
                                 {formatMoney(fromBom[it.key]!)}
                               </span>
                             ) : (
-                              <input
-                                className="w-full bg-transparent px-2 py-1.5 text-right tabular-nums text-ink focus:bg-surface focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-ring"
+                              <CellInput
+                                className="text-right tabular-nums"
+                                aria-label={`${costItemLabel(it)} — birim tutar`}
                                 value={it.amount}
                                 onChange={(e) => setItem(i, { amount: e.target.value })}
                                 inputMode="decimal"
@@ -1105,10 +1147,10 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                         </tr>
                       ))}
                       <tr className="bg-surface-muted">
-                        <td className="border border-line-strong px-2 py-1.5 text-[12px] font-bold uppercase tracking-wide text-ink">
+                        <td className={cn("border border-line-strong px-2 py-1.5 text-ink", LABEL_CLS)}>
                           Birim maliyet
                         </td>
-                        <td className="border border-line-strong px-2 py-1.5 text-right text-[13px] font-bold tabular-nums text-ink">
+                        <td className="border border-line-strong px-2 py-1.5 text-right text-[13.5px] font-semibold tabular-nums text-ink">
                           {formatMoney(unitCost)}
                         </td>
                       </tr>
@@ -1123,19 +1165,21 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                   <LabeledField label="Not" value={p.notes ?? ""} onChange={(v) => setP({ notes: v })} placeholder="KDV hariç, kargo vb." />
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-surface-muted px-3 py-2 text-[13px]">
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-control border border-line bg-surface-muted px-3 py-2 text-[13.5px]">
                   <span className="text-muted">
                     Toplam adet: <span className="font-semibold tabular-nums text-ink">{qty || "—"}</span>
                     <span className="mx-1.5 text-subtle">×</span>
                     Birim maliyet: <span className="font-semibold tabular-nums text-ink">{formatMoney(unitCost)}</span>
                   </span>
                   <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                    {/* Yeşil yalnız "tamamlandı" içindir; artı marj nötr,
+                        eksi marj kırmızı. */}
                     {margin !== null && (
-                      <span className={cn("font-semibold tabular-nums", margin >= 0 ? "text-success" : "text-danger")}>
+                      <span className={cn("font-semibold tabular-nums", margin >= 0 ? "text-ink" : "text-danger")}>
                         Kâr marjı: %{margin.toFixed(0)}
                       </span>
                     )}
-                    <span className="font-bold tabular-nums text-ink">
+                    <span className="font-semibold tabular-nums text-ink">
                       Toplam maliyet: {formatMoney(qty * unitCost)}
                     </span>
                   </span>
@@ -1169,11 +1213,11 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
         <Section title="Kumaş & Aksesuar Bilgisi">
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-2 xl:gap-x-5">
             <label className="block">
-              <span className="mb-1 block text-[11.5px] font-semibold uppercase tracking-wide text-muted">Kumaş bilgisi (cinsi, desen yönü, pantone, gramaj…)</span>
+              <span className={cn(LABEL_CLS, "mb-1 block text-muted")}>Kumaş bilgisi (cinsi, desen yönü, pantone, gramaj…)</span>
               <TextArea value={form.fabric_info ?? ""} onChange={(v) => set("fabric_info", v)} rows={2} />
             </label>
             <label className="block">
-              <span className="mb-1 block text-[11.5px] font-semibold uppercase tracking-wide text-muted">Aksesuarlar bilgisi (çıtçıt, düğme, kopça, taş, boncuk, etiket…)</span>
+              <span className={cn(LABEL_CLS, "mb-1 block text-muted")}>Aksesuarlar bilgisi (çıtçıt, düğme, kopça, taş, boncuk, etiket…)</span>
               <TextArea value={form.accessories_info ?? ""} onChange={(v) => set("accessories_info", v)} rows={2} />
             </label>
           </div>
@@ -1202,19 +1246,19 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
         <Section title="Özel İşçilik ve Kalite Kontrol">
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-2 xl:gap-x-5">
             <label className="block">
-              <span className="mb-1 block text-[11.5px] font-semibold uppercase tracking-wide text-muted">Özel işçilik notları</span>
+              <span className={cn(LABEL_CLS, "mb-1 block text-muted")}>Özel işçilik notları</span>
               <TextArea value={form.workmanship_notes ?? ""} onChange={(v) => set("workmanship_notes", v)} rows={2} />
             </label>
             <label className="block">
-              <span className="mb-1 block text-[11.5px] font-semibold uppercase tracking-wide text-muted">Kalite kontrol revizyon tarihi</span>
+              <span className={cn(LABEL_CLS, "mb-1 block text-muted")}>Kalite kontrol revizyon tarihi</span>
               <TextArea value={form.qc_revision ?? ""} onChange={(v) => set("qc_revision", v)} rows={2} />
             </label>
             <label className="block">
-              <span className="mb-1 block text-[11.5px] font-semibold uppercase tracking-wide text-muted">Revizyon notları</span>
+              <span className={cn(LABEL_CLS, "mb-1 block text-muted")}>Revizyon notları</span>
               <TextArea value={form.revision_notes ?? ""} onChange={(v) => set("revision_notes", v)} rows={2} />
             </label>
             <label className="block">
-              <span className="mb-1 block text-[11.5px] font-semibold uppercase tracking-wide text-muted">Üretim fire payı</span>
+              <span className={cn(LABEL_CLS, "mb-1 block text-muted")}>Üretim fire payı</span>
               <TextArea value={form.production_waste ?? ""} onChange={(v) => set("production_waste", v)} rows={2} />
             </label>
           </div>

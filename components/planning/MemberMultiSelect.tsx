@@ -91,7 +91,7 @@ export function MemberMultiSelect({ members, selected, onChange, placeholder = "
       role="listbox"
       aria-multiselectable="true"
       style={pos ? { top: pos.top, left: pos.left, width: pos.width } : { opacity: 0 }}
-      className="anim-fade-down fixed z-[120] max-h-60 overflow-y-auto rounded-lg border border-line bg-surface p-1 shadow-pop"
+      className="anim-fade-down fixed z-[120] max-h-60 overflow-y-auto rounded-control border border-line bg-surface p-1 shadow-pop"
     >
       {members.length === 0 ? (
         <p className="px-2 py-1.5 text-[12px] text-subtle">Üye bulunamadı.</p>
@@ -112,7 +112,7 @@ export function MemberMultiSelect({ members, selected, onChange, placeholder = "
             >
               <span
                 className={cn(
-                  "inline-flex h-5 w-6 shrink-0 items-center justify-center rounded text-[11px] font-semibold transition-colors duration-150",
+                  "inline-flex h-5 w-6 shrink-0 items-center justify-center rounded text-[11.5px] font-semibold transition-colors duration-150",
                   on ? "bg-brand/10 text-brand-strong" : "bg-surface-muted text-muted",
                 )}
               >
@@ -135,9 +135,9 @@ export function MemberMultiSelect({ members, selected, onChange, placeholder = "
         aria-haspopup="listbox"
         aria-expanded={open}
         className={cn(
-          "flex w-full items-center justify-between gap-1 rounded-lg border bg-surface text-[13px] text-ink transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-2 focus:ring-brand-ring focus:border-brand-ring",
+          "flex w-full items-center justify-between gap-1 rounded-control border bg-surface text-[13.5px] text-ink transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-2 focus:ring-brand-ring focus:border-brand-ring",
           open ? "border-brand-ring" : "border-line hover:border-line-strong",
-          compact ? "px-2 py-1" : "px-2.5 py-1.5",
+          compact ? "min-h-8 px-2 py-1" : "min-h-9 px-2.5 py-1.5",
         )}
       >
         <span className="flex min-w-0 flex-wrap items-center gap-1">
@@ -145,7 +145,7 @@ export function MemberMultiSelect({ members, selected, onChange, placeholder = "
             <span className="truncate text-subtle">{placeholder}</span>
           ) : (
             selectedMembers.map((m) => (
-              <span key={m.id} title={m.name} className="inline-flex h-5 items-center rounded bg-brand-soft px-1.5 text-[11px] font-semibold text-brand-strong">
+              <span key={m.id} title={m.name} className="inline-flex h-5 items-center rounded bg-brand-soft px-1.5 text-[11.5px] font-semibold text-brand-strong">
                 {initialsOf(m.name)}
               </span>
             ))
@@ -168,14 +168,14 @@ export function MemberInitials({
   if (!ids?.length && !extra.length) return null;
   return (
     <span className={cn("inline-flex flex-wrap items-center gap-1", className)}>
-      <Users size={9} className="text-ink/50" />
+      <Users size={11} className="text-ink/50" aria-hidden />
       {ids.map((id) => (
-        <span key={id} title={memberNames[id] ?? ""} className="rounded bg-black/5 px-1 text-[10px] font-semibold text-ink/70">
+        <span key={id} title={memberNames[id] ?? ""} className="rounded bg-black/5 px-1 text-[11.5px] font-semibold text-ink/70">
           {initialsOf(memberNames[id])}
         </span>
       ))}
       {extra.map((name) => (
-        <span key={name} title={`${name} — sistemde kullanıcı değil`} className="rounded bg-black/5 px-1 text-[10px] font-medium text-ink/55">
+        <span key={name} title={`${name} — sistemde kullanıcı değil`} className="rounded bg-black/5 px-1 text-[12px] font-medium text-ink/60">
           {name}
         </span>
       ))}

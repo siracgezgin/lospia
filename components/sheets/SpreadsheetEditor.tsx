@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { useConfirm } from "@/components/ui/useConfirm";
+import { SelectInput } from "@/components/ui/Field";
 import {
   GUTTER_W, HEAD_H, ROW_H, MAX_COLS, MAX_ROWS,
   activeSheet, colName, colWidth, deleteCol, deleteRow, emptySheet, emptyWorkbook,
@@ -63,12 +64,14 @@ const inSel = (s: Sel, r: number, c: number) => {
 
 const OVERSCAN = 6;
 
-/** Dolgu ve yazı için sade palet — marka tonlarıyla çakışmayan yumuşak renkler. */
+/** Dolgu ve yazı paleti — yazı editörüyle (DocEditor.DOC_COLORS) ve kişi
+ *  paletiyle AYNI aile. Önce genel bir Tailwind paletiydi; tablodaki kırmızı
+ *  ile yazıdaki kırmızı birbirini tutmuyordu. İlk göz "yok" demektir. */
 const FILL_COLORS = [
-  "", "#fee2e2", "#ffedd5", "#fef9c3", "#dcfce7", "#dbeafe", "#ede9fe", "#fce7f3", "#e5e7eb", "#111827",
+  "", "#fbe6e2", "#fdebd9", "#f6ecd4", "#dcf0e6", "#dbe7f8", "#ece4fb", "#fbe2f0", "#eef0f2", "#111827",
 ];
 const TEXT_COLORS = [
-  "", "#b91c1c", "#c2410c", "#a16207", "#15803d", "#1d4ed8", "#6d28d9", "#be185d", "#374151", "#ffffff",
+  "", "#d23320", "#df7314", "#c98e20", "#1f6e4d", "#2563c9", "#7c3aed", "#cc2e93", "#5b6e8a", "#ffffff",
 ];
 
 export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, onDirty }: Props) {
@@ -569,10 +572,10 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
   const fillTarget = fillTo ? { r: Math.max(fillTo.r, selN.r2), c: Math.max(fillTo.c, selN.c2) } : null;
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-card">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-card border border-line bg-surface shadow-card">
       {/* ── Araç çubuğu ──────────────────────────────────────────────────── */}
       {!readOnly && (
-        <div className="flex flex-wrap items-center gap-0.5 border-b border-hairline px-2 py-1.5">
+        <div role="toolbar" aria-label="Biçim" className="flex flex-wrap items-center gap-0.5 border-b border-hairline px-2 py-1.5">
           <TBtn onClick={undo} title="Geri al (⌘Z)"><Undo2 size={15} /></TBtn>
           <TBtn onClick={redo} title="İleri al (⇧⌘Z)"><Redo2 size={15} /></TBtn>
           <Sep />
@@ -606,7 +609,9 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
             {popover === "border" && (
               <div
                 onMouseDown={(e) => e.stopPropagation()}
-                className="anim-fade-down absolute left-0 top-full z-50 mt-1 w-44 rounded-lg border border-line bg-surface p-1 shadow-pop"
+                role="menu"
+                aria-label="Kenarlık"
+                className="anim-fade-down absolute left-0 top-full z-50 mt-1 w-44 rounded-card border border-line bg-surface p-1 shadow-pop"
               >
                 {[
                   { v: "tlbr", label: "Tüm kenarlar" },
@@ -618,8 +623,10 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                 ].map((o) => (
                   <button
                     key={o.label}
+                    type="button"
+                    role="menuitem"
                     onClick={() => applyStyle({ bd: o.v })}
-                    className="block w-full rounded-md px-2 py-1.5 text-left text-[13px] text-muted transition-colors hover:bg-surface-muted hover:text-ink"
+                    className="block w-full rounded-control px-2 py-1.5 text-left text-[13.5px] text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
                   >
                     {o.label}
                   </button>
@@ -636,14 +643,15 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
           <TBtn onClick={toggleMerge} active={!!mergeAt(sheet, active.r, active.c)} title="Hücreleri birleştir / çöz"><Combine size={15} /></TBtn>
 
           <Sep />
-          <select
+          {/* Ortak SelectInput — araç çubuğu boyuna (h-8) indirilmiş. */}
+          <SelectInput
             value={activeStyle.n ?? "auto"}
             onChange={(e) => applyStyle({ n: e.target.value as NumberFormat })}
-            className="h-7 rounded-md border border-line bg-surface px-1.5 text-[12.5px] text-muted transition-colors hover:border-line-strong focus:outline-none focus:ring-2 focus:ring-brand-ring/40"
+            className="h-8 w-auto py-0 pl-2 pr-7 text-[12.5px] text-muted"
             aria-label="Sayı biçimi"
           >
             {NUMBER_FORMAT_LABELS.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
-          </select>
+          </SelectInput>
           <TBtn onClick={() => stepDecimals(-1)} title="Ondalık azalt"><span className="text-[12px] font-semibold tabular-nums">.0−</span></TBtn>
           <TBtn onClick={() => stepDecimals(1)} title="Ondalık artır"><span className="text-[12px] font-semibold tabular-nums">.00+</span></TBtn>
           <TBtn onClick={autoSum} title="Otomatik toplam"><Sigma size={15} /></TBtn>
@@ -655,7 +663,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
         <span className="grid h-8 shrink-0 place-items-center border-r border-hairline px-2 text-[12.5px] font-semibold tabular-nums text-muted" style={{ width: GUTTER_W + 24 }}>
           {selLabel}
         </span>
-        <span className="grid h-8 w-7 shrink-0 place-items-center border-r border-hairline font-serif text-[13px] italic text-subtle">fx</span>
+        <span aria-hidden className="grid h-8 w-7 shrink-0 place-items-center border-r border-hairline text-[13px] font-medium italic text-subtle">fx</span>
         <input
           value={formulaBarValue}
           readOnly={readOnly}
@@ -666,7 +674,8 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
           }}
           onFocus={() => { if (!editing && !readOnly) startEdit(active.r, active.c); }}
           placeholder="Değer veya =formül"
-          className="h-8 min-w-0 flex-1 bg-transparent px-2.5 text-[13px] text-ink placeholder:text-subtle focus:outline-none"
+          aria-label="Formül çubuğu"
+          className="h-8 min-w-0 flex-1 bg-transparent px-2.5 text-[13.5px] text-ink placeholder:text-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-ring/40"
         />
       </div>
 
@@ -680,7 +689,10 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
         onCut={onCut}
         onPaste={onPaste}
         onMouseUp={() => setDragging(false)}
-        className="relative min-h-0 flex-1 overflow-auto outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-ring/40"
+        role="grid"
+        aria-label="Hücreler"
+        aria-readonly={readOnly || undefined}
+        className="relative min-h-0 flex-1 overflow-auto overscroll-contain outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-ring/40"
       >
         <div style={{ width: colLefts.total + GUTTER_W, height: rowTops.total + HEAD_H, position: "relative" }}>
           {/* Sütun başlıkları */}
@@ -692,7 +704,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                 onMouseDown={() => setSel({ r1: 0, c1: c, r2: sheet.rows - 1, c2: c })}
                 onContextMenu={(e) => { e.preventDefault(); setSel({ r1: 0, c1: c, r2: sheet.rows - 1, c2: c }); setMenu({ x: e.clientX, y: e.clientY, kind: "col", r: 0, c }); }}
                 className={cn(
-                  "relative shrink-0 cursor-pointer select-none border-b border-r border-line-strong text-center text-[11.5px] font-semibold text-muted",
+                  "relative shrink-0 cursor-pointer select-none border-b border-r border-line-strong text-center text-[12px] font-semibold tabular-nums text-muted",
                   c >= selN.c1 && c <= selN.c2 ? "bg-brand-soft text-brand-strong" : "bg-surface-muted",
                 )}
                 style={{ width: colWidth(sheet, c), height: HEAD_H, lineHeight: `${HEAD_H}px` }}
@@ -716,7 +728,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                   onMouseDown={() => setSel({ r1: r, c1: 0, r2: r, c2: sheet.cols - 1 })}
                   onContextMenu={(e) => { e.preventDefault(); setSel({ r1: r, c1: 0, r2: r, c2: sheet.cols - 1 }); setMenu({ x: e.clientX, y: e.clientY, kind: "row", r, c: 0 }); }}
                   className={cn(
-                    "sticky left-0 z-10 shrink-0 cursor-pointer select-none border-b border-r border-line text-center text-[11.5px] tabular-nums",
+                    "sticky left-0 z-10 shrink-0 cursor-pointer select-none border-b border-r border-line text-center text-[12px] tabular-nums",
                     r >= selN.r1 && r <= selN.r2 ? "bg-brand-soft font-semibold text-brand-strong" : "bg-surface-muted text-subtle",
                   )}
                   style={{ width: GUTTER_W, height: rh, lineHeight: `${rh - 1}px` }}
@@ -766,7 +778,8 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                             else if (e.key === "Tab") { e.preventDefault(); stopEdit(true, "right"); }
                             else if (e.key === "Escape") { e.preventDefault(); stopEdit(false); }
                           }}
-                          className="absolute inset-0 z-40 w-full border-2 border-brand bg-surface px-1.5 text-[13px] text-ink shadow-pop outline-none"
+                          aria-label="Hücre"
+                          className="absolute inset-0 z-40 w-full border-2 border-brand bg-surface px-1.5 text-[13.5px] tabular-nums text-ink shadow-pop outline-none"
                           style={{ minWidth: w }}
                         />
                       </div>
@@ -796,7 +809,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                         setMenu({ x: e.clientX, y: e.clientY, kind: "cell", r, c });
                       }}
                       className={cn(
-                        "relative shrink-0 select-none overflow-hidden border-b border-r border-hairline px-1.5 text-[13px]",
+                        "relative shrink-0 select-none overflow-hidden border-b border-r border-hairline px-1.5 text-[13.5px] tabular-nums",
                         st?.w ? "whitespace-pre-wrap break-words leading-[1.35]" : "whitespace-nowrap",
                         selected ? "bg-brand-soft/50" : "bg-surface",
                         inFill && "bg-brand-soft/30",
@@ -812,10 +825,10 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                         lineHeight: st?.w ? undefined : `${h - 1}px`,
                         background: st?.bg || undefined,
                         color: st?.fg || undefined,
-                        borderTop: st?.bd?.includes("t") ? "1.5px solid #6b7280" : undefined,
-                        borderBottom: st?.bd?.includes("b") ? "1.5px solid #6b7280" : undefined,
-                        borderLeft: st?.bd?.includes("l") ? "1.5px solid #6b7280" : undefined,
-                        borderRight: st?.bd?.includes("r") ? "1.5px solid #6b7280" : undefined,
+                        borderTop: st?.bd?.includes("t") ? "1.5px solid var(--color-ink)" : undefined,
+                        borderBottom: st?.bd?.includes("b") ? "1.5px solid var(--color-ink)" : undefined,
+                        borderLeft: st?.bd?.includes("l") ? "1.5px solid var(--color-ink)" : undefined,
+                        borderRight: st?.bd?.includes("r") ? "1.5px solid var(--color-ink)" : undefined,
                       }}
                       title={cell?.f ? `${cell.f} → ${formatValue(val, st)}` : undefined}
                     >
@@ -845,9 +858,11 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
       <div className="flex items-center gap-1 overflow-x-auto border-t border-line bg-surface-muted px-2 py-1">
         {!readOnly && (
           <button
+            type="button"
             onClick={addSheet}
             title="Sayfa ekle"
-            className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted transition-colors hover:bg-surface hover:text-ink"
+            aria-label="Sayfa ekle"
+            className="tap-target grid h-7 w-7 shrink-0 place-items-center rounded-control text-muted transition-colors duration-150 hover:bg-surface hover:text-ink"
           >
             <Plus size={15} />
           </button>
@@ -866,7 +881,8 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                   if (e.key === "Enter") { renameSheet(i, renaming.draft); setRenaming(null); }
                   if (e.key === "Escape") setRenaming(null);
                 }}
-                className="h-7 w-28 shrink-0 rounded-md border border-brand bg-surface px-2 text-[12.5px] text-ink outline-none"
+                aria-label="Sayfa adı"
+                className="h-7 w-28 shrink-0 rounded-control border border-brand bg-surface px-2 text-[12.5px] text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-ring/40"
               />
             );
           }
@@ -874,20 +890,20 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
             <span
               key={s.id}
               className={cn(
-                "group inline-flex h-7 shrink-0 items-center gap-1 rounded-md pl-2.5 pr-1 text-[12.5px] transition-colors",
+                "group inline-flex h-7 shrink-0 items-center gap-1 rounded-control pl-2.5 pr-1 text-[12.5px] transition-colors duration-150",
                 on ? "bg-surface font-semibold text-ink shadow-xs ring-1 ring-line" : "text-muted hover:bg-surface/70 hover:text-ink",
               )}
             >
-              <button onClick={() => selectSheet(i)} onDoubleClick={() => !readOnly && setRenaming({ index: i, draft: s.name })} className="max-w-40 truncate">
+              <button type="button" aria-current={on ? "true" : undefined} onClick={() => selectSheet(i)} onDoubleClick={() => !readOnly && setRenaming({ index: i, draft: s.name })} className="max-w-40 truncate">
                 {s.name}
               </button>
               {!readOnly && on && (
                 <>
-                  <button onClick={() => setRenaming({ index: i, draft: s.name })} title="Yeniden adlandır" className="grid h-5 w-5 place-items-center rounded text-subtle transition-colors hover:bg-surface-muted hover:text-ink">
+                  <button type="button" onClick={() => setRenaming({ index: i, draft: s.name })} title="Yeniden adlandır" aria-label="Sayfayı yeniden adlandır" className="tap-target grid h-5 w-5 place-items-center rounded-[4px] text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink">
                     <Pencil size={11} />
                   </button>
                   {wb.sheets.length > 1 && (
-                    <button onClick={() => removeSheet(i)} title="Sayfayı sil" className="grid h-5 w-5 place-items-center rounded text-subtle transition-colors hover:bg-[#fbe6e2] hover:text-danger">
+                    <button type="button" onClick={() => removeSheet(i)} title="Sayfayı sil" aria-label="Sayfayı sil" className="tap-target grid h-5 w-5 place-items-center rounded-[4px] text-subtle transition-colors duration-150 hover:bg-danger/10 hover:text-danger">
                       <X size={12} />
                     </button>
                   )}
@@ -908,7 +924,8 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
       {menu && !readOnly && (
         <div
           onMouseDown={(e) => e.stopPropagation()}
-          className="anim-fade fixed z-[70] w-56 rounded-lg border border-line bg-surface py-1 shadow-drawer"
+          role="menu"
+          className="anim-fade fixed z-[70] w-56 rounded-card border border-line bg-surface py-1 shadow-pop"
           style={{ left: Math.min(menu.x, (typeof window !== "undefined" ? window.innerWidth : 9999) - 240), top: menu.y }}
         >
           <MenuItem onClick={() => { navigator.clipboard?.writeText(selectionTsv()); setMenu(null); }}>Kopyala</MenuItem>
@@ -936,17 +953,21 @@ function Palette({ colors, onPick }: { colors: string[]; onPick: (_c: string) =>
   return (
     <div
       onMouseDown={(e) => e.stopPropagation()}
-      className="anim-fade-down absolute left-0 top-full z-50 mt-1 grid w-[184px] grid-cols-5 gap-1 rounded-lg border border-line bg-surface p-2 shadow-pop"
+      role="group"
+      aria-label="Renk"
+      className="anim-fade-down absolute left-0 top-full z-50 mt-1 grid w-[184px] grid-cols-5 gap-1 rounded-card border border-line bg-surface p-2 shadow-pop"
     >
       {colors.map((c) => (
         <button
           key={c || "none"}
+          type="button"
           onClick={() => onPick(c)}
           title={c || "Yok"}
-          className="grid h-6 w-6 place-items-center rounded ring-1 ring-line transition-transform hover:scale-110"
+          aria-label={c ? `Renk ${c}` : "Rengi kaldır"}
+          className="tap-target grid h-6 w-6 place-items-center rounded-[4px] ring-1 ring-line transition-[box-shadow] duration-150 hover:ring-2 hover:ring-line-strong"
           style={{ background: c || "transparent" }}
         >
-          {!c && <span className="text-[10px] text-subtle">✕</span>}
+          {!c && <X size={11} className="text-subtle" aria-hidden />}
         </button>
       ))}
     </div>
@@ -956,10 +977,12 @@ function Palette({ colors, onPick }: { colors: string[]; onPick: (_c: string) =>
 function MenuItem({ onClick, danger, children }: { onClick: () => void; danger?: boolean; children: React.ReactNode }) {
   return (
     <button
+      type="button"
+      role="menuitem"
       onClick={onClick}
       className={cn(
-        "block w-full px-3 py-1.5 text-left text-[13px] transition-colors",
-        danger ? "text-danger hover:bg-[#fbe6e2]" : "text-muted hover:bg-surface-muted hover:text-ink",
+        "block w-full px-3 py-1.5 text-left text-[13.5px] transition-colors duration-150",
+        danger ? "text-danger hover:bg-danger/10" : "text-ink hover:bg-surface-muted",
       )}
     >
       {children}
@@ -981,7 +1004,9 @@ function TBtn({
       aria-label={title}
       aria-pressed={active}
       className={cn(
-        "inline-flex h-7 items-center rounded-md px-1.5 transition-colors duration-150 active:scale-[0.97]",
+        /* Eşit kare (32px) — araç çubuğunda ikonlar bir hizada dursun;
+           `tap-target` telefonda görünmez 40px hedef verir. */
+        "tap-target inline-flex h-8 min-w-8 items-center justify-center rounded-control px-1.5 transition-colors duration-150 active:scale-[0.97]",
         active ? "bg-brand-soft text-brand-strong" : "text-muted hover:bg-surface-muted hover:text-ink",
       )}
     >

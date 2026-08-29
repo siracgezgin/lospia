@@ -4,6 +4,9 @@ import { TrashView } from "@/components/task/TrashView";
 import { canViewDestructivePages } from "@/lib/auth/permissions";
 import type { Task, WorkspaceRole } from "@/types";
 
+// Sekme adı uygulama çubuğuyla aynı (PAGE_TITLES ↔ registry).
+export const metadata = { title: "Trash" };
+
 export default async function TrashPage() {
   const supabase = await createClient();
   const user = await getAuthUser();

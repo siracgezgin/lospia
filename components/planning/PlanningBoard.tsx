@@ -128,23 +128,26 @@ export function PlanningBoard({
        araç çubuğu geldi; ızgara kalan yüksekliğin TAMAMINI alıyor. */
     <div className="flex h-full min-h-0 w-full flex-col">
       <CalendarToolbar viewSwitch={<CalendarViewSwitch scale="hafta" />}>
-        <div className="inline-flex h-9 shrink-0 items-stretch overflow-hidden rounded-lg border border-line bg-surface">
+        <div className="inline-flex h-9 shrink-0 items-stretch overflow-hidden rounded-control border border-line bg-surface">
           <button
+            type="button"
             onClick={() => gotoWeek(format(subDays(parseISO(weekStart), 7), "yyyy-MM-dd"))}
-            className="inline-flex w-9 items-center justify-center text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
+            className="tap-target inline-flex w-9 items-center justify-center text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
             title="Önceki hafta" aria-label="Önceki hafta"
           >
             <ChevronLeft size={16} />
           </button>
           <button
+            type="button"
             onClick={() => gotoWeek(format(new Date(), "yyyy-MM-dd"))}
             className="whitespace-nowrap border-x border-line px-3 text-[13px] font-medium text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
           >
             Bu hafta
           </button>
           <button
+            type="button"
             onClick={() => gotoWeek(format(addDays(parseISO(weekStart), 7), "yyyy-MM-dd"))}
-            className="inline-flex w-9 items-center justify-center text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
+            className="tap-target inline-flex w-9 items-center justify-center text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
             title="Sonraki hafta" aria-label="Sonraki hafta"
           >
             <ChevronRight size={16} />

@@ -18,9 +18,9 @@ import type {
 } from "@/types";
 import { roleLabel } from "@/lib/utils/roles";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { Card } from "@/components/ui/Card";
+import { Button, IconButton } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
 import { buildDeptMeta } from "@/lib/utils/departments";
-import { getDepartmentBadge } from "@/lib/design/semantics";
 import { cn } from "@/lib/utils/cn";
 import { PersonAvatar } from "@/components/ui/PersonAvatar";
 import { saveMemberIdentity } from "@/lib/actions/member-identity";
@@ -168,15 +168,15 @@ export function MembersManager({
     });
   }
 
-  // member_id (workspace_members.id) → department badges (name + effective colour)
+  // member_id (workspace_members.id) → departman adları. Renkli çipler
+  // kalktı: satırda TEK rozet (rol) kalır; departman ünvanla aynı satırda
+  // düz metin olarak yazılır (sadelik kuralı: kart başına en fazla bir rozet).
   const deptMeta = buildDeptMeta(departments);
-  const deptsByMember = new Map<string, { name: string; color: string | null }[]>();
+  const deptsByMember = new Map<string, string[]>();
   for (const dm of deptMembers) {
     const meta = deptMeta[dm.department_id];
     if (!meta) continue;
-    const arr = deptsByMember.get(dm.member_id) ?? [];
-    arr.push({ name: meta.name, color: meta.color });
-    deptsByMember.set(dm.member_id, arr);
+    deptsByMember.set(dm.member_id, [...(deptsByMember.get(dm.member_id) ?? []), meta.name]);
   }
 
   function runConfirmedDelete() {
@@ -207,46 +207,48 @@ export function MembersManager({
           Ekibe kişi eklemek ekip yönetiminin parçası; formu isteyen açar. */}
       {createPanel && (
         <div>
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => setAddOpen((v) => !v)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-[13px] font-medium text-muted transition-all duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
             aria-expanded={addOpen}
           >
-            <UserPlus size={14} /> {addOpen ? "Vazgeç" : "Kişi ekle"}
-          </button>
+            <UserPlus size={14} aria-hidden /> {addOpen ? "Vazgeç" : "Kişi ekle"}
+          </Button>
           {addOpen && <div className="anim-fade-down mt-3">{createPanel}</div>}
         </div>
       )}
 
       {/* Palet tükendiyse iki kişi aynı rengi paylaşır — sessizce yapılmaz. */}
       {clashes.length > 0 && (
-        <p className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-[12.5px] leading-relaxed text-ink">
+        <p className="rounded-control border border-warning/30 bg-warning/5 px-3 py-2 text-[12.5px] leading-relaxed text-ink">
           Otomatik atama şu kişilere aynı rengi verdi:{" "}
           <strong className="font-semibold">{clashes.map((n) => n.join(" / ")).join(" · ")}</strong>.
-          Satırdaki palet düğmesinden birine başka bir renk verebilirsiniz — hex de yazılabilir.
+          Kişiyi düzenleyip başka bir renk verebilirsiniz.
         </p>
       )}
 
-      {/* Current members */}
-      <Card className="divide-y divide-hairline">
+      {/* Üye listesi — kart değil, ince çizgiyle ayrılmış satırlar (bölüm
+          yüzeyi zaten kart; kart içinde kart yok). */}
+      <ul className="divide-y divide-hairline border-t border-hairline">
         {members.map((m) => {
           const isSelf = m.user_id === currentUserId;
           const isOwnerRow = m.role === "owner";
           const canManage = isOwner && !isSelf && !isOwnerRow;
+          const ident = identityOf.get(m.id) ?? null;
+          const tone = ident ? tones[ident.userId] : undefined;
+          const display = getDisplayNotificationEmail(m);
+          const depts = deptsByMember.get(m.id) ?? [];
+          const tertiary = [ident?.jobTitle?.trim() || null, ...depts].filter(Boolean).join(" · ");
+          const editing = editingMemberId === m.id;
 
           return (
-            <div key={m.id} className="px-4 py-3 transition-colors duration-150 hover:bg-surface-hover sm:px-5">
-            <div className="flex items-start justify-between gap-3">
-              {/* Kimlik rozeti — panodaki, rapordaki ve görev kartındakiyle
-                  AYNI. Fotoğraf varsa fotoğraf, yoksa kişinin kendi renginde
-                  baş harfleri (Aslı Hanım, 2026-08-24: "ikon kalkıp herkesin
-                  resmi gelecek… resmi olmayan yine aynı şekilde"). */}
-              {(() => {
-                const ident = identityOf.get(m.id);
-                if (!ident) return null;
-                const tone = tones[ident.userId];
-                if (!tone) return null;
-                return (
+            <li key={m.id} className="py-3">
+              <div className="flex items-start gap-3">
+                {/* Kimlik rozeti — panodaki, rapordaki ve görev kartındakiyle
+                    AYNI. Fotoğraf varsa fotoğraf, yoksa kişinin kendi renginde
+                    baş harfleri (Aslı Hanım, 2026-08-24). */}
+                {ident && tone && (
                   <PersonAvatar
                     name={ident.name}
                     photoUrl={ident.avatarUrl ?? null}
@@ -254,93 +256,68 @@ export function MembersManager({
                     size="md"
                     className="mt-0.5"
                   />
-                );
-              })()}
-              <div className="flex-1 min-w-0">
-                {/* Satır SALT OKUR. Düzenleme tek panelde (MemberEditPanel) —
-                    Aslı Hanım (2026-08-24): "Her kısmı böyle düzeltmek yerine
-                    daha profesyonel düzenleme kısmı olmalı her üye için."
-                    Önce isim, kullanıcı adı ve e-posta üç ayrı kalemdi. */}
-                <p className="flex items-center gap-1.5 truncate text-sm font-medium text-ink">
-                  <span className="truncate">{m.profiles?.full_name ?? m.profiles?.email ?? "—"}</span>
-                  {isSelf && <span className="shrink-0 text-[10px] text-subtle">(siz)</span>}
-                </p>
-                {/* Kullanıcı adı yoksa SATIR HİÇ ÇİZİLMEZ. "Kullanıcı adı yok"
-                    yazmak satırı uzatıyor ve hiçbir şey söylemiyordu; boş bir
-                    <p> de yüksekliğini korurdu. */}
-                {m.profiles?.username && (
-                  <p className="truncate text-xs text-muted">@{m.profiles.username}</p>
                 )}
-                {(() => {
-                  // notification_email → gerçek profiles.email → "eklenmedi".
-                  // @lospia.local giriş yer tutucuları adres olarak gösterilmez.
-                  const display = getDisplayNotificationEmail(m);
-                  return (
-                    <p className={cn("truncate text-xs", display.email ? "text-subtle" : "text-warning")}>
-                      {display.email ?? "Bildirim e-postası eklenmedi"}
-                    </p>
-                  );
-                })()}
-                {(deptsByMember.get(m.id) ?? []).length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1.5">
-                    {(deptsByMember.get(m.id) ?? []).map((d) => {
-                      const badge = getDepartmentBadge(d.color);
-                      return (
-                        <span
-                          key={d.name}
-                          className={cn(
-                            "inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full ring-1",
-                            badge.chip,
-                            badge.ring,
-                          )}
-                        >
-                          <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", badge.dot)} />
-                          {d.name}
-                        </span>
-                      );
-                    })}
-                  </div>
-                )}
+                <div className="min-w-0 flex-1">
+                  {/* Satır SALT OKUR. Düzenleme tek panelde (MemberEditPanel) —
+                      Aslı Hanım (2026-08-24): "Her kısmı böyle düzeltmek yerine
+                      daha profesyonel düzenleme kısmı olmalı her üye için." */}
+                  <p className="flex items-center gap-1.5 text-[14px] font-medium text-ink">
+                    <span className="truncate">{m.profiles?.full_name ?? m.profiles?.email ?? "—"}</span>
+                    {isSelf && <span className="shrink-0 text-[12px] font-normal text-subtle">(siz)</span>}
+                  </p>
+                  {/* İkincil satır: kullanıcı adı · e-posta. E-posta yoksa
+                      yöneticinin görmesi gereken bir eksik — sözle söylenir,
+                      yalnız renkle değil. */}
+                  <p className="truncate text-[12.5px] text-muted">
+                    {m.profiles?.username && <span>@{m.profiles.username}</span>}
+                    {m.profiles?.username && <span aria-hidden> · </span>}
+                    {display.email ? (
+                      <span>{display.email}</span>
+                    ) : (
+                      <span className="text-warning">Bildirim e-postası eklenmedi</span>
+                    )}
+                  </p>
+                  {tertiary && (
+                    <p className="truncate text-[12px] text-subtle">{tertiary}</p>
+                  )}
+                </div>
+
+                {/* Sağ blok: rol (tek rozet) + TEK "Düzenle" + kaldırma. Rol
+                    seçici de panele taşındı — satırda beş ayrı etkileşim
+                    vardı, artık bir tane. Kaldırma satırın en sonunda, dinlenirken
+                    sessiz, üstüne gelince kırmızı: yıkıcı eylem ayrışır. */}
+                <div className="flex shrink-0 items-center gap-1">
+                  <Badge className="mr-1 bg-surface-sunken text-muted">{roleLabel(m.role)}</Badge>
+                  {(canManage || canManageIdentity) && (
+                    <IconButton
+                      size="sm"
+                      onClick={() => setEditingMemberId(editing ? null : m.id)}
+                      aria-label="Üyeyi düzenle"
+                      aria-expanded={editing}
+                      className={cn(editing && "bg-surface-muted text-ink")}
+                    >
+                      <Pencil size={14} />
+                    </IconButton>
+                  )}
+                  {canManage && (
+                    <IconButton
+                      size="sm"
+                      onClick={() => setConfirm({
+                        kind: "member",
+                        id: m.id,
+                        label: m.profiles?.full_name ?? m.profiles?.email ?? "",
+                      })}
+                      disabled={isPending}
+                      aria-label="Üyeyi kaldır"
+                      className="hover:bg-danger/10 hover:text-danger"
+                    >
+                      <UserMinus size={14} />
+                    </IconButton>
+                  )}
+                </div>
               </div>
 
-              {/* Sağ blok: rol rozeti (salt okur) + TEK "Düzenle" + kaldırma.
-                  Rol seçici de panele taşındı — satırda beş ayrı etkileşim
-                  vardı, artık bir tane. */}
-              <div className="flex shrink-0 items-center gap-2">
-                <span className="rounded-full bg-surface-sunken px-2.5 py-0.5 text-xs text-muted">
-                  {roleLabel(m.role)}
-                </span>
-                {(canManage || canManageIdentity) && (
-                  <button
-                    onClick={() => setEditingMemberId(editingMemberId === m.id ? null : m.id)}
-                    className="tap-target rounded-md p-1 text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-95"
-                    aria-label="Üyeyi düzenle"
-                    aria-expanded={editingMemberId === m.id}
-                    title="Düzenle"
-                  >
-                    <Pencil size={13} />
-                  </button>
-                )}
-                {canManage && (
-                  <button
-                    onClick={() => setConfirm({
-                      kind: "member",
-                      id: m.id,
-                      label: m.profiles?.full_name ?? m.profiles?.email ?? "",
-                    })}
-                    disabled={isPending}
-                    className="tap-target rounded-md p-1 text-subtle transition-colors duration-150 hover:bg-danger/10 hover:text-danger active:scale-95 disabled:pointer-events-none disabled:opacity-50"
-                    aria-label="Üyeyi kaldır"
-                  >
-                    <UserMinus size={13} />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {editingMemberId === m.id && (() => {
-              const ident = identityOf.get(m.id) ?? null;
-              return (
+              {editing && (
                 <MemberEditPanel
                   member={ident}
                   draft={{
@@ -360,62 +337,61 @@ export function MembersManager({
                   onResetIdentity={() => { if (ident) saveIdentity(ident, { colorKey: "", iconKey: "" }); }}
                   onSave={(next) => handleSaveMember(m, ident, next)}
                 />
-              );
-            })()}
-            </div>
+              )}
+            </li>
           );
         })}
-      </Card>
+      </ul>
 
       {/* Legacy team-access grants. Self-signup is DISABLED — new people are added
-          via "Hesap oluştur" above. Any leftover pending grants from the old flow
+          via "Kişi ekle" above. Any leftover pending grants from the old flow
           are shown here so an owner can revoke them; no new ones can be added. */}
       {isOwner && grants.length > 0 && (
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-subtle">Bekleyen eski erişimler</p>
-          <p className="text-xs text-subtle mt-1 mb-2">
-            Self-signup kapatıldı. Aşağıdaki eski kayıtlar artık kullanılmıyor; kaldırabilirsiniz.
+        <div className="pt-2">
+          <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle">Bekleyen eski erişimler</p>
+          <p className="mt-1 text-[12.5px] leading-relaxed text-muted">
+            Bu kayıtlar artık kullanılmıyor; kaldırabilirsiniz.
           </p>
-          <Card className="divide-y divide-hairline">
+          <ul className="mt-2 divide-y divide-hairline border-t border-hairline">
             {grants.map((g) => (
-              <div key={g.id} className="flex items-center justify-between px-5 py-3 gap-3 transition-colors duration-150 hover:bg-surface-hover">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-ink truncate">
+              <li key={g.id} className="flex items-center justify-between gap-3 py-2.5">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13.5px] font-medium text-ink">
                     {g.username ? `@${g.username}` : "—"}
                   </p>
-                  <p className="text-xs text-subtle truncate">{g.email}</p>
-                  <p className="text-xs text-subtle">{roleLabel(g.role)} · Kullanılmıyor</p>
+                  <p className="truncate text-[12.5px] text-muted">{g.email} · {roleLabel(g.role)}</p>
                 </div>
-                <button
+                <IconButton
+                  size="sm"
                   onClick={() => setConfirm({ kind: "grant", id: g.id, label: g.email })}
                   disabled={isPending}
-                  className="p-1 rounded-md text-subtle hover:text-danger hover:bg-danger/10 active:scale-95 disabled:pointer-events-none disabled:opacity-50 transition-colors duration-150"
                   aria-label="Erişimi kaldır"
+                  className="hover:bg-danger/10 hover:text-danger"
                 >
                   <X size={14} />
-                </button>
-              </div>
+                </IconButton>
+              </li>
             ))}
-          </Card>
+          </ul>
         </div>
       )}
 
-      {error && <p role="alert" className="anim-fade-down text-xs text-danger">{error}</p>}
+      {error && <p role="alert" className="anim-fade-down text-[12.5px] text-danger">{error}</p>}
 
       <ConfirmDialog
         open={confirm !== null}
         pending={isPending}
         title={
           confirm?.kind === "member"
-            ? "Bu kullanıcıyı silmek istediğinizden emin misiniz?"
-            : "Silmek istediğinize emin misiniz?"
+            ? "Bu kişiyi silmek istiyor musunuz?"
+            : "Erişimi kaldırmak istiyor musunuz?"
         }
-        confirmLabel={confirm?.kind === "member" ? "Evet, sil" : "Sil"}
+        confirmLabel={confirm?.kind === "member" ? "Evet, sil" : "Kaldır"}
         message={
           confirm?.kind === "grant"
             ? `${confirm.label} için ekip erişimi kaldırılacak.`
             : confirm?.kind === "member"
-              ? `${confirm.label} silinecek. Bu işlem kullanıcının giriş erişimini kaldırır ve hesabını sistemden temizler. Oluşturduğu görev/not kayıtları korunur.`
+              ? `${confirm.label} silinecek: giriş erişimi kalkar, hesabı sistemden temizlenir. Oluşturduğu görev ve notlar korunur.`
               : ""
         }
         onConfirm={runConfirmedDelete}

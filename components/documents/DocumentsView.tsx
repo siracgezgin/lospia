@@ -97,6 +97,7 @@ export function DocumentsView({
           links={links}
           memberNames={memberNames}
           memberAvatars={memberAvatars}
+          currentUserId={currentUserId}
           isAdmin={isAdmin}
           rootLabel="AF Teamwork"
           leading={<BackLink />}

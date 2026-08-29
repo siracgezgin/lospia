@@ -2,18 +2,22 @@
 
 import { useConfirm } from "@/components/ui/useConfirm";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
 import { Pin, Trash2, PencilLine, StickyNote, ChevronDown, Check, Eye, HandHelping, CalendarCheck } from "lucide-react";
 import type { TaskNoteWithAuthor, TaskNoteType } from "@/types";
 import {
   addTaskNoteWorkflow, acknowledgeTaskNote, toggleNotePin, deleteTaskNote, updateTaskNote,
 } from "@/lib/actions/notes";
 import {
-  NOTE_TYPES, NOTE_TYPE_LABELS, NOTE_TYPE_BADGE, asNoteType, asNoteActionStatus,
+  NOTE_TYPES, NOTE_TYPE_LABELS, asNoteType, asNoteActionStatus,
   NOTE_ASSIGNMENT_LABELS, type NoteAssignmentAction,
 } from "@/lib/notes/note-types";
 import { formatNoteTimeTR, formatDateTR } from "@/lib/utils/format-date";
 import { Avatar } from "@/components/ui/Avatar";
+import { Button, IconButton } from "@/components/ui/Button";
+import { Field, TextArea, TextInput, SelectInput } from "@/components/ui/Field";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { cn } from "@/lib/utils/cn";
 
 // One selectable person in the "Kime bildirilsin?" picker — a flattened
 // AssignablePerson (members ∪ contacts, duplicates already collapsed).
@@ -46,13 +50,17 @@ interface Props {
 
 const ACTIONABLE_TYPES: TaskNoteType[] = ["action_required", "handoff", "approval_waiting"];
 
-// Shared class for the compact form controls in the add-note row — token-based
-// (line/surface/brand focus) so they match the Görev bilgileri inputs.
-const noteControlCls =
-  "w-full text-sm text-ink bg-surface border border-line rounded-lg px-2 py-1.5 " +
-  "transition-[color,background-color,border-color,box-shadow] duration-150 ease-standard hover:border-line-strong " +
-  "focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40 " +
-  "disabled:bg-surface-sunken disabled:text-subtle disabled:hover:border-line";
+/* Not türü rozeti — TEK sakin renk sistemi, hepsi durum token'ından:
+   bilgi → info · aksiyon → warning · devir → marka · onay → approval.
+   (lib/notes/note-types.ts'teki NOTE_TYPE_BADGE ham blue/amber/sky/violet
+   paletiyle yazılmış; lib dokunulmaz olduğundan görsel ton burada seçilir,
+   etiket metni oradan gelir.) */
+const NOTE_TYPE_TONE: Record<TaskNoteType, string> = {
+  info:             "bg-info/10 text-info border-info/25",
+  action_required:  "bg-warning/10 text-warning border-warning/30",
+  handoff:          "bg-brand-soft text-brand-strong border-brand-ring/50",
+  approval_waiting: "bg-approval/10 text-approval border-approval/25",
+};
 
 function shortDate(iso: string | null | undefined): string {
   if (!iso) return "";
@@ -149,6 +157,8 @@ function NoteItem({
     if (!(await ask({
       title: "Not silinsin mi?",
       message: "Not kalıcı olarak silinir; bu işlem geri alınamaz.",
+      confirmLabel: "Sil",
+      tone: "danger",
     }))) return;
     startTransition(async () => {
       await deleteTaskNote(note.id, taskId);
@@ -156,18 +166,27 @@ function NoteItem({
   }
 
   return (
-    <li className={`rounded-lg border p-3 space-y-1.5 transition-colors duration-150 ${note.is_pinned ? "border-amber-200 bg-amber-50" : "border-hairline bg-surface-muted hover:border-line hover:bg-surface-hover"}`}>
-      {/* Workflow context row — type badge, delivery date confirmed, targets */}
+    <li
+      className={cn(
+        "rounded-control border p-3 space-y-2 transition-colors duration-150",
+        // Sabitlenmiş not: uyarı tonunda hafif dolgu (ham amber yerine token).
+        note.is_pinned
+          ? "border-warning/30 bg-warning/5"
+          : "border-hairline bg-surface-muted hover:border-line",
+      )}
+    >
+      {/* Workflow context row — type badge, delivery date confirmed, targets.
+          Satırda tek rozet (tür); tarih ve muhatap düz metin. */}
       {(noteType !== "info" || note.due_date_at_note_time || notifiedNames.length > 0) && (
-        <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
+        <div className="flex items-center gap-2 flex-wrap text-[12px]">
           {noteType !== "info" && (
-            <span className={`rounded px-1.5 py-0.5 leading-none font-medium ${NOTE_TYPE_BADGE[noteType]}`}>
+            <span className={cn("rounded-md border px-1.5 py-0.5 leading-none font-medium", NOTE_TYPE_TONE[noteType])}>
               {NOTE_TYPE_LABELS[noteType]}
             </span>
           )}
           {note.due_date_at_note_time && (
-            <span className="inline-flex items-center gap-0.5 text-subtle" title="Not eklenirken kontrol edilen teslim tarihi">
-              <CalendarCheck size={10} /> Teslim: {shortDate(note.due_date_at_note_time)}
+            <span className="inline-flex items-center gap-1 text-subtle tabular-nums" title="Not eklenirken kontrol edilen teslim tarihi">
+              <CalendarCheck size={12} aria-hidden /> Teslim: {shortDate(note.due_date_at_note_time)}
             </span>
           )}
           {notifiedNames.length > 0 && (
@@ -179,10 +198,10 @@ function NoteItem({
       )}
 
       <div className="flex items-start gap-2">
-        {note.is_pinned && <Pin size={12} className="text-amber-500 mt-0.5 shrink-0" />}
+        {note.is_pinned && <Pin size={13} className="text-warning mt-1 shrink-0" aria-label="Sabitlenmiş" />}
         <div className="flex-1 min-w-0">
           {editing ? (
-            <textarea
+            <TextArea
               value={editValue}
               onChange={(e) => setEditValue(e.target.value)}
               onKeyDown={(e) => {
@@ -191,10 +210,11 @@ function NoteItem({
               }}
               autoFocus
               rows={3}
-              className="w-full text-sm text-ink bg-surface border border-brand-ring rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-brand-ring/40 resize-none"
+              aria-label="Notu düzenle"
+              className="resize-none"
             />
           ) : (
-            <p className="text-sm text-ink whitespace-pre-wrap break-words">{note.content}</p>
+            <p className="text-[13.5px] leading-relaxed text-ink whitespace-pre-wrap break-words">{note.content}</p>
           )}
         </div>
       </div>
@@ -203,64 +223,73 @@ function NoteItem({
       {isActionable && !editing && (
         <div className="flex items-center gap-2 flex-wrap">
           {isClaimed ? (
-            <span className="anim-fade inline-flex items-center gap-1 text-[11px] text-teal-700 bg-teal-50 border border-teal-200 rounded px-1.5 py-0.5 font-medium">
-              <Check size={11} /> Üzerine alındı{claimedByName ? ` · ${claimedByName}` : ""}
+            <span className="anim-fade inline-flex items-center gap-1 rounded-md border border-brand-ring/50 bg-brand-soft px-2 py-1 text-[12px] font-medium text-brand-strong">
+              <Check size={12} aria-hidden /> Üzerine alındı{claimedByName ? ` · ${claimedByName}` : ""}
             </span>
           ) : (
             !isViewer && note.author_id !== currentUserId && (
-              <button
-                onClick={() => handleAck("claimed")}
-                disabled={pending}
-                className="inline-flex items-center gap-1 text-[11px] font-medium text-teal-700 border border-teal-200 bg-surface hover:bg-teal-50 active:scale-[0.98] rounded px-2 py-0.5 transition-colors duration-150 disabled:opacity-60 disabled:pointer-events-none"
-              >
-                <HandHelping size={11} /> Üzerime aldım
-              </button>
+              <Button variant="secondary" size="sm" disabled={pending} onClick={() => handleAck("claimed")}>
+                <HandHelping size={13} aria-hidden /> Üzerime aldım
+              </Button>
             )
           )}
           {seenByMe ? (
-            <span className="anim-fade inline-flex items-center gap-1 text-[11px] text-subtle">
-              <Eye size={11} /> Görüldü
+            <span className="anim-fade inline-flex items-center gap-1 text-[12px] text-subtle">
+              <Eye size={12} aria-hidden /> Görüldü
             </span>
           ) : (
-            <button
-              onClick={() => handleAck("seen")}
-              disabled={pending}
-              className="inline-flex items-center gap-1 text-[11px] font-medium text-muted border border-line bg-surface hover:bg-surface-hover hover:border-line-strong active:scale-[0.98] rounded px-2 py-0.5 transition-colors duration-150 disabled:opacity-60 disabled:pointer-events-none"
-            >
-              <Eye size={11} /> Gördüm
-            </button>
+            <Button variant="ghost" size="sm" disabled={pending} onClick={() => handleAck("seen")}>
+              <Eye size={13} aria-hidden /> Gördüm
+            </Button>
           )}
-          {ackError && <span className="anim-fade-down text-[11px] text-danger">{ackError}</span>}
+          {ackError && <span role="alert" className="anim-fade-down text-[12px] text-danger">{ackError}</span>}
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-2 text-xs text-subtle">
+      <div className="flex items-center justify-between gap-2 text-[12px] text-subtle">
         <span className="flex items-center gap-1.5 min-w-0" title={authorName}>
           <Avatar name={authorName} size="xs" />
           <span className="font-medium text-muted truncate max-w-[10rem]">{authorName}</span>
           <span className="text-subtle shrink-0">·</span>
           <span className="shrink-0 whitespace-nowrap tabular-nums">{formatNoteTimeTR(note.created_at)}</span>
         </span>
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-0.5 shrink-0">
           {editing ? (
             <>
-              <button onClick={handleSaveEdit} className="text-brand hover:text-brand-strong font-medium transition-colors duration-150">Kaydet</button>
-              <button onClick={() => { setEditing(false); setEditValue(note.content); }} className="text-muted hover:text-ink ml-1 transition-colors duration-150">İptal</button>
+              <Button variant="ghost" size="sm" onClick={() => { setEditing(false); setEditValue(note.content); }}>
+                Vazgeç
+              </Button>
+              <Button variant="ghost" size="sm" onClick={handleSaveEdit} className="text-brand hover:text-brand-strong">
+                Kaydet
+              </Button>
             </>
           ) : (
             <>
               {canEdit && (
-                <button onClick={() => setEditing(true)} className="p-1 rounded-md text-subtle hover:text-ink hover:bg-surface-sunken active:scale-[0.98] transition-colors duration-150" title="Düzenle">
-                  <PencilLine size={12} />
-                </button>
+                <IconButton size="sm" onClick={() => setEditing(true)} aria-label="Notu düzenle" title="Düzenle">
+                  <PencilLine size={14} />
+                </IconButton>
               )}
-              <button onClick={handlePin} className={`p-1 rounded-md active:scale-[0.98] transition-colors duration-150 ${note.is_pinned ? "text-amber-500 hover:text-amber-700 hover:bg-amber-100/60" : "text-subtle hover:text-amber-500 hover:bg-surface-sunken"}`} title={note.is_pinned ? "Sabitlemeyi kaldır" : "Sabitle"}>
-                <Pin size={12} />
-              </button>
+              <IconButton
+                size="sm"
+                onClick={handlePin}
+                aria-pressed={note.is_pinned}
+                aria-label={note.is_pinned ? "Sabitlemeyi kaldır" : "Sabitle"}
+                title={note.is_pinned ? "Sabitlemeyi kaldır" : "Sabitle"}
+                className={note.is_pinned ? "text-warning hover:text-warning hover:bg-warning/10" : undefined}
+              >
+                <Pin size={14} />
+              </IconButton>
               {canDelete && (
-                <button onClick={handleDelete} className="p-1 rounded-md text-subtle hover:text-danger hover:bg-danger/10 active:scale-[0.98] transition-colors duration-150" title="Sil">
-                  <Trash2 size={12} />
-                </button>
+                <IconButton
+                  size="sm"
+                  onClick={handleDelete}
+                  aria-label="Notu sil"
+                  title="Sil"
+                  className="hover:text-danger hover:bg-danger/10"
+                >
+                  <Trash2 size={14} />
+                </IconButton>
               )}
             </>
           )}
@@ -274,10 +303,12 @@ function NoteItem({
 // ── "Kime bildirilsin?" multi-select (compact checkbox dropdown) ──────────────
 
 function PeoplePicker({
+  id,
   people,
   selected,
   onToggle,
 }: {
+  id?: string;
   people: NotePerson[];
   selected: Set<string>;
   onToggle: (_id: string) => void;
@@ -286,50 +317,66 @@ function PeoplePicker({
   const ref = useRef<HTMLDivElement>(null);
   const selectedNames = people.filter((p) => selected.has(p.id)).map((p) => p.name);
 
+  // Dışarı tıklayınca / Esc ile kapan. Eskiden tüm ekranı kaplayan görünmez bir
+  // `fixed inset-0` katmanı vardı; sayfadaki başka hiçbir şeye tıklanamıyordu.
+  useEffect(() => {
+    if (!open) return;
+    function onDown(e: MouseEvent) {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
   return (
     <div className="relative" ref={ref}>
+      {/* Field'ın kontrol görünümüyle aynı ölçü/çerçeve (h-9, rounded-control). */}
       <button
+        id={id}
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="w-full flex items-center justify-between gap-1 text-sm border border-line rounded-lg px-2.5 py-1.5 bg-surface text-left hover:border-line-strong transition-colors duration-150"
+        className="h-9 w-full flex items-center justify-between gap-1 rounded-control border border-line bg-surface px-3 text-left text-[13.5px] transition-[border-color,box-shadow] duration-150 hover:border-line-strong"
       >
-        <span className={`truncate ${selectedNames.length === 0 ? "text-subtle" : "text-ink"}`}>
+        <span className={cn("truncate", selectedNames.length === 0 ? "text-subtle" : "text-ink")}>
           {selectedNames.length === 0 ? "Kişi seçin…" : selectedNames.join(", ")}
         </span>
-        <ChevronDown size={13} className={`text-subtle shrink-0 transition-transform duration-200 ease-standard ${open ? "rotate-180" : ""}`} />
+        <ChevronDown size={14} className={cn("text-subtle shrink-0 transition-transform duration-200 ease-standard", open && "rotate-180")} aria-hidden />
       </button>
       {open && (
-        <>
-          {/* click-away layer */}
-          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} aria-hidden />
-          <div className="anim-fade-down absolute z-30 mt-1 w-full max-h-52 overflow-y-auto rounded-lg border border-line bg-surface shadow-pop py-1">
-            {people.length === 0 && (
-              <p className="px-3 py-2 text-xs text-subtle">Kişi bulunamadı.</p>
-            )}
-            {people.map((p) => {
-              const on = selected.has(p.id);
-              return (
-                <label
-                  key={p.id}
-                  className="flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-surface-hover transition-colors duration-150"
-                >
-                  <input
-                    type="checkbox"
-                    checked={on}
-                    onChange={() => onToggle(p.id)}
-                    className="rounded border-line accent-brand"
-                  />
-                  <span className="flex-1 truncate text-ink">{p.name}</span>
-                  {p.type === "contact" && (
-                    <span className="text-[10px] text-subtle shrink-0">kişi</span>
-                  )}
-                </label>
-              );
-            })}
-          </div>
-        </>
+        <div className="anim-fade-down absolute z-30 mt-1 w-full max-h-52 overflow-y-auto rounded-control border border-line bg-surface shadow-pop py-1">
+          {people.length === 0 && (
+            <p className="px-3 py-2 text-[12.5px] text-subtle">Kişi bulunamadı.</p>
+          )}
+          {people.map((p) => {
+            const on = selected.has(p.id);
+            return (
+              <label
+                key={p.id}
+                className="flex items-center gap-2 px-3 py-1.5 text-[13.5px] cursor-pointer hover:bg-surface-hover transition-colors duration-150"
+              >
+                <input
+                  type="checkbox"
+                  checked={on}
+                  onChange={() => onToggle(p.id)}
+                  className="rounded border-line accent-brand"
+                />
+                <span className="flex-1 truncate text-ink">{p.name}</span>
+                {p.type === "contact" && (
+                  <span className="text-[12px] text-subtle shrink-0">kişi</span>
+                )}
+              </label>
+            );
+          })}
+        </div>
       )}
     </div>
   );
@@ -351,6 +398,7 @@ function AddNoteForm({
   people: NotePerson[];
 }) {
   const currentDue = taskDueDate ? taskDueDate.slice(0, 10) : "";
+  const notifyId = useId();
   const [content, setContent] = useState("");
   const [noteType, setNoteType] = useState<TaskNoteType>("info");
   const [dueDate, setDueDate] = useState(currentDue);
@@ -422,69 +470,57 @@ function AddNoteForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-2">
-      <textarea
+    <form onSubmit={handleSubmit} className="space-y-3">
+      <TextArea
         value={content}
         onChange={(e) => setContent(e.target.value)}
         placeholder="Not ekle…"
+        aria-label="Not"
         rows={2}
-        className="w-full text-sm text-ink bg-surface border border-line rounded-lg px-3 py-2 placeholder:text-subtle transition-colors focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40 resize-none"
+        className="resize-none"
       />
 
-      {/* Desktop: single control row; mobile: stacked */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-        <label className="block">
-          <span className="block text-[11px] font-medium text-muted mb-0.5">Not tipi</span>
-          <select
-            value={noteType}
-            onChange={(e) => setNoteType(e.target.value as TaskNoteType)}
-            className={noteControlCls}
-          >
+      {/* Desktop: single control row; mobile: stacked. Etiketler görünür,
+          alanlar ortak Field ölçüsünde. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <Field label="Not tipi">
+          <SelectInput value={noteType} onChange={(e) => setNoteType(e.target.value as TaskNoteType)}>
             {NOTE_TYPES.map((t) => (
               <option key={t} value={t}>{NOTE_TYPE_LABELS[t]}</option>
             ))}
-          </select>
-        </label>
+          </SelectInput>
+        </Field>
 
-        <label className="block">
-          <span className="block text-[11px] font-medium text-muted mb-0.5">Teslim tarihi</span>
-          <input
+        <Field label="Teslim tarihi" hint={!canEditDueDate ? "Teslim tarihini değiştirme yetkiniz yok." : undefined}>
+          <TextInput
             type="date"
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
             disabled={!canEditDueDate}
-            title={!canEditDueDate ? "Teslim tarihini değiştirme yetkiniz yok." : undefined}
-            className={noteControlCls}
+            className="tabular-nums"
           />
-        </label>
+        </Field>
 
-        <div className="block">
-          <span className="block text-[11px] font-medium text-muted mb-0.5">Kime bildirilsin?</span>
-          <PeoplePicker people={people} selected={selectedPeople} onToggle={togglePerson} />
-        </div>
+        <Field label="Kime bildirilsin?" htmlFor={notifyId}>
+          <PeoplePicker id={notifyId} people={people} selected={selectedPeople} onToggle={togglePerson} />
+        </Field>
 
-        <label className="block">
-          <span className="block text-[11px] font-medium text-muted mb-0.5">Sorumluluk aksiyonu</span>
-          <select
+        <Field label="Sorumluluk aksiyonu" hint={!canManageAssignment ? "Bu göreve sorumlu kişi atama yetkiniz yok." : undefined}>
+          <SelectInput
             value={assignmentAction}
             onChange={(e) => setAssignmentAction(e.target.value as NoteAssignmentAction)}
             disabled={!canManageAssignment}
-            title={!canManageAssignment ? "Bu göreve sorumlu kişi atama yetkiniz yok." : undefined}
-            className={noteControlCls}
           >
             {(Object.keys(NOTE_ASSIGNMENT_LABELS) as NoteAssignmentAction[]).map((a) => (
               <option key={a} value={a}>{NOTE_ASSIGNMENT_LABELS[a]}</option>
             ))}
-          </select>
-        </label>
+          </SelectInput>
+        </Field>
       </div>
 
-      <div className="flex items-start justify-between gap-2 flex-wrap">
-        <div className="text-[11px] text-subtle space-y-0.5 min-w-0">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="text-[12px] leading-relaxed text-subtle space-y-0.5 min-w-0">
           <p>Not eklerken teslim tarihini ve gerekiyorsa sıradaki sorumluyu netleştirin.</p>
-          {!canManageAssignment && (
-            <p className="text-subtle">Bu göreve sorumlu kişi atama yetkiniz yok.</p>
-          )}
           {dueBlocked && (
             <p className="text-danger">
               Bu göreve not eklemek için teslim tarihi gerekli. Teslim tarihi belirleme yetkiniz yok.
@@ -494,17 +530,14 @@ function AddNoteForm({
             <p className="text-warning">Bu not tipi için muhatap kişi seçmeniz önerilir.</p>
           )}
         </div>
-        <button
-          type="submit"
-          disabled={pending || dueBlocked}
-          className="text-sm bg-brand text-white shadow-xs rounded-lg px-3 py-2 hover:bg-brand-strong active:scale-[0.98] disabled:opacity-60 disabled:pointer-events-none disabled:shadow-none transition-all duration-150 font-medium whitespace-nowrap shrink-0"
-        >
-          {pending ? "…" : "Not ekle"}
-        </button>
+        {/* Ekranın tek primary'si üstteki "Kaydet"; not ekleme çerçeveli düğme. */}
+        <Button type="submit" variant="secondary" loading={pending} disabled={dueBlocked} className="shrink-0 ml-auto">
+          Not ekle
+        </Button>
       </div>
 
-      {error && <p role="alert" className="anim-fade-down text-xs text-danger">{error}</p>}
-      {warning && <p className="anim-fade-down text-xs text-warning">{warning}</p>}
+      {error && <p role="alert" className="anim-fade-down text-[12.5px] text-danger">{error}</p>}
+      {warning && <p className="anim-fade-down text-[12.5px] text-warning">{warning}</p>}
     </form>
   );
 }
@@ -530,7 +563,7 @@ export function TaskNotesPanel({
   return (
     <div className="bg-surface rounded-card border border-line shadow-card p-5 space-y-4">
       <h3 className="text-sm font-semibold tracking-tight text-ink flex items-center gap-1.5">
-        <StickyNote size={14} className="text-muted" /> Notlar
+        <StickyNote size={14} className="text-muted" aria-hidden /> Notlar
       </h3>
 
       {!isViewer && (
@@ -544,9 +577,7 @@ export function TaskNotesPanel({
       )}
 
       {sorted.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-line bg-surface-muted/40 px-4 py-6 text-center text-sm text-subtle">
-          Henüz not eklenmedi.
-        </p>
+        <EmptyState compact title="Henüz not yok." />
       ) : (
         <ol className="space-y-2">
           {sorted.map((note) => (

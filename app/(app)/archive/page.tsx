@@ -4,6 +4,9 @@ import { ArchiveView } from "@/components/task/ArchiveView";
 import { canViewDestructivePages } from "@/lib/auth/permissions";
 import type { Task, WorkspaceRole } from "@/types";
 
+// Sekme adı uygulama çubuğuyla aynı (PAGE_TITLES ↔ registry).
+export const metadata = { title: "Archive" };
+
 export default async function ArchivePage() {
   const supabase = await createClient();
   const user = await getAuthUser();

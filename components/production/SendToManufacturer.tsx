@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Send, Loader2, CheckCircle2, Mail } from "lucide-react";
+import { Send, CheckCircle2 } from "lucide-react";
 import { sendSheetToManufacturer } from "@/lib/actions/production";
 import { Overlay } from "@/components/ui/Overlay";
 import { Button } from "@/components/ui/Button";
+import { Field, TextInput, TextArea } from "@/components/ui/Field";
 
 interface Props {
   sheetId: string;
@@ -46,22 +47,29 @@ export function SendToManufacturer({ sheetId, defaultEmail, manufacturerName, co
 
   return (
     <>
-      <button
-        onClick={() => { setSentTo(null); setOpen(true); }}
-        disabled={!confirmed}
+      {/* Kapalı düğme üstünde ipucu kalsın diye sarmalayıcı `title` taşır
+          (devre dışı düğme işaretçi olaylarını almaz). */}
+      <span
+        className="inline-flex"
         title={
           confirmed
             ? "Föyü üreticiye e-posta olarak gönder"
             : "Önce föyü konfirme edin — eksik föy üreticiye gitmez"
         }
-        className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-muted shadow-xs transition-all duration-150 hover:border-brand hover:text-brand active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45"
       >
-        <Send size={15} /> <span className="hidden sm:inline">Üreticiye gönder</span>
-      </button>
+        <Button
+          variant="secondary"
+          onClick={() => { setSentTo(null); setOpen(true); }}
+          disabled={!confirmed}
+          aria-label="Üreticiye gönder"
+        >
+          <Send size={15} aria-hidden /> <span className="hidden sm:inline">Üreticiye gönder</span>
+        </Button>
+      </span>
 
       {sentTo && (
-        <span className="anim-fade-down inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-[12.5px] font-medium text-emerald-800">
-          <CheckCircle2 size={14} /> {sentTo} adresine gönderildi
+        <span role="status" className="anim-fade-down inline-flex h-9 items-center gap-1.5 rounded-control border border-success/30 bg-success/10 px-2.5 text-[12.5px] font-medium text-ink">
+          <CheckCircle2 size={14} className="text-success" aria-hidden /> {sentTo} adresine gönderildi
         </span>
       )}
 
@@ -83,37 +91,30 @@ export function SendToManufacturer({ sheetId, defaultEmail, manufacturerName, co
         >
         <div className="space-y-3">
             {error && (
-              <p role="alert" className="anim-fade-down rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-[12.5px] font-medium text-danger">
+              <p role="alert" className="anim-fade-down rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] font-medium text-danger">
                 {error}
               </p>
             )}
 
-            <label className="block">
-              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">
-                Alıcı{manufacturerName ? ` · ${manufacturerName}` : ""}
-              </span>
-              <input
+            <Field label={`Alıcı${manufacturerName ? ` · ${manufacturerName}` : ""}`} required>
+              <TextInput
                 type="email"
                 value={to}
                 onChange={(e) => setTo(e.target.value)}
                 placeholder="usta@atolye.com"
                 autoFocus
-                className="w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[13px] text-ink placeholder:text-subtle transition-[border-color,box-shadow] duration-150 hover:border-line-strong focus:border-brand-ring focus:outline-none focus:ring-2 focus:ring-brand-ring"
+                autoComplete="email"
               />
-            </label>
+            </Field>
 
-            <label className="block">
-              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">
-                Not <span className="font-normal normal-case tracking-normal text-subtle">· mailin başında görünür</span>
-              </span>
-              <textarea
+            <Field label="Not" hint="Mailin başında görünür.">
+              <TextArea
                 rows={3}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="Merhaba, ekteki föye göre üretime başlayabilir misiniz?"
-                className="w-full resize-y rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[13px] leading-relaxed text-ink placeholder:text-subtle transition-[border-color,box-shadow] duration-150 hover:border-line-strong focus:border-brand-ring focus:outline-none focus:ring-2 focus:ring-brand-ring"
               />
-            </label>
+            </Field>
 
             <p className="text-[12px] leading-relaxed text-subtle">
               Föyün tamamı — ürün künyesi, beden dağılımı, ölçüler ve reçete —

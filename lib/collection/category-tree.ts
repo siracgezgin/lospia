@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { COLLECTION_TAXONOMY, type CategoryNode } from "./taxonomy";
+import { COLLECTION_TAXONOMY, findSub, type CategoryNode } from "./taxonomy";
 
 /**
  * KATEGORİ AĞACININ TEK OKUMA KAPISI.
@@ -21,20 +21,29 @@ export type CategoryRow = {
   color_hex: string | null;
 };
 
-/** Düz satırları iki kademeli ağaca çevirir. */
+/**
+ * Düz satırları ağaca çevirir — ÜÇ kademeye kadar (Accessories › Hats ›
+ * Bucket Hat). Şema `parent_key` ile keyfi derinliğe izin veriyordu ama
+ * kurucu yalnız iki kademe okuyordu: üçüncü seviye satırlar veritabanında
+ * durup ekranda hiç görünmüyordu (Sıraç, 2026-08-30 koleksiyon yapısı).
+ */
 export function buildCategoryTree(rows: CategoryRow[]): CategoryNode[] {
-  const tops = rows
-    .filter((r) => !r.parent_key)
-    .sort((a, b) => a.position - b.position || a.label.localeCompare(b.label, "tr"));
+  const byOrder = (a: CategoryRow, b: CategoryRow) =>
+    a.position - b.position || a.label.localeCompare(b.label, "tr");
 
-  return tops.map((t) => ({
-    key: t.key,
-    label: t.label,
-    subcategories: rows
-      .filter((r) => r.parent_key === t.key)
-      .sort((a, b) => a.position - b.position || a.label.localeCompare(b.label, "tr"))
-      .map((s) => ({ key: s.key, label: s.label })),
-  }));
+  const childrenOf = (parent: string): CategoryNode["subcategories"] =>
+    rows
+      .filter((r) => r.parent_key === parent)
+      .sort(byOrder)
+      .map((s) => {
+        const kids = childrenOf(s.key);
+        return kids.length ? { key: s.key, label: s.label, children: kids } : { key: s.key, label: s.label };
+      });
+
+  return rows
+    .filter((r) => !r.parent_key)
+    .sort(byOrder)
+    .map((t) => ({ key: t.key, label: t.label, subcategories: childrenOf(t.key) }));
 }
 
 /**
@@ -68,7 +77,9 @@ export function subLabelOf(
   sub: string | null | undefined,
 ): string {
   if (!category || !sub) return "";
-  return tree.find((c) => c.key === category)?.subcategories.find((s) => s.key === sub)?.label ?? "";
+  // ÜÇ kademe: alt kategori ikinci ya da üçüncü seviyede olabilir.
+  const node = tree.find((c) => c.key === category);
+  return node ? (findSub(node.subcategories, sub)?.label ?? "") : "";
 }
 
 /** Bir kategorinin alt kategorileri. */

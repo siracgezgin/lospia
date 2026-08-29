@@ -14,11 +14,11 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ImagePlus, Loader2, Trash2 } from "lucide-react";
+import { ImagePlus, Trash2 } from "lucide-react";
 import { uploadAvatar, removeAvatar } from "@/lib/actions/avatars";
 import { compressImage } from "@/lib/utils/compress-image";
 import { PersonAvatar } from "@/components/ui/PersonAvatar";
-import { cn } from "@/lib/utils/cn";
+import { Button } from "@/components/ui/Button";
 
 const MAX_ORIGINAL_BYTES = 5 * 1024 * 1024;
 
@@ -91,32 +91,34 @@ export function AvatarUploader({ userId, name, photoUrl, colorHex, disabled, nam
         type="file"
         accept="image/png,image/jpeg,image/webp"
         className="hidden"
+        aria-label="Fotoğraf seç"
+        tabIndex={-1}
         onChange={(e) => handleFile(e.target.files?.[0])}
       />
 
-      <button
-        type="button"
+      {/* Yükleme ikincil bir eylem: sayfanın tek primary'si "Kaydet". */}
+      <Button
+        variant="secondary"
+        size="sm"
         onClick={() => inputRef.current?.click()}
-        disabled={disabled || working}
-        className={cn(
-          "inline-flex h-8 items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 text-[12.5px] font-medium text-muted transition-colors duration-150",
-          "hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50",
-        )}
+        disabled={disabled || isPending}
+        loading={busy}
       >
-        {working ? <Loader2 size={13} className="animate-spin" /> : <ImagePlus size={13} />}
+        {!busy && <ImagePlus size={14} aria-hidden />}
         {photoUrl ? "Değiştir" : "Fotoğraf yükle"}
-      </button>
+      </Button>
 
       {photoUrl && (
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={handleRemove}
           disabled={disabled || working}
           title="Fotoğrafı kaldır — baş harfleri gösterilir"
-          className="inline-flex h-8 items-center gap-1 rounded-lg px-2 text-[12.5px] text-subtle transition-colors duration-150 hover:bg-[#fbe6e2] hover:text-danger disabled:pointer-events-none disabled:opacity-50"
+          className="hover:bg-danger/10 hover:text-danger"
         >
-          <Trash2 size={13} /> Kaldır
-        </button>
+          <Trash2 size={14} aria-hidden /> Kaldır
+        </Button>
       )}
 
       {error && <p role="alert" className="w-full text-[12px] text-danger">{error}</p>}

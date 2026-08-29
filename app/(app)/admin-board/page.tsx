@@ -2,7 +2,11 @@ import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { KanbanBoard, type ManagerOption } from "@/components/board/KanbanBoard";
 import { asVisibility, type TaskVisibility } from "@/lib/utils/visibility";
-import type { Task, Profile, WorkspaceContact, WorkspaceDepartment, WorkspaceRole, TaskParticipant } from "@/types";
+import { asNoteType, asNoteActionStatus } from "@/lib/notes/note-types";
+import type {
+  Task, Profile, WorkspaceContact, WorkspaceDepartment, WorkspaceRole, TaskParticipant,
+  WorkspaceNote, BoardNoteFeedItem,
+} from "@/types";
 import type { BoardMember } from "@/app/(app)/board/page";
 
 export default async function AdminBoardPage({
@@ -31,7 +35,13 @@ export default async function AdminBoardPage({
   const visibility: TaskVisibility = asVisibility(params.visibility);
   const manager = params.manager ?? "all";
 
-  const [tasksResult, profilesResult, contactsResult, deptsResult, completionsResult, deptMembersResult] =
+  /* NOT SÜTUNU Yönetici Pano'da da çizilir (Sıraç, 2026-08-29: "soldaki notlar
+     kısmı neden burda yok"). Sorgular normal Pano ile BİREBİR aynı; hepsi
+     AYNI dalgada gider — kabuk kuralı: maliyet sıralı adım sayısıdır. */
+  const [
+    tasksResult, profilesResult, contactsResult, deptsResult, completionsResult, deptMembersResult,
+    notesResult, feedResult, ackResult,
+  ] =
     await Promise.all([
       // Admin sees every task via RLS; we still drop archived/deleted here.
       supabase
@@ -64,6 +74,26 @@ export default async function AdminBoardPage({
         .from("department_members")
         .select("department_id, member_id")
         .eq("workspace_id", workspaceId),
+      // Çalışma alanı notları — not sütununun sabit kartları.
+      supabase
+        .from("workspace_notes")
+        .select("*")
+        .eq("workspace_id", workspaceId)
+        .order("position")
+        .order("created_at"),
+      // Haftanın Not Akışı — görev notları, göreviyle ve yazarıyla birlikte.
+      supabase
+        .from("task_notes")
+        .select("*, task:tasks!inner(id, title, department_id, due_date, archived_at, deleted_at, visibility), author:profiles!task_notes_author_id_fkey(id, full_name, email)")
+        .eq("workspace_id", workspaceId)
+        .order("created_at", { ascending: false })
+        .limit(150),
+      // Not makbuzları ("gördüm / üstlendim"). Tablo migrate edilmemişse boş döner.
+      supabase
+        .from("task_note_acknowledgements")
+        .select("note_id, user_id, action")
+        .eq("workspace_id", workspaceId)
+        .limit(1000),
     ]);
 
   const allTasks: Task[] = tasksResult.data ?? [];
@@ -143,6 +173,63 @@ export default async function AdminBoardPage({
   const departments = (deptsResult.data ?? []) as WorkspaceDepartment[];
   const deptMembers = (deptMembersResult.data ?? []) as { department_id: string; member_id: string }[];
 
+  /* ── Not sütununun verisi — normal Pano ile AYNI dönüşüm ─────────────────
+     Yönetici zaten tüm görevleri görüyor (RLS), yine de görünürlük ve
+     silinmişlik kontrolü Pano'daki gibi burada da uygulanır: dönüşümün iki
+     yüzeyde ayrışması, aynı notun iki panoda farklı görünmesi demekti. */
+  const notes: WorkspaceNote[] = (notesResult.data ?? []) as WorkspaceNote[];
+
+  type FeedTaskRow = {
+    id: string; title: string; department_id: string | null; due_date: string | null;
+    archived_at: string | null; deleted_at: string | null; visibility: string | null;
+  };
+  type FeedNoteRow = {
+    id: string; task_id: string; author_id: string | null; content: string; created_at: string;
+    note_type?: string; action_status?: string; metadata?: Record<string, unknown> | null;
+    task: FeedTaskRow | FeedTaskRow[] | null;
+    author: Pick<Profile, "id" | "full_name" | "email"> | Pick<Profile, "id" | "full_name" | "email">[] | null;
+  };
+
+  const nameOfUser = (id: string | null | undefined): string | null => {
+    if (!id) return null;
+    const p = profiles.find((x) => x.id === id);
+    return p?.full_name ?? p?.email ?? null;
+  };
+  const nameOfContact = (id: string): string | null =>
+    contacts.find((c) => c.id === id)?.name ?? null;
+
+  const noteFeed: BoardNoteFeedItem[] = ((feedResult.data ?? []) as unknown as FeedNoteRow[])
+    .map((row) => {
+      const task = Array.isArray(row.task) ? row.task[0] : row.task;
+      if (!task || task.archived_at || task.deleted_at) return null;
+      const author = Array.isArray(row.author) ? row.author[0] : row.author;
+      const meta = (row.metadata ?? {}) as Record<string, unknown>;
+      const notifyUserIds = Array.isArray(meta.notify_user_ids) ? (meta.notify_user_ids as string[]) : [];
+      const notifyContactIds = Array.isArray(meta.notify_contact_ids) ? (meta.notify_contact_ids as string[]) : [];
+      const notifiedNames = [
+        ...notifyUserIds.map((id) => nameOfUser(id)),
+        ...notifyContactIds.map((id) => nameOfContact(id)),
+      ].filter((n): n is string => !!n);
+      return {
+        id: row.id,
+        taskId: task.id,
+        taskTitle: task.title,
+        taskDueDate: task.due_date ? String(task.due_date).slice(0, 10) : null,
+        departmentId: task.department_id,
+        authorId: row.author_id,
+        authorName: author?.full_name ?? author?.email ?? "Bilinmeyen kullanıcı",
+        content: row.content,
+        noteType: asNoteType(row.note_type),
+        actionStatus: asNoteActionStatus(row.action_status),
+        createdAt: row.created_at,
+        notifiedNames: [...new Set(notifiedNames)],
+        claimedByName: nameOfUser(typeof meta.claimed_by === "string" ? meta.claimed_by : null),
+      } satisfies BoardNoteFeedItem;
+    })
+    .filter((x): x is BoardNoteFeedItem => x !== null);
+
+  const noteAcks = (ackResult.data ?? []) as { note_id: string; user_id: string; action: string }[];
+
   return (
     <KanbanBoard
       tasks={tasks}
@@ -152,7 +239,9 @@ export default async function AdminBoardPage({
       userId={user.id}
       profiles={profiles}
       contacts={contacts}
-      notes={[]}
+      notes={notes}
+      noteFeed={noteFeed}
+      noteAcks={noteAcks}
       departments={departments}
       participantsByTask={participantsByTask}
       members={members}

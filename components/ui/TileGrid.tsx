@@ -113,10 +113,10 @@ export function Tile({
           <img
             src={photoUrl}
             alt=""
-            className="h-full w-full object-cover transition-transform duration-300 ease-standard group-hover:scale-[1.04]"
+            className="h-full w-full object-cover"
           />
         ) : initials ? (
-          <span className={cn("font-semibold tracking-tight", compact ? "text-[12.5px]" : "text-[28px]")}>
+          <span className={cn("font-semibold tracking-tight", compact ? "text-[13px]" : "text-[28px]")}>
             {initials}
           </span>
         ) : Icon ? (
@@ -134,7 +134,7 @@ export function Tile({
         <span
           className={cn(
             "block truncate font-semibold tracking-tight text-ink",
-            row ? "text-[13.5px]" : compact ? "text-[11px] sm:text-[11.5px] leading-tight" : "text-[16px] sm:text-[19px]",
+            row ? "text-[13.5px]" : compact ? "text-[12px] leading-tight" : "text-[16px] sm:text-[18px]",
           )}
           title={title}
         >
@@ -144,7 +144,7 @@ export function Tile({
           <span
             className={cn(
               "block truncate text-muted",
-              row ? "text-[11.5px]" : compact ? "mt-0.5 line-clamp-2 text-[11.5px] leading-snug" : "mt-1 text-[13px]",
+              row ? "text-[12px]" : compact ? "mt-0.5 line-clamp-2 text-[12px] leading-snug" : "mt-1 text-[13px]",
             )}
           >
             {metaNode ?? meta}
@@ -158,15 +158,15 @@ export function Tile({
     // w-full ŞART: <button>/<a> ızgara hücresini kendiliğinden doldurmuyor.
     // Kart içeriği kadar dar kalıyor, sarmalayıcıya göre konumlanan aksiyon
     // düğmeleri de karttan KOPUK duruyordu (2026-08-29 ekran görüntüsü).
-    "group relative flex w-full overflow-hidden border bg-surface shadow-card transition-all duration-200 ease-standard",
+    "group relative flex w-full overflow-hidden border bg-surface shadow-card transition-[box-shadow,border-color] duration-150 ease-standard",
     row
-      ? "items-center gap-2.5 rounded-xl px-3 py-2.5 text-left"
+      ? "items-center gap-2.5 rounded-card px-3 py-2.5 text-left"
       : cn(
           "flex-col items-center text-center",
-          compact ? "rounded-xl" : "rounded-2xl",
+          compact ? "rounded-card" : "rounded-card",
           compact ? "gap-1 px-1 pb-2 pt-2.5" : "gap-2.5 px-3 pb-5 pt-6 sm:gap-3 sm:px-4 sm:pb-6 sm:pt-8",
         ),
-    "hover:-translate-y-0.5 hover:shadow-card-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
+    "hover:shadow-card-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring focus-visible:ring-offset-2",
     !st && "border-line hover:border-line-strong",
     active && "ring-2 ring-brand-ring",
   );

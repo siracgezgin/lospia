@@ -43,7 +43,10 @@ const isAdmin = (r: AppRole) => r === "owner" || r === "admin";
 const FolderSchema = z.object({
   name: z.string().min(1, "Klasör adı gerekli.").max(200),
   parent_id: z.string().uuid().optional().nullable(),
-  visibility: z.enum(["all", "admin"]).default("admin"),
+  /* Varsayılan "all": klasörü açan kişi aksini söylemedikçe ekip görsün.
+     Eskiden 'admin'di ve üyenin açtığı klasör kendinden başkasına görünmüyordu
+     (Sıraç, 2026-08-30: "tüm üyelere göster kısmı da olsun"). */
+  visibility: z.enum(["all", "admin"]).default("all"),
   /** Bölüm (20240324): AF Teamwork mü Kütüphane mi. Alt klasör üstünü izler. */
   section: z.enum(["teamwork", "library"]).default("teamwork"),
 });
@@ -58,7 +61,23 @@ export async function saveFolder(
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
-  if (!isAdmin(ctx.role)) return { error: ADMIN_ONLY };
+
+  /* SAHİPLİK KURALI: yönetici her klasörü, üye YALNIZ KENDİ açtığını yönetir.
+     Eskiden klasör açmak da düzenlemek de yönetici işiydi; üye kendi çalışma
+     alanını kuramıyordu (Sıraç, 2026-08-30). Aynı kural RLS'te de yazılıdır —
+     burası yalnız net bir hata mesajı verebilmek için. */
+  if (id && !isAdmin(ctx.role)) {
+    const { data: owner } = await supabase
+      .from("document_folders")
+      .select("created_by")
+      .eq("id", id)
+      .eq("workspace_id", ctx.workspaceId)
+      .maybeSingle();
+    if (!owner) return { error: NOT_FOUND };
+    if ((owner as { created_by: string | null }).created_by !== ctx.userId) {
+      return { error: ADMIN_ONLY };
+    }
+  }
 
   const v = parsed.data;
   // Klasör kendi altına taşınamaz — ağaç döngüye girerdi.
@@ -103,7 +122,20 @@ export async function deleteFolder(id: string): Promise<{ ok: true } | { error: 
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
-  if (!isAdmin(ctx.role)) return { error: ADMIN_ONLY };
+
+  // Yönetici her klasörü, üye kendi açtığını siler (RLS ile aynı kural).
+  if (!isAdmin(ctx.role)) {
+    const { data: owner } = await supabase
+      .from("document_folders")
+      .select("created_by")
+      .eq("id", id)
+      .eq("workspace_id", ctx.workspaceId)
+      .maybeSingle();
+    if (!owner) return { error: NOT_FOUND };
+    if ((owner as { created_by: string | null }).created_by !== ctx.userId) {
+      return { error: ADMIN_ONLY };
+    }
+  }
 
   const [{ count: docs }, { count: subs }] = await Promise.all([
     supabase.from("operation_documents")

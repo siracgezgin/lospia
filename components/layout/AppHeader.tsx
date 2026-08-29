@@ -34,8 +34,10 @@ const PAGE_TITLES: { match: (p: string) => boolean; title: string }[] = [
   { match: (p) => p.startsWith("/admin-board"), title: "Admin Board" },
   { match: (p) => p.startsWith("/board"), title: "Board" },
   { match: (p) => p.startsWith("/planning"), title: "Calendar" },
+  // Raporlar List yüzeyinin son sekmesidir; başlık yüzeyin adını söyler,
+  // hangi sekmede olunduğunu şeridin kendisi gösterir.
   { match: (p) => p.startsWith("/list"), title: "List" },
-  { match: (p) => p.startsWith("/dashboard"), title: "Reports" },
+  { match: (p) => p.startsWith("/dashboard"), title: "List" },
   // "/collection/maliyet" kendi adını taşır — sıra önemli (startsWith).
   { match: (p) => p.startsWith("/collection/maliyet"), title: "Cost" },
   { match: (p) => p.startsWith("/collection/veri"), title: "Product Data" },
@@ -110,15 +112,15 @@ function ProfileMenu({
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 rounded-lg border-l border-line py-1 pl-3 pr-1.5 transition-colors duration-150 hover:bg-surface-muted active:bg-surface-sunken"
+        className="flex h-9 items-center gap-2 rounded-control py-1 pl-2 pr-1.5 transition-colors duration-150 hover:bg-surface-muted active:bg-surface-sunken"
         aria-haspopup="menu"
         aria-expanded={open}
         title={subtitle ? `${displayName} · ${subtitle}` : displayName}
       >
         <PersonAvatar name={displayName} photoUrl={photoUrl} size="sm" />
         <div className="hidden flex-col text-left leading-tight sm:flex">
-          <span className="max-w-[140px] truncate text-xs font-medium text-ink">{displayName}</span>
-          {subtitle && <span className="max-w-[140px] truncate text-[10px] text-subtle">{subtitle}</span>}
+          <span className="max-w-[160px] truncate text-[13px] font-medium text-ink">{displayName}</span>
+          {subtitle && <span className="max-w-[160px] truncate text-[12px] text-subtle">{subtitle}</span>}
         </div>
         <ChevronDown
           size={13}
@@ -129,14 +131,14 @@ function ProfileMenu({
       {open && (
         <div
           role="menu"
-          className="anim-fade-down absolute right-0 top-full z-50 mt-2 w-64 origin-top-right overflow-hidden rounded-xl border border-line bg-surface shadow-pop"
+          className="anim-fade-down absolute right-0 top-full z-50 mt-1.5 w-64 origin-top-right overflow-hidden rounded-card border border-line bg-surface shadow-pop"
         >
           {/* Kimlik — ad + e-posta. Rol aşağıda BİR kez yazar. */}
           <div className="flex items-center gap-3 border-b border-line bg-surface-muted/60 px-4 py-3.5">
             <PersonAvatar name={displayName} photoUrl={photoUrl} size="md" />
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-ink">{displayName}</p>
-              <p className="flex items-center gap-1.5 truncate text-[11px] text-subtle">
+              <p className="flex items-center gap-1.5 truncate text-[12px] text-subtle">
                 <Mail size={11} className="shrink-0" />
                 <span className={email ? "truncate" : "truncate italic text-subtle/80"}>
                   {email ?? "E-posta eklenmedi"}
@@ -149,7 +151,7 @@ function ProfileMenu({
               ve her yerde onunla görünür. */}
           {viewerIsAdmin && (
             <div className="border-b border-line px-4 py-2.5">
-              <div className="flex items-center gap-2 text-[12px] text-muted">
+              <div className="flex items-center gap-2 text-[12.5px] text-muted">
                 <Shield size={13} className="shrink-0 text-subtle" />
                 <span>{ROLE_LABELS[role]}</span>
               </div>
@@ -158,9 +160,15 @@ function ProfileMenu({
 
           <div className="py-1">
             <MenuLink href="/profile" icon={UserRound} label="Profilim" onGo={() => setOpen(false)} />
-            <MenuLink href="/activity" icon={Bell} label="Hareketlerim" onGo={() => setOpen(false)} />
+            {/* Hareket kaydı VERİ DÜZEYİNDE yönetici-only (RLS). Bağlantı herkese
+                çiziliyordu: üye tıklıyor ve "bu alan yalnızca yöneticilere açık"
+                ekranına düşüyordu (Sıraç, 2026-08-29: "bu da gereksiz bilgi").
+                Çıkmaza götüren kapıyı hiç açmamak, çıkmazı açıklamaktan iyidir. */}
             {canManageSettings(role) && (
-              <MenuLink href="/settings" icon={Settings} label="Ayarlar" onGo={() => setOpen(false)} />
+              <>
+                <MenuLink href="/activity" icon={Bell} label="Hareketlerim" onGo={() => setOpen(false)} />
+                <MenuLink href="/settings" icon={Settings} label="Ayarlar" onGo={() => setOpen(false)} />
+              </>
             )}
           </div>
 
@@ -216,7 +224,7 @@ export function AppHeader({
        Başlık eskiden z-30'daydı; Planlama ızgarasının yapışkan satırı da
        z-30'daydı ve DOM'da sonra geldiği için profil menüsünün ÜSTÜNE
        çiziliyordu — menü kırpılmış görünüyordu (2026-08-20 geri bildirimi). */
-    <header className="relative z-40 h-14 bg-surface border-b border-line flex items-center justify-between px-5 shrink-0">
+    <header className="relative z-40 flex h-14 shrink-0 items-center justify-between border-b border-line bg-surface px-4 sm:px-5">
       <div className="flex items-center gap-2.5 min-w-0">
         {/* key={pathname} — rota değişince başlık yumuşakça belirir. */}
         <h1

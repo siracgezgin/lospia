@@ -32,7 +32,7 @@
      tasarımcının "bitmemiş" diye okuduğu ilk şeydir. */
   --text:          #121a1e;   /* birincil */
   --text-muted:    #44525a;   /* ikincil */
-  --text-subtle:   #72828a;   /* üçüncül / yer tutucu */
+  --text-subtle:   #66767f;   /* üçüncül / yer tutucu — beyaz üstünde ≥4.5:1, 12px meta okunur kalır */
 
   /* MARKA — sakin ama CANLI teal. Eskisi (#2f5d6b) tozlu kalıyordu. */
   --brand:         #2a6b7a;
@@ -359,10 +359,9 @@ body {
 }
 
 /* Calm, accessible focus ring */
-:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+:where(a, button, input, select, textarea, [tabindex], summary):focus-visible {
   outline: 2px solid var(--brand-ring);
-  outline-offset: 1px;
-  border-radius: 4px;
+  outline-offset: 2px;
 }
 
 ::selection {

@@ -19,50 +19,35 @@ export default async function LoginPage({
   // logo (and its pilot subline); everything else is the Lospia product mark.
   const brand = getAppBrandForHost((await headers()).get("host"));
 
+  /* Sakin giriş: düz zemin, tek kart, tek form. Önce iki radyal ışıma vardı
+     (gradient arka plan); marka ışıması değil görsel gürültüydü — kaldırıldı.
+     Kart telefonda kenardan 16px içeride ve daha dar dolgu (p-6). */
   return (
-    <main className="relative min-h-screen flex items-center justify-center bg-app px-4 py-12">
-      {/* Sakin, kurumsal arka plan vurgusu — üstte hafif brand-soft radyal ışıma,
-          köşede daha da soluk bir denge lekesi. Dekoratif; etkileşim almaz. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(44rem 30rem at 50% -8rem, var(--brand-soft) 0%, transparent 68%), radial-gradient(30rem 22rem at 106% 108%, var(--brand-soft) 0%, transparent 72%)",
-        }}
-      />
-
-      <div className="anim-fade-up relative w-full max-w-sm space-y-6 rounded-2xl border border-line bg-surface p-8 shadow-pop">
+    <main className="flex min-h-screen items-center justify-center bg-app px-4 py-10 sm:py-12">
+      <div className="anim-fade-up w-full max-w-sm space-y-6 rounded-card border border-line bg-surface p-6 shadow-card sm:p-8">
         {/* Brand — the resolved product/pilot logo leads, then a single generic
             supporting line. Logo width is capped so it reads as a confident
             brand mark without overflowing the card. The pilot subline (AF only)
             is the one exception where a tenant name appears pre-auth, matching
             the original AF Operasyon login. */}
-        <div
-          className="anim-fade-up flex flex-col items-center text-center space-y-4"
-          style={{ animationDelay: "60ms" }}
-        >
+        <div className="flex flex-col items-center space-y-4 text-center">
           <img
             src={brand.loginLogo}
             alt={brand.name}
-            className="w-40 h-auto select-none"
+            className="h-auto w-40 select-none"
             draggable={false}
           />
           <div className="space-y-1.5">
-            <p className="text-sm text-muted leading-relaxed">
+            <p className="text-[13.5px] leading-relaxed text-muted">
               Görevler, ekip akışı ve operasyon takibi için giriş yapın.
             </p>
             {brand.loginSubtitle && (
-              <p className="text-xs text-subtle">{brand.loginSubtitle}</p>
+              <p className="text-[12.5px] text-subtle">{brand.loginSubtitle}</p>
             )}
           </div>
         </div>
 
-        <div
-          aria-hidden
-          className="anim-fade border-t border-hairline"
-          style={{ animationDelay: "120ms" }}
-        />
+        <div aria-hidden className="border-t border-hairline" />
 
         <LoginForm initialEmail={initialEmail} />
       </div>

@@ -41,7 +41,7 @@ export function KimBadges({ ids, kim, collaboratorIds, memberNames, personHex = 
           key={id}
           title={memberNames[id] ?? ""}
           className={cn(
-            "inline-flex items-center rounded-md px-1.5 py-px text-[10.5px] font-bold uppercase leading-[15px] tracking-wide text-white",
+            "inline-flex items-center rounded-md px-1.5 py-px text-[11.5px] font-semibold uppercase leading-4 tracking-wide text-white",
             !personHex[id] && "bg-brand",
           )}
           style={personHex[id] ? { backgroundColor: personHex[id] } : undefined}
@@ -56,7 +56,7 @@ export function KimBadges({ ids, kim, collaboratorIds, memberNames, personHex = 
           key={`c-${id}`}
           title={`${memberNames[id] ?? ""} — iş birliği`}
           className={cn(
-            "inline-flex items-center rounded-md border border-dashed bg-surface px-1.5 py-px text-[10.5px] font-semibold uppercase leading-[15px] tracking-wide",
+            "inline-flex items-center rounded-md border border-dashed bg-surface px-1.5 py-px text-[11.5px] font-semibold uppercase leading-4 tracking-wide",
             !personHex[id] && "border-brand/50 text-brand-strong",
           )}
           style={personHex[id] ? { borderColor: personHex[id], color: personHex[id] } : undefined}
@@ -70,7 +70,7 @@ export function KimBadges({ ids, kim, collaboratorIds, memberNames, personHex = 
         <span
           key={name}
           title={`${name} — sistemde kullanıcı değil`}
-          className="inline-flex items-center rounded-md border border-brand-ring/60 bg-brand-soft px-1.5 py-px text-[10.5px] font-semibold leading-[15px] text-brand-strong"
+          className="inline-flex items-center rounded-md border border-brand-ring/60 bg-brand-soft px-1.5 py-px text-[12px] font-medium leading-4 text-brand-strong"
         >
           {name}
         </span>

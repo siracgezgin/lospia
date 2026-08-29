@@ -4,14 +4,15 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Plus, Search, Table2, Pencil, Archive, ArrowUpRight, Lock, Trash2,
+  Plus, Search, Table2, Pencil, Archive, Lock, Trash2,
 } from "lucide-react";
 import { archiveOperationSpreadsheet, deleteOperationSpreadsheet } from "@/lib/actions/sheets";
-import {
-  SHEET_TYPES, SHEET_STATUSES, sheetTypeLabel, sheetStatusLabel, SHEET_STATUS_TONE,
-} from "@/lib/office/constants";
+import { sheetStatusLabel, SHEET_STATUS_TONE } from "@/lib/office/constants";
 import { cn } from "@/lib/utils/cn";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Button, IconButton } from "@/components/ui/Button";
+import { TextInput } from "@/components/ui/Field";
+import { useConfirm } from "@/components/ui/useConfirm";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { SheetFormModal } from "./SheetFormModal";
 import type { OperationSpreadsheet, WorkspaceDepartment } from "@/types";
@@ -38,10 +39,16 @@ function norm(s: string): string {
     .replace(/İ/g, "i");
 }
 
+/**
+ * NOT (2026-08-29): Bu liste ekranı artık KULLANILMIYOR — /sheets,
+ * /documents'a yönlendiriyor; tablolar AF Teamwork klasörlerinde yaşıyor.
+ * Silme kararı kullanıcıya ait; o güne kadar aynı UI kurallarına uyar.
+ */
 export function SheetsView({
   sheets, departments, tasks, contacts, memberNames, currentUserId, isAdmin,
 }: Props) {
   const router = useRouter();
+  const { ask, dialog } = useConfirm();
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [status, setStatus] = useState("");
@@ -79,8 +86,8 @@ export function SheetsView({
   function openNew() { setEditing(null); setModalOpen(true); }
   function openEdit(s: SheetListItem) { setEditing(s); setModalOpen(true); }
 
-  function handleArchive(s: SheetListItem) {
-    if (!confirm(`"${s.title}" tablosunu arşivlemek istiyor musunuz?`)) return;
+  async function handleArchive(s: SheetListItem) {
+    if (!(await ask({ message: `"${s.title}" tablosu arşivlensin mi?`, confirmLabel: "Arşivle" }))) return;
     setError(null);
     startWork(async () => {
       const res = await archiveOperationSpreadsheet(s.id);
@@ -93,8 +100,11 @@ export function SheetsView({
      Arşivleme vardı ama silme hiç bağlanmamıştı — server action
      (deleteOperationSpreadsheet) yazılmış, arayüzden çağrılmıyordu.
      Geri alınamaz olduğu için onay metni tablonun adını söyler. */
-  function handleDelete(s: SheetListItem) {
-    if (!confirm(`"${s.title}" tablosu kalıcı olarak silinsin mi?\n\nBu işlem geri alınamaz. Sadece gözden kaldırmak için "Arşivle"yi kullanın.`)) return;
+  async function handleDelete(s: SheetListItem) {
+    if (!(await ask({
+      title: "Tablo silinsin mi?",
+      message: `"${s.title}" kalıcı olarak silinir. Yalnız gözden kaldırmak için "Arşivle"yi kullanın.`,
+    }))) return;
     setError(null);
     startWork(async () => {
       const res = await deleteOperationSpreadsheet(s.id);
@@ -103,24 +113,16 @@ export function SheetsView({
     });
   }
 
-  const selectCls =
-    "h-9 rounded-lg border border-line bg-surface px-3 text-sm text-muted transition-colors duration-150 hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40";
-
   return (
     <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
       <ModulePageHeader
         title="Sheets"
-        description="Excel/CSV düzenlerinizi Lospia içinde tablo olarak tutun — hücreleri doğrudan düzenleyin, Excel'den kopyalayıp yapıştırın."
-        icon={Table2}
-        // Sheets AF Teamwork'ün bir bölümü (2026-08-28) — geri oraya döner.
+        backHref="/documents"
         rightSlot={
-          <button
-            onClick={openNew}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-3.5 py-2 text-[13px] font-medium text-white transition-colors duration-150 hover:bg-brand-strong active:scale-[0.98]"
-          >
-            <Plus size={15} />
+          <Button size="sm" onClick={openNew}>
+            <Plus size={15} aria-hidden />
             Yeni tablo
-          </button>
+          </Button>
         }
       />
 
@@ -128,18 +130,19 @@ export function SheetsView({
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="relative min-w-[200px] flex-1">
           <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-subtle" />
-          <input
+          <TextInput
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Tablo adı veya etiket ara…"
-            className="h-9 w-full rounded-lg border border-line bg-surface pl-9 pr-3 text-sm text-ink placeholder:text-subtle transition-colors duration-150 hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40"
+            aria-label="Tablo ara"
+            className="pl-9"
           />
         </div>
         {/* Tür / durum / departman açılır listeleri KALDIRILDI — üç ayrı süzgeç
             bir avuç tablo için fazlaydı ve arama kutusunu bastırıyordu.
             Departman süzgeci ancak birden fazla departmana tablo dağılmışsa
             anlamlı; o zaman da arama yeterli. (Sadelik kuralı.) */}
-        <label className="flex h-9 cursor-pointer select-none items-center gap-1.5 rounded-lg px-2 text-[12.5px] text-muted transition-colors duration-150 hover:text-ink">
+        <label className="flex h-9 cursor-pointer select-none items-center gap-1.5 rounded-control px-2 text-[12.5px] text-muted transition-colors duration-150 hover:text-ink">
           <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} className="h-3.5 w-3.5 accent-brand" />
           Arşivi göster
         </label>
@@ -147,27 +150,19 @@ export function SheetsView({
 
       {/* Cards */}
       {filtered.length === 0 ? (
-        <div className="anim-fade-up rounded-2xl border border-line bg-surface shadow-card">
-          <EmptyState
-            icon={sheets.length === 0 ? Table2 : Search}
-            title={
-              sheets.length === 0
-                ? "Henüz tablo eklenmedi. Stok, koleksiyon ve operasyon tablolarınızı buradan takip edebilirsiniz."
-                : "Filtreye uyan tablo bulunamadı."
-            }
-            action={
-              sheets.length === 0 ? (
-                <button
-                  onClick={openNew}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3.5 py-2 text-[13px] font-medium text-white transition-colors duration-150 hover:bg-brand-strong active:scale-[0.98]"
-                >
-                  <Plus size={15} />
-                  İlk tabloyu oluştur
-                </button>
-              ) : undefined
-            }
-          />
-        </div>
+        <EmptyState
+          icon={sheets.length === 0 ? Table2 : Search}
+          title={sheets.length === 0 ? "Henüz tablo yok." : "Aramaya uyan tablo yok."}
+          description={sheets.length === 0 ? "Stok, koleksiyon ve operasyon tablolarını buradan tutabilirsiniz." : undefined}
+          action={
+            sheets.length === 0 ? (
+              <Button size="sm" variant="secondary" onClick={openNew}>
+                <Plus size={15} aria-hidden />
+                Tablo oluştur
+              </Button>
+            ) : undefined
+          }
+        />
       ) : (
         /* KARTIN TAMAMI TIKLANABİLİR.
            Aslı Hanım (2026-08-24): "bu kısım çok kötü, mesela nereye
@@ -182,12 +177,12 @@ export function SheetsView({
           {filtered.map((s) => (
             <div
               key={s.id}
-              className="group relative flex flex-col rounded-2xl border border-line bg-surface p-4 shadow-card transition-all duration-200 ease-standard hover:-translate-y-0.5 hover:border-line-strong hover:shadow-card-hover"
+              className="group relative flex flex-col rounded-card border border-line bg-surface p-4 shadow-card transition-[box-shadow,border-color] duration-150 ease-standard hover:border-line-strong hover:shadow-card-hover"
             >
               <Link
                 href={`/sheets/${s.id}`}
                 aria-label={s.title}
-                className="absolute inset-0 z-[1] rounded-2xl focus-visible:outline-2 focus-visible:outline-brand-ring"
+                className="absolute inset-0 z-[1] rounded-card focus-visible:outline-2 focus-visible:outline-brand-ring"
               />
 
               <div className="mb-2 flex min-h-6 items-start justify-between gap-2">
@@ -198,29 +193,29 @@ export function SheetsView({
                   </span>
                 ) : <span />}
 
-                {/* Aksiyonlar — kart bağlantısının üstünde, fare gelince belirir */}
-                <div className="z-[2] flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover:opacity-100">
+                {/* Aksiyonlar — kart bağlantısının üstünde, her cihazda görünür
+                    (hover-only işlev telefonda erişilemez). */}
+                <div className="z-[2] flex shrink-0 items-center gap-0.5">
                   {canMutate(s) && (
-                    <button onClick={() => openEdit(s)} className="rounded-md p-1.5 text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-95" title="Bilgileri düzenle">
-                      <Pencil size={13} />
-                    </button>
+                    <IconButton size="sm" aria-label="Bilgileri düzenle" title="Bilgileri düzenle" onClick={() => openEdit(s)}>
+                      <Pencil size={13} aria-hidden />
+                    </IconButton>
                   )}
                   {isAdmin && s.status !== "archived" && (
-                    <button onClick={() => handleArchive(s)} disabled={isBusy} className="rounded-md p-1.5 text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-95 disabled:pointer-events-none disabled:opacity-50" title="Arşivle">
-                      <Archive size={13} />
-                    </button>
+                    <IconButton size="sm" aria-label="Arşivle" title="Arşivle" disabled={isBusy} onClick={() => handleArchive(s)}>
+                      <Archive size={13} aria-hidden />
+                    </IconButton>
                   )}
                   {canMutate(s) && (
-                    <button onClick={() => handleDelete(s)} disabled={isBusy} className="rounded-md p-1.5 text-subtle transition-colors duration-150 hover:bg-[#fbe6e2] hover:text-danger active:scale-95 disabled:pointer-events-none disabled:opacity-50" title="Sil">
-                      <Trash2 size={13} />
-                    </button>
+                    <IconButton size="sm" aria-label="Sil" title="Sil" disabled={isBusy} onClick={() => handleDelete(s)} className="hover:bg-danger/10 hover:text-danger">
+                      <Trash2 size={13} aria-hidden />
+                    </IconButton>
                   )}
                 </div>
               </div>
 
-              <h3 className="flex items-start justify-between gap-2 text-sm font-medium leading-snug text-ink transition-colors duration-150 group-hover:text-brand-strong">
+              <h3 className="text-[13.5px] font-medium leading-snug text-ink transition-colors duration-150 group-hover:text-brand-strong">
                 <span className="min-w-0">{s.title}</span>
-                <ArrowUpRight size={14} className="mt-0.5 shrink-0 text-subtle opacity-0 transition-opacity duration-150 group-hover:opacity-100" />
               </h3>
               {s.department_id && deptName.get(s.department_id) && (
                 <p className="mt-0.5 text-[12px] text-subtle">{deptName.get(s.department_id)}</p>
@@ -241,11 +236,12 @@ export function SheetsView({
       )}
 
       {error && (
-        <p role="alert" className="anim-fade-down mt-3 rounded-lg border border-danger/20 bg-danger/10 px-3 py-2 text-[12.5px] text-danger">
+        <p role="alert" className="anim-fade-down mt-3 rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[12.5px] text-danger">
           {error}
         </p>
       )}
 
+      {dialog}
       {modalOpen && (
         <SheetFormModal
           departments={departments}

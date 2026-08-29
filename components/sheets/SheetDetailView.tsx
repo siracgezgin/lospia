@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Table2, Pencil, Save, Info, Loader2, Check } from "lucide-react";
+import { Pencil, Save, Info, Loader2, Check } from "lucide-react";
 import { saveSpreadsheetSnapshot } from "@/lib/actions/sheets";
 import { emptyWorkbook, fromLegacy, type WorkbookSnapshot } from "@/lib/sheets/model";
 import { cn } from "@/lib/utils/cn";
+import { Button } from "@/components/ui/Button";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { SpreadsheetEditor, type SheetEditorApi } from "./SpreadsheetEditor";
 import { SheetFormModal } from "./SheetFormModal";
@@ -89,39 +90,35 @@ export function SheetDetailView({
 
   return (
     <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
+      {/* Tablo AF Teamwork'ün klasöründe yaşıyor (20240329); "Geri" oraya
+          döner. /sheets zaten /documents'a yönlendiriyor — ara durak yok. */}
       <ModulePageHeader
         title={sheet.title}
-        description={sheet.description ?? undefined}
-        icon={Table2}
-        backHref="/sheets"
-        backLabel="Sheets’e dön"
+        backHref="/documents"
         rightSlot={
           <>
-            {canEditMeta && (
-              <button
-                onClick={() => setMetaOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-[13px] font-medium text-muted transition-colors duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
-              >
-                <Pencil size={13} />
-                Bilgileri düzenle
-              </button>
-            )}
             {!readOnly && (
               <span
                 className={cn(
-                  "inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-medium",
+                  "inline-flex h-8 items-center gap-1.5 px-2 text-[13px] font-medium",
                   isSaving || dirty ? "text-muted" : "text-success",
                 )}
                 aria-live="polite"
               >
                 {isSaving ? (
-                  <><Loader2 size={13} className="animate-spin" /> Kaydediliyor…</>
+                  <><Loader2 size={13} className="animate-spin" aria-hidden /> Kaydediliyor…</>
                 ) : dirty ? (
-                  <><Save size={13} /> Değişiklikler bekliyor</>
+                  <><Save size={13} aria-hidden /> Değişiklikler bekliyor</>
                 ) : savedAt ? (
-                  <><Check size={13} /> Kaydedildi</>
+                  <><Check size={13} aria-hidden /> Kaydedildi</>
                 ) : null}
               </span>
+            )}
+            {canEditMeta && (
+              <Button variant="secondary" size="sm" onClick={() => setMetaOpen(true)}>
+                <Pencil size={13} aria-hidden />
+                Bilgileri düzenle
+              </Button>
             )}
           </>
         }
@@ -133,8 +130,8 @@ export function SheetDetailView({
           söyleniyor; gerisi "Bilgileri düzenle"nin içinde. */}
 
       {readOnly && (
-        <div className="anim-fade-up mb-3 flex items-start gap-2 rounded-xl border border-line bg-surface-muted/60 px-3.5 py-2.5 text-[13.5px] leading-relaxed text-muted">
-          <Info size={14} className="mt-0.5 shrink-0" />
+        <div role="status" className="anim-fade-up mb-3 flex items-start gap-2 rounded-card border border-line bg-surface-muted px-3.5 py-2.5 text-[13.5px] leading-relaxed text-muted">
+          <Info size={14} className="mt-0.5 shrink-0" aria-hidden />
           {contentLocked
             ? sheet.status === "locked"
               ? "Bu tablo kilitli — içerik salt okunur. Düzenlemek için bir yönetici tablo durumunu değiştirmelidir."
@@ -144,8 +141,9 @@ export function SheetDetailView({
       )}
 
       {/* Tam yükseklik: hesap tablosu ekranın kalanını doldursun, sayfa
-          kaydırmasın — Excel'de olduğu gibi ızgaranın KENDİSİ kayar. */}
-      <div className="h-[calc(100vh-15rem)] min-h-[420px]">
+          kaydırmasın — Excel'de olduğu gibi ızgaranın KENDİSİ kayar.
+          dvh: telefonda adres çubuğu açılıp kapanınca kutu taşmasın. */}
+      <div className="h-[calc(100dvh-15rem)] min-h-[420px]">
         <SpreadsheetEditor
           initialSnapshot={initialGrid}
           readOnly={readOnly}
@@ -159,7 +157,7 @@ export function SheetDetailView({
           role="status"
           className={cn(
             "anim-fade fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-full px-4 py-2 text-[12.5px] font-medium shadow-pop",
-            message.kind === "ok" ? "bg-ink text-white" : "bg-[#971f12] text-white",
+            message.kind === "ok" ? "bg-ink text-white" : "bg-danger-strong text-white",
           )}
         >
           {message.text}

@@ -1,7 +1,5 @@
-"use client";
-
-import { useState } from "react";
 import { DatabaseZap, ChevronDown } from "lucide-react";
+import { cn } from "@/lib/utils/cn";
 
 interface Props {
   /** Friendly Turkish explanation of what is being awaited. */
@@ -15,9 +13,12 @@ interface Props {
 }
 
 /**
- * A calm, professional "veritabanı güncellemesi bekleniyor" notice. Replaces raw
- * PostgREST errors in the module UI. The raw English detail is tucked into a
- * collapsible note (admin-only surfaces render this), never shown up front.
+ * "Veritabanı güncellemesi bekleniyor" — sakin uyarı kutusu.
+ *
+ * Ham PostgREST hatasının yerine geçer. Renk uyarı token'ından (önce elle
+ * yazılmış dört sarı-kahve hex vardı); teknik ayrıntı yalnız yöneticinin
+ * gördüğü yüzeylerde gelir ve yerel `<details>` ile katlanır — durum yok,
+ * istemci JS'i yok, sunucu bileşeninden de çizilebilir.
  */
 export function SetupRequiredNotice({
   message,
@@ -25,46 +26,35 @@ export function SetupRequiredNotice({
   technicalDetail,
   variant = "banner",
 }: Props) {
-  const [showDetail, setShowDetail] = useState(false);
-
   const isBlock = variant === "block";
 
   return (
     <div
-      className={
-        "anim-fade-down flex items-start gap-2.5 rounded-xl border border-[#e7d3ab] bg-[#fbf3e3] text-[#7a561c]" +
-        (isBlock ? " px-5 py-4" : " px-4 py-3")
-      }
+      role="status"
+      className={cn(
+        "anim-fade-down flex items-start gap-2.5 rounded-card border border-warning/30 bg-warning/8",
+        isBlock ? "px-5 py-4" : "px-4 py-3",
+      )}
     >
-      <DatabaseZap size={16} className="mt-0.5 shrink-0 text-[#a05f1c]" />
-      <div className="min-w-0">
-        <p className={"font-semibold text-[#7a561c]" + (isBlock ? " text-[14px]" : " text-[13px]")}>
-          {title}
-        </p>
-        <p className={"mt-0.5 leading-relaxed" + (isBlock ? " text-[13px]" : " text-[12.5px]")}>
-          {message}
-        </p>
+      <DatabaseZap size={16} className="mt-0.5 shrink-0 text-warning" aria-hidden />
+      <div className="min-w-0 flex-1">
+        <p className={cn("font-semibold text-ink", isBlock ? "text-[14px]" : "text-[13.5px]")}>{title}</p>
+        <p className="mt-0.5 text-[13px] leading-relaxed text-muted">{message}</p>
 
         {technicalDetail && (
-          <div className="mt-2">
-            <button
-              type="button"
-              onClick={() => setShowDetail((s) => !s)}
-              aria-expanded={showDetail}
-              className="inline-flex items-center gap-1 text-[11.5px] font-medium text-[#a05f1c] transition-colors duration-150 hover:text-[#7a561c]"
-            >
+          <details className="group/detail mt-2">
+            <summary className="inline-flex cursor-pointer select-none list-none items-center gap-1 rounded-control text-[12px] font-medium text-muted transition-colors duration-150 hover:text-ink [&::-webkit-details-marker]:hidden">
               <ChevronDown
                 size={12}
-                className={"transition-transform duration-200 ease-standard" + (showDetail ? " rotate-180" : "")}
+                className="transition-transform duration-200 ease-standard group-open/detail:rotate-180"
+                aria-hidden
               />
               Teknik detay
-            </button>
-            {showDetail && (
-              <p className="anim-fade-down mt-1 break-words rounded-md bg-[#f4e6c9] px-2.5 py-1.5 font-mono text-[11px] leading-relaxed text-[#7a561c]">
-                {technicalDetail}
-              </p>
-            )}
-          </div>
+            </summary>
+            <p className="anim-fade-down mt-1 break-words rounded-control bg-surface-sunken px-2.5 py-1.5 font-mono text-[12px] leading-relaxed text-muted">
+              {technicalDetail}
+            </p>
+          </details>
         )}
       </div>
     </div>

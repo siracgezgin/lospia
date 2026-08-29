@@ -10,15 +10,28 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { Check, Eye, HandHelping, ArrowUpRight } from "lucide-react";
-import type { BoardNoteFeedItem } from "@/types";
-import { NOTE_TYPE_LABELS, NOTE_TYPE_BADGE } from "@/lib/notes/note-types";
+import type { BoardNoteFeedItem, TaskNoteType } from "@/types";
+import { NOTE_TYPE_LABELS } from "@/lib/notes/note-types";
 import { acknowledgeTaskNote } from "@/lib/actions/notes";
-import { getDepartmentCardStyle } from "@/lib/design/semantics";
 import { formatDateTR } from "@/lib/utils/format-date";
 import { cn } from "@/lib/utils/cn";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import type { DeptMeta } from "@/lib/utils/departments";
 
 const VISIBLE_LIMIT = 6;
+
+/* Not türü rozeti — tasarım token'larından. lib/notes/note-types.ts'teki
+   NOTE_TYPE_BADGE ham Tailwind paleti (blue-50, amber-700…) taşıyor; lib bu
+   pasın kapsamı dışında olduğu için eşleme burada yapıldı. Kartın TEK rozeti
+   budur; departman rozeti kalktı, adı meta satırında düz metin olarak yazar
+   ("başlık · tür · departman" kuralı). */
+const NOTE_TYPE_TONE: Record<TaskNoteType, string> = {
+  info:             "bg-info/10 text-info border border-info/30",
+  action_required:  "bg-hold/10 text-hold border border-hold/30",
+  handoff:          "bg-brand-soft text-brand-strong border border-brand-ring/50",
+  approval_waiting: "bg-approval/10 text-approval border border-approval/30",
+};
 
 type AckRow = { note_id: string; user_id: string; action: string };
 
@@ -48,7 +61,6 @@ function FeedCard({
   const [pending, startTransition] = useTransition();
 
   const dept = item.departmentId ? deptMeta[item.departmentId] : undefined;
-  const deptStyle = getDepartmentCardStyle(dept?.color);
   const actionable = item.noteType !== "info";
   const seenByMe = acks.some((a) => a.note_id === item.id && a.user_id === currentUserId && a.action === "seen");
   const claimedByMe = acks.some((a) => a.note_id === item.id && a.user_id === currentUserId && a.action === "claimed");
@@ -63,41 +75,37 @@ function FeedCard({
   }
 
   return (
-    <div className="rounded-card border border-line bg-surface p-2.5 shadow-card transition-[transform,box-shadow] duration-200 ease-standard hover:shadow-card-hover hover:-translate-y-px space-y-1.5">
-      {/* Type + department chips */}
-      <div className="flex items-center gap-1 flex-wrap">
-        <span className={cn("text-[10px] rounded px-1.5 py-0.5 leading-none font-medium", NOTE_TYPE_BADGE[item.noteType])}>
-          {NOTE_TYPE_LABELS[item.noteType]}
-        </span>
-        {dept && (
-          <span className={cn("text-[10px] rounded px-1.5 py-0.5 leading-none truncate max-w-28", deptStyle.chip)}>
-            {dept.name}
-          </span>
-        )}
-      </div>
+    // Hover'da yalnız gölge; kart yerinden oynamaz (translate yok).
+    <div className="space-y-1.5 rounded-card border border-line bg-surface p-2.5 shadow-card transition-shadow duration-200 ease-standard hover:shadow-card-hover">
+      {/* Tek rozet: not türü */}
+      <Badge size="xs" className={NOTE_TYPE_TONE[item.noteType]}>
+        {NOTE_TYPE_LABELS[item.noteType]}
+      </Badge>
 
       {/* Task link (title) */}
       <Link
         prefetch={false}
         href={`/tasks/${item.taskId}`}
-        className="group/task flex items-start gap-1 text-[12px] font-semibold tracking-tight text-ink hover:text-brand leading-snug transition-colors duration-150"
+        className="group/task flex items-start gap-1 text-[13.5px] font-semibold leading-snug tracking-tight text-ink transition-colors duration-150 hover:text-brand"
         title={item.taskTitle}
       >
-        <span className="line-clamp-2 break-words flex-1 min-w-0">{item.taskTitle}</span>
+        <span className="line-clamp-2 min-w-0 flex-1 break-words">{item.taskTitle}</span>
         <ArrowUpRight
-          size={11}
-          className="shrink-0 mt-0.5 text-subtle transition-[color,transform] duration-150 ease-standard group-hover/task:text-brand group-hover/task:translate-x-px group-hover/task:-translate-y-px"
+          size={12}
+          aria-hidden
+          className="mt-0.5 shrink-0 text-subtle transition-colors duration-150 group-hover/task:text-brand"
         />
       </Link>
 
       {/* Note snippet */}
-      <p className="text-[11px] text-muted leading-relaxed line-clamp-3 break-words whitespace-pre-wrap">
+      <p className="line-clamp-3 whitespace-pre-wrap break-words text-[13px] leading-relaxed text-muted">
         {item.content}
       </p>
 
-      {/* Meta: author · due date · targets */}
-      <p className="text-[10px] text-subtle leading-snug">
+      {/* Meta: yazar · departman · teslim · muhatap — hepsi düz metin */}
+      <p className="text-[12px] leading-snug text-subtle">
         <span className="font-medium text-muted">{item.authorName}</span>
+        {dept && <span> · {dept.name}</span>}
         {item.taskDueDate && <span> · Teslim: {shortDate(item.taskDueDate)}</span>}
         {item.notifiedNames.length > 0 && (
           <span> · Muhatap: <span className="text-muted">{item.notifiedNames.join(", ")}</span></span>
@@ -106,36 +114,34 @@ function FeedCard({
 
       {/* Actions — only on actionable note types */}
       {actionable && (
-        <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
           {isClaimed ? (
-            <span className="inline-flex items-center gap-1 text-[10px] text-teal-700 bg-teal-50 border border-teal-200 rounded px-1.5 py-0.5 font-medium">
-              <Check size={10} /> Üzerine alındı{item.claimedByName ? ` · ${item.claimedByName}` : claimedByMe ? " · siz" : ""}
+            <span className="inline-flex items-center gap-1 rounded-md border border-brand-ring/50 bg-brand-soft px-1.5 py-0.5 text-[12px] font-medium text-brand-strong">
+              <Check size={11} aria-hidden /> Üzerine alındı{item.claimedByName ? ` · ${item.claimedByName}` : claimedByMe ? " · siz" : ""}
             </span>
           ) : (
             !isViewer && item.authorId !== currentUserId && (
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
+                className="text-brand hover:text-brand-strong"
                 onClick={() => handleAck("claimed")}
                 disabled={pending}
-                className="inline-flex items-center gap-1 text-[10px] font-medium text-teal-700 border border-teal-200 bg-white hover:bg-teal-50 hover:border-teal-300 rounded px-1.5 py-1 transition-colors duration-150 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none"
               >
-                <HandHelping size={10} /> Üzerime aldım
-              </button>
+                <HandHelping size={13} aria-hidden /> Üzerime aldım
+              </Button>
             )
           )}
           {seenByMe ? (
-            <span className="inline-flex items-center gap-1 text-[10px] text-subtle">
-              <Eye size={10} /> Görüldü
+            <span className="inline-flex items-center gap-1 text-[12px] text-subtle">
+              <Eye size={11} aria-hidden /> Görüldü
             </span>
           ) : (
-            <button
-              onClick={() => handleAck("seen")}
-              disabled={pending}
-              className="inline-flex items-center gap-1 text-[10px] font-medium text-muted border border-line bg-surface hover:bg-surface-muted hover:border-line-strong hover:text-ink rounded px-1.5 py-1 transition-colors duration-150 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none"
-            >
-              <Eye size={10} /> Gördüm
-            </button>
+            <Button variant="ghost" size="sm" onClick={() => handleAck("seen")} disabled={pending}>
+              <Eye size={13} aria-hidden /> Gördüm
+            </Button>
           )}
-          {error && <span className="text-[10px] text-danger">{error}</span>}
+          {error && <span className="text-[12px] text-danger">{error}</span>}
         </div>
       )}
     </div>
@@ -162,8 +168,9 @@ export function WeeklyNoteFeed({
   );
 
   if (items.length === 0) {
+    // Dar sütunda küçük, sakin boş durum: tek satır.
     return (
-      <p className="anim-fade text-[11px] text-subtle rounded-card border border-dashed border-line bg-surface/60 px-3 py-4 text-center">
+      <p className="anim-fade rounded-card border border-dashed border-line bg-surface/60 px-3 py-3 text-center text-[12.5px] text-subtle">
         Bu hafta yeni görev notu yok.
       </p>
     );
@@ -182,12 +189,14 @@ export function WeeklyNoteFeed({
         />
       ))}
       {items.length > VISIBLE_LIMIT && (
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn("self-start text-brand hover:text-brand-strong")}
           onClick={() => setShowAll((v) => !v)}
-          className="text-[11px] font-medium text-brand hover:text-brand-strong hover:underline underline-offset-2 transition-colors duration-150 text-left px-1 py-0.5 rounded"
         >
           {showAll ? "Daha az göster" : `Tüm notları gör (${items.length})`}
-        </button>
+        </Button>
       )}
     </div>
   );

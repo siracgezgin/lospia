@@ -1,44 +1,32 @@
 import { Skeleton } from "@/components/ui/Skeleton";
 
-// Board loading skeleton — shown instantly while the server fetches tasks, so
-// navigation to Pano feels immediate instead of blank. Mirrors the real board:
-// a toolbar row, then fixed-width columns each with a header (title + count) and
-// task cards that echo the chip / title / meta structure of a real TaskCard.
+/* Pano iskeleti — anında çizilir, sunucu görevleri getirirken boş ekran
+   kalmaz. GERÇEK ilk ekranı taklit eder: pano kişi ızgarasıyla açılır ("Kim
+   ne yapıyor?"), sütunlarla değil. Başlık satırı + sağda "Tüm işler" düğmesi,
+   altında PeopleGrid/Tile ile aynı kırılımlı kutucuklar (2 / 3 / 4 sütun;
+   üstte kimlik şeridi, ortada yuvarlak görsel, altta isim ve ünvan). Ölçüler
+   Tile'ın büyük dikey kartıyla birebir (rounded-card, size-16/24 daire). */
 export default function BoardLoading() {
   return (
-    <div className="flex flex-col h-full">
-      {/* toolbar */}
-      <div className="flex items-center gap-2 px-4 py-2 bg-surface border-b border-hairline shrink-0">
-        <Skeleton className="h-8 w-32 rounded-lg" />
-        <div className="ml-auto flex items-center gap-2">
-          <Skeleton className="h-8 w-24 rounded-lg" />
-          <Skeleton className="h-8 w-40 rounded-lg" />
+    <div className="px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <Skeleton className="h-6 w-44" />
+          <Skeleton className="mt-2 h-3.5 w-56" />
         </div>
+        <Skeleton className="h-9 w-24 rounded-control" />
       </div>
 
-      {/* columns */}
-      <div className="flex gap-3 sm:gap-4 px-3 sm:px-4 pt-4 pb-4 overflow-hidden">
-        {Array.from({ length: 5 }).map((_, col) => (
-          <div key={col} className="w-72 shrink-0 space-y-3">
-            {/* column header */}
-            <div className="flex items-center gap-2 h-11">
-              <Skeleton className="h-3.5 w-20" />
-              <Skeleton className="h-4 w-5 rounded-full" />
-            </div>
-            {/* task cards */}
-            <div className="space-y-2">
-              {Array.from({ length: 3 + (col % 3) }).map((_, card) => (
-                <div key={card} className="rounded-card border border-hairline bg-surface p-3 shadow-card space-y-2.5">
-                  <Skeleton className="h-3.5 w-16 rounded-md" />
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-3/5" />
-                  <div className="flex items-center gap-2 pt-0.5">
-                    <Skeleton className="h-4 w-14 rounded-md" />
-                    <Skeleton className="ml-auto h-5 w-5 rounded-full" />
-                  </div>
-                </div>
-              ))}
-            </div>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 lg:gap-5">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div
+            key={i}
+            className="relative flex flex-col items-center overflow-hidden rounded-card border border-line bg-surface px-3 pb-5 pt-6 shadow-card sm:pb-6 sm:pt-8"
+          >
+            <span aria-hidden className="absolute inset-x-0 top-0 h-1.5 bg-surface-sunken" />
+            <Skeleton className="size-16 rounded-full sm:size-24" />
+            <Skeleton className="mt-3 h-4 w-24" />
+            <Skeleton className="mt-2 h-3 w-16" />
           </div>
         ))}
       </div>

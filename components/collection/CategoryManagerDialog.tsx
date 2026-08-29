@@ -7,7 +7,7 @@ import {
   createProductCategory, renameProductCategory, deleteProductCategory,
 } from "@/lib/actions/collection-categories";
 import { Overlay } from "@/components/ui/Overlay";
-import { Button } from "@/components/ui/Button";
+import { Button, IconButton } from "@/components/ui/Button";
 import { Field, TextInput } from "@/components/ui/Field";
 import { useConfirm } from "@/components/ui/useConfirm";
 import type { CategoryNode } from "@/lib/collection/taxonomy";
@@ -136,7 +136,7 @@ export function CategoryManagerDialog({
 
         {!isNew && (
           <section className="border-t border-hairline pt-4">
-            <h3 className="mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-subtle">
+            <h3 className="mb-2.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle">
               Alt kategoriler
             </h3>
 
@@ -149,14 +149,16 @@ export function CategoryManagerDialog({
                 {category!.subcategories.map((sub) => (
                   <li key={sub.key} className="flex items-center gap-2 px-3 py-2">
                     <span className="min-w-0 flex-1 truncate text-[13.5px] text-ink">{sub.label}</span>
-                    <button
+                    <IconButton
+                      size="sm"
                       onClick={() => removeSub(sub.key, sub.label)}
                       disabled={isPending}
                       title="Alt kategoriyi sil"
-                      className="shrink-0 rounded-md p-1.5 text-subtle transition-colors duration-150 hover:bg-danger/10 hover:text-danger disabled:pointer-events-none disabled:opacity-50"
+                      aria-label={`${sub.label} alt kategorisini sil`}
+                      className="text-subtle hover:bg-danger/10 hover:text-danger"
                     >
                       <Trash2 size={14} />
-                    </button>
+                    </IconButton>
                   </li>
                 ))}
               </ul>
@@ -168,8 +170,9 @@ export function CategoryManagerDialog({
                 onChange={(e) => setNewSub(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && addSub()}
                 placeholder="Yeni alt kategori adı"
+                aria-label="Yeni alt kategori adı"
               />
-              <Button variant="secondary" size="sm" onClick={addSub} disabled={isPending || !newSub.trim()}>
+              <Button variant="secondary" onClick={addSub} disabled={isPending || !newSub.trim()} className="shrink-0">
                 <Plus size={14} /> Ekle
               </Button>
             </div>

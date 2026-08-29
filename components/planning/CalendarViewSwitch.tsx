@@ -37,25 +37,29 @@ export function CalendarViewSwitch({ scale }: { scale: CalendarScale }) {
     <div
       role="tablist"
       aria-label="Takvim ölçeği"
-      className="inline-flex h-9 shrink-0 items-stretch overflow-hidden rounded-lg border border-line bg-surface"
+      className="inline-flex h-9 shrink-0 items-stretch overflow-hidden rounded-control border border-line bg-surface"
     >
       {CALENDAR_SCALES.map(({ id, label, icon: Icon }, i) => {
         const active = id === scale;
         return (
           <button
             key={id}
+            type="button"
             role="tab"
             aria-selected={active}
+            aria-label={label}
+            title={label}
             onClick={() => go(id)}
             className={cn(
-              "inline-flex items-center gap-1.5 border-line px-2.5 text-[13px] font-medium transition-colors duration-150 sm:px-3",
+              // Telefonda yalnız ikon kalır: w-10 parmak hedefi, ad aria-label'da.
+              "inline-flex min-w-10 items-center justify-center gap-1.5 border-line px-2.5 text-[13px] font-medium transition-colors duration-150 sm:px-3",
               i > 0 && "border-l",
               active
                 ? "bg-brand text-white"
                 : "text-muted hover:bg-surface-muted hover:text-ink",
             )}
           >
-            <Icon size={14} />
+            <Icon size={14} aria-hidden />
             <span className="hidden sm:inline">{label}</span>
           </button>
         );

@@ -3,10 +3,11 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import {
-  Wallet, ClipboardList, Check, Loader2, Info, FileSpreadsheet,
+  Wallet, ClipboardList, Check, Loader2, Info,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
+import { TextInput } from "@/components/ui/Field";
+import { EmptyState } from "@/components/ui/EmptyState";
 import {
   updateProductionSheetPricing, updateProductionSheetSizeDistribution,
 } from "@/lib/actions/production";
@@ -38,15 +39,14 @@ interface Props {
   rows: Row[];
 }
 
-const cellInput =
-  "w-full min-w-0 rounded-md border border-transparent bg-transparent px-1.5 py-1 text-[13px] text-ink text-center tabular-nums transition-[border-color,background-color,box-shadow] duration-150 hover:border-line focus:border-brand-ring focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand-ring";
-const priceInput =
-  "w-full rounded-md border border-line bg-surface px-2 py-1 text-[13px] text-ink text-right tabular-nums transition-[border-color,box-shadow] duration-150 hover:border-line-strong focus:outline-none focus:ring-2 focus:ring-brand-ring focus:border-brand-ring";
-// Hücreler arası dikey çizgi
-const colBorder = "border-l border-line/70";
+/* Hücre girdileri ortak TextInput'un kompakt hâlleri (h-8). */
+const cellInput = "h-8 border-transparent bg-transparent px-1.5 text-center tabular-nums hover:border-line focus:bg-surface";
+const priceInput = "h-8 px-2 text-right tabular-nums";
+// Dikey çizgi yok; yalnız beden adetleri ile fiyat/toplam arasında tek ayırıcı.
+const groupSep = "border-l border-hairline";
 // Sticky başlık/dip hücreleri — tablo border-separate olduğundan çizgiler hücrede yaşar.
-const thSticky = "sticky top-0 z-10 border-b-2 border-line-strong bg-surface-muted";
-const tfSticky = "sticky bottom-0 z-10 border-t-2 border-line-strong bg-surface-muted";
+const thSticky = "sticky top-0 z-10 border-b border-line-strong bg-surface";
+const tfSticky = "sticky bottom-0 z-10 border-t border-line-strong bg-surface-muted";
 
 export function CostTable({ rows }: Props) {
   // Fiyat + beden dağılımı yerel kopyaları — blur'da föye geri yazılır (tek kaynak).
@@ -131,27 +131,22 @@ export function CostTable({ rows }: Props) {
       </div>
 
       {rows.length === 0 ? (
-        <div className="anim-fade-up rounded-2xl border border-line bg-surface px-6 py-14 text-center shadow-card">
-          <div className="mx-auto mb-3 grid size-11 place-items-center rounded-full bg-surface-sunken text-subtle">
-            <Wallet size={20} />
-          </div>
-          <p className="text-[13.5px] text-subtle">Henüz ürün yok. Collection’a föy ekleyin.</p>
-        </div>
+        <EmptyState icon={Wallet} className="anim-fade-up" title="Henüz ürün yok." description="Collection’a föy ekleyin." />
       ) : (
-        <div className="anim-fade-up overflow-hidden rounded-2xl border border-line-strong bg-surface shadow-card">
+        <div className="anim-fade-up overflow-hidden rounded-card border border-line bg-surface shadow-card">
           {/* border-separate: sticky başlık/dip hücrelerinde çizgilerin kayarken
               kaybolmaması için (border-collapse sticky ile çizgiyi geride bırakır). */}
           <div className="max-h-[70vh] overflow-auto">
             <table className="w-full min-w-[880px] border-separate border-spacing-0 text-sm">
               <thead>
-                <tr className="text-[11.5px] font-semibold uppercase tracking-wider text-muted">
+                <tr className="text-[12px] font-semibold uppercase tracking-[0.06em] text-muted">
                   <th className={cn(thSticky, "min-w-[220px] px-3 py-2.5 text-left")}>Ürün</th>
                   {sizes.map((s) => (
-                    <th key={s} className={cn(thSticky, "w-16 px-1 py-2.5 text-center", colBorder)}>{s}</th>
+                    <th key={s} className={cn(thSticky, "w-16 px-1 py-2.5 text-center")}>{s}</th>
                   ))}
-                  <th className={cn(thSticky, "px-2 py-2.5 text-right", colBorder)}>Toplam Adet</th>
-                  <th className={cn(thSticky, "w-36 px-2 py-2.5 text-right", colBorder)}>Birim Fiyat</th>
-                  <th className={cn(thSticky, "min-w-[120px] px-3 py-2.5 text-right", colBorder)}>Toplam</th>
+                  <th className={cn(thSticky, groupSep, "px-2 py-2.5 text-right")}>Toplam Adet</th>
+                  <th className={cn(thSticky, "w-36 px-2 py-2.5 text-right")}>Birim Fiyat</th>
+                  <th className={cn(thSticky, "min-w-[120px] px-3 py-2.5 text-right")}>Toplam</th>
                   <th className={cn(thSticky, "w-8 px-2 py-2.5")} />
                 </tr>
               </thead>
@@ -159,7 +154,7 @@ export function CostTable({ rows }: Props) {
                 {rows.map((r) => {
                   const qbs = qtyBySizeOf(r.id);
                   return (
-                    <tr key={r.id} className="transition-colors duration-150 hover:bg-surface-hover/60">
+                    <tr key={r.id} className="transition-colors duration-150 hover:bg-surface-hover">
                       {/* ÜRÜN — fotoğrafıyla. Maliyet tablosu bir muhasebe
                           çizelgesi gibi duruyordu; hangi ürünün satırında
                           olduğunu ancak adı okuyarak anlıyordunuz. Kapak
@@ -169,7 +164,7 @@ export function CostTable({ rows }: Props) {
                           href={`/production/${r.id}`}
                           className="group/prod flex items-center gap-2.5"
                         >
-                          <span className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-lg bg-surface-muted">
+                          <span className="grid h-12 w-9 shrink-0 place-items-center overflow-hidden rounded-[6px] bg-surface-muted">
                             {coverOf(r) ? (
                               // eslint-disable-next-line @next/next/no-img-element
                               <img src={coverOf(r)!} alt="" className="h-full w-full object-cover" />
@@ -190,9 +185,10 @@ export function CostTable({ rows }: Props) {
                         </Link>
                       </td>
                       {sizes.map((s) => (
-                        <td key={s} className={cn("px-0.5 py-1", colBorder)}>
-                          <input
+                        <td key={s} className="px-0.5 py-1">
+                          <TextInput
                             className={cellInput}
+                            aria-label={`${r.title} — ${s}`}
                             value={qbs[s] ? String(qbs[s]) : ""}
                             onChange={(e) => setQty(r.id, s, e.target.value)}
                             onBlur={() => saveDist(r.id)}
@@ -201,12 +197,13 @@ export function CostTable({ rows }: Props) {
                           />
                         </td>
                       ))}
-                      <td className={cn("px-2 py-1.5 text-right font-semibold tabular-nums text-ink", colBorder)}>
+                      <td className={cn(groupSep, "px-2 py-1.5 text-right font-semibold tabular-nums text-ink")}>
                         {totalOf(r.id) || "—"}
                       </td>
-                      <td className={cn("px-2 py-1", colBorder)}>
-                        <input
+                      <td className="px-2 py-1">
+                        <TextInput
                           className={priceInput}
+                          aria-label={`${r.title} — birim fiyat`}
                           value={pricing[r.id]?.unit_price ?? ""}
                           onChange={(e) => setUnit(r.id, e.target.value)}
                           onBlur={() => saveUnit(r.id)}
@@ -214,7 +211,7 @@ export function CostTable({ rows }: Props) {
                           inputMode="decimal"
                         />
                       </td>
-                      <td className={cn("px-3 py-1.5 text-right font-semibold tabular-nums text-ink", colBorder)}>
+                      <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-ink">
                         {lineTotal(r.id) ? formatMoney(lineTotal(r.id)) : "—"}
                       </td>
                       <td className="px-2 py-1.5 text-center">
@@ -230,10 +227,10 @@ export function CostTable({ rows }: Props) {
               </tbody>
               <tfoot>
                 <tr>
-                  <td className={cn(tfSticky, "px-3 py-3 text-[12px] font-bold uppercase tracking-wider text-ink")} colSpan={sizes.length + 3}>
-                    Genel Toplam
+                  <td className={cn(tfSticky, "px-3 py-2.5 text-[13px] font-semibold text-ink")} colSpan={sizes.length + 3}>
+                    Genel toplam
                   </td>
-                  <td className={cn(tfSticky, "px-3 py-3 text-right text-[15px] font-bold tabular-nums tracking-tight text-ink", colBorder)}>
+                  <td className={cn(tfSticky, "px-3 py-2.5 text-right text-[13px] font-semibold tabular-nums text-ink")}>
                     {formatMoney(grandTotal)}
                   </td>
                   <td className={tfSticky} />

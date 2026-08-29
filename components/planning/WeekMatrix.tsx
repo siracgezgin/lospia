@@ -26,7 +26,7 @@ export function WeekMatrix({ rows, memberNames, personHex = {}, available }: Pro
   if (!available) {
     return (
       <Wrap>
-        <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] font-medium text-amber-900">
+        <p className="rounded-control border border-warning/40 bg-warning/10 px-3 py-2 text-[12.5px] font-medium text-ink">
           Bu bölüm için veritabanı güncellemesi bekleniyor (planning_week_matrix).
         </p>
       </Wrap>
@@ -51,10 +51,10 @@ export function WeekMatrix({ rows, memberNames, personHex = {}, available }: Pro
   return (
     <Wrap>
       {/* Geniş ekran — Excel tablosu */}
-      <div className="hidden overflow-x-auto overscroll-x-contain rounded-2xl border border-line-strong bg-surface shadow-card lg:block">
+      <div className="hidden overflow-x-auto overscroll-x-contain rounded-card border border-line-strong bg-surface lg:block">
         <div style={{ minWidth }}>
           <div className="grid border-b border-line-strong bg-surface-muted" style={{ gridTemplateColumns: gridCols }}>
-            <div className="border-r border-hairline px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-subtle">
+            <div className="border-r border-hairline px-2.5 py-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle">
               Tarih / Saat
             </div>
             {cols.map((c) => {
@@ -101,7 +101,7 @@ export function WeekMatrix({ rows, memberNames, personHex = {}, available }: Pro
             .filter(({ row }) => row?.text || row?.kim || row?.participant_ids?.length);
           if (!filled.length) return null;
           return (
-            <div key={wd} className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">
+            <div key={wd} className="overflow-hidden rounded-card border border-line bg-surface">
               <div className="border-b border-hairline bg-surface-muted px-3 py-1.5 text-[12px] font-bold text-ink">
                 {WEEKDAY_LONG_TR[wd]} · 09:00
               </div>
@@ -110,7 +110,7 @@ export function WeekMatrix({ rows, memberNames, personHex = {}, available }: Pro
                   const meta = categoryMeta(c.category);
                   return (
                     <li key={c.category} className="flex items-start gap-2 px-3 py-2">
-                      <span className={cn("mt-px shrink-0 rounded px-1.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wide", meta.chip)}>
+                      <span className={cn("mt-px shrink-0 rounded px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-wide", meta.chip)}>
                         {c.label}
                       </span>
                       <span className="min-w-0 flex-1 text-[12.5px] leading-snug text-ink/90">

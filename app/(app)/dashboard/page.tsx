@@ -31,7 +31,7 @@ export default async function DashboardPage() {
     .eq("user_id", user.id)
     .limit(1);
   const workspaceId = memberRows?.[0]?.workspace_id;
-  if (!workspaceId) return <div className="p-8 text-muted">No workspace found.</div>;
+  if (!workspaceId) return <div className="p-8 text-[13.5px] text-muted">Çalışma alanı bulunamadı.</div>;
   const isAdmin = memberRows?.[0]?.role === "owner" || memberRows?.[0]?.role === "admin";
 
   // ── Üye raporu = kesinlikle kişisel. Ekip geneli hiçbir veri istemciye

@@ -2,6 +2,7 @@
 
 import { Printer } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { Button } from "@/components/ui/Button";
 import { BackLink } from "@/components/modules/BackLink";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { assignPersonTones } from "@/lib/design/person-colors";
@@ -86,15 +87,15 @@ export function PersonReport({
         {/* Bu sayfaya artık Reports'un kişi kartından geliniyor; sabit
             "Board'a dön" yanlış yere götürüyordu. Hedefi geçmiş belirler. */}
         <BackLink href="/dashboard" />
-        <button
-          onClick={() => window.print()}
-          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-[13px] font-medium text-muted transition-all duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
-        >
-          <Printer size={14} /> Yazdır / PDF
-        </button>
+        <Button variant="secondary" onClick={() => window.print()}>
+          <Printer size={14} aria-hidden /> Yazdır / PDF
+        </Button>
       </div>
 
-      <article className="print-page mx-auto max-w-3xl rounded-2xl border border-line bg-surface p-6 shadow-card sm:p-8">
+      {/* Kâğıt sayfası: A4 oranında dar kolon BİLEREK korunur — ekranda da
+          basılacak sayfa gibi okunsun; .print-page kuralları kenarlık/gölgeyi
+          kâğıtta kaldırır. */}
+      <article className="print-page mx-auto max-w-3xl rounded-card border border-line bg-surface p-6 shadow-card sm:p-8">
         {/* Kimlik */}
         <header className="flex items-center gap-4 border-b border-line-strong pb-4">
           {/* Fotoğraf, yoksa kişinin renginde baş harfleri. */}
@@ -163,7 +164,7 @@ export function PersonReport({
         )}
 
         {open.length === 0 && meetings.length === 0 && (
-          <p className="mt-4 rounded-lg border border-line bg-surface-muted px-3 py-4 text-center text-[13px] text-subtle">
+          <p className="mt-4 rounded-control border border-line bg-surface-muted px-3 py-4 text-center text-[13.5px] text-subtle">
             Açık iş ve toplantı yok.
           </p>
         )}

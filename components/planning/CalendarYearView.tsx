@@ -9,6 +9,7 @@ import {
 } from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { Button } from "@/components/ui/Button";
 
 /** Bir günün yoğunluğu — görev + toplantı sayısı. */
 export type YearDayLoad = { tasks: number; meetings: number };
@@ -77,10 +78,11 @@ export function CalendarYearView({ loadByDay, initialYear, viewSwitch }: Props) 
       {/* Yıl gezgini — hafta ve ay görünümleriyle AYNI çubuk gövdesi
           (2026-08-29: "hepsi aynı yerde olsun"). */}
       <CalendarToolbar viewSwitch={viewSwitch}>
-        <div className="inline-flex h-9 items-stretch overflow-hidden rounded-lg border border-line bg-surface">
+        <div className="inline-flex h-9 items-stretch overflow-hidden rounded-control border border-line bg-surface">
           <button
+            type="button"
             onClick={() => setYear((y) => y - 1)}
-            className="inline-flex w-9 items-center justify-center text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
+            className="tap-target inline-flex w-9 items-center justify-center text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
             aria-label="Önceki yıl"
           >
             <ChevronLeft size={16} />
@@ -89,19 +91,23 @@ export function CalendarYearView({ loadByDay, initialYear, viewSwitch }: Props) 
             {year}
           </span>
           <button
+            type="button"
             onClick={() => setYear((y) => y + 1)}
-            className="inline-flex w-9 items-center justify-center text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
+            className="tap-target inline-flex w-9 items-center justify-center text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
             aria-label="Sonraki yıl"
           >
             <ChevronRight size={16} />
           </button>
         </div>
-        <button
+        {/* İkincil kontrol — ızgara ana yüzey; "Bu yıl" onunla yarışmaz. */}
+        <Button
+          variant="secondary"
           onClick={() => setYear(new Date().getFullYear())}
-          className="inline-flex h-9 items-center rounded-lg border border-line bg-surface px-3 text-[13px] font-medium text-muted transition-colors duration-150 hover:border-line-strong hover:text-ink"
+          aria-pressed={year === new Date().getFullYear()}
+          className={cn(year === new Date().getFullYear() && "border-line-strong bg-surface-muted")}
         >
           Bu yıl
-        </button>
+        </Button>
         <span className="hidden text-[12.5px] tabular-nums text-subtle sm:inline">
           <b className="font-semibold text-ink">{yearTotals.meetings}</b> toplantı ·{" "}
           <b className="font-semibold text-ink">{yearTotals.tasks}</b> görev
@@ -111,18 +117,20 @@ export function CalendarYearView({ loadByDay, initialYear, viewSwitch }: Props) 
       {/* 12 mini ay — telefonda 1, tablette 2-3, masaüstünde 4 sütun */}
       <div className="grid min-h-0 flex-1 gap-3 overflow-auto p-3 sm:grid-cols-2 sm:p-4 lg:grid-cols-3 xl:grid-cols-4">
         {months.map(({ monthStart, days }, mi) => (
-          <div key={mi} className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">
+          <div key={mi} className="overflow-hidden rounded-card border border-line bg-surface">
             <button
+              type="button"
               onClick={() => router.push(`/planning?v=ay&d=${format(monthStart, "yyyy-MM-dd")}`)}
-              className="flex w-full items-center justify-between border-b border-hairline bg-surface-muted px-3 py-2 text-left transition-colors duration-150 hover:bg-surface-hover"
+              aria-label={`${TR_MONTHS[mi]} ${year} — ay görünümünde aç`}
+              className="flex min-h-[40px] w-full items-center justify-between border-b border-hairline bg-surface-muted px-3 py-2 text-left transition-colors duration-150 hover:bg-surface-hover"
             >
-              <span className="text-[13px] font-semibold tracking-tight text-ink">{TR_MONTHS[mi]}</span>
-              <span className="text-[11px] font-medium text-subtle">aç →</span>
+              <span className="text-[13.5px] font-semibold tracking-tight text-ink">{TR_MONTHS[mi]}</span>
+              <span className="text-[12px] font-medium text-subtle" aria-hidden>aç →</span>
             </button>
 
             <div className="grid grid-cols-7 px-2 pb-2 pt-1.5">
               {DOW.map((d, i) => (
-                <span key={i} className="py-1 text-center text-[9.5px] font-semibold uppercase text-subtle">
+                <span key={i} className="py-1 text-center text-[12px] font-semibold uppercase text-subtle">
                   {d}
                 </span>
               ))}
@@ -134,15 +142,17 @@ export function CalendarYearView({ loadByDay, initialYear, viewSwitch }: Props) 
                 return (
                   <button
                     key={iso}
+                    type="button"
                     onClick={() => goDay(iso)}
                     disabled={!inMonth}
+                    aria-label={inMonth ? `${format(day, "d")} ${TR_MONTHS[mi]}${total ? ` — ${load!.meetings} toplantı, ${load!.tasks} görev` : ""}` : undefined}
                     title={
                       inMonth && total
                         ? `${format(day, "d MMMM")} — ${load!.meetings} toplantı, ${load!.tasks} görev`
                         : undefined
                     }
                     className={cn(
-                      "m-px grid aspect-square place-items-center rounded text-[10.5px] tabular-nums transition-colors duration-150",
+                      "m-px grid aspect-square place-items-center rounded text-[12px] tabular-nums transition-colors duration-150",
                       inMonth
                         ? "text-muted hover:bg-surface-hover hover:text-ink"
                         : "pointer-events-none text-transparent",
@@ -160,7 +170,7 @@ export function CalendarYearView({ loadByDay, initialYear, viewSwitch }: Props) 
       </div>
 
       {/* Gösterge */}
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[12px] text-subtle">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t border-hairline px-3 py-2 text-[12px] text-subtle sm:px-4">
         <span className="inline-flex items-center gap-1.5">
           <span className="h-3 w-3 rounded-sm bg-brand" /> toplantı var
         </span>

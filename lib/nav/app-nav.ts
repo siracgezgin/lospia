@@ -54,7 +54,14 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/home", label: "Home Page", icon: Home, adminOnly: false },
       link("planning"),
       link("board"),
-      link("dashboard"),
+      /* LIST — Reports'un yerine.
+         Sıraç (2026-08-29): "Reports / size atanan işler ve teslim tarihleri
+         yerine List gelecek." Üyeye Reports'un anlattığı şey (bana atanan
+         işler + teslim tarihleri) zaten List'in tablosuydu; menüde iki kapı
+         aynı soruyu cevaplıyordu. Raporlar artık List'in şeridindeki son
+         sekmedir (bkz. components/shared/SurfaceTabs) — kendi rotasında
+         yaşamaya devam eder, menüde ikinci bir başlık açmaz. */
+      link("list"),
     ],
   },
   {
@@ -89,6 +96,12 @@ export function navSectionsForRole(isAdmin: boolean): NavSection[] {
  * /collection/maliyet açıkken hem Collection hem Cost yanmasın diye.
  */
 export function activeNavHref(pathname: string): string | null {
+  /* Raporlar artık List yüzeyinin bir SEKMESİ (bkz. SurfaceTabs) ama kendi
+     rotasında yaşıyor. Menüde kendi satırı olmadığı için /dashboard'dayken
+     hiçbir satır yanmıyordu — kullanıcı "neredeyim?" sorusunu kaybediyordu.
+     Sekme hangi yüzeye aitse menüde o satır yanar. */
+  if (pathname === "/dashboard" || pathname.startsWith("/dashboard/")) return "/list";
+
   return (
     [...NAV_SECTIONS.flatMap((s) => s.items), NAV_DIRECTORY]
       .map((i) => i.href)

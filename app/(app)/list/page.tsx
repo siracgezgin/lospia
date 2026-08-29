@@ -46,7 +46,10 @@ export default async function ListPage({
       .order("position"),
     supabase
       .from("workspace_members")
-      .select("id, user_id, role, profiles(id, full_name, email)")
+      /* color_key + avatar_url: süzgeç şeridindeki kişi baloncukları kişinin
+         KENDİ rengini ve fotoğrafını taşır (Pano ile aynı kimlik). Yeni bir
+         sorgu değil, aynı turda iki sütun daha. */
+      .select("id, user_id, role, color_key, profiles(id, full_name, email, avatar_url)")
       .eq("workspace_id", workspaceId),
     supabase
       .from("workspace_contacts")
@@ -66,8 +69,11 @@ export default async function ListPage({
 
   const tasks: Task[] = tasksResult.data ?? [];
   const savedViews: SavedView[] = viewsResult.data ?? [];
-  type ProfileLite = Pick<Profile, "id" | "full_name" | "email">;
-  type MemberRow = { id: string; user_id: string; role: string; profiles: ProfileLite | ProfileLite[] | null };
+  type ProfileLite = Pick<Profile, "id" | "full_name" | "email" | "avatar_url">;
+  type MemberRow = {
+    id: string; user_id: string; role: string; color_key: string | null;
+    profiles: ProfileLite | ProfileLite[] | null;
+  };
   const memberRowsData = (membersResult.data ?? []) as unknown as MemberRow[];
   const profiles: ProfileLite[] = memberRowsData
     .flatMap((m) => (Array.isArray(m.profiles) ? m.profiles : m.profiles ? [m.profiles] : []));
@@ -76,6 +82,16 @@ export default async function ListPage({
     return {
       memberId: m.id, userId: m.user_id, name: prof?.full_name ?? prof?.email ?? "—",
       isAdmin: m.role === "owner" || m.role === "admin",
+    };
+  });
+  /* Süzgeç baloncukları — ekip üyeleri, kimlikleriyle (ad · fotoğraf · renk). */
+  const people = memberRowsData.map((m) => {
+    const prof = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
+    return {
+      userId: m.user_id,
+      name: prof?.full_name ?? prof?.email ?? "—",
+      photoUrl: prof?.avatar_url ?? null,
+      colorKey: m.color_key,
     };
   });
   const deptMembers = (deptMembersResult.data ?? []) as { department_id: string; member_id: string }[];
@@ -92,6 +108,7 @@ export default async function ListPage({
       contacts={contacts}
       departments={departments}
       members={members}
+      people={people}
       deptMembers={deptMembers}
       isAdmin={isAdmin}
       initialPerson={initialPerson}

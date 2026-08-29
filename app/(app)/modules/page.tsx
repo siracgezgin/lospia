@@ -71,12 +71,12 @@ export default async function ModulesPage() {
           return (
             <section key={group}>
               <div className="mb-3 border-b border-hairline pb-2">
-                <h2 className="text-[11px] font-semibold uppercase tracking-[0.13em] text-subtle">
+                <h2 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle">
                   {MODULE_GROUP_TITLES[group]}
                 </h2>
                 <p className="mt-1 text-[13px] text-muted">{GROUP_NOTES[group]}</p>
               </div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                 {items.map((m) => (
                   <OfficeCenterCard
                     key={m.key}

@@ -2,9 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, AlertTriangle, ChevronDown, Loader2, ShieldCheck, RotateCcw, ArrowRight } from "lucide-react";
+import { CheckCircle2, AlertTriangle, ChevronDown, ShieldCheck, RotateCcw, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { setProductionSheetConfirmed } from "@/lib/actions/production";
+import { Button } from "@/components/ui/Button";
 import type { SheetCheck } from "@/lib/production/completeness";
 
 interface Props {
@@ -54,12 +55,12 @@ export function SheetReadiness({ sheetId, checks, confirmedAt, confirmedByName, 
   return (
     <div
       className={cn(
-        "mb-4 overflow-hidden rounded-xl border shadow-card",
+        "mb-4 overflow-hidden rounded-card border",
         confirmed
-          ? "border-emerald-300 bg-emerald-50"
+          ? "border-success/30 bg-success/10"
           : complete
             ? "border-line bg-surface"
-            : "border-amber-300 bg-amber-50",
+            : "border-warning/30 bg-warning/10",
       )}
     >
       {/* Telefonda metin TAM GENİŞLİK, düğmeler alt satıra iner. Aksi hâlde
@@ -67,11 +68,11 @@ export function SheetReadiness({ sheetId, checks, confirmedAt, confirmedByName, 
           kelime kırılıyordu (390px denetiminde görüldü). */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3.5 py-2.5">
         {confirmed ? (
-          <ShieldCheck size={17} className="shrink-0 text-emerald-600" />
+          <ShieldCheck size={17} className="shrink-0 text-success" aria-hidden />
         ) : complete ? (
-          <CheckCircle2 size={17} className="shrink-0 text-emerald-600" />
+          <CheckCircle2 size={17} className="shrink-0 text-success" aria-hidden />
         ) : (
-          <AlertTriangle size={17} className="shrink-0 text-amber-600" />
+          <AlertTriangle size={17} className="shrink-0 text-warning" aria-hidden />
         )}
 
         {/* TEK SATIR. Başlık ve açıklama iki ayrı satırdaydı; şerit iki kat
@@ -81,24 +82,14 @@ export function SheetReadiness({ sheetId, checks, confirmedAt, confirmedByName, 
             Cümle artık başlığın devamı: kalın kısım DURUM, ince kısım
             NE YAPILACAĞI. */}
         <span className="min-w-0 flex-1 basis-[calc(100%-2rem)] text-[13.5px] leading-snug sm:basis-0">
-          <span
-            className={cn(
-              "font-semibold tracking-tight",
-              confirmed ? "text-emerald-900" : complete ? "text-ink" : "text-amber-900",
-            )}
-          >
+          <span className="font-semibold tracking-tight text-ink">
             {confirmed
               ? `Konfirme edildi${confirmedByName ? ` — ${confirmedByName}` : ""}`
               : complete
                 ? "Föy eksiksiz"
                 : `${missing.length} alan eksik`}
           </span>
-          <span
-            className={cn(
-              "ml-1.5 text-[12.5px]",
-              confirmed ? "text-emerald-800/80" : complete ? "text-muted" : "text-amber-800/90",
-            )}
-          >
+          <span className="ml-1.5 text-[12.5px] text-muted">
             {confirmed
               ? "· föyde bir şey değişirse konfirmasyon düşer"
               : complete
@@ -108,28 +99,33 @@ export function SheetReadiness({ sheetId, checks, confirmedAt, confirmedByName, 
         </span>
 
         {!complete && (
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => setOpen((o) => !o)}
-            className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-amber-300 bg-white/70 px-2.5 py-1.5 text-[12.5px] font-medium text-amber-900 transition-colors hover:bg-white max-sm:flex-1 max-sm:justify-center"
+            aria-expanded={open}
+            className="max-sm:flex-1"
           >
             {open ? "Gizle" : "Eksikleri gör"}
-            <ChevronDown size={13} className={cn("transition-transform duration-200", open && "rotate-180")} />
-          </button>
+            <ChevronDown size={13} className={cn("transition-transform duration-200", open && "rotate-180")} aria-hidden />
+          </Button>
         )}
 
+        {/* Konfirme İKİNCİL düğmedir; ekranın tek primary'si üst çubuktaki
+            Kaydet. Yeşil yalnız "tamamlandı" anlamında ve yalnız düğme
+            gerçekten basılabilirken. */}
         {sheetId && (
           confirmed ? (
-            <button
-              onClick={() => toggleConfirm(false)}
-              disabled={busy}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-emerald-300 bg-white/70 px-3 py-1.5 text-[12.5px] font-medium text-emerald-900 transition-colors hover:bg-white disabled:opacity-60 max-sm:flex-1 max-sm:justify-center"
-            >
-              {busy ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />} Geri al
-            </button>
+            <Button variant="secondary" size="sm" onClick={() => toggleConfirm(false)} loading={busy} className="max-sm:flex-1">
+              {!busy && <RotateCcw size={13} aria-hidden />} Geri al
+            </Button>
           ) : (
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => toggleConfirm(true)}
-              disabled={busy || !complete || dirty}
+              loading={busy}
+              disabled={!complete || dirty}
               title={
                 dirty
                   ? "Önce kaydedin — kaydedilmemiş değişiklik var."
@@ -137,22 +133,22 @@ export function SheetReadiness({ sheetId, checks, confirmedAt, confirmedByName, 
                     ? "Föyü konfirme et"
                     : "Eksik alanlar var; önce onları doldurun."
               }
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-[12.5px] font-semibold text-white transition-colors hover:bg-emerald-700 disabled:pointer-events-none disabled:opacity-45 max-sm:flex-1 max-sm:justify-center"
+              className={cn("max-sm:flex-1", complete && !dirty && "border-success/40 text-success hover:bg-success/10 hover:border-success/60")}
             >
-              {busy ? <Loader2 size={13} className="animate-spin" /> : <ShieldCheck size={13} />} Konfirme et
-            </button>
+              {!busy && <ShieldCheck size={13} aria-hidden />} Konfirme et
+            </Button>
           )
         )}
       </div>
 
       {error && (
-        <p className="border-t border-danger/30 bg-danger/10 px-3.5 py-2 text-[12.5px] font-medium text-danger">
+        <p role="alert" className="border-t border-danger/30 bg-danger/10 px-3.5 py-2 text-[13px] font-medium text-danger">
           {error}
         </p>
       )}
 
       {open && !complete && (
-        <ul className="anim-fade-down divide-y divide-amber-200/70 border-t border-amber-200 bg-white/50">
+        <ul className="anim-fade-down divide-y divide-hairline border-t border-warning/30 bg-surface">
           {missing.map((c) => (
             <li key={c.key}>
               {/* Eksik kaleme tıklayınca doğrudan O ALANA gider: sekmesi
@@ -161,17 +157,21 @@ export function SheetReadiness({ sheetId, checks, confirmedAt, confirmedByName, 
                   eksikse tıkladığımda beni oraya atsın"). Önce yalnız sekme
                   değişiyordu; uzun föyde alan hâlâ aranıyordu. */}
               <button
+                type="button"
                 onClick={() => onJump?.(c.key)}
-                className="group flex w-full items-start gap-2 px-3.5 py-2 text-left transition-colors hover:bg-amber-100/60"
+                className="group flex w-full items-start gap-2 px-3.5 py-2 text-left transition-colors duration-150 hover:bg-surface-hover"
               >
-                <AlertTriangle size={13} className="mt-0.5 shrink-0 text-amber-600" />
+                <AlertTriangle size={13} className="mt-0.5 shrink-0 text-warning" aria-hidden />
                 <span className="min-w-0">
-                  <span className="block text-[13px] font-medium text-ink">{c.label}</span>
+                  <span className="block text-[13.5px] font-medium text-ink">{c.label}</span>
                   {c.hint && <span className="block text-[12px] text-muted">{c.hint}</span>}
                 </span>
+                {/* Ok her zaman görünür: satırın "buraya götürür" olduğu
+                    hover'a bağlı kalmasın. */}
                 <ArrowRight
                   size={13}
-                  className="ml-auto mt-0.5 shrink-0 text-amber-600 opacity-0 transition-all duration-150 group-hover:translate-x-0.5 group-hover:opacity-100"
+                  className="ml-auto mt-0.5 shrink-0 text-subtle transition-colors duration-150 group-hover:text-ink"
+                  aria-hidden
                 />
               </button>
             </li>

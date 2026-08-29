@@ -45,6 +45,24 @@ function slotMinutes(slot: string): number {
   return m ? +m[1] * 60 + +m[2] : 24 * 60 + 1;
 }
 
+/** Tıklanabilir hücrenin hover hâli: kategori rengini ezmeyen ince mürekkep
+ *  perdesi (`after:`); filtre/brightness kullanılmaz. */
+const HOVER_VEIL =
+  "cursor-pointer after:pointer-events-none after:absolute after:inset-0 after:bg-ink/[0.04] after:opacity-0 after:transition-opacity after:duration-150 hover:after:opacity-100";
+
+/** Sürüklenemeyen ama tıklanabilen hücre klavyeden de açılsın: Enter/Boşluk.
+ *  Sürüklenebilir hücrede rol ve tabIndex'i dnd-kit'in `attributes`ı verir. */
+function keyboardOpen(enabled: boolean, onOpen: () => void) {
+  if (!enabled) return {};
+  return {
+    role: "button" as const,
+    tabIndex: 0,
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); }
+    },
+  };
+}
+
 /**
  * Aslı Hanım'ın Excel düzeni — masaüstü (lg ve üzeri).
  *
@@ -110,7 +128,7 @@ export function PlanningWeekGrid({
   );
   const SLIM = 78;   // yalnız gün adı + tarih sığar
   const WIDE_MIN = 132;
-  const LABEL_W = 80; // iki satırlık saat (NY + IST) sığsın diye 64'ten geniş
+  const LABEL_W = 84; // iki satırlık saat (NY + IST) 12px'te sığsın diye geniş
   const cols =
     `${LABEL_W}px ` + weekDays.map((_, i) => (dayFilled[i] ? `minmax(${WIDE_MIN}px, 1fr)` : `${SLIM}px`)).join(" ");
   const minWidth = LABEL_W + dayFilled.reduce((n, f) => n + (f ? WIDE_MIN : SLIM), 0);
@@ -196,7 +214,7 @@ export function PlanningWeekGrid({
   const grid = (
     /* h-full: sayfa artık tam ekran (bkz. PlanningBoard) — sabit bir
        max-height yerine kalan yüksekliğin tamamı. */
-    <div className="hidden h-full overflow-auto overscroll-x-contain rounded-2xl border border-line-strong bg-surface shadow-card lg:block">
+    <div className="hidden h-full overflow-auto overscroll-x-contain rounded-card border border-line-strong bg-surface lg:block">
       <div style={{ minWidth }}>
         {/* GÜN + TARİH TEK SATIRDA — dikey kaydırmada üstte kalır. */}
         <div className="sticky top-0 z-20 border-b border-line-strong bg-surface-muted">
@@ -212,7 +230,7 @@ export function PlanningWeekGrid({
                 )}
               >
                 <span className={cn(
-                  "text-[10.5px] font-bold uppercase tracking-[0.1em]",
+                  "text-[12px] font-semibold uppercase tracking-[0.08em]",
                   iso === todayIso ? "text-brand-strong" : "text-subtle",
                 )}>
                   {WEEKDAY_SHORT_EN[i]}
@@ -242,21 +260,23 @@ export function PlanningWeekGrid({
                   {open ? (
                     <BandEditor band={band} refDay={weekRefDay} onClose={() => setEditingBand(null)} />
                   ) : (
-                    <button
-                      type="button"
-                      onClick={isAdmin ? () => setEditingBand(key) : undefined}
-                      disabled={!isAdmin}
-                      title={isAdmin ? "Şeridi düzenle — ad, saat, renk" : undefined}
-                      className={cn(
-                        "group/band sticky left-0 inline-flex items-center gap-1.5 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em]",
-                        isAdmin && "cursor-pointer transition-opacity duration-150 hover:opacity-80",
-                      )}
-                    >
-                      {band.label || "—"}
-                      {isAdmin && (
-                        <Pencil size={11} className="opacity-0 transition-opacity duration-150 group-hover/band:opacity-70" />
-                      )}
-                    </button>
+                    isAdmin ? (
+                      <button
+                        type="button"
+                        onClick={() => setEditingBand(key)}
+                        title="Şeridi düzenle — ad, saat, renk"
+                        className="sticky left-0 inline-flex min-h-[28px] items-center gap-1.5 px-3 py-1 text-[12px] font-semibold uppercase tracking-[0.1em] transition-opacity duration-150 hover:opacity-80"
+                      >
+                        {band.label || "—"}
+                        {/* Kalem HER ZAMAN görünür (soluk) — hover'a saklı işlev
+                            dokunmatikte yoktur; salt-okur üyede hiç çizilmez. */}
+                        <Pencil size={12} className="opacity-60" aria-hidden />
+                      </button>
+                    ) : (
+                      <span className="sticky left-0 inline-flex min-h-[28px] items-center px-3 py-1 text-[12px] font-semibold uppercase tracking-[0.1em]">
+                        {band.label || "—"}
+                      </span>
+                    )
                   )}
                 </div>
               )}
@@ -279,9 +299,9 @@ export function PlanningWeekGrid({
               <button
                 type="button"
                 onClick={() => setEditingBand("new")}
-                className="sticky left-0 inline-flex items-center gap-1 px-3 py-1.5 text-[11.5px] font-semibold uppercase tracking-[0.14em] text-subtle transition-colors duration-150 hover:text-brand"
+                className="sticky left-0 inline-flex min-h-[36px] items-center gap-1 px-3 py-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle transition-colors duration-150 hover:text-brand"
               >
-                <Plus size={12} /> Saat ekle
+                <Plus size={13} aria-hidden /> Saat ekle
               </button>
             )}
           </div>
@@ -305,7 +325,7 @@ export function PlanningWeekGrid({
       {grid}
       <DragOverlay dropAnimation={null}>
         {dragging && (
-          <div className="rounded-lg border border-brand-ring bg-surface px-2.5 py-1.5 text-[12.5px] font-semibold tracking-tight text-ink shadow-drawer">
+          <div className="rounded-control border border-brand-ring bg-surface px-2.5 py-1.5 text-[12.5px] font-semibold tracking-tight text-ink shadow-pop">
             {dragging}
           </div>
         )}
@@ -347,6 +367,7 @@ function TitleCell({
   const setRef = (node: HTMLDivElement | null) => { dropRef(node); dragRef(node); };
 
   const content = cell.map((m) => m.content).filter(Boolean).join(" · ");
+  const keyOpen = keyboardOpen(isAdmin && !canDrag, onOpen);
   const ids = [...new Set(cell.flatMap((m) => m.participant_ids ?? []))];
   const kim = cell.map((m) => m.kim).filter(Boolean).join(", ");
   const collabIds = [...new Set(cell.flatMap((m) => m.collaborator_ids ?? []))];
@@ -356,13 +377,16 @@ function TitleCell({
       ref={setRef}
       {...(canDrag ? listeners : {})}
       {...(canDrag ? attributes : {})}
+      {...keyOpen}
       onClick={isAdmin ? onOpen : undefined}
       className={cn(
         // Başlıklar dikeyde ORTALANIR: bir gün iki satıra taşınca tek satırlık
         // komşuları yukarıda asılı kalmasın.
         "group/cell relative flex min-h-[38px] items-center border-r border-hairline px-2 py-1.5 last:border-r-0",
         cell.length || hasBand ? meta.cell : "bg-surface",
-        isAdmin && "cursor-pointer transition-colors duration-150 hover:brightness-[0.97]",
+        // Hover: filtre (brightness) yerine ince bir mürekkep perdesi — kategori
+        // rengi bozulmaz, sürükleme halkasıyla (ring) çakışmaz.
+        isAdmin && HOVER_VEIL,
         canDrag && "active:cursor-grabbing",
         isOver && "ring-2 ring-inset ring-brand-ring",
         isDragging && "opacity-40",
@@ -379,7 +403,7 @@ function TitleCell({
         </span>
         <KimBadges ids={ids} kim={kim} collaboratorIds={collabIds} memberNames={memberNames} personHex={personHex} />
         {content && (
-          <span className="mt-0.5 block whitespace-pre-line text-[11.5px] leading-snug text-ink/70">
+          <span className="mt-0.5 block whitespace-pre-line text-[12px] leading-snug text-ink/70">
             {content}
           </span>
         )}
@@ -415,18 +439,20 @@ function TopicCell({
     data: { cell: cellId, label: topic?.text ?? "Konu" },
   });
   const setRef = (node: HTMLDivElement | null) => { dropRef(node); dragRef(node); };
+  const keyOpen = keyboardOpen(isAdmin && !canDrag, onOpen);
 
   return (
     <div
       ref={setRef}
       {...(canDrag ? listeners : {})}
       {...(canDrag ? attributes : {})}
+      {...keyOpen}
       onClick={isAdmin ? onOpen : undefined}
       title={canDrag ? "Sürükleyip başka gün/saate ya da satıra taşıyabilirsiniz" : undefined}
       className={cn(
-        "min-h-[30px] border-r border-hairline px-2 py-1.5 text-[12px] leading-snug text-ink/90 last:border-r-0",
+        "relative min-h-[30px] border-r border-hairline px-2 py-1.5 text-[12px] leading-snug text-ink/90 last:border-r-0",
         isToday && "bg-brand-soft/25",
-        isAdmin && "cursor-pointer transition-colors duration-150 hover:bg-brand-soft/50",
+        isAdmin && HOVER_VEIL,
         canDrag && "active:cursor-grabbing",
         isOver && "ring-2 ring-inset ring-brand-ring",
         isDragging && "opacity-40",
@@ -434,7 +460,7 @@ function TopicCell({
     >
       {topic?.text}
       {topic?.task_id && (
-        <CheckCircle2 size={11} className="ml-1 inline shrink-0 text-emerald-600" aria-label="Göreve atandı" />
+        <CheckCircle2 size={12} className="ml-1 inline shrink-0 text-success" aria-label="Göreve atandı" />
       )}
       {topic && (
         <KimBadges
@@ -450,7 +476,7 @@ function TopicCell({
           sütunun tarihini tekrar basmak gürültüydü (Aslı Hanım, 2026-08-29:
           "zaten ben o tarihi seçip konu ekliyorum"). */}
       {topic?.due_date && topic.due_date.slice(0, 10) !== cellId.split("|")[0] && (
-        <span className="ml-1 whitespace-nowrap text-[10.5px] tabular-nums text-subtle">
+        <span className="ml-1 whitespace-nowrap text-[12px] tabular-nums text-subtle">
           {format(parseISO(topic.due_date), "d MMM", { locale: tr })}
         </span>
       )}
@@ -460,7 +486,7 @@ function TopicCell({
 
 function HeadCell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="sticky left-0 z-10 border-r border-hairline bg-surface-muted px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-subtle">
+    <div className="sticky left-0 z-10 border-r border-hairline bg-surface-muted px-2.5 py-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle">
       {children}
     </div>
   );
@@ -471,13 +497,13 @@ function SlotLabel({ slot, refDay }: { slot: string; refDay: string }) {
   const ist = istanbulLabel(refDay, slot);
   return (
     <div className="sticky left-0 z-10 border-r border-hairline bg-surface px-2.5 py-1.5">
-      <span className="block text-[12px] font-bold tabular-nums leading-tight text-ink">
-        <span className="mr-1 text-[9.5px] font-semibold uppercase tracking-wider text-subtle">{HOME_LABEL}</span>
+      <span className="block text-[12.5px] font-semibold tabular-nums leading-tight text-ink">
+        <span className="mr-1 text-[12px] font-semibold uppercase tracking-[0.06em] text-subtle">{HOME_LABEL}</span>
         {slot}
       </span>
       {ist && (
-        <span className="block text-[10.5px] font-medium tabular-nums leading-tight text-subtle">
-          <span className="mr-1 text-[9.5px] uppercase tracking-wider">{AWAY_LABEL}</span>
+        <span className="mt-0.5 block text-[12px] font-medium tabular-nums leading-tight text-subtle">
+          <span className="mr-1 uppercase tracking-[0.06em]">{AWAY_LABEL}</span>
           {ist}
         </span>
       )}
@@ -487,7 +513,7 @@ function SlotLabel({ slot, refDay }: { slot: string; refDay: string }) {
 
 function RowLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="sticky left-0 z-10 border-r border-hairline bg-surface px-2.5 py-1.5 text-[11.5px] font-medium text-subtle">
+    <div className="sticky left-0 z-10 border-r border-hairline bg-surface px-2.5 py-1.5 text-[12px] font-medium text-subtle">
       {children}
     </div>
   );

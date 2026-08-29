@@ -13,7 +13,7 @@ import { assignPersonTones } from "@/lib/design/person-colors";
 import { canManageSettings, canRenameWorkspace, canManageWorkspace } from "@/lib/auth/permissions";
 import { roleLabel } from "@/lib/utils/roles";
 import { pickDisplayEmail } from "@/lib/utils/display-identity";
-import { Avatar } from "@/components/ui/Avatar";
+import { PersonAvatar } from "@/components/ui/PersonAvatar";
 import { ArrowRight } from "lucide-react";
 import type {
   Workspace, WorkspaceMember, Profile,
@@ -36,11 +36,19 @@ export default async function SettingsPage() {
   if (!workspaceId) return <div className="p-8 text-muted">Çalışma alanı bulunamadı.</div>;
 
   if (!canManageSettings(userRole)) {
+    /* Yetkisiz üye: başlık uygulama çubuğunda zaten yazıyor; burada sakin bir
+       uyarı + kişinin kendi işine giden tek bağlantı (Profil). Ham amber kutu
+       token'lı warning yüzeyine döndü. */
     return (
-      <div className="mx-auto w-full max-w-3xl px-4 py-4 sm:px-6 lg:px-8">
-        <h1 className="text-2xl font-bold text-ink mb-6">Settings</h1>
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-sm text-amber-800">
-          Bu sayfayı düzenlemek için yetkiniz yok. Yöneticinize başvurun.
+      <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
+        <h1 className="sr-only">Settings</h1>
+        <div className="max-w-lg rounded-card border border-warning/30 bg-warning/5 px-4 py-3.5">
+          <p className="text-[13.5px] font-medium text-ink">Bu sayfayı yalnız yöneticiler düzenleyebilir.</p>
+          <p className="mt-1 text-[13px] leading-relaxed text-muted">
+            Adınızı, ünvanınızı ve fotoğrafınızı{" "}
+            <Link href="/profile" className="font-medium text-brand hover:text-brand-strong">Profil</Link>
+            {" "}sayfasından değiştirebilirsiniz.
+          </p>
         </div>
       </div>
     );
@@ -191,7 +199,7 @@ export default async function SettingsPage() {
           birini bulunmaz kılıyordu. Kart biçimi de tekleşti (SettingsSection):
           önce bazı başlıklar kartın içinde, bazıları dışındaydı. */}
       <SettingsTabs>
-        <SettingsTab label="Ekip" count={memberCount}>
+        <SettingsTab label="Ekip">
               {/* TEK SÜTUN. Burası `xl:grid-cols-2` idi ama içinde iki bölüm
                   vardı ve ilki `xl:col-span-2` ile tam genişlik alıyordu —
                   geriye tek başına kalan "Departmanlar" ızgaranın SOL yarısını
@@ -263,62 +271,52 @@ export default async function SettingsPage() {
                   aside={
                     <Link
                       href="/profile"
-                      className="group inline-flex items-center gap-1 text-[12.5px] font-medium text-brand transition-colors duration-150 hover:text-brand-strong"
+                      className="inline-flex items-center gap-1 text-[13px] font-medium text-brand transition-colors duration-150 hover:text-brand-strong"
                     >
                       Düzenle
-                      <ArrowRight size={12} className="transition-transform duration-150 ease-standard group-hover:translate-x-0.5" />
+                      <ArrowRight size={13} aria-hidden />
                     </Link>
                   }
                 >
                   <div className="space-y-4">
                   <div className="flex items-center gap-3">
-                    {/* Kendi renginiz — panodaki, rapordaki ve Kişi Kimliği'ndekiyle
-                        AYNI ton. Avatar kendi paletine düşerse aynı kişi iki
-                        farklı renkte görünüyor. */}
-                    <Avatar name={profileName} size="md" colorHex={myTone?.hex} />
+                    {/* Kişi her yerde aynı rozetle: fotoğraf varsa fotoğraf,
+                        yoksa kendi renginde baş harfler — panodaki, rapordaki
+                        ve Ekip listesindekiyle AYNI ton. */}
+                    <PersonAvatar
+                      name={profileName}
+                      photoUrl={profile?.avatar_url ?? null}
+                      colorHex={myTone?.hex ?? null}
+                      size="md"
+                    />
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-ink">{profileName}</p>
-                      <p className="text-xs text-subtle">{roleLabel(userRole)}</p>
+                      <p className="truncate text-[14px] font-semibold text-ink">{profileName}</p>
+                      <p className="text-[12.5px] text-muted">{roleLabel(userRole)}</p>
                     </div>
                   </div>
-                  <div className="space-y-3 border-t border-hairline pt-4">
-                    <div>
-                      <p className="text-xs text-subtle">E-posta</p>
-                      <p className={displayEmail ? "text-sm font-medium text-ink" : "text-sm italic text-subtle"}>
-                        {displayEmail ?? "E-posta eklenmedi"}
-                      </p>
-                    </div>
-                    {profile?.username && (
-                      <div>
-                        <p className="text-xs text-subtle">Kullanıcı adı</p>
-                        <p className="text-sm font-medium text-ink">@{profile.username}</p>
-                      </div>
-                    )}
-                  </div>
+                  <dl className="divide-y divide-hairline border-t border-hairline">
+                    <InfoRow label="E-posta">
+                      {displayEmail ?? <span className="font-normal text-subtle">E-posta eklenmedi</span>}
+                    </InfoRow>
+                    {profile?.username && <InfoRow label="Kullanıcı adı">@{profile.username}</InfoRow>}
+                  </dl>
                   </div>
                 </SettingsSection>
 
                 <SettingsSection title="Çalışma alanı">
-                  <div className="space-y-4">
-                  <div>
-                    <p className="mb-1 text-xs text-subtle">İsim</p>
-                    {isOwner && workspace ? (
-                      <WorkspaceNameEditor workspaceId={workspaceId} currentName={workspace.name} />
-                    ) : (
-                      <p className="text-sm font-medium text-ink">{workspace?.name}</p>
-                    )}
-                  </div>
-                  <div className="space-y-3 border-t border-hairline pt-4">
-                    <div>
-                      <p className="text-xs text-subtle">Kısa ad</p>
-                      <p className="font-mono text-sm text-muted">{workspace?.slug}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-subtle">Rolünüz</p>
-                      <p className="text-sm font-medium text-ink">{roleLabel(userRole)}</p>
-                    </div>
-                  </div>
-                  </div>
+                  <dl className="divide-y divide-hairline">
+                    <InfoRow label="İsim">
+                      {isOwner && workspace ? (
+                        <WorkspaceNameEditor workspaceId={workspaceId} currentName={workspace.name} />
+                      ) : (
+                        workspace?.name
+                      )}
+                    </InfoRow>
+                    <InfoRow label="Kısa ad">
+                      <span className="font-mono font-normal text-muted">{workspace?.slug}</span>
+                    </InfoRow>
+                    <InfoRow label="Rolünüz">{roleLabel(userRole)}</InfoRow>
+                  </dl>
                 </SettingsSection>
               </div>
         </SettingsTab>
@@ -327,12 +325,23 @@ export default async function SettingsPage() {
                   yedekleme haftada bir." Tek bölüm, tek iş: yedeği indir. */}
               <SettingsSection
                 title="Yedekleme"
-                description="Çalışma alanındaki bütün kayıtları (istenirse yüklenen dosyalarla birlikte) tek bir .zip dosyası olarak indirin. Haftada bir alıp sistemin dışında saklayın."
+                description="Haftada bir tam yedek alıp sistemin dışında saklayın."
               >
                 <BackupPanel last={lastBackup} />
               </SettingsSection>
         </SettingsTab>
       </SettingsTabs>
+    </div>
+  );
+}
+
+/** Hesabım sekmesindeki salt-okur satır: etiket solda, değer sağda; satırlar
+ *  ince çizgiyle ayrılır — kart içinde kart yok. */
+function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-2.5">
+      <dt className="shrink-0 text-[13px] text-muted">{label}</dt>
+      <dd className="min-w-0 flex-1 text-right text-[13.5px] font-medium text-ink">{children}</dd>
     </div>
   );
 }

@@ -53,6 +53,10 @@ import {
   BOARD_COL_HEADER_TONE,
 } from "@/lib/design/semantics";
 import { Badge } from "@/components/ui/Badge";
+import { Button, IconButton } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { SelectInput, TextInput } from "@/components/ui/Field";
+import { useConfirm } from "@/components/ui/useConfirm";
 import { reorderTask, updateTask, softDeleteTask, archiveTask, duplicateTask } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils/cn";
 import { formatDateTR } from "@/lib/utils/format-date";
@@ -180,7 +184,8 @@ function CardStatusChip({ task }: { task: Task }) {
   }, [open]);
 
   const tone = STATUS_CHIP_TONE[optStatus] ?? "bg-surface-sunken text-muted";
-  const chipCls = cn("text-[10px] rounded px-1.5 py-0.5 leading-none font-medium", tone);
+  // Meta metin 12px'in altına inmez (tipografi tabanı); çip Badge ölçüsünde.
+  const chipCls = cn("text-[12px] rounded-md px-1.5 py-0.5 leading-none font-medium", tone);
   const canDone = ctx?.canComplete ?? false;
   // A done task is locked for non-admins — they can neither change nor reopen it.
   const doneLocked = optStatus === "done" && !canDone;
@@ -210,14 +215,16 @@ function CardStatusChip({ task }: { task: Task }) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className={cn(chipCls, "inline-flex items-center gap-0.5 hover:brightness-95 active:brightness-90 transition duration-150")}
+        className={cn(chipCls, "tap-target inline-flex items-center gap-0.5 hover:brightness-95 active:brightness-90 transition duration-150")}
         title="Durumu değiştir"
+        aria-haspopup="menu"
+        aria-expanded={open}
       >
         {STATUS_LABELS[optStatus]}
-        <ChevronDown size={9} className="opacity-60" />
+        <ChevronDown size={11} className="opacity-60" />
       </button>
       {open && (
-        <div className="absolute left-0 top-full mt-1 w-32 bg-surface border border-line rounded-lg shadow-pop z-50 py-1 origin-top-left anim-fade-down">
+        <div role="menu" className="absolute left-0 top-full mt-1 w-36 bg-surface border border-line rounded-control shadow-pop z-50 py-1 origin-top-left anim-fade-down">
           {CARD_STATUS_CHOICES.map((o) => {
             const disabled = o.value === "done" && !canDone;
             const active = o.value === optStatus;
@@ -225,17 +232,18 @@ function CardStatusChip({ task }: { task: Task }) {
               <button
                 key={o.value}
                 type="button"
+                role="menuitem"
                 disabled={disabled}
                 onClick={() => choose(o.value)}
                 className={cn(
-                  "w-full text-left px-2.5 py-1.5 text-[11px] flex items-center gap-1.5 hover:bg-surface-muted transition-colors duration-150",
+                  "w-full text-left px-2.5 py-1.5 text-[13px] flex items-center gap-1.5 hover:bg-surface-muted transition-colors duration-150",
                   active && "font-semibold text-brand",
                   disabled && "opacity-40 cursor-not-allowed hover:bg-transparent",
                 )}
                 title={disabled ? "Yalnızca yöneticiler tamamlayabilir" : undefined}
               >
                 {o.label}
-                {active && <Check size={10} className="ml-auto" />}
+                {active && <Check size={12} className="ml-auto" />}
               </button>
             );
           })}
@@ -260,15 +268,16 @@ function ParticipantChips({ participants }: { participants: TaskParticipant[] })
             size="xs"
             tone={p.completed ? "done" : "neutral"}
             title={`${p.name} — ${p.completed ? "Tamamladı" : "Tamamlanmadı"}`}
-            className="ring-1 ring-white"
+            className="ring-1 ring-surface"
           />
           {p.completed && (
-            <Check size={8} className="absolute -bottom-0.5 -right-0.5 text-green-600 bg-white rounded-full" strokeWidth={3} />
+            <Check size={8} className="absolute -bottom-0.5 -right-0.5 rounded-full bg-surface text-success" strokeWidth={3} />
           )}
         </span>
       ))}
+      {/* Avatar boyu (16px) — rozet içi tek işaret, tipografi tabanı burada uygulanmaz. */}
       {overflow > 0 && (
-        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-surface-sunken text-muted text-[8px] font-semibold ring-1 ring-white">
+        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-surface-sunken text-muted text-[8px] font-semibold ring-1 ring-surface">
           +{overflow}
         </span>
       )}
@@ -529,14 +538,10 @@ function taskUrgencyRank(t: Task, today: string): number {
   return 3;
 }
 
-// Urgent (Acil) tasks must read as critical at first glance: a thick red-600
-// left accent over a red-to-white wash, a clear red ring + soft red glow for
-// separation from the column background, plus the red "Acil" badge (with
-// AlertTriangle) in the card body. Distinct from the crimson Marka Yönetimi
-// department chip because the emphasis lives on the card FRAME
-// (border/ring/wash/shadow), never the identity chip. Done cards drop the
-// emphasis (completed urgency is history). Applied to every card variant. Kept
-// as plain class strings (no cn()) because tailwind-merge strips border-l-*.
+// Acil (urgent) görev ilk bakışta okunmalı: kalın kırmızı sol şerit + ince
+// kırmızı halka + karttaki "Acil" rozeti. Vurgu kartın ÇERÇEVESİNDE yaşar,
+// kimlik renginde değil; tamamlanan kartta düşer (bitmiş işin aciliyeti
+// tarihtir). Düz sınıf dizgisi (cn() yok): tailwind-merge border-l-* yutuyor.
 function urgentCardStyle(
   task: Task,
   base: { surface: string; border: string; accent: string; style?: React.CSSProperties },
@@ -549,23 +554,29 @@ function urgentCardStyle(
   // kişinin renginde olsun" dedi, aciliyet kimliği silmemeli. Aciliyet artık
   // kalın kırmızı çerçeve + halka + gölge ile anlatılır; "Acil" rozeti zaten
   // kartın üstünde duruyor.
+  /* Kenarlık ve zemin kişinin renginde KALIR; yalnız sol şerit kalınlaşıp
+     kırmızıya döner, çevresine ince bir halka gelir. Kırmızı gölge yok (büyük
+     görsel efekt yasak; "Acil" rozeti zaten kartın üstünde). Renk token'dan
+     (--urgent): tek doygun kırmızı, her yüzeyde aynı. */
   return {
     surface: base.surface,
-    // Zemin kişinin rengi kalır, kenarlık ve şerit kırmızıya döner.
-    style: base.style ? { ...base.style, borderColor: "#f87171", borderLeftColor: "#dc2626" } : undefined,
-    border: "border-red-400",
-    accent: "border-l-red-600",
+    style: base.style ? { ...base.style, borderLeftColor: "var(--urgent)" } : undefined,
+    border: base.border,
+    accent: "border-l-urgent",
     widthCls: "border-l-[6px]",
-    ring: "ring-1 ring-red-300/80",
-    shadow: "shadow-[0_8px_24px_rgba(220,38,38,0.16)]",
+    ring: "ring-1 ring-urgent/30",
+    shadow: "shadow-card",
     urgent,
   };
 }
 
 // ── Card 3-dot menu ───────────────────────────────────────────────────────────
 
-const MENU_WIDTH = 144;      // matches the old w-36
-const MENU_EST_HEIGHT = 132; // first-paint guess; refined after measuring
+const MENU_WIDTH = 160;      // 13px satırlar rahat sığsın
+const MENU_EST_HEIGHT = 140; // first-paint guess; refined after measuring
+// Menü satırı — 13px birincil metin, tek dil (durum menüsüyle aynı).
+const MENU_ITEM =
+  "flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink";
 
 function CardMenu({
   onEdit,
@@ -585,9 +596,14 @@ function CardMenu({
   canDuplicate?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const [confirming, setConfirming] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  /* Silme onayı ORTAK diyalogdan (useConfirm). Eskiden menünün içine sıkışan
+     iki adımlı "Evet / İptal" 10px'lik metinle okunmuyordu ve uygulamanın
+     geri kalanındaki onay penceresine benzemiyordu. Diyalog bu sarmalayıcının
+     React ağacında kalır: tıklamaları kartın aç/sürükle dinleyicilerine
+     ulaşmadan durur. */
+  const { ask, dialog } = useConfirm();
   // Fixed viewport coords: the menu is PORTALLED to <body> so neither the
   // column's overflow-auto nor a following card's paint order can clip it.
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
@@ -610,11 +626,11 @@ function CardMenu({
     setPos((prev) => (prev && prev.top === top && prev.left === left ? prev : { top, left }));
   }, []);
 
-  // Re-place once the real height is known (and again when the confirm step
-  // grows the menu), so a flipped menu never hangs off the viewport.
+  // Re-place once the real height is known, so a flipped menu never hangs off
+  // the viewport.
   useEffect(() => {
     if (open) place();
-  }, [open, confirming, place]);
+  }, [open, place]);
 
   useEffect(() => {
     if (!open) return;
@@ -622,12 +638,10 @@ function CardMenu({
       const target = e.target as Node;
       if (ref.current?.contains(target) || menuRef.current?.contains(target)) return;
       setOpen(false);
-      setConfirming(false);
     }
     // A fixed menu can't follow the column scroll — close instead of drifting.
     function dismiss() {
       setOpen(false);
-      setConfirming(false);
     }
     document.addEventListener("mousedown", handleOutsideClick);
     window.addEventListener("scroll", dismiss, true);
@@ -639,6 +653,16 @@ function CardMenu({
     };
   }, [open]);
 
+  async function requestDelete() {
+    setOpen(false);
+    const ok = await ask({
+      title: "Görev çöp kutusuna taşınsın mı?",
+      message: "Çöp kutusundan geri alabilirsiniz.",
+      confirmLabel: "Çöp kutusuna taşı",
+    });
+    if (ok) onDelete();
+  }
+
   return (
     <div
       ref={ref}
@@ -647,22 +671,22 @@ function CardMenu({
       onMouseDown={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
     >
+      {/* Düğme HER ZAMAN görünür (soluk): hover'a saklanan işlev telefonda
+          erişilemezdi. Kart hover'ında ve açıkken koyulaşır. Klavyeyle de
+          ulaşılır (tabIndex -1 kaldırıldı). */}
       <button
+        type="button"
         onClick={() => {
           // Place BEFORE opening so the first frame paints in position.
           if (!open) place();
           setOpen((o) => !o);
-          setConfirming(false);
         }}
-        // Stays visible while open: the menu now lives in a portal, so moving
-        // the pointer onto it leaves the card's :hover group.
-        className={`p-0.5 rounded-md text-subtle hover:text-ink hover:bg-surface-muted group-hover:opacity-100 focus-visible:opacity-100 transition-[opacity,background-color,color] duration-150 ${open ? "opacity-100 text-ink" : "opacity-0"}`}
+        className={`tap-target grid size-6 shrink-0 place-items-center rounded-md transition-[background-color,color] duration-150 hover:bg-surface-muted hover:text-ink ${open ? "bg-surface-muted text-ink" : "text-subtle/80 group-hover:text-muted"}`}
         aria-label="Görev seçenekleri"
         aria-haspopup="menu"
         aria-expanded={open}
-        tabIndex={-1}
       >
-        <MoreVertical size={12} />
+        <MoreVertical size={14} />
       </button>
 
       {open && createPortal(
@@ -670,63 +694,42 @@ function CardMenu({
           ref={menuRef}
           role="menu"
           style={{ top: pos?.top ?? -9999, left: pos?.left ?? -9999, width: MENU_WIDTH }}
-          className="fixed z-[100] bg-surface border border-line rounded-lg shadow-pop py-1 origin-top-right anim-fade-down"
+          className="fixed z-[100] bg-surface border border-line rounded-control shadow-pop py-1 origin-top-right anim-fade-down"
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
         >
-          <button
-            onClick={() => { setOpen(false); onEdit(); }}
-            className="w-full text-left px-3 py-1.5 text-xs text-muted hover:bg-surface-muted hover:text-ink transition-colors flex items-center gap-1.5"
-          >
-            <Pencil size={11} /> Düzenle
+          <button type="button" role="menuitem" onClick={() => { setOpen(false); onEdit(); }} className={MENU_ITEM}>
+            <Pencil size={13} /> Düzenle
           </button>
           {canDuplicate && (
-            <button
-              onClick={() => { setOpen(false); onDuplicate(); }}
-              className="w-full text-left px-3 py-1.5 text-xs text-muted hover:bg-surface-muted hover:text-ink transition-colors flex items-center gap-1.5"
-            >
-              <Copy size={11} /> Çoğalt
+            <button type="button" role="menuitem" onClick={() => { setOpen(false); onDuplicate(); }} className={MENU_ITEM}>
+              <Copy size={13} /> Çoğalt
             </button>
           )}
           {canArchive && (
-            <button
-              onClick={() => { setOpen(false); onArchive(); }}
-              className="w-full text-left px-3 py-1.5 text-xs text-muted hover:bg-surface-muted hover:text-ink transition-colors flex items-center gap-1.5"
-            >
-              <Archive size={11} /> Arşivle
+            <button type="button" role="menuitem" onClick={() => { setOpen(false); onArchive(); }} className={MENU_ITEM}>
+              <Archive size={13} /> Arşivle
             </button>
           )}
-          {canDelete && <div className="my-1 border-t border-hairline" />}
-          {canDelete && confirming ? (
-            <div className="px-2 py-1.5">
-              <p className="text-[10px] text-red-600 mb-1.5 leading-snug">Çöp kutusuna taşınsın mı?</p>
-              <div className="flex gap-1">
-                <button
-                  onClick={() => { setOpen(false); setConfirming(false); onDelete(); }}
-                  className="flex-1 text-[10px] bg-red-600 text-white rounded px-1.5 py-0.5 hover:bg-red-700 transition-colors duration-150"
-                >
-                  Evet
-                </button>
-                <button
-                  onClick={() => setConfirming(false)}
-                  className="flex-1 text-[10px] bg-surface-sunken text-muted rounded px-1.5 py-0.5 hover:bg-surface-hover transition-colors"
-                >
-                  İptal
-                </button>
-              </div>
-            </div>
-          ) : canDelete ? (
-            <button
-              onClick={() => setConfirming(true)}
-              className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 transition-colors duration-150 flex items-center gap-1.5"
-            >
-              <Trash2 size={11} /> Sil
-            </button>
-          ) : null}
+          {canDelete && (
+            <>
+              <div className="my-1 border-t border-hairline" />
+              {/* Yıkıcı eylem: kırmızı metin, ortak onay penceresi. */}
+              <button
+                type="button"
+                role="menuitem"
+                onClick={requestDelete}
+                className={cn(MENU_ITEM, "text-danger hover:bg-danger/10 hover:text-danger")}
+              >
+                <Trash2 size={13} /> Sil
+              </button>
+            </>
+          )}
         </div>,
         document.body,
       )}
+      {dialog}
     </div>
   );
 }
@@ -784,7 +787,7 @@ function QuickAssigneeSelect({
       title={`${currentName} — ${task.status === "done" ? "Tamamladı" : "Tamamlanmadı"}`}
     />
   ) : (
-    <span className="text-[10px] text-subtle pointer-events-none">—</span>
+    <span className="text-[12px] text-subtle pointer-events-none">—</span>
   );
 
   if (!canAssign) {
@@ -807,7 +810,10 @@ function QuickAssigneeSelect({
         onClick={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
         onPointerDown={(e) => e.stopPropagation()}
-        className="absolute inset-0 opacity-0 cursor-pointer w-full text-[10px]"
+        // Görünmez seçici: avatarın üstünde saydam <select>, tıklayınca
+        // tarayıcının kendi listesi açılır — Field primitifi burada çizim
+        // yapmadığı için gereksiz.
+        className="absolute inset-0 w-full cursor-pointer opacity-0"
         aria-label="Sorumlu değiştir"
       >
         <option value="">— Atanmamış</option>
@@ -899,7 +905,7 @@ function CardContent({
       : noteSignal
       ? { label: noteSignal.label, className: noteSignal.className }
       : (task as unknown as { visibility?: string }).visibility === "admin_only"
-      ? { label: ADMIN_ONLY_CHIP_LABEL, className: "bg-amber-50 text-amber-700 border border-amber-200" }
+      ? { label: ADMIN_ONLY_CHIP_LABEL, className: "bg-hold/10 text-hold border border-hold/30" }
       : null;
 
   return (
@@ -909,7 +915,7 @@ function CardContent({
         <div className="min-w-0 flex-1">
           {soleChip && (
             <Badge size="xs" className={cn("mb-1.5 max-w-full truncate inline-flex items-center gap-0.5", soleChip.className)}>
-              {soleChip.icon && <AlertTriangle size={9} strokeWidth={2.5} />}
+              {soleChip.icon && <AlertTriangle size={10} strokeWidth={2.5} aria-hidden />}
               {soleChip.label}
             </Badge>
           )}
@@ -935,7 +941,7 @@ function CardContent({
         title={task.title}
         draggable={false}
         className={cn(
-          "text-[13px] font-semibold line-clamp-4 block leading-snug tracking-[-0.005em] break-words",
+          "text-[13.5px] font-semibold line-clamp-4 block leading-snug tracking-[-0.005em] break-words",
           markers.shouldStrike
             ? "text-success/90 line-through decoration-success/40"
             : "text-ink hover:text-brand",
@@ -954,14 +960,20 @@ function CardContent({
         {showStatus && (interactive ? (
           <CardStatusChip task={task} />
         ) : (
-          <span className={cn("text-[10px] rounded px-1.5 py-0.5 leading-none font-medium", STATUS_CHIP_TONE[task.status] ?? "bg-surface-sunken text-muted")}>
+          <span className={cn("text-[12px] rounded-md px-1.5 py-0.5 leading-none font-medium", STATUS_CHIP_TONE[task.status] ?? "bg-surface-sunken text-muted")}>
             {STATUS_LABELS[task.status]}
           </span>
         ))}
 
+        {/* TARİH — gecikmişse ikon + kırmızı metin + açıklayıcı title; kart
+            kırmızıya BOYANMAZ (kart rengi kişinin kimliğidir, semantics.ts). */}
         {task.due_date && (
-          <span className={cn("text-[10px] font-medium tabular-nums flex items-center gap-0.5", markers.dueDateClass)}>
-            {markers.overdue && <AlertTriangle size={9} />}
+          <span
+            className={cn("flex items-center gap-1 text-[12px] font-medium tabular-nums", markers.dueDateClass)}
+            title={markers.overdue ? "Teslim tarihi geçti" : "Teslim tarihi"}
+          >
+            {markers.overdue && <AlertTriangle size={11} aria-hidden />}
+            {markers.overdue && <span className="sr-only">Gecikti: </span>}
             {formatDate(task.due_date)}
           </span>
         )}
@@ -1012,7 +1024,7 @@ function StaticTaskCard({
   return (
     <div className={cardCls} style={em.style}>
       <div className="flex items-start gap-1.5">
-        <span className="mt-0.5 p-0.5 shrink-0 text-subtle/70"><GripVertical size={13} /></span>
+        <span className="mt-0.5 p-0.5 shrink-0 text-subtle/70" aria-hidden><GripVertical size={14} /></span>
         <CardContent task={task} profiles={profiles} contacts={contacts} responsibleNames={responsibleNames} interactive={false} />
       </div>
     </div>
@@ -1061,11 +1073,11 @@ function TaskCard({
   const colorCls = `${em.surface} ${em.border} ${em.accent} ${em.ring}`;
   const stateCls = [
     isDragging ? "opacity-40" : "",
-    // Soft shadow lift only — the card's border stays the department color
-    // (never flattened to a neutral on hover, preserving the colour hierarchy).
+    // Hover'da YALNIZ gölge (translate/scale yok): kartın kenarlığı kişinin
+    // renginde kalır ve dnd-kit'in satır içi transform'uyla çakışma olmaz.
     isDragOverlay
-      ? "shadow-drawer rotate-1 scale-[1.02]"
-      : "hover:shadow-card-hover hover:-translate-y-px transition-[box-shadow,translate] duration-200 ease-standard",
+      ? "shadow-drawer rotate-1"
+      : "hover:shadow-card-hover transition-shadow duration-200 ease-standard",
     // Keyboard focus (the card receives tabIndex from dnd-kit attributes) — a
     // calm brand ring so drag/enter targets are visible without a mouse.
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring/60 focus-visible:ring-offset-1",
@@ -1116,13 +1128,16 @@ function TaskCard({
       aria-label={`Görev detayını aç: ${task.title}`}
     >
       <div className="flex items-start gap-1.5">
+        {/* Tutamaç HER ZAMAN görünür (soluk) — sürüklenebilirlik hover'a
+            saklanmaz; imleç tutamaçta "grab". Sürükleme kilitliyse yer korunur
+            ama görünmez, kart metni hizada kalır. */}
         <span
-          className={`mt-0.5 p-0.5 shrink-0 transition-opacity ${
-            disableDrag ? "text-transparent" : "text-subtle/70 opacity-0 group-hover:opacity-100"
+          className={`mt-0.5 p-0.5 shrink-0 transition-colors duration-150 ${
+            disableDrag ? "text-transparent" : "cursor-grab text-subtle/70 group-hover:text-muted"
           }`}
           aria-hidden
         >
-          <GripVertical size={13} />
+          <GripVertical size={14} />
         </span>
         <CardContent
           task={task}
@@ -1241,25 +1256,32 @@ function KanbanColumn({
   const { setNodeRef, isOver } = useDroppable({ id: colDef.id });
   const headerTone = BOARD_COL_HEADER_TONE[colDef.id] ?? "text-muted";
 
+  /* Masaüstünde sütun ŞERİDİ alanı doldurur: 288px taban genişlik + `grow`.
+     Dar ekranda toplam genişlik sığmadığı için yatay kaydırma (min-w-max)
+     aynen sürer; geniş ekranda artan yer sütunlara paylaştırılır — sağ yarısı
+     boş kalan pano bundandı. `shrink-0` tabanın altına inmeyi engeller. */
   return (
-    <div className="flex flex-col gap-2 w-[80vw] max-w-72 sm:w-72 shrink-0">
-      <div className="sticky top-0 z-20 h-11 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <h3 className={cn("text-xs font-bold uppercase tracking-wider truncate", headerTone)}>
+    <div className="flex flex-col gap-2 w-[80vw] max-w-72 sm:w-72 sm:max-w-none sm:grow shrink-0">
+      {/* Başlık: bölüm eyebrow ölçüsü (12px / semibold / 0.08em). Sayaç
+          listeyi TARİF eder (sütundaki iş adedi) — kişiyi puanlayan sayı değil. */}
+      <div className="sticky top-0 z-20 flex h-11 items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <h3 className={cn("truncate text-[12px] font-semibold uppercase tracking-[0.08em]", headerTone)}>
             {colDef.label}
           </h3>
-          <span className="inline-flex items-center justify-center min-w-5 px-1.5 py-0.5 rounded-full bg-surface-sunken text-[10px] font-semibold text-muted leading-none shrink-0 tabular-nums">
+          <span className="inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-surface-sunken px-1.5 py-0.5 text-[12px] font-semibold leading-none text-muted tabular-nums">
             {tasks.length}
           </span>
         </div>
         {!disableDrag && (
-          <button
-            onClick={() => onAddTask(colDef.id)}
-            className="p-1 rounded-md text-subtle hover:text-brand hover:bg-brand-soft active:scale-95 transition-all duration-150 shrink-0"
+          <IconButton
+            size="sm"
             aria-label={`${colDef.label} sütununa görev ekle`}
+            onClick={() => onAddTask(colDef.id)}
+            className="size-7 text-subtle hover:bg-brand-soft hover:text-brand"
           >
-            <Plus size={14} />
-          </button>
+            <Plus size={15} />
+          </IconButton>
         )}
       </div>
 
@@ -1267,17 +1289,18 @@ function KanbanColumn({
         <div
           ref={setNodeRef}
           className={cn(
-            "flex flex-col gap-2 rounded-card p-1.5 min-h-20 bg-surface-sunken/50 transition-[background-color,box-shadow] duration-[var(--duration-fast)] ease-standard",
+            "flex flex-col gap-2 rounded-card p-1.5 min-h-14 bg-surface-sunken/50 transition-[background-color,box-shadow] duration-[var(--duration-fast)] ease-standard",
             tasks.length === 0 && "border border-dashed border-line",
             isOver && "bg-brand-soft/60 ring-2 ring-inset ring-brand-ring/50",
           )}
           data-col={colDef.id}
         >
+          {/* Boş sütun: küçük, sakin tek satır — dev boş kart değil. Sürükleme
+              üstüne gelince bırakma ipucuna döner. */}
           {tasks.length === 0 && (
-            <div className="flex flex-col items-center justify-center gap-0.5 py-6 text-center pointer-events-none select-none anim-fade">
-              <p className="text-[11px] font-medium text-subtle">Bu sütunda görev yok</p>
-              <p className="text-[10px] text-subtle/70">Buraya görev sürükleyin</p>
-            </div>
+            <p className="pointer-events-none select-none py-3 text-center text-[12px] text-subtle">
+              {isOver ? "Buraya bırakın" : "Görev yok"}
+            </p>
           )}
           {tasks.map((task) => (
             <TaskCard
@@ -1317,15 +1340,20 @@ function StaticKanbanColumn({
   responsibleNames: Record<string, string>;
 }) {
   const headerTone = BOARD_COL_HEADER_TONE[colDef.id] ?? "text-muted";
+  /* Genişlik davranışı DnD sütunuyla birebir aynı olmalı — mount öncesi ve
+     sonrası yerleşim zıplamasın. */
   return (
-    <div className="flex flex-col gap-2 w-[80vw] max-w-72 sm:w-72 shrink-0 anim-fade">
-      <div className="sticky top-0 z-20 h-11 flex items-center gap-2">
-        <h3 className={cn("text-xs font-bold uppercase tracking-wider truncate", headerTone)}>
+    <div className="flex flex-col gap-2 w-[80vw] max-w-72 sm:w-72 sm:max-w-none sm:grow shrink-0 anim-fade">
+      <div className="sticky top-0 z-20 flex h-11 items-center gap-2">
+        <h3 className={cn("truncate text-[12px] font-semibold uppercase tracking-[0.08em]", headerTone)}>
           {colDef.label}
         </h3>
-        <span className="inline-flex items-center justify-center min-w-5 px-1.5 py-0.5 rounded-full bg-surface-sunken text-[10px] font-semibold text-muted leading-none shrink-0 tabular-nums">{tasks.length}</span>
+        <span className="inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-surface-sunken px-1.5 py-0.5 text-[12px] font-semibold leading-none text-muted tabular-nums">{tasks.length}</span>
       </div>
-      <div className={cn("flex flex-col gap-2 rounded-card p-1.5 min-h-20 bg-surface-sunken/50", tasks.length === 0 && "border border-dashed border-line")}>
+      <div className={cn("flex flex-col gap-2 rounded-card p-1.5 min-h-14 bg-surface-sunken/50", tasks.length === 0 && "border border-dashed border-line")}>
+        {tasks.length === 0 && (
+          <p className="pointer-events-none select-none py-3 text-center text-[12px] text-subtle">Görev yok</p>
+        )}
         {tasks.map((task) => (
           <StaticTaskCard key={task.id} task={task} profiles={profiles} contacts={contacts} responsibleNames={responsibleNames} />
         ))}
@@ -1888,13 +1916,13 @@ export function KanbanBoard({
       const open = !claimed && n.actionStatus !== "closed";
       const recent = now - new Date(n.createdAt).getTime() < RECENT_NOTE;
       if (n.noteType === "action_required" && open) {
-        propose(n.taskId, 1, "Aksiyon bekliyor", "bg-amber-50 text-amber-700 border border-amber-200");
+        propose(n.taskId, 1, "Aksiyon bekliyor", "bg-hold/10 text-hold border border-hold/30");
       } else if (n.noteType === "approval_waiting" && open) {
-        propose(n.taskId, 2, "Onay bekliyor", "bg-violet-50 text-violet-700 border border-violet-200");
+        propose(n.taskId, 2, "Onay bekliyor", "bg-approval/10 text-approval border border-approval/30");
       } else if (n.noteType === "handoff" && recent) {
-        propose(n.taskId, 3, "Sorumlu değişti", "bg-sky-50 text-sky-700 border border-sky-200");
+        propose(n.taskId, 3, "Sorumlu değişti", "bg-info/10 text-info border border-info/30");
       } else if (recent && n.authorId !== userId && !seenByMe.has(n.id)) {
-        propose(n.taskId, 4, "Yeni not", "bg-blue-50 text-blue-700 border border-blue-200");
+        propose(n.taskId, 4, "Yeni not", "bg-brand-soft text-brand-strong border border-brand-ring/50");
       }
     }
     // "Güncellendi" — a recent task edit with no stronger note signal. Done
@@ -1905,7 +1933,7 @@ export function KanbanBoard({
         t.updated_at && t.created_at && t.updated_at !== t.created_at &&
         now - new Date(t.updated_at).getTime() < RECENT_UPDATE
       ) {
-        propose(t.id, 5, "Güncellendi", "bg-gray-100 text-gray-600 border border-gray-200");
+        propose(t.id, 5, "Güncellendi", "bg-surface-sunken text-muted border border-line");
       }
     }
     const out: Record<string, NoteSignal> = {};
@@ -1949,12 +1977,14 @@ export function KanbanBoard({
         <div className="flex items-center gap-2 px-4 pt-3 pb-2 bg-surface border-b border-hairline shrink-0 flex-wrap">
           <ShieldCheck size={16} className="text-brand shrink-0" />
           <span className="text-sm font-semibold tracking-tight text-ink mr-1">Yönetici Pano</span>
-          <div className="inline-flex rounded-lg border border-line bg-surface-sunken p-0.5">
+          <div className="inline-flex rounded-control border border-line bg-surface-sunken p-0.5">
             {(["admin_only", "workspace"] as TaskVisibility[]).map((v) => {
               const on = adminVisibility === v;
               return (
                 <button
                   key={v}
+                  type="button"
+                  aria-pressed={on}
                   onClick={() => { setAdminVisibility(v); syncAdminUrl(v, adminManager); }}
                   className={cn(
                     "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors duration-150",
@@ -2009,7 +2039,9 @@ export function KanbanBoard({
                 })}
               getHref={(slug) => `/board?view=${slug}`}
             />
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => {
                 const next = !weekOnly;
                 const monday = getMondayOf(new Date());
@@ -2023,17 +2055,13 @@ export function KanbanBoard({
                 );
               }}
               aria-pressed={weekOnly}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[13px] font-medium transition-all duration-150 active:scale-[0.98]",
-                weekOnly
-                  ? "bg-brand-soft border-brand/30 text-brand-strong"
-                  : "bg-surface border-line text-muted hover:border-line-strong hover:text-ink hover:bg-surface-muted",
-              )}
+              // Basılı hâl tereddütsüz seçili: marka dolgusu + halka rengi kenarlık.
+              className={weekOnly ? "border-brand-ring bg-brand-soft text-brand-strong hover:bg-brand-soft" : "text-muted"}
               title={weekOnly ? "Hafta filtresini kaldır — tüm işleri göster" : "Yalnız bu haftanın işlerini göster"}
             >
               <CalendarDays size={14} />
               Bu hafta
-            </button>
+            </Button>
           </div>
 
           {/* Active view description + (toggle açıkken) week navigator */}
@@ -2044,7 +2072,9 @@ export function KanbanBoard({
             </p>
             {weekFilterActive && (
               <div className="flex items-center gap-1">
-                <button
+                <IconButton
+                  size="sm"
+                  aria-label="Önceki hafta"
                   onClick={() => {
                     const n = new Date(weekStart);
                     n.setDate(n.getDate() - 7);
@@ -2052,15 +2082,15 @@ export function KanbanBoard({
                     setWeekStart(monday);
                     router.push(`/board?view=${effectiveSlug}&week=${localISO(monday)}`);
                   }}
-                  className="p-1 rounded-md text-muted hover:text-ink hover:bg-surface-muted active:bg-surface-sunken transition-colors duration-150"
-                  aria-label="Önceki hafta"
                 >
-                  <ChevronLeft size={14} />
-                </button>
+                  <ChevronLeft size={15} />
+                </IconButton>
                 <span className="text-[13px] font-semibold text-ink min-w-28 text-center select-none tabular-nums">
                   {formatWeekLabel(weekStart)}
                 </span>
-                <button
+                <IconButton
+                  size="sm"
+                  aria-label="Sonraki hafta"
                   onClick={() => {
                     const n = new Date(weekStart);
                     n.setDate(n.getDate() + 7);
@@ -2068,22 +2098,22 @@ export function KanbanBoard({
                     setWeekStart(monday);
                     router.push(`/board?view=${effectiveSlug}&week=${localISO(monday)}`);
                   }}
-                  className="p-1 rounded-md text-muted hover:text-ink hover:bg-surface-muted active:bg-surface-sunken transition-colors duration-150"
-                  aria-label="Sonraki hafta"
                 >
-                  <ChevronRight size={14} />
-                </button>
+                  <ChevronRight size={15} />
+                </IconButton>
                 {!isCurrentWeek && (
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="ml-1 text-brand hover:bg-brand-soft hover:text-brand-strong"
                     onClick={() => {
                       const monday = getMondayOf(new Date());
                       setWeekStart(monday);
                       router.push(`/board?view=${effectiveSlug}&week=${localISO(monday)}`);
                     }}
-                    className="ml-1 text-[13px] font-medium text-brand hover:text-brand-strong px-2 py-0.5 rounded-md hover:bg-brand-soft transition-colors duration-150"
                   >
                     Bu haftaya dön
-                  </button>
+                  </Button>
                 )}
               </div>
             )}
@@ -2105,12 +2135,14 @@ export function KanbanBoard({
       {/* ── Seçili kişi şeridi — kimin sayfasındayız? ─────────────────────── */}
       {!peopleEntry && !isAdminBoard && (
         <div className="flex items-center gap-2 border-b border-hairline bg-surface px-4 py-2 shrink-0">
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
+            className="text-muted"
             onClick={() => { setPersonFilter(""); setSearch(""); setPeopleEntry(true); }}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[13px] font-medium text-muted transition-all duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
           >
             <ChevronLeft size={14} /> Kişiler
-          </button>
+          </Button>
           {selectedPerson ? (
             <span className="flex min-w-0 items-center gap-2">
               <span
@@ -2127,7 +2159,7 @@ export function KanbanBoard({
               {selectedPerson.filterKey.startsWith("member:") && (
                 <Link
                   href={`/reports/${selectedPerson.id}`}
-                  className="ml-1 inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1 text-[12.5px] font-medium text-muted transition-all duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
+                  className="ml-1 inline-flex h-8 shrink-0 items-center gap-1.5 rounded-control border border-line bg-surface px-3 text-[13px] font-medium text-muted shadow-xs transition-[background-color,border-color,color] duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink"
                   title="Bu kişinin tek sayfalık özeti — yazdırılabilir"
                 >
                   <FileText size={13} /> Tek sayfa özet
@@ -2144,24 +2176,19 @@ export function KanbanBoard({
       {!peopleEntry && (
       <div className="flex items-center gap-2 px-4 py-2 border-b border-hairline bg-surface shrink-0 flex-wrap">
         {/* Left: action buttons (hidden for viewer) */}
+        {/* Ekranın TEK primary düğmesi. */}
         {canCreate && (
-          <button
-            onClick={() => { setModalDefaultStatus("ready"); setModalOpen(true); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-brand text-white text-sm font-medium rounded-lg shadow-xs hover:bg-brand-strong active:scale-[0.98] transition-all duration-150"
-          >
+          <Button size="sm" onClick={() => { setModalDefaultStatus("ready"); setModalOpen(true); }}>
             <Plus size={14} />
             Görev oluştur
-          </button>
+          </Button>
         )}
         {/* CSV içe aktar — geri bildirimle şimdilik gizlendi (kod/action korunur). */}
         {CSV_IMPORT_ENABLED && canComplete && !isAdminBoard && (
-          <button
-            onClick={() => setImportOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-line text-muted text-sm rounded-lg shadow-xs hover:bg-surface-muted hover:border-line-strong hover:text-ink active:scale-[0.98] transition-all duration-150"
-          >
+          <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
             <FileSpreadsheet size={14} />
             CSV&apos;den içe aktar
-          </button>
+          </Button>
         )}
 
         {/* Right: Departman + Kişi + Arama */}
@@ -2169,18 +2196,15 @@ export function KanbanBoard({
 
           {/* Departman filtresi — gizli (DEPARTMENT_FILTER_ENABLED). */}
           {DEPARTMENT_FILTER_ENABLED && (
-          <select
+          <SelectInput
             value={departmentFilter}
             onChange={(e) => setDepartmentFilter(e.target.value)}
-            className={cn(
-              "text-sm border rounded-lg px-2.5 py-1.5 bg-surface transition-colors duration-150 cursor-pointer",
-              departmentFilter ? "border-brand text-brand" : "border-line text-muted hover:border-line-strong hover:text-ink",
-            )}
+            className={cn("h-8 w-auto text-[13px]", departmentFilter ? "border-brand-ring text-brand" : "text-muted")}
             aria-label="Departmana göre filtrele"
           >
             <option value="">Departman</option>
             {deptFilterOptions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-          </select>
+          </SelectInput>
           )}
 
           {/* Person filter. Manager board lists ONLY owner/admin people and
@@ -2192,50 +2216,49 @@ export function KanbanBoard({
               Yönetici panosunda yönetici seçici kalıyor: orada giriş ızgarası
               yok. */}
           {isAdminBoard && (
-            <select
+            <SelectInput
               value={adminManager}
               onChange={(e) => { setAdminManager(e.target.value); syncAdminUrl(adminVisibility, e.target.value); }}
-              className={cn(
-                "text-sm border rounded-lg px-2.5 py-1.5 bg-surface transition-colors duration-150 cursor-pointer",
-                adminManager !== "all" ? "border-brand text-brand" : "border-line text-muted hover:border-line-strong hover:text-ink",
-              )}
+              className={cn("h-8 w-auto text-[13px]", adminManager !== "all" ? "border-brand-ring text-brand" : "text-muted")}
               aria-label="Yöneticiye göre filtrele"
             >
               <option value="all">Tüm yöneticiler</option>
               {(adminBoard?.managers ?? []).map((m) => (
                 <option key={m.userId} value={m.userId}>{getPersonDisplayName(m.name)}</option>
               ))}
-            </select>
+            </SelectInput>
           )}
 
           {/* Search */}
+          {/* Arama: ortak TextInput (araç çubuğu boyu h-8). Odaklanınca genişler. */}
           <div className="relative">
-            <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-subtle pointer-events-none" />
-            <input
+            <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-subtle" />
+            <TextInput
               type="search"
               placeholder="Ara…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className={cn(
-                "text-sm border rounded-lg pl-7 pr-3 py-1.5 bg-surface w-44 focus:w-64 focus:outline-none focus:ring-2 transition-[width,color,background-color,border-color,box-shadow] duration-200 ease-standard",
-                search ? "border-brand text-brand focus:ring-brand-ring/60" : "border-line text-ink hover:border-line-strong focus:border-brand-ring focus:ring-brand-ring/40",
+                "h-8 w-44 pl-8 text-[13px] transition-[width,border-color,box-shadow,background-color] duration-200 ease-standard focus:w-64",
+                search && "border-brand-ring",
               )}
               aria-label="Görev ara"
             />
           </div>
 
-          {/* Clear all */}
+          {/* "Temizle" yalnız uygulanmış bir filtre varken. */}
           {hasActiveFilter && (
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => {
                 setDepartmentFilter(""); setSearch("");
                 if (isAdminBoard) { setAdminManager("all"); syncAdminUrl(adminVisibility, "all"); }
               }}
-              className="text-[13px] text-muted hover:text-ink px-1.5 py-1 rounded-md hover:bg-surface-muted transition-colors duration-150 whitespace-nowrap"
               aria-label="Filtreleri temizle"
             >
-              ✕ Temizle
-            </button>
+              <X size={13} /> Temizle
+            </Button>
           )}
         </div>
       </div>
@@ -2253,9 +2276,12 @@ export function KanbanBoard({
         <div className="hidden md:block overflow-auto flex-1 min-h-0">
           <div className="relative min-w-max">
             {/* Continuous sticky band behind every column header (no gaps/peek). */}
-            <div aria-hidden className="sticky top-0 z-10 h-11 bg-app border-b border-line shadow-[0_4px_10px_-6px_rgba(16,24,40,0.18)]" />
+            <div aria-hidden className="sticky top-0 z-10 h-11 border-b border-line bg-app" />
             <div className="flex gap-3 sm:gap-4 px-3 sm:px-4 pb-4 items-start -mt-11">
-              {!isAdminBoard && <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} currentUserId={userId} isAdmin={canComplete} feed={feedNode} feedLabel={feedLabel} />}
+              {/* Not sütunu Yönetici Panoda da çizilir: pano dili her iki yüzeyde
+                  aynı olmalı ve yönetici notları/akışı burada da lazım. Sütunun
+                  kendi izin davranışı (readOnly / isAdmin) değişmez. */}
+              <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} currentUserId={userId} isAdmin={canComplete} feed={feedNode} feedLabel={feedLabel} />
               {BOARD_COLUMNS.map((col) => (
                 <StaticKanbanColumn
                   key={col.id}
@@ -2282,9 +2308,9 @@ export function KanbanBoard({
           <div className="hidden md:block overflow-auto flex-1 min-h-0">
             <div className="relative min-w-max">
               {/* Continuous sticky band behind every column header (no gaps/peek). */}
-              <div aria-hidden className="sticky top-0 z-10 h-11 bg-app border-b border-line shadow-[0_4px_10px_-6px_rgba(16,24,40,0.18)]" />
+              <div aria-hidden className="sticky top-0 z-10 h-11 border-b border-line bg-app" />
               <div className="flex gap-3 sm:gap-4 px-3 sm:px-4 pb-4 items-start -mt-11">
-                {!isAdminBoard && <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} currentUserId={userId} isAdmin={canComplete} feed={feedNode} feedLabel={feedLabel} />}
+                <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} currentUserId={userId} isAdmin={canComplete} feed={feedNode} feedLabel={feedLabel} />
                 {BOARD_COLUMNS.map((col) => (
                   <KanbanColumn
                     key={col.id}
@@ -2327,16 +2353,17 @@ export function KanbanBoard({
       <div className="md:hidden flex flex-col">
         {/* Segmented status tabs — the one sticky element on mobile (compact, single
             row, horizontal scroll with the scrollbar hidden). */}
-        <div className="flex gap-1.5 px-3 py-2 overflow-x-auto no-scrollbar bg-surface/95 backdrop-blur border-b border-hairline sticky top-0 z-10">
+        <div className="sticky top-0 z-10 flex gap-1.5 overflow-x-auto border-b border-hairline bg-surface px-3 py-2 no-scrollbar">
           {(isAdminBoard ? MOBILE_SEGMENTS.filter((s) => s.id !== "notes") : MOBILE_SEGMENTS).map((seg) => {
             const count = seg.id === "notes" ? notes.length : (tasksByCol[seg.id as BoardColId]?.length ?? 0);
             const active = mobileSeg === seg.id;
             return (
               <button
                 key={seg.id}
+                type="button"
                 onClick={() => setMobileSeg(seg.id)}
                 className={cn(
-                  "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-medium whitespace-nowrap border transition-colors duration-150 shrink-0",
+                  "flex min-h-9 items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-medium whitespace-nowrap border transition-colors duration-150 shrink-0",
                   active
                     ? "bg-brand text-white border-brand shadow-xs"
                     : "bg-surface text-muted border-line active:bg-surface-muted",
@@ -2345,7 +2372,7 @@ export function KanbanBoard({
               >
                 {seg.label}
                 <span className={cn(
-                  "rounded-full px-1.5 py-0.5 text-[10px] leading-none font-semibold tabular-nums",
+                  "rounded-full px-1.5 py-0.5 text-[12px] leading-none font-semibold tabular-nums",
                   active ? "bg-white/20 text-white" : "bg-surface-sunken text-muted",
                 )}>
                   {count}
@@ -2364,17 +2391,17 @@ export function KanbanBoard({
               const colTasks = tasksByCol[mobileSeg as BoardColId] ?? [];
               if (colTasks.length === 0) {
                 return (
-                  <div key={mobileSeg} className="flex flex-col items-center justify-center text-center gap-2 py-16 text-subtle anim-fade">
-                    <p className="text-sm">Bu sütunda görev yok.</p>
-                    {canCreate && (
-                      <button
-                        onClick={() => { setModalDefaultStatus("ready"); setModalOpen(true); }}
-                        className="text-sm text-brand font-medium hover:text-brand-strong active:opacity-80 transition-colors duration-150"
-                      >
-                        + Görev oluştur
-                      </button>
-                    )}
-                  </div>
+                  <EmptyState
+                    key={mobileSeg}
+                    compact
+                    className="anim-fade"
+                    title="Görev yok"
+                    action={canCreate ? (
+                      <Button variant="secondary" size="sm" onClick={() => { setModalDefaultStatus("ready"); setModalOpen(true); }}>
+                        <Plus size={14} /> Görev oluştur
+                      </Button>
+                    ) : undefined}
+                  />
                 );
               }
               return (
@@ -2403,26 +2430,28 @@ export function KanbanBoard({
       )}
 
       {/* ── Toast overlay ─────────────────────────────────────────────────── */}
+      {/* Telefonda alt gezinmenin ÜSTÜNDE durur (4.5rem + güvenli alan). */}
       {toasts.length > 0 && (
-        <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none">
+        <div className="pointer-events-none fixed inset-x-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] z-[100] flex flex-col items-end gap-2 md:inset-x-auto md:bottom-4 md:right-4">
           {toasts.map((t) => (
             <div
               key={t.id}
-              className="pointer-events-auto anim-slide-up bg-ink text-white text-sm px-4 py-2.5 rounded-xl shadow-drawer flex items-center gap-3 max-w-sm"
+              className="pointer-events-auto anim-slide-up flex max-w-sm items-center gap-3 rounded-card bg-ink px-4 py-2.5 text-sm text-white shadow-drawer"
             >
               <span className="flex-1">{t.msg}</span>
               {t.action && (
                 <Link
                   href={t.action.href}
                   onClick={() => dismissToast(t.id)}
-                  className="shrink-0 font-medium text-[#8fc7d6] hover:text-white underline underline-offset-2 transition-colors duration-150"
+                  className="shrink-0 font-medium text-brand-ring underline underline-offset-2 transition-colors duration-150 hover:text-white"
                 >
                   {t.action.label}
                 </Link>
               )}
               <button
+                type="button"
                 onClick={() => dismissToast(t.id)}
-                className="shrink-0 text-white/50 hover:text-white transition-colors duration-150"
+                className="tap-target shrink-0 rounded-md text-white/60 transition-colors duration-150 hover:text-white"
                 aria-label="Kapat"
               >
                 <X size={14} />

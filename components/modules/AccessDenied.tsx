@@ -10,20 +10,20 @@ import { ShieldAlert, ArrowLeft } from "lucide-react";
 export function AccessDenied() {
   return (
     <div className="mx-auto flex min-h-full w-full max-w-lg items-center justify-center px-4 py-16">
-      <div className="anim-fade-up w-full rounded-2xl border border-line bg-surface p-8 text-center shadow-card">
-        <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-brand-soft text-brand">
-          <ShieldAlert size={22} />
+      <div className="anim-fade-up w-full rounded-card border border-line bg-surface p-6 text-center shadow-card sm:p-8">
+        <div className="mx-auto mb-4 grid h-10 w-10 place-items-center rounded-full bg-surface-sunken text-muted">
+          <ShieldAlert size={18} strokeWidth={1.75} aria-hidden />
         </div>
-        <h1 className="text-lg font-semibold tracking-tight text-ink">Bu alan yalnızca yöneticilere açıktır.</h1>
-        <p className="mx-auto mt-2 max-w-sm text-[13.5px] leading-relaxed text-muted">
-          Günlük görevlerinize Pano veya Liste ekranından devam edebilirsiniz.
+        <h1 className="text-[16px] font-semibold tracking-tight text-ink">Bu alan yalnızca yöneticilere açık.</h1>
+        <p className="mx-auto mt-1.5 max-w-sm text-[13.5px] leading-relaxed text-muted">
+          Günlük işlerinize Ana Sayfa&apos;dan devam edebilirsiniz.
         </p>
         <Link
-          href="/board"
-          className="group mt-5 inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-[13px] font-medium text-white shadow-xs transition-[background-color,box-shadow,transform] duration-150 ease-standard hover:bg-brand-strong active:scale-[0.98]"
+          href="/home"
+          className="mt-5 inline-flex h-9 items-center gap-1.5 rounded-control bg-brand px-3.5 text-[13.5px] font-medium text-white shadow-xs transition-[background-color,transform] duration-150 ease-standard hover:bg-brand-strong active:scale-[0.98]"
         >
-          <ArrowLeft size={15} className="transition-transform duration-150 ease-standard group-hover:-translate-x-0.5" />
-          Board’a dön
+          <ArrowLeft size={15} aria-hidden />
+          Ana Sayfa&apos;ya dön
         </Link>
       </div>
     </div>

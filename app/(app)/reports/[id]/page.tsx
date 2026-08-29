@@ -17,8 +17,9 @@ export const metadata = { title: "Person Report" };
  * okusun." Ve biçim için: "Instagram'da yapıyorlar ya, önce dikkati çekiyor,
  * daha fazlasını isteyince veriyor."
  *
- * O yüzden sayfa üç büyük rakamla açılıyor, detay altta. Yazdırılabilir:
- * A4 tek sayfa (bkz. globals.css @media print).
+ * Sayfa doğrudan işin kendisiyle açılır (gecikmiş → yaklaşan → toplantı →
+ * tarihsiz); sayaç yok (Aslı Hanım, 2026-08-24: "İsmi, işi, tarihi bu
+ * kadar"). Yazdırılabilir: A4 tek sayfa (bkz. globals.css @media print).
  */
 export default async function PersonReportPage({
   params,

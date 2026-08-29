@@ -8,6 +8,8 @@ import { formatDateTR } from "@/lib/utils/format-date";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { STATUS_LABELS } from "@/lib/utils/task-constants";
 import { SortHeader } from "@/components/ui/SortHeader";
+import { TextInput } from "@/components/ui/Field";
+import { EmptyState } from "@/components/ui/EmptyState";
 import type { DueSoonTask } from "./DashboardView";
 
 type SortKey = "due_date" | "title" | "who" | "status";
@@ -25,7 +27,9 @@ type Dir = "asc" | "desc";
  * SIRALANABİLİR bir tablo; açık işlerin tamamı burada.
  *
  * Sayı/rozet yok: satırların kendisi zaten listeyi anlatıyor (CLAUDE.md
- * sadelik kuralı — puanlayan sayı yasak, tarif eden serbest).
+ * sadelik kuralı — puanlayan sayı yasak, tarif eden serbest). Gecikmiş tarih
+ * kırmızı yazılır ama ekran okuyucuya da "gecikti" denir; renk tek başına
+ * sinyal değildir.
  */
 export function DeliveryTable({
   tasks, nameOf,
@@ -72,22 +76,23 @@ export function DeliveryTable({
   }, [tasks, nameOf, sort, dir, query]);
 
   return (
-    <div className="rounded-2xl border border-line bg-surface shadow-card">
+    <div className="rounded-card border border-line bg-surface shadow-card">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-2.5">
-        <h2 className="text-sm font-semibold text-ink">Tüm işler</h2>
+        <h2 className="text-[13.5px] font-semibold tracking-tight text-ink">Tüm işler</h2>
         <div className="relative min-w-[180px] flex-1 sm:max-w-xs">
-          <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-subtle" />
-          <input
+          <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 z-10 -translate-y-1/2 text-subtle" aria-hidden />
+          <TextInput
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="İş veya kişi ara…"
-            className="h-8 w-full rounded-lg border border-line bg-surface pl-8 pr-3 text-[13px] text-ink placeholder:text-subtle transition-colors hover:border-line-strong focus:border-brand-ring focus:outline-none focus:ring-2 focus:ring-brand-ring/40"
+            aria-label="İş veya kişi ara"
+            className="h-8 pl-8 text-[13px]"
           />
         </div>
       </div>
 
       {rows.length === 0 ? (
-        <p className="px-4 py-10 text-center text-[13px] text-subtle">Eşleşen iş yok.</p>
+        <EmptyState compact title="Eşleşen iş yok." description={query ? "Aramayı değiştirin." : undefined} />
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[600px] text-left text-sm">
@@ -96,7 +101,9 @@ export function DeliveryTable({
                 <Th><SortHeader active={sort === "title"} dir={dir} onSort={() => toggle("title")}>İş</SortHeader></Th>
                 <Th className="w-40"><SortHeader active={sort === "who"} dir={dir} onSort={() => toggle("who")}>Kim</SortHeader></Th>
                 <Th className="w-36"><SortHeader active={sort === "status"} dir={dir} onSort={() => toggle("status")}>Durum</SortHeader></Th>
-                <Th className="w-28"><SortHeader active={sort === "due_date"} dir={dir} onSort={() => toggle("due_date")}>Teslim</SortHeader></Th>
+                {/* Tarih sağa yaslı: rakamlar alt alta hizalanır, göz tek
+                    sütunda tarar. */}
+                <Th className="w-28 text-right"><SortHeader align="right" active={sort === "due_date"} dir={dir} onSort={() => toggle("due_date")}>Teslim</SortHeader></Th>
               </tr>
             </thead>
             <tbody>
@@ -104,12 +111,12 @@ export function DeliveryTable({
                 const who = t.assignee_id ? nameOf[t.assignee_id] : null;
                 const late = !!t.due_date && t.due_date < today;
                 return (
-                  <tr key={t.id} className="group border-b border-hairline last:border-b-0 transition-colors hover:bg-surface-hover">
+                  <tr key={t.id} className="group border-b border-hairline last:border-b-0 transition-colors duration-150 hover:bg-surface-hover">
                     <td className="px-3 py-2">
                       <Link
                         prefetch={false}
                         href={`/tasks/${t.id}`}
-                        className="font-medium text-ink transition-colors group-hover:text-brand"
+                        className="text-[13.5px] font-medium text-ink transition-colors duration-150 group-hover:text-brand"
                       >
                         {t.title}
                       </Link>
@@ -121,9 +128,10 @@ export function DeliveryTable({
                       {STATUS_LABELS[t.status] ?? t.status}
                     </td>
                     <td className={cn(
-                      "whitespace-nowrap px-3 py-2 text-[13px] font-medium tabular-nums",
+                      "whitespace-nowrap px-3 py-2 text-right text-[13px] font-medium tabular-nums",
                       late ? "text-danger" : "text-muted",
                     )}>
+                      {late && <span className="sr-only">Gecikti: </span>}
                       {t.due_date
                         ? formatDateTR(t.due_date, { day: "numeric", month: "short" })
                         : "—"}

@@ -27,13 +27,13 @@ export function PlanningSection({
         <div className="flex min-w-0 items-start gap-3">
           <span
             aria-hidden
-            className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-surface-muted text-muted"
+            className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-control bg-surface-muted text-muted"
           >
             <Icon size={16} />
           </span>
           <div className="min-w-0">
             <h2 className="flex flex-wrap items-center gap-2 text-[16px] font-semibold tracking-tight text-ink">
-              <span className="text-[12px] font-bold tabular-nums text-subtle">{step}</span>
+              <span className="text-[12px] font-semibold tabular-nums text-subtle">{step}</span>
               {title}
             </h2>
             <p className="mt-0.5 text-[12.5px] text-muted">{description}</p>

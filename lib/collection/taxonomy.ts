@@ -4,7 +4,9 @@
 
 import type { ProductionCategory } from "@/types";
 
-export type SubCategory = { key: string; label: string };
+/** Alt kategori. `children` doluysa bir kademe daha iner (Hats → Bucket Hat).
+ *  Ağaç ÜÇ seviyeye kadar okunur; föy yine iki alan taşır (bkz. dosya notu). */
+export type SubCategory = { key: string; label: string; children?: SubCategory[] };
 export type CategoryNode = {
   /* Kategoriler artık kullanıcı tarafından açılabildiği için anahtar SERBEST
      metindir; kod varsayılanları `ProductionCategory` birliğinden gelir ama
@@ -22,6 +24,7 @@ export const COLLECTION_TAXONOMY: CategoryNode[] = [
     subcategories: [
       { key: "clothing", label: "Clothing" },
       { key: "belts", label: "Belts" },
+      { key: "headpiece", label: "Headpiece" },
     ],
   },
   {
@@ -44,8 +47,25 @@ export const COLLECTION_TAXONOMY: CategoryNode[] = [
   {
     key: "accessories",
     label: "Accessories",
-    // Sitede alt kategori kırılımı görünmüyordu — Aslı Excel'i gelince eklenebilir.
-    subcategories: [],
+    subcategories: [
+      {
+        key: "hats",
+        label: "Hats",
+        children: [
+          { key: "bucket_hat", label: "Bucket Hat" },
+          { key: "eight_cornered_cap", label: "Eight-Cornered Cap" },
+        ],
+      },
+      { key: "bags", label: "Bags" },
+      {
+        key: "wraps",
+        label: "Wraps",
+        children: [
+          { key: "ehrams", label: "Ehrams" },
+          { key: "peshtemal", label: "Peshtemal" },
+        ],
+      },
+    ],
   },
 ];
 
@@ -62,7 +82,37 @@ export function subcategoryLabel(
 ): string {
   if (!category || !sub) return "";
   const node = CATEGORY_BY_KEY.get(category as ProductionCategory);
-  return node?.subcategories.find((s) => s.key === sub)?.label ?? "";
+  return node ? (findSub(node.subcategories, sub)?.label ?? "") : "";
+}
+
+/** Alt ağaçta anahtarı arar — ikinci ve ÜÇÜNCÜ seviyeyi birlikte tarar. */
+export function findSub(list: SubCategory[], key: string): SubCategory | null {
+  for (const s of list) {
+    if (s.key === key) return s;
+    const hit = s.children ? findSub(s.children, key) : null;
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/** Bir alt kategorinin köke kadar olan yolu ("Accessories › Hats › Bucket Hat"). */
+export function subPath(list: SubCategory[], key: string): SubCategory[] {
+  for (const s of list) {
+    if (s.key === key) return [s];
+    if (s.children) {
+      const deeper = subPath(s.children, key);
+      if (deeper.length) return [s, ...deeper];
+    }
+  }
+  return [];
+}
+
+/** Seçilebilir TÜM alt kategoriler, derinlik bilgisiyle (seçici listeleri için). */
+export function flattenSubs(list: SubCategory[], depth = 0): { node: SubCategory; depth: number }[] {
+  return list.flatMap((s) => [
+    { node: s, depth },
+    ...(s.children ? flattenSubs(s.children, depth + 1) : []),
+  ]);
 }
 
 export function subcategoriesOf(category: string | null | undefined): SubCategory[] {

@@ -4,9 +4,10 @@ import { useState, useTransition } from "react";
 import { Trash2, Plus, Users } from "lucide-react";
 import { createContact, deleteContact } from "@/lib/actions/contacts";
 import { Card } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { Button, IconButton } from "@/components/ui/Button";
+import { Field, TextInput } from "@/components/ui/Field";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { useConfirm } from "@/components/ui/useConfirm";
 import type { WorkspaceContact } from "@/types";
 
 interface Props {
@@ -14,7 +15,13 @@ interface Props {
   initialContacts: WorkspaceContact[];
 }
 
+/**
+ * Dış kişiler listesi. Kendi başına bir yüzey (Card) — bir bölüm kartının
+ * içine konmaz. Silme onay sorar; alanların etiketi görünür (placeholder
+ * etiket değildir).
+ */
 export function ContactsManager({ workspaceId, initialContacts }: Props) {
+  const { ask, dialog } = useConfirm();
   const [contacts, setContacts] = useState(initialContacts);
   const [isPending, startTransition] = useTransition();
   const [name, setName] = useState("");
@@ -58,76 +65,87 @@ export function ContactsManager({ workspaceId, initialContacts }: Props) {
     });
   }
 
-  function handleDelete(id: string) {
+  async function handleDelete(c: WorkspaceContact) {
+    const ok = await ask({
+      title: "Kişiyi silmek istiyor musunuz?",
+      message: `${c.name} listeden silinecek.`,
+      confirmLabel: "Sil",
+    });
+    if (!ok) return;
     startTransition(async () => {
-      const result = await deleteContact(id);
+      const result = await deleteContact(c.id);
       if ("error" in result) {
         setError(result.error);
         return;
       }
-      setContacts((prev) => prev.filter((c) => c.id !== id));
+      setContacts((prev) => prev.filter((x) => x.id !== c.id));
     });
   }
 
   return (
     <Card className="divide-y divide-hairline">
       {contacts.length === 0 ? (
-        <EmptyState icon={Users} title="Henüz kişi eklenmemiş." className="py-8" />
+        <EmptyState icon={Users} title="Henüz kişi yok" compact />
       ) : (
         contacts.map((c) => (
-          <div key={c.id} className="flex items-center justify-between gap-3 px-5 py-3 transition-colors duration-150 hover:bg-surface-hover">
+          <div key={c.id} className="flex items-center justify-between gap-3 px-4 py-3 transition-colors duration-150 hover:bg-surface-hover sm:px-5">
             <div className="min-w-0">
-              <p className="text-sm font-medium text-ink truncate">{c.name}</p>
+              <p className="truncate text-[13.5px] font-medium text-ink">{c.name}</p>
               {(c.email || c.role_label) && (
-                <p className="text-xs text-subtle truncate">
+                <p className="truncate text-[12.5px] text-muted">
                   {[c.role_label, c.email].filter(Boolean).join(" · ")}
                 </p>
               )}
             </div>
-            <button
-              onClick={() => handleDelete(c.id)}
+            <IconButton
+              size="sm"
+              onClick={() => handleDelete(c)}
               disabled={isPending}
-              className="shrink-0 text-subtle hover:text-danger hover:bg-danger/10 p-1.5 rounded-md transition-colors duration-150 active:scale-95 disabled:pointer-events-none disabled:opacity-50"
               aria-label={`${c.name} kişisini sil`}
+              className="hover:bg-danger/10 hover:text-danger"
             >
               <Trash2 size={14} />
-            </button>
+            </IconButton>
           </div>
         ))
       )}
 
-      <form onSubmit={handleAdd} className="px-5 py-4 space-y-3">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-subtle">Kişi ekle</p>
-        <div className="flex flex-wrap gap-2">
-          <Input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="İsim *"
-            required
-            className="flex-1 min-w-[120px] h-8"
-          />
-          <Input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="E-posta"
-            className="flex-1 min-w-[140px] h-8"
-          />
-          <Input
-            type="text"
-            value={roleLabel}
-            onChange={(e) => setRoleLabel(e.target.value)}
-            placeholder="Rol / açıklama (opsiyonel)"
-            className="flex-1 min-w-[140px] h-8"
-          />
-          <Button type="submit" size="sm" disabled={isPending || !name.trim()}>
-            <Plus size={14} />
+      <form onSubmit={handleAdd} className="space-y-3 px-4 py-4 sm:px-5">
+        <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle">Kişi ekle</p>
+        <div className="grid grid-cols-1 gap-x-3 gap-y-3 sm:grid-cols-3">
+          <Field label="İsim" required>
+            <TextInput
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
+          </Field>
+          <Field label="E-posta">
+            <TextInput
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </Field>
+          <Field label="Rol / açıklama">
+            <TextInput
+              type="text"
+              value={roleLabel}
+              onChange={(e) => setRoleLabel(e.target.value)}
+            />
+          </Field>
+        </div>
+        {error && <p role="alert" className="anim-fade-down text-[12.5px] text-danger">{error}</p>}
+        <div className="flex justify-end">
+          <Button type="submit" size="sm" loading={isPending} disabled={!name.trim()}>
+            <Plus size={14} aria-hidden />
             Ekle
           </Button>
         </div>
-        {error && <p role="alert" className="anim-fade-down text-xs text-danger">{error}</p>}
       </form>
+
+      {dialog}
     </Card>
   );
 }

@@ -68,6 +68,9 @@ export interface OverlayProps {
   /** Başlık çubuğu YOKKEN sağ üste yüzen kapatma düğmesi (görsel büyütme). */
   floatingClose?: boolean;
   className?: string;
+  /** Gövde sınıfları — liste tipi içerikte dolguyu kaldırmak için
+   *  (`p-0`); varsayılan `px-5 py-4`. */
+  bodyClassName?: string;
   children?: React.ReactNode;
 }
 
@@ -82,6 +85,7 @@ export function Overlay({
   dismissOnBackdrop = true,
   floatingClose = false,
   className,
+  bodyClassName,
   children,
 }: OverlayProps) {
   const mounted = useMounted();
@@ -126,7 +130,7 @@ export function Overlay({
 
   return createPortal(
     <div
-      className="anim-fade fixed inset-0 z-[100] flex items-end justify-center bg-ink/45 backdrop-blur-[2px] sm:items-center sm:p-6"
+      className="anim-fade fixed inset-0 z-[100] flex items-end justify-center bg-ink/50 sm:items-center sm:p-6"
       onMouseDown={(e) => {
         // mousedown: form içinde metin seçip dışarıda bırakınca kapanmasın.
         if (dismissOnBackdrop && e.target === e.currentTarget) onClose();
@@ -153,7 +157,7 @@ export function Overlay({
             data-overlay-close
             onClick={onClose}
             aria-label="Kapat"
-            className="absolute right-3 top-3 z-10 rounded-full bg-surface/90 p-2 text-ink shadow-pop backdrop-blur transition-transform duration-150 hover:bg-surface active:scale-95"
+            className="absolute right-3 top-3 z-10 grid size-9 place-items-center rounded-full bg-surface text-ink shadow-pop transition-transform duration-150 hover:bg-surface-muted active:scale-95"
           >
             <X size={17} strokeWidth={2} />
           </button>
@@ -173,7 +177,7 @@ export function Overlay({
               data-overlay-close
               onClick={onClose}
               aria-label="Kapat"
-              className="-mr-1.5 -mt-0.5 shrink-0 rounded-lg p-1.5 text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
+              className="tap-target -mr-2 -mt-1 grid size-9 shrink-0 place-items-center rounded-control text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
             >
               <X size={17} strokeWidth={2} />
             </button>
@@ -182,7 +186,7 @@ export function Overlay({
 
         {/* Gövde tek kaydırılan yer — alt eylem çubuğu hep görünür kalır.
             Eskiden uzun formlarda "Kaydet" ekranın altına düşüyordu. */}
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">{children}</div>
+        <div className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4", bodyClassName)}>{children}</div>
 
         {footer && (
           <div className="flex items-center justify-end gap-2 border-t border-line bg-surface-muted/60 px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-3">
