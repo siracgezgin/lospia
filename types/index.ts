@@ -347,6 +347,12 @@ export type SizeDistribution = {
 /** Föye eklenen görsellerin bağlı olduğu bölüm.
  *  technical_drawing (tekil) geri uyum içindir — yeni föyler ÖN/ARKA kullanır. */
 export type ProductionImageSection =
+  /** KAPAK — ürünün Koleksiyon'daki yüzü. Föyde tek görsel olarak seçilir ve
+   *  kart kapağında her şeyin önüne geçer (Sıraç, 2026-08-30: "föylerde de
+   *  kapak resmi ekleme kısmı olsun"). Öncesinde kapak, yüklenen görseller
+   *  arasından sıraya göre TAHMİN ediliyordu; kullanıcı hangi fotoğrafın
+   *  görüneceğini seçemiyordu. */
+  | "cover"
   | "technical_drawing" | "technical_drawing_front" | "technical_drawing_back"
   | "fabric" | "accessories" | "embellishments" | "sewing" | "general";
 /** Supabase Storage'da tutulan föy görseli (public URL + silme için path). */

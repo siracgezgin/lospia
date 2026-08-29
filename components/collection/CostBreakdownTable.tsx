@@ -24,7 +24,9 @@ type Row = Pick<
 
 /** Satırdaki ürün görseli — Koleksiyon kartlarıyla AYNI öncelik: önce ürünün
  *  kendi fotoğrafı, teknik çizim en son. */
-const COVER_PRIORITY = ["general", "embellishments", "accessories", "sewing", "fabric"] as const;
+/* Kapak sırası: kullanıcının SEÇTİĞİ kapak her şeyin önünde. Föyde kapak
+   yoksa eski davranış sürer (ürün fotoğrafı → teknik çizim). */
+const COVER_PRIORITY = ["cover", "general", "embellishments", "accessories", "sewing", "fabric"] as const;
 function coverOf(r: Row): string | null {
   const imgs = (Array.isArray(r.photo_refs) ? r.photo_refs : []).filter((i) => i?.url);
   for (const section of COVER_PRIORITY) {

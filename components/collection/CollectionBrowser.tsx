@@ -4,9 +4,9 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Boxes, Plus, Search, ChevronLeft, FileDown, Printer, Shirt, Sparkles,
-  Footprints, Gem, FileSpreadsheet, ClipboardList, ShieldCheck, AlertTriangle,
-  Pencil, FolderPlus, Package, Trash2, Image as ImageIcon,
+  Boxes, Plus, Search, ChevronLeft, FileDown, Printer, Shirt, Scissors,
+  Footprints, Handbag, FileSpreadsheet, ClipboardList, ShieldCheck, AlertTriangle,
+  Pencil, FolderPlus, SwatchBook, Trash2, Image as ImageIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { deleteProductionSheet } from "@/lib/actions/production";
@@ -48,12 +48,20 @@ interface Props {
 const UNCAT = "__uncat__";
 
 /** Kategori kimliği — kutucuk rengi ve ikonu. Renkler kişi paletinden gelir ki
- *  uygulamanın tamamı tek renk ailesinde kalsın. */
+ *  uygulamanın tamamı tek renk ailesinde kalsın.
+ *
+ *  İKONLAR NESNEYİ ANLATIR, süslemez (Sıraç, 2026-08-30: "burdaki ikonlar
+ *  profesyonel olsun"). Eskiden One-of-a-Kind'da `Sparkles` (parıltı) vardı:
+ *  bir ürün grubunu değil, "özel/sihirli" fikrini anlatan dekoratif bir işaret.
+ *  Yerine `Scissors` — terzi masası, elde kesilen tek parça. Accessories'te
+ *  `Gem` (mücevher) yalnız takıyı çağrıştırıyordu; ağaçta şapka, çanta ve şal
+ *  var, o yüzden `Handbag`. Dördü de aynı çizgi kalınlığında, hepsi somut
+ *  bir nesne. */
 const CATEGORY_IDENTITY: Record<string, { hex: string; icon: typeof Shirt }> = {
-  one_of_a_kind: { hex: "#c98e20", icon: Sparkles },   // altın
+  one_of_a_kind: { hex: "#c98e20", icon: Scissors },   // altın
   ready_to_wear: { hex: "#5b6e8a", icon: Shirt },      // kurşuni
   shoes:         { hex: "#1796a4", icon: Footprints }, // turkuaz
-  accessories:   { hex: "#7c3aed", icon: Gem },        // mor
+  accessories:   { hex: "#7c3aed", icon: Handbag },    // mor
 };
 const UNCAT_IDENTITY = { hex: "#998a2e", icon: ClipboardList };
 
@@ -63,7 +71,8 @@ const NEW_CATEGORY_HUES = ["#1f6e4d", "#c98e20", "#2563c9", "#7c3aed", "#cc2e93"
 function FALLBACK_IDENTITY(key: string): { hex: string; icon: typeof Shirt } {
   let h = 0;
   for (const ch of key) h = ((h * 31) + ch.charCodeAt(0)) & 0x7fffffff;
-  return { hex: NEW_CATEGORY_HUES[h % NEW_CATEGORY_HUES.length]!, icon: Package };
+  // Kullanıcının açtığı kategori: kumaş kartelası — nötr ama moda dilinde.
+  return { hex: NEW_CATEGORY_HUES[h % NEW_CATEGORY_HUES.length]!, icon: SwatchBook };
 }
 
 /** DownloadLink kendi <button>'ını çizer; Button primitifinin `secondary`
@@ -93,7 +102,9 @@ function norm(s: string): string {
  * (general), sonra süsleme/aksesuar gibi ürün üstü çekimler, kumaş swatch'ı ve
  * teknik çizim ise EN SON — başka hiçbir görsel yoksa.
  */
-const COVER_PRIORITY = ["general", "embellishments", "accessories", "sewing", "fabric"] as const;
+/* Kapak sırası: kullanıcının SEÇTİĞİ kapak her şeyin önünde. Föyde kapak
+   yoksa eski davranış sürer (ürün fotoğrafı → teknik çizim). */
+const COVER_PRIORITY = ["cover", "general", "embellishments", "accessories", "sewing", "fabric"] as const;
 
 function coverImage(s: CollectionItem): string | null {
   const imgs = (Array.isArray(s.photo_refs) ? s.photo_refs : []).filter((i) => i?.url);
@@ -164,16 +175,13 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
   }, [visible]);
 
   /** Kategori kutucuğunun kapağı — o kategorideki ilk ürün fotoğrafı. */
-  const catCover = useMemo(() => {
-    const out: Record<string, string> = {};
-    for (const s of visible) {
-      const c = s.category ?? UNCAT;
-      if (out[c]) continue;
-      const img = coverImage(s);
-      if (img) out[c] = img;
-    }
-    return out;
-  }, [visible]);
+  /* KATEGORİ KUTUCUĞUNDA ÜRÜN FOTOĞRAFI YOK.
+     Kutucuk, içindeki ilk ürünün fotoğrafını kapak yapıyordu: dolu kategori
+     fotoğrafla, boş kategori ikonla çiziliyordu ve ızgara kendi içinde
+     ikiye bölünüyordu (Sıraç, 2026-08-30: "ready to wear'deki resim kalksın,
+     icon olmalı hepsi"). Kapak ayrıca rastgeleydi — kategoriyi değil, o an
+     ilk sıradaki ürünü anlatıyordu. Kategori bir KAPIDIR; kimliğini sabit
+     ikonu ve rengi taşır. Ürün fotoğrafı kapının ARDINDA, ürün kartında. */
 
   const filtered = useMemo(() => {
     return visible.filter((s) => {
@@ -187,6 +195,8 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
       if (!q) return true;
       return norm([s.title, s.product_code, s.product_kind, s.producer].filter(Boolean).join(" ")).includes(q);
     });
+    // subTreeKeys yalnız `subs`e bağlıdır; o da selCat'ten türer.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, q, selCat, selSub]);
 
   const hasUncat = (counts.cat[UNCAT] ?? 0) > 0;
@@ -322,7 +332,6 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
                   onClick={() => { setSelCat(c.key); setSelSub(null); }}
                   title={c.label}
                   meta={n > 0 ? `${n} ürün` : "Henüz ürün yok"}
-                  photoUrl={catCover[c.key]}
                   icon={id.icon}
                   colorHex={id.hex}
                   /* Düzenleme kartın İÇİNE konamaz (kart bir düğmedir);
@@ -353,7 +362,6 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
                 onClick={() => { setSelCat(UNCAT); setSelSub(null); }}
                 title="Kategorisiz"
                 meta={`${counts.cat[UNCAT]} ürün`}
-                photoUrl={catCover[UNCAT]}
                 icon={UNCAT_IDENTITY.icon}
                 colorHex={UNCAT_IDENTITY.hex}
               />

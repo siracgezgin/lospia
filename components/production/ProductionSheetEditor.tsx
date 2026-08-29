@@ -1,12 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 import {
-  ClipboardList, ArrowLeft, Plus, Trash2, Save, User, Clock, FileDown, Printer, AlertTriangle, CheckCircle2, Ruler, Wallet, Layers,
+  ClipboardList, Plus, Trash2, Save, User, Clock, FileDown, Printer, AlertTriangle, CheckCircle2, Ruler, Wallet, Layers,
 } from "lucide-react";
 import {
   createProductionSheet, updateProductionSheet, updateProductionSheetImages,
@@ -20,6 +19,7 @@ import { Button, IconButton } from "@/components/ui/Button";
 import { TextInput, TextArea as UiTextArea, SelectInput } from "@/components/ui/Field";
 import { Badge } from "@/components/ui/Badge";
 import { SendToManufacturer } from "./SendToManufacturer";
+import { BackLink } from "@/components/modules/BackLink";
 import { ImageUploader } from "./ImageUploader";
 import { SheetReadiness } from "./SheetReadiness";
 import { SheetBom, type PickableMaterial } from "./SheetBom";
@@ -549,9 +549,15 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
       {/* Opak zemin, gölgesiz: bulanık/yarı saydam çubuk föyün üstünde yüzüyordu. */}
       <div className="sticky top-0 z-20 -mx-4 mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-line bg-app px-4 py-3 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
         <div className="min-w-0">
-          <Link href="/collection" className="mb-1 inline-flex items-center gap-1 rounded-control text-[13.5px] text-subtle transition-colors duration-150 hover:text-ink">
-            <ArrowLeft size={14} aria-hidden /> Collection
-          </Link>
+          {/* GERİ — uygulamanın TEK geri düğmesiyle aynı (components/modules/BackLink).
+              Burada elle yazılmış bir bağlantı vardı ve yalnız "Collection"
+              yazıyordu: bir düğme gibi değil, sayfanın üstünde duran bir etiket
+              gibi okunuyordu (Sıraç, 2026-08-30: "bi föydeyken geri butonu yok,
+              direkt Collection var"). Ortak bileşen "← Geri" der, dokunma hedefi
+              parmağa göredir ve hedefi hiyerarşiden türetir (föy → Koleksiyon). */}
+          <div className="mb-1">
+            <BackLink />
+          </div>
           {!isNew && sheet && (
             <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[12px] text-subtle">
               <span className="flex items-center gap-1">
@@ -863,12 +869,19 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
         </div>
         </div>
 
-        {/* TEKNİK ÇİZİM — sağ üst köşe, ÖN ve ARKA HER ZAMAN YAN YANA.
-            Geniş ekranda alt alta diziliyordu; sağ sütun sol sütunun iki katı
-            uzuyor, altında uzun bir boşluk kalıyordu (Aslı Hanım, 2026-08-24:
-            "Üretim föyünde çoğu yer boşluklu, optimum olsun"). Yan yana
-            durunca iki sütunun boyu birbirine yaklaşıyor. */}
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {/* KAPAK + TEKNİK ÇİZİM — HER ZAMAN YAN YANA (geniş ekranda üç sütun).
+            Alt alta dizilince sağ sütun solun iki katı uzuyor ve altında boşluk
+            kalıyordu (Aslı Hanım, 2026-08-24: "föyde çoğu yer boşluklu").
+            Kapak, ürünün Koleksiyon'daki yüzüdür: kart kapağı artık yüklenen
+            görseller arasından TAHMİN edilmiyor, buradan seçiliyor
+            (Sıraç, 2026-08-30: "föylerde de kapak resmi ekleme kısmı olsun,
+            bu resmin tamamını değiştireceğim"). `variant="drawing"` tek görsel
+            gösterir ve "Değiştir" düğmesiyle gelir — kapak bir galeri değil,
+            tek bir karardır. Zorunlu alan DEĞİLDİR: eksik uyarısını şişirmez. */}
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          <Section title="Kapak Görseli">
+            <ImageUploader sheetId={sheetId} section="cover" images={form.photo_refs} onChange={handleImagesChange} variant="drawing" />
+          </Section>
           <Section checkKey="drawing" title="Teknik Çizim — Ön">
             <ImageUploader sheetId={sheetId} section="technical_drawing_front" images={form.photo_refs} onChange={handleImagesChange} variant="drawing" />
           </Section>

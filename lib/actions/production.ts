@@ -50,6 +50,7 @@ const productionImage = z.object({
   url: z.string().max(2000),
   path: z.string().max(500),
   section: z.enum([
+    "cover",
     "technical_drawing", "technical_drawing_front", "technical_drawing_back",
     "fabric", "accessories", "embellishments", "sewing", "general",
   ]),
