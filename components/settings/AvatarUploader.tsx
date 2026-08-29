@@ -28,9 +28,15 @@ interface Props {
   photoUrl: string | null;
   colorHex?: string | null;
   disabled?: boolean;
+  /** Rozet ile düğmeler ARASINA giren kimlik bloğu (ad + ünvan).
+   *  Profil'de satır böyle okunur: rozet · isim · "Fotoğraf yükle"
+   *  (2026-08-29: "ikon ismin solunda olsun, fotoğraf yükle sağında olsun,
+   *  tek satırda bitir"). Verilmezse rozet ve düğme yan yana durur — Ayarlar
+   *  listesindeki hâli budur. */
+  nameSlot?: React.ReactNode;
 }
 
-export function AvatarUploader({ userId, name, photoUrl, colorHex, disabled }: Props) {
+export function AvatarUploader({ userId, name, photoUrl, colorHex, disabled, nameSlot }: Props) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -75,6 +81,10 @@ export function AvatarUploader({ userId, name, photoUrl, colorHex, disabled }: P
   return (
     <div className="flex flex-wrap items-center gap-2">
       <PersonAvatar name={name} photoUrl={photoUrl} colorHex={colorHex} size="md" />
+
+      {/* Kimlik bloğu rozetle düğmeler arasına girer ve boşluğu YER: düğmeler
+          satırın sağına yaslanır. */}
+      {nameSlot && <div className="min-w-0 flex-1">{nameSlot}</div>}
 
       <input
         ref={inputRef}

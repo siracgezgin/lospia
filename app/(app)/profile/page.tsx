@@ -82,24 +82,27 @@ export default async function ProfilePage() {
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
         {/* ── Kimlik + düzenlenebilir alanlar ──────────────────────────── */}
         <section className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card lg:col-span-2">
-          {/* ÖNCE KİM, sonra fotoğraf. Sıra tersti: fotoğraf yükleyici ve
-              düğmesi solda, isim sağda kalıyordu — karta bakan önce bir
-              yükleme düğmesi görüyordu, kimin sayfası olduğunu sonra
-              (2026-08-29: "profilimde de önce isim, sonra resim ekleme
-              gelmeli"). */}
-          <div className="border-b border-hairline bg-surface-muted/50 px-5 py-4">
-            <p className="truncate text-[17px] font-semibold tracking-tight text-ink">{displayName}</p>
-            <p className="truncate text-[13px] text-muted">
-              {personTitle({ jobTitle: me?.job_title, role, viewerIsAdmin: canManageSettings(role) }) ?? "Ünvan eklenmedi"}
-            </p>
-            <div className="mt-3.5 border-t border-hairline pt-3.5">
-              <AvatarUploader
-                userId={user.id}
-                name={displayName}
-                photoUrl={profile?.avatar_url ?? null}
-                colorHex={myTone?.hex ?? null}
-              />
-            </div>
+          {/* TEK SATIR: rozet · ad + ünvan · "Fotoğraf yükle".
+              Önce fotoğraf yükleyici solda, isim sağdaydı — karta bakan önce
+              bir yükleme düğmesi görüyordu. Sonra isim üste alındı ama bu kez
+              fotoğraf alt satıra düştü (2026-08-29: "alt satır değil ya, ikon
+              ismin solunda olsun, fotoğraf yükle sağında olsun, tek satırda
+              bitir işi"). */}
+          <div className="border-b border-hairline bg-surface-muted/50 px-5 py-3.5">
+            <AvatarUploader
+              userId={user.id}
+              name={displayName}
+              photoUrl={profile?.avatar_url ?? null}
+              colorHex={myTone?.hex ?? null}
+              nameSlot={
+                <>
+                  <p className="truncate text-[16px] font-semibold tracking-tight text-ink">{displayName}</p>
+                  <p className="truncate text-[12.5px] text-muted">
+                    {personTitle({ jobTitle: me?.job_title, role, viewerIsAdmin: canManageSettings(role) }) ?? "Ünvan eklenmedi"}
+                  </p>
+                </>
+              }
+            />
           </div>
 
           <div className="px-5 py-4">
