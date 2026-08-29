@@ -6,8 +6,7 @@ import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 import {
-  ClipboardList, ArrowLeft, Plus, Trash2, Save, User, Clock, Loader2, FileDown, Printer, AlertTriangle, ChevronDown,
-  CheckCircle2, Ruler, Wallet, Layers,
+  ClipboardList, ArrowLeft, Plus, Trash2, Save, User, Clock, Loader2, FileDown, Printer, AlertTriangle, CheckCircle2, Ruler, Wallet, Layers,
 } from "lucide-react";
 import {
   createProductionSheet, updateProductionSheet, updateProductionSheetImages,
@@ -211,15 +210,26 @@ const inputCls =
  * sutunu olctugu icin sonuc her genislikte dogru.
  */
 function FieldRow({
-  label, align = "center", className, missing, hint, children,
+  label, align = "center", className, missing, hint, children, checkKey,
 }: {
   label: string; align?: "center" | "start"; className?: string;
   /** Eksiksizlik denetiminde açık kalan alan → etiketin yanında uyarı ikonu. */
   missing?: boolean; hint?: string;
+  /** Eksiksizlik anahtarı (lib/production/completeness.ts). Üstteki şeritte
+   *  bu kaleme tıklanınca alan BU işaretten bulunur. */
+  checkKey?: string;
   children: React.ReactNode;
 }) {
   return (
-    <label className={cn("@container block", className)}>
+    <label
+      data-check={checkKey}
+      className={cn(
+        "@container block scroll-mt-24 rounded-lg transition-[box-shadow,background-color] duration-300",
+        /* Şeritten atlandığında alan bir an vurgulanır — uzun föyde "hangisiydi"
+           sorusu doğuyordu. Sınıf DOM'dan eklenir/çıkarılır (bkz. jumpTo). */
+        className,
+      )}
+    >
       <span
         className={cn(
           "flex flex-col gap-1 @[23rem]:flex-row @[23rem]:gap-2",
@@ -247,13 +257,13 @@ function FieldRow({
 }
 
 function LabeledField({
-  label, value, onChange, placeholder, missing, hint,
+  label, value, onChange, placeholder, missing, hint, checkKey,
 }: {
   label: string; value: string; onChange: (_v: string) => void; placeholder?: string;
-  missing?: boolean; hint?: string;
+  missing?: boolean; hint?: string; checkKey?: string;
 }) {
   return (
-    <FieldRow label={label} missing={missing} hint={hint}>
+    <FieldRow label={label} missing={missing} hint={hint} checkKey={checkKey}>
       <input className={inputCls} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
     </FieldRow>
   );
@@ -274,9 +284,19 @@ function TextArea({
 }
 
 /** Föy bölümü — çerçeveli, üstte başlık şeridi (Excel föyü hissi). */
-function Section({ title, children, className }: { title: string; children: React.ReactNode; className?: string }) {
+function Section({ title, children, className, checkKey }: {
+  title: string; children: React.ReactNode; className?: string;
+  /** Eksiksizlik anahtarı — şeritteki kalemden buraya atlanır (bkz. jumpTo). */
+  checkKey?: string;
+}) {
   return (
-    <section className={cn("overflow-hidden rounded-lg border border-line bg-surface shadow-card transition-shadow duration-200 ease-standard", className)}>
+    <section
+      data-check={checkKey}
+      className={cn(
+        "overflow-hidden rounded-lg border border-line bg-surface shadow-card scroll-mt-24 transition-[box-shadow,background-color] duration-300 ease-standard",
+        className,
+      )}
+    >
       <div className="flex items-center gap-2 border-b border-line bg-surface-muted px-3 py-2">
         <span aria-hidden className="h-3.5 w-[3px] shrink-0 rounded-full bg-brand" />
         <h2 className="text-[11.5px] font-semibold uppercase tracking-wider text-muted">{title}</h2>
@@ -315,6 +335,31 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
   const sheetId = sheet?.id ?? "new";
   // Silme: admin her föyü; üye kendi oluşturduğu föyü siler (RLS de bunu uygular).
   const canDelete = !isNew && !!sheet && (isAdmin || sheet.created_by === currentUserId);
+  /**
+   * Eksik kalemden ALANA git.
+   *
+   * Sıraç (2026-08-29): "Eksik alanda neresi eksikse tıkladığımda beni oraya
+   * atsın." Önce yalnız sekme değişiyordu; föy uzun olduğu için alan hâlâ
+   * gözle aranıyordu.
+   *
+   * Sekme değişimi DOM'a yansısın diye iki kare beklenir; sonra alan ekranın
+   * ortasına kaydırılır, içindeki ilk girdi odaklanır ve alan bir buçuk saniye
+   * vurgulanır.
+   */
+  function jumpTo(key: string) {
+    setTab(CHECK_TAB[key] ?? "urun");
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        const el = document.querySelector<HTMLElement>(`[data-check="${key}"]`);
+        if (!el) return;
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.querySelector<HTMLElement>("input, select, textarea, button")?.focus({ preventScroll: true });
+        el.classList.add("bg-amber-50", "ring-2", "ring-amber-400");
+        window.setTimeout(() => el.classList.remove("bg-amber-50", "ring-2", "ring-amber-400"), 1500);
+      }),
+    );
+  }
+
   const set = <K extends keyof ProductionSheetInput>(key: K, value: ProductionSheetInput[K]) => {
     setDirty(true);
     setForm((f) => ({ ...f, [key]: value }));
@@ -501,19 +546,34 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               okunuyordu. Yetenek kaybolmadı: künye bilgisi künyenin yanına,
               üst çubuğa alındı. */}
           {isAdmin && !isNew && (
-            <label className="relative inline-flex items-center">
-              <span className="sr-only">Föy durumu</span>
+            /* DURUM okunur değildi: kutuda yalnız "Aktif" yazıyordu, neyin
+               durumu olduğu ve seçeneklerin ne anlama geldiği belirsizdi
+               (2026-08-29: "şurada da Aktif/Taslak/Arşiv, anlamadım").
+               Artık etiket görünür, renk noktası durumu tek bakışta söyler ve
+               seçeneklerin karşılığı yazıyor. Ok GLOBAL select kuralından
+               gelir — burada ayrıca çizilmez. */
+            <label
+              className="inline-flex h-[38px] shrink-0 items-center gap-2 rounded-lg border border-line bg-surface pl-2.5 shadow-xs transition-colors duration-150 focus-within:border-brand-ring focus-within:ring-2 focus-within:ring-brand-ring/40 hover:border-line-strong"
+              title="Föyün künye durumu — içeriğini değiştirmez"
+            >
+              <span className="text-[10.5px] font-semibold uppercase tracking-wider text-subtle">Durum</span>
+              <span
+                aria-hidden
+                className={cn(
+                  "size-1.5 shrink-0 rounded-full",
+                  form.status === "active" ? "bg-success" : form.status === "draft" ? "bg-warning" : "bg-subtle",
+                )}
+              />
               <select
                 value={form.status}
                 onChange={(e) => set("status", e.target.value as ProductionSheetInput["status"])}
-                className="h-[38px] appearance-none rounded-lg border border-line bg-surface pl-3 pr-7 text-[13px] font-medium text-muted shadow-xs transition-colors duration-150 hover:border-line-strong hover:text-ink focus:outline-none focus:ring-2 focus:ring-brand-ring/40"
-                title="Föy durumu"
+                aria-label="Föy durumu"
+                className="h-full cursor-pointer border-0 bg-transparent pl-0 text-[13px] font-medium text-ink focus:outline-none"
               >
-                <option value="draft">Taslak</option>
-                <option value="active">Aktif</option>
-                <option value="archived">Arşiv</option>
+                <option value="draft">Taslak — hazırlanıyor</option>
+                <option value="active">Aktif — üretimde</option>
+                <option value="archived">Arşiv — listeden kalkar</option>
               </select>
-              <ChevronDown size={13} className="pointer-events-none absolute right-2 text-subtle" />
             </label>
           )}
           {/* TEK SAYFA CIKTI — Asli Hanim (2026-08-23): "cikti aldigin zaman tek
@@ -568,7 +628,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
       <SheetReadiness
         sheetId={sheet?.id ?? null}
         checks={checks}
-        onJump={(key) => setTab(CHECK_TAB[key] ?? "urun")}
+        onJump={jumpTo}
         confirmedAt={sheet?.confirmed_at ?? null}
         confirmedByName={sheet?.confirmed_by ? nameOf(sheet.confirmed_by) : null}
         dirty={dirty}
@@ -647,18 +707,18 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
             ekran kirilimi 1024'te sutunu 122px'e dusuruyordu. */}
         <div className="@container">
         <div className="grid grid-cols-1 gap-x-5 gap-y-2 rounded-lg border border-line p-3 @[49rem]:grid-cols-2">
-          <LabeledField label="Föy başlığı *" value={form.title} onChange={(v) => set("title", v)} placeholder="Beyaz Dantel Etek" missing={missingKeys.has("title")} hint={hintOf.get("title")} />
+          <LabeledField checkKey="title" label="Föy başlığı *" value={form.title} onChange={(v) => set("title", v)} placeholder="Beyaz Dantel Etek" missing={missingKeys.has("title")} hint={hintOf.get("title")} />
           <LabeledField label="Üretim tarihi" value={form.production_date ?? ""} onChange={(v) => set("production_date", v)} />
           <LabeledField label="Ürün kodu" value={form.product_code ?? ""} onChange={(v) => set("product_code", v)} />
-          <LabeledField label="Teslim tarihi" value={form.delivery_date ?? ""} onChange={(v) => set("delivery_date", v)} placeholder="21.07.2026" missing={missingKeys.has("delivery_date")} hint={hintOf.get("delivery_date")} />
-          <LabeledField label="Ürün cinsi" value={form.product_kind ?? ""} onChange={(v) => set("product_kind", v)} placeholder="Etek" missing={missingKeys.has("description")} hint={hintOf.get("description")} />
+          <LabeledField checkKey="delivery_date" label="Teslim tarihi" value={form.delivery_date ?? ""} onChange={(v) => set("delivery_date", v)} placeholder="21.07.2026" missing={missingKeys.has("delivery_date")} hint={hintOf.get("delivery_date")} />
+          <LabeledField checkKey="description" label="Ürün cinsi" value={form.product_kind ?? ""} onChange={(v) => set("product_kind", v)} placeholder="Etek" missing={missingKeys.has("description")} hint={hintOf.get("description")} />
           {/* RENK — föy kimliğinin üçüncü parçası (model | kumaş | renk),
               Zedonk deseni. Aynı modelin başka rengi için aşağıdaki varyant
               şeridinden "Renk ekle" kullanılır. */}
           <LabeledField label="Renk" value={form.colorway ?? ""} onChange={(v) => set("colorway", v)} placeholder="Mavi" />
           {/* İkinci tarih — "Bir ürünlerin teslim tarihi, bir de dikim teslim
               tarihi lazım." */}
-          <LabeledField label="Dikim teslim tarihi" value={form.sewing_delivery_date ?? ""} onChange={(v) => set("sewing_delivery_date", v)} placeholder="14.07.2026" missing={missingKeys.has("sewing_delivery_date")} hint={hintOf.get("sewing_delivery_date")} />
+          <LabeledField checkKey="sewing_delivery_date" label="Dikim teslim tarihi" value={form.sewing_delivery_date ?? ""} onChange={(v) => set("sewing_delivery_date", v)} placeholder="14.07.2026" missing={missingKeys.has("sewing_delivery_date")} hint={hintOf.get("sewing_delivery_date")} />
           {/* ÜRETİCİ — artık serbest metin değil, gerçek usta kaydı.
               Aslı Hanım (2026-08-19): "Cihan Usta, Hakan Usta… ona gireceksin,
               hangi ürünler orada dikiliyor." Serbest metinken Ödeme Tablosu
@@ -666,7 +726,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               Liste boşsa (tablo migrate edilmemiş) eski metin alanına düşer —
               föy her hâlükârda açılır. */}
           {manufacturers.length > 0 ? (
-            <FieldRow label="Üretici" missing={missingKeys.has("producer")} hint={hintOf.get("producer")}>
+            <FieldRow checkKey="producer" label="Üretici" missing={missingKeys.has("producer")} hint={hintOf.get("producer")}>
               <select
                 className={inputCls}
                 value={form.manufacturer_id ?? ""}
@@ -715,7 +775,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
             <LabeledField label="Sezon" value={form.season ?? ""} onChange={(v) => set("season", v)} placeholder="2026 RESORT" />
           )}
           {/* Koleksiyon kategorisi — web nav yapısı (One-of-a-Kind / Ready to Wear …) */}
-          <FieldRow label="Kategori" missing={missingKeys.has("category")} hint={hintOf.get("category")}>
+          <FieldRow checkKey="category" label="Kategori" missing={missingKeys.has("category")} hint={hintOf.get("category")}>
             <select
               className={inputCls}
               value={form.category ?? ""}
@@ -737,7 +797,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               ))}
             </select>
           </FieldRow>
-          <FieldRow label="Alt kategori" missing={missingKeys.has("subcategory")} hint={hintOf.get("subcategory")}>
+          <FieldRow checkKey="subcategory" label="Alt kategori" missing={missingKeys.has("subcategory")} hint={hintOf.get("subcategory")}>
             <select
               className={cn(inputCls, subsOf(tree, form.category).length === 0 && "opacity-50")}
               value={form.subcategory ?? ""}
@@ -751,7 +811,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
             </select>
           </FieldRow>
           <LabeledField label="1 ürüne giden metraj" value={form.meterage ?? ""} onChange={(v) => set("meterage", v)} placeholder="1.60 CM" />
-          <FieldRow label="Ürünün açıklaması" align="start" className="@[49rem]:col-span-2" missing={missingKeys.has("description")} hint={hintOf.get("description")}>
+          <FieldRow checkKey="description" label="Ürünün açıklaması" align="start" className="@[49rem]:col-span-2" missing={missingKeys.has("description")} hint={hintOf.get("description")}>
             <TextArea value={form.description ?? ""} onChange={(v) => set("description", v)} rows={2} />
           </FieldRow>
         </div>
@@ -763,7 +823,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
             "Üretim föyünde çoğu yer boşluklu, optimum olsun"). Yan yana
             durunca iki sütunun boyu birbirine yaklaşıyor. */}
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <Section title="Teknik Çizim — Ön">
+          <Section checkKey="drawing" title="Teknik Çizim — Ön">
             <ImageUploader sheetId={sheetId} section="technical_drawing_front" images={form.photo_refs} onChange={handleImagesChange} variant="drawing" />
           </Section>
           <Section title="Teknik Çizim — Arka">
@@ -791,7 +851,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
             Aslı Hanım (2026-08-19): "Bunların Excel gibi çizgi çizgi kare kare
             olması… hiçbir boş hücre kalmaması. Mesela üç numara niye boş?"
             Sıra numarası artık elle yazılmıyor → hiçbir numara boş kalamaz. */}
-        <Section title="Ölçüler (cm)">
+        <Section checkKey="measurements" title="Ölçüler (cm)">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[420px] table-fixed border-collapse text-[13px]">
               <colgroup>
@@ -834,7 +894,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
         </Section>
 
         {/* BEDEN DAĞILIMI — sabit standart beden kolonları; hangisine istersen gir */}
-        <Section title="Beden Dağılımı">
+        <Section checkKey="sizes" title="Beden Dağılımı">
           <p className="mb-2.5 text-[12px] text-subtle">
             Tüm bedenler her zaman burada; yalnızca ürünün olan bedenlerine adet girin.
             <br />

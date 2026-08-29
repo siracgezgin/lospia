@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, AlertTriangle, ChevronDown, Loader2, ShieldCheck, RotateCcw } from "lucide-react";
+import { CheckCircle2, AlertTriangle, ChevronDown, Loader2, ShieldCheck, RotateCcw, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { setProductionSheetConfirmed } from "@/lib/actions/production";
 import type { SheetCheck } from "@/lib/production/completeness";
@@ -74,30 +74,36 @@ export function SheetReadiness({ sheetId, checks, confirmedAt, confirmedByName, 
           <AlertTriangle size={17} className="shrink-0 text-amber-600" />
         )}
 
-        <span className="min-w-0 flex-1 basis-[calc(100%-2rem)] sm:basis-0">
+        {/* TEK SATIR. Başlık ve açıklama iki ayrı satırdaydı; şerit iki kat
+            yükseliyor ve ikinci satır ("Üreticiye giden dosya eksiksiz
+            olmalı…") her föyde aynı cümleyi tekrar ediyordu (2026-08-29:
+            "şu eksik alanlar kısmı iki satır olmuş, tek satıra düşür").
+            Cümle artık başlığın devamı: kalın kısım DURUM, ince kısım
+            NE YAPILACAĞI. */}
+        <span className="min-w-0 flex-1 basis-[calc(100%-2rem)] text-[13.5px] leading-snug sm:basis-0">
           <span
             className={cn(
-              "block text-[13.5px] font-semibold tracking-tight",
+              "font-semibold tracking-tight",
               confirmed ? "text-emerald-900" : complete ? "text-ink" : "text-amber-900",
             )}
           >
             {confirmed
               ? `Konfirme edildi${confirmedByName ? ` — ${confirmedByName}` : ""}`
               : complete
-                ? "Föy eksiksiz — konfirmeye hazır"
+                ? "Föy eksiksiz"
                 : `${missing.length} alan eksik`}
           </span>
           <span
             className={cn(
-              "mt-0.5 block text-[12px]",
+              "ml-1.5 text-[12.5px]",
               confirmed ? "text-emerald-800/80" : complete ? "text-muted" : "text-amber-800/90",
             )}
           >
             {confirmed
-              ? "Föyde bir şey değiştirirseniz konfirmasyon otomatik düşer."
+              ? "· föyde bir şey değişirse konfirmasyon düşer"
               : complete
-                ? "Aslı Hanım’a göstermeden önce konfirme edin."
-                : "Üreticiye giden dosya eksiksiz olmalı — eksikleri görmek için açın."}
+                ? "· konfirmeye hazır"
+                : "· üreticiye giden dosya eksiksiz olmalı"}
           </span>
         </span>
 
@@ -149,17 +155,24 @@ export function SheetReadiness({ sheetId, checks, confirmedAt, confirmedByName, 
         <ul className="anim-fade-down divide-y divide-amber-200/70 border-t border-amber-200 bg-white/50">
           {missing.map((c) => (
             <li key={c.key}>
-              {/* Eksik kaleme tıklayınca o alanın sekmesine atlar — föy dört
-                  sekmeye ayrıldığı için "nerede bu alan?" sorusu doğuyordu. */}
+              {/* Eksik kaleme tıklayınca doğrudan O ALANA gider: sekmesi
+                  açılır, alan ekranın ortasına kaydırılır, imleç içine konur
+                  ve alan bir an vurgulanır (2026-08-29: "eksik alanda neresi
+                  eksikse tıkladığımda beni oraya atsın"). Önce yalnız sekme
+                  değişiyordu; uzun föyde alan hâlâ aranıyordu. */}
               <button
                 onClick={() => onJump?.(c.key)}
-                className="flex w-full items-start gap-2 px-3.5 py-2 text-left transition-colors hover:bg-amber-100/60"
+                className="group flex w-full items-start gap-2 px-3.5 py-2 text-left transition-colors hover:bg-amber-100/60"
               >
                 <AlertTriangle size={13} className="mt-0.5 shrink-0 text-amber-600" />
                 <span className="min-w-0">
                   <span className="block text-[13px] font-medium text-ink">{c.label}</span>
                   {c.hint && <span className="block text-[12px] text-muted">{c.hint}</span>}
                 </span>
+                <ArrowRight
+                  size={13}
+                  className="ml-auto mt-0.5 shrink-0 text-amber-600 opacity-0 transition-all duration-150 group-hover:translate-x-0.5 group-hover:opacity-100"
+                />
               </button>
             </li>
           ))}

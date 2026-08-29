@@ -82,10 +82,14 @@ export function Tile({
           renklerini yutuyor (proje kuralı). */}
       {/* Kimlik çubuğu yalnız DİKEY kartta; yatay kutuda ikonun rengi zaten
           türü söylüyor, üstte bir şerit gürültü oluyordu. */}
-      {st && !row && (
+      {/* Kimlik şeridi yalnız BÜYÜK dikey kartta. Kompakt kartta renk avatarın
+          halkasında yaşar: 84px'lik bir kutuda üstte bir şerit kartın onda
+          birini yiyordu ve kart "etiketli" duruyordu (2026-08-29: "daha küçük,
+          minimal olsun, hepsi yuvarlak olabilir"). */}
+      {st && !row && !compact && (
         <span
           aria-hidden
-          className={cn("absolute inset-x-0 top-0", compact ? "h-1" : "h-1.5")}
+          className="absolute inset-x-0 top-0 h-1.5"
           style={{ backgroundColor: st.hex }}
         />
       )}
@@ -95,13 +99,14 @@ export function Tile({
       <span
         className={cn(
           "grid shrink-0 place-items-center overflow-hidden",
-          row ? "size-9 rounded-lg" : "rounded-full ring-2 ring-white/70",
+          row ? "size-9 rounded-lg" : "rounded-full ring-2",
+          !row && (compact ? "ring-[color:var(--tile-ring)]" : "ring-white/70"),
           /* Telefonda bir kademe küçük: 375px ekranda iki sütun × 96px ikon
              kartı taşırıyor, başlık iki satıra sarıyordu. */
-          !row && (compact ? "size-11" : "size-16 sm:size-24"),
+          !row && (compact ? "size-10 sm:size-11" : "size-16 sm:size-24"),
           !st && "bg-surface-sunken text-muted",
         )}
-        style={st ? { backgroundColor: st.hex + "1A", color: st.hex } : undefined}
+        style={st ? { backgroundColor: st.hex + "1A", color: st.hex, ["--tile-ring" as string]: st.hex + "59" } : undefined}
       >
         {photoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -129,7 +134,7 @@ export function Tile({
         <span
           className={cn(
             "block truncate font-semibold tracking-tight text-ink",
-            row ? "text-[13.5px]" : compact ? "text-[13px]" : "text-[16px] sm:text-[19px]",
+            row ? "text-[13.5px]" : compact ? "text-[12px] sm:text-[13px]" : "text-[16px] sm:text-[19px]",
           )}
           title={title}
         >
@@ -157,8 +162,9 @@ export function Tile({
     row
       ? "items-center gap-2.5 rounded-xl px-3 py-2.5 text-left"
       : cn(
-          "flex-col items-center rounded-2xl text-center",
-          compact ? "gap-2 px-2 pb-3 pt-3.5" : "gap-2.5 px-3 pb-5 pt-6 sm:gap-3 sm:px-4 sm:pb-6 sm:pt-8",
+          "flex-col items-center text-center",
+          compact ? "rounded-2xl" : "rounded-2xl",
+          compact ? "gap-1.5 px-1.5 pb-2.5 pt-3" : "gap-2.5 px-3 pb-5 pt-6 sm:gap-3 sm:px-4 sm:pb-6 sm:pt-8",
         ),
     "hover:-translate-y-0.5 hover:shadow-card-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
     !st && "border-line hover:border-line-strong",
@@ -221,7 +227,10 @@ export function TileGrid({
         row
           ? "grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-2.5"
           : compact
-            ? "grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-2.5"
+            /* KOMPAKT: telefonda kartlar küçülüp yan yana dizilsin
+               (2026-08-29: "mobil için Reports'ta daha küçük, yan yana,
+               minimal olsun"). 88px → 390px ekranda dört sütun. */
+            ? "grid-cols-[repeat(auto-fill,minmax(84px,1fr))] gap-2 sm:grid-cols-[repeat(auto-fill,minmax(104px,1fr))] sm:gap-2.5"
             : "grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 lg:gap-5",
         className,
       )}
