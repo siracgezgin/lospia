@@ -1,4 +1,5 @@
 import { createClient, getAuthUser } from "@/lib/supabase/server";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { WorkspaceNameEditor } from "@/components/settings/WorkspaceNameEditor";
 import { MembersManager } from "@/components/settings/MembersManager";
@@ -12,7 +13,7 @@ import { canManageSettings, canRenameWorkspace, canManageWorkspace } from "@/lib
 import { roleLabel } from "@/lib/utils/roles";
 import { pickDisplayEmail } from "@/lib/utils/display-identity";
 import { Avatar } from "@/components/ui/Avatar";
-import { Shield } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import type {
   Workspace, WorkspaceMember, Profile,
   WorkspaceRole, WorkspaceInvite,
@@ -137,24 +138,11 @@ export default async function SettingsPage() {
   const profileName = profile?.full_name ?? "—";
 
   return (
-    <div className="w-full p-4 sm:p-6 lg:p-8 space-y-8">
-      {/* Page header: title + summary chips */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-ink tracking-tight">Settings</h1>
-          <p className="text-sm text-muted mt-1">
-            Profilinizi, çalışma alanınızı, departmanları ve ekip üyelerini buradan yönetin.
-          </p>
-        </div>
-        {/* Yalnız rol. Departman ve üye sayısı artık sekmelerde ve bölüm
-            başlıklarında duruyordu; başlıkta tekrar etmeleri gürültüydü. */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1 text-xs font-medium text-muted shadow-card">
-            <Shield size={12} className="text-brand" />
-            {roleLabel(userRole)}
-          </span>
-        </div>
-      </div>
+    <div className="w-full space-y-6 px-4 py-4 sm:px-6 lg:px-8">
+      {/* Başlık uygulama çubuğunda. Burada ikinci kez büyük bir "Settings" +
+          açıklama cümlesi + rol rozeti duruyordu; üçü de ~110px yiyor ve
+          hiçbiri yeni bir şey söylemiyordu (rol zaten profil menüsünde). */}
+      <h1 className="sr-only">Settings</h1>
 
       {/* SEKMELER — Aslı Hanım (2026-08-23): "diğer kısımlar da çok kötü,
           ayarlar sayfası." Dokuz bölüm tek yığındaydı: profil, hesap açma, ekip
@@ -164,13 +152,19 @@ export default async function SettingsPage() {
           önce bazı başlıklar kartın içinde, bazıları dışındaydı. */}
       <SettingsTabs>
         <SettingsTab label="Ekip" count={memberCount}>
-              <div className="grid items-start gap-6 xl:grid-cols-2">
+              {/* TEK SÜTUN. Burası `xl:grid-cols-2` idi ama içinde iki bölüm
+                  vardı ve ilki `xl:col-span-2` ile tam genişlik alıyordu —
+                  geriye tek başına kalan "Departmanlar" ızgaranın SOL yarısını
+                  kaplayıp sağ yarıyı boş bırakıyordu (2026-08-29 ekran
+                  görüntüsü: "sayfa boş gözükmemeli, yarısı boş gözükmemeli").
+                  İki bölüm de tam genişlik: liste zaten yatayda okunur. */}
+              <div className="space-y-6">
                 {/* TEK BAŞLIK — Aslı Hanım (2026-08-23): "Bunların tamamı
                     aynı başlıkta toplanabilir, daha profesyonel tasarımla."
                     Üyeler, Kişi Kimliği ve Hesap oluştur üç ayrı karttı ve ilk
                     ikisi aynı sekiz kişiyi iki kez listeliyordu. Artık tek
                     satır: rozet + isim/kullanıcı adı/e-posta + rol + kimlik. */}
-                <div className="xl:col-span-2">
+                <div>
                 <SettingsSection
                   title="Ekip"
                   description="Roller, kullanıcı adları, bildirim e-postaları ve kişi kimlikleri (renk + fotoğraf). Görev kartları da kişinin rengini taşır — panoda kimin işi olduğu renkten okunur."
@@ -209,7 +203,6 @@ export default async function SettingsPage() {
                 <SettingsSection
                   title="Departmanlar"
                   description="Görevleri departmanlara atayın. Üyeler birden fazla departmanda yer alabilir."
-                  aside={<CountChip n={departments.length} birim="departman" />}
                 >
                   <DepartmentsManager
                     departments={departments}
@@ -225,7 +218,18 @@ export default async function SettingsPage() {
         </SettingsTab>
         <SettingsTab label="Hesabım">
               <div className="grid items-start gap-6 lg:grid-cols-2">
-                <SettingsSection title="Profiliniz">
+                <SettingsSection
+                  title="Profiliniz"
+                  aside={
+                    <Link
+                      href="/profile"
+                      className="group inline-flex items-center gap-1 text-[12.5px] font-medium text-brand transition-colors duration-150 hover:text-brand-strong"
+                    >
+                      Düzenle
+                      <ArrowRight size={12} className="transition-transform duration-150 ease-standard group-hover:translate-x-0.5" />
+                    </Link>
+                  }
+                >
                   <div className="space-y-4">
                   <div className="flex items-center gap-3">
                     {/* Kendi renginiz — panodaki, rapordaki ve Kişi Kimliği'ndekiyle

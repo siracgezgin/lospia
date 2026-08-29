@@ -164,9 +164,18 @@ export function OpenItemsBoard({ items, members, currentUserId, isAdmin, availab
           satırda toplanır — boş kart tam bir sütun kaplayıp yanındaki dolu
           kartın hizasını bozuyordu (Aslı Hanım, 2026-08-24: "tasarım çok kötü,
           iyileştirilmesi profesyonelleştirilmesi lazım"). */}
+      {/* TEK KALAN KART satırın tamamını kaplar: tek sayıda kart varsa
+          sonuncusu yanında boş bir sütun bırakıyordu (2026-08-29: "sayfa boş
+          gözükmemeli, yarısı boş gözükmemeli"). */}
       <div className="grid items-start gap-3 xl:grid-cols-2">
-        {withItems.map((col) => (
-          <div key={col.key} className="flex flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-card">
+        {withItems.map((col, i) => (
+          <div
+            key={col.key}
+            className={cn(
+              "flex flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-card",
+              withItems.length % 2 === 1 && i === withItems.length - 1 && "xl:col-span-2",
+            )}
+          >
             {/* Blok başlığı — kişi */}
             <div className="flex items-center gap-2 border-b border-hairline bg-surface-muted px-3 py-2">
               <span className="inline-flex h-6 w-7 shrink-0 items-center justify-center rounded bg-surface text-[11px] font-semibold text-muted">

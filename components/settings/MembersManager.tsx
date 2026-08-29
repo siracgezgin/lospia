@@ -265,9 +265,12 @@ export function MembersManager({
                   <span className="truncate">{m.profiles?.full_name ?? m.profiles?.email ?? "—"}</span>
                   {isSelf && <span className="shrink-0 text-[10px] text-subtle">(siz)</span>}
                 </p>
-                <p className="truncate text-xs text-muted">
-                  {m.profiles?.username ? `@${m.profiles.username}` : "Kullanıcı adı yok"}
-                </p>
+                {/* Kullanıcı adı yoksa SATIR HİÇ ÇİZİLMEZ. "Kullanıcı adı yok"
+                    yazmak satırı uzatıyor ve hiçbir şey söylemiyordu; boş bir
+                    <p> de yüksekliğini korurdu. */}
+                {m.profiles?.username && (
+                  <p className="truncate text-xs text-muted">@{m.profiles.username}</p>
+                )}
                 {(() => {
                   // notification_email → gerçek profiles.email → "eklenmedi".
                   // @lospia.local giriş yer tutucuları adres olarak gösterilmez.

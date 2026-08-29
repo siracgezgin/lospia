@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, ChevronRight, Plus, Trash2, UserPlus, UserMinus } from "lucide-react";
+import { Building2, ChevronRight, Plus, Trash2, UserPlus, UserMinus, Pencil } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import type { WorkspaceDepartment, DepartmentMember, WorkspaceMember, Profile } from "@/types";
 import { Avatar, AvatarGroup } from "@/components/ui/Avatar";
@@ -17,6 +17,7 @@ import {
   deleteDepartment,
   addDepartmentMember,
   removeDepartmentMember,
+  updateDepartment,
 } from "@/lib/actions/departments";
 
 type MemberRow = WorkspaceMember & { profiles?: Partial<Profile> | null };
@@ -144,6 +145,26 @@ function DeptCard({
 }) {
   const [open, setOpen] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
+  /* YENİDEN ADLANDIRMA — satırda yalnız çöp kutusu vardı; adı düzeltmenin tek
+     yolu silip yeniden açmaktı, o da içindeki üyeleri kaybettiriyordu
+     (2026-08-29). Çip yerinde inputa dönüşür; sayfanın tepesinde tam genişlik
+     bir kutu açmak düzenlenen departmandan metrelerce uzaktı. */
+  const [renaming, setRenaming] = useState(false);
+  const [draftName, setDraftName] = useState(dept.name);
+  const [savingName, startRename] = useTransition();
+
+  function commitRename() {
+    const clean = draftName.trim();
+    setRenaming(false);
+    if (!clean || clean === dept.name) {
+      setDraftName(dept.name);
+      return;
+    }
+    startRename(async () => {
+      await updateDepartment(dept.id, { name: clean });
+      router.refresh();
+    });
+  }
   const [removeTarget, setRemoveTarget] = useState<{ id: string; name: string } | null>(null);
   const [pendingRemove, startTransition] = useTransition();
   const router = useRouter();
@@ -179,24 +200,49 @@ function DeptCard({
           size={14}
           className={`text-subtle transition-transform duration-200 ease-standard shrink-0 ${open ? "rotate-90" : ""}`}
         />
-        <span className={cn("inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-full ring-1", badge.chip, badge.ring)}>
-          <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", badge.dot)} />
-          {dept.name}
-        </span>
+        {renaming ? (
+          <input
+            autoFocus
+            value={draftName}
+            onChange={(e) => setDraftName(e.target.value)}
+            onClick={(e) => e.stopPropagation()}
+            onBlur={commitRename}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitRename();
+              if (e.key === "Escape") { setDraftName(dept.name); setRenaming(false); }
+            }}
+            aria-label="Departman adı"
+            className="h-7 min-w-0 flex-1 rounded-control border border-brand-ring bg-surface px-2 text-xs font-semibold text-ink focus:outline-none focus:ring-2 focus:ring-brand-ring/40"
+          />
+        ) : (
+          <span className={cn("inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-full ring-1", badge.chip, badge.ring, savingName && "opacity-60")}>
+            <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", badge.dot)} />
+            {dept.name}
+          </span>
+        )}
         {aggregateMembers.length > 0 && (
           <div className="flex items-center gap-1.5 ml-auto">
             <AvatarGroup names={aggregateMembers.map((dm) => getPersonDisplayName(dm.profiles ?? dm.member_id.slice(0, 8)))} max={4} />
             <span className="text-xs text-subtle tabular-nums whitespace-nowrap">{aggregateMembers.length} kişi</span>
           </div>
         )}
-        {canManage && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onDelete(dept.id); }}
-            className="p-1 text-subtle hover:text-danger hover:bg-danger/10 rounded-md ml-1 shrink-0 active:scale-95 transition-colors duration-150"
-            title="Sil"
-          >
-            <Trash2 size={12} />
-          </button>
+        {canManage && !renaming && (
+          <div className="ml-1 flex shrink-0 items-center gap-0.5">
+            <button
+              onClick={(e) => { e.stopPropagation(); setDraftName(dept.name); setRenaming(true); }}
+              className="rounded-md p-1 text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-95"
+              title="Yeniden adlandır"
+            >
+              <Pencil size={12} />
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(dept.id); }}
+              className="rounded-md p-1 text-subtle transition-colors duration-150 hover:bg-danger/10 hover:text-danger active:scale-95"
+              title="Sil"
+            >
+              <Trash2 size={12} />
+            </button>
+          </div>
         )}
       </div>
 
