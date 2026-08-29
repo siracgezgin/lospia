@@ -103,7 +103,7 @@ export function Tile({
           !row && (compact ? "ring-[color:var(--tile-ring)]" : "ring-white/70"),
           /* Telefonda bir kademe küçük: 375px ekranda iki sütun × 96px ikon
              kartı taşırıyor, başlık iki satıra sarıyordu. */
-          !row && (compact ? "size-10 sm:size-11" : "size-16 sm:size-24"),
+          !row && (compact ? "size-9 sm:size-10" : "size-16 sm:size-24"),
           !st && "bg-surface-sunken text-muted",
         )}
         style={st ? { backgroundColor: st.hex + "1A", color: st.hex, ["--tile-ring" as string]: st.hex + "59" } : undefined}
@@ -116,11 +116,11 @@ export function Tile({
             className="h-full w-full object-cover transition-transform duration-300 ease-standard group-hover:scale-[1.04]"
           />
         ) : initials ? (
-          <span className={cn("font-semibold tracking-tight", compact ? "text-[14px]" : "text-[28px]")}>
+          <span className={cn("font-semibold tracking-tight", compact ? "text-[12.5px]" : "text-[28px]")}>
             {initials}
           </span>
         ) : Icon ? (
-          <Icon size={row ? 17 : compact ? 18 : 30} strokeWidth={row ? 1.9 : 1.6} className={cn(!row && !compact && "sm:size-[34px]")} />
+          <Icon size={row ? 17 : compact ? 16 : 30} strokeWidth={row ? 1.9 : 1.6} className={cn(!row && !compact && "sm:size-[34px]")} />
         ) : null}
       </span>
       {iconBadge && (
@@ -134,7 +134,7 @@ export function Tile({
         <span
           className={cn(
             "block truncate font-semibold tracking-tight text-ink",
-            row ? "text-[13.5px]" : compact ? "text-[12px] sm:text-[13px]" : "text-[16px] sm:text-[19px]",
+            row ? "text-[13.5px]" : compact ? "text-[11px] sm:text-[11.5px] leading-tight" : "text-[16px] sm:text-[19px]",
           )}
           title={title}
         >
@@ -163,8 +163,8 @@ export function Tile({
       ? "items-center gap-2.5 rounded-xl px-3 py-2.5 text-left"
       : cn(
           "flex-col items-center text-center",
-          compact ? "rounded-2xl" : "rounded-2xl",
-          compact ? "gap-1.5 px-1.5 pb-2.5 pt-3" : "gap-2.5 px-3 pb-5 pt-6 sm:gap-3 sm:px-4 sm:pb-6 sm:pt-8",
+          compact ? "rounded-xl" : "rounded-2xl",
+          compact ? "gap-1 px-1 pb-2 pt-2.5" : "gap-2.5 px-3 pb-5 pt-6 sm:gap-3 sm:px-4 sm:pb-6 sm:pt-8",
         ),
     "hover:-translate-y-0.5 hover:shadow-card-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
     !st && "border-line hover:border-line-strong",
@@ -230,7 +230,11 @@ export function TileGrid({
             /* KOMPAKT: telefonda kartlar küçülüp yan yana dizilsin
                (2026-08-29: "mobil için Reports'ta daha küçük, yan yana,
                minimal olsun"). 88px → 390px ekranda dört sütun. */
-            ? "grid-cols-[repeat(auto-fill,minmax(84px,1fr))] gap-2 sm:grid-cols-[repeat(auto-fill,minmax(104px,1fr))] sm:gap-2.5"
+            /* Ekip büyüdükçe kart sayısı artar; kartın kendisi küçük kalmalı
+               ki hepsi tek bakışta sığsın (2026-08-29: "başka isimler de
+               gelecek, o yüzden sığsın"). 72px → 390px telefonda beş sütun,
+               1200px'lik içerikte on beş. */
+            ? "grid-cols-[repeat(auto-fill,minmax(72px,1fr))] gap-1.5 sm:grid-cols-[repeat(auto-fill,minmax(84px,1fr))] sm:gap-2"
             : "grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 lg:gap-5",
         className,
       )}
