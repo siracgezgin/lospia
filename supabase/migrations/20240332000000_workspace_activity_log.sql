@@ -16,7 +16,10 @@
 create table if not exists public.workspace_activity_logs (
   id           uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references public.workspaces(id) on delete cascade,
-  actor_id     uuid references auth.users(id) on delete set null,
+  -- profiles'a bağlanır, auth.users'a DEĞİL: günlük satırı okunurken kişinin
+  -- adı gömülü ilişkiyle geliyor (PostgREST embed iki PUBLIC tablo arasında
+  -- doğrudan bir FK ister). task_activity_logs da böyle kurulmuştu.
+  actor_id     uuid references public.profiles(id) on delete set null,
   -- 'sheet_downloaded' | 'sheet_deleted' | 'category_deleted' …
   action       text not null,
   -- 'production_sheet' | 'category' | 'document' | 'folder' | 'contact' …
@@ -62,3 +65,10 @@ create policy wal_insert on public.workspace_activity_logs
 
 grant select, insert on public.workspace_activity_logs to authenticated;
 grant all on public.workspace_activity_logs to service_role;
+
+-- Daha önce auth.users'a bağlanmış bir sürüm uygulanmışsa kısıtı taşı.
+alter table public.workspace_activity_logs
+  drop constraint if exists workspace_activity_logs_actor_id_fkey;
+alter table public.workspace_activity_logs
+  add constraint workspace_activity_logs_actor_id_fkey
+  foreign key (actor_id) references public.profiles(id) on delete set null;

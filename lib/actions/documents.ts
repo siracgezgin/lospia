@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import type { AppRole } from "@/lib/auth/permissions";
 import { toActionErrorMessage } from "@/lib/utils/supabase-errors";
+import { logWorkspaceActivity, WORKSPACE_ACTIONS } from "@/lib/activity/log-workspace-activity";
 import { sanitizeRichText } from "@/lib/office/sanitize-html";
 
 // Doküman Merkezi — a link/metadata registry (no file storage). Unlike the
@@ -211,6 +212,15 @@ export async function deleteOperationDocument(
     if (editable.status !== "draft") return { error: PERM_DENIED };
   }
 
+  /* Silinen kaydın ADI önce okunur — satır gittikten sonra günlükte okunur
+     tek iz odur (2026-08-29). */
+  const { data: doomed } = await supabase
+    .from("operation_documents")
+    .select("title")
+    .eq("id", documentId)
+    .eq("workspace_id", ctx.workspaceId)
+    .maybeSingle();
+
   const { error } = await supabase
     .from("operation_documents")
     .delete()
@@ -218,6 +228,16 @@ export async function deleteOperationDocument(
     .eq("workspace_id", ctx.workspaceId);
 
   if (error) return { error: toActionErrorMessage(error) };
+
+  await logWorkspaceActivity(supabase, {
+    workspaceId: ctx.workspaceId,
+    actorId: ctx.userId,
+    action: WORKSPACE_ACTIONS.DOCUMENT_DELETED,
+    entityType: "document",
+    entityId: documentId,
+    entityLabel: (doomed as { title?: string } | null)?.title ?? null,
+  });
+
   revalidatePath("/documents");
   return { ok: true };
 }

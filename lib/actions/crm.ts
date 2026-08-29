@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { canManageContacts, type AppRole } from "@/lib/auth/permissions";
 import { toActionErrorMessage } from "@/lib/utils/supabase-errors";
+import { logWorkspaceActivity, WORKSPACE_ACTIONS } from "@/lib/activity/log-workspace-activity";
 
 // CRM v0 builds on the existing workspace_contacts table (used for task
 // responsible/contact mapping). These actions only touch the additive columns
@@ -49,7 +50,7 @@ type CrmFields = z.infer<typeof CrmFieldsSchema>;
 
 async function requireContactAdmin(
   supabase: Awaited<ReturnType<typeof createClient>>,
-): Promise<{ workspaceId: string } | { error: string }> {
+): Promise<{ workspaceId: string; userId: string } | { error: string }> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Kimlik doğrulama gerekli." };
   const { data: member } = await supabase
@@ -60,7 +61,7 @@ async function requireContactAdmin(
     .maybeSingle();
   if (!member) return { error: "Çalışma alanı bulunamadı." };
   if (!canManageContacts(member.role as AppRole)) return { error: PERM_DENIED };
-  return { workspaceId: member.workspace_id as string };
+  return { workspaceId: member.workspace_id as string, userId: user.id };
 }
 
 // Normalise empty strings → null so we never store "".
@@ -198,6 +199,13 @@ export async function deleteCrmContact(
   const ctx = await requireContactAdmin(supabase);
   if ("error" in ctx) return { error: ctx.error };
 
+  const { data: doomed } = await supabase
+    .from("workspace_contacts")
+    .select("name")
+    .eq("id", contactId)
+    .eq("workspace_id", ctx.workspaceId)
+    .maybeSingle();
+
   const { error } = await supabase
     .from("workspace_contacts")
     .delete()
@@ -205,6 +213,16 @@ export async function deleteCrmContact(
     .eq("workspace_id", ctx.workspaceId);
 
   if (error) return { error: toActionErrorMessage(error) };
+
+  await logWorkspaceActivity(supabase, {
+    workspaceId: ctx.workspaceId,
+    actorId: ctx.userId,
+    action: WORKSPACE_ACTIONS.CONTACT_DELETED,
+    entityType: "contact",
+    entityId: contactId,
+    entityLabel: (doomed as { name?: string } | null)?.name ?? null,
+  });
+
   revalidatePath("/crm");
   revalidatePath("/settings");
   return { ok: true };

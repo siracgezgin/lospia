@@ -15,6 +15,7 @@ import {
 } from "@/lib/actions/production";
 import { cn } from "@/lib/utils/cn";
 import { useConfirm } from "@/components/ui/useConfirm";
+import { DownloadLink } from "@/components/ui/DownloadLink";
 import { SendToManufacturer } from "./SendToManufacturer";
 import { ImageUploader } from "./ImageUploader";
 import { SheetReadiness } from "./SheetReadiness";
@@ -580,13 +581,15 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               sayfada ciksin ve her sey gorunsun… firmaya vereyim." Ekrandaki
               dort sekme kagitta tek parca olur. */}
           {!isNew && sheet && (
-            <a
+            <DownloadLink
               href={`/production/${sheet.id}/print`}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-muted shadow-xs transition-all duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
+              what={`“${sheet.title}” föyünün çıktısı`}
+              label="Çıktı al"
               title="Föyün tamamı tek A4 sayfada — yazdır veya PDF olarak kaydet"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-muted shadow-xs transition-all duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
             >
               <Printer size={15} /> <span className="hidden sm:inline">Tek sayfa çıktı</span>
-            </a>
+            </DownloadLink>
           )}
           {/* ÜRETİCİYE GÖNDER — Aslı Hanım (2026-08-28): "Üreticiye bu föy
               gidiyor. Aynı mail sistemiyle." Üretici uygulamaya girmez. */}
@@ -601,13 +604,14 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
             />
           )}
           {!isNew && sheet && (
-            <a
+            <DownloadLink
               href={`/production/${sheet.id}/export`}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-muted shadow-xs transition-all duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
+              what={`“${sheet.title}” föyünün Excel dosyası`}
               title="Föyü Excel (.xlsx) olarak indir"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-muted shadow-xs transition-all duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
             >
               <FileDown size={15} /> <span className="hidden sm:inline">Excel indir</span>
-            </a>
+            </DownloadLink>
           )}
           {SaveBtn}
         </div>

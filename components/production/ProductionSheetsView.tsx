@@ -9,6 +9,7 @@ import {
 import { archiveProductionSheet } from "@/lib/actions/production";
 import { cn } from "@/lib/utils/cn";
 import { useConfirm } from "@/components/ui/useConfirm";
+import { DownloadLink } from "@/components/ui/DownloadLink";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import type { ProductionSheet } from "@/types";
 
@@ -108,14 +109,15 @@ export function ProductionSheetsView({ sheets, isAdmin }: Props) {
         rightSlot={
           <div className="flex shrink-0 items-center gap-2">
             {sheets.some((s) => s.status !== "archived") && (
-              <a
+              <DownloadLink
                 href="/production/export-all"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-muted transition-colors hover:bg-surface-muted hover:text-ink"
+                what="Tüm föyler"
                 title="Tüm föyleri tek Excel dosyası olarak indir (her föy ayrı sekme)"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-muted transition-colors hover:bg-surface-muted hover:text-ink"
               >
                 <FileSpreadsheet size={15} />
                 Tümünü indir
-              </a>
+              </DownloadLink>
             )}
             <Link
               href="/production/new"
@@ -213,14 +215,14 @@ export function ProductionSheetsView({ sheets, isAdmin }: Props) {
 
                 {/* İndir / arşivle — fotoğrafın üstünde, yalnız fare gelince */}
                 <div className="absolute right-2 top-2 flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
-                  <a
+                  <DownloadLink
                     href={`/production/${s.id}/export`}
-                    onClick={(e) => e.stopPropagation()}
-                    className="rounded-md bg-surface/90 p-1.5 text-muted shadow-sm backdrop-blur transition-colors hover:text-ink"
+                    what={`“${s.title}” föyünün Excel dosyası`}
                     title="Föyü Excel (.xlsx) olarak indir"
+                    className="rounded-md bg-surface/90 p-1.5 text-muted shadow-sm backdrop-blur transition-colors hover:text-ink"
                   >
                     <FileDown size={13} />
-                  </a>
+                  </DownloadLink>
                   {isAdmin && s.status !== "archived" && (
                     <button
                       onClick={() => handleArchive(s)}

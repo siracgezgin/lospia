@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import type { AppRole } from "@/lib/auth/permissions";
 import { toActionErrorMessage } from "@/lib/utils/supabase-errors";
+import { logWorkspaceActivity, WORKSPACE_ACTIONS } from "@/lib/activity/log-workspace-activity";
 
 // Tablo Merkezi — embedded spreadsheets persisted as JSONB snapshots (no file
 // storage, no realtime collaboration). Metadata (title/type/status/relations)
@@ -269,6 +270,13 @@ export async function deleteOperationSpreadsheet(
     if (editable.status !== "draft") return { error: PERM_DENIED };
   }
 
+  const { data: doomed } = await supabase
+    .from("operation_spreadsheets")
+    .select("title")
+    .eq("id", sheetId)
+    .eq("workspace_id", ctx.workspaceId)
+    .maybeSingle();
+
   const { error } = await supabase
     .from("operation_spreadsheets")
     .delete()
@@ -276,7 +284,18 @@ export async function deleteOperationSpreadsheet(
     .eq("workspace_id", ctx.workspaceId);
 
   if (error) return { error: toActionErrorMessage(error) };
+
+  await logWorkspaceActivity(supabase, {
+    workspaceId: ctx.workspaceId,
+    actorId: ctx.userId,
+    action: WORKSPACE_ACTIONS.SPREADSHEET_DELETED,
+    entityType: "spreadsheet",
+    entityId: sheetId,
+    entityLabel: (doomed as { title?: string } | null)?.title ?? null,
+  });
+
   revalidatePath("/sheets");
+  revalidatePath("/documents");
   return { ok: true };
 }
 

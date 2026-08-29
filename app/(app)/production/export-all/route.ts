@@ -4,6 +4,7 @@
 import { NextResponse } from "next/server";
 import { requireModuleMember } from "@/lib/modules/context";
 import { buildAllProductionSheetsWorkbook } from "@/lib/production/xlsx";
+import { logWorkspaceActivity, WORKSPACE_ACTIONS } from "@/lib/activity/log-workspace-activity";
 import type { ProductionSheet } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +28,16 @@ export async function GET() {
   if (sheets.length === 0) {
     return NextResponse.json({ error: "İndirilecek föy yok." }, { status: 404 });
   }
+
+  /* Toplu indirme günlüğe yazılır: koleksiyonun TAMAMI tek dosyada dışarı
+     çıkıyor — kaydedilmesi gereken en ağır indirme budur (2026-08-29). */
+  await logWorkspaceActivity(supabase, {
+    workspaceId,
+    actorId: user.id,
+    action: WORKSPACE_ACTIONS.SHEETS_EXPORTED,
+    entityType: "production_sheet",
+    metadata: { count: sheets.length, format: "xlsx" },
+  });
 
   // Üye adları — alt bilgideki "oluşturan / son giren" için.
   const membersResult = await supabase

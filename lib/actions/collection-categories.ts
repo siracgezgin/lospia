@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { AppRole } from "@/lib/auth/permissions";
 import { COLLECTION_TAXONOMY } from "@/lib/collection/taxonomy";
 import { toActionErrorMessage } from "@/lib/utils/supabase-errors";
+import { logWorkspaceActivity, WORKSPACE_ACTIONS } from "@/lib/activity/log-workspace-activity";
 
 /**
  * KOLEKSİYON KATEGORİLERİ — ekle · yeniden adlandır · sil.
@@ -171,6 +172,17 @@ export async function createProductCategory(
     .single();
 
   if (error) return { error: toActionErrorMessage(error) };
+
+  await logWorkspaceActivity(supabase, {
+    workspaceId: ctx.workspaceId,
+    actorId: ctx.userId,
+    action: WORKSPACE_ACTIONS.CATEGORY_CREATED,
+    entityType: parentKey ? "subcategory" : "category",
+    entityId: key,
+    entityLabel: parsed.data.label.trim(),
+    metadata: parentKey ? { parent: parentKey } : {},
+  });
+
   revalidateAll();
   return { id: (data as { id: string }).id, key: (data as { key: string }).key };
 }
@@ -199,6 +211,16 @@ export async function renameProductCategory(
 
   if (error) return { error: toActionErrorMessage(error) };
   if (!count) return { error: NOT_FOUND };
+
+  await logWorkspaceActivity(supabase, {
+    workspaceId: ctx.workspaceId,
+    actorId: ctx.userId,
+    action: WORKSPACE_ACTIONS.CATEGORY_RENAMED,
+    entityType: "category",
+    entityId: key,
+    entityLabel: clean,
+  });
+
   revalidateAll();
   return {};
 }
@@ -242,6 +264,13 @@ export async function deleteProductCategory(
     return { error: "Önce alt kategorileri silin." };
   }
 
+  const { data: doomed } = await supabase
+    .from("workspace_product_categories")
+    .select("label")
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("key", key)
+    .maybeSingle();
+
   const { error, count } = await supabase
     .from("workspace_product_categories")
     .delete({ count: "exact" })
@@ -250,6 +279,16 @@ export async function deleteProductCategory(
 
   if (error) return { error: toActionErrorMessage(error) };
   if (!count) return { error: NOT_FOUND };
+
+  await logWorkspaceActivity(supabase, {
+    workspaceId: ctx.workspaceId,
+    actorId: ctx.userId,
+    action: WORKSPACE_ACTIONS.CATEGORY_DELETED,
+    entityType: "category",
+    entityId: key,
+    entityLabel: (doomed as { label?: string } | null)?.label ?? key,
+  });
+
   revalidateAll();
   return {};
 }

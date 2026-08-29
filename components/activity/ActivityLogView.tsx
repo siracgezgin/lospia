@@ -3,8 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  Plus, RefreshCw, CheckCircle2, RotateCcw, StickyNote, Users, Eye,
-  Flag, CalendarClock, Archive, Trash2, Award, Pencil, Activity as ActivityIcon,
+  Plus, RefreshCw, CheckCircle2, RotateCcw, StickyNote, Users, Eye, Flag, CalendarClock, Archive, Trash2, Award, Pencil, Activity as ActivityIcon, Download,
 } from "lucide-react";
 import { formatDateTimeTR, formatDateTR } from "@/lib/utils/format-date";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
@@ -70,6 +69,26 @@ const ACTION_META: Record<string, ActionMeta> = {
   points_finalized:             { label: "Puan",           verb: "puanı kesinleştirdi",            tone: "green",  icon: Award },
   points_revoked:               { label: "Puan",           verb: "kazanılan puanı geri aldı",      tone: "rose",   icon: Award },
   points_self_approval_skipped: { label: "Puan",           verb: "kendi onayı nedeniyle puan verilmedi", tone: "slate", icon: Award },
+
+  /* GÖREV DIŞI OLAYLAR (workspace_activity_logs, 20240332).
+     Sıraç (2026-08-29): "Bu indirme, silme kısımları da loglarda çıksın."
+     Föy indirmek ve kategori/klasör silmek bir göreve bağlı değil; ayrı bir
+     tabloda tutulur ama AYNI akışta okunur — denetim yaparken iki listeye
+     bakmak istemezsiniz. */
+  sheet_downloaded:     { label: "İndirme", verb: "föyü Excel olarak indirdi",   tone: "blue",  icon: Download },
+  sheets_exported:      { label: "İndirme", verb: "tüm föyleri indirdi",         tone: "blue",  icon: Download },
+  sheet_printed:        { label: "Çıktı",   verb: "föyün çıktısını aldı",        tone: "blue",  icon: Download },
+  file_downloaded:      { label: "İndirme", verb: "dosya indirdi",               tone: "blue",  icon: Download },
+  sheet_sent:           { label: "Gönderim", verb: "föyü üreticiye gönderdi",    tone: "violet", icon: Users },
+  sheet_deleted:        { label: "Silme",   verb: "föyü sildi",                  tone: "rose",  icon: Trash2 },
+  sheet_archived:       { label: "Arşiv",   verb: "föyü arşivledi",              tone: "slate", icon: Archive },
+  category_created:     { label: "Kategori", verb: "kategori açtı",              tone: "green", icon: Plus },
+  category_renamed:     { label: "Kategori", verb: "kategoriyi yeniden adlandırdı", tone: "slate", icon: Pencil },
+  category_deleted:     { label: "Silme",   verb: "kategoriyi sildi",            tone: "rose",  icon: Trash2 },
+  document_deleted:     { label: "Silme",   verb: "dokümanı sildi",              tone: "rose",  icon: Trash2 },
+  folder_deleted:       { label: "Silme",   verb: "klasörü sildi",               tone: "rose",  icon: Trash2 },
+  spreadsheet_deleted:  { label: "Silme",   verb: "tabloyu sildi",               tone: "rose",  icon: Trash2 },
+  contact_deleted:      { label: "Silme",   verb: "ilişki kaydını sildi",        tone: "rose",  icon: Trash2 },
 };
 
 const FALLBACK_META: ActionMeta = { label: "Güncelleme", verb: "görevi güncelledi", tone: "slate", icon: ActivityIcon };
@@ -79,7 +98,7 @@ function metaFor(action: string): ActionMeta {
 }
 
 // ── Filters (user-facing groups → action sets) ────────────────────────────────
-type FilterKey = "all" | "created" | "status" | "completed" | "assignment" | "date";
+type FilterKey = "all" | "created" | "status" | "completed" | "assignment" | "date" | "download" | "deleted";
 
 const FILTERS: { key: FilterKey; label: string; actions: string[]; icon: typeof Plus; tone: Tone }[] = [
   { key: "all",        label: "Tümü",                 actions: [],                                                                   icon: ActivityIcon, tone: "slate" },
@@ -88,6 +107,10 @@ const FILTERS: { key: FilterKey; label: string; actions: string[]; icon: typeof 
   { key: "completed",  label: "Tamamlananlar",         actions: ["task_completed", "participant_completed"],                         icon: CheckCircle2, tone: "green" },
   { key: "assignment", label: "Atamalar",              actions: ["assignee_changed", "responsible_contact_changed", "waiting_person_changed"], icon: Users, tone: "violet" },
   { key: "date",       label: "Tarih değişiklikleri",  actions: ["due_date_changed"],                                                icon: CalendarClock, tone: "amber" },
+  /* İki yeni süzgeç: denetimde en çok aranan iki soru "kim ne indirdi" ve
+     "kim ne sildi" (2026-08-29). */
+  { key: "download",   label: "İndirmeler",            actions: ["sheet_downloaded", "sheets_exported", "sheet_printed", "file_downloaded"], icon: Download, tone: "blue" },
+  { key: "deleted",    label: "Silmeler",              actions: ["sheet_deleted", "category_deleted", "document_deleted", "folder_deleted", "spreadsheet_deleted", "contact_deleted", "task_trashed"], icon: Trash2, tone: "rose" },
 ];
 
 // ── Change-detail extraction (old → new) ──────────────────────────────────────
@@ -132,7 +155,10 @@ export function ActivityLogView({ rows }: { rows: ActivityRow[] }) {
   const [filter, setFilter] = useState<FilterKey>("all");
 
   const counts = useMemo(() => {
-    const c: Record<FilterKey, number> = { all: rows.length, created: 0, status: 0, completed: 0, assignment: 0, date: 0 };
+    const c: Record<FilterKey, number> = {
+      all: rows.length, created: 0, status: 0, completed: 0, assignment: 0, date: 0,
+      download: 0, deleted: 0,
+    };
     for (const f of FILTERS) {
       if (f.key === "all") continue;
       c[f.key] = rows.filter((r) => f.actions.includes(r.action)).length;

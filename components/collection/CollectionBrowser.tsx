@@ -11,6 +11,7 @@ import {
 import { cn } from "@/lib/utils/cn";
 import { deleteProductionSheet } from "@/lib/actions/production";
 import { useConfirm } from "@/components/ui/useConfirm";
+import { DownloadLink, downloadIconCls } from "@/components/ui/DownloadLink";
 import { CollectionTabs } from "./PaymentTable";
 import { SeasonSwitch, type SwitchSeason } from "./SeasonSwitch";
 import { Tile, TileGrid } from "@/components/ui/TileGrid";
@@ -210,13 +211,14 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
                 Koleksiyon, Maliyet ve Ödeme Tablosu aynı seçime uyar. */}
             <SeasonSwitch seasons={seasons} />
             {visible.length > 0 && (
-              <a
+              <DownloadLink
                 href="/production/export-all"
-                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-[13px] font-medium text-muted transition-[background-color,border-color,color,transform] duration-150 ease-standard hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
+                what="Tüm föyler"
                 title="Tüm föyleri tek Excel dosyası olarak indir"
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-[13px] font-medium text-muted transition-[background-color,border-color,color,transform] duration-150 ease-standard hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
               >
                 <FileSpreadsheet size={15} /> <span className="hidden sm:inline">Tümünü indir</span>
-              </a>
+              </DownloadLink>
             )}
             {/* HİYERARŞİ: föy bir KATEGORİNİN altında doğar (2026-08-29:
                 "önce kategori… sonra o kategorinin içine girip föy
@@ -415,20 +417,25 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
                       Yazdır önce gelir: föyü üreticiye vermenin ana yolu artık
                       tek sayfalık kâğıt, Excel düzenleme/veri formatı. */}
                   <div className="absolute right-2 top-2 z-[2] flex items-center gap-1 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover:opacity-100">
-                    <a
+                    {/* İNDİRME ONAYI: dosya sistemin dışına çıkıyor ve
+                        günlüğe yazılıyor (2026-08-29). */}
+                    <DownloadLink
                       href={`/production/${s.id}/print`}
-                      className="tap-target rounded-md bg-surface/90 p-1.5 text-subtle shadow-sm backdrop-blur transition-[color,transform] duration-150 hover:text-ink active:scale-95"
+                      what={`“${s.title}” föyünün çıktısı`}
+                      label="Çıktı al"
                       title="Tek sayfa çıktı — yazdır veya PDF"
+                      className={downloadIconCls}
                     >
                       <Printer size={13} />
-                    </a>
-                    <a
+                    </DownloadLink>
+                    <DownloadLink
                       href={`/production/${s.id}/export`}
-                      className="tap-target rounded-md bg-surface/90 p-1.5 text-subtle shadow-sm backdrop-blur transition-[color,transform] duration-150 hover:text-ink active:scale-95"
+                      what={`“${s.title}” föyünün Excel dosyası`}
                       title="Föyü Excel olarak indir"
+                      className={downloadIconCls}
                     >
                       <FileDown size={13} />
-                    </a>
+                    </DownloadLink>
                     {/* SİLME katalogda da var: föyü silmek için tek tek açmak
                         gerekiyordu (2026-08-29: "föy düzenleme silme gibi
                         olması gereken ne varsa olmalı"). Onay penceresi

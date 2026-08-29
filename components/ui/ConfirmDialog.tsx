@@ -85,7 +85,11 @@ export function ConfirmDialog({
           <h2 className="text-[14.5px] font-semibold tracking-tight text-ink">{heading}</h2>
           {/* whitespace-pre-line: "Bu işlem geri alınamaz" ikinci satır olarak
               mesajın içinde \n ile geliyor. */}
-          <p className="whitespace-pre-line text-[13.5px] leading-relaxed text-muted">{message}</p>
+          {/* Mesaj İSTEĞE BAĞLI: bazı sorular tek satırda biter ("… indirilsin
+              mi?"). Boş bir paragraf yine de yer kaplıyordu. */}
+          {message.trim() && (
+            <p className="whitespace-pre-line text-[13.5px] leading-relaxed text-muted">{message}</p>
+          )}
         </div>
       </div>
     </Overlay>

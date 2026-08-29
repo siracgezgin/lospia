@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import type { AppRole } from "@/lib/auth/permissions";
 import { toActionErrorMessage } from "@/lib/utils/supabase-errors";
+import { logWorkspaceActivity, WORKSPACE_ACTIONS } from "@/lib/activity/log-workspace-activity";
 import { sendEmail } from "@/lib/email/send-email";
 import { buildSheetEmail } from "@/lib/production/sheet-email";
 import type { ProductionSheet, SheetMaterialWithMaterial } from "@/types";
@@ -493,6 +494,16 @@ export async function deleteProductionSheet(
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
 
+  /* Silinen kaydın ADI önce okunur: satır gittikten sonra günlükte okunur
+     tek iz odur (2026-08-29: "bu indirme, silme kısımları da loglarda
+     çıksın"). */
+  const { data: doomed } = await supabase
+    .from("production_sheets")
+    .select("title")
+    .eq("id", sheetId)
+    .eq("workspace_id", ctx.workspaceId)
+    .maybeSingle();
+
   const { error } = await supabase
     .from("production_sheets")
     .delete()
@@ -500,7 +511,18 @@ export async function deleteProductionSheet(
     .eq("workspace_id", ctx.workspaceId);
 
   if (error) return { error: toActionErrorMessage(error) };
+
+  await logWorkspaceActivity(supabase, {
+    workspaceId: ctx.workspaceId,
+    actorId: ctx.userId,
+    action: WORKSPACE_ACTIONS.SHEET_DELETED,
+    entityType: "production_sheet",
+    entityId: sheetId,
+    entityLabel: (doomed as { title?: string } | null)?.title ?? null,
+  });
+
   revalidatePath("/production");
+  revalidatePath("/collection");
   return { ok: true };
 }
 

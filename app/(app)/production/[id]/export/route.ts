@@ -5,6 +5,7 @@
 import { NextResponse } from "next/server";
 import { requireModuleMember } from "@/lib/modules/context";
 import { buildProductionSheetWorkbook } from "@/lib/production/xlsx";
+import { logWorkspaceActivity, WORKSPACE_ACTIONS } from "@/lib/activity/log-workspace-activity";
 import type { ProductionSheet } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +31,19 @@ export async function GET(
   }
 
   const sheet = data as unknown as ProductionSheet;
+
+  /* İNDİRME GÜNLÜĞE YAZILIR (2026-08-29). Dosya sistemin dışına çıkıyor ve
+     maliyeti, üreticiyi, ölçüleri taşıyor; kim indirdi sorusunun cevabı
+     olmalı. Günlük yazılamazsa indirme yine de sürer. */
+  await logWorkspaceActivity(supabase, {
+    workspaceId,
+    actorId: user.id,
+    action: WORKSPACE_ACTIONS.SHEET_DOWNLOADED,
+    entityType: "production_sheet",
+    entityId: sheet.id,
+    entityLabel: sheet.title,
+    metadata: { format: "xlsx" },
+  });
 
   // Üye adları — alt bilgideki "oluşturan / son giren" için.
   const membersResult = await supabase
