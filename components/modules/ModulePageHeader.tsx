@@ -59,7 +59,11 @@ export function ModulePageHeader({
       <h1 className="sr-only">{title}</h1>
       <BackLink href={backHref} />
       {rightSlot && (
-        <div className="-mx-1 flex w-full flex-wrap items-center gap-2 overflow-x-auto px-1 pb-0.5 sm:mx-0 sm:w-auto sm:shrink-0 sm:overflow-visible sm:px-0">
+        /* sm:ml-auto ŞART: BackLink kök sayfada hiç çizilmiyor ve satırda tek
+           çocuk kalıyor — `justify-between` tek çocuğu SOLA yaslıyordu. Aynı
+           kontrol bir sayfada sağda, diğerinde solda görünüyordu (2026-08-29:
+           "mantıksız olmuş, bir sağ bir sol"). */
+        <div className="-mx-1 flex w-full flex-wrap items-center gap-2 overflow-x-auto px-1 pb-0.5 sm:mx-0 sm:ml-auto sm:w-auto sm:shrink-0 sm:overflow-visible sm:px-0">
           {rightSlot}
         </div>
       )}

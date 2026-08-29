@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { CalendarToolbar } from "./CalendarToolbar";
 import {
   startOfYear, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   eachDayOfInterval, format, isSameMonth, isToday,
@@ -17,6 +18,8 @@ interface Props {
   loadByDay: Record<string, YearDayLoad>;
   /** Açılışta gösterilecek yıl. */
   initialYear: number;
+  /** Hafta/Ay/Yıl seçici — araç çubuğunun sağ ucuna konur. */
+  viewSwitch?: React.ReactNode;
 }
 
 const TR_MONTHS = [
@@ -32,7 +35,7 @@ const DOW = ["P", "S", "Ç", "P", "C", "C", "P"];
  * bakabilmek ("geçen ay hangi gün ne yaptık"): bir güne tıklayınca o gün Ay
  * görünümünde açılır, bir aya tıklayınca o ay açılır.
  */
-export function CalendarYearView({ loadByDay, initialYear }: Props) {
+export function CalendarYearView({ loadByDay, initialYear, viewSwitch }: Props) {
   const router = useRouter();
   const [year, setYear] = useState(initialYear);
 
@@ -70,9 +73,10 @@ export function CalendarYearView({ loadByDay, initialYear }: Props) {
   const goDay = (iso: string) => router.push(`/planning?v=ay&d=${iso}`);
 
   return (
-    <section className="anim-fade">
-      {/* Yıl gezgini */}
-      <div className="mb-3 flex flex-wrap items-center gap-2">
+    <section className="anim-fade flex h-full min-h-0 flex-col">
+      {/* Yıl gezgini — hafta ve ay görünümleriyle AYNI çubuk gövdesi
+          (2026-08-29: "hepsi aynı yerde olsun"). */}
+      <CalendarToolbar viewSwitch={viewSwitch}>
         <div className="inline-flex h-9 items-stretch overflow-hidden rounded-lg border border-line bg-surface">
           <button
             onClick={() => setYear((y) => y - 1)}
@@ -98,14 +102,14 @@ export function CalendarYearView({ loadByDay, initialYear }: Props) {
         >
           Bu yıl
         </button>
-        <span className="ml-auto text-[12.5px] tabular-nums text-subtle">
+        <span className="hidden text-[12.5px] tabular-nums text-subtle sm:inline">
           <b className="font-semibold text-ink">{yearTotals.meetings}</b> toplantı ·{" "}
           <b className="font-semibold text-ink">{yearTotals.tasks}</b> görev
         </span>
-      </div>
+      </CalendarToolbar>
 
       {/* 12 mini ay — telefonda 1, tablette 2-3, masaüstünde 4 sütun */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid min-h-0 flex-1 gap-3 overflow-auto p-3 sm:grid-cols-2 sm:p-4 lg:grid-cols-3 xl:grid-cols-4">
         {months.map(({ monthStart, days }, mi) => (
           <div key={mi} className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">
             <button

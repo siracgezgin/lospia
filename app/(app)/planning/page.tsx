@@ -79,6 +79,12 @@ export default async function CalendarPage({
     }
   }
 
+  /* Ölçek seçici (Hafta/Ay/Yıl) BU BAŞLIKTA DEĞİL: her görünüm onu kendi araç
+     çubuğunun sağ ucunda çiziyor. Burada dururken hafta görünümünde sağda,
+     ay görünümünde ayrı bir satırda solda kalıyordu — aynı kontrol sayfadan
+     sayfaya yer değiştiriyordu (2026-08-29: "mantıksız olmuş, bir sağ bir
+     sol"). JSX ÖZNİTELİKLERİ ARASINA yorum yazılmaz: Turbopack derlemeyi
+     orada kırıyor (next build'in SWC'si sessizce geçiyor). */
   const header = (
     <ModulePageHeader
       title="Calendar"
@@ -92,7 +98,6 @@ export default async function CalendarPage({
             : "Yıl görünümü — 12 ay bir arada; bir güne tıklayınca o gün açılır."
       }
       icon={CalendarRange}
-      rightSlot={<CalendarViewSwitch scale={scale} />}
     />
   );
 
@@ -129,9 +134,13 @@ export default async function CalendarPage({
 
     if (scale === "ay") {
       return (
-        <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
-          {header}
+        /* HAFTA İLE AYNI KABUK: tam yükseklik, sayfa dolgusu yok — araç
+           çubuğu her ölçekte ekranın aynı yerinde başlar. Dolgu artık
+           görünümün GÖVDESİNDE (bkz. CalendarView embedded). */
+        <div className="flex h-full min-h-0 w-full flex-col">
+          <h1 className="sr-only">Calendar</h1>
           <CalendarView
+            viewSwitch={<CalendarViewSwitch scale={scale} />}
             embedded
             initialDate={sp.d ?? null}
             tasks={tasks}
@@ -172,9 +181,13 @@ export default async function CalendarPage({
     }
 
     return (
-      <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
-        {header}
-        <CalendarYearView loadByDay={loadByDay} initialYear={focusYear} />
+      <div className="flex h-full min-h-0 w-full flex-col">
+        <h1 className="sr-only">Calendar</h1>
+        <CalendarYearView
+          loadByDay={loadByDay}
+          initialYear={focusYear}
+          viewSwitch={<CalendarViewSwitch scale={scale} />}
+        />
       </div>
     );
   }

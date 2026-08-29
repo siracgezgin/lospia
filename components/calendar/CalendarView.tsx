@@ -21,6 +21,7 @@ import { tr } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, X, Plus, CalendarDays, ChevronDown, Lock } from "lucide-react";
 import type { TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceDepartment } from "@/types";
 import { cn } from "@/lib/utils/cn";
+import { CalendarToolbar } from "@/components/planning/CalendarToolbar";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
 import { buildDeptMeta } from "@/lib/utils/departments";
 import { getDepartmentCardStyle } from "@/lib/design/semantics";
@@ -48,6 +49,8 @@ interface Props {
   /** Calendar'ın "Ay" sekmesi olarak gömülü çalışır: kendi başlığını ve
    *  dış boşluğunu çizmez (sayfa başlığı zaten üstte). */
   embedded?: boolean;
+  /** Hafta/Ay/Yıl seçici — araç çubuğunun sağ ucuna konur. */
+  viewSwitch?: React.ReactNode;
   /** Açılışta gösterilecek gün (yyyy-MM-dd) — Yıl görünümünden gelen atlama. */
   initialDate?: string | null;
 }
@@ -192,7 +195,17 @@ function MonthYearPicker({ value, onChange }: { value: Date; onChange: (d: Date)
   );
 }
 
-export function CalendarView({ tasks, workspaceId, profiles, contacts, departments = [], members = [], deptMembers = [], isAdmin = false, embedded = false, initialDate = null }: Props) {
+/** Araç çubuğu kabuğu — gömülüyken ortak `CalendarToolbar`, değilken düz satır. */
+function ToolbarShell({
+  embedded, viewSwitch, children,
+}: { embedded: boolean; viewSwitch?: React.ReactNode; children: React.ReactNode }) {
+  if (embedded && viewSwitch) {
+    return <CalendarToolbar viewSwitch={viewSwitch}>{children}</CalendarToolbar>;
+  }
+  return <div className="flex shrink-0 flex-wrap items-center gap-3">{children}</div>;
+}
+
+export function CalendarView({ tasks, workspaceId, profiles, contacts, departments = [], members = [], deptMembers = [], isAdmin = false, embedded = false, initialDate = null, viewSwitch }: Props) {
   const deptMeta = buildDeptMeta(departments);
   const dotFor = (t: CalTask) => {
     if (t.status === "done") return "bg-success";
@@ -244,7 +257,7 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
   // Server / pre-hydration skeleton — same outer shape so layout doesn't jump.
   if (!mounted) {
     return (
-      <div className={cn("flex flex-col gap-4", embedded ? "min-h-[70vh]" : "p-4 sm:p-6 h-full")}>
+      <div className={cn("flex flex-col", embedded ? "h-full min-h-0 gap-0" : "h-full gap-4 p-4 sm:p-6")}>
         {!embedded && (
           <div className="flex items-center gap-3 shrink-0">
             <h1 className="text-2xl font-semibold tracking-tight text-ink">Calendar</h1>
@@ -256,11 +269,15 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
   }
 
   return (
-    <div className={cn("flex flex-col gap-4", embedded ? "min-h-[70vh]" : "p-4 sm:p-6 h-full")}>
+    <div className={cn("flex flex-col", embedded ? "h-full min-h-0 gap-0" : "h-full gap-4 p-4 sm:p-6")}>
       {/* Header — a single month/year control next to the title (no duplicates).
           The month label itself opens the month/year picker for jumping ahead.
           Gömülü modda başlık üstteki sayfa başlığıdır; burada tekrar edilmez. */}
-      <div className="flex items-center gap-3 flex-wrap shrink-0">
+      {/* Gömülü modda (Calendar sayfası) araç çubuğu HAFTA GÖRÜNÜMÜYLE AYNI
+          gövdedir: solda gezinme, sağda ölçek seçici, üstte tek çerçeveli bar
+          (2026-08-29: "hepsi aynı yerde olsun"). Tek başına kullanıldığında
+          eski serbest satır korunur. */}
+      <ToolbarShell embedded={embedded} viewSwitch={viewSwitch}>
         {!embedded && <h1 className="text-2xl font-semibold tracking-tight text-ink">Calendar</h1>}
 
         {/* Prev · clickable month/year picker · next.
@@ -298,10 +315,10 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
         >
           Bugün
         </button>
-      </div>
+      </ToolbarShell>
 
       {/* Body: calendar grid + agenda side panel */}
-      <div className="flex gap-4 flex-1 min-h-0">
+      <div className={cn("flex min-h-0 flex-1 gap-4", embedded && "p-3 sm:p-4")}>
         {/* Calendar */}
         <div className="flex-1 min-w-0 flex flex-col bg-surface rounded-xl border border-line shadow-card overflow-hidden">
           {/* Day-of-week headers */}

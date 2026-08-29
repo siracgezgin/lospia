@@ -5,12 +5,12 @@ import { useRouter } from "next/navigation";
 import { format, parseISO, addDays, subDays } from "date-fns";
 import { tr } from "date-fns/locale";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { BackLink } from "@/components/modules/BackLink";
 import { TOPIC_ROWS, WEEKDAY_LONG_TR, type RuntimeBand } from "@/lib/planning/bands";
 import { MeetingEditor } from "./MeetingEditor";
 import { PlanningWeekGrid } from "./PlanningWeekGrid";
 import { PlanningDayList } from "./PlanningDayList";
 import { CalendarViewSwitch } from "./CalendarViewSwitch";
+import { CalendarToolbar } from "./CalendarToolbar";
 import type { Member } from "./MemberMultiSelect";
 import type { PlanningMeetingWithTopics, PlanningTopic } from "@/types";
 
@@ -127,39 +127,30 @@ export function PlanningBoard({
        başlığı zaten uygulama çubuğu yazıyordu. Yerine tek satırlık ince bir
        araç çubuğu geldi; ızgara kalan yüksekliğin TAMAMINI alıyor. */
     <div className="flex h-full min-h-0 w-full flex-col">
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-hairline bg-surface px-3 py-1.5 sm:px-4">
-        <BackLink />
-        <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2">
-          {/* SIRA: hafta gezinme solda, ölçek seçici EN SAĞDA — Aslı Hanım
-              (2026-08-24): "Hafta / Ay / Yıl yazısı en köşede olsun." */}
-          {/* h-9: uygulamadaki TÜM araç çubuğu kontrolleri bu yükseklikte.
-              Burası h-8'di, yanındaki ölçek seçici h-9 — iki düğme yan yana
-              farklı boydaydı (2026-08-29: "neden hiçbiri eşit değil"). */}
-          <div className="inline-flex h-9 shrink-0 items-stretch overflow-hidden rounded-lg border border-line bg-surface">
-            <button
-              onClick={() => gotoWeek(format(subDays(parseISO(weekStart), 7), "yyyy-MM-dd"))}
-              className="inline-flex w-9 items-center justify-center text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
-              title="Önceki hafta" aria-label="Önceki hafta"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <button
-              onClick={() => gotoWeek(format(new Date(), "yyyy-MM-dd"))}
-              className="whitespace-nowrap border-x border-line px-3 text-[13px] font-medium text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
-            >
-              Bu hafta
-            </button>
-            <button
-              onClick={() => gotoWeek(format(addDays(parseISO(weekStart), 7), "yyyy-MM-dd"))}
-              className="inline-flex w-9 items-center justify-center text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
-              title="Sonraki hafta" aria-label="Sonraki hafta"
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
-          <CalendarViewSwitch scale="hafta" />
+      <CalendarToolbar viewSwitch={<CalendarViewSwitch scale="hafta" />}>
+        <div className="inline-flex h-9 shrink-0 items-stretch overflow-hidden rounded-lg border border-line bg-surface">
+          <button
+            onClick={() => gotoWeek(format(subDays(parseISO(weekStart), 7), "yyyy-MM-dd"))}
+            className="inline-flex w-9 items-center justify-center text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
+            title="Önceki hafta" aria-label="Önceki hafta"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <button
+            onClick={() => gotoWeek(format(new Date(), "yyyy-MM-dd"))}
+            className="whitespace-nowrap border-x border-line px-3 text-[13px] font-medium text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
+          >
+            Bu hafta
+          </button>
+          <button
+            onClick={() => gotoWeek(format(addDays(parseISO(weekStart), 7), "yyyy-MM-dd"))}
+            className="inline-flex w-9 items-center justify-center text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
+            title="Sonraki hafta" aria-label="Sonraki hafta"
+          >
+            <ChevronRight size={16} />
+          </button>
         </div>
-      </div>
+      </CalendarToolbar>
 
       <div className="min-h-0 flex-1 overflow-auto p-2 sm:p-3 lg:overflow-hidden lg:p-3">
       {/* Sayfada tek blok var: takvim. Numaralı başlık ("1 — Haftalık Toplantı

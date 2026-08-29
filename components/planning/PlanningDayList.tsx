@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { format, parseISO } from "date-fns";
 import { tr } from "date-fns/locale";
-import { CheckCircle2, Pencil, Plus } from "lucide-react";
+import { CheckCircle2, Clock, Pencil, Plus } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { categoryMeta } from "@/lib/planning/categories";
 import { WEEKDAY_LONG_TR, WEEKDAY_SHORT_TR, type RuntimeBand } from "@/lib/planning/bands";
+import { BandEditor } from "./BandEditor";
 import { istanbulLabel, AWAY_LABEL } from "@/lib/planning/timezones";
 import { KimBadges } from "./KimBadges";
 import type { PlanningMeetingWithTopics, PlanningTopic } from "@/types";
@@ -40,6 +41,20 @@ export function PlanningDayList({
   const todayIdx = weekDays.indexOf(todayIso);
   const [dayIdx, setDayIdx] = useState(todayIdx >= 0 ? todayIdx : 0);
   const iso = weekDays[dayIdx] ?? weekDays[0];
+
+  /* ŞERİT DÜZENLEME dar ekranda hiç yoktu: "Saat ekle" ve şeridin kalemi
+     yalnız masaüstü ızgarasındaydı (2026-08-29: "Saat ekle nerede?").
+     Telefondan bakan biri yeni bir saat açamıyor, var olanın adını ya da
+     saatini değiştiremiyordu — oysa şerit haftanın iskeleti.
+     `null` kapalı · `"new"` yeni saat · başka bir değer o şeridin SAATİ.
+     Kimlik olarak `band.id` KULLANILMAZ: tablo henüz doldurulmamışken kod
+     varsayılanlarının hepsinde id `null`'dır ve tek kaleme basınca bütün
+     şeritler açılırdı. Saat listede tekildir (masaüstü ızgarası da satır
+     anahtarını böyle kuruyor). */
+  const [editingBand, setEditingBand] = useState<string | null>(null);
+  /* Saat çevirimi (NY → İstanbul) haftanın ilk gününe göre yapılır —
+     masaüstü ızgarasıyla aynı kaynak. */
+  const weekRefDay = weekDays[0];
 
   /* Saatler KRONOLOJİK — masaüstü ızgarasıyla aynı sıra. Şerit dışı saat
      (elle girilmiş 11:11) listenin dibine düşmez, yerine oturur. */
@@ -114,10 +129,18 @@ export function PlanningDayList({
           // Boş şeridi üyeye gösterme — yönetici ekleyebilsin diye ona kalır.
           if (!title && !content && topics.length === 0 && !isAdmin) return null;
 
+          if (isAdmin && band && editingBand === slot) {
+            return (
+              <div key={slot} className="overflow-hidden rounded-xl border border-brand-ring bg-surface shadow-card">
+                <BandEditor band={band} refDay={weekRefDay} onClose={() => setEditingBand(null)} />
+              </div>
+            );
+          }
+
           return (
             <section
               key={slot}
-              className="overflow-hidden rounded-xl border border-line bg-surface shadow-card"
+              className="relative overflow-hidden rounded-xl border border-line bg-surface shadow-card"
             >
               <button
                 onClick={isAdmin ? () => onOpen(iso, slot, dayIdx) : undefined}
@@ -152,8 +175,21 @@ export function PlanningDayList({
                     </span>
                   )}
                 </span>
-                {isAdmin && <Pencil size={13} className="mt-0.5 shrink-0 text-ink/35" />}
               </button>
+
+              {/* Şeridi düzenle — toplantı açan gövdeden AYRI bir düğme.
+                  İç içe <button> geçersiz HTML'dir, bu yüzden kardeş olarak
+                  ve mutlak konumda durur. */}
+              {isAdmin && band && (
+                <button
+                  onClick={() => setEditingBand(slot)}
+                  title={`${band.label || meta.label} — saati ve adını düzenle`}
+                  aria-label="Şeridi düzenle"
+                  className="absolute right-1.5 top-1.5 rounded-md p-1.5 text-ink/35 transition-colors duration-150 hover:bg-surface/70 hover:text-ink"
+                >
+                  <Pencil size={13} />
+                </button>
+              )}
 
               {topics.length > 0 ? (
                 <ol className="divide-y divide-hairline">
@@ -191,6 +227,29 @@ export function PlanningDayList({
             </section>
           );
         })}
+
+        {/* SAAT EKLE — listenin sonunda, masaüstü ızgarasındaki düğmenin
+            karşılığı. Şerit haftanın iskeletidir; telefondan bakan biri de
+            yeni bir saat açabilmeli (2026-08-29: "Saat ekle nerede?"). */}
+        {isAdmin && (
+          editingBand === "new" ? (
+            <div className="overflow-hidden rounded-xl border border-brand-ring bg-surface shadow-card">
+              <BandEditor
+                band={{ id: null, slot: "13:00", category: "other", label: "", topicRows: 3, columns: [] }}
+                refDay={weekRefDay}
+                onClose={() => setEditingBand(null)}
+              />
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setEditingBand("new")}
+              className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-line bg-surface/60 py-2.5 text-[12.5px] font-medium text-subtle transition-colors duration-150 hover:border-brand-ring hover:bg-brand-soft/30 hover:text-brand"
+            >
+              <Clock size={13} /> Saat ekle
+            </button>
+          )
+        )}
       </div>
     </div>
   );
