@@ -15,6 +15,8 @@ export type GridPerson = {
   name: string;
   avatarUrl?: string | null;
   isAdmin?: boolean;
+  /** Ayarlar'dan girilen ünvan (20240323). Boşsa rolden türetilen etiket. */
+  jobTitle?: string | null;
 };
 
 interface Props {
@@ -138,8 +140,13 @@ export function PeopleGrid({ people, meKey, onPick, onShowAll, choices }: Props)
                   <span className="block truncate text-[19px] font-semibold tracking-tight text-ink" title={p.name}>
                     {getPersonDisplayName(p.name)}
                   </span>
+                  {/* ÜNVAN — sistem rolü DEĞİL. Aslı Hanım (2026-08-28):
+                      "Bana da tasarımcı yazarsan; ben yönetici olmak
+                      istemiyorum çünkü." Rol bir izin ayarıdır; kartta kişinin
+                      kendi ünvanı yazar. Ünvan girilmemişse eski etikete
+                      düşülür, kart hiçbir zaman boş kalmaz. */}
                   <span className="mt-1 block text-[13px] text-muted">
-                    {isMe ? "Ben" : p.isAdmin ? "Yönetici" : "Ekip"}
+                    {p.jobTitle?.trim() || (isMe ? "Ben" : p.isAdmin ? "Yönetici" : "Ekip")}
                   </span>
                 </span>
               </button>

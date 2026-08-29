@@ -5,6 +5,9 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import type { AppRole } from "@/lib/auth/permissions";
 import { toActionErrorMessage } from "@/lib/utils/supabase-errors";
+import { sendEmail } from "@/lib/email/send-email";
+import { buildSheetEmail } from "@/lib/production/sheet-email";
+import type { ProductionSheet, SheetMaterialWithMaterial } from "@/types";
 
 // Üretim Föyü — yapısal üretim föyleri (production_sheets). Her ürün bir föy;
 // ekip üyeleri (Gül, Selen) AYNI föye veri girebilir. "Kim girdi" föy düzeyinde:
@@ -72,6 +75,9 @@ const pricing = z.object({
   // hesaplamaktır." İkisi AYRI alanlarda yaşar.
   cost_items: z.array(costItem).max(20).optional(),
   usta_unit_payment: z.string().max(40).optional(),
+  // Fatura karşılığı (2026-08-28) — muhasebe eşleştirmesi için.
+  invoice_no: z.string().max(60).optional(),
+  invoice_amount: z.string().max(40).optional(),
 });
 
 const SheetSchema = z.object({
@@ -571,4 +577,98 @@ export async function deleteProductionSheetImage(
   const { error } = await supabase.storage.from(IMAGE_BUCKET).remove([path]);
   if (error) return { error: error.message };
   return { ok: true };
+}
+
+// ── Föyü ÜRETİCİYE MAİLLE gönder ────────────────────────────────────────────
+//
+// Aslı Hanım (2026-08-28): "Üreticiye bu föy gidiyor. Aynı mail sistemiyle."
+// Sıraç üreticiye sistem erişimi vermeyi önerdi, Aslı reddetti: "Bence mail
+// olarak gitmesiyle başta daha sağlıklı yani." Üretici uygulamaya GİRMEZ.
+//
+// Ustanın e-postası usta kaydından gelir; yoksa gönderen elle yazabilir —
+// atölyenin mail adresi yüzünden föy gönderilemez olmasın.
+
+const SendSheetSchema = z.object({
+  to: z.string().max(320).email("Geçerli bir e-posta adresi girin.").optional().or(z.literal("")),
+  note: z.string().max(2000).optional(),
+});
+
+export async function sendSheetToManufacturer(
+  sheetId: string,
+  input: { to?: string; note?: string },
+): Promise<{ ok: true; to: string } | { error: string }> {
+  const parsed = SendSheetSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+
+  const { data: sheetRow, error: sheetErr } = await supabase
+    .from("production_sheets")
+    .select("*")
+    .eq("id", sheetId)
+    .eq("workspace_id", ctx.workspaceId)
+    .maybeSingle();
+  if (sheetErr) return { error: toActionErrorMessage(sheetErr) };
+  if (!sheetRow) return { error: NOT_FOUND };
+  const sheet = sheetRow as unknown as ProductionSheet;
+
+  /* KONFİRME ŞARTI. Aslı Hanım (2026-08-21): "Üreticiye gidecek dosyanın
+     eksiksiz olmasını istiyorum" + "Nisa'yla beraber konfirme ederek bana
+     göstermenizi istiyorum." Üç kez eksik föy gitti. Mail geri alınamaz —
+     konfirme edilmemiş föy buradan çıkmaz. */
+  if (!sheet.confirmed_at) {
+    return { error: "Föy konfirme edilmeden üreticiye gönderilemez. Önce föyü kontrol edip konfirme edin." };
+  }
+
+  // Alıcı: usta kaydındaki e-posta, yoksa elle yazılan.
+  let manufacturerName: string | null = null;
+  let manufacturerEmail: string | null = null;
+  if (sheet.manufacturer_id) {
+    const m = await supabase
+      .from("workspace_manufacturers")
+      .select("name, email")
+      .eq("id", sheet.manufacturer_id)
+      .eq("workspace_id", ctx.workspaceId)
+      .maybeSingle();
+    const row = m.data as { name: string; email: string | null } | null;
+    manufacturerName = row?.name ?? null;
+    manufacturerEmail = row?.email ?? null;
+  }
+  const to = (parsed.data.to || manufacturerEmail || "").trim();
+  if (!to) {
+    return { error: "Ustanın e-posta adresi yok. Ayarlar → Ustalar'dan ekleyin ya da gönderirken elle yazın." };
+  }
+
+  const [bomRes, seasonRes, senderRes] = await Promise.all([
+    supabase
+      .from("production_sheet_materials")
+      .select("*, material:workspace_materials(id, name, code, category, unit, unit_price, currency, width_cm)")
+      .eq("sheet_id", sheetId)
+      .order("position"),
+    sheet.season_id
+      ? supabase.from("workspace_seasons").select("name").eq("id", sheet.season_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    supabase.from("profiles").select("full_name, email").eq("id", ctx.userId).maybeSingle(),
+  ]);
+
+  const sender = senderRes.data as { full_name: string | null; email: string | null } | null;
+  const { subject, text, html } = buildSheetEmail({
+    sheet,
+    bom: (bomRes.data ?? []) as unknown as SheetMaterialWithMaterial[],
+    manufacturerName: manufacturerName ?? sheet.producer ?? null,
+    seasonName: (seasonRes.data as { name: string } | null)?.name ?? null,
+    senderName: sender?.full_name || sender?.email || "Aslı Filinta ekibi",
+    note: parsed.data.note ?? null,
+  });
+
+  const res = await sendEmail({ to, subject, text, html });
+  if (res.status === "error") return { error: `E-posta gönderilemedi: ${res.error}` };
+  if (res.status === "skipped") {
+    return { error: `E-posta gönderimi kapalı (${res.reason}). .env.local içinde EMAIL_NOTIFICATIONS_ENABLED=true olmalı.` };
+  }
+
+  revalidatePath(`/production/${sheetId}`);
+  return { ok: true, to };
 }

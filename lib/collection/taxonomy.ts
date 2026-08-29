@@ -6,7 +6,10 @@ import type { ProductionCategory } from "@/types";
 
 export type SubCategory = { key: string; label: string };
 export type CategoryNode = {
-  key: ProductionCategory;
+  /* Kategoriler artık kullanıcı tarafından açılabildiği için anahtar SERBEST
+     metindir; kod varsayılanları `ProductionCategory` birliğinden gelir ama
+     "bags" gibi sonradan açılanlar da geçerlidir (2026-08-29). */
+  key: string;
   label: string;
   subcategories: SubCategory[];
 };

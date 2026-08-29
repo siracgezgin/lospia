@@ -4,9 +4,9 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format, parseISO, addDays, subDays } from "date-fns";
 import { tr } from "date-fns/locale";
-import { CalendarRange, ChevronLeft, ChevronRight } from "lucide-react";
-import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
-import { PLANNING_BANDS, TOPIC_ROWS, WEEKDAY_LONG_TR } from "@/lib/planning/bands";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { BackLink } from "@/components/modules/BackLink";
+import { TOPIC_ROWS, WEEKDAY_LONG_TR, type RuntimeBand } from "@/lib/planning/bands";
 import { MeetingEditor } from "./MeetingEditor";
 import { PlanningWeekGrid } from "./PlanningWeekGrid";
 import { PlanningDayList } from "./PlanningDayList";
@@ -23,10 +23,9 @@ interface Props {
   /** Kişi rengi (profiles.id → hex) — baş harf rozetleri kendi renginde. */
   personHex?: Record<string, string>;
   isAdmin: boolean;
+  /** Sol sütun — veritabanından; boşsa kod varsayılanları (20240326). */
+  bands: RuntimeBand[];
 }
-
-/** Hiç konusu olmayan şeritte bile çizilen taban "Konu" satırı sayısı. */
-const MIN_TOPIC_ROWS = 3;
 
 /**
  * Calendar — SADECE takvim.
@@ -42,12 +41,18 @@ const MIN_TOPIC_ROWS = 3;
  * satırları veritabanında DURUYOR — yalnız bu sayfadan çizilmiyor. Görev
  * olarak Pano'ya taşınmaları ayrı bir iş.
  */
+/** Her başlığın altında varsayılan olarak çizilen "Konu" satırı sayısı. */
+const DEFAULT_TOPIC_ROWS = 3;
+
 export function PlanningBoard({
-  meetings, weekDays, weekStart, members, memberNames, personHex = {}, isAdmin,
+  meetings, weekDays, weekStart, members, memberNames, personHex = {}, isAdmin, bands,
 }: Props) {
   const router = useRouter();
   const [editor, setEditor] = useState<
-    { meeting: PlanningMeetingWithTopics | null; day: string; slot: string; dayLabel: string } | null
+    {
+      meeting: PlanningMeetingWithTopics | null; day: string; slot: string; dayLabel: string;
+      bandCategory?: RuntimeBand["category"]; bandLabel?: string;
+    } | null
   >(null);
 
   // (gün|saat) → toplantılar
@@ -63,9 +68,9 @@ export function PlanningBoard({
 
   // Şeritlerin dışında kalan saatler (elle eklenmiş 13:00 gibi) kaybolmasın.
   const extraSlots = useMemo(() => {
-    const known = new Set(PLANNING_BANDS.map((b) => b.slot));
+    const known = new Set(bands.map((b) => b.slot));
     return [...new Set(meetings.map((m) => m.time_slot))].filter((s) => !known.has(s)).sort();
-  }, [meetings]);
+  }, [meetings, bands]);
 
   // Konular "Konu N" satırlarına position'a göre oturur; 5'i aşanlar (elle
   // eklenmiş) alta ek satır olarak düşer. Çizilecek satır sayısı DOLU satıra
@@ -73,7 +78,7 @@ export function PlanningBoard({
   const { topicRows, rowCountOfSlot } = useMemo(() => {
     const topicRows = new Map<string, (PlanningTopic | null)[]>();
     const rowCountOfSlot = new Map<string, number>();
-    const slots = [...new Set(meetings.map((m) => m.time_slot).concat(PLANNING_BANDS.map((b) => b.slot)))];
+    const slots = [...new Set(meetings.map((m) => m.time_slot).concat(bands.map((b) => b.slot)))];
     for (const slot of slots) {
       let used = 0;
       for (const iso of weekDays) {
@@ -89,10 +94,13 @@ export function PlanningBoard({
           if (rows[i]) { used = Math.max(used, i + 1); break; }
         }
       }
-      rowCountOfSlot.set(slot, Math.max(MIN_TOPIC_ROWS, used));
+      /* HER BAŞLIKTA VARSAYILAN 3 KONU (Aslı Hanım, 2026-08-29: "default
+         olarak her başlığa 3 konu olsun"). Dolu satır üçü aşarsa ızgara
+         büyür — girilen konu asla gizlenmez. */
+      rowCountOfSlot.set(slot, Math.max(used, DEFAULT_TOPIC_ROWS));
     }
     return { topicRows, rowCountOfSlot };
-  }, [byCell, meetings, weekDays]);
+  }, [byCell, meetings, weekDays, bands]);
 
   const gotoWeek = (isoMonday: string) => router.push(`/planning?week=${isoMonday}`);
   const todayIso = format(new Date(), "yyyy-MM-dd");
@@ -100,61 +108,60 @@ export function PlanningBoard({
   const openEditor = (iso: string, slot: string, i: number) => {
     if (!isAdmin) return;
     const cell = byCell.get(`${iso}|${slot}`) ?? [];
+    // Toplantı, oturduğu ŞERİDİN kimliğini alır — renk seçtirilmiyor.
+    const band = bands.find((b) => b.slot === slot);
     setEditor({
       meeting: cell[0] ?? null,
       day: iso,
       slot,
       dayLabel: `${WEEKDAY_LONG_TR[i]} ${format(parseISO(iso), "d MMM", { locale: tr })}`,
+      bandCategory: band?.category,
+      bandLabel: band?.label,
     });
   };
 
   return (
-    <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
-      <ModulePageHeader
-        title="Calendar"
-        description={
-          isAdmin
-            ? "Haftalık toplantı ızgarası — gün, saat, konu ve sorumlular."
-            : "Haftalık toplantı ızgarası — takvimi yöneticiler düzenler; size atanan işler Board’da görünür."
-        }
-        icon={CalendarRange}
-        secondaryBackHref="/board"
-        rightSlot={
-          <div className="flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2">
-            {/* SIRA: hafta gezinme solda, ölçek seçici EN SAĞDA — Aslı Hanım
-                (2026-08-24): "Hafta / Ay / Yıl yazısı en köşede olsun."
-                "Şablonlar" KALDIRILDI ("olmasına gerek yok, zaten elden
-                giriyoruz biz"): haftanın iskeleti artık kodda sabit
-                (lib/planning/bands.ts) ve boş hafta açılırken kendiliğinden
-                kuruluyor, ayrı bir şablon ekranına gerek kalmadı. */}
-            <span className="mx-0.5 hidden h-6 w-px bg-line sm:block" />
-            <div className="inline-flex h-9 shrink-0 items-stretch overflow-hidden rounded-lg border border-line bg-surface">
-              <button
-                onClick={() => gotoWeek(format(subDays(parseISO(weekStart), 7), "yyyy-MM-dd"))}
-                className="inline-flex w-9 items-center justify-center text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
-                title="Önceki hafta" aria-label="Önceki hafta"
-              >
-                <ChevronLeft size={16} />
-              </button>
-              <button
-                onClick={() => gotoWeek(format(new Date(), "yyyy-MM-dd"))}
-                className="whitespace-nowrap border-x border-line px-2.5 text-[13px] font-medium text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink sm:px-3"
-              >
-                Bu hafta
-              </button>
-              <button
-                onClick={() => gotoWeek(format(addDays(parseISO(weekStart), 7), "yyyy-MM-dd"))}
-                className="inline-flex w-9 items-center justify-center text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
-                title="Sonraki hafta" aria-label="Sonraki hafta"
-              >
-                <ChevronRight size={16} />
-              </button>
-            </div>
-            <CalendarViewSwitch scale="hafta" />
+    /* TAM EKRAN. Aslı Hanım (2026-08-29): "Buradaki boşluğu kaldır ve calendar
+       tam ekran olsun." Sayfada ModulePageHeader vardı: "← Geri" satırı, büyük
+       "Calendar" başlığı ve bir açıklama cümlesi — üstte ~110px yiyordu ve
+       başlığı zaten uygulama çubuğu yazıyordu. Yerine tek satırlık ince bir
+       araç çubuğu geldi; ızgara kalan yüksekliğin TAMAMINI alıyor. */
+    <div className="flex h-full min-h-0 w-full flex-col">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-hairline bg-surface px-3 py-1.5 sm:px-4">
+        <BackLink />
+        <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2">
+          {/* SIRA: hafta gezinme solda, ölçek seçici EN SAĞDA — Aslı Hanım
+              (2026-08-24): "Hafta / Ay / Yıl yazısı en köşede olsun." */}
+          {/* h-9: uygulamadaki TÜM araç çubuğu kontrolleri bu yükseklikte.
+              Burası h-8'di, yanındaki ölçek seçici h-9 — iki düğme yan yana
+              farklı boydaydı (2026-08-29: "neden hiçbiri eşit değil"). */}
+          <div className="inline-flex h-9 shrink-0 items-stretch overflow-hidden rounded-lg border border-line bg-surface">
+            <button
+              onClick={() => gotoWeek(format(subDays(parseISO(weekStart), 7), "yyyy-MM-dd"))}
+              className="inline-flex w-9 items-center justify-center text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
+              title="Önceki hafta" aria-label="Önceki hafta"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <button
+              onClick={() => gotoWeek(format(new Date(), "yyyy-MM-dd"))}
+              className="whitespace-nowrap border-x border-line px-3 text-[13px] font-medium text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
+            >
+              Bu hafta
+            </button>
+            <button
+              onClick={() => gotoWeek(format(addDays(parseISO(weekStart), 7), "yyyy-MM-dd"))}
+              className="inline-flex w-9 items-center justify-center text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
+              title="Sonraki hafta" aria-label="Sonraki hafta"
+            >
+              <ChevronRight size={16} />
+            </button>
           </div>
-        }
-      />
+          <CalendarViewSwitch scale="hafta" />
+        </div>
+      </div>
 
+      <div className="min-h-0 flex-1 overflow-auto p-2 sm:p-3 lg:overflow-hidden lg:p-3">
       {/* Sayfada tek blok var: takvim. Numaralı başlık ("1 — Haftalık Toplantı
           Izgarası") de kalktı; numaralandırma ancak birden fazla blok varken
           anlamlıydı. */}
@@ -169,6 +176,7 @@ export function PlanningBoard({
         isAdmin={isAdmin}
         todayIso={todayIso}
         onOpen={openEditor}
+        bands={bands}
       />
       <PlanningDayList
         weekDays={weekDays}
@@ -180,13 +188,9 @@ export function PlanningBoard({
         isAdmin={isAdmin}
         todayIso={todayIso}
         onOpen={openEditor}
+        bands={bands}
       />
-
-      <p className="mt-2 hidden px-1 text-[12.5px] text-subtle lg:block">
-        {isAdmin
-          ? "Bir hücreye tıklayınca o gün-saatin toplantısı ve konuları açılır. Baş harf rozetleri Excel'deki “Kim” sütunudur."
-          : "Takvim salt görüntüleme — konular ve sorumlular hücrelerin içinde listelenir."}
-      </p>
+      </div>
 
       {editor && (
         <MeetingEditor
@@ -194,6 +198,8 @@ export function PlanningBoard({
           day={editor.day}
           slot={editor.slot}
           dayLabel={editor.dayLabel}
+          bandCategory={editor.bandCategory}
+          bandLabel={editor.bandLabel}
           members={members}
           onClose={() => setEditor(null)}
           onSaved={() => { setEditor(null); router.refresh(); }}

@@ -6,6 +6,7 @@ import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { SetupRequiredNotice } from "@/components/modules/SetupRequiredNotice";
 import { maybeDatabaseSetupRequired } from "@/lib/utils/supabase-errors";
 import { CollectionBrowser } from "@/components/collection/CollectionBrowser";
+import { getCategoryTree } from "@/lib/collection/category-tree";
 import { resolveSeasonId } from "@/lib/collection/season";
 import type { ProductionSheet } from "@/types";
 
@@ -61,12 +62,11 @@ export default async function CollectionPage({
   const setup = maybeDatabaseSetupRequired(sheetsResult.error);
   if (setup.setupRequired) {
     return (
-      <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-3xl px-4 py-4 sm:px-6 lg:px-8">
         <ModulePageHeader
           title="Collection"
           description="Ürünlerinizi kategori kategori görüntüleyin — her ürünün üretim föyü ve maliyeti bir arada."
           icon={Boxes}
-          secondaryBackHref="/board"
         />
         <SetupRequiredNotice
           variant="block"
@@ -87,5 +87,9 @@ export default async function CollectionPage({
      bir tur biniyordu. */
   const sheets = (sheetsResult.data ?? []) as unknown as ProductionSheet[];
 
-  return <CollectionBrowser sheets={sheets} isAdmin={isAdmin} seasons={seasons} />;
+  /* Kategori ağacı — tablo boşsa kod varsayılanlarına düşer, ekran hiçbir
+     durumda boş açılmaz (bkz. lib/collection/category-tree.ts). */
+  const categories = await getCategoryTree(supabase, workspaceId);
+
+  return <CollectionBrowser sheets={sheets} isAdmin={isAdmin} seasons={seasons} categories={categories} />;
 }

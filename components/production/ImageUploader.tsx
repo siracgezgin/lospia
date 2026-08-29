@@ -1,12 +1,14 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ImagePlus, Loader2, Trash2, X } from "lucide-react";
+import { ImagePlus, Loader2, Trash2 } from "lucide-react";
 import {
   uploadProductionSheetImage, deleteProductionSheetImage,
 } from "@/lib/actions/production";
 import { compressImage } from "@/lib/utils/compress-image";
 import { cn } from "@/lib/utils/cn";
+import { useConfirm } from "@/components/ui/useConfirm";
+import { Overlay } from "@/components/ui/Overlay";
 import type { ProductionImage, ProductionImageSection } from "@/types";
 
 // Orijinal (sıkıştırma öncesi) dosya için üst sınır. UI'de "maks 5 MB" yazıyor.
@@ -25,6 +27,7 @@ interface Props {
 export function ImageUploader({
   sheetId, section, images, onChange, variant = "gallery", label,
 }: Props) {
+  const { ask, dialog } = useConfirm();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -72,7 +75,11 @@ export function ImageUploader({
 
   async function handleRemove(img: ProductionImage) {
     // Yanlışlıkla silmeyi önlemek için onay.
-    if (!window.confirm("Bu görseli kaldırmak istediğinize emin misiniz? Bu işlem geri alınamaz.")) return;
+    if (!(await ask({
+      title: "Görsel kaldırılsın mı?",
+      message: "Görsel föyden ve depodan kalıcı olarak silinir.",
+      confirmLabel: "Kaldır",
+    }))) return;
     // Önce yerel state + üst bileşene bildir (üst bileşen DB'yi anında günceller).
     onChange(images.filter((i) => i.path !== img.path));
     // Depodan da sil — best effort.
@@ -198,19 +205,16 @@ export function ImageUploader({
         onChange={(e) => handleFiles(e.target.files)}
       />
 
-      {/* Lightbox */}
-      {lightbox && (
-        <div
-          className="anim-fade fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6 backdrop-blur-[2px]"
-          onClick={() => setLightbox(null)}
-        >
-          <button className="absolute right-4 top-4 rounded-full bg-white/90 p-2 text-ink shadow-pop transition-all duration-150 hover:bg-white active:scale-95" onClick={() => setLightbox(null)}>
-            <X size={18} />
-          </button>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={lightbox} alt="" className={cn("anim-scale-in max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-drawer")} />
-        </div>
-      )}
+      {/* Görsel büyütme — Overlay üzerinden PORTAL ile <body>'ye çizilir.
+          Eskiden burada elle bir `fixed inset-0` vardı; föy editörünün
+          animasyonlu (transform'lu) kartının içinde kaldığı için katman
+          viewport'a değil o karta göre konumlanıyor, görsel sayfanın içine
+          taşıyordu. */}
+      <Overlay open={!!lightbox} onClose={() => setLightbox(null)} size="lg" floatingClose className="border-0 bg-transparent shadow-none">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={lightbox ?? ""} alt="" className="mx-auto max-h-[78dvh] w-auto rounded-lg object-contain shadow-drawer" />
+      </Overlay>
+      {dialog}
     </div>
   );
 }

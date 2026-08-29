@@ -71,9 +71,12 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     // sol bara ikinci giriş verilmez (kullanıcı isteği, 2026-07-27).
     title: "Product & Office",
     items: [
+      // Sheets ve Library sol bardan KALKTI: ikisi de AF Teamwork'ün giriş
+      // kutucukları (Aslı Hanım, 2026-08-28 — "Bir gireyim, bir kutucuk format
+      // olsun, bir kutucuk lookbook olsun"). Rotalar duruyor; hub ve Ana Sayfa
+      // kısayolları da erişim veriyor.
       { href: "/collection", label: "Collection",     icon: Boxes,      adminOnly: false },
-      { href: "/documents",  label: "Documents",      icon: FolderOpen, adminOnly: false },
-      { href: "/sheets",     label: "Sheets",         icon: Table2,     adminOnly: false },
+      { href: "/documents",  label: "AF Teamwork",    icon: FolderOpen, adminOnly: false },
       { href: "/crm",        label: "CRM",            icon: Contact,    adminOnly: false },
     ],
   },

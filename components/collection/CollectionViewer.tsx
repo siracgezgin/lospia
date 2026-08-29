@@ -70,14 +70,13 @@ export function CollectionViewer({ isAdmin }: Props) {
   const shownRows = filteredRows.slice(0, MAX_ROWS_RENDERED);
 
   return (
-    <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
+    <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
       {/* Header */}
       <ModulePageHeader
         title="Collection"
         description="Koleksiyon/kumaş verilerini Lospia içinde güvenle görüntüleyin."
         icon={Boxes}
         badge="Salt okunur"
-        secondaryBackHref="/board"
       />
 
       {/* Read-only banner */}

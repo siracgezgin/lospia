@@ -53,7 +53,7 @@ export default async function ModulesPage() {
   if (gate !== "ok" || !workspaceId) return <AccessDenied />;
 
   return (
-    <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
+    <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
       {/* Page header */}
       <ModulePageHeader
         title="Operation Modules"
@@ -71,14 +71,15 @@ export default async function ModulesPage() {
         {hubCard("crm")}
       </div>
 
-      {/* Ofis Merkezi — Word/Excel ihtiyacının sistemdeki karşılığı. */}
+      {/* AF Teamwork — Word/Excel ihtiyacının sistemdeki karşılığı.
+          "sheets" kartı KALKTI: tablo artık ayrı bir modül değil, AF
+          Teamwork'te klasörün içinde açılan bir öğe (2026-08-29). */}
       <SectionHeading
-        title="Ofis Merkezi"
-        note="Doküman & tablolar — Word/Excel ile yürüyen operasyon işlerinin sistemdeki karşılığı."
+        title="AF Teamwork"
+        note="Klasörler, yazılar, tablolar, dosyalar ve dış bağlantılar — hepsi tek yerde."
       />
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
         {hubCard("documents")}
-        {hubCard("sheets")}
       </div>
 
       {/* Yönetim — yalnız yönetici: para akışı + denetim + düzen. */}

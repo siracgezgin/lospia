@@ -149,22 +149,26 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
     group: "urun",
   },
 
-  // ── Ofis Merkezi — Word/Excel işlerinin sistemdeki karşılığı ──────────────
+  // ── AF Teamwork — ekibin ortak çalışma alanı ──────────────────────────────
+  // Aslı Hanım (2026-08-28): "Sen onun adını AF Teamwork diye çevir. Bizim
+  // teamwork bütün çalışmalarımız burada olsun." Sheets ve Library sol bardan
+  // kalktı; ikisi de AF Teamwork'ün giriş kutucuğu. Hub'da yine listelenirler
+  // çünkü ikisi de çalışan bir ekran ve hub bir DİZİNdir.
   {
     key: "documents",
-    title: "Documents",
-    description: "Operasyon metinleri, format e-postalar ve Drive bağlantıları.",
+    title: "AF Teamwork",
+    description: "Ekibin çalışma dosyaları — klasörler, tablolar ve dış bağlantılar.",
     href: "/documents",
     icon: FolderOpen,
     access: "all",
     group: "urun",
   },
   {
-    key: "sheets",
-    title: "Sheets",
-    description: "Excel/CSV düzenleri ve operasyon tabloları.",
-    href: "/sheets",
-    icon: Table2,
+    key: "collection-data",
+    title: "Product Data",
+    description: "Sezon, usta ve hammadde — föyleri ve maliyeti besleyen tanımlar.",
+    href: "/collection/veri",
+    icon: Boxes,
     access: "all",
     group: "urun",
   },

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import type { AppRole } from "@/lib/auth/permissions";
 import { toActionErrorMessage } from "@/lib/utils/supabase-errors";
+import { sanitizeRichText } from "@/lib/office/sanitize-html";
 
 // Doküman Merkezi — a link/metadata registry (no file storage). Unlike the
 // admin-only Kreatif Linkler, members participate here: they create drafts and
@@ -43,6 +44,9 @@ const DocumentSchema = z.object({
   related_contact_id: uuidOrNull,
   tags: z.array(z.string().max(60)).max(20).optional(),
   notes: z.string().max(4000).optional().nullable(),
+  /* Bağlantı da AF Teamwork'te bir KLASÖRÜN içinde yaşar (2026-08-29) —
+     "Bağlantılar" diye ayrı bir bölüm kalmadı. */
+  folder_id: uuidOrNull,
 });
 
 export type DocumentInput = z.infer<typeof DocumentSchema>;
@@ -82,6 +86,7 @@ function normalize(v: DocumentInput) {
     related_contact_id: nn(v.related_contact_id),
     tags: (v.tags ?? []).map((t) => t.trim()).filter(Boolean),
     notes: nn(v.notes),
+    folder_id: nn(v.folder_id),
   };
 }
 
@@ -215,4 +220,129 @@ export async function deleteOperationDocument(
   if (error) return { error: toActionErrorMessage(error) };
   revalidatePath("/documents");
   return { ok: true };
+}
+
+// ── YAZI (Word karşılığı) — 20240325 ────────────────────────────────────────
+//
+// Aslı Hanım (2026-08-28): "Excel'in yanına Word'ü de gir. Alev mesela buna
+// 'online influencer marketing format' diye o dosyayı buraya girsin. Bize
+// sunum yaparken biz buradan açalım, Alev'in mailini okuyalım, revize verelim
+// ve o bir format olarak hazırlansın."
+//
+// Yazı gövdesi HTML'dir ve BURADA temizlenir — veritabanına ham girdi girmez.
+
+const DocBodySchema = z.object({
+  title: z.string().min(1, "Başlık gerekli").max(300),
+  body: z.string().max(400_000).optional().nullable(),
+});
+
+export async function createTeamworkDoc(
+  input: { title: string; folder_id?: string | null; section?: "teamwork" | "library" },
+): Promise<{ id: string } | { error: string }> {
+  const parsed = z
+    .object({
+      title: z.string().min(1, "Başlık gerekli").max(300),
+      folder_id: uuidOrNull,
+      // Bölüm (20240327) — klasörsüz yazı da doğru ekranda kalsın.
+      section: z.enum(["teamwork", "library"]).default("teamwork"),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+
+  const folderId = (parsed.data.folder_id ?? "") || null;
+  const { data: row, error } = await supabase
+    .from("operation_documents")
+    .insert({
+      workspace_id: ctx.workspaceId,
+      created_by: ctx.userId,
+      owner_id: ctx.userId,
+      title: parsed.data.title.trim(),
+      document_type: "doc",
+      status: isAdmin(ctx) ? "approved" : "draft",
+      folder_id: folderId,
+      section: parsed.data.section,
+      body: "",
+    })
+    .select("id")
+    .single();
+
+  if (error) return { error: toActionErrorMessage(error) };
+  revalidatePath("/documents");
+  return { id: (row as { id: string }).id };
+}
+
+export async function saveTeamworkDoc(
+  documentId: string,
+  input: { title: string; body?: string | null },
+): Promise<{ ok: true } | { error: string }> {
+  const parsed = DocBodySchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+
+  const gate = await loadEditable(supabase, ctx, documentId);
+  if ("error" in gate) return { error: gate.error };
+
+  const { error } = await supabase
+    .from("operation_documents")
+    .update({
+      title: parsed.data.title.trim(),
+      // Temizlik SUNUCUDA — istemciden gelen HTML'e asla güvenilmez.
+      body: sanitizeRichText(parsed.data.body),
+    })
+    .eq("id", documentId)
+    .eq("workspace_id", ctx.workspaceId);
+
+  if (error) return { error: toActionErrorMessage(error) };
+  revalidatePath("/documents");
+  revalidatePath(`/documents/${documentId}`);
+  return { ok: true };
+}
+
+/**
+ * Yazının içine görsel yükler ve KALICI bir URL döner (20240328).
+ *
+ * Aslı Hanım (2026-08-29): "Word'de… resim vs ekleyemiyor muyuz."
+ *
+ * `documents` bucket'ı private ve imzalı URL'i 60 saniyede sönüyor; gövdeye
+ * gömülen <img> ertesi gün kırılırdı. Bu yüzden satır içi görseller ayrı,
+ * public bir bucket'ta yaşar (yol UUID içerir). Ayrıntılı gerekçe migration
+ * dosyasında.
+ */
+const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+const IMAGE_MIME = ["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif"];
+
+export async function uploadDocImage(
+  formData: FormData,
+): Promise<{ url: string } | { error: string }> {
+  const file = formData.get("file");
+  if (!(file instanceof File)) return { error: "Görsel bulunamadı." };
+  if (file.size === 0) return { error: "Görsel boş." };
+  if (file.size > IMAGE_MAX_BYTES) {
+    return { error: `Görsel 5 MB sınırını aşıyor (${(file.size / 1024 / 1024).toFixed(1)} MB).` };
+  }
+  if (!IMAGE_MIME.includes(file.type)) {
+    return { error: "Yalnız PNG, JPEG, WebP, GIF ve AVIF yüklenebilir." };
+  }
+
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+
+  const ext = (file.name.split(".").pop() ?? "png").replace(/[^a-z0-9]/gi, "").slice(0, 5) || "png";
+  const path = `${ctx.workspaceId}/${crypto.randomUUID()}.${ext}`;
+
+  const { error: upErr } = await supabase.storage
+    .from("teamwork-images")
+    .upload(path, file, { contentType: file.type, upsert: false });
+  if (upErr) return { error: upErr.message };
+
+  const { data } = supabase.storage.from("teamwork-images").getPublicUrl(path);
+  return { url: data.publicUrl };
 }

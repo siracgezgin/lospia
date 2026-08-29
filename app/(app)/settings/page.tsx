@@ -8,9 +8,6 @@ import type { IdentityMember } from "@/components/settings/PersonIdentityManager
 import { SettingsTabs, SettingsTab } from "@/components/settings/SettingsTabs";
 import { SettingsSection, CountChip } from "@/components/settings/SettingsSection";
 import { assignPersonTones } from "@/lib/design/person-colors";
-import { ManufacturersManager, type ManagerManufacturer } from "@/components/settings/ManufacturersManager";
-import { SeasonsManager, type ManagerSeason } from "@/components/settings/SeasonsManager";
-import { MaterialsManager, type ManagerMaterial } from "@/components/settings/MaterialsManager";
 import { canManageSettings, canRenameWorkspace, canManageWorkspace } from "@/lib/auth/permissions";
 import { roleLabel } from "@/lib/utils/roles";
 import { pickDisplayEmail } from "@/lib/utils/display-identity";
@@ -38,7 +35,7 @@ export default async function SettingsPage() {
 
   if (!canManageSettings(userRole)) {
     return (
-      <div className="max-w-2xl mx-auto py-8 px-4">
+      <div className="mx-auto w-full max-w-3xl px-4 py-4 sm:px-6 lg:px-8">
         <h1 className="text-2xl font-bold text-ink mb-6">Settings</h1>
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-sm text-amber-800">
           Bu sayfayı düzenlemek için yetkiniz yok. Yöneticinize başvurun.
@@ -51,8 +48,7 @@ export default async function SettingsPage() {
   const canManageDepts = canManageWorkspace(userRole);   // owner + admin (departments)
 
   const [wsResult, membersResult, profileResult, invitesResult,
-         deptsResult, deptMembersResult, manufacturersResult, sheetProducerResult,
-         seasonsResult, sheetSeasonResult, materialsResult, bomUsageResult, suppliersResult] =
+         deptsResult, deptMembersResult] =
     await Promise.all([
       supabase.from("workspaces").select("*").eq("id", workspaceId).single(),
       supabase
@@ -77,73 +73,10 @@ export default async function SettingsPage() {
         .from("department_members")
         .select("*, workspace_members(profiles(id, full_name, email))")
         .eq("workspace_id", workspaceId),
-      // Üretici (Usta) listesi — Aslı Hanım'ın "Cihan Usta, Hakan Usta" isteği.
-      // Tablo migrate edilmemişse hata döner; bölüm sessizce gizlenir.
-      supabase
-        .from("workspace_manufacturers")
-        .select("id, name, photo_url, city, country, currency, lead_time_days, min_order_qty, contact_name, phone, email, notes, is_active")
-        .eq("workspace_id", workspaceId)
-        .order("is_active", { ascending: false })
-        .order("name"),
-      // Usta başına föy sayısı — "hangi ürünler orada dikiliyor" göstergesi.
-      supabase
-        .from("production_sheets")
-        .select("manufacturer_id")
-        .eq("workspace_id", workspaceId)
-        .not("manufacturer_id", "is", null),
-      // Sezon — Ürün ekranlarının bağlamı (Zedonk `SS 21 - WW` deseni).
-      supabase
-        .from("workspace_seasons")
-        .select("id, name, starts_on, ends_on, is_current")
-        .eq("workspace_id", workspaceId)
-        .order("is_current", { ascending: false })
-        .order("name", { ascending: false }),
-      supabase
-        .from("production_sheets")
-        .select("season_id")
-        .eq("workspace_id", workspaceId)
-        .not("season_id", "is", null),
-      // Hammadde kütüphanesi — föy reçetelerinin kaynağı (20240310).
-      supabase
-        .from("workspace_materials")
-        .select("id, code, name, category, supplier_id, composition, width_cm, unit, unit_price, currency, notes, is_active")
-        .eq("workspace_id", workspaceId)
-        .order("is_active", { ascending: false })
-        .order("category")
-        .order("name"),
-      supabase
-        .from("production_sheet_materials")
-        .select("material_id")
-        .eq("workspace_id", workspaceId),
-      supabase
-        .from("workspace_suppliers")
-        .select("id, name")
-        .eq("workspace_id", workspaceId)
-        .eq("is_active", true)
-        .order("name"),
+      // NOT: sezon / usta / hammadde sorguları BURADAN KALKTI — üçü de
+      // Koleksiyon > Product Data sayfasına taşındı (2026-08-29). Bunlar bir
+      // ayar değil ürün verisi; Ayarlar her açılışta yedi sorgu fazla atıyordu.
     ]);
-
-  const manufacturers = (manufacturersResult.data ?? []) as ManagerManufacturer[];
-  const manufacturersAvailable = !manufacturersResult.error;
-  const sheetCounts: Record<string, number> = {};
-  for (const r of (sheetProducerResult.data ?? []) as { manufacturer_id: string | null }[]) {
-    if (r.manufacturer_id) sheetCounts[r.manufacturer_id] = (sheetCounts[r.manufacturer_id] ?? 0) + 1;
-  }
-
-  const seasons = (seasonsResult.data ?? []) as ManagerSeason[];
-  const seasonsAvailable = !seasonsResult.error;
-  const seasonCounts: Record<string, number> = {};
-  for (const r of (sheetSeasonResult.data ?? []) as { season_id: string | null }[]) {
-    if (r.season_id) seasonCounts[r.season_id] = (seasonCounts[r.season_id] ?? 0) + 1;
-  }
-
-  const materials = (materialsResult.data ?? []) as ManagerMaterial[];
-  const materialsAvailable = !materialsResult.error;
-  const suppliers = (suppliersResult.data ?? []) as { id: string; name: string }[];
-  const materialUsage: Record<string, number> = {};
-  for (const r of (bomUsageResult.data ?? []) as { material_id: string }[]) {
-    materialUsage[r.material_id] = (materialUsage[r.material_id] ?? 0) + 1;
-  }
 
   const workspace: Workspace | null = wsResult.data;
   const profile: Profile | null = profileResult.data;
@@ -288,54 +221,6 @@ export default async function SettingsPage() {
                   />
                 </SettingsSection>
 
-              </div>
-        </SettingsTab>
-        <SettingsTab label="Ürün verisi">
-              <div className="grid items-start gap-6 xl:grid-cols-2">
-                {/* Sezon — Ürün ekranlarının BAĞLAMI. */}
-                {seasonsAvailable && (
-                  <SettingsSection
-                    title="Sezonlar"
-                    description="Koleksiyon, Maliyet ve Ödeme Tablosu seçili sezona göre süzülür. Aktif sezon üst çubukta ilk gelen ve yeni föyün varsayılanıdır."
-                    aside={<CountChip n={seasons.length} birim="sezon" />}
-                  >
-                    <SeasonsManager seasons={seasons} sheetCounts={seasonCounts} canManage={canManageDepts} />
-                  </SettingsSection>
-                )}
-
-                {/* Üretici (Usta) — "Cihan Usta, o ustaları da öyle açacağız…
-                    hangi ürünler orada dikiliyor." */}
-                {manufacturersAvailable && (
-                  <SettingsSection
-                    title="Üreticiler (Ustalar)"
-                    description="Föydeki “Üretici” alanı ve Ödeme Tablosu buradan beslenir. Teslim süresi ve minimum adet sipariş verirken lazım olur."
-                    aside={<CountChip n={manufacturers.length} birim="usta" />}
-                  >
-                    <ManufacturersManager
-                      manufacturers={manufacturers}
-                      sheetCounts={sheetCounts}
-                      canManage={canManageDepts}
-                    />
-                  </SettingsSection>
-                )}
-
-                {/* Hammadde — föy reçetelerinin kaynağı. */}
-                {materialsAvailable && (
-                  <div className="xl:col-span-2">
-                  <SettingsSection
-                    title="Hammadde"
-                    description="Kumaş ve aksesuarlar burada bir kez tanımlanır. Föyün reçetesine eklenince maliyet hesaplanır; fiyat burada değişince tüm föyler güncellenir."
-                    aside={<CountChip n={materials.length} birim="malzeme" />}
-                  >
-                    <MaterialsManager
-                      materials={materials}
-                      suppliers={suppliers}
-                      usageCounts={materialUsage}
-                      canManage={canManageDepts}
-                    />
-                  </SettingsSection>
-                  </div>
-                )}
               </div>
         </SettingsTab>
         <SettingsTab label="Hesabım">

@@ -2,9 +2,10 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { X, Upload, FileText, CheckCircle2, AlertTriangle, CopyX, Loader2 } from "lucide-react";
+import { Upload, FileText, CheckCircle2, AlertTriangle, CopyX, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Button } from "@/components/ui/Button";
+import { Overlay } from "@/components/ui/Overlay";
 import { STATUS_LABELS } from "@/lib/utils/task-constants";
 import {
   previewCsvImport, applyCsvImport,
@@ -81,26 +82,8 @@ export function CsvImportModal({ onClose }: Props) {
   const counts = preview?.counts;
 
   return (
-    <div
-      className="anim-fade fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-[2px] p-4"
-      onClick={onClose}
-    >
-      <div
-        className="anim-scale-in bg-surface rounded-modal border border-line shadow-drawer w-full max-w-3xl max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-hairline sticky top-0 bg-surface z-10">
-          <h2 className="text-base font-semibold tracking-tight text-ink">CSV&apos;den içe aktar</h2>
-          <button
-            onClick={onClose}
-            aria-label="Kapat"
-            className="text-subtle hover:text-ink hover:bg-surface-muted active:scale-[0.98] rounded-lg p-1.5 transition-colors duration-150"
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        <div className="px-6 py-5 space-y-4">
+    <Overlay open onClose={onClose} title="CSV’den içe aktar" size="lg">
+      <div className="space-y-4">
           {/* ── Result report (final step) ─────────────────────────────────── */}
           {result ? (
             <div className="anim-fade-up space-y-4">
@@ -254,8 +237,7 @@ export function CsvImportModal({ onClose }: Props) {
               )}
             </>
           )}
-        </div>
       </div>
-    </div>
+    </Overlay>
   );
 }

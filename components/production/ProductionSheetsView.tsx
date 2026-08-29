@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { archiveProductionSheet } from "@/lib/actions/production";
 import { cn } from "@/lib/utils/cn";
+import { useConfirm } from "@/components/ui/useConfirm";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import type { ProductionSheet } from "@/types";
 
@@ -68,6 +69,7 @@ const STATUS_LABEL: Record<ProductionSheet["status"], string> = {
 };
 
 export function ProductionSheetsView({ sheets, isAdmin }: Props) {
+  const { ask, dialog } = useConfirm();
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [showArchived, setShowArchived] = useState(false);
@@ -84,8 +86,13 @@ export function ProductionSheetsView({ sheets, isAdmin }: Props) {
     });
   }, [sheets, query, showArchived]);
 
-  function handleArchive(s: ProductionListItem) {
-    if (!confirm(`"${s.title}" föyünü arşivlemek istiyor musunuz?`)) return;
+  async function handleArchive(s: ProductionListItem) {
+    if (!(await ask({
+      tone: "default",
+      title: "Föy arşivlensin mi?",
+      message: `"${s.title}" listeden kalkar ama SİLİNMEZ; arşivden geri alınabilir.`,
+      confirmLabel: "Arşivle",
+    }))) return;
     startArchive(async () => {
       await archiveProductionSheet(s.id);
       router.refresh();
@@ -93,12 +100,11 @@ export function ProductionSheetsView({ sheets, isAdmin }: Props) {
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+    <div className="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
       <ModulePageHeader
         title="Production Sheet"
         description="Her ürün bir föy. Ölçüler, beden dağılımı ve talimatları buradan girin — kimin girdiği herkese görünür."
         icon={ClipboardList}
-        secondaryBackHref="/board"
         rightSlot={
           <div className="flex shrink-0 items-center gap-2">
             {sheets.some((s) => s.status !== "archived") && (
@@ -232,6 +238,7 @@ export function ProductionSheetsView({ sheets, isAdmin }: Props) {
         </div>
       )}
 
+      {dialog}
     </div>
   );
 }

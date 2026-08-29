@@ -15,6 +15,9 @@ import { toActionErrorMessage } from "@/lib/utils/supabase-errors";
  *
  * Seçimi YÖNETİCİ yapar (Ayarlar → Kişi Kimliği). Boş bırakılan alan otomatik
  * atamaya döner; sistem hiçbir zaman renksiz kişi göstermez.
+ *
+ * 20240323'ten beri ÜNVAN da buradan yazılır — kartın altında sistem rolü
+ * ("Yönetici") değil, kişinin kendi ünvanı ("Tasarımcı") görünsün diye.
  */
 
 const AUTH_REQUIRED = "Kimlik doğrulama gerekli.";
@@ -37,6 +40,10 @@ const IdentitySchema = z.object({
     z.literal(""),
   ]).nullable(),
   iconKey: z.union([z.enum(ICON_KEYS as [string, ...string[]]), z.literal("")]).nullable(),
+  /* ÜNVAN — kartın altındaki satır (20240323). Aslı Hanım (2026-08-28):
+     "Bana da tasarımcı yazarsan; ben yönetici olmak istemiyorum çünkü."
+     "" → rolden türetilen eski etikete dön. */
+  jobTitle: z.string().max(60).nullable().optional(),
 });
 
 export type MemberIdentityInput = z.infer<typeof IdentitySchema>;
@@ -70,10 +77,11 @@ export async function saveMemberIdentity(
 
   const color_key = parsed.data.colorKey ? parsed.data.colorKey : null;
   const icon_key = parsed.data.iconKey ? parsed.data.iconKey : null;
+  const job_title = (parsed.data.jobTitle ?? "").trim() || null;
 
   const { error } = await supabase
     .from("workspace_members")
-    .update({ color_key, icon_key })
+    .update({ color_key, icon_key, job_title })
     .eq("id", memberId)
     .eq("workspace_id", ctx.workspaceId); // başka alanın üyesine yazılmasın
 

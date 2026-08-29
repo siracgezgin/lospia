@@ -1,10 +1,9 @@
 "use client";
 
-import Image from "next/image";
-import Link from "next/link";
-import { ArrowLeft, Printer } from "lucide-react";
+import { Printer } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import { getPersonDisplayName, getPersonInitials } from "@/lib/utils/person-display";
+import { BackLink } from "@/components/modules/BackLink";
+import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { assignPersonTones } from "@/lib/design/person-colors";
 import { PersonAvatar } from "@/components/ui/PersonAvatar";
 
@@ -81,15 +80,12 @@ export function PersonReport({
   const undated = open.filter((t) => !t.due_date).slice(0, 6);
 
   return (
-    <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
+    <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
       {/* Ekran kabuğu — kâğıda basılmaz */}
       <div className="no-print mb-4 flex flex-wrap items-center justify-between gap-3">
-        <Link
-          href="/board"
-          className="group inline-flex items-center gap-1.5 text-[13px] text-muted transition-colors hover:text-ink"
-        >
-          <ArrowLeft size={14} className="transition-transform group-hover:-translate-x-0.5" /> Board’a dön
-        </Link>
+        {/* Bu sayfaya artık Reports'un kişi kartından geliniyor; sabit
+            "Board'a dön" yanlış yere götürüyordu. Hedefi geçmiş belirler. */}
+        <BackLink href="/dashboard" />
         <button
           onClick={() => window.print()}
           className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-[13px] font-medium text-muted transition-all duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]"

@@ -13,6 +13,8 @@ export type MemberDraft = {
   fullName: string;
   username: string;
   notificationEmail: string;
+  /** Kartta görünen ünvan — boşsa sistem rolü yazılır (20240323). */
+  jobTitle: string;
   role: "admin" | "member" | "viewer";
   colorKey: string;
   iconKey: string;
@@ -69,6 +71,18 @@ export function MemberEditPanel({
             placeholder="kullanici.adi"
             spellCheck={false}
             disabled={busy}
+            className="h-8"
+          />
+        </Field>
+        {/* ÜNVAN — Pano kartında bu yazar. Aslı Hanım (2026-08-28): "Bana da
+            tasarımcı yazarsan; ben yönetici olmak istemiyorum çünkü."
+            Boş bırakılırsa kart eskisi gibi sistem rolünü yazar. */}
+        <Field label="Ünvan">
+          <Input
+            value={d.jobTitle}
+            onChange={(e) => set("jobTitle", e.target.value)}
+            placeholder="Tasarımcı, Üretim Sorumlusu…"
+            disabled={busy || !canManageIdentity}
             className="h-8"
           />
         </Field>

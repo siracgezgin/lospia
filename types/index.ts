@@ -65,6 +65,8 @@ export type WorkspaceContact = {
   next_follow_up_at?: string | null;
   owner_id?: string | null;
   crm_status?: string | null;
+  /** Influencer seeding adımı (20240330) — bkz. lib/crm/seeding.ts. */
+  seeding_stage?: string | null;
   metadata?: Record<string, unknown> | null;
   // Optional link to a system user/profile (20240206000000_contact_user_link).
   user_id?: string | null;
@@ -103,11 +105,14 @@ export type OperationDocumentType =
   | "pdf_link" | "word_link" | "excel_link" | "website" | "internal_note" | "other"
   /** Sisteme YÜKLENMİŞ dosya (20240312). Bağlantı değil; klasör tarayıcısında
    *  yaşar, "Bağlantılar" listesinde görünmez. */
-  | "file";
+  | "file"
+  /** Sistemde YAZILAN metin — AF Teamwork'ün Word'ü (20240325). Gövdesi
+   *  `body` kolonunda; /documents/[id] editöründe açılır. */
+  | "doc";
 
-/** Bağlantı formunun üretebildiği türler — "file" yalnız yükleme akışında
- *  oluşur, elle seçilemez. */
-export type LinkDocumentType = Exclude<OperationDocumentType, "file">;
+/** Bağlantı formunun üretebildiği türler — "file" ve "doc" yalnız kendi
+ *  akışlarında oluşur, elle seçilemez. */
+export type LinkDocumentType = Exclude<OperationDocumentType, "file" | "doc">;
 
 export type OperationDocument = {
   id: string;
@@ -121,6 +126,10 @@ export type OperationDocument = {
   related_contact_id: string | null;
   status: OfficeRecordStatus;
   owner_id: string | null;
+  /** Yazının gövdesi — yalnız document_type = "doc" kayıtlarında dolu. */
+  body?: string | null;
+  /** Bulunduğu klasör (20240312). NULL = AF Teamwork kökü. */
+  folder_id?: string | null;
   tags: string[];
   notes: string | null;
   metadata: Record<string, unknown>;
@@ -436,6 +445,13 @@ export type ProductionPricing = {
   /** Ustaya birim başına ödenen tutar. ÖDEME TABLOSU bunu kullanır; maliyetle
    *  KARIŞTIRILMAZ — "bu maliyet değil, bu ödeme tablosu". */
   usta_unit_payment?: string;
+  /* FATURA KARŞILIĞI. Aslı Hanım (2026-08-28): "Toplam fatura bilgileri. Bir
+     de fatura karşılığının bilgisi de girsin buraya. Çünkü muhasebeyi de
+     buraya bağlayacaksın ya sonra." Ödenen tutar ile faturalanan tutar aynı
+     olmak zorunda değil — ikisi ayrı alanda yaşar ki muhasebe eşleştirmesi
+     yapılabilsin. */
+  invoice_no?: string;
+  invoice_amount?: string;
 };
 
 // ── Planlama Modülü — Haftalık Toplantı Takvimi (20240216 migration) ─────────

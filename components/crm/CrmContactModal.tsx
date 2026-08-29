@@ -1,10 +1,13 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { X, AlertCircle } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import { createCrmContact, updateCrmContact } from "@/lib/actions/crm";
 import { CRM_SEGMENTS, CRM_STATUSES, CRM_SOURCE_CHANNELS } from "@/lib/crm/constants";
-import { cn } from "@/lib/utils/cn";
+import { SEEDING_STEPS, seedingStep } from "@/lib/crm/seeding";
+import { Overlay } from "@/components/ui/Overlay";
+import { Button } from "@/components/ui/Button";
+import { Field, FieldGrid, SelectInput, TextArea, TextInput } from "@/components/ui/Field";
 import type { WorkspaceContact } from "@/types";
 
 interface Member {
@@ -19,21 +22,49 @@ interface Props {
   contact?: WorkspaceContact | null;
 }
 
-const inputCls =
-  "w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-subtle transition-colors duration-150 hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40 disabled:opacity-60 disabled:bg-surface-sunken";
-const labelCls = "block text-[12px] font-medium text-muted mb-1";
+/** Bölüm başlığı — on üç alan tek yığın halinde okunmuyordu. */
+function Group({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="border-t border-hairline pt-4 first:border-0 first:pt-0">
+      <h3 className="mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-subtle">{title}</h3>
+      {children}
+    </section>
+  );
+}
 
+/**
+ * CRM KİŞİ FORMU.
+ *
+ * Sıraç (2026-08-29): "Bu pop-up'lar çok kötü, baştan responsive profesyonelce
+ * tasarla."
+ *
+ * Önceki hali on üç alanı tek sütunda alt alta diziyordu; pencere ekrandan
+ * taşıyor, "Ekle" düğmesi görünmüyordu. İki ayrıntı ayrıca bozuktu:
+ *
+ *  • İki sütunlu ızgaraya üç alan konmuştu ("Tür", "Segment", "Durum"), üstelik
+ *    ilkinin altında iki satırlık bir açıklama vardı. Sonuç: "Durum" tek başına
+ *    bir satırda kalıp yanında koca bir boşluk bırakıyordu.
+ *  • "Tür" alanı bir TUZAKTI: "Ekip" seçilince kayıt, üzerinde durduğunuz CRM
+ *    listesinden kayboluyordu. CRM zaten yalnız dış ilişkileri gösterir
+ *    (workspace_contacts.kind='external'); ekip kayıtları buradan açılmaz, o
+ *    yüzden seçim de kaldırıldı. Mevcut değer olduğu gibi korunur.
+ */
 export function CrmContactModal({ onClose, onSaved, members, contact }: Props) {
   const isEdit = !!contact;
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
+  // Ekranda seçimi yok ama kayıtta duruyor — düzenlerken sıfırlanmasın.
+  const kind = ((contact as { kind?: string } | null | undefined)?.kind === "team" ? "team" : "external") as
+    | "team"
+    | "external";
+
   const [form, setForm] = useState({
     name: contact?.name ?? "",
     organization: contact?.organization ?? "",
-    kind: (((contact as { kind?: string } | null | undefined)?.kind === "team") ? "team" : "external") as "team" | "external",
     segment: contact?.segment ?? "",
     crm_status: contact?.crm_status ?? "",
+    seeding_stage: contact?.seeding_stage ?? "",
     source_channel: contact?.source_channel ?? "",
     email: contact?.email ?? "",
     phone: contact?.phone ?? "",
@@ -53,10 +84,8 @@ export function CrmContactModal({ onClose, onSaved, members, contact }: Props) {
       return;
     }
     startTransition(async () => {
-      const payload = { ...form };
-      const result = isEdit
-        ? await updateCrmContact(contact!.id, payload)
-        : await createCrmContact(payload);
+      const payload = { ...form, kind };
+      const result = isEdit ? await updateCrmContact(contact!.id, payload) : await createCrmContact(payload);
       if ("error" in result) {
         setError(result.error);
         return;
@@ -65,148 +94,124 @@ export function CrmContactModal({ onClose, onSaved, members, contact }: Props) {
     });
   }
 
+  const step = seedingStep(form.seeding_stage);
+
   return (
-    <div className="anim-fade fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose} role="dialog" aria-modal="true">
-      <div
-        className="anim-scale-in w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-2xl bg-surface shadow-drawer"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-surface px-5 py-3.5">
-          <h2 className="text-[15px] font-semibold tracking-tight text-ink">
-            {isEdit ? "İlişkiyi düzenle" : "Yeni ilişki ekle"}
-          </h2>
-          <button onClick={onClose} aria-label="Kapat" className="rounded-lg p-1.5 text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-95">
-            <X size={16} />
-          </button>
-        </div>
-
-        <div className="space-y-3.5 px-5 py-4">
-          <div>
-            <label className={labelCls}>İsim *</label>
-            <input className={inputCls} value={form.name} onChange={(e) => set("name", e.target.value)} autoFocus />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Kurum / Marka</label>
-              <input className={inputCls} value={form.organization} onChange={(e) => set("organization", e.target.value)} />
-            </div>
-            <div>
-              <label className={labelCls}>Rol / Ünvan</label>
-              <input className={inputCls} value={form.role_label} onChange={(e) => set("role_label", e.target.value)} />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Tür</label>
-              <select className={inputCls} value={form.kind} onChange={(e) => set("kind", e.target.value as "team" | "external")}>
-                <option value="external">Dış ilişki (müşteri, tedarikçi, basın…)</option>
-                <option value="team">Ekip — CRM&apos;de görünmez, Pano&apos;da iş atanabilir</option>
-              </select>
-              <p className="mt-1 text-[11.5px] text-subtle">
-                Ekip seçilirse kayıt CRM listesinden çıkar ama Pano&apos;daki kişi kartı durur.
-              </p>
-            </div>
-
-            <div>
-              <label className={labelCls}>Segment</label>
-              <select className={inputCls} value={form.segment} onChange={(e) => set("segment", e.target.value)}>
+    <Overlay
+      open
+      onClose={onClose}
+      title={isEdit ? "İlişkiyi düzenle" : "Yeni ilişki ekle"}
+      size="lg"
+      dismissOnBackdrop={false}
+      footer={
+        <>
+          <Button variant="ghost" size="sm" onClick={onClose} disabled={isPending}>
+            İptal
+          </Button>
+          <Button size="sm" onClick={handleSave} loading={isPending}>
+            {isEdit ? "Kaydet" : "Ekle"}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <Group title="Kim">
+          <FieldGrid>
+            <Field label="İsim" required className="sm:col-span-2">
+              <TextInput value={form.name} onChange={(e) => set("name", e.target.value)} autoFocus />
+            </Field>
+            <Field label="Kurum / Marka">
+              <TextInput value={form.organization} onChange={(e) => set("organization", e.target.value)} />
+            </Field>
+            <Field label="Rol / Ünvan">
+              <TextInput value={form.role_label} onChange={(e) => set("role_label", e.target.value)} />
+            </Field>
+            <Field label="Segment">
+              <SelectInput value={form.segment} onChange={(e) => set("segment", e.target.value)}>
                 <option value="">Seçiniz</option>
                 {CRM_SEGMENTS.map((s) => (
                   <option key={s.key} value={s.key}>{s.label}</option>
                 ))}
-              </select>
-            </div>
-            <div>
-              <label className={labelCls}>Durum</label>
-              <select className={inputCls} value={form.crm_status} onChange={(e) => set("crm_status", e.target.value)}>
-                <option value="">Seçiniz</option>
-                {CRM_STATUSES.map((s) => (
-                  <option key={s.key} value={s.key}>{s.label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>E-posta</label>
-              <input className={inputCls} value={form.email} onChange={(e) => set("email", e.target.value)} />
-            </div>
-            <div>
-              <label className={labelCls}>Telefon</label>
-              <input className={inputCls} value={form.phone} onChange={(e) => set("phone", e.target.value)} />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Kaynak</label>
-              <select className={inputCls} value={form.source_channel} onChange={(e) => set("source_channel", e.target.value)}>
+              </SelectInput>
+            </Field>
+            <Field label="Kaynak">
+              <SelectInput value={form.source_channel} onChange={(e) => set("source_channel", e.target.value)}>
                 <option value="">Seçiniz</option>
                 {CRM_SOURCE_CHANNELS.map((s) => (
                   <option key={s.key} value={s.key}>{s.label}</option>
                 ))}
-              </select>
-            </div>
-            <div>
-              <label className={labelCls}>Sorumlu kişi</label>
-              <select className={inputCls} value={form.owner_id} onChange={(e) => set("owner_id", e.target.value)}>
+              </SelectInput>
+            </Field>
+          </FieldGrid>
+        </Group>
+
+        <Group title="İletişim">
+          <FieldGrid>
+            <Field label="E-posta">
+              <TextInput type="email" value={form.email} onChange={(e) => set("email", e.target.value)} />
+            </Field>
+            <Field label="Telefon">
+              <TextInput type="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)} />
+            </Field>
+          </FieldGrid>
+        </Group>
+
+        <Group title="Süreç">
+          <FieldGrid>
+            <Field label="Durum">
+              <SelectInput value={form.crm_status} onChange={(e) => set("crm_status", e.target.value)}>
+                <option value="">Seçiniz</option>
+                {CRM_STATUSES.map((s) => (
+                  <option key={s.key} value={s.key}>{s.label}</option>
+                ))}
+              </SelectInput>
+            </Field>
+            {/* Seeding — Aslı Hanım'ın yedi adımı (2026-08-28). */}
+            <Field label="Seeding adımı" hint={step?.note}>
+              <SelectInput value={form.seeding_stage} onChange={(e) => set("seeding_stage", e.target.value)}>
+                <option value="">Süreç başlamadı</option>
+                {SEEDING_STEPS.map((st) => (
+                  <option key={st.key} value={st.key}>
+                    {st.order}. {st.label}
+                  </option>
+                ))}
+              </SelectInput>
+            </Field>
+            <Field label="Sorumlu kişi">
+              <SelectInput value={form.owner_id} onChange={(e) => set("owner_id", e.target.value)}>
                 <option value="">Seçiniz</option>
                 {members.map((m) => (
                   <option key={m.userId} value={m.userId}>{m.name}</option>
                 ))}
-              </select>
+              </SelectInput>
+            </Field>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="Son temas">
+                <TextInput type="date" value={form.last_contact_at} onChange={(e) => set("last_contact_at", e.target.value)} />
+              </Field>
+              <Field label="Sonraki takip">
+                <TextInput type="date" value={form.next_follow_up_at} onChange={(e) => set("next_follow_up_at", e.target.value)} />
+              </Field>
             </div>
+          </FieldGrid>
+        </Group>
+
+        <Group title="Not">
+          <TextArea
+            rows={3}
+            value={form.notes}
+            onChange={(e) => set("notes", e.target.value)}
+            placeholder="Tercihler, beden, geçmiş işbirlikleri…"
+          />
+        </Group>
+
+        {error && (
+          <div className="anim-fade-down flex items-start gap-2 rounded-control border border-danger/25 bg-danger/8 px-3 py-2.5 text-[12.5px] leading-relaxed text-danger">
+            <AlertCircle size={15} className="mt-0.5 shrink-0" />
+            <span className="min-w-0 break-words">{error}</span>
           </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Son temas</label>
-              <input type="date" className={inputCls} value={form.last_contact_at} onChange={(e) => set("last_contact_at", e.target.value)} />
-            </div>
-            <div>
-              <label className={labelCls}>Sonraki takip</label>
-              <input type="date" className={inputCls} value={form.next_follow_up_at} onChange={(e) => set("next_follow_up_at", e.target.value)} />
-            </div>
-          </div>
-
-          <div>
-            <label className={labelCls}>Not</label>
-            <textarea
-              className={cn(inputCls, "resize-y")}
-              rows={3}
-              value={form.notes}
-              onChange={(e) => set("notes", e.target.value)}
-              placeholder="Müşteri özel notu, tercihler, geçmiş…"
-            />
-          </div>
-
-          {error && (
-            <div className="anim-fade-down flex items-start gap-2 rounded-lg border border-[#f1c3bb] bg-[#fdeae7] px-3 py-2.5 text-[12.5px] leading-relaxed text-[#971f12]">
-              <AlertCircle size={15} className="mt-0.5 shrink-0" />
-              <span className="min-w-0 break-words">{error}</span>
-            </div>
-          )}
-        </div>
-
-        <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-line bg-surface px-5 py-3">
-          <button onClick={onClose} className="rounded-lg px-3.5 py-2 text-[13px] font-medium text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-[0.98]">
-            İptal
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={isPending}
-            className={cn(
-              "rounded-lg px-4 py-2 text-[13px] font-medium text-white transition-colors duration-150 active:scale-[0.98]",
-              isPending ? "bg-brand/60 cursor-not-allowed" : "bg-brand hover:bg-brand-strong",
-            )}
-          >
-            {isPending ? "Kaydediliyor…" : isEdit ? "Kaydet" : "Ekle"}
-          </button>
-        </div>
+        )}
       </div>
-    </div>
+    </Overlay>
   );
 }

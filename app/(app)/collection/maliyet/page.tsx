@@ -12,8 +12,11 @@ import type { BomLite } from "@/components/collection/CostBreakdownTable";
 
 export const dynamic = "force-dynamic";
 
+// photo_refs + product_code: maliyet satırı artık ürünün FOTOĞRAFINI ve kodunu
+// taşıyor — tablo bir muhasebe çizelgesi değil, ürün listesi gibi okunsun.
 const COST_COLUMNS =
-  "id, title, product_kind, producer, category, subcategory, pricing, size_distribution, status";
+  "id, title, product_kind, product_code, photo_refs, producer, category, subcategory, " +
+  "pricing, size_distribution, status";
 
 export default async function CostPage({
   searchParams,
@@ -56,12 +59,11 @@ export default async function CostPage({
   const setup = maybeDatabaseSetupRequired(result.error);
   if (setup.setupRequired) {
     return (
-      <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-3xl px-4 py-4 sm:px-6 lg:px-8">
         <ModulePageHeader
           title="Cost"
           description="Her ürünün birim maliyeti kalem kalem — kumaş, dikim, fermuar, ütü/paket, kalıp, genel giderler."
           icon={Wallet}
-          secondaryBackHref="/collection"
         />
         <SetupRequiredNotice
           variant="block"
@@ -75,7 +77,8 @@ export default async function CostPage({
 
   const rows = (result.data ?? []) as unknown as Pick<
     ProductionSheet,
-    "id" | "title" | "product_kind" | "producer" | "category" | "subcategory" | "pricing" | "size_distribution" | "status"
+    | "id" | "title" | "product_kind" | "product_code" | "photo_refs" | "producer"
+    | "category" | "subcategory" | "pricing" | "size_distribution" | "status"
   >[];
 
   // Tüm föylerin reçeteleri — maliyetin malzeme kalemleri buradan gelir.

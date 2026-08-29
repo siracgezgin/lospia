@@ -13,6 +13,8 @@ export type IdentityMember = {
   userId: string;
   name: string;
   roleLabel: string;
+  /** Ekranda görünen ünvan (20240323). Boşsa roleLabel kullanılır. */
+  jobTitle?: string | null;
   colorKey: string | null;
   iconKey: string | null;
   /** profiles.avatar_url — fotoğraf yükleyici için. */

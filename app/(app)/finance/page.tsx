@@ -28,12 +28,11 @@ export default async function FinancePage() {
   const setup = maybeDatabaseSetupRequired(res.error);
   if (setup.setupRequired) {
     return (
-      <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-3xl px-4 py-4 sm:px-6 lg:px-8">
         <ModulePageHeader
           title="Finance"
           description="Kime, ne kadar, ne zaman — ödemelerin tek listesi."
           icon={Wallet}
-          secondaryBackHref="/modules"
         />
         <SetupRequiredNotice
           variant="block"

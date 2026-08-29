@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
-  Wallet, ClipboardList, Check, Loader2, HandCoins, ChevronLeft, Scissors,
+  Wallet, ClipboardList, Check, Loader2, HandCoins, ChevronLeft, Scissors, Boxes,
   MapPin, Clock3, Package,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
@@ -70,6 +70,12 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
   const unitPaymentOf = (id: string) => ustaUnitPaymentOf(pricing[id]);
   const qtyOf = (r: Row) => totalQuantity(r.size_distribution);
   const lineTotal = (r: Row) => qtyOf(r) * unitPaymentOf(r.id);
+  /** Faturalanan tutar toplamı — ödenen toplamla karşılaştırmak için. */
+  const invoiceTotal = (rs: Row[]) =>
+    rs.reduce((a, r) => {
+      const v = Number(String(pricing[r.id]?.invoice_amount ?? "").replace(",", "."));
+      return a + (Number.isFinite(v) ? v : 0);
+    }, 0);
 
   const byId = useMemo(() => {
     const m: Record<string, PaymentManufacturer> = {};
@@ -117,6 +123,13 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
 
   const setPayment = (id: string, value: string) =>
     setPricing((p) => ({ ...p, [id]: { ...p[id], usta_unit_payment: value } }));
+  /* FATURA KARŞILIĞI. Aslı Hanım (2026-08-28): "Bir de fatura karşılığının
+     bilgisi de girsin buraya. Çünkü muhasebeyi de buraya bağlayacaksın."
+     Ödenen tutarla faturalanan tutar aynı olmayabilir; iki alan ayrı durur. */
+  const setInvoiceNo = (id: string, value: string) =>
+    setPricing((p) => ({ ...p, [id]: { ...p[id], invoice_no: value } }));
+  const setInvoiceAmount = (id: string, value: string) =>
+    setPricing((p) => ({ ...p, [id]: { ...p[id], invoice_amount: value } }));
 
   function savePayment(id: string) {
     setSavingId(id);
@@ -130,6 +143,8 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
         notes: p.notes ?? "",
         cost_items: p.cost_items,
         usta_unit_payment: p.usta_unit_payment ?? "",
+        invoice_no: p.invoice_no ?? "",
+        invoice_amount: p.invoice_amount ?? "",
       });
       setSavingId(null);
       if (!("error" in res)) flash(id);
@@ -139,16 +154,10 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
   const active = openUsta ? ustalar.find((u) => u.key === openUsta) ?? null : null;
 
   return (
-    <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
-      <ModulePageHeader
-        title="Payment Table"
-        description="Usta başına ödeme — hangi usta hangi ürünü dikti, ne kadar ödenecek. Ürün maliyeti ayrı ekranda."
-        icon={HandCoins}
-        secondaryBackHref="/collection"
-        rightSlot={<SeasonSwitch seasons={seasons} />}
-      />
-
-      <CollectionTabs active="odeme" />
+    <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
+      {/* Başlık uygulama çubuğunda; aksiyonlar sekme satırının SAĞINDA. */}
+      <h1 className="sr-only">Payment Table</h1>
+      <CollectionTabs active="odeme" actions={<SeasonSwitch seasons={seasons} />} />
 
       {rows.length === 0 ? (
         <EmptyBox text="Henüz ürün yok. Collection’a föy ekleyin." />
@@ -173,13 +182,15 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
 
           <div className="overflow-hidden rounded-2xl border border-line-strong bg-surface shadow-card">
             <div className="max-h-[70vh] overflow-auto">
-              <table className="w-full min-w-[560px] border-separate border-spacing-0 text-sm">
+              <table className="w-full min-w-[820px] border-separate border-spacing-0 text-sm">
                 <thead>
                   <tr className="text-[11.5px] font-semibold uppercase tracking-wider text-muted">
                     <th className="sticky top-0 z-10 min-w-[220px] border-b-2 border-line-strong bg-surface-muted px-3 py-2.5 text-left">Ürün</th>
                     <th className="sticky top-0 z-10 border-b-2 border-l border-line-strong bg-surface-muted px-2 py-2.5 text-right">Adet</th>
                     <th className="sticky top-0 z-10 w-36 border-b-2 border-l border-line-strong bg-surface-muted px-2 py-2.5 text-right">Birim ödeme</th>
                     <th className="sticky top-0 z-10 min-w-[120px] border-b-2 border-l border-line-strong bg-surface-muted px-3 py-2.5 text-right">Toplam</th>
+                    <th className="sticky top-0 z-10 w-32 border-b-2 border-l border-line-strong bg-surface-muted px-2 py-2.5 text-left">Fatura no</th>
+                    <th className="sticky top-0 z-10 w-36 border-b-2 border-l border-line-strong bg-surface-muted px-2 py-2.5 text-right">Fatura tutarı</th>
                     <th className="sticky top-0 z-10 w-8 border-b-2 border-line-strong bg-surface-muted px-2 py-2.5" />
                   </tr>
                 </thead>
@@ -208,6 +219,26 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
                       <td className="border-l border-line/70 px-3 py-1.5 text-right font-semibold tabular-nums text-ink">
                         {lineTotal(r) ? formatMoney(lineTotal(r)) : "—"}
                       </td>
+                      <td className="border-l border-line/70 px-2 py-1">
+                        <input
+                          className={cn(priceInput, "text-left tabular-nums")}
+                          value={pricing[r.id]?.invoice_no ?? ""}
+                          onChange={(e) => setInvoiceNo(r.id, e.target.value)}
+                          onBlur={() => savePayment(r.id)}
+                          placeholder="—"
+                          spellCheck={false}
+                        />
+                      </td>
+                      <td className="border-l border-line/70 px-2 py-1">
+                        <input
+                          className={priceInput}
+                          value={pricing[r.id]?.invoice_amount ?? ""}
+                          onChange={(e) => setInvoiceAmount(r.id, e.target.value)}
+                          onBlur={() => savePayment(r.id)}
+                          placeholder="0"
+                          inputMode="decimal"
+                        />
+                      </td>
                       <td className="px-2 py-1.5 text-center">
                         {savingId === r.id ? (
                           <Loader2 size={13} className="mx-auto animate-spin text-subtle" />
@@ -224,6 +255,10 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
                     <td className="sticky bottom-0 z-10 border-l border-t-2 border-line-strong bg-surface-muted px-2 py-2 text-right tabular-nums text-ink">{active.qty}</td>
                     <td className="sticky bottom-0 z-10 border-l border-t-2 border-line-strong bg-surface-muted px-2 py-2" />
                     <td className="sticky bottom-0 z-10 border-l border-t-2 border-line-strong bg-surface-muted px-3 py-2 text-right tabular-nums text-ink">{formatMoney(active.total)}</td>
+                    <td className="sticky bottom-0 z-10 border-l border-t-2 border-line-strong bg-surface-muted px-2 py-2" />
+                    <td className="sticky bottom-0 z-10 border-l border-t-2 border-line-strong bg-surface-muted px-2 py-2 text-right tabular-nums text-ink">
+                      {invoiceTotal(active.rows) ? formatMoney(invoiceTotal(active.rows)) : "—"}
+                    </td>
                     <td className="sticky bottom-0 z-10 border-t-2 border-line-strong bg-surface-muted px-2 py-2" />
                   </tr>
                 </tfoot>
@@ -322,27 +357,68 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
   );
 }
 
-/** Koleksiyon sekmeleri — Föyler · Maliyet · Ödeme. Tek yerden. */
-export function CollectionTabs({ active }: { active: "foy" | "maliyet" | "odeme" }) {
-  const item = (href: string, label: string, Icon: typeof Wallet, key: string) =>
-    key === active ? (
-      <span key={key} className="flex items-center gap-1.5 border-b-2 border-brand px-3 py-2 text-[13px] font-semibold text-ink">
-        <Icon size={15} /> {label}
-      </span>
-    ) : (
-      <Link
-        key={key}
-        href={href}
-        className="flex items-center gap-1.5 border-b-2 border-transparent px-3 py-2 text-[13px] font-medium text-muted transition-colors duration-150 hover:border-line-strong hover:text-ink"
-      >
-        <Icon size={15} /> {label}
-      </Link>
-    );
+/**
+ * Koleksiyon sekmeleri — Föyler · Maliyet · Ödeme · Ürün verisi.
+ *
+ * TEK SATIR: solda sekme KUTUSU, sağda o sekmenin aksiyonları. Aksiyonlar
+ * eskiden ayrı bir başlık satırındaydı; Product Data'da aksiyon olmadığı için
+ * o satır kayboluyor ve sekmeler yukarı zıplıyordu (2026-08-29: "product
+ * data'ya girince tasarım yukarı kayıyor"). Artık satır her sekmede aynı
+ * yükseklikte: aksiyon yoksa sağ taraf boş kalır, düzen kaymaz.
+ *
+ * Sekmeler bir KUTU içinde — dört alt başlık bir kontrol gibi okunsun.
+ */
+export function CollectionTabs({
+  active, actions,
+}: {
+  active: "foy" | "maliyet" | "odeme" | "veri";
+  /** Sağa sabitlenen aksiyonlar (sezon seçici, indir, yeni föy…). */
+  actions?: React.ReactNode;
+}) {
+  const TABS: { key: string; href: string; label: string; icon: typeof Wallet }[] = [
+    { key: "foy",     href: "/collection",         label: "Production Sheets", icon: ClipboardList },
+    { key: "maliyet", href: "/collection/maliyet", label: "Cost",              icon: Wallet },
+    { key: "odeme",   href: "/collection/odeme",   label: "Payment Table",     icon: HandCoins },
+    { key: "veri",    href: "/collection/veri",    label: "Product Data",      icon: Boxes },
+  ];
+
   return (
-    <div className="mb-4 flex items-center gap-1 overflow-x-auto border-b border-line no-scrollbar">
-      {item("/collection", "Production Sheets", ClipboardList, "foy")}
-      {item("/collection/maliyet", "Cost", Wallet, "maliyet")}
-      {item("/collection/odeme", "Payment Table", HandCoins, "odeme")}
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+      <div className="inline-flex h-9 max-w-full items-center overflow-x-auto rounded-lg border border-line bg-surface-muted p-0.5 no-scrollbar">
+        {TABS.map((t, i) => {
+          const isActive = t.key === active;
+          /* AYIRICI: sekmeler bitişikken tek bir uzun düğme gibi okunuyordu
+             (2026-08-29: "neden ayırıcı eklemiyorsun, iç içe geçmiş gibi").
+             Çizgi yalnız İKİ PASİF sekme arasında çizilir; seçili sekme beyaz
+             bir kart olduğu için kendi kenarını zaten belli ediyor. */
+          const divider = i > 0 && !isActive && TABS[i - 1].key !== active;
+          return (
+            <span key={t.key} className="flex h-full items-center">
+              {divider && <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-line" />}
+              {isActive ? (
+                <span
+                  aria-current="page"
+                  className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-surface px-3 text-[13px] font-semibold text-ink shadow-xs ring-1 ring-line/70"
+                >
+                  <t.icon size={15} /> <span className="hidden sm:inline">{t.label}</span>
+                </span>
+              ) : (
+                <Link
+                  href={t.href}
+                  className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium text-muted transition-colors duration-150 hover:bg-surface hover:text-ink"
+                >
+                  <t.icon size={15} /> <span className="hidden sm:inline">{t.label}</span>
+                </Link>
+              )}
+            </span>
+          );
+        })}
+      </div>
+      {/* Sağ taraf HER SEKMEDE var; boş olsa da satır yüksekliğini sekme
+          kutusu belirler, o yüzden düzen kaymaz. */}
+      <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+        {actions}
+      </div>
     </div>
   );
 }

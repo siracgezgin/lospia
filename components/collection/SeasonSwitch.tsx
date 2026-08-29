@@ -35,11 +35,15 @@ export function SeasonSwitch({ seasons }: { seasons: SwitchSeason[] }) {
   }
 
   return (
+    /* ETİKET GÖRÜNÜR. Kutu yalnız "2026 RESORT ·" yazıyordu; ne olduğu
+       anlaşılmıyor, sondaki nokta da bozukmuş gibi duruyordu (2026-08-29:
+       "onun mantığını anlamadım, kafa karıştırıcı geliyor"). */
     <label
       className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface pl-2.5 pr-1 text-[13px]"
-      title="Sezon — Koleksiyon, Maliyet ve Ödeme Tablosu bu seçime uyar"
+      title="Koleksiyon, Maliyet ve Ödeme Tablosu seçili sezonu gösterir"
     >
       <CalendarClock size={14} className="shrink-0 text-muted" />
+      <span className="shrink-0 text-[12px] font-medium text-subtle">Sezon</span>
       <select
         value={current}
         onChange={(e) => go(e.target.value)}
@@ -50,8 +54,11 @@ export function SeasonSwitch({ seasons }: { seasons: SwitchSeason[] }) {
         )}
       >
         {seasons.map((s) => (
+          /* Sezon adı DÜZ yazılır. Önce "·", sonra "(aktif)" ekliydi; ikisi
+             de kutuyu kalabalıklaştırdı ve soruyu cevaplamadı. Hangi sezonun
+             aktif olduğu Product Data > Sezonlar'da yıldızla duruyor. */
           <option key={s.id} value={s.id}>
-            {s.name}{s.is_current ? " ·" : ""}
+            {s.name}
           </option>
         ))}
         <option value={ALL_SEASONS}>Tüm sezonlar</option>

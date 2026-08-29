@@ -107,12 +107,12 @@ export function SheetsView({
     "h-9 rounded-lg border border-line bg-surface px-3 text-sm text-muted transition-colors duration-150 hover:border-line-strong focus:outline-none focus:border-brand-ring focus:ring-2 focus:ring-brand-ring/40";
 
   return (
-    <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
+    <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
       <ModulePageHeader
         title="Sheets"
         description="Excel/CSV düzenlerinizi Lospia içinde tablo olarak tutun — hücreleri doğrudan düzenleyin, Excel'den kopyalayıp yapıştırın."
         icon={Table2}
-        secondaryBackHref="/board"
+        // Sheets AF Teamwork'ün bir bölümü (2026-08-28) — geri oraya döner.
         rightSlot={
           <button
             onClick={openNew}

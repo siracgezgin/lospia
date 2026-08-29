@@ -1,18 +1,38 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Mail, Shield, AtSign, LogOut } from "lucide-react";
+import {
+  AtSign, LogOut, Shield, Home, ListChecks, CalendarDays, Settings as SettingsIcon,
+  type LucideIcon,
+} from "lucide-react";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { AvatarUploader } from "@/components/settings/AvatarUploader";
+import { ProfileForm } from "@/components/profile/ProfileForm";
 import { assignPersonTones } from "@/lib/design/person-colors";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { roleLabel } from "@/lib/utils/roles";
+import { canManageSettings } from "@/lib/auth/permissions";
 import { signOut } from "@/lib/actions/auth";
 import type { WorkspaceRole } from "@/types";
 
-// Lightweight personal profile, surfaced for members in the mobile bottom nav
-// (admins reach it from the top-right avatar menu). Read-only snapshot of who
-// you are — no team data ever crosses to a member here.
-// NOT: puan kartları kaldırıldı (puan sistemi gizli — sidebar/header'dan da
-// kaldırılmıştı, burası son kalan yüzeydi); sorgusu da artık çalışmıyor.
+export const metadata = { title: "Profile" };
+
+/**
+ * PROFİL — kişinin kendi sayfası.
+ *
+ * Sıraç (2026-08-29): "Profilimde sadece [fotoğraf] ekleme var. Bu kısım daha
+ * iyileştirilebilir olmalı ya da diğer kısımlarla birleştirilip yapılabilir.
+ * Bir de bu şu an admin, üyede nasıl olacak?"
+ *
+ * Eski hali SALT OKUNURDU: fotoğraf dışında hiçbir şey değiştirilemiyordu, ad
+ * ve ünvan yalnız yöneticinin Ayarlar ekranından yazılabiliyordu — yani bir
+ * tasarımcı kendi ünvanını yazamıyordu. Üstelik `max-w-2xl` yüzünden sayfanın
+ * sağ yarısı bomboş duruyordu.
+ *
+ * ÜYE / YÖNETİCİ FARKI: sayfa ikisi için de AYNIDIR. Ad, ünvan, fotoğraf ve
+ * bildirim adresi herkesin kendi verisidir. Rol yalnız YAZILIR, seçilemez —
+ * rol değiştirmek Ayarlar'ın (yönetici) işidir. Tek fark yan sütundaki
+ * "Ayarlar" kısayolunun yalnız yöneticide görünmesi.
+ */
 export default async function ProfilePage() {
   const supabase = await createClient();
   const user = await getAuthUser();
@@ -20,14 +40,23 @@ export default async function ProfilePage() {
 
   const { data: memberRows } = await supabase
     .from("workspace_members")
-    .select("workspace_id, role")
+    .select("id, workspace_id, role, job_title, notification_email")
     .eq("user_id", user.id)
     .limit(1);
-  const role = (memberRows?.[0]?.role ?? "member") as WorkspaceRole;
+  const me = memberRows?.[0] as
+    | {
+        id: string;
+        workspace_id: string;
+        role: string;
+        job_title?: string | null;
+        notification_email?: string | null;
+      }
+    | undefined;
+  const role = (me?.role ?? "member") as WorkspaceRole;
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name, username, avatar_url")
+    .select("full_name, username, avatar_url, email")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -38,7 +67,7 @@ export default async function ProfilePage() {
   const { data: teamRows } = await supabase
     .from("workspace_members")
     .select("user_id, color_key, icon_key")
-    .eq("workspace_id", memberRows?.[0]?.workspace_id ?? "");
+    .eq("workspace_id", me?.workspace_id ?? "");
   const team = (teamRows ?? []) as { user_id: string; color_key: string | null; icon_key: string | null }[];
   const myTone = assignPersonTones(
     team.map((m) => m.user_id),
@@ -46,60 +75,72 @@ export default async function ProfilePage() {
   )[user.id];
 
   return (
-    <div className="w-full px-4 py-6 sm:px-6 lg:px-8 space-y-5">
-      <h1 className="text-xl font-semibold text-ink">Profile</h1>
+    <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
+      {/* Başlık uygulama çubuğunda zaten yazıyor. */}
+      <h1 className="sr-only">Profile</h1>
 
-      <div className="max-w-2xl">
-        <div className="space-y-5 min-w-0">
-          {/* Identity card */}
-          <div className="bg-surface rounded-2xl border border-line shadow-card p-5">
-            <div className="flex flex-wrap items-center gap-4">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-lg font-semibold text-ink">{displayName}</p>
-                <p className="flex items-center gap-1.5 truncate text-[13px] text-muted">
-                  <Mail size={13} className="shrink-0" />
-                  <span className="truncate">{user.email ?? "—"}</span>
-                </p>
-              </div>
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
+        {/* ── Kimlik + düzenlenebilir alanlar ──────────────────────────── */}
+        <section className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card lg:col-span-2">
+          <div className="flex flex-wrap items-center gap-4 border-b border-hairline bg-surface-muted/50 px-5 py-4">
+            <AvatarUploader
+              userId={user.id}
+              name={displayName}
+              photoUrl={profile?.avatar_url ?? null}
+              colorHex={myTone?.hex ?? null}
+            />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[17px] font-semibold tracking-tight text-ink">{displayName}</p>
+              <p className="truncate text-[13px] text-muted">
+                {me?.job_title?.trim() || roleLabel(role)}
+              </p>
             </div>
-
-            {/* Fotoğraf — herkes kendi resmini buradan koyar; yoksa baş harf
-                gösterilir (Aslı Hanım, 2026-08-24: "artık kişiler resmiyle
-                görünecek… resmi olmayan yine aynı şekilde"). */}
-            <div className="mt-4 border-t border-hairline pt-4">
-              <AvatarUploader
-                userId={user.id}
-                name={displayName}
-                photoUrl={profile?.avatar_url ?? null}
-                colorHex={myTone?.hex ?? null}
-              />
-            </div>
-
-            <dl className="mt-5 grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-line bg-line">
-              {profile?.username && (
-                <div className="flex items-center justify-between gap-3 bg-surface px-4 py-3">
-                  <dt className="flex items-center gap-2 text-sm text-muted">
-                    <AtSign size={14} className="text-subtle shrink-0" />
-                    Kullanıcı adı
-                  </dt>
-                  <dd className="text-sm font-medium text-ink truncate">{profile.username}</dd>
-                </div>
-              )}
-              <div className="flex items-center justify-between gap-3 bg-surface px-4 py-3">
-                <dt className="flex items-center gap-2 text-sm text-muted">
-                  <Shield size={14} className="text-subtle shrink-0" />
-                  Rol
-                </dt>
-                <dd className="text-sm font-medium text-ink">{roleLabel(role)}</dd>
-              </div>
-            </dl>
           </div>
 
-          {/* Sign out */}
+          <div className="px-5 py-4">
+            <ProfileForm
+              memberId={me?.id ?? null}
+              fullName={profile?.full_name ?? ""}
+              jobTitle={me?.job_title ?? null}
+              notificationEmail={me?.notification_email ?? null}
+            />
+          </div>
+        </section>
+
+        {/* ── Hesap + kısayollar ───────────────────────────────────────── */}
+        <div className="space-y-4">
+          <section className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
+            <h2 className="border-b border-hairline px-5 py-3 text-[11.5px] font-semibold uppercase tracking-[0.1em] text-subtle">
+              Hesap
+            </h2>
+            <dl className="divide-y divide-hairline">
+              <Row icon={Shield} label="Rol" value={roleLabel(role)} />
+              <Row icon={AtSign} label="Giriş adresi" value={profile?.email ?? user.email ?? "—"} />
+              {profile?.username && <Row icon={AtSign} label="Kullanıcı adı" value={profile.username} />}
+            </dl>
+            <p className="border-t border-hairline px-5 py-3 text-[11.5px] leading-snug text-subtle">
+              Rolü ve erişimleri yalnız yönetici değiştirebilir.
+            </p>
+          </section>
+
+          <section className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
+            <h2 className="border-b border-hairline px-5 py-3 text-[11.5px] font-semibold uppercase tracking-[0.1em] text-subtle">
+              Kısayollar
+            </h2>
+            <div className="divide-y divide-hairline">
+              <Shortcut href="/home" icon={Home} label="Ana Sayfa" />
+              <Shortcut href="/list?view=mine" icon={ListChecks} label="İşlerim" />
+              <Shortcut href="/planning" icon={CalendarDays} label="Calendar" />
+              {canManageSettings(role) && (
+                <Shortcut href="/settings" icon={SettingsIcon} label="Ayarlar" />
+              )}
+            </div>
+          </section>
+
           <form action={signOut}>
             <button
               type="submit"
-              className="w-full flex items-center justify-center gap-2 rounded-xl border border-line bg-surface px-4 py-3 text-sm font-medium text-[#a83a2c] hover:bg-[#fbeae7] transition-colors"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-line bg-surface px-4 py-3 text-sm font-medium text-danger shadow-card transition-colors duration-150 hover:bg-danger/10"
             >
               <LogOut size={16} />
               Çıkış yap
@@ -108,5 +149,31 @@ export default async function ProfilePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+/** Salt okunur hesap satırı. */
+function Row({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-5 py-2.5">
+      <dt className="flex shrink-0 items-center gap-2 text-[13px] text-muted">
+        <Icon size={14} className="shrink-0 text-subtle" />
+        {label}
+      </dt>
+      <dd className="min-w-0 truncate text-[13px] font-medium text-ink">{value}</dd>
+    </div>
+  );
+}
+
+/** Kısayol satırı — hepsi aynı yükseklikte, aynı ikon boyunda. */
+function Shortcut({ href, icon: Icon, label }: { href: string; icon: LucideIcon; label: string }) {
+  return (
+    <Link
+      href={href}
+      className="flex items-center gap-2.5 px-5 py-2.5 text-[13.5px] text-muted transition-colors duration-150 hover:bg-surface-hover hover:text-ink"
+    >
+      <Icon size={15} className="shrink-0 text-subtle" />
+      {label}
+    </Link>
   );
 }

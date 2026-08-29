@@ -45,16 +45,20 @@ app/
     finance/            ödeme takibi (admin-only, RLS dahil)
     modules/            Operasyon Modülleri hub (Çekirdek + departman kartları)
     crm/ creative/      contacts + kreatif link registry (admin)
-    documents/ templates/ sheets/   Ofis Merkezi
+    documents/ sheets/ library/     AF Teamwork (documents = giriş; sheets ve
+                        library onun kutucukları — sidebar'da tek satır)
     activity/ archive/ trash/ settings/ profile/ rules/
   api/inbound-email/    email-to-task webhook (feature-flagged)
-components/             alan başına klasör (ui/ = paylaşılan primitifler;
+components/             alan başına klasör (ui/ = paylaşılan primitifler —
+                        TileGrid.tsx TEK giriş deseni: Pano kişi kartı dili
+                        Collection, AF Teamwork ve Library'de aynen tekrar eder;
                         planning/ board/ task/ collection/ production/ finance/
                         modules/ layout/ dashboard/ …)
 lib/
   supabase/             browser | server | middleware clients
   actions/              server actions (all mutations live here)
   planning/ collection/ production/  alan yardımcıları (kategoriler, maliyet, xlsx)
+  planning/timezones.ts kayıtlı toplantı saati NEW YORK'tur; İstanbul hesaplanır
   modules/registry.ts   MODULE_DIRECTORY — "ne nerede"nin tek kaynağı.
                         KURAL: isim-only başlık yok; bir rota EN FAZLA bir kez,
                         TEK kanonik isimle listelenir (sidebar + PAGE_TITLES
@@ -78,8 +82,17 @@ types/
   ediyor?* (kategori ağacındaki ürün adedi, filtrelenmiş tablonun satır
   sayısı) → serbest. Kart başına EN FAZLA bir rozet; durumu sütun/sayfa zaten
   söylüyorsa çip tekrardır. "Mühendis gibi hissetmek istemiyorum."
-- Giriş rotası /home (Ana Sayfa) — tüm roller; kısayol kartları registry'den
-  role göre filtrelenir. /modules genel-bakış hub'ıdır — kartlarda sayaç yok.
+- **TEK TASARIM DİLİ (Aslı Hanım, 2026-08-28): "Bir tasarımı yaptığın zaman
+  o tasarımı her yerde devam ettirmen gerekiyor… O da branding'ini destekleyen
+  bir şey olur."** Bir modülün GİRİŞ ekranı her zaman `components/ui/TileGrid`
+  kutucuklarıdır (referans: Pano kişi kartı). Yeni bir liste/ağaç/açılır-kutu
+  düzeni İCAT ETME; solda ayrı gezinme paneli açma; "muhasebeci gibi" alt alta
+  select dizme. Süzgeç kuralı: **başlık · tür · departman**, fazlası satırın
+  içinde yazar.
+- Giriş rotası /home (Ana Sayfa) — tüm roller. İçerik "bugün ne yapacağım?":
+  işler ZAMANA göre gruplu (Gecikmiş · Bugün · Bu hafta · Sonrası · Tarihsiz)
+  + bugünün ve haftanın toplantıları. KISAYOL IZGARASI YOK (2026-08-29:
+  "zaten yanda var her şey") — gezinme sol menü ve /modules hub'ıdır.
 - Sidebar 3 sabit grup (Core Operations / Product & Office / Admin); yeni
   modülün kapısı Ana Sayfa kısayolları + /modules hub'ıdır — sidebar'a başlık
   eklemek kullanıcı onayı ister.

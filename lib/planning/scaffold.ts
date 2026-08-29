@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { PLANNING_BANDS } from "@/lib/planning/bands";
+import { defaultRuntimeBands, type RuntimeBand } from "@/lib/planning/bands";
 
 /**
  * Haftanın iskeletini OTOMATİK kurar (kaynak: PLANNING_BANDS).
@@ -27,9 +27,15 @@ import { PLANNING_BANDS } from "@/lib/planning/bands";
  */
 export async function ensureWeekScaffold(
   supabase: SupabaseClient,
-  opts: { workspaceId: string; userId: string; isAdmin: boolean; weekStart: string; weekEnd: string },
+  opts: {
+    workspaceId: string; userId: string; isAdmin: boolean;
+    weekStart: string; weekEnd: string;
+    /** Sol sütun (20240326). Verilmezse kod varsayılanları. */
+    bands?: RuntimeBand[];
+  },
 ): Promise<number> {
   const { workspaceId, userId, isAdmin, weekStart, weekEnd } = opts;
+  const bands = opts.bands?.length ? opts.bands : defaultRuntimeBands();
   if (!isAdmin) return 0;
 
   // Hafta boş mu? Tek satır yeter — dolu haftada hiçbir sorgu daha yapılmaz.
@@ -46,8 +52,10 @@ export async function ensureWeekScaffold(
      Aslı Hanım (2026-08-24): "Şablonları kaldır, olmasına gerek yok; zaten
      elden giriyoruz biz." Şablonlar ayrı bir ekranda yönetiliyor, boş
      bırakılınca hafta bomboş açılıyordu. Artık haftanın saatleri ve gün
-     başlıkları PLANNING_BANDS'ten okunur — her hafta birebir aynı. */
-  const rows = PLANNING_BANDS.flatMap((band) =>
+     başlıkları ŞERİTLERDEN okunur: yönetici sol sütunu düzenlediyse
+     (planning_bands, 20240326) onun saatleri, düzenlemediyse kod
+     varsayılanları geçerli — her hafta birebir aynı. */
+  const rows = bands.flatMap((band) =>
     band.columns.flatMap((title, weekday) => {
       if (!title.trim()) return []; // o gün o şeritte toplantı yok
       return [{

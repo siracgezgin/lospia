@@ -44,6 +44,8 @@ const FolderSchema = z.object({
   name: z.string().min(1, "Klasör adı gerekli.").max(200),
   parent_id: z.string().uuid().optional().nullable(),
   visibility: z.enum(["all", "admin"]).default("admin"),
+  /** Bölüm (20240324): AF Teamwork mü Kütüphane mi. Alt klasör üstünü izler. */
+  section: z.enum(["teamwork", "library"]).default("teamwork"),
 });
 export type FolderInput = z.infer<typeof FolderSchema>;
 
@@ -66,6 +68,7 @@ export async function saveFolder(
     name: v.name.trim(),
     parent_id: v.parent_id || null,
     visibility: v.visibility,
+    section: v.section,
     updated_by: ctx.userId,
   };
 
@@ -135,6 +138,10 @@ export async function uploadDocumentFile(
 ): Promise<{ id: string } | { error: string }> {
   const file = formData.get("file");
   const folderId = (formData.get("folder_id") as string | null) || null;
+  /* Bölüm (20240327): kayıt hangi ekranda açıldıysa orada yaşar. Klasörsüz
+     yüklemede tek ayırt edici bu — yoksa Kütüphane köküne atılan dosya AF
+     Teamwork'te beliriyordu. */
+  const section = (formData.get("section") as string | null) === "library" ? "library" : "teamwork";
   if (!(file instanceof File)) return { error: "Dosya bulunamadı." };
   if (file.size === 0) return { error: "Dosya boş." };
   if (file.size > MAX_BYTES) {
@@ -165,6 +172,7 @@ export async function uploadDocumentFile(
       file_name: file.name.slice(0, 300),
       file_size: file.size,
       file_mime: file.type || null,
+      section,
       status: "approved",
       owner_id: ctx.userId,
       created_by: ctx.userId,

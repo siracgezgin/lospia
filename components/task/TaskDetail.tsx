@@ -28,6 +28,7 @@ import {
 import { Avatar } from "@/components/ui/Avatar";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { cn } from "@/lib/utils/cn";
+import { BackLink } from "@/components/modules/BackLink";
 import { TaskDrawerContext } from "@/components/task/TaskDetailDrawer";
 import {
   TASK_VISIBILITIES, VISIBILITY_LABELS, VISIBILITY_DESCRIPTIONS,
@@ -213,9 +214,11 @@ function TaskEditor({
             <ArrowLeft size={14} className="transition-transform duration-150 ease-standard group-hover:-translate-x-0.5" /> Kapat
           </button>
         ) : (
-          <Link href={backHref} className="group inline-flex items-center gap-1 text-sm text-muted hover:text-ink transition-colors duration-150">
-            <ArrowLeft size={14} className="transition-transform duration-150 ease-standard group-hover:-translate-x-0.5" /> {backLabel}
-          </Link>
+          /* GERÇEK geri — Aslı Hanım (2026-08-28): "normal geldiği yerden geri
+             dönün." Görev Takvim'den ya da Ana Sayfa'dan açıldığında da
+             "Board'a dön" yazıyordu. Geçmiş yoksa hesaplanan panoya düşer
+             (yönetici panosunun görünürlük/yönetici parametreleri korunur). */
+          <BackLink href={backHref} />
         )}
         <div className="flex items-center gap-2 ml-auto">
           {feedback && (

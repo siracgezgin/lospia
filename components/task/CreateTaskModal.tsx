@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { X, Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 import { createTask } from "@/lib/actions/tasks";
 import {
   STATUS_LABELS,
@@ -14,6 +14,7 @@ import {
 import { Avatar } from "@/components/ui/Avatar";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { cn } from "@/lib/utils/cn";
+import { Overlay } from "@/components/ui/Overlay";
 import { type EffortSize } from "@/lib/points/effort";
 import {
   TASK_VISIBILITIES, VISIBILITY_LABELS, VISIBILITY_DESCRIPTIONS,
@@ -183,26 +184,8 @@ export function CreateTaskModal({
   const labelCls = "block text-[12px] font-medium text-muted mb-1";
 
   return (
-    <div
-      className="anim-fade fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-[2px] p-4"
-      onClick={onClose}
-    >
-      <div
-        className="anim-scale-in bg-surface rounded-modal border border-line shadow-drawer w-full max-w-lg max-h-[92vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-hairline sticky top-0 bg-surface z-10">
-          <h2 className="text-base font-semibold tracking-tight text-ink">Görev oluştur</h2>
-          <button
-            onClick={onClose}
-            aria-label="Kapat"
-            className="text-subtle hover:text-ink hover:bg-surface-muted active:scale-[0.98] rounded-lg p-1.5 transition-colors duration-150"
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+    <Overlay open onClose={onClose} title="Görev oluştur" size="md" dismissOnBackdrop={false}>
+      <form onSubmit={handleSubmit} className="space-y-4">
           {/* ── 1. İŞ ─────────────────────────────────────────────────────── */}
           <div>
             <label className={labelCls}>İş <span className="text-danger">*</span></label>
@@ -306,7 +289,7 @@ export function CreateTaskModal({
               </select>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className={labelCls}>Başlangıç tarihi</label>
                 <input
@@ -420,9 +403,8 @@ export function CreateTaskModal({
               {isPending ? "Oluşturuluyor…" : "Görev oluştur"}
             </button>
           </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </Overlay>
   );
 }
 

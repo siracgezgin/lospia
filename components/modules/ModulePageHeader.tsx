@@ -1,89 +1,68 @@
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { BackLink } from "./BackLink";
 
 interface Props {
+  /** Sayfa başlığı — EKRANDA çizilmez (uygulama çubuğu zaten yazıyor), yalnız
+   *  ekran okuyucular için gizli bir <h1> olarak konur. */
   title: string;
-  description?: string;
-  icon?: LucideIcon;
-  /** Optional small pill next to the title (e.g. "Yönetici alanı"). */
-  badge?: string;
-  /** Primary back target — defaults to Home Page (her role açık, çıkmaz yok). */
+  /** "Geri"nin hedefini ELLE ver. Boşsa yolun kendisinden türetilir; kök
+   *  sayfalarda düğme hiç çizilmez (bkz. lib/nav/parent-path.ts). */
   backHref?: string;
-  backLabel?: string;
-  /** Optional secondary back link (e.g. "Board'a dön"). */
-  secondaryBackHref?: string;
-  secondaryBackLabel?: string;
-  /** Optional right-aligned actions (buttons, filters). */
+  /** Sağa yaslı aksiyonlar (düğmeler, süzgeçler). */
   rightSlot?: React.ReactNode;
+
+  /** @deprecated Çizilmiyor (2026-08-29) — bkz. bileşen notu. Eski çağrı
+   *  yerleri tip hatası vermesin diye kabul ediliyor. */
+  description?: string;
+  /** @deprecated Çizilmiyor (2026-08-29). */
+  icon?: LucideIcon;
+  /** @deprecated Çizilmiyor (2026-08-29). */
+  badge?: string;
+  /** @deprecated İkinci sabit geri bağlantısı kaldırıldı (2026-08-28). */
+  secondaryBackHref?: string;
+  /** @deprecated */
+  secondaryBackLabel?: string;
+  /** @deprecated */
+  backLabel?: string;
 }
 
 /**
- * Shared header for the Operasyon Modülleri screens. Gives every module a
- * consistent, professional shell: a small "← geri dön" row on top, then the
- * icon + title + description, with an optional right-hand action slot. Keeps the
- * AF design language (soft brand chip, muted text) and never lets a module page
- * dead-end.
+ * Her modül ekranının ortak üst çubuğu: SOLDA "← Geri", SAĞDA aksiyonlar.
+ *
+ * Aslı Hanım (2026-08-29): "Bütün sayfalarda şu kısımları kaldır, sayfayı
+ * etkin, optimum, profesyonel kullan."
+ *
+ * Burada bir zamanlar büyük bir blok vardı: ikon + sayfa başlığı + açıklama
+ * cümlesi. Üçü de ~110px yüksekliği yiyordu ve BAŞLIK TEKRARDI — uygulama
+ * çubuğu (AppHeader) aynı adı zaten yazıyor. Açıklama cümlesi de ilk günden
+ * sonra kimse tarafından okunmuyordu. Geriye tek satır kaldı; içerik ekranın
+ * tepesinden başlıyor.
+ *
+ * Başlık ERİŞİLEBİLİRLİK için duruyor: her sayfanın bir <h1>'i olmalı, ama
+ * görsel olarak gizli (sr-only).
+ *
+ * Aslı Hanım (2026-08-28), geri bağlantısı için: "Neden 'Home Page'e dön' var
+ * her yerde? Normal geldiği yerden geri dönün." — hedefi tarayıcı geçmişi
+ * belirler (bkz. BackLink).
  */
 export function ModulePageHeader({
   title,
-  description,
-  icon: Icon,
-  badge,
-  backHref = "/home",
-  backLabel = "Home Page’e dön",
-  secondaryBackHref,
-  secondaryBackLabel = "Board’a dön",
+  backHref,
   rightSlot,
 }: Props) {
   return (
-    <div className="mb-5">
-      {/* Back navigation row */}
-      <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
-        <Link
-          href={backHref}
-          className="group inline-flex items-center gap-1.5 text-muted transition-colors duration-150 hover:text-ink"
-        >
-          <ArrowLeft size={14} className="shrink-0 transition-transform duration-150 ease-standard group-hover:-translate-x-0.5" />
-          {backLabel}
-        </Link>
-        {secondaryBackHref && (
-          <>
-            <span className="text-subtle">·</span>
-            <Link
-              href={secondaryBackHref}
-              className="text-subtle transition-colors duration-150 hover:text-ink"
-            >
-              {secondaryBackLabel}
-            </Link>
-          </>
-        )}
-      </div>
-
-      {/* Title row */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-3">
-          {Icon && (
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">
-              <Icon size={18} />
-            </div>
-          )}
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl font-semibold tracking-tight text-ink">{title}</h1>
-              {badge && (
-                <span className="rounded-full bg-brand-soft px-2 py-0.5 text-[11px] font-medium text-brand-strong">
-                  {badge}
-                </span>
-              )}
-            </div>
-            {description && (
-              <p className="mt-0.5 text-sm text-muted">{description}</p>
-            )}
-          </div>
+    /* Tek satır. Dar ekranda aksiyonlar alta geçip tam genişlik alır; eskiden
+       `shrink-0` yüzünden sıkışıp sayfayı yatay kaydırıyorlardı. */
+    /* Kök sayfada BackLink kendini çizmez; aksiyon da yoksa satır boş kalır
+       ama yalnız `mb-2` kadar yer tutar — görünür bir boşluk bırakmaz. */
+    <div className="mb-2 flex flex-col gap-2 empty:mb-0 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+      <h1 className="sr-only">{title}</h1>
+      <BackLink href={backHref} />
+      {rightSlot && (
+        <div className="-mx-1 flex w-full flex-wrap items-center gap-2 overflow-x-auto px-1 pb-0.5 sm:mx-0 sm:w-auto sm:shrink-0 sm:overflow-visible sm:px-0">
+          {rightSlot}
         </div>
-        {rightSlot && <div className="flex shrink-0 items-center gap-2">{rightSlot}</div>}
-      </div>
+      )}
     </div>
   );
 }

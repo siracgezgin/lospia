@@ -18,8 +18,21 @@ import type { ProductionSheet, ProductionPricing, SizeDistribution } from "@/typ
 
 type Row = Pick<
   ProductionSheet,
-  "id" | "title" | "product_kind" | "category" | "subcategory" | "pricing" | "size_distribution"
+  | "id" | "title" | "product_kind" | "product_code" | "photo_refs"
+  | "category" | "subcategory" | "pricing" | "size_distribution"
 >;
+
+/** Satırdaki ürün görseli — Koleksiyon kartlarıyla AYNI öncelik: önce ürünün
+ *  kendi fotoğrafı, teknik çizim en son. */
+const COVER_PRIORITY = ["general", "embellishments", "accessories", "sewing", "fabric"] as const;
+function coverOf(r: Row): string | null {
+  const imgs = (Array.isArray(r.photo_refs) ? r.photo_refs : []).filter((i) => i?.url);
+  for (const section of COVER_PRIORITY) {
+    const hit = imgs.find((i) => i.section === section);
+    if (hit) return hit.url;
+  }
+  return imgs[0]?.url ?? null;
+}
 
 interface Props {
   rows: Row[];
@@ -100,24 +113,9 @@ export function CostTable({ rows }: Props) {
   const grandTotal = rows.reduce((acc, r) => acc + lineTotal(r.id), 0);
 
   return (
-    <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
-      <ModulePageHeader
-        title="Cost"
-        description="Tüm ürünlerin maliyeti tek tabloda. Beden adetlerini ve birim fiyatı burada değiştirebilirsiniz — ürünün föyünde de güncellenir."
-        icon={Wallet}
-        secondaryBackHref="/collection"
-        rightSlot={
-          rows.length > 0 ? (
-            <a
-              href="/collection/maliyet/export"
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-muted transition-[background-color,border-color,color,transform] duration-150 ease-standard hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
-              title="Maliyet tablosunu Excel olarak indir"
-            >
-              <FileSpreadsheet size={15} /> Excel indir
-            </a>
-          ) : undefined
-        }
-      />
+    <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
+      {/* Başlık uygulama çubuğunda; aksiyonlar sekme satırının SAĞINDA. */}
+      <h1 className="sr-only">Cost</h1>
 
       {/* Sekme çubuğu */}
       <div className="mb-4 flex items-center gap-1 border-b border-line">
@@ -162,11 +160,34 @@ export function CostTable({ rows }: Props) {
                   const qbs = qtyBySizeOf(r.id);
                   return (
                     <tr key={r.id} className="transition-colors duration-150 hover:bg-surface-hover/60">
+                      {/* ÜRÜN — fotoğrafıyla. Maliyet tablosu bir muhasebe
+                          çizelgesi gibi duruyordu; hangi ürünün satırında
+                          olduğunu ancak adı okuyarak anlıyordunuz. Kapak
+                          görseli Koleksiyon kartıyla aynı kuraldan gelir. */}
                       <td className="px-3 py-1.5">
-                        <Link href={`/production/${r.id}`} className="font-medium text-ink transition-colors duration-150 hover:text-brand-strong">
-                          {r.title}
+                        <Link
+                          href={`/production/${r.id}`}
+                          className="group/prod flex items-center gap-2.5"
+                        >
+                          <span className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-lg bg-surface-muted">
+                            {coverOf(r) ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={coverOf(r)!} alt="" className="h-full w-full object-cover" />
+                            ) : (
+                              <ClipboardList size={15} className="text-subtle" />
+                            )}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block truncate font-medium text-ink transition-colors duration-150 group-hover/prod:text-brand-strong">
+                              {r.title}
+                            </span>
+                            {(r.product_code || r.product_kind) && (
+                              <span className="block truncate text-[12px] text-subtle">
+                                {[r.product_code, r.product_kind].filter(Boolean).join(" · ")}
+                              </span>
+                            )}
+                          </span>
                         </Link>
-                        {r.product_kind && <span className="ml-2 text-[12px] text-subtle">{r.product_kind}</span>}
                       </td>
                       {sizes.map((s) => (
                         <td key={s} className={cn("px-0.5 py-1", colBorder)}>

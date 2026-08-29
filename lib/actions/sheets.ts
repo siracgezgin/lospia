@@ -279,3 +279,50 @@ export async function deleteOperationSpreadsheet(
   revalidatePath("/sheets");
   return { ok: true };
 }
+
+/**
+ * Klasörün içinde yeni bir TABLO açar (20240329).
+ *
+ * Sıraç (2026-08-29): "Mantık Drive'daki gibi olsun. Klasör oluşturalım,
+ * klasörün içinde Excel de Word de oluşturulabilsin."
+ *
+ * `createOperationSpreadsheet` künye formundan (başlık, tür, departman,
+ * etiket…) besleniyor; buradaki akış tek tık: klasörde boş bir tablo doğar,
+ * adı editörde değişir. Aynı desen yazılarda da var (createTeamworkDoc).
+ */
+export async function createSheetInFolder(
+  input: { title?: string; folder_id?: string | null; section?: "teamwork" | "library" },
+): Promise<{ id: string } | { error: string }> {
+  const parsed = z
+    .object({
+      title: z.string().max(300).default("Adsız tablo"),
+      folder_id: z.string().uuid().optional().nullable().or(z.literal("")),
+      section: z.enum(["teamwork", "library"]).default("teamwork"),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+
+  const { data: row, error } = await supabase
+    .from("operation_spreadsheets")
+    .insert({
+      workspace_id: ctx.workspaceId,
+      created_by: ctx.userId,
+      owner_id: ctx.userId,
+      title: (parsed.data.title || "Adsız tablo").trim(),
+      sheet_type: "freeform",
+      status: isAdmin(ctx) ? "active" : "draft",
+      folder_id: (parsed.data.folder_id ?? "") || null,
+      section: parsed.data.section,
+      snapshot: {},
+    })
+    .select("id")
+    .single();
+
+  if (error) return { error: toActionErrorMessage(error) };
+  revalidatePath("/documents");
+  return { id: (row as { id: string }).id };
+}

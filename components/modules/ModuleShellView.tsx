@@ -29,13 +29,12 @@ const RELATED_LINKS: { label: string; href: string }[] = [
  */
 export function ModuleShellView({ shell }: { shell: ModuleShell }) {
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 lg:px-8">
+    <div className="mx-auto w-full max-w-3xl px-4 py-4 sm:px-6 lg:px-8">
       <ModulePageHeader
         title={shell.title}
         description={shell.summary}
         icon={Wrench}
         badge="Hazırlık aşamasında"
-        secondaryBackHref="/board"
       />
 
       <div className="rounded-2xl border border-line bg-surface p-6 shadow-card">

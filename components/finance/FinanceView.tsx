@@ -8,6 +8,7 @@ import {
   Wallet, Plus, Pencil, Trash2, Loader2, Save, X, CircleDollarSign, Clock3, CheckCircle2,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { useConfirm } from "@/components/ui/useConfirm";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { savePayment, setPaymentStatus, deletePayment, type PaymentInput } from "@/lib/actions/finance";
 import type { FinancePayment } from "@/types";
@@ -50,6 +51,7 @@ function fmtAmount(amount: number | null, currency: string) {
 }
 
 export function FinanceView({ payments }: Props) {
+  const { ask, dialog } = useConfirm();
   const router = useRouter();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -113,8 +115,11 @@ export function FinanceView({ payments }: Props) {
     });
   }
 
-  function handleDelete(p: FinancePayment) {
-    if (!confirm(`"${p.title}" kaydını silmek istiyor musunuz?`)) return;
+  async function handleDelete(p: FinancePayment) {
+    if (!(await ask({
+      title: "Ödeme kaydı silinsin mi?",
+      message: `"${p.title}" kalıcı olarak silinir.`,
+    }))) return;
     setBusyId(p.id);
     startSave(async () => {
       const res = await deletePayment(p.id);
@@ -125,12 +130,11 @@ export function FinanceView({ payments }: Props) {
   }
 
   return (
-    <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
+    <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
       <ModulePageHeader
         title="Finance"
         description="Kime, ne kadar, ne zaman — ödemelerin tek listesi. Yalnız yöneticiler görür."
         icon={Wallet}
-        secondaryBackHref="/modules"
         rightSlot={
           <button
             onClick={openNew}
@@ -324,6 +328,7 @@ export function FinanceView({ payments }: Props) {
           </tbody>
         </table>
       </div>
+      {dialog}
     </div>
   );
 }

@@ -4,19 +4,34 @@ import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Folder, FolderPlus, Upload, Trash2, Loader2, Download, ChevronRight,
-  FileText, Lock, Users, Pencil, Home,
+  FileText, Lock, Users, Pencil, Home, FilePlus2, PenLine,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { Tile, TileGrid } from "@/components/ui/TileGrid";
+import { personTone } from "@/lib/design/person-colors";
 import {
   saveFolder, deleteFolder, uploadDocumentFile,
   getDocumentDownloadUrl, deleteDocumentFile,
 } from "@/lib/actions/document-files";
+import { createTeamworkDoc, deleteOperationDocument } from "@/lib/actions/documents";
 
 export type DocFolder = {
   id: string;
   parent_id: string | null;
   name: string;
   visibility: "all" | "admin";
+  /** AF Teamwork mü Kütüphane mi (20240324). */
+  section?: "teamwork" | "library";
+};
+
+/** Sistemde yazılan yazı (Word karşılığı, 20240325). */
+export type DocItem = {
+  id: string;
+  title: string;
+  folder_id: string | null;
+  preview: string;
+  created_by: string | null;
+  updated_at: string;
 };
 
 export type DocFile = {
@@ -33,8 +48,13 @@ export type DocFile = {
 interface Props {
   folders: DocFolder[];
   files: DocFile[];
+  /** Yazılar — Excel'in yanındaki "Word" (Aslı Hanım, 2026-08-28). */
+  docs?: DocItem[];
   memberNames: Record<string, string>;
   isAdmin: boolean;
+  /** Yeni klasörlerin açılacağı bölüm. Kök kırıntısının adı da bundan gelir. */
+  section?: "teamwork" | "library";
+  rootLabel?: string;
 }
 
 /** 1536000 → "1,5 MB" */
@@ -58,7 +78,10 @@ function humanSize(bytes: number | null): string {
  * herkesin erişimi olmayacak." Varsayılan YÖNETİCİ — modül açılınca içerik
  * sızmasın; klasör tek tek "tüm ekip"e açılır.
  */
-export function DocumentFiles({ folders, files, memberNames, isAdmin }: Props) {
+export function DocumentFiles({
+  folders, files, docs = [], memberNames, isAdmin, section = "teamwork",
+  rootLabel = "Dokümanlar",
+}: Props) {
   const router = useRouter();
   const [cwd, setCwd] = useState<string | null>(null);   // null = kök
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +99,10 @@ export function DocumentFiles({ folders, files, memberNames, isAdmin }: Props) {
   const childFiles = useMemo(
     () => files.filter((f) => f.folder_id === cwd),
     [files, cwd],
+  );
+  const childDocs = useMemo(
+    () => docs.filter((d) => d.folder_id === cwd),
+    [docs, cwd],
   );
 
   /** Kökten buraya kadar olan yol — üstteki kırıntı çubuğu. */
@@ -119,6 +146,7 @@ export function DocumentFiles({ folders, files, memberNames, isAdmin }: Props) {
     const fd = new FormData();
     fd.append("file", file);
     if (cwd) fd.append("folder_id", cwd);
+    fd.append("section", section);   // klasörsüz yükleme de doğru ekranda kalsın
     run("upload", () => uploadDocumentFile(fd));
   }
 
@@ -145,7 +173,7 @@ export function DocumentFiles({ folders, files, memberNames, isAdmin }: Props) {
               cwd === null ? "font-semibold text-ink" : "text-muted hover:text-ink",
             )}
           >
-            <Home size={13} /> Dokümanlar
+            <Home size={13} /> {rootLabel}
           </button>
           {trail.map((f, i) => (
             <span key={f.id} className="inline-flex items-center gap-1">
@@ -172,6 +200,24 @@ export function DocumentFiles({ folders, files, memberNames, isAdmin }: Props) {
               <FolderPlus size={14} /> Klasör
             </button>
           )}
+          {/* YENİ YAZI — Aslı Hanım (2026-08-28): "Excel'in yanına Word'ü de
+              gir." Yazı sistemde açılıp düzenlenir; dosya gibi indirilip başka
+              programda açılmaz. */}
+          <button
+            onClick={() =>
+              run("newdoc", async () => {
+                const res = await createTeamworkDoc({ title: "Adsız yazı", folder_id: cwd, section });
+                if ("error" in res) return res;
+                router.push(`/documents/${res.id}`);
+                return {};
+              })
+            }
+            disabled={busy === "newdoc"}
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-[13px] font-medium text-muted transition-all duration-150 hover:border-brand hover:text-brand active:scale-[0.98] disabled:opacity-60"
+          >
+            {busy === "newdoc" ? <Loader2 size={14} className="animate-spin" /> : <FilePlus2 size={14} />}
+            Yeni yazı
+          </button>
           <button
             onClick={() => fileRef.current?.click()}
             disabled={busy === "upload"}
@@ -208,6 +254,7 @@ export function DocumentFiles({ folders, files, memberNames, isAdmin }: Props) {
                     name: folderName,
                     parent_id: renaming ? renaming.parent_id : cwd,
                     visibility: renaming?.visibility ?? "admin",
+                    section: renaming?.section ?? section,
                   }),
                 () => { setNaming(false); setRenaming(null); setFolderName(""); },
               )
@@ -226,106 +273,149 @@ export function DocumentFiles({ folders, files, memberNames, isAdmin }: Props) {
         </div>
       )}
 
-      {childFolders.length === 0 && childFiles.length === 0 ? (
-        <p className="rounded-xl border border-line bg-surface px-4 py-10 text-center text-[13px] text-subtle">
-          Bu klasör boş. Dosya yükleyin ya da alt klasör açın.
-        </p>
-      ) : (
-        <ul className="divide-y divide-hairline overflow-hidden rounded-xl border border-line bg-surface shadow-card">
-          {childFolders.map((f) => (
-            <li key={f.id} className="group flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-surface-hover/60">
-              <button onClick={() => setCwd(f.id)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand">
-                  <Folder size={16} />
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate text-[14px] font-medium text-ink">{f.name}</span>
-                  <span className="mt-0.5 inline-flex items-center gap-1 text-[12px] text-subtle">
-                    {f.visibility === "admin"
-                      ? <><Lock size={10} /> yalnız yönetici</>
-                      : <><Users size={10} /> tüm ekip</>}
+      {/* KLASÖRLER — kutucuk. Aslı Hanım (2026-08-28): "Sen şu document
+          kısmını da bu collection ve board kısmı gibi yapabilir misin? File
+          file gibi." Ortak primitif: components/ui/TileGrid.tsx.
+          Yönetici düğmeleri kutucuğun ÜSTÜNDE kardeş katman olarak durur —
+          <button> içinde <button> geçersiz HTML'dir. */}
+      {(childFolders.length > 0 || childDocs.length > 0 || childFiles.length > 0) && (
+        <TileGrid className="mb-1">
+          {childFolders.map((f) => {
+            const n = files.filter((x) => x.folder_id === f.id).length
+              + docs.filter((x) => x.folder_id === f.id).length;
+            const sub = folders.filter((x) => x.parent_id === f.id).length;
+            return (
+              <div key={f.id} className="group/tile relative">
+                <Tile
+                  onClick={() => setCwd(f.id)}
+                  title={f.name}
+                  meta={[
+                    sub > 0 ? `${sub} klasör` : null,
+                    `${n} öğe`,
+                    f.visibility === "admin" ? "yalnız yönetici" : null,
+                  ].filter(Boolean).join(" · ")}
+                  icon={Folder}
+                  colorHex={personTone(f.id).hex}
+                />
+                {isAdmin && (
+                  <span className="absolute right-2 top-2 z-[3] flex items-center gap-0.5 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/tile:opacity-100">
+                    <button
+                      onClick={() => { setRenaming(f); setNaming(false); setFolderName(f.name); }}
+                      className="tap-target rounded-md bg-surface/90 p-1.5 text-subtle shadow-sm backdrop-blur transition-colors hover:text-ink"
+                      title="Yeniden adlandır"
+                    >
+                      <Pencil size={13} />
+                    </button>
+                    <button
+                      onClick={() =>
+                        run(`f-${f.id}`, () =>
+                          saveFolder(f.id, {
+                            name: f.name,
+                            parent_id: f.parent_id,
+                            visibility: f.visibility === "admin" ? "all" : "admin",
+                            section: f.section ?? section,
+                          }),
+                        )
+                      }
+                      className="tap-target rounded-md bg-surface/90 p-1.5 text-subtle shadow-sm backdrop-blur transition-colors hover:text-ink"
+                      title={f.visibility === "admin" ? "Tüm ekibe aç" : "Yalnız yöneticiye kapat"}
+                    >
+                      {f.visibility === "admin" ? <Users size={13} /> : <Lock size={13} />}
+                    </button>
+                    <button
+                      onClick={() => run(`d-${f.id}`, () => deleteFolder(f.id))}
+                      disabled={busy === `d-${f.id}`}
+                      className="tap-target rounded-md bg-surface/90 p-1.5 text-subtle shadow-sm backdrop-blur transition-colors hover:text-danger disabled:opacity-50"
+                      title="Sil (yalnız boş klasör)"
+                    >
+                      {busy === `d-${f.id}` ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                    </button>
                   </span>
-                </span>
-              </button>
+                )}
+              </div>
+            );
+          })}
+
+          {/* YAZILAR — klasörlerle AYNI kart. Aslı Hanım (2026-08-29):
+              "Dokümanlar ve Bağlantılar kısmı da kart olsun, hepsi aynı
+              mantıkta olsun artık tüm sayfalarda." Önce alt alta liste
+              satırlarıydı; klasörler kart, dosyalar liste olunca aynı ekranda
+              iki ayrı dil konuşuluyordu. */}
+          {childDocs.map((d) => (
+            <div key={d.id} className="group/tile relative">
+              <Tile
+                href={`/documents/${d.id}`}
+                title={d.title}
+                meta={[
+                  d.preview || "Boş yazı",
+                  new Date(d.updated_at).toLocaleDateString("tr-TR"),
+                ].filter(Boolean).join(" · ")}
+                icon={PenLine}
+                colorHex="#2563c9"
+              />
               {isAdmin && (
-                <span className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                <span className="absolute right-2 top-2 z-[3] opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/tile:opacity-100">
                   <button
-                    onClick={() => { setRenaming(f); setNaming(false); setFolderName(f.name); }}
-                    className="tap-target rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-muted hover:text-ink"
-                    title="Yeniden adlandır"
+                    onClick={() => {
+                      if (!confirm(`"${d.title}" yazısı kalıcı olarak silinsin mi?`)) return;
+                      run(`doc-${d.id}`, () => deleteOperationDocument(d.id));
+                    }}
+                    disabled={busy === `doc-${d.id}`}
+                    className="tap-target rounded-md bg-surface/90 p-1.5 text-subtle shadow-sm backdrop-blur transition-colors hover:text-danger disabled:opacity-50"
+                    title="Sil"
                   >
-                    <Pencil size={13} />
-                  </button>
-                  <button
-                    onClick={() =>
-                      run(`f-${f.id}`, () =>
-                        saveFolder(f.id, {
-                          name: f.name,
-                          parent_id: f.parent_id,
-                          visibility: f.visibility === "admin" ? "all" : "admin",
-                        }),
-                      )
-                    }
-                    className="tap-target rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-muted hover:text-ink"
-                    title={f.visibility === "admin" ? "Tüm ekibe aç" : "Yalnız yöneticiye kapat"}
-                  >
-                    {f.visibility === "admin" ? <Users size={13} /> : <Lock size={13} />}
-                  </button>
-                  <button
-                    onClick={() => run(`d-${f.id}`, () => deleteFolder(f.id))}
-                    disabled={busy === `d-${f.id}`}
-                    className="tap-target rounded-md p-1.5 text-subtle transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-50"
-                    title="Sil (yalnız boş klasör)"
-                  >
-                    {busy === `d-${f.id}` ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                    {busy === `doc-${d.id}` ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
                   </button>
                 </span>
               )}
-            </li>
+            </div>
           ))}
 
+          {/* DOSYALAR — aynı kart; tıklayınca imzalı bağlantıyla iner. */}
           {childFiles.map((d) => (
-            <li key={d.id} className="group flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-surface-hover/60">
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface-muted text-muted">
-                <FileText size={16} />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[14px] font-medium text-ink" title={d.file_name ?? d.title}>
-                  {d.file_name ?? d.title}
-                </span>
-                <span className="mt-0.5 flex flex-wrap items-center gap-x-3 text-[12px] text-subtle tabular-nums">
-                  <span>{humanSize(d.file_size)}</span>
-                  {d.created_by && <span>{memberNames[d.created_by] ?? "—"}</span>}
-                  <span>{new Date(d.created_at).toLocaleDateString("tr-TR")}</span>
-                </span>
-              </span>
-              <span className="flex shrink-0 items-center gap-1">
+            <div key={d.id} className="group/tile relative">
+              <Tile
+                onClick={() => download(d.id)}
+                title={d.file_name ?? d.title}
+                meta={[
+                  humanSize(d.file_size),
+                  d.created_by ? memberNames[d.created_by] ?? null : null,
+                  new Date(d.created_at).toLocaleDateString("tr-TR"),
+                ].filter(Boolean).join(" · ")}
+                icon={busy === `dl-${d.id}` ? Loader2 : FileText}
+              />
+              <span className="absolute right-2 top-2 z-[3] flex items-center gap-0.5 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/tile:opacity-100">
                 <button
                   onClick={() => download(d.id)}
                   disabled={busy === `dl-${d.id}`}
-                  className="tap-target rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-muted hover:text-ink disabled:opacity-50"
+                  className="tap-target rounded-md bg-surface/90 p-1.5 text-subtle shadow-sm backdrop-blur transition-colors hover:text-ink disabled:opacity-50"
                   title="İndir"
                 >
-                  {busy === `dl-${d.id}` ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+                  <Download size={13} />
                 </button>
                 <button
                   onClick={() => run(`x-${d.id}`, () => deleteDocumentFile(d.id))}
                   disabled={busy === `x-${d.id}`}
-                  className="tap-target rounded-md p-1.5 text-subtle opacity-0 transition-all hover:bg-danger/10 hover:text-danger disabled:opacity-50 group-hover:opacity-100"
+                  className="tap-target rounded-md bg-surface/90 p-1.5 text-subtle shadow-sm backdrop-blur transition-colors hover:text-danger disabled:opacity-50"
                   title="Sil"
                 >
                   {busy === `x-${d.id}` ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
                 </button>
               </span>
-            </li>
+            </div>
           ))}
-        </ul>
+        </TileGrid>
       )}
 
-      <p className="px-1 text-[12px] text-subtle">
-        Tek dosya en fazla 25 MB. Klasörler varsayılan olarak yalnız yöneticiye açıktır;
-        kilit simgesiyle tüm ekibe açabilirsiniz.
-      </p>
+      {childFolders.length === 0 && childFiles.length === 0 && childDocs.length === 0 && (
+        /* Sola yaslı ve alçak: metin çok geniş bir kutunun ortasında asılı
+           kalıyordu. Altındaki "25 MB / görünürlük" bilgi satırı da kaldırıldı —
+           sınır aşılınca zaten hata çıkıyor, kilit simgesinin de ipucu var. */
+        <p className="rounded-xl border border-dashed border-line bg-surface px-4 py-6 text-[13px] text-subtle">
+          Bu klasör boş. Yazı açın, dosya yükleyin ya da alt klasör oluşturun.
+        </p>
+      )}
+
     </section>
   );
 }

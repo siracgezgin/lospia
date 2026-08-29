@@ -1,20 +1,26 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { X, Plus, Trash2, Loader2, Save, Send, CheckCircle2 } from "lucide-react";
+import { Plus, Trash2, Loader2, Save, Send, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { useConfirm } from "@/components/ui/useConfirm";
+import { Overlay } from "@/components/ui/Overlay";
 import {
   createMeeting, updateMeeting, deleteMeeting, saveMeetingTopics, assignTopicAsTask,
 } from "@/lib/actions/planning";
-import { PLANNING_CATEGORIES } from "@/lib/planning/categories";
+import { categoryMeta } from "@/lib/planning/categories";
+import { normalizeSlot, istanbulLabel, HOME_LABEL, AWAY_LABEL } from "@/lib/planning/timezones";
 import { MemberMultiSelect, type Member } from "./MemberMultiSelect";
 import type { PlanningCategory, PlanningMeetingWithTopics } from "@/types";
 
 interface Props {
   meeting: PlanningMeetingWithTopics | null; // null → yeni
   day: string;       // yyyy-MM-dd
-  slot: string;      // "09:00"
+  slot: string;      // "09:00" — tıklanan hücrenin saati, BAŞLANGIÇ değeri
   dayLabel: string;  // "Pazartesi 27 Tem"
+  /** Toplantının OTURDUĞU şeridin kategorisi — renk buradan gelir, seçilmez. */
+  bandCategory?: PlanningCategory;
+  bandLabel?: string;
   members: Member[];
   onClose: () => void;
   onSaved: () => void;
@@ -32,24 +38,68 @@ type TopicDraft = {
 const inputCls =
   "w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[13px] text-ink placeholder:text-subtle transition-[border-color,box-shadow] duration-150 hover:border-line-strong focus:outline-none focus:ring-2 focus:ring-brand-ring focus:border-brand-ring";
 
-export function MeetingEditor({ meeting, day, slot, dayLabel, members, onClose, onSaved }: Props) {
+/**
+ * Toplantı düzenleyici — SADE.
+ *
+ * Ekranda İKİ şey var: BAŞLIK ve KONULAR. Sırayla kaldırılanlar:
+ *   • kategori seçici — ızgarada hiçbir şeyi değiştirmiyordu (renk şeritten),
+ *   • "Yanında" (iş birliği) — "bir kişi zaten yeterli oluyor",
+ *   • toplantı düzeyinde "Kim" — "iki defa kişi seçmek çok saçma; altta konuya
+ *     göre seçiliyor ve orada mail de gidiyor",
+ *   • konu satırındaki tarih — "zaten ben o tarihi seçip konu ekliyorum".
+ * Kalan her kontrol ya ızgarada görünen bir şeyi değiştirir ya da bir mail
+ * gönderir.
+ *
+ * Aslı Hanım (2026-08-28): "Minimum yazı, maksimum kullanılabilir." Eskiden
+ * pencere dokuz kategori düğmesi, iki başlıklı metin alanı, iki kişi seçici ve
+ * her konu satırında dört kontrolle açılıyordu. Şimdi ekranda yalnız BAŞLIK,
+ * KİM ve KONU duruyor; kategori tek renk noktasının, not ve iş birliği ise
+ * birer "ekle" bağlantısının arkasında — dolu olduklarında kendiliğinden
+ * görünürler.
+ *
+ * SAAT ARTIK DÜZENLENEBİLİR. Saatler `lib/planning/bands.ts` iskeletinde sabit
+ * olduğu için 17:00'a toplantı koymak mümkün değildi (2026-08-28: cumartesi
+ * 17:00 Ebu Bekir toplantısı takvime girilemedi). Başlıktaki saat alanı
+ * `time_slot`u yazar; şerit dışına düşen saat ızgarada kendi satırını açar.
+ */
+export function MeetingEditor({
+  meeting, day, slot, dayLabel, bandCategory, bandLabel, members, onClose, onSaved,
+}: Props) {
+  const { ask, dialog } = useConfirm();
   // Kaydedilmiş toplantının id'si — prop DEĞİL state, çünkü "Bildir" düğmesi
   // kaydetmeyi zorlar: yeni bir toplantı oluşturulduktan sonra prop hâlâ null
   // kalıyordu ve ikinci kayıtta İKİNCİ bir toplantı yaratılıyordu (konular ilk
   // toplantıda kaldığı için de "Cannot coerce…" hatası düşüyordu).
   const [meetingId, setMeetingId] = useState<string | null>(meeting?.id ?? null);
   const isNew = meetingId === null;
-  const [category, setCategory] = useState<PlanningCategory>(meeting?.category ?? "uretim");
+  const [time, setTime] = useState(() => normalizeSlot(meeting?.time_slot ?? slot));
+  /* KATEGORİ SEÇİLMEZ — şeritten gelir. Aslı Hanım (2026-08-29): "Üretim
+     yerine AI seçiyorum ama değişmiyor… aslında format belli zaten, olduğu
+     gibi neye ekliyorsam ona eklensin." Pencerede dokuz kategori düğmesi
+     vardı ama ızgara hücreyi ŞERİDİN rengiyle boyuyordu; seçim hiçbir yere
+     yansımıyor, sadece yanıltıyordu. Rengi değiştirmenin tek yeri artık
+     şeridin kendisi (sol sütundaki kalem). */
+  const category: PlanningCategory = bandCategory ?? meeting?.category ?? "other";
   const [title, setTitle] = useState(meeting?.title ?? "");
   const [content, setContent] = useState(meeting?.content ?? "");
-  const [participantIds, setParticipantIds] = useState<string[]>(meeting?.participant_ids ?? []);
-  const [collaboratorIds, setCollaboratorIds] = useState<string[]>(meeting?.collaborator_ids ?? []);
+  const [noteOpen, setNoteOpen] = useState(Boolean(meeting?.content));
+  /* TOPLANTI DÜZEYİNDE KİŞİ SEÇİLMEZ. Aslı Hanım (2026-08-29): "İki defa kişi
+     seçmek de çok saçma; altta konuya göre seçiliyor zaten ve orada mail de
+     gidiyor sonuçta." Kişi KONUNUN sorumlusudur — görevi ve bildirimi o
+     doğurur. Toplantının ayrı bir katılımcı listesi aynı ismi iki kez
+     sordurup hangisinin mail attığını belirsizleştiriyordu.
+     Mevcut kayıtların listeleri KORUNUR (silinmiş gibi davranmayalım). */
+  const participantIds = meeting?.participant_ids ?? [];
+  const collaboratorIds = meeting?.collaborator_ids ?? [];
   const [topics, setTopics] = useState<TopicDraft[]>(() => {
     const existing: TopicDraft[] = (meeting?.topics ?? []).map((t) => ({
       id: t.id, text: t.text ?? "", participant_ids: t.participant_ids ?? [],
       collaborator_ids: t.collaborator_ids ?? [],
       due_date: t.due_date ?? "", task_id: t.task_id,
     }));
+    /* Varsayılan ÜÇ satır — ızgaradaki "Konu 1..3" ile birebir (Aslı Hanım,
+       2026-08-29: "default olarak her başlığa 3 konu olsun"). Metni boş kalan
+       satır kaydedilmez, ızgarada hayalet satır oluşturmaz. */
     while (existing.length < 3) {
       existing.push({ text: "", participant_ids: [], collaborator_ids: [], due_date: "" });
     }
@@ -61,6 +111,9 @@ export function MeetingEditor({ meeting, day, slot, dayLabel, members, onClose, 
   const [assigningIdx, setAssigningIdx] = useState<number | null>(null);
   const [assignedMsg, setAssignedMsg] = useState<string | null>(null);
 
+  const meta = categoryMeta(category);
+  const ist = istanbulLabel(day, time);
+
   const setTopic = (i: number, patch: Partial<TopicDraft>) =>
     setTopics((ts) => ts.map((t, idx) => (idx === i ? { ...t, ...patch } : t)));
   const addTopic = () =>
@@ -70,7 +123,9 @@ export function MeetingEditor({ meeting, day, slot, dayLabel, members, onClose, 
   // Toplantı + konuları kaydeder; konu id'lerini geri yazar ("Bildir" için).
   async function persist(): Promise<{ meetingId: string; posToId: Record<number, string> } | { error: string }> {
     const payload = {
-      meeting_date: day, time_slot: slot, category, title, content,
+      // Saat kullanıcıdan geliyor; boş bırakılırsa tıklanan hücrenin saati.
+      meeting_date: day, time_slot: normalizeSlot(time) || normalizeSlot(slot),
+      category, title, content,
       participant_ids: participantIds, collaborator_ids: collaboratorIds,
     };
     let id = meetingId;
@@ -88,7 +143,7 @@ export function MeetingEditor({ meeting, day, slot, dayLabel, members, onClose, 
       id,
       topics.map((t, i) => ({
         id: t.id, position: i, text: t.text, participant_ids: t.participant_ids,
-        collaborator_ids: t.collaborator_ids, due_date: t.due_date || null,
+        collaborator_ids: t.collaborator_ids, due_date: t.due_date || day,
       })),
     );
     if ("error" in tRes) return { error: tRes.error };
@@ -118,7 +173,10 @@ export function MeetingEditor({ meeting, day, slot, dayLabel, members, onClose, 
       if ("error" in res) { setAssigningIdx(null); setError(res.error); return; }
       const topicId = res.posToId[i];
       if (!topicId) { setAssigningIdx(null); setError("Konu kaydedilemedi."); return; }
-      const aRes = await assignTopicAsTask(topicId, { dueDate: topics[i].due_date || null });
+      /* Teslim tarihi = konunun kendi tarihi yoksa TOPLANTININ GÜNÜ.
+         Aslı Hanım (2026-08-29): "Bir de yanında tarih olması saçma; zaten ben
+         o tarihi seçip konu ekliyorum." Tarihi hücre söylüyor. */
+      const aRes = await assignTopicAsTask(topicId, { dueDate: topics[i].due_date || day });
       setAssigningIdx(null);
       if ("error" in aRes) { setError(aRes.error); return; }
       setTopics((ts) => ts.map((t, idx) => (idx === i ? { ...t, task_id: aRes.taskId } : t)));
@@ -126,9 +184,12 @@ export function MeetingEditor({ meeting, day, slot, dayLabel, members, onClose, 
     });
   }
 
-  function handleDelete() {
+  async function handleDelete() {
     if (!meetingId) return;
-    if (!confirm("Bu toplantıyı ve konularını silmek istiyor musunuz?")) return;
+    if (!(await ask({
+      title: "Toplantı silinsin mi?",
+      message: "Toplantı ve altındaki bütün konular kalıcı olarak silinir.",
+    }))) return;
     setError(null);
     startDelete(async () => {
       const res = await deleteMeeting(meetingId);
@@ -138,81 +199,57 @@ export function MeetingEditor({ meeting, day, slot, dayLabel, members, onClose, 
   }
 
   return (
-    <div className="anim-fade fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-[2px] sm:p-8" onClick={onClose}>
-      <div
-        className="anim-scale-in w-full max-w-4xl rounded-2xl border border-line bg-surface shadow-drawer"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Başlık */}
-        <div className="flex items-center justify-between border-b border-line px-5 py-3">
-          <div>
-            <h2 className="text-[15px] font-semibold tracking-tight text-ink">{isNew ? "Yeni toplantı" : "Toplantıyı düzenle"}</h2>
-            <p className="text-[12px] tabular-nums text-subtle">{dayLabel} · {slot}</p>
-          </div>
-          <button onClick={onClose} className="rounded-md p-1.5 text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-95" aria-label="Kapat"><X size={17} /></button>
-        </div>
-
-        <div className="max-h-[70vh] space-y-4 overflow-y-auto px-5 py-4">
+    <Overlay
+      open
+      onClose={onClose}
+      size="lg"
+      dismissOnBackdrop={false}
+      titleNode={
+      <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
+        <span className="text-[14px] font-semibold tracking-tight text-ink">{dayLabel}</span>
+        <label className="inline-flex items-center gap-1.5">
+          <span className="text-[10.5px] font-semibold uppercase tracking-wider text-subtle">{HOME_LABEL}</span>
+          <input
+            type="time"
+            value={time}
+            onChange={(e) => setTime(e.target.value)}
+            className="rounded-lg border border-line bg-surface px-2 py-1 text-[13px] font-semibold tabular-nums text-ink transition-[border-color,box-shadow] duration-150 hover:border-line-strong focus:border-brand-ring focus:outline-none focus:ring-2 focus:ring-brand-ring"
+            aria-label="Toplantı saati (New York)"
+          />
+        </label>
+        {ist && (
+          <span className="text-[12px] tabular-nums text-subtle" title="İstanbul saati — New York saatinden hesaplanır">
+            {AWAY_LABEL} {ist}
+          </span>
+        )}
+      </div>
+      }
+    >
+      <div className="space-y-3.5">
           {error && <div className="anim-fade-down rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] font-medium text-red-700">{error}</div>}
 
-          {/* Kategori seçici */}
-          <div>
-            <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted">Kategori</span>
-            <div className="flex flex-wrap gap-1.5">
-              {PLANNING_CATEGORIES.map((c) => (
-                <button
-                  key={c.key}
-                  type="button"
-                  onClick={() => setCategory(c.key)}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-medium transition-all duration-150 ease-standard active:scale-[0.97]",
-                    category === c.key
-                      ? cn(c.chip, "font-semibold shadow-sm ring-1 ring-black/10")
-                      : "bg-surface-muted text-muted hover:bg-surface-hover hover:text-ink",
-                  )}
-                  aria-pressed={category === c.key}
-                >
-                  <span className={cn("h-2 w-2 rounded-full ring-1 ring-inset ring-black/10 transition-transform duration-150", category === c.key && "scale-110", c.dot)} />
-                  {c.label}
-                </button>
-              ))}
-            </div>
+          {/* Başlık. Solundaki nokta ŞERİDİ gösterir — bilgi, seçim değil. */}
+          <div className="flex items-center gap-2">
+            <span
+              title={`Şerit: ${bandLabel || meta.label}`}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-surface-muted px-2 py-1.5 text-[12px] font-medium text-muted"
+            >
+              <span className={cn("h-2.5 w-2.5 rounded-full ring-1 ring-inset ring-black/10", meta.dot)} />
+              <span className="hidden sm:inline">{bandLabel || meta.label}</span>
+            </span>
+            <input
+              className={cn(inputCls, "flex-1 text-[14px] font-medium")}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Toplantı başlığı — Ready to Wear, Lookbook, AFCOM…"
+              autoFocus
+            />
           </div>
 
-          <label className="block">
-            <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">Başlık (kategori sonrası)</span>
-            <input className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ready to Wear / Lookbook / AFCOM…" />
-          </label>
-
-          <label className="block">
-            <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">Açıklama</span>
-            <textarea className={cn(inputCls, "resize-y leading-relaxed")} rows={2} value={content} onChange={(e) => setContent(e.target.value)} placeholder="Toplantı içeriği…" />
-          </label>
-
-          {/* Sorumlu ve iş birliği AYRI iki alan. Aslı Hanım (2026-08-19):
-              "Sorumlu kişinin iş birliğini koyacaksın. Çünkü yanında iş
-              birliği yapması gereken biri oluyor ya genelde." */}
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">
-                Kim <span className="font-normal normal-case tracking-normal text-subtle">· sorumlu</span>
-              </span>
-              <MemberMultiSelect members={members} selected={participantIds} onChange={setParticipantIds} placeholder="Üye seç…" />
-            </div>
-            <div>
-              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">
-                İş birliği <span className="font-normal normal-case tracking-normal text-subtle">· yanında çalışan</span>
-              </span>
-              <MemberMultiSelect members={members} selected={collaboratorIds} onChange={setCollaboratorIds} placeholder="Üye seç…" />
-            </div>
-          </div>
 
           {/* Konular */}
           <div>
-            <div className="mb-1.5 flex items-center justify-between">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">Konular</span>
-              <span className="text-[12px] text-subtle">Sorumlu + iş birliği · tarih · “Bildir” ile göreve dönüştür</span>
-            </div>
+            <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-muted">Konular</span>
             {assignedMsg && (
               <div className="anim-fade-down mb-2 flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[12px] font-medium text-emerald-800">
                 <CheckCircle2 size={14} className="shrink-0" /> {assignedMsg}
@@ -223,22 +260,11 @@ export function MeetingEditor({ meeting, day, slot, dayLabel, members, onClose, 
                 /* Satır dar ekranda kırılır (metin üstte, seçimler altta),
                    geniş ekranda tek satır kalır. */
                 <div key={i} className="flex flex-wrap items-center gap-1.5 rounded-lg border border-hairline p-1.5 sm:border-0 sm:p-0">
-                  <span className="w-5 shrink-0 text-center text-[11px] font-medium text-subtle">{i + 1}</span>
+                  <span className="w-4 shrink-0 text-center text-[11px] font-medium text-subtle">{i + 1}</span>
                   <input className={cn(inputCls, "min-w-0 flex-1 basis-full sm:basis-0")} value={t.text} onChange={(e) => setTopic(i, { text: e.target.value })} placeholder={`Konu ${i + 1}`} />
                   <div className="w-[88px] shrink-0">
                     <MemberMultiSelect members={members} selected={t.participant_ids} onChange={(ids) => setTopic(i, { participant_ids: ids })} placeholder="Kim" compact />
                   </div>
-                  {/* İş birliği — sorumlunun yanında çalışan kişi. */}
-                  <div className="w-[88px] shrink-0" title="İş birliği yapan kişi">
-                    <MemberMultiSelect members={members} selected={t.collaborator_ids} onChange={(ids) => setTopic(i, { collaborator_ids: ids })} placeholder="İş birliği" compact />
-                  </div>
-                  <input
-                    type="date"
-                    className={cn(inputCls, "w-[130px] shrink-0")}
-                    value={t.due_date}
-                    onChange={(e) => setTopic(i, { due_date: e.target.value })}
-                    title="Teslim tarihi (deadline)"
-                  />
                   {/* Sabit genişlik: etiket her durumda "Bildir" ve buton
                       ölçüsü değişmez — atama sonrası satır kaymaz. Durum
                       yalnız renk + ikonla anlatılır. */}
@@ -264,10 +290,28 @@ export function MeetingEditor({ meeting, day, slot, dayLabel, members, onClose, 
                 </div>
               ))}
             </div>
-            <button onClick={addTopic} className="mt-2 inline-flex items-center gap-1 text-[12px] font-medium text-brand hover:text-brand-strong">
-              <Plus size={12} /> Konu ekle
-            </button>
+            <div className="mt-2 flex flex-wrap items-center gap-4">
+              <button onClick={addTopic} className="inline-flex items-center gap-1 text-[12px] font-medium text-brand hover:text-brand-strong">
+                <Plus size={12} /> Konu ekle
+              </button>
+              {!noteOpen && (
+                <button onClick={() => setNoteOpen(true)} className="inline-flex items-center gap-1 text-[12px] font-medium text-subtle hover:text-ink">
+                  <Plus size={12} /> Not ekle
+                </button>
+              )}
+            </div>
           </div>
+
+          {/* Açıklama — çoğu toplantıda boş kalıyordu; artık istenince açılır. */}
+          {noteOpen && (
+            <textarea
+              className={cn(inputCls, "anim-fade-down resize-y leading-relaxed")}
+              rows={2}
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              placeholder="Not…"
+            />
+          )}
         </div>
 
         {/* Alt bar */}
@@ -291,8 +335,8 @@ export function MeetingEditor({ meeting, day, slot, dayLabel, members, onClose, 
               {isSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} Kaydet
             </button>
           </div>
-        </div>
       </div>
-    </div>
+      {dialog}
+    </Overlay>
   );
 }

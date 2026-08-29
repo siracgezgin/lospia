@@ -88,15 +88,13 @@ export function SheetDetailView({
   }, [doSave]);
 
   return (
-    <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
+    <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
       <ModulePageHeader
         title={sheet.title}
         description={sheet.description ?? undefined}
         icon={Table2}
         backHref="/sheets"
         backLabel="Sheets’e dön"
-        secondaryBackHref="/modules"
-        secondaryBackLabel="Operation Modules"
         rightSlot={
           <>
             {canEditMeta && (

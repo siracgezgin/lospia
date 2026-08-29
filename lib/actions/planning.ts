@@ -570,3 +570,180 @@ export async function copyPreviousWeek(
   revalidatePath("/planning");
   return { ok: true, created: rows.length };
 }
+
+/**
+ * Toplantıyı BAŞKA HÜCREYE taşır — sürükle bırak.
+ *
+ * Aslı Hanım (2026-08-29): "bu calendar kısmı biraz Excel tarzında olmalı,
+ * esnek olmalı; mesela sürükle bırakla taşıyabilmeli."
+ *
+ * Yalnız gün ve saat değişir; başlık, konular, kişiler ve kategori aynen
+ * taşınır — hücre değiştirmek içeriği yeniden yazmak değildir.
+ */
+export async function moveMeeting(
+  meetingId: string,
+  target: { meeting_date: string; time_slot: string },
+): Promise<{ ok: true } | { error: string }> {
+  const parsed = z
+    .object({
+      meeting_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Geçersiz tarih"),
+      time_slot: z.string().min(1).max(10),
+    })
+    .safeParse(target);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+  if (!isAdminRole(ctx.role)) return { error: PLANNING_ADMIN_ONLY };
+
+  const { error, count } = await supabase
+    .from("planning_meetings")
+    .update(
+      {
+        meeting_date: parsed.data.meeting_date,
+        time_slot: parsed.data.time_slot,
+        updated_by: ctx.userId,
+      },
+      { count: "exact" },
+    )
+    .eq("id", meetingId)
+    .eq("workspace_id", ctx.workspaceId);
+  if (error) return { error: toActionErrorMessage(error) };
+  if (count === 0) return { error: NOT_FOUND };
+  revalidatePath("/planning");
+  return { ok: true };
+}
+
+/**
+ * KONUYU başka hücreye taşır — sürükle bırak.
+ *
+ * Aslı Hanım (2026-08-29): "Konulardaki başlıklar da sürükle bırak olmalı."
+ *
+ * Konu bir TOPLANTIYA bağlıdır; başka gün/saate taşımak onu o hücrenin
+ * toplantısına bağlamak demektir. Hedef hücrede toplantı yoksa sessizce bir
+ * tane açılır (başlıksız, kategorisi o saatteki komşusundan) — kullanıcı
+ * "önce toplantı oluştur" diye bir duvara çarpmasın.
+ *
+ * Taşıma sonrası HEM kaynak HEM hedef toplantının konuları 0..n-1 olarak
+ * yeniden numaralanır: ızgara satırları position'a göre çizildiği için
+ * boşluklu numaralar "Konu 2 boş, Konu 3 dolu" gibi hayalet satır üretiyordu.
+ */
+export async function moveTopic(
+  topicId: string,
+  target: { meeting_date: string; time_slot: string; position: number },
+): Promise<{ ok: true } | { error: string }> {
+  const parsed = z
+    .object({
+      meeting_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Geçersiz tarih"),
+      time_slot: z.string().min(1).max(10),
+      position: z.number().int().min(0).max(50),
+    })
+    .safeParse(target);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+  if (!isAdminRole(ctx.role)) return { error: PLANNING_ADMIN_ONLY };
+
+  const { data: topicRow, error: topicErr } = await supabase
+    .from("planning_topics")
+    .select("id, meeting_id")
+    .eq("id", topicId)
+    .eq("workspace_id", ctx.workspaceId)
+    .maybeSingle();
+  if (topicErr) return { error: toActionErrorMessage(topicErr) };
+  if (!topicRow) return { error: "Konu bulunamadı." };
+  const sourceMeetingId = (topicRow as { meeting_id: string }).meeting_id;
+
+  // Hedef hücrenin toplantısı — yoksa aç.
+  const { data: found } = await supabase
+    .from("planning_meetings")
+    .select("id")
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("meeting_date", parsed.data.meeting_date)
+    .eq("time_slot", parsed.data.time_slot)
+    .order("position", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  let targetMeetingId = (found as { id: string } | null)?.id ?? null;
+  if (!targetMeetingId) {
+    // Kategori o saatteki başka bir günden miras alınır ki hücre şeridin
+    // rengiyle uyumlu çıksın.
+    const { data: sibling } = await supabase
+      .from("planning_meetings")
+      .select("category")
+      .eq("workspace_id", ctx.workspaceId)
+      .eq("time_slot", parsed.data.time_slot)
+      .limit(1)
+      .maybeSingle();
+    const { data: created, error: createErr } = await supabase
+      .from("planning_meetings")
+      .insert({
+        workspace_id: ctx.workspaceId,
+        meeting_date: parsed.data.meeting_date,
+        time_slot: parsed.data.time_slot,
+        category: (sibling as { category: string } | null)?.category ?? "other",
+        participant_ids: [],
+        collaborator_ids: [],
+        created_by: ctx.userId,
+        updated_by: ctx.userId,
+      })
+      .select("id")
+      .single();
+    if (createErr) return { error: toActionErrorMessage(createErr) };
+    targetMeetingId = (created as { id: string }).id;
+  }
+
+  const { error: moveErr } = await supabase
+    .from("planning_topics")
+    .update({ meeting_id: targetMeetingId, position: parsed.data.position })
+    .eq("id", topicId)
+    .eq("workspace_id", ctx.workspaceId);
+  if (moveErr) return { error: toActionErrorMessage(moveErr) };
+
+  await renumberTopics(supabase, ctx.workspaceId, targetMeetingId, topicId, parsed.data.position);
+  if (sourceMeetingId !== targetMeetingId) {
+    await renumberTopics(supabase, ctx.workspaceId, sourceMeetingId, null, 0);
+  }
+
+  revalidatePath("/planning");
+  return { ok: true };
+}
+
+/** Bir toplantının konularını 0..n-1 yapar; `pinnedId` verilirse o konu
+ *  `pinnedIndex`'e oturtulur, kalanlar etrafında kayar. */
+async function renumberTopics(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  workspaceId: string,
+  meetingId: string,
+  pinnedId: string | null,
+  pinnedIndex: number,
+): Promise<void> {
+  const { data } = await supabase
+    .from("planning_topics")
+    .select("id, position")
+    .eq("meeting_id", meetingId)
+    .eq("workspace_id", workspaceId)
+    .order("position", { ascending: true });
+  const rows = (data ?? []) as { id: string; position: number }[];
+  if (!rows.length) return;
+
+  const others = rows.filter((r) => r.id !== pinnedId).map((r) => r.id);
+  const ordered = pinnedId
+    ? [...others.slice(0, pinnedIndex), pinnedId, ...others.slice(pinnedIndex)]
+    : others;
+
+  for (let i = 0; i < ordered.length; i++) {
+    const id = ordered[i];
+    const current = rows.find((r) => r.id === id);
+    if (current && current.position === i) continue; // gereksiz yazma yok
+    await supabase
+      .from("planning_topics")
+      .update({ position: i })
+      .eq("id", id)
+      .eq("workspace_id", workspaceId);
+  }
+}

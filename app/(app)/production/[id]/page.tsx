@@ -2,17 +2,22 @@ import { redirect } from "next/navigation";
 import { requireModuleMember } from "@/lib/modules/context";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { ProductionSheetEditor } from "@/components/production/ProductionSheetEditor";
+import { getCategoryTree } from "@/lib/collection/category-tree";
 import type { ProductionSheet, Manufacturer, SheetMaterialWithMaterial } from "@/types";
 import type { PickableMaterial } from "@/components/production/SheetBom";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProductionSheetPage({
-  params,
+  params, searchParams,
 }: {
   params: Promise<{ id: string }>;
+  /* Yeni föy KATEGORİSİYLE açılır: Koleksiyon'da bir kategorinin içindeyken
+     "Yeni föy"e basınca o kategori taşınır (2026-08-29). */
+  searchParams: Promise<{ kategori?: string; alt?: string }>;
 }) {
   const { id } = await params;
+  const sp = await searchParams;
   const { supabase, user, workspaceId, isAdmin, gate } = await requireModuleMember();
   if (gate === "login") redirect("/login");
   if (gate !== "ok" || !workspaceId || !user) return <AccessDenied />;
@@ -35,12 +40,14 @@ export default async function ProductionSheetPage({
   // düşer; föy açılmaya devam eder.
   const manufacturersResult = await supabase
     .from("workspace_manufacturers")
-    .select("id, name, is_active, lead_time_days, min_order_qty, currency, city")
+    // email: föyü ustaya maille göndermek için (2026-08-28).
+    .select("id, name, is_active, lead_time_days, min_order_qty, currency, city, email")
     .eq("workspace_id", workspaceId)
     .order("is_active", { ascending: false })
     .order("name", { ascending: true });
   const manufacturers = (manufacturersResult.data ?? []) as Pick<
-    Manufacturer, "id" | "name" | "is_active" | "lead_time_days" | "min_order_qty" | "currency" | "city"
+    Manufacturer,
+    "id" | "name" | "is_active" | "lead_time_days" | "min_order_qty" | "currency" | "city" | "email"
   >[];
 
   // Sezon listesi — föydeki "Sezon" alanı da artık seçim.
@@ -51,6 +58,10 @@ export default async function ProductionSheetPage({
     .order("is_current", { ascending: false })
     .order("name", { ascending: false });
   const seasons = (seasonsResult.data ?? []) as { id: string; name: string; is_current: boolean }[];
+
+  /* Kategori ağacı — Koleksiyon'daki listeyle AYNI olsun diye aynı kapıdan
+     okunur; tablo boşsa kod varsayılanlarına düşer. */
+  const categories = await getCategoryTree(supabase, workspaceId);
 
   // Hammadde kütüphanesi — reçeteye eklenebilecekler.
   const materialsResult = await supabase
@@ -67,6 +78,8 @@ export default async function ProductionSheetPage({
     return (
       <ProductionSheetEditor
         sheet={null}
+        initialCategory={sp.kategori ?? null}
+        initialSubcategory={sp.alt ?? null}
         memberNames={memberNames}
         manufacturers={manufacturers}
         seasons={seasons}
@@ -74,6 +87,7 @@ export default async function ProductionSheetPage({
         bom={[]}
         isAdmin={isAdmin}
         currentUserId={user.id}
+        categories={categories}
       />
     );
   }
@@ -121,6 +135,7 @@ export default async function ProductionSheetPage({
       siblings={siblings}
       isAdmin={isAdmin}
       currentUserId={user.id}
+      categories={categories}
     />
   );
 }

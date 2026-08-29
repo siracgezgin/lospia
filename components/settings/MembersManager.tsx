@@ -71,12 +71,16 @@ export function MembersManager({
   const identityOf = new Map(identities.map((i) => [i.id, i]));
   const [addOpen, setAddOpen] = useState(false);
 
-  function saveIdentity(m: IdentityMember, next: { colorKey?: string | null; iconKey?: string | null }) {
+  function saveIdentity(
+    m: IdentityMember,
+    next: { colorKey?: string | null; iconKey?: string | null; jobTitle?: string | null },
+  ) {
     setError(null);
     startTransition(async () => {
       const res = await saveMemberIdentity(m.id, {
         colorKey: next.colorKey !== undefined ? next.colorKey : m.colorKey,
         iconKey: next.iconKey !== undefined ? next.iconKey : m.iconKey,
+        jobTitle: next.jobTitle !== undefined ? next.jobTitle : (m.jobTitle ?? null),
       });
       if ("error" in res) { setError(res.error); return; }
       router.refresh();
@@ -108,6 +112,7 @@ export function MembersManager({
     next: {
       fullName: string; username: string; notificationEmail: string;
       role: "admin" | "member" | "viewer"; colorKey: string; iconKey: string;
+      jobTitle: string;
     },
   ) {
     setError(null);
@@ -146,8 +151,15 @@ export function MembersManager({
         setMembers((prev) => prev.map((x) => (x.id === m.id ? { ...x, role: next.role } : x)));
       }
 
-      if (ident && (next.colorKey !== (ident.colorKey ?? "") || next.iconKey !== (ident.iconKey ?? ""))) {
-        const r = await saveMemberIdentity(m.id, { colorKey: next.colorKey, iconKey: next.iconKey });
+      if (
+        ident &&
+        (next.colorKey !== (ident.colorKey ?? "") ||
+          next.iconKey !== (ident.iconKey ?? "") ||
+          next.jobTitle.trim() !== (ident.jobTitle ?? ""))
+      ) {
+        const r = await saveMemberIdentity(m.id, {
+          colorKey: next.colorKey, iconKey: next.iconKey, jobTitle: next.jobTitle,
+        });
         if ("error" in r) { setError(r.error); return; }
       }
 
@@ -333,6 +345,7 @@ export function MembersManager({
                     username: m.profiles?.username ?? "",
                     notificationEmail: m.notification_email ?? "",
                     role: (m.role === "owner" ? "admin" : m.role) as "admin" | "member" | "viewer",
+                    jobTitle: ident?.jobTitle ?? "",
                     colorKey: ident?.colorKey ?? "",
                     iconKey: ident?.iconKey ?? "",
                   }}

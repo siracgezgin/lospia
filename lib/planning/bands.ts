@@ -87,3 +87,33 @@ export const WEEKDAY_LONG_TR = ["Pazartesi", "Salı", "Çarşamba", "Perşembe",
 /** Kısaltmalar elle yazılır: ilk üç harf Pazartesi ve Pazar'ı ikisini de
  *  "Paz" yapıyor — dar ekranda gün seçici okunamaz hâle geliyordu. */
 export const WEEKDAY_SHORT_TR = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
+
+/**
+ * ÇALIŞMA ANINDAKİ şerit — kaynağı `planning_bands` tablosu (20240326).
+ *
+ * Aslı Hanım (2026-08-28): "Buraya neden müdahale edemiyorum?" Yukarıdaki
+ * PLANNING_BANDS artık yalnız VARSAYILAN: tablo boşken bu listeye düşülür,
+ * ilk düzenlemede hepsi tabloya yazılır ve oradan okunur.
+ */
+export type RuntimeBand = {
+  /** null = henüz tabloya yazılmamış varsayılan şerit. */
+  id: string | null;
+  slot: string;
+  category: PlanningCategory;
+  label: string;
+  /** "Konu 1..N" satır sayısı. */
+  topicRows: number;
+  /** Gün başlıkları (Pzt…Paz). Boş dize = o gün toplantı yok. */
+  columns: string[];
+};
+
+export function defaultRuntimeBands(): RuntimeBand[] {
+  return PLANNING_BANDS.map((b) => ({
+    id: null,
+    slot: b.slot,
+    category: b.category,
+    label: b.label,
+    topicRows: 3,
+    columns: b.columns,
+  }));
+}

@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
-import { ChevronDown, LogOut, Mail, Shield, Settings } from "lucide-react";
+import { ChevronDown, LogOut, Mail, Shield, Settings, UserRound, Bell } from "lucide-react";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
-import { Avatar } from "@/components/ui/Avatar";
+import { PersonAvatar } from "@/components/ui/PersonAvatar";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { ROLE_LABELS } from "@/lib/utils/roles";
 import { canManageSettings } from "@/lib/auth/permissions";
@@ -18,6 +18,8 @@ interface Props {
   userId: string;
   userName?: string | null;
   userEmail?: string | null;
+  /** profiles.avatar_url — kişinin kendi fotoğrafı. */
+  userAvatarUrl?: string | null;
   notifications?: Notification[];
   deadTaskIds?: string[];
   userRole?: WorkspaceRole;
@@ -34,13 +36,14 @@ const PAGE_TITLES: { match: (p: string) => boolean; title: string }[] = [
   { match: (p) => p.startsWith("/dashboard"), title: "Reports" },
   // "/collection/maliyet" kendi adını taşır — sıra önemli (startsWith).
   { match: (p) => p.startsWith("/collection/maliyet"), title: "Cost" },
+  { match: (p) => p.startsWith("/collection/veri"), title: "Product Data" },
   { match: (p) => p.startsWith("/collection/odeme"), title: "Payment Table" },
   { match: (p) => p.startsWith("/collection"), title: "Collection" },
   { match: (p) => p.startsWith("/production"), title: "Production Sheet" },
   { match: (p) => p.startsWith("/finance"), title: "Finance" },
   { match: (p) => p.startsWith("/modules"), title: "Operation Modules" },
-  { match: (p) => p.startsWith("/documents"), title: "Documents" },
-  { match: (p) => p.startsWith("/sheets"), title: "Sheets" },
+  { match: (p) => p.startsWith("/documents"), title: "AF Teamwork" },
+  { match: (p) => p.startsWith("/sheets"), title: "AF Teamwork" },
   { match: (p) => p.startsWith("/crm"), title: "CRM" },
   { match: (p) => p.startsWith("/activity"), title: "Activity Log" },
   { match: (p) => p.startsWith("/profile"), title: "Profile" },
@@ -51,14 +54,30 @@ const PAGE_TITLES: { match: (p: string) => boolean; title: string }[] = [
   { match: (p) => p.startsWith("/tasks/"), title: "Task" },
 ];
 
+/**
+ * PROFİL MENÜSÜ — kimlik + kişinin kendi sayfalarına giden kapı.
+ *
+ * Sıraç (2026-08-29): "En basitinden webde sağ üstte profil kartına tıklayınca
+ * bir anlam ifade etmiyor ama aslında anlam ifade etmeli. Sitede işlevsiz,
+ * gereksiz şeyler olmamalı."
+ *
+ * Haklı iki eksik vardı:
+ *  • Menüde /profile'a giden bağlantı YOKTU. Üye için menü yalnız adını
+ *    tekrar edip "Çıkış yap" sunuyordu — yani hiçbir işe yaramıyordu.
+ *  • Uygulamada fotoğraf yükleyici var (Ayarlar → Kimlik) ama başlıktaki
+ *    rozet baş harf çiziyordu; kişi kendi fotoğrafını yükleyip hiçbir yerde
+ *    göremiyordu. Artık her yerdeki ile aynı `PersonAvatar`.
+ */
 function ProfileMenu({
   displayName,
   email,
   role,
+  photoUrl,
 }: {
   displayName: string;
   email: string | null;
   role: WorkspaceRole;
+  photoUrl: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -68,22 +87,29 @@ function ProfileMenu({
     function onDoc(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
     document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [open]);
 
   return (
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 pl-3 border-l border-line rounded-lg py-1 pr-1 hover:bg-surface-muted active:bg-surface-sunken transition-colors duration-150"
+        className="flex items-center gap-2 rounded-lg border-l border-line py-1 pl-3 pr-1.5 transition-colors duration-150 hover:bg-surface-muted active:bg-surface-sunken"
         aria-haspopup="menu"
         aria-expanded={open}
         title={`${displayName} · ${ROLE_LABELS[role]}`}
       >
-        <Avatar name={displayName} size="sm" />
-        <div className="hidden sm:flex flex-col leading-tight text-left">
-          <span className="text-xs font-medium text-ink truncate max-w-[140px]">{displayName}</span>
+        <PersonAvatar name={displayName} photoUrl={photoUrl} size="sm" />
+        <div className="hidden flex-col text-left leading-tight sm:flex">
+          <span className="max-w-[140px] truncate text-xs font-medium text-ink">{displayName}</span>
           <span className="text-[10px] text-subtle">{ROLE_LABELS[role]}</span>
         </div>
         <ChevronDown
@@ -93,15 +119,16 @@ function ProfileMenu({
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-64 origin-top-right bg-surface border border-line rounded-xl shadow-pop z-50 overflow-hidden anim-fade-down">
-          {/* Identity card — name + email (role lives once, in Details below) */}
-          <div className="flex items-center gap-3 px-4 py-3.5 bg-surface-muted/60 border-b border-line">
-            <Avatar name={displayName} size="md" />
+        <div
+          role="menu"
+          className="anim-fade-down absolute right-0 top-full z-50 mt-2 w-64 origin-top-right overflow-hidden rounded-xl border border-line bg-surface shadow-pop"
+        >
+          {/* Kimlik — ad + e-posta. Rol aşağıda BİR kez yazar. */}
+          <div className="flex items-center gap-3 border-b border-line bg-surface-muted/60 px-4 py-3.5">
+            <PersonAvatar name={displayName} photoUrl={photoUrl} size="md" />
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-ink truncate">{displayName}</p>
-              {/* Canonical display e-mail (never a @lospia.local placeholder);
-                  muted fallback when the person has no real address. */}
-              <p className="flex items-center gap-1.5 text-[11px] text-subtle truncate">
+              <p className="truncate text-sm font-semibold text-ink">{displayName}</p>
+              <p className="flex items-center gap-1.5 truncate text-[11px] text-subtle">
                 <Mail size={11} className="shrink-0" />
                 <span className={email ? "truncate" : "truncate italic text-subtle/80"}>
                   {email ?? "E-posta eklenmedi"}
@@ -110,36 +137,25 @@ function ProfileMenu({
             </div>
           </div>
 
-          {/* Details — role shown exactly once */}
-          <div className="px-4 py-3 border-b border-line">
+          <div className="border-b border-line px-4 py-2.5">
             <div className="flex items-center gap-2 text-[12px] text-muted">
-              <Shield size={13} className="text-subtle shrink-0" />
+              <Shield size={13} className="shrink-0 text-subtle" />
               <span>{ROLE_LABELS[role]}</span>
             </div>
           </div>
 
-          {/* Kişisel puan özeti kaldırıldı — puan sistemi Aslı/Nisa isteğiyle
-              gizli; verisi de artık layout'ta sorgulanmıyor (performans).
-              Geri istenirse veriyi burada değil Profil sayfasında göster. */}
+          <div className="py-1">
+            <MenuLink href="/profile" icon={UserRound} label="Profilim" onGo={() => setOpen(false)} />
+            <MenuLink href="/activity" icon={Bell} label="Hareketlerim" onGo={() => setOpen(false)} />
+            {canManageSettings(role) && (
+              <MenuLink href="/settings" icon={Settings} label="Ayarlar" onGo={() => setOpen(false)} />
+            )}
+          </div>
 
-          {/* Ayarlar — admin-only. On mobile the bottom nav no longer carries
-              Ayarlar (it shows Yönetici Pano), so this is its primary phone entry. */}
-          {canManageSettings(role) && (
-            <Link
-              href="/settings"
-              onClick={() => setOpen(false)}
-              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-muted hover:bg-surface-muted hover:text-ink transition-colors duration-150 border-b border-line"
-            >
-              <Settings size={15} className="shrink-0" />
-              Ayarlar
-            </Link>
-          )}
-
-          {/* Sign out */}
-          <form action={signOut}>
+          <form action={signOut} className="border-t border-line">
             <button
               type="submit"
-              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-muted hover:bg-danger/10 hover:text-danger transition-colors duration-150"
+              className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-muted transition-colors duration-150 hover:bg-danger/10 hover:text-danger"
             >
               <LogOut size={15} className="shrink-0" />
               Çıkış yap
@@ -151,8 +167,24 @@ function ProfileMenu({
   );
 }
 
+/** Menü satırı — hepsi aynı yükseklikte, aynı ikon boyunda. */
+function MenuLink({
+  href, icon: Icon, label, onGo,
+}: { href: string; icon: typeof Settings; label: string; onGo: () => void }) {
+  return (
+    <Link
+      href={href}
+      onClick={onGo}
+      className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
+    >
+      <Icon size={15} className="shrink-0 text-subtle" />
+      {label}
+    </Link>
+  );
+}
+
 export function AppHeader({
-  unreadCount, userId, userName, userEmail, notifications = [], deadTaskIds = [], userRole = "member",
+  unreadCount, userId, userName, userEmail, userAvatarUrl = null, notifications = [], deadTaskIds = [], userRole = "member",
 }: Props) {
   const pathname = usePathname();
   const title = PAGE_TITLES.find((t) => t.match(pathname))?.title ?? "";
@@ -193,6 +225,7 @@ export function AppHeader({
             displayName={displayName}
             email={userEmail ?? null}
             role={userRole}
+            photoUrl={userAvatarUrl}
           />
         </div>
       </div>

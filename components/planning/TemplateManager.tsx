@@ -1,8 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { X, Plus, Trash2, Loader2, Save, Pencil, Power } from "lucide-react";
+import { Plus, Trash2, Loader2, Save, Pencil, Power } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { useConfirm } from "@/components/ui/useConfirm";
+import { Overlay } from "@/components/ui/Overlay";
+import { Button } from "@/components/ui/Button";
 import { saveTemplate, deleteTemplate, type TemplateInput } from "@/lib/actions/planning";
 import { PLANNING_CATEGORIES, categoryMeta } from "@/lib/planning/categories";
 import { MemberMultiSelect, MemberInitials, type Member } from "./MemberMultiSelect";
@@ -43,6 +46,7 @@ const EMPTY: Draft = {
  * Yalnız yöneticiler açabilir (sayfa tarafında gizlenir, action da korur).
  */
 export function TemplateManager({ templates, members, memberNames, onClose, onChanged }: Props) {
+  const { ask, dialog } = useConfirm();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, startSave] = useTransition();
@@ -93,8 +97,11 @@ export function TemplateManager({ templates, members, memberNames, onClose, onCh
     });
   }
 
-  function handleDelete(t: PlanningTemplate) {
-    if (!confirm("Bu şablonu silmek istiyor musunuz? (Kurulmuş toplantılar silinmez.)")) return;
+  async function handleDelete(t: PlanningTemplate) {
+    if (!(await ask({
+      title: "Şablon silinsin mi?",
+      message: "Şablon kalkar; bu şablondan KURULMUŞ toplantılar silinmez.",
+    }))) return;
     setBusyId(t.id);
     startSave(async () => {
       const res = await deleteTemplate(t.id);
@@ -109,20 +116,22 @@ export function TemplateManager({ templates, members, memberNames, onClose, onCh
   for (const t of templates) byDay[t.weekday]?.push(t);
 
   return (
-    <div className="anim-fade fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-[2px] sm:p-8" onClick={onClose}>
-      <div className="anim-scale-in w-full max-w-3xl rounded-2xl border border-line bg-surface shadow-drawer" onClick={(e) => e.stopPropagation()}>
-        {/* Başlık */}
-        <div className="flex items-center justify-between border-b border-line px-5 py-3">
-          <div>
-            <h2 className="text-[15px] font-semibold tracking-tight text-ink">Hafta Şablonları</h2>
-            <p className="text-[12px] text-subtle">
-              Tekrar eden ritim: gün + saat + kategori. “Haftayı şablondan kur” bu listeden toplantı üretir.
-            </p>
-          </div>
-          <button onClick={onClose} className="rounded-md p-1.5 text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink active:scale-95" aria-label="Kapat"><X size={17} /></button>
-        </div>
-
-        <div className="max-h-[70vh] space-y-4 overflow-y-auto px-5 py-4">
+    <Overlay
+      open
+      onClose={onClose}
+      title="Hafta Şablonları"
+      hint="Tekrar eden ritim: gün + saat + kategori. “Haftayı şablondan kur” bu listeden toplantı üretir."
+      size="lg"
+      footer={
+        <>
+          <button onClick={openNew} className="mr-auto inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[13px] font-medium text-brand transition-all duration-150 hover:bg-brand-soft hover:text-brand-strong active:scale-[0.98]">
+            <Plus size={14} /> Şablon ekle
+          </button>
+          <Button variant="secondary" size="sm" onClick={onClose}>Kapat</Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
           {error && <div className="anim-fade-down rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] font-medium text-red-700">{error}</div>}
 
           {/* Düzenleyici */}
@@ -237,18 +246,8 @@ export function TemplateManager({ templates, members, memberNames, onClose, onCh
               </div>
             ),
           )}
-        </div>
-
-        {/* Alt bar */}
-        <div className="flex items-center justify-between border-t border-line px-5 py-3">
-          <button onClick={openNew} className="-ml-2 inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[13px] font-medium text-brand transition-all duration-150 hover:bg-brand-soft hover:text-brand-strong active:scale-[0.98]">
-            <Plus size={14} /> Şablon ekle
-          </button>
-          <button onClick={onClose} className="rounded-lg border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-muted shadow-xs transition-all duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]">
-            Kapat
-          </button>
-        </div>
       </div>
-    </div>
+      {dialog}
+    </Overlay>
   );
 }

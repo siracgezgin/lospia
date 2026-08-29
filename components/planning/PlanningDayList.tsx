@@ -6,7 +6,8 @@ import { tr } from "date-fns/locale";
 import { CheckCircle2, Pencil, Plus } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { categoryMeta } from "@/lib/planning/categories";
-import { PLANNING_BANDS, WEEKDAY_LONG_TR, WEEKDAY_SHORT_TR } from "@/lib/planning/bands";
+import { WEEKDAY_LONG_TR, WEEKDAY_SHORT_TR, type RuntimeBand } from "@/lib/planning/bands";
+import { istanbulLabel, AWAY_LABEL } from "@/lib/planning/timezones";
 import { KimBadges } from "./KimBadges";
 import type { PlanningMeetingWithTopics, PlanningTopic } from "@/types";
 
@@ -21,6 +22,8 @@ interface Props {
   isAdmin: boolean;
   todayIso: string;
   onOpen: (_iso: string, _slot: string, _dayIndex: number) => void;
+  /** Sol sütun — masaüstündeki ızgarayla AYNI kaynak (20240326). */
+  bands: RuntimeBand[];
 }
 
 /**
@@ -31,14 +34,22 @@ interface Props {
  * okunur — bilgi aynı, gezinme parmakla mümkün.
  */
 export function PlanningDayList({
-  weekDays, byCell, topicRows, extraSlots, memberNames, personHex = {}, isAdmin, todayIso, onOpen,
+  weekDays, byCell, topicRows, extraSlots, memberNames, personHex = {}, isAdmin, todayIso,
+  onOpen, bands,
 }: Props) {
   const todayIdx = weekDays.indexOf(todayIso);
   const [dayIdx, setDayIdx] = useState(todayIdx >= 0 ? todayIdx : 0);
   const iso = weekDays[dayIdx] ?? weekDays[0];
 
-  // O günde içeriği olan şeritler önce; boş şeritler de görünür (yönetici ekler).
-  const slots = [...PLANNING_BANDS.map((b) => b.slot), ...extraSlots];
+  /* Saatler KRONOLOJİK — masaüstü ızgarasıyla aynı sıra. Şerit dışı saat
+     (elle girilmiş 11:11) listenin dibine düşmez, yerine oturur. */
+  const slots = [...bands.map((b) => b.slot), ...extraSlots].sort((a, b) => {
+    const mins = (v: string) => {
+      const m = /^(\d{1,2}):(\d{2})/.exec(v);
+      return m ? +m[1] * 60 + +m[2] : 24 * 60 + 1;
+    };
+    return mins(a) - mins(b);
+  });
 
   return (
     <div className="lg:hidden">
@@ -90,7 +101,7 @@ export function PlanningDayList({
 
       <div className="space-y-2.5">
         {slots.map((slot) => {
-          const band = PLANNING_BANDS.find((b) => b.slot === slot);
+          const band = bands.find((b) => b.slot === slot);
           const cell = byCell.get(`${iso}|${slot}`) ?? [];
           const meta = categoryMeta(band?.category ?? cell[0]?.category ?? "other");
           const title = cell.map((m) => m.title).filter(Boolean).join(" · ");
@@ -117,15 +128,22 @@ export function PlanningDayList({
                   isAdmin && "transition-[filter] duration-150 active:brightness-95",
                 )}
               >
-                <span className="mt-px shrink-0 rounded bg-ink/[0.07] px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-ink/70">
-                  {slot}
+                {/* Saat çifti — kayıtlı New York saati ve İstanbul karşılığı
+                    (Aslı Hanım, 2026-08-28). */}
+                <span className="mt-px shrink-0 rounded bg-ink/[0.07] px-1.5 py-0.5 text-center leading-tight">
+                  <span className="block text-[11px] font-bold tabular-nums text-ink/70">{slot}</span>
+                  {istanbulLabel(iso, slot) && (
+                    <span className="block text-[9.5px] font-medium tabular-nums text-ink/45">
+                      {AWAY_LABEL} {istanbulLabel(iso, slot)}
+                    </span>
+                  )}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className={cn("block text-[10px] font-bold uppercase tracking-[0.12em] opacity-70", meta.title)}>
                     {band?.label ?? meta.label}
                   </span>
                   <span className={cn("block text-[13.5px] font-bold leading-snug tracking-tight", meta.title)}>
-                    {title || (isAdmin ? "— başlık ekle" : "—")}
+                    {title || "—"}
                   </span>
                   <KimBadges ids={ids} kim={kim} collaboratorIds={collabIds} memberNames={memberNames} className="ml-0 mt-1" personHex={personHex} />
                   {content && (
@@ -150,7 +168,8 @@ export function PlanningDayList({
                           <CheckCircle2 size={12} className="ml-1 inline shrink-0 text-emerald-600" aria-label="Göreve atandı" />
                         )}
                         <KimBadges ids={t.participant_ids} kim={t.kim} collaboratorIds={t.collaborator_ids} memberNames={memberNames} personHex={personHex} />
-                        {t.due_date && (
+                        {/* Yalnız o günden FARKLI teslim tarihi yazılır. */}
+                        {t.due_date && t.due_date.slice(0, 10) !== iso && (
                           <span className="ml-1 whitespace-nowrap text-[11px] tabular-nums text-subtle">
                             {format(parseISO(t.due_date), "d MMM", { locale: tr })}
                           </span>

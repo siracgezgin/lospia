@@ -124,7 +124,7 @@ function MonthYearPicker({ value, onChange }: { value: Date; onChange: (d: Date)
         type="button"
         data-testid="calendar-month-picker-button"
         onClick={toggle}
-        className="flex items-center gap-1.5 text-sm font-semibold tracking-tight text-ink w-40 justify-center border-x border-line py-1.5 capitalize select-none cursor-pointer transition-colors duration-150 hover:bg-surface-hover active:bg-surface-sunken focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-ring"
+        className="flex h-9 w-40 items-center justify-center gap-1.5 border-x border-line text-[13px] font-semibold capitalize tracking-tight text-ink transition-colors duration-150 hover:bg-surface-hover active:bg-surface-sunken focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-ring"
         aria-label="Ay ve yıl seç"
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -267,7 +267,8 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
             NOTE: no `overflow-hidden` here — it would clip the picker popover
             (rendered at top-full, outside this box) and the picker would appear
             to "do nothing" on click. End buttons are rounded individually. */}
-        <div className="flex items-center rounded-lg border border-line bg-surface shadow-xs">
+        {/* h-9 — uygulama genelindeki araç çubuğu yüksekliği. */}
+        <div className="flex h-9 items-center rounded-lg border border-line bg-surface shadow-xs">
           <button
             onClick={() => setCurrent((d) => subMonths(d, 1))}
             className="p-1.5 rounded-l-lg text-muted hover:bg-surface-hover hover:text-ink active:bg-surface-sunken transition-colors duration-150"
@@ -289,7 +290,7 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
           onClick={() => { setCurrent(new Date()); setSelectedDay(new Date()); }}
           aria-pressed={!viewingToday}
           className={cn(
-            "text-sm px-3 py-1.5 rounded-lg font-medium border transition-all duration-150 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring focus-visible:ring-offset-1",
+            "inline-flex h-9 items-center rounded-lg border px-3 text-[13px] font-medium transition-all duration-150 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring focus-visible:ring-offset-1",
             viewingToday
               ? "bg-surface border-line text-subtle hover:bg-surface-muted hover:text-muted"
               : "bg-brand border-brand text-white shadow-xs hover:bg-brand-strong",
@@ -435,9 +436,9 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
           only peeks through when the sheet is dragged. dvh (not vh) keeps the
           height correct against the mobile browser's dynamic toolbar. */}
       {showMobilePanel && (
-        <div className="anim-fade fixed inset-0 z-50 flex items-end justify-center bg-black/30 lg:hidden" onClick={() => setShowMobilePanel(false)}>
+        <div className="anim-fade fixed inset-0 z-50 flex items-end justify-center bg-ink/45 backdrop-blur-[2px] lg:hidden" onClick={() => setShowMobilePanel(false)}>
           <div
-            className="anim-slide-up bg-surface rounded-t-2xl shadow-drawer w-full max-h-[85dvh] flex flex-col"
+            className="anim-slide-up flex max-h-[85dvh] w-full flex-col rounded-t-modal border border-line bg-surface shadow-drawer"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-hairline">

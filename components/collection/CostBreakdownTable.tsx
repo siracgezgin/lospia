@@ -4,7 +4,6 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { Wallet, Check, Loader2, FileSpreadsheet, Info } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { updateProductionSheetPricing } from "@/lib/actions/production";
 import {
   totalQuantity, formatMoney, COST_ITEM_DEFS, emptyCostItems, unitCostOf,
@@ -16,8 +15,21 @@ import type { ProductionSheet, ProductionPricing, CostItemKey, MaterialCategory 
 
 type Row = Pick<
   ProductionSheet,
-  "id" | "title" | "product_kind" | "producer" | "category" | "subcategory" | "pricing" | "size_distribution"
+  | "id" | "title" | "product_kind" | "product_code" | "photo_refs" | "producer"
+  | "category" | "subcategory" | "pricing" | "size_distribution"
 >;
+
+/** Satırdaki ürün görseli — Koleksiyon kartlarıyla AYNI öncelik: önce ürünün
+ *  kendi fotoğrafı, teknik çizim en son. */
+const COVER_PRIORITY = ["general", "embellishments", "accessories", "sewing", "fabric"] as const;
+function coverOf(r: Row): string | null {
+  const imgs = (Array.isArray(r.photo_refs) ? r.photo_refs : []).filter((i) => i?.url);
+  for (const section of COVER_PRIORITY) {
+    const hit = imgs.find((i) => i.section === section);
+    if (hit) return hit.url;
+  }
+  return imgs[0]?.url ?? null;
+}
 
 /** Maliyet tablosunun ihtiyaç duyduğu sade reçete satırı. */
 export type BomLite = {
@@ -137,29 +149,26 @@ export function CostBreakdownTable({ rows, seasons = [], bomBySheet = {} }: Prop
   }
 
   return (
-    <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
-      <ModulePageHeader
-        title="Cost"
-        description="Her ürünün birim maliyeti kalem kalem: kumaş, dikim, fermuar, ütü/paket, kalıp, genel giderler."
-        icon={Wallet}
-        secondaryBackHref="/collection"
-        rightSlot={
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+    <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
+      {/* Başlık uygulama çubuğunda; aksiyonlar sekme satırının SAĞINDA. */}
+      <h1 className="sr-only">Cost</h1>
+      <CollectionTabs
+        active="maliyet"
+        actions={
+          <>
             <SeasonSwitch seasons={seasons} />
             {rows.length > 0 && (
-            <a
-              href="/collection/maliyet/export"
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-muted transition-[background-color,border-color,color,transform] duration-150 ease-standard hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
-              title="Maliyet tablosunu Excel olarak indir"
-            >
-              <FileSpreadsheet size={15} /> Excel indir
-            </a>
+              <a
+                href="/collection/maliyet/export"
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-[13px] font-medium text-muted transition-[background-color,border-color,color,transform] duration-150 ease-standard hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
+                title="Maliyet tablosunu Excel olarak indir"
+              >
+                <FileSpreadsheet size={15} /> Excel indir
+              </a>
             )}
-          </div>
+          </>
         }
       />
-
-      <CollectionTabs active="maliyet" />
 
       <p className="mb-3 flex items-start gap-2 rounded-lg border border-line bg-surface-muted px-3 py-2 text-[12.5px] text-muted">
         <Info size={14} className="mt-px shrink-0 text-subtle" />
@@ -198,11 +207,30 @@ export function CostBreakdownTable({ rows, seasons = [], bomBySheet = {} }: Prop
               <tbody className="[&>tr:last-child>td]:border-b-0 [&>tr>td]:border-b [&>tr>td]:border-b-hairline">
                 {rows.map((r) => (
                   <tr key={r.id} className="transition-colors duration-150 hover:bg-surface-hover/60">
+                    {/* ÜRÜN — fotoğrafıyla. Maliyet tablosu bir muhasebe
+                        çizelgesi gibi duruyordu; hangi ürünün satırında
+                        olduğunu ancak adı okuyarak anlıyordunuz. */}
                     <td className="px-3 py-1.5">
-                      <Link href={`/production/${r.id}`} className="font-medium text-ink transition-colors duration-150 hover:text-brand-strong">
-                        {r.title}
+                      <Link href={`/production/${r.id}`} className="group/prod flex items-center gap-2.5">
+                        <span className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-lg bg-surface-muted">
+                          {coverOf(r) ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={coverOf(r)!} alt="" className="h-full w-full object-cover" />
+                          ) : (
+                            <Wallet size={15} className="text-subtle" />
+                          )}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block truncate font-medium text-ink transition-colors duration-150 group-hover/prod:text-brand-strong">
+                            {r.title}
+                          </span>
+                          {(r.product_code || r.producer) && (
+                            <span className="block truncate text-[12px] text-subtle">
+                              {[r.product_code, r.producer].filter(Boolean).join(" · ")}
+                            </span>
+                          )}
+                        </span>
                       </Link>
-                      {r.producer && <span className="ml-2 text-[12px] text-subtle">{r.producer}</span>}
                     </td>
                     {COST_ITEM_DEFS.map((d) => {
                       const fromBom = bomOf(r.id)[d.key];

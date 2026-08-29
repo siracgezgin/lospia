@@ -10,6 +10,8 @@ export type BoardMember = {
   /** Yöneticinin seçtiği kimlik (20240313). null → id'den otomatik türetilir. */
   colorKey?: string | null;
   iconKey?: string | null;
+  /** Kartta görünen ünvan (20240323). null → rolden türetilen etiket. */
+  jobTitle?: string | null;
 };
 
 function parseWeekParam(weekStr?: string): string | null {
@@ -88,7 +90,7 @@ export default async function BoardPage({
     // workspace_members row id so we can build the dept-filtered responsible picker.
     supabase
       .from("workspace_members")
-      .select("id, user_id, role, color_key, icon_key, profiles(id, full_name, email, avatar_url)")
+      .select("id, user_id, role, color_key, icon_key, job_title, profiles(id, full_name, email, avatar_url)")
       .eq("workspace_id", workspaceId),
     supabase
       .from("workspace_contacts")
@@ -148,7 +150,7 @@ export default async function BoardPage({
   const tasks: Task[] = tasksResult.data ?? [];
   const savedViews: SavedView[] = viewsResult.data ?? [];
   type ProfileLite = Pick<Profile, "id" | "full_name" | "email" | "avatar_url">;
-  type MemberRow = { id: string; user_id: string; role: string; color_key: string | null; icon_key: string | null; profiles: ProfileLite | ProfileLite[] | null };
+  type MemberRow = { id: string; user_id: string; role: string; color_key: string | null; icon_key: string | null; job_title?: string | null; profiles: ProfileLite | ProfileLite[] | null };
   const memberRowsData = (profilesResult.data ?? []) as unknown as MemberRow[];
   const profiles: ProfileLite[] = memberRowsData
     .flatMap((m) => (Array.isArray(m.profiles) ? m.profiles : m.profiles ? [m.profiles] : []));
@@ -158,7 +160,7 @@ export default async function BoardPage({
     return {
       memberId: m.id, userId: m.user_id, name: prof?.full_name ?? prof?.email ?? "—",
       isAdmin: m.role === "owner" || m.role === "admin",
-      colorKey: m.color_key, iconKey: m.icon_key,
+      colorKey: m.color_key, iconKey: m.icon_key, jobTitle: m.job_title ?? null,
     };
   });
   const deptMembers = (deptMembersResult.data ?? []) as { department_id: string; member_id: string }[];

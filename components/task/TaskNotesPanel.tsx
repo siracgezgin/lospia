@@ -1,5 +1,7 @@
 "use client";
 
+import { useConfirm } from "@/components/ui/useConfirm";
+
 import { useMemo, useRef, useState, useTransition } from "react";
 import { Pin, Trash2, PencilLine, StickyNote, ChevronDown, Check, Eye, HandHelping, CalendarCheck } from "lucide-react";
 import type { TaskNoteWithAuthor, TaskNoteType } from "@/types";
@@ -80,6 +82,7 @@ function NoteItem({
   people: NotePerson[];
   acks: AckRow[];
 }) {
+  const { ask, dialog } = useConfirm();
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(note.content);
   const [ackError, setAckError] = useState<string | null>(null);
@@ -142,8 +145,11 @@ function NoteItem({
     });
   }
 
-  function handleDelete() {
-    if (!confirm("Bu notu silmek istediğinizden emin misiniz?")) return;
+  async function handleDelete() {
+    if (!(await ask({
+      title: "Not silinsin mi?",
+      message: "Not kalıcı olarak silinir; bu işlem geri alınamaz.",
+    }))) return;
     startTransition(async () => {
       await deleteTaskNote(note.id, taskId);
     });
@@ -260,6 +266,7 @@ function NoteItem({
           )}
         </div>
       </div>
+      {dialog}
     </li>
   );
 }

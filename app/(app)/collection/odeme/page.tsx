@@ -60,12 +60,11 @@ export default async function PaymentPage({
   const setup = maybeDatabaseSetupRequired(result.error);
   if (setup.setupRequired) {
     return (
-      <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-3xl px-4 py-4 sm:px-6 lg:px-8">
         <ModulePageHeader
           title="Payment Table"
           description="Usta başına ödeme — hangi usta hangi ürünü dikti, ne kadar ödenecek."
           icon={HandCoins}
-          secondaryBackHref="/collection"
         />
         <SetupRequiredNotice
           variant="block"

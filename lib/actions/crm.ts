@@ -32,6 +32,9 @@ const CrmFieldsSchema = z.object({
   organization: nullableText(200),
   segment: nullableText(40),
   crm_status: nullableText(40),
+  /* Influencer seeding adımı (20240330). Aslı Hanım'ın yedi adımı —
+     bkz. lib/crm/seeding.ts. Boş = süreç başlamadı. */
+  seeding_stage: nullableText(20),
   source_channel: nullableText(60),
   email: z.string().email("Geçersiz e-posta").optional().nullable().or(z.literal("")),
   phone: nullableText(60),
@@ -71,6 +74,7 @@ function clean(v: CrmFields) {
     organization: nn(v.organization),
     segment: nn(v.segment),
     crm_status: nn(v.crm_status),
+    seeding_stage: nn(v.seeding_stage),
     source_channel: nn(v.source_channel),
     email: nn(v.email),
     phone: nn(v.phone),

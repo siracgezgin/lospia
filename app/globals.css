@@ -7,40 +7,49 @@
    ────────────────────────────────────────────────────────────────────────── */
 
 :root {
-  /* Surfaces — layered neutrals (app → panel → raised) */
-  --app-bg:        #f7f8fa;   /* page canvas */
-  --surface:       #ffffff;   /* cards, panels */
-  --surface-muted: #f9fafb;   /* subtle fills, hover rows */
-  --surface-sunken:#f2f4f6;   /* wells, inputs at rest */
-  --surface-hover: #f4f6f8;   /* interactive-row hover (between muted and sunken) */
+  /* YÜZEYLER — nötrler SAF GRİ DEĞİL, markanın yeşilimsi-mavisine bir tık
+     çalar. Sıraç (2026-08-29): "Soluk olmamalı, her şey canlı ve yumuşak
+     görünmeli, estetik görünmeli."
 
-  /* Lines — soft. hairline is for internal dividers, line for panel edges */
-  --hairline:      #eceef2;
-  --border:        #dfe3e9;
-  --border-strong: #c9cfd8;
+     Saf gri (#f7f8fa) ekranda "varsayılan" gibi okunur — hiç seçilmemiş bir
+     renk gibi. Aynı açıklıkta ama içinde birkaç derece marka rengi taşıyan bir
+     nötr, gözle ayırt edilemeyecek kadar hafiftir ama yüzey "boyanmış" hisseder.
+     Kanvas da bir kademe koyulaştı: beyaz kartlar artık zeminden ayrılıyor,
+     kart kenarını çizgi değil ışık taşıyor. */
+  --app-bg:        #f3f6f7;   /* sayfa zemini */
+  --surface:       #ffffff;   /* kartlar, paneller */
+  --surface-muted: #f7fafa;   /* yumuşak dolgu, satır hover */
+  --surface-sunken:#edf2f3;   /* kuyular, dinlenen alanlar */
+  --surface-hover: #f0f5f6;   /* tıklanabilir satır hover */
 
-  /* Text — gövde tonları bir kademe koyu tutulur;
-     hiyerarşi korunur (primary > muted > subtle) ama hepsi net okunur. */
-  --text:          #15191f;   /* primary */
-  --text-muted:    #495160;   /* secondary */
-  --text-subtle:   #7b8494;   /* tertiary / placeholder */
+  /* ÇİZGİLER — yumuşak ama görünür. hairline iç ayırıcı, line panel kenarı. */
+  --hairline:      #e7edee;
+  --border:        #d5dee0;
+  --border-strong: #b6c3c7;
 
-  /* Brand — calm teal, signals trust without shouting */
-  --brand:         #2f5d6b;
-  --brand-strong:  #264c58;
-  --brand-soft:    #eaf2f4;
-  --brand-ring:    #7faab8;
+  /* METİN — gövde tonları bir kademe koyu; hiyerarşi korunur
+     (primary > muted > subtle) ama üçü de net okunur. Soluk gri metin,
+     tasarımcının "bitmemiş" diye okuduğu ilk şeydir. */
+  --text:          #121a1e;   /* birincil */
+  --text-muted:    #44525a;   /* ikincil */
+  --text-subtle:   #72828a;   /* üçüncül / yer tutucu */
 
-  /* Semantic state hues (kept here for non-Tailwind use) */
-  --danger:        #c8503d;
-  --danger-strong: #b03e2c;   /* destructive hover */
-  --warning:       #bd7a2c;
-  --hold:          #b08019;
-  --approval:      #7257b5;
-  --success:       #2c8a61;
-  --info:          #3172ad;   /* calm blue — in-progress / informational */
-  --overdue:       #a83a2c;   /* matches the Gecikti chip text tone */
-  --urgent:        #dc2626;   /* Acil — the only saturated solid red */
+  /* MARKA — sakin ama CANLI teal. Eskisi (#2f5d6b) tozlu kalıyordu. */
+  --brand:         #2a6b7a;
+  --brand-strong:  #1f5462;
+  --brand-soft:    #e3f1f3;
+  --brand-ring:    #78b1bd;
+
+  /* Durum renkleri — her biri kendi ailesinde bir tık daha doygun. */
+  --danger:        #c94a35;
+  --danger-strong: #ae3a27;   /* yıkıcı eylem hover */
+  --warning:       #c07a22;
+  --hold:          #b07d12;
+  --approval:      #7050bb;
+  --success:       #21875d;
+  --info:          #2d72b0;   /* sakin mavi — devam eden / bilgi */
+  --overdue:       #a83a2c;   /* "Gecikti" çipinin metin tonu */
+  --urgent:        #dc2626;   /* Acil — tek doygun kırmızı */
 
   --radius:        0.625rem;  /* 10px — default card radius */
 
@@ -103,10 +112,12 @@
   --radius-modal:   1rem;     /* dialogs, sheets (== rounded-2xl today) */
 
   /* Soft, premium elevation — never harsh */
-  --shadow-card: 0 1px 2px rgba(20, 28, 40, 0.04), 0 1px 3px rgba(20, 28, 40, 0.03);
-  --shadow-card-hover: 0 2px 6px rgba(20, 28, 40, 0.07), 0 1px 3px rgba(20, 28, 40, 0.05);
-  --shadow-pop: 0 4px 16px rgba(20, 28, 40, 0.10), 0 1px 3px rgba(20, 28, 40, 0.06);
-  --shadow-drawer: 0 12px 40px rgba(20, 28, 40, 0.16), 0 2px 8px rgba(20, 28, 40, 0.08);
+  /* Gölge rengi MARKANIN koyu tonundan türer (mavi-siyah değil): kenarlar
+     kirlenmiş gri yerine yumuşak bir ışık kaybı gibi okunur. */
+  --shadow-card: 0 1px 2px rgba(14, 38, 44, 0.045), 0 1px 3px rgba(14, 38, 44, 0.035);
+  --shadow-card-hover: 0 3px 8px rgba(14, 38, 44, 0.075), 0 1px 3px rgba(14, 38, 44, 0.05);
+  --shadow-pop: 0 6px 20px rgba(14, 38, 44, 0.11), 0 1px 4px rgba(14, 38, 44, 0.06);
+  --shadow-drawer: 0 16px 48px rgba(14, 38, 44, 0.17), 0 3px 10px rgba(14, 38, 44, 0.08);
 
   /* Motion easings — ease-standard for most UI, ease-emphasized for
      enter/exit of larger surfaces (drawers, sheets). */
@@ -188,6 +199,37 @@ body {
    hücreleri — tıklanabilir her düğme fareyle üzerine gelince ölü görünüyordu
    (2026-08-20 kullanıcı geri bildirimi). Tek yerden geri alınır; devre dışı
    düğmeler hariç tutulur ki "tıklanabilir" yanılgısı doğmasın. */
+@layer base {
+  /* AÇILIR LİSTELER — tek ok, her işletim sisteminde aynı.
+     -----------------------------------------------------------------------
+     Sıraç (2026-08-29): "İkon renkleri gibisinden düzen, dizayn, uyum,
+     eşitlik… tasarımcılar için çok önemli."
+
+     `<select>`ler uygulama boyunca elle biçimlendiriliyordu ama hiçbirinde
+     `appearance: none` yoktu: macOS kendi ÇİFT OKUNU, Windows kutulu tek ok
+     çiziyordu. Yan yana duran bir input ile bir select aynı satırda farklı
+     görünüyordu — üstelik ok, metin uzayınca üstüne biniyordu.
+
+     Kural burada bir kez konur; hiçbir ekranın kendi okunu çizmesi gerekmez.
+     Çoklu/liste select'ler (multiple, size>1) dışarıda bırakılır — onlarda ok
+     zaten yok. */
+  select:not([multiple]):not([size]) {
+    appearance: none;
+    -moz-appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7482' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.6rem center;
+    background-size: 14px 14px;
+    padding-right: 1.9rem;
+  }
+
+  select:not([multiple]):not([size]):disabled {
+    opacity: 1; /* soluklaştırmayı rengi yapar; ok yok olmasın */
+    background-image: none;
+  }
+}
+
 @layer base {
   button:not(:disabled),
   [role="button"]:not(:disabled),

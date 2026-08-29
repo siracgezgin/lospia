@@ -1788,6 +1788,7 @@ export function KanbanBoard({
           name: m.name,
           avatarUrl: profiles.find((p) => p.id === m.userId)?.avatar_url ?? null,
           isAdmin: m.isAdmin,
+          jobTitle: m.jobTitle ?? null,
         }))
       : profiles.map((p) => ({
           filterKey: `member:${p.id}`,

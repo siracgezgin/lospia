@@ -29,6 +29,7 @@ import {
   PaintBucket, Baseline, Square, Combine, X, Pencil,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { useConfirm } from "@/components/ui/useConfirm";
 import {
   GUTTER_W, HEAD_H, ROW_H, MAX_COLS, MAX_ROWS,
   activeSheet, colName, colWidth, deleteCol, deleteRow, emptySheet, emptyWorkbook,
@@ -71,6 +72,7 @@ const TEXT_COLORS = [
 ];
 
 export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, onDirty }: Props) {
+  const { ask, dialog } = useConfirm();
   const [wb, setWb] = useState<WorkbookSnapshot>(() => initialSnapshot ?? emptyWorkbook());
   const [sel, setSel] = useState<Sel>({ r1: 0, c1: 0, r2: 0, c2: 0 });
   const [editing, setEditing] = useState<{ r: number; c: number; draft: string } | null>(null);
@@ -462,11 +464,14 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
     commitWb({ engine: "wb", sheets: [...w.sheets, s], active: w.sheets.length });
     setSel({ r1: 0, c1: 0, r2: 0, c2: 0 });
   };
-  const removeSheet = (index: number) => {
+  const removeSheet = async (index: number) => {
     const w = wbRef.current;
     if (w.sheets.length <= 1) return;               // son sayfa silinmez
     const name = w.sheets[index].name;
-    if (!window.confirm(`"${name}" sayfası silinsin mi? İçindeki veriler gider.`)) return;
+    if (!(await ask({
+      title: "Sayfa silinsin mi?",
+      message: `"${name}" sayfası ve İÇİNDEKİ TÜM VERİLER kalıcı olarak silinir.`,
+    }))) return;
     const sheets = w.sheets.filter((_, i) => i !== index);
     commitWb({ engine: "wb", sheets, active: Math.max(0, Math.min(sheets.length - 1, index > 0 ? index - 1 : 0)) });
     setSel({ r1: 0, c1: 0, r2: 0, c2: 0 });
@@ -922,6 +927,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
           <MenuItem onClick={() => { clearRange(norm(sel), true); setMenu(null); }} danger>İçeriği ve biçimi temizle</MenuItem>
         </div>
       )}
+      {dialog}
     </div>
   );
 }

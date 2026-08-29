@@ -7,6 +7,7 @@ import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { SetupRequiredNotice } from "@/components/modules/SetupRequiredNotice";
 import { maybeDatabaseSetupRequired } from "@/lib/utils/supabase-errors";
 import { ensureWeekScaffold } from "@/lib/planning/scaffold";
+import { defaultRuntimeBands, type RuntimeBand } from "@/lib/planning/bands";
 import { PlanningBoard } from "@/components/planning/PlanningBoard";
 import { CalendarViewSwitch } from "@/components/planning/CalendarViewSwitch";
 import { asCalendarScale } from "@/lib/planning/calendar-scale";
@@ -91,7 +92,6 @@ export default async function CalendarPage({
             : "Yıl görünümü — 12 ay bir arada; bir güne tıklayınca o gün açılır."
       }
       icon={CalendarRange}
-      secondaryBackHref="/board"
       rightSlot={<CalendarViewSwitch scale={scale} />}
     />
   );
@@ -129,7 +129,7 @@ export default async function CalendarPage({
 
     if (scale === "ay") {
       return (
-        <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
+        <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
           {header}
           <CalendarView
             embedded
@@ -172,7 +172,7 @@ export default async function CalendarPage({
     }
 
     return (
-      <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
+      <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
         {header}
         <CalendarYearView loadByDay={loadByDay} initialYear={focusYear} />
       </div>
@@ -180,6 +180,31 @@ export default async function CalendarPage({
   }
 
   // ── Hafta (varsayılan) — haftalık toplantı ızgarası ────────────────────────
+  /* Sol sütun (şerit adı · saat · konu satırı) artık VERİ — Aslı Hanım
+     (2026-08-28): "Buraya neden müdahale edemiyorum?" Tablo boşsa ya da henüz
+     migrate edilmediyse kod varsayılanlarına düşülür; takvim her hâlükârda
+     açılır. */
+  const bandsRes = await supabase
+    .from("planning_bands")
+    .select("id, slot, category, label, topic_rows, columns")
+    .eq("workspace_id", workspaceId)
+    .order("position");
+  type BandRow = {
+    id: string; slot: string; category: string; label: string;
+    topic_rows: number; columns: unknown;
+  };
+  const bandRows = (bandsRes.error ? [] : (bandsRes.data ?? [])) as unknown as BandRow[];
+  const bands: RuntimeBand[] = bandRows.length
+    ? bandRows.map((b) => ({
+        id: b.id,
+        slot: b.slot,
+        category: b.category as RuntimeBand["category"],
+        label: b.label,
+        topicRows: b.topic_rows ?? 3,
+        columns: Array.isArray(b.columns) ? (b.columns as string[]) : [],
+      }))
+    : defaultRuntimeBands();
+
   const ref = sp.week && isValid(parseISO(sp.week)) ? parseISO(sp.week) : new Date();
   const monday = startOfWeek(ref, { weekStartsOn: 1 });
   const days = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
@@ -209,7 +234,7 @@ export default async function CalendarPage({
   // (Aslı Hanım, 2026-08-20: "Ben tek tek uğraşmayayım.")
   if (!meetingsRes.error && (meetingsRes.data ?? []).length === 0) {
     const added = await ensureWeekScaffold(supabase, {
-      workspaceId, userId: user.id, isAdmin, weekStart, weekEnd,
+      workspaceId, userId: user.id, isAdmin, weekStart, weekEnd, bands,
     });
     if (added > 0) meetingsRes = await weekQuery();
   }
@@ -217,7 +242,7 @@ export default async function CalendarPage({
   const setup = maybeDatabaseSetupRequired(meetingsRes.error);
   if (setup.setupRequired) {
     return (
-      <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-3xl px-4 py-4 sm:px-6 lg:px-8">
         {header}
         <SetupRequiredNotice
           variant="block"
@@ -251,6 +276,7 @@ export default async function CalendarPage({
       memberNames={memberNames}
       personHex={personHex}
       isAdmin={isAdmin}
+      bands={bands}
     />
   );
 }

@@ -36,7 +36,7 @@ export default async function ActivityLogPage() {
   const isAdmin = member.role === "owner" || member.role === "admin";
   if (!isAdmin) {
     return (
-      <div className="max-w-2xl mx-auto py-8 px-4">
+      <div className="mx-auto w-full max-w-3xl px-4 py-4 sm:px-6 lg:px-8">
         <h1 className="text-2xl font-bold text-gray-900 mb-6">Activity Log</h1>
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-sm text-amber-800">
           Bu sayfa yalnızca yöneticiler içindir.

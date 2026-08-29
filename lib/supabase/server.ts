@@ -84,8 +84,10 @@ export const getProfile = cache(async function getProfile(userId: string) {
   const supabase = await createClient();
   const { data } = await supabase
     .from("profiles")
-    .select("full_name, email")
+    .select("full_name, email, avatar_url")
     .eq("id", userId)
     .maybeSingle();
-  return (data ?? null) as { full_name: string | null; email: string | null } | null;
+  return (data ?? null) as
+    | { full_name: string | null; email: string | null; avatar_url: string | null }
+    | null;
 });

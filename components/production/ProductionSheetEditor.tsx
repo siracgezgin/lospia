@@ -15,12 +15,15 @@ import {
   type ProductionSheetInput,
 } from "@/lib/actions/production";
 import { cn } from "@/lib/utils/cn";
+import { useConfirm } from "@/components/ui/useConfirm";
+import { SendToManufacturer } from "./SendToManufacturer";
 import { ImageUploader } from "./ImageUploader";
 import { SheetReadiness } from "./SheetReadiness";
 import { SheetBom, type PickableMaterial } from "./SheetBom";
 import { SheetVariants, type SiblingSheet } from "./SheetVariants";
 import { checkSheet } from "@/lib/production/completeness";
-import { COLLECTION_TAXONOMY, subcategoriesOf } from "@/lib/collection/taxonomy";
+import { COLLECTION_TAXONOMY, type CategoryNode } from "@/lib/collection/taxonomy";
+import { subsOf } from "@/lib/collection/category-tree";
 import {
   totalQuantity, parseMoney, formatMoney, STANDARD_SIZES, normalizeToStandardSizes,
   DEFAULT_SIZE_GROUPS, emptyCostItems, costItemLabel, bomCostByKey,
@@ -33,10 +36,17 @@ import type {
 /** Föydeki "Üretici" seçicisini besleyen sade usta kaydı. */
 export type SheetManufacturer = Pick<
   Manufacturer, "id" | "name" | "is_active" | "lead_time_days" | "min_order_qty" | "currency" | "city"
->;
+> & {
+  /** Föyü maille göndermek için (2026-08-28). Yoksa gönderirken elle yazılır. */
+  email?: string | null;
+};
 
 interface Props {
   sheet: ProductionSheet | null;
+  /** Yeni föy açılırken ön-dolu kategori — Koleksiyon'da hangi kategorinin
+   *  içindeysen o (2026-08-29). Föy bir kategorinin ALTINDA doğar. */
+  initialCategory?: string | null;
+  initialSubcategory?: string | null;
   memberNames: Record<string, string>;
   /** Usta listesi. Boşsa alan serbest metne düşer (tablo migrate edilmemiş). */
   manufacturers?: SheetManufacturer[];
@@ -50,6 +60,9 @@ interface Props {
   siblings?: SiblingSheet[];
   isAdmin: boolean;
   currentUserId: string;
+  /** Düzenlenebilir kategori ağacı (workspace_product_categories). Verilmezse
+   *  kod varsayılanları — Koleksiyon ile AYNI liste görünsün diye geçilir. */
+  categories?: CategoryNode[];
 }
 
 /**
@@ -273,9 +286,22 @@ function Section({ title, children, className }: { title: string; children: Reac
   );
 }
 
-export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], seasons = [], materials = [], bom = [], siblings = [], isAdmin, currentUserId }: Props) {
+export function ProductionSheetEditor({ sheet, initialCategory = null, initialSubcategory = null, memberNames, manufacturers = [], seasons = [], materials = [], bom = [], siblings = [], isAdmin, currentUserId, categories }: Props) {
+  const tree = categories && categories.length > 0 ? categories : COLLECTION_TAXONOMY;
+  const { ask, dialog } = useConfirm();
   const router = useRouter();
-  const [form, setForm] = useState<ProductionSheetInput>(() => (sheet ? fromSheet(sheet) : emptyState()));
+  const [form, setForm] = useState<ProductionSheetInput>(() => {
+    if (sheet) return fromSheet(sheet);
+    /* Yeni föy, GELDİĞİ KATEGORİYLE açılır — föy bir kategorinin altında doğar
+       (2026-08-29). Kategori ızgarasından açıldıysa boş kalır ve "Kategori"
+       alanı eksik olarak işaretlenir. */
+    const blank = emptyState();
+    return {
+      ...blank,
+      category: (initialCategory as ProductionSheetInput["category"]) ?? blank.category,
+      subcategory: initialSubcategory ?? blank.subcategory,
+    };
+  });
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   // Kaydedilmemiş değişiklik: konfirme yalnız DİSKTEKİ hâli onaylar, ekrandaki
@@ -400,9 +426,12 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
     });
   }
 
-  function handleDelete() {
+  async function handleDelete() {
     if (!sheet) return;
-    if (!confirm(`"${sheet.title}" föyünü kalıcı olarak silmek istiyor musunuz? Bu işlem geri alınamaz.`)) return;
+    if (!(await ask({
+      title: "Föy silinsin mi?",
+      message: `"${sheet.title}" ve içindeki bütün bilgiler kalıcı olarak silinir.\n\nYalnız gözden kaldırmak istiyorsanız durumu "Arşiv" yapın.`,
+    }))) return;
     setError(null);
     startDelete(async () => {
       const res = await deleteProductionSheet(sheet.id);
@@ -420,11 +449,12 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
     >
       {isSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
       {isNew ? "Föyü oluştur" : "Kaydet"}
+      {dialog}
     </button>
   );
 
   return (
-    <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
+    <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
       {/* Kaydedildi bildirimi (toast) */}
       <div
         aria-live="polite"
@@ -497,6 +527,18 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
             >
               <Printer size={15} /> <span className="hidden sm:inline">Tek sayfa çıktı</span>
             </a>
+          )}
+          {/* ÜRETİCİYE GÖNDER — Aslı Hanım (2026-08-28): "Üreticiye bu föy
+              gidiyor. Aynı mail sistemiyle." Üretici uygulamaya girmez. */}
+          {!isNew && sheet && (
+            <SendToManufacturer
+              sheetId={sheet.id}
+              defaultEmail={manufacturers.find((m) => m.id === sheet.manufacturer_id)?.email ?? null}
+              manufacturerName={
+                manufacturers.find((m) => m.id === sheet.manufacturer_id)?.name ?? sheet.producer ?? null
+              }
+              confirmed={!!sheet.confirmed_at}
+            />
           )}
           {!isNew && sheet && (
             <a
@@ -680,7 +722,7 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
               onChange={(e) => {
                 const next = (e.target.value || null) as ProductionCategory | null;
                 // Kategori değişince geçersiz alt kategoriyi temizle.
-                const validSubs = subcategoriesOf(next).map((s) => s.key);
+                const validSubs = subsOf(tree, next).map((s) => s.key);
                 setDirty(true);
                 setForm((f) => ({
                   ...f,
@@ -690,20 +732,20 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
               }}
             >
               <option value="">Seçiniz…</option>
-              {COLLECTION_TAXONOMY.map((c) => (
+              {tree.map((c) => (
                 <option key={c.key} value={c.key}>{c.label}</option>
               ))}
             </select>
           </FieldRow>
           <FieldRow label="Alt kategori" missing={missingKeys.has("subcategory")} hint={hintOf.get("subcategory")}>
             <select
-              className={cn(inputCls, subcategoriesOf(form.category).length === 0 && "opacity-50")}
+              className={cn(inputCls, subsOf(tree, form.category).length === 0 && "opacity-50")}
               value={form.subcategory ?? ""}
               onChange={(e) => set("subcategory", e.target.value)}
-              disabled={subcategoriesOf(form.category).length === 0}
+              disabled={subsOf(tree, form.category).length === 0}
             >
-              <option value="">{subcategoriesOf(form.category).length === 0 ? "—" : "Seçiniz…"}</option>
-              {subcategoriesOf(form.category).map((s) => (
+              <option value="">{subsOf(tree, form.category).length === 0 ? "—" : "Seçiniz…"}</option>
+              {subsOf(tree, form.category).map((s) => (
                 <option key={s.key} value={s.key}>{s.label}</option>
               ))}
             </select>
@@ -720,7 +762,7 @@ export function ProductionSheetEditor({ sheet, memberNames, manufacturers = [], 
             uzuyor, altında uzun bir boşluk kalıyordu (Aslı Hanım, 2026-08-24:
             "Üretim föyünde çoğu yer boşluklu, optimum olsun"). Yan yana
             durunca iki sütunun boyu birbirine yaklaşıyor. */}
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <Section title="Teknik Çizim — Ön">
             <ImageUploader sheetId={sheetId} section="technical_drawing_front" images={form.photo_refs} onChange={handleImagesChange} variant="drawing" />
           </Section>
