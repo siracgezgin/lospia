@@ -869,19 +869,17 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
         </div>
         </div>
 
-        {/* KAPAK + TEKNİK ÇİZİM — HER ZAMAN YAN YANA (geniş ekranda üç sütun).
-            Alt alta dizilince sağ sütun solun iki katı uzuyor ve altında boşluk
-            kalıyordu (Aslı Hanım, 2026-08-24: "föyde çoğu yer boşluklu").
-            Kapak, ürünün Koleksiyon'daki yüzüdür: kart kapağı artık yüklenen
-            görseller arasından TAHMİN edilmiyor, buradan seçiliyor
-            (Sıraç, 2026-08-30: "föylerde de kapak resmi ekleme kısmı olsun,
-            bu resmin tamamını değiştireceğim"). `variant="drawing"` tek görsel
-            gösterir ve "Değiştir" düğmesiyle gelir — kapak bir galeri değil,
-            tek bir karardır. Zorunlu alan DEĞİLDİR: eksik uyarısını şişirmez. */}
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
-          <Section title="Kapak Görseli">
-            <ImageUploader sheetId={sheetId} section="cover" images={form.photo_refs} onChange={handleImagesChange} variant="drawing" />
-          </Section>
+        {/* TEKNİK ÇİZİM — ÖN ve ARKA HER ZAMAN YAN YANA. Alt alta dizilince sağ
+            sütun solun iki katı uzuyor ve altında boşluk kalıyordu (Aslı Hanım,
+            2026-08-24: "föyde çoğu yer boşluklu").
+
+            KAPAK GÖRSELİ BURADA DEĞİL: Koleksiyon ızgarasında, ürün kartının
+            kendi köşesinde (components/collection/CoverImageButton). Sıraç
+            (2026-08-30): "kapak görseli üretim föyü içinde değil, föylerin
+            listelendiği kısımda her föyün kapağının üzerinde resim butonu
+            olsun". Kapak bir föy alanı değil, katalog kararıdır — koleksiyona
+            bakarken verilir. */}
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <Section checkKey="drawing" title="Teknik Çizim — Ön">
             <ImageUploader sheetId={sheetId} section="technical_drawing_front" images={form.photo_refs} onChange={handleImagesChange} variant="drawing" />
           </Section>

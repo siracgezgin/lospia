@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils/cn";
 import { deleteProductionSheet } from "@/lib/actions/production";
 import { useConfirm } from "@/components/ui/useConfirm";
 import { DownloadLink, downloadIconCls } from "@/components/ui/DownloadLink";
+import { CoverImageButton } from "./CoverImageButton";
 import { Button, IconButton } from "@/components/ui/Button";
 import { TextInput } from "@/components/ui/Field";
 import { Badge } from "@/components/ui/Badge";
@@ -140,6 +141,10 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
   const router = useRouter();
   const { ask, dialog } = useConfirm();
   const [isDeleting, startDelete] = useTransition();
+
+  /* Kapak yükleme hatası — tek satır, insan dili. Kart üstünde yer yok,
+     ızgaranın üstünde gösterilir. */
+  const [coverError, setCoverError] = useState<string | null>(null);
 
   async function removeSheet(sheet: CollectionItem) {
     if (!(await ask({
@@ -460,6 +465,12 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
                (2xl'de altı) — geniş monitörde koleksiyon gerçekten yan yana
                görülür. Hover'da kart yer değiştirmez, görsel büyümez: gölge ve
                kenarlık yeter. */
+            <>
+            {coverError && (
+              <p role="alert" className="anim-fade-down mb-3 rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[13.5px] font-medium text-danger">
+                {coverError}
+              </p>
+            )}
             <div className="stagger-children grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
               {filtered.map((s) => {
                 const cover = coverImage(s);
@@ -496,6 +507,14 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
                       telefonda erişilemezdi. Yazdır önce: föyü üreticiye
                       vermenin ana yolu tek sayfalık kâğıt. */}
                   <div className="absolute right-2 top-2 z-[2] flex items-center gap-1 transition-opacity duration-150 pointer-fine:opacity-0 pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100">
+                    {/* KAPAK — karar ızgaraya bakarken verilir, föyün içinde
+                        değil (2026-08-30). Föyü açmadan tek tıkla değiştirilir. */}
+                    <CoverImageButton
+                      sheetId={s.id}
+                      title={s.title}
+                      images={Array.isArray(s.photo_refs) ? s.photo_refs : []}
+                      onError={setCoverError}
+                    />
                     {/* İNDİRME ONAYI: dosya sistemin dışına çıkıyor ve
                         günlüğe yazılıyor (2026-08-29). */}
                     <DownloadLink
@@ -558,6 +577,7 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
                 );
               })}
             </div>
+            </>
           )}
         </div>
       )}
