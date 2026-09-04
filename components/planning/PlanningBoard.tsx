@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { format, parseISO, addDays, subDays } from "date-fns";
+import { format, parseISO, addDays, subDays, startOfWeek } from "date-fns";
 import { tr } from "date-fns/locale";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { TOPIC_ROWS, WEEKDAY_LONG_TR, type RuntimeBand } from "@/lib/planning/bands";
@@ -10,6 +10,7 @@ import { MeetingEditor } from "./MeetingEditor";
 import { PlanningWeekGrid } from "./PlanningWeekGrid";
 import { PlanningDayList } from "./PlanningDayList";
 import { MeetingUndoBar, type DeletedMeeting } from "./MeetingUndoBar";
+import { PlanningDayView } from "./PlanningDayView";
 import { CalendarViewSwitch } from "./CalendarViewSwitch";
 import { CalendarToolbar } from "./CalendarToolbar";
 import type { Member } from "./MemberMultiSelect";
@@ -24,6 +25,9 @@ interface Props {
   /** Kişi rengi (profiles.id → hex) — baş harf rozetleri kendi renginde. */
   personHex?: Record<string, string>;
   isAdmin: boolean;
+  /** GÜN KARTI açık gelsin (?v=gun&d=…) — ayrı sayfa değil, haftanın üstünde
+   *  bir pencere. Boşsa kart kapalıdır. */
+  openDay?: string | null;
   /** Sol sütun — veritabanından; boşsa kod varsayılanları (20240326). */
   bands: RuntimeBand[];
 }
@@ -46,7 +50,7 @@ interface Props {
 const DEFAULT_TOPIC_ROWS = 3;
 
 export function PlanningBoard({
-  meetings, weekDays, weekStart, members, memberNames, personHex = {}, isAdmin, bands,
+  meetings, weekDays, weekStart, members, memberNames, personHex = {}, isAdmin, bands, openDay = null,
 }: Props) {
   const router = useRouter();
   const [editor, setEditor] = useState<
@@ -107,6 +111,15 @@ export function PlanningBoard({
   const [deleted, setDeleted] = useState<DeletedMeeting | null>(null);
 
   const gotoWeek = (isoMonday: string) => router.push(`/planning?week=${isoMonday}`);
+
+  /* GÜN KARTI. Rota tek doğrudur: ?v=gun&d=<gün> kart AÇIK demektir, kapatmak
+     onu URL'den düşürür. Böylece bağlantı paylaşılabilir, geri tuşu beklendiği
+     gibi çalışır ve gün hafta dışına çıktığında sunucu doğru haftayı yükler. */
+  const openDayCard = (iso: string) => {
+    const monday = format(startOfWeek(parseISO(iso), { weekStartsOn: 1 }), "yyyy-MM-dd");
+    router.push(`/planning?week=${monday}&v=gun&d=${iso}`);
+  };
+  const closeDayCard = () => router.push(`/planning?week=${weekStart}`);
   const todayIso = format(new Date(), "yyyy-MM-dd");
 
   const openEditor = (iso: string, slot: string, i: number) => {
@@ -202,6 +215,23 @@ export function PlanningBoard({
           onClose={() => setEditor(null)}
           onSaved={() => { setEditor(null); router.refresh(); }}
           onDeleted={(snap) => { setEditor(null); setDeleted(snap); router.refresh(); }}
+        />
+      )}
+
+      {openDay && (
+        <PlanningDayView
+          day={openDay}
+          byCell={byCell}
+          topicRows={topicRows}
+          extraSlots={extraSlots}
+          memberNames={memberNames}
+          personHex={personHex}
+          isAdmin={isAdmin}
+          bands={bands}
+          todayIso={todayIso}
+          onDayChange={openDayCard}
+          onOpenSlot={(iso, slot) => openEditor(iso, slot, Math.max(0, weekDays.indexOf(iso)))}
+          onClose={closeDayCard}
         />
       )}
 

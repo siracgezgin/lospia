@@ -219,58 +219,21 @@ export default async function CalendarPage({
       }))
     : defaultRuntimeBands();
 
-  /* GÜN ÖLÇEĞİ — tek günün toplantıları.
-     Şeritler (bands) yukarıda zaten okundu; hafta ile TEK farkı sorgunun
-     aralığı ve çizilen bileşen. Ayrı bir veri yolu açmak, aynı takvimin iki
-     ayrı doğruya sahip olması demekti. */
-  if (scale === "gun") {
-    const focusDay = sp.d && isValid(parseISO(sp.d)) ? sp.d.slice(0, 10) : format(new Date(), "yyyy-MM-dd");
-    const dayRes = await supabase
-      .from("planning_meetings")
-      .select("*, planning_topics(*)")
-      .eq("workspace_id", workspaceId)
-      .eq("meeting_date", focusDay)
-      .order("time_slot", { ascending: true })
-      .order("position", { ascending: true });
+  /* GÜN — AYRI SAYFA DEĞİL, haftanın üstünde bir KART.
+     Sıraç (2026-08-30): "Gün pop-up'ı hafta kısmında kart olarak açılsın,
+     başka sayfa değil." Bu yüzden `?v=gun` kendi veri yolunu açmaz: hafta
+     normal şekilde yüklenir ve kart o günde açık gelir. Hafta zaten yedi günün
+     toplantılarını çekiyor — gün kartı için EK SORGU YOK. */
+  const openDay =
+    scale === "gun"
+      ? (sp.d && isValid(parseISO(sp.d)) ? sp.d.slice(0, 10) : format(new Date(), "yyyy-MM-dd"))
+      : null;
 
-    const daySetup = maybeDatabaseSetupRequired(dayRes.error);
-    if (daySetup.setupRequired) {
-      return (
-        <div className="mx-auto w-full max-w-3xl px-4 py-4 sm:px-6 lg:px-8">
-          {header}
-          <SetupRequiredNotice
-            variant="block"
-            title="Takvim tabloları henüz oluşturulmadı"
-            message={daySetup.message ?? "Calendar için veritabanı güncellemesi bekleniyor."}
-          />
-        </div>
-      );
-    }
-
-    type DayRow = PlanningMeeting & { planning_topics?: PlanningTopic[] | null };
-    const dayMeetings: PlanningMeetingWithTopics[] = ((dayRes.data ?? []) as unknown as DayRow[])
-      .map(({ planning_topics, ...m }) => ({
-        ...(m as PlanningMeeting),
-        topics: [...(planning_topics ?? [])].sort((a, b) => (a.position ?? 0) - (b.position ?? 0)),
-      }));
-
-    return (
-      <div className="flex h-full min-h-0 w-full flex-col">
-        <h1 className="sr-only">Calendar</h1>
-        <PlanningDayView
-          day={focusDay}
-          meetings={dayMeetings}
-          members={members}
-          memberNames={memberNames}
-          personHex={personHex}
-          isAdmin={isAdmin}
-          bands={bands}
-        />
-      </div>
-    );
-  }
-
-  const ref = sp.week && isValid(parseISO(sp.week)) ? parseISO(sp.week) : new Date();
+  const ref = sp.week && isValid(parseISO(sp.week))
+    ? parseISO(sp.week)
+    : openDay
+      ? parseISO(openDay)   // kart hangi gündeyse o günün haftası yüklenir
+      : new Date();
   const monday = startOfWeek(ref, { weekStartsOn: 1 });
   const days = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
   const isoDays = days.map((d) => format(d, "yyyy-MM-dd"));
@@ -342,6 +305,7 @@ export default async function CalendarPage({
       personHex={personHex}
       isAdmin={isAdmin}
       bands={bands}
+      openDay={openDay}
     />
   );
 }

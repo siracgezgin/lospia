@@ -32,8 +32,17 @@ export function CalendarViewSwitch({ scale }: { scale: CalendarScale }) {
   function go(next: CalendarScale) {
     if (next === scale) return;
     const q = new URLSearchParams(params.toString());
-    if (next === "hafta") q.delete("v");
+    if (next === "hafta") { q.delete("v"); q.delete("d"); }
     else q.set("v", next);
+    /* GÜN ayrı bir sayfa değil, haftanın üstünde açılan karttır: hangi günün
+       açılacağını `d` söyler. Değer yoksa bugün. Diğer ölçeklerden geçerken
+       `d` boş kalabiliyordu ve kart "bugün"e düşüyordu — açık yazmak, bağlantı
+       paylaşıldığında da aynı günü getirir. */
+    if (next === "gun" && !q.get("d")) {
+      const now = new Date();
+      const iso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      q.set("d", iso);
+    }
     const qs = q.toString();
     router.push(qs ? `/planning?${qs}` : "/planning");
   }
