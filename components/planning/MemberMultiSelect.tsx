@@ -17,7 +17,8 @@ interface Props {
 }
 
 const LIST_WIDTH = 224;      // w-56
-const LIST_EST_HEIGHT = 240; // max-h-60 — ilk boyama tahmini, ölçülünce düzelir
+const LIST_EST_HEIGHT = 240; // ilk boyama tahmini, ölçülünce düzelir
+const LIST_MAX_HEIGHT = 380; // ekranda yer varsa bu kadar uzayabilir
 
 /**
  * Sistemdeki üyelerden çoklu seçim; buton seçili baş harfleri gösterir.
@@ -31,7 +32,7 @@ const LIST_EST_HEIGHT = 240; // max-h-60 — ilk boyama tahmini, ölçülünce d
  */
 export function MemberMultiSelect({ members, selected, onChange, placeholder = "Kim", compact }: Props) {
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -43,14 +44,21 @@ export function MemberMultiSelect({ members, selected, onChange, placeholder = "
     // Liste tetikleyiciden dar olmasın; ekrandan da taşmasın.
     const width = Math.max(LIST_WIDTH, r.width);
     const left = Math.min(Math.max(8, r.left), Math.max(8, window.innerWidth - width - 8));
-    const below = r.bottom + 4;
-    const top = below + height > window.innerHeight - 8
-      ? Math.max(8, r.top - height - 4)
-      : below;
+
+    /* Yükseklik EKRANA GÖRE: sabit 240px, ekranda yer varken bile listeyi
+       kısaltıp gereksiz kaydırma üretiyordu ("kişilerin tamamı çıkmıyor").
+       Altta ve üstte kalan boşluk ölçülür, geniş olan taraf seçilir. */
+    const spaceBelow = window.innerHeight - r.bottom - 12;
+    const spaceAbove = r.top - 12;
+    const openUp = spaceBelow < Math.min(height, LIST_EST_HEIGHT) && spaceAbove > spaceBelow;
+    const maxHeight = Math.max(140, Math.min(LIST_MAX_HEIGHT, openUp ? spaceAbove : spaceBelow));
+    const shown = Math.min(height, maxHeight);
+    const top = openUp ? Math.max(8, r.top - shown - 4) : r.bottom + 4;
+
     setPos((prev) =>
-      prev && prev.top === top && prev.left === left && prev.width === width
+      prev && prev.top === top && prev.left === left && prev.width === width && prev.maxHeight === maxHeight
         ? prev
-        : { top, left, width },
+        : { top, left, width, maxHeight },
     );
   }, []);
 
@@ -65,18 +73,31 @@ export function MemberMultiSelect({ members, selected, onChange, placeholder = "
       if (ref.current?.contains(t) || listRef.current?.contains(t)) return;
       setOpen(false);
     };
-    // Sabit konumlu liste kaydırmayı takip edemez — sürüklenmektense kapanır.
-    const dismiss = () => setOpen(false);
+    /* Sabit konumlu liste SAYFA kaydırmasını takip edemez — sürüklenmektense
+       kapanır. AMA listenin KENDİ kaydırması bunun dışındadır.
+
+       Sıraç (2026-08-30): "Konuda kişilerin tamamı çıkmıyor, aşağı da inme
+       olmuyor, bozuk orası." Dinleyici pencereye YAKALAMA fazında bağlıydı
+       (capture: true); bu, sayfadaki HER kaydırma olayını yakalar — listenin
+       kendi `overflow-y-auto` kutusununkini de. Yani kullanıcı listeyi aşağı
+       kaydırmaya çalıştığı anda liste kapanıyordu ve ilk birkaç kişiden
+       fazlası hiçbir zaman görülemiyordu. */
+    const dismiss = (e: Event) => {
+      const t = e.target as Node | null;
+      if (t && listRef.current?.contains(t)) return; // listenin kendi kaydırması
+      setOpen(false);
+    };
+    const onResize = () => setOpen(false);
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     document.addEventListener("mousedown", onDoc);
     document.addEventListener("keydown", onKey);
     window.addEventListener("scroll", dismiss, true);
-    window.addEventListener("resize", dismiss);
+    window.addEventListener("resize", onResize);
     return () => {
       document.removeEventListener("mousedown", onDoc);
       document.removeEventListener("keydown", onKey);
       window.removeEventListener("scroll", dismiss, true);
-      window.removeEventListener("resize", dismiss);
+      window.removeEventListener("resize", onResize);
     };
   }, [open]);
 
@@ -90,8 +111,8 @@ export function MemberMultiSelect({ members, selected, onChange, placeholder = "
       ref={listRef}
       role="listbox"
       aria-multiselectable="true"
-      style={pos ? { top: pos.top, left: pos.left, width: pos.width } : { opacity: 0 }}
-      className="anim-fade-down fixed z-[120] max-h-60 overflow-y-auto rounded-control border border-line bg-surface p-1 shadow-pop"
+      style={pos ? { top: pos.top, left: pos.left, width: pos.width, maxHeight: pos.maxHeight } : { opacity: 0 }}
+      className="anim-fade-down fixed z-[120] overflow-y-auto overscroll-contain rounded-control border border-line bg-surface p-1 shadow-pop"
     >
       {members.length === 0 ? (
         <p className="px-2 py-1.5 text-[12px] text-subtle">Üye bulunamadı.</p>
