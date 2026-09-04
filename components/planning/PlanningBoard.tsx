@@ -9,6 +9,7 @@ import { TOPIC_ROWS, WEEKDAY_LONG_TR, type RuntimeBand } from "@/lib/planning/ba
 import { MeetingEditor } from "./MeetingEditor";
 import { PlanningWeekGrid } from "./PlanningWeekGrid";
 import { PlanningDayList } from "./PlanningDayList";
+import { MeetingUndoBar, type DeletedMeeting } from "./MeetingUndoBar";
 import { CalendarViewSwitch } from "./CalendarViewSwitch";
 import { CalendarToolbar } from "./CalendarToolbar";
 import type { Member } from "./MemberMultiSelect";
@@ -101,6 +102,9 @@ export function PlanningBoard({
     }
     return { topicRows, rowCountOfSlot };
   }, [byCell, meetings, weekDays, bands]);
+
+  /* Silinen toplantı — "Geri al" şeridi ve Ctrl+Z bunun üzerinden çalışır. */
+  const [deleted, setDeleted] = useState<DeletedMeeting | null>(null);
 
   const gotoWeek = (isoMonday: string) => router.push(`/planning?week=${isoMonday}`);
   const todayIso = format(new Date(), "yyyy-MM-dd");
@@ -197,8 +201,11 @@ export function PlanningBoard({
           members={members}
           onClose={() => setEditor(null)}
           onSaved={() => { setEditor(null); router.refresh(); }}
+          onDeleted={(snap) => { setEditor(null); setDeleted(snap); router.refresh(); }}
         />
       )}
+
+      <MeetingUndoBar deleted={deleted} onClear={() => setDeleted(null)} />
 
     </div>
   );

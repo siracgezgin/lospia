@@ -120,13 +120,59 @@ export async function updateMeeting(
   return { ok: true };
 }
 
+/** Silinen toplantının GERİ ALMAK için gereken tam kopyası. */
+export type MeetingSnapshot = {
+  meeting_date: string;
+  time_slot: string;
+  category: string;
+  title: string | null;
+  content: string | null;
+  participant_ids: string[];
+  collaborator_ids: string[];
+  kim: string | null;
+  topics: {
+    position: number;
+    text: string | null;
+    kim: string | null;
+    participant_ids: string[];
+    collaborator_ids: string[];
+    due_date: string | null;
+  }[];
+};
+
+/**
+ * Toplantıyı siler ve GERİ ALINABİLİR bir kopyasını döndürür.
+ *
+ * Aslı Hanım (2026-08-30): "Bir konu yerine yanlışlıkla başlığı silince
+ * gidiyor, Ctrl+Z yapınca geri gelmiyor, bu çok kötü."
+ *
+ * Konu satırının çöp kutusu ile toplantının "Sil" düğmesi yan yana duruyor;
+ * yanlışa basmak kolay ve sonucu KALICI. Silmeden önce satırın ve konularının
+ * tam kopyası okunur, çağırana verilir; kullanıcı "Geri al" derse
+ * `restoreMeeting` aynı içerikle yeniden yazar (bkz. MeetingUndoBar).
+ *
+ * Yumuşak silme (deleted_at) yerine kopya-döndürme seçildi: planning_meetings
+ * tüm okumalarında filtre yok; bir `deleted_at` sütunu eklemek takvimin her
+ * sorgusuna koşul eklemeyi ve migration'ı gerektirirdi. Geri alma penceresi
+ * kullanıcının o anki kararı kadar yaşar.
+ */
 export async function deleteMeeting(
   meetingId: string,
-): Promise<{ ok: true } | { error: string }> {
+): Promise<{ ok: true; snapshot: MeetingSnapshot | null } | { error: string }> {
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
   if (!isAdminRole(ctx.role)) return { error: PLANNING_ADMIN_ONLY };
+
+  /* Kopya SİLMEDEN ÖNCE okunur — satır gittikten sonra okunacak bir şey
+     kalmaz. Okuma başarısızsa silme yine yapılır, yalnız geri alma sunulmaz. */
+  const { data: before } = await supabase
+    .from("planning_meetings")
+    .select("*, planning_topics(*)")
+    .eq("id", meetingId)
+    .eq("workspace_id", ctx.workspaceId)
+    .maybeSingle();
+
   const { error } = await supabase
     .from("planning_meetings")
     .delete()
@@ -134,7 +180,92 @@ export async function deleteMeeting(
     .eq("workspace_id", ctx.workspaceId);
   if (error) return { error: toActionErrorMessage(error) };
   revalidatePath("/planning");
-  return { ok: true };
+
+  const row = before as Record<string, unknown> | null;
+  if (!row) return { ok: true, snapshot: null };
+
+  const topicRows = (row.planning_topics as Record<string, unknown>[] | null) ?? [];
+  const snapshot: MeetingSnapshot = {
+    meeting_date: String(row.meeting_date).slice(0, 10),
+    time_slot: String(row.time_slot).slice(0, 5),
+    category: String(row.category ?? "other"),
+    title: (row.title as string | null) ?? null,
+    content: (row.content as string | null) ?? null,
+    participant_ids: (row.participant_ids as string[] | null) ?? [],
+    collaborator_ids: (row.collaborator_ids as string[] | null) ?? [],
+    kim: (row.kim as string | null) ?? null,
+    topics: topicRows
+      .map((t, i) => ({
+        position: Number(t.position ?? i),
+        text: (t.text as string | null) ?? null,
+        kim: (t.kim as string | null) ?? null,
+        participant_ids: (t.participant_ids as string[] | null) ?? [],
+        collaborator_ids: (t.collaborator_ids as string[] | null) ?? [],
+        due_date: (t.due_date as string | null) ?? null,
+      }))
+      .sort((a, b) => a.position - b.position),
+  };
+  return { ok: true, snapshot };
+}
+
+/**
+ * Silinen toplantıyı geri yazar (bkz. deleteMeeting).
+ *
+ * YENİ id ile yazılır: eski satırın id'sini geri koymak, o id'ye bağlı
+ * silinmiş konuların/görevlerin yeniden canlanacağı izlenimi verirdi — oysa
+ * geri gelen şey içeriğin kopyasıdır. Konuların `task_id`i BİLEREK taşınmaz:
+ * göreve dönüştürülmüş bir konu silindiğinde görev Pano'da yaşamaya devam
+ * eder; kopyayı ona yeniden bağlamak iki kaydı sessizce eşleştirirdi.
+ */
+export async function restoreMeeting(
+  snapshot: MeetingSnapshot,
+): Promise<{ id: string } | { error: string }> {
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+  if (!isAdminRole(ctx.role)) return { error: PLANNING_ADMIN_ONLY };
+
+  const { data, error } = await supabase
+    .from("planning_meetings")
+    .insert({
+      workspace_id: ctx.workspaceId,
+      meeting_date: snapshot.meeting_date,
+      time_slot: snapshot.time_slot,
+      category: snapshot.category,
+      title: nn(snapshot.title),
+      content: nn(snapshot.content),
+      participant_ids: snapshot.participant_ids ?? [],
+      collaborator_ids: snapshot.collaborator_ids ?? [],
+      kim: nn(snapshot.kim),
+      created_by: ctx.userId,
+      updated_by: ctx.userId,
+    })
+    .select("id")
+    .single();
+  if (error) return { error: toActionErrorMessage(error) };
+  const newId = (data as { id: string }).id;
+
+  const topics = (snapshot.topics ?? []).filter((t) => (t.text ?? "").trim() || t.participant_ids?.length);
+  if (topics.length) {
+    const { error: tErr } = await supabase.from("planning_topics").insert(
+      topics.map((t, i) => ({
+        meeting_id: newId,
+        workspace_id: ctx.workspaceId,
+        position: t.position ?? i,
+        text: nn(t.text),
+        kim: nn(t.kim),
+        participant_ids: t.participant_ids ?? [],
+        collaborator_ids: t.collaborator_ids ?? [],
+        due_date: t.due_date ?? null,
+        created_by: ctx.userId,
+      })),
+    );
+    // Konular yazılamazsa toplantı yine geri gelmiş olur; sessiz kalmayalım.
+    if (tErr) return { error: "Toplantı geri geldi ama konular yazılamadı." };
+  }
+
+  revalidatePath("/planning");
+  return { id: newId };
 }
 
 /**

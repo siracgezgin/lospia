@@ -9,6 +9,7 @@ import { maybeDatabaseSetupRequired } from "@/lib/utils/supabase-errors";
 import { ensureWeekScaffold } from "@/lib/planning/scaffold";
 import { defaultRuntimeBands, type RuntimeBand } from "@/lib/planning/bands";
 import { PlanningBoard } from "@/components/planning/PlanningBoard";
+import { PlanningDayView } from "@/components/planning/PlanningDayView";
 import { CalendarViewSwitch } from "@/components/planning/CalendarViewSwitch";
 import { asCalendarScale } from "@/lib/planning/calendar-scale";
 import { assignPersonTones } from "@/lib/design/person-colors";
@@ -217,6 +218,57 @@ export default async function CalendarPage({
         columns: Array.isArray(b.columns) ? (b.columns as string[]) : [],
       }))
     : defaultRuntimeBands();
+
+  /* GÜN ÖLÇEĞİ — tek günün toplantıları.
+     Şeritler (bands) yukarıda zaten okundu; hafta ile TEK farkı sorgunun
+     aralığı ve çizilen bileşen. Ayrı bir veri yolu açmak, aynı takvimin iki
+     ayrı doğruya sahip olması demekti. */
+  if (scale === "gun") {
+    const focusDay = sp.d && isValid(parseISO(sp.d)) ? sp.d.slice(0, 10) : format(new Date(), "yyyy-MM-dd");
+    const dayRes = await supabase
+      .from("planning_meetings")
+      .select("*, planning_topics(*)")
+      .eq("workspace_id", workspaceId)
+      .eq("meeting_date", focusDay)
+      .order("time_slot", { ascending: true })
+      .order("position", { ascending: true });
+
+    const daySetup = maybeDatabaseSetupRequired(dayRes.error);
+    if (daySetup.setupRequired) {
+      return (
+        <div className="mx-auto w-full max-w-3xl px-4 py-4 sm:px-6 lg:px-8">
+          {header}
+          <SetupRequiredNotice
+            variant="block"
+            title="Takvim tabloları henüz oluşturulmadı"
+            message={daySetup.message ?? "Calendar için veritabanı güncellemesi bekleniyor."}
+          />
+        </div>
+      );
+    }
+
+    type DayRow = PlanningMeeting & { planning_topics?: PlanningTopic[] | null };
+    const dayMeetings: PlanningMeetingWithTopics[] = ((dayRes.data ?? []) as unknown as DayRow[])
+      .map(({ planning_topics, ...m }) => ({
+        ...(m as PlanningMeeting),
+        topics: [...(planning_topics ?? [])].sort((a, b) => (a.position ?? 0) - (b.position ?? 0)),
+      }));
+
+    return (
+      <div className="flex h-full min-h-0 w-full flex-col">
+        <h1 className="sr-only">Calendar</h1>
+        <PlanningDayView
+          day={focusDay}
+          meetings={dayMeetings}
+          members={members}
+          memberNames={memberNames}
+          personHex={personHex}
+          isAdmin={isAdmin}
+          bands={bands}
+        />
+      </div>
+    );
+  }
 
   const ref = sp.week && isValid(parseISO(sp.week)) ? parseISO(sp.week) : new Date();
   const monday = startOfWeek(ref, { weekStartsOn: 1 });

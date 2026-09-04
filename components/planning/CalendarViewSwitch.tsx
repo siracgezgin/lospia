@@ -1,12 +1,17 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { CalendarRange, CalendarDays, CalendarClock } from "lucide-react";
+import { Calendar1, CalendarRange, CalendarDays, CalendarClock } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 // Ölçek sözlüğü sunucu-güvenli modülde: `?v=` çözümlemesini sayfa orada yapar.
 import type { CalendarScale } from "@/lib/planning/calendar-scale";
 
 export const CALENDAR_SCALES: { id: CalendarScale; label: string; icon: typeof CalendarRange }[] = [
+  /* GÜN — Aslı Hanım (2026-08-30): "Haftanın yanına gün ekleyelim ve güne
+     girelim." Haftalık ızgara yedi günü bir arada gösterir; tek bir günün
+     saatlerini okumak ve o güne toplantı eklemek için ölçeğin en dar hâli
+     gerekiyordu. Sıra dardan genişe: Gün · Hafta · Ay · Yıl. */
+  { id: "gun",   label: "Gün",   icon: Calendar1     },
   { id: "hafta", label: "Hafta", icon: CalendarRange },
   { id: "ay",    label: "Ay",    icon: CalendarDays  },
   { id: "yil",   label: "Yıl",   icon: CalendarClock },

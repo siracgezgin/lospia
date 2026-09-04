@@ -9,8 +9,10 @@ import { Button, IconButton } from "@/components/ui/Button";
 import { Field, TextInput, TextArea } from "@/components/ui/Field";
 import {
   createMeeting, updateMeeting, deleteMeeting, saveMeetingTopics, assignTopicAsTask,
+  type MeetingSnapshot,
 } from "@/lib/actions/planning";
 import { categoryMeta } from "@/lib/planning/categories";
+import { WEEKDAY_LONG_TR } from "@/lib/planning/bands";
 import { normalizeSlot, istanbulLabel, HOME_LABEL, AWAY_LABEL } from "@/lib/planning/timezones";
 import { MemberMultiSelect, type Member } from "./MemberMultiSelect";
 import type { PlanningCategory, PlanningMeetingWithTopics } from "@/types";
@@ -26,6 +28,9 @@ interface Props {
   members: Member[];
   onClose: () => void;
   onSaved: () => void;
+  /** Silme sonrası GERİ ALMA için: silinen toplantının tam kopyası.
+   *  Verilmezse silme eskisi gibi yalnız kapatır (geri alma sunulmaz). */
+  onDeleted?: (_snapshot: MeetingSnapshot) => void;
 }
 
 type TopicDraft = {
@@ -65,8 +70,17 @@ type TopicDraft = {
  * Overlay'in SABİT alt şeridinde: uzun konu listesinde "Kaydet" kaybolmaz.
  * Tek birincil düğme Kaydet; "Bildir" satır eylemidir, ikincil durur.
  */
+/** Seçilen tarihin gün adı + günü ("Pazartesi 27 Tem"). Tarih okunamazsa
+ *  hücreden gelen sabit etiket kullanılır. */
+function weekdayLabelOf(iso: string, fallback: string): string {
+  const d = new Date(`${iso}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return fallback;
+  const day = WEEKDAY_LONG_TR[(d.getDay() + 6) % 7];
+  return `${day} ${new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "short" }).format(d)}`;
+}
+
 export function MeetingEditor({
-  meeting, day, slot, dayLabel, bandCategory, bandLabel, members, onClose, onSaved,
+  meeting, day, slot, dayLabel, bandCategory, bandLabel, members, onClose, onSaved, onDeleted,
 }: Props) {
   const { ask, dialog } = useConfirm();
   // Kaydedilmiş toplantının id'si — prop DEĞİL state, çünkü "Bildir" düğmesi
@@ -76,6 +90,13 @@ export function MeetingEditor({
   const [meetingId, setMeetingId] = useState<string | null>(meeting?.id ?? null);
   const isNew = meetingId === null;
   const [time, setTime] = useState(() => normalizeSlot(meeting?.time_slot ?? slot));
+  /* GÜN de pencerede seçilir. Aslı Hanım (2026-08-30): "Pop-up açılsın, biz
+     gün saat vs seçelim, kendisi takvime eklensin." Önceden gün tıklanan
+     hücreden geliyordu ve pencerede DEĞİŞTİRİLEMİYORDU: yanlış güne açılan
+     toplantıyı taşımak için pencereyi kapatıp doğru hücreyi bulmak
+     gerekiyordu. */
+  const [dateIso, setDateIso] = useState(() =>
+    String(meeting?.meeting_date ?? day).slice(0, 10));
   /* KATEGORİ SEÇİLMEZ — şeritten gelir. Aslı Hanım (2026-08-29): "Üretim
      yerine AI seçiyorum ama değişmiyor… aslında format belli zaten, olduğu
      gibi neye ekliyorsam ona eklensin." Pencerede dokuz kategori düğmesi
@@ -115,7 +136,7 @@ export function MeetingEditor({
   const [assignedMsg, setAssignedMsg] = useState<string | null>(null);
 
   const meta = categoryMeta(category);
-  const ist = istanbulLabel(day, time);
+  const ist = istanbulLabel(dateIso, time);
 
   const setTopic = (i: number, patch: Partial<TopicDraft>) =>
     setTopics((ts) => ts.map((t, idx) => (idx === i ? { ...t, ...patch } : t)));
@@ -127,7 +148,7 @@ export function MeetingEditor({
   async function persist(): Promise<{ meetingId: string; posToId: Record<number, string> } | { error: string }> {
     const payload = {
       // Saat kullanıcıdan geliyor; boş bırakılırsa tıklanan hücrenin saati.
-      meeting_date: day, time_slot: normalizeSlot(time) || normalizeSlot(slot),
+      meeting_date: dateIso || day, time_slot: normalizeSlot(time) || normalizeSlot(slot),
       category, title, content,
       participant_ids: participantIds, collaborator_ids: collaboratorIds,
     };
@@ -199,7 +220,10 @@ export function MeetingEditor({
     startDelete(async () => {
       const res = await deleteMeeting(meetingId);
       if ("error" in res) { setError(res.error); return; }
-      onSaved();
+      /* Geri alma: silinen satırın kopyası çağırana verilir (bkz.
+         MeetingUndoBar). Kopya okunamadıysa akış eskisi gibi sürer. */
+      if (onDeleted && res.snapshot) onDeleted(res.snapshot);
+      else onSaved();
     });
   }
 
@@ -213,7 +237,19 @@ export function MeetingEditor({
       dismissOnBackdrop={false}
       titleNode={
         <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
-          <span className="text-[14px] font-semibold tracking-tight text-ink">{dayLabel}</span>
+          {/* GÜN — hücreden gelen tarih artık burada değiştirilebilir. Yanındaki
+              gün adı seçilen tarihten türer, sabit `dayLabel`den değil. */}
+          <label className="inline-flex items-center gap-1.5">
+            <span className="text-[12px] font-semibold uppercase tracking-[0.06em] text-subtle">Gün</span>
+            <TextInput
+              type="date"
+              value={dateIso}
+              onChange={(e) => setDateIso(e.target.value)}
+              className="h-8 w-auto px-2 text-[13px] font-semibold tabular-nums"
+              aria-label="Toplantı günü"
+            />
+          </label>
+          <span className="text-[13px] font-medium tracking-tight text-muted">{weekdayLabelOf(dateIso, dayLabel)}</span>
           <label className="inline-flex items-center gap-1.5">
             <span className="text-[12px] font-semibold uppercase tracking-[0.06em] text-subtle">{HOME_LABEL}</span>
             <TextInput

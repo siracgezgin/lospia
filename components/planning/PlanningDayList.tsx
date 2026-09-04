@@ -26,6 +26,11 @@ interface Props {
   onOpen: (_iso: string, _slot: string, _dayIndex: number) => void;
   /** Sol sütun — masaüstündeki ızgarayla AYNI kaynak (20240326). */
   bands: RuntimeBand[];
+  /** GÜN ÖLÇEĞİ: tek gün çizilir — hafta seçici gizlenir ve liste masaüstünde
+   *  de görünür. Bu bileşen dar ekran için doğdu (lg:hidden) ama gün görünümü
+   *  tam olarak aynı şeyi istiyor: bir günün şeritleri alt alta. İkinci bir
+   *  kopya yazmak yerine aynı gövde iki yerden kullanılır. */
+  singleDay?: boolean;
 }
 
 /**
@@ -37,7 +42,7 @@ interface Props {
  */
 export function PlanningDayList({
   weekDays, byCell, topicRows, extraSlots, memberNames, personHex = {}, isAdmin, todayIso,
-  onOpen, bands,
+  onOpen, bands, singleDay = false,
 }: Props) {
   const todayIdx = weekDays.indexOf(todayIso);
   const [dayIdx, setDayIdx] = useState(todayIdx >= 0 ? todayIdx : 0);
@@ -53,6 +58,21 @@ export function PlanningDayList({
      şeritler açılırdı. Saat listede tekildir (masaüstü ızgarası da satır
      anahtarını böyle kuruyor). */
   const [editingBand, setEditingBand] = useState<string | null>(null);
+
+  /* "Büyük gözüksün" (Aslı Hanım üzerinden Nisa, 2026-08-30). Bu gövde telefon
+     için doğdu; gün ölçeğinde masaüstünde tek başına duruyor ve aynı ölçüyle
+     minicik kalıyordu. Aynı bileşen, bir kademe iri: saat çifti, şerit adı,
+     başlık ve konu satırları büyür; hafta/ay/yıl HİÇ ETKİLENMEZ. */
+  const big = singleDay;
+  const z = {
+    slot:    big ? "text-[15px]" : "text-[12px]",
+    slotAway:big ? "text-[13px]" : "text-[12px]",
+    band:    big ? "text-[13px]" : "text-[12px]",
+    title:   big ? "text-[17px]" : "text-[13.5px]",
+    content: big ? "text-[14px]" : "text-[12.5px]",
+    pad:     big ? "px-4 py-3.5" : "px-3 py-2",
+    gap:     big ? "space-y-3" : "space-y-2.5",
+  };
   /* Saat çevirimi (NY → İstanbul) haftanın ilk gününe göre yapılır —
      masaüstü ızgarasıyla aynı kaynak. */
   const weekRefDay = weekDays[0];
@@ -68,7 +88,7 @@ export function PlanningDayList({
   });
 
   return (
-    <div className="lg:hidden">
+    <div className={singleDay ? undefined : "lg:hidden"}>
       {/* Gün seçici — HAFTANIN TAMAMI tek bakışta, yedi sütun.
           Önce yatay kayan bir şeritti (7 × 64px = 484px, 390px'lik telefonu
           aşıyordu): hafta sonu ekranın dışında kalıyor, üstelik SEÇİLİ gün
@@ -76,6 +96,7 @@ export function PlanningDayList({
           için kaydırmak zorundaydı. Izgara hem kaydırmayı bitiriyor hem de
           "bu hafta" sorusuna bakışta cevap veriyor. Hücre dar ekranda ~46px,
           dokunma hedefi yüksekliğiyle (52px) rahat kalır. */}
+      {!singleDay && (
       <div
         role="tablist"
         aria-label="Haftanın günleri"
@@ -117,12 +138,16 @@ export function PlanningDayList({
           );
         })}
       </div>
+      )}
 
-      <p className="mb-2 px-0.5 text-[12.5px] font-medium text-muted">
-        {WEEKDAY_LONG_TR[dayIdx]} · {format(parseISO(iso), "d MMMM yyyy", { locale: tr })}
+      {/* Gün adı TARİHTEN türer, dizinden değil: gün ölçeğinde dizi tek
+          elemanlı olduğu için `dayIdx` hep 0'dı ve hangi gün olursa olsun
+          "Pazartesi" yazıyordu. WEEKDAY_LONG_TR Pazartesi=0 sıralı. */}
+      <p className={cn("mb-2 px-0.5 font-medium text-muted", big ? "mb-3 text-[16px] font-semibold tracking-tight text-ink" : "text-[12.5px]")}>
+        {WEEKDAY_LONG_TR[(parseISO(iso).getDay() + 6) % 7]} · {format(parseISO(iso), "d MMMM yyyy", { locale: tr })}
       </p>
 
-      <div className="space-y-2.5">
+      <div className={z.gap}>
         {slots.map((slot) => {
           const band = bands.find((b) => b.slot === slot);
           const cell = byCell.get(`${iso}|${slot}`) ?? [];
@@ -153,31 +178,31 @@ export function PlanningDayList({
             <>
               {/* Saat çifti — kayıtlı New York saati ve İstanbul karşılığı
                   (Aslı Hanım, 2026-08-28). */}
-              <span className="mt-px shrink-0 rounded-md bg-ink/[0.07] px-1.5 py-0.5 text-center leading-tight">
-                <span className="block text-[12px] font-semibold tabular-nums text-ink/75">{slot}</span>
+              <span className={cn("mt-px shrink-0 rounded-md bg-ink/[0.07] text-center leading-tight", big ? "px-2.5 py-1" : "px-1.5 py-0.5")}>
+                <span className={cn("block font-semibold tabular-nums text-ink/75", z.slot)}>{slot}</span>
                 {ist && (
-                  <span className="block text-[12px] font-medium tabular-nums text-ink/50">
+                  <span className={cn("block font-medium tabular-nums text-ink/50", z.slotAway)}>
                     {AWAY_LABEL} {ist}
                   </span>
                 )}
               </span>
               <span className="min-w-0 flex-1">
-                <span className={cn("block text-[12px] font-semibold uppercase tracking-[0.08em] opacity-70", meta.title)}>
+                <span className={cn("block font-semibold uppercase tracking-[0.08em] opacity-70", z.band, meta.title)}>
                   {band?.label ?? meta.label}
                 </span>
-                <span className={cn("block text-[13.5px] font-semibold leading-snug tracking-tight", meta.title)}>
+                <span className={cn("block font-semibold leading-snug tracking-tight", z.title, meta.title)}>
                   {title || "—"}
                 </span>
                 <KimBadges ids={ids} kim={kim} collaboratorIds={collabIds} memberNames={memberNames} className="ml-0 mt-1" personHex={personHex} />
                 {content && (
-                  <span className="mt-1 block whitespace-pre-line text-[12.5px] leading-snug text-ink/70">
+                  <span className={cn("mt-1 block whitespace-pre-line leading-snug text-ink/70", z.content)}>
                     {content}
                   </span>
                 )}
               </span>
             </>
           );
-          const headCls = cn("flex w-full items-start gap-2 px-3 py-2 text-left", meta.cell, isAdmin && band && "pr-12");
+          const headCls = cn("flex w-full items-start gap-2 text-left", z.pad, meta.cell, isAdmin && band && "pr-12");
 
           return (
             <section
