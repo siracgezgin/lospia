@@ -5,8 +5,14 @@ import { createPortal } from "react-dom";
 import { Users, Check, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { initialsOf } from "@/lib/planning/initials";
+import { PersonAvatar } from "@/components/ui/PersonAvatar";
 
-export type Member = { id: string; name: string };
+export type Member = {
+  id: string;
+  name: string;
+  /** profiles.avatar_url — varsa rozet fotoğrafı gösterir. */
+  photoUrl?: string | null;
+};
 
 interface Props {
   members: Member[];
@@ -14,11 +20,15 @@ interface Props {
   onChange: (_ids: string[]) => void;
   placeholder?: string;
   compact?: boolean;
+  /** profiles.id → hex. Rozetler kişinin KENDİ rengini taşır (Pano/List ile
+   *  aynı kaynak); verilmezse nötr gri. */
+  personHex?: Record<string, string>;
 }
 
 const LIST_WIDTH = 224;      // w-56
 const LIST_EST_HEIGHT = 240; // ilk boyama tahmini, ölçülünce düzelir
 const LIST_MAX_HEIGHT = 380; // ekranda yer varsa bu kadar uzayabilir
+const MAX_BADGES = 4;        // tetikleyicide yan yana en fazla bu kadar yüz
 
 /**
  * Sistemdeki üyelerden çoklu seçim; buton seçili baş harfleri gösterir.
@@ -30,7 +40,9 @@ const LIST_MAX_HEIGHT = 380; // ekranda yer varsa bu kadar uzayabilir
  * Kart menüsüyle (KanbanBoard/CardMenu) aynı desen: viewport koordinatı ölç,
  * yer yoksa yukarı çevir, kaydırma/yeniden boyutlamada kapat.
  */
-export function MemberMultiSelect({ members, selected, onChange, placeholder = "Kim", compact }: Props) {
+export function MemberMultiSelect({
+  members, selected, onChange, placeholder = "Kim", compact, personHex = {},
+}: Props) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
@@ -73,33 +85,34 @@ export function MemberMultiSelect({ members, selected, onChange, placeholder = "
       if (ref.current?.contains(t) || listRef.current?.contains(t)) return;
       setOpen(false);
     };
-    /* Sabit konumlu liste SAYFA kaydırmasını takip edemez — sürüklenmektense
-       kapanır. AMA listenin KENDİ kaydırması bunun dışındadır.
-
-       Sıraç (2026-08-30): "Konuda kişilerin tamamı çıkmıyor, aşağı da inme
-       olmuyor, bozuk orası." Dinleyici pencereye YAKALAMA fazında bağlıydı
-       (capture: true); bu, sayfadaki HER kaydırma olayını yakalar — listenin
-       kendi `overflow-y-auto` kutusununkini de. Yani kullanıcı listeyi aşağı
-       kaydırmaya çalıştığı anda liste kapanıyordu ve ilk birkaç kişiden
-       fazlası hiçbir zaman görülemiyordu. */
-    const dismiss = (e: Event) => {
+    /* KAYDIRINCA KAPANMAZ, TAKİP EDER.
+       Sıraç (2026-08-30): "Scroll olunca kapanmamalı."
+       Önce iki kusur vardı: (1) dinleyici yakalama fazındaydı ve listenin
+       KENDİ kaydırmasını da yakalayıp kapatıyordu — aşağı inmek imkânsızdı;
+       (2) sayfa kaydırılınca liste tamamen kapanıyordu, oysa kullanıcı
+       seçimini bitirmemişti. `fixed` katman tetikleyiciyi kendiliğinden takip
+       etmez; çözüm kapatmak değil, YENİDEN KONUMLANDIRMAK. Tetikleyici
+       görüş alanından tamamen çıkarsa liste kapanır — havada asılı kalmasın. */
+    const onScroll = (e: Event) => {
       const t = e.target as Node | null;
       if (t && listRef.current?.contains(t)) return; // listenin kendi kaydırması
-      setOpen(false);
+      const r = ref.current?.getBoundingClientRect();
+      if (!r || r.bottom < 0 || r.top > window.innerHeight) { setOpen(false); return; }
+      place();
     };
     const onResize = () => setOpen(false);
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     document.addEventListener("mousedown", onDoc);
     document.addEventListener("keydown", onKey);
-    window.addEventListener("scroll", dismiss, true);
+    window.addEventListener("scroll", onScroll, true);
     window.addEventListener("resize", onResize);
     return () => {
       document.removeEventListener("mousedown", onDoc);
       document.removeEventListener("keydown", onKey);
-      window.removeEventListener("scroll", dismiss, true);
+      window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", onResize);
     };
-  }, [open]);
+  }, [open, place]);
 
   const toggle = (id: string) =>
     onChange(selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id]);
@@ -131,14 +144,12 @@ export function MemberMultiSelect({ members, selected, onChange, placeholder = "
                 on ? "bg-brand-soft font-medium text-brand-strong" : "text-ink hover:bg-surface-muted active:bg-surface-hover",
               )}
             >
-              <span
-                className={cn(
-                  "inline-flex h-5 w-6 shrink-0 items-center justify-center rounded text-[11.5px] font-semibold transition-colors duration-150",
-                  on ? "bg-brand/10 text-brand-strong" : "bg-surface-muted text-muted",
-                )}
-              >
-                {initialsOf(m.name)}
-              </span>
+              <PersonAvatar
+                name={m.name}
+                photoUrl={m.photoUrl}
+                colorHex={personHex[m.id] ?? null}
+                size="xs"
+              />
               <span className="min-w-0 flex-1 truncate">{m.name}</span>
               {on && <Check size={14} className="anim-scale-in shrink-0" />}
             </button>
@@ -161,15 +172,38 @@ export function MemberMultiSelect({ members, selected, onChange, placeholder = "
           compact ? "min-h-8 px-2 py-1" : "min-h-9 px-2.5 py-1.5",
         )}
       >
-        <span className="flex min-w-0 flex-wrap items-center gap-1">
+        {/* SEÇİLENLER YAN YANA — sarmayan tek satır.
+            Sıraç (2026-08-30): "Kişiler yan yana gelmeli ve şuradaki gibi."
+            Önce `flex-wrap` ile köşeli baş-harf çipleriydi: iki kişi seçilince
+            alt alta kayıyor, satırı ikiye çıkarıp ızgarayı bozuyordu. Artık
+            List'teki süzgeç baloncuklarıyla AYNI dil — yuvarlak avatar,
+            fotoğraf varsa fotoğraf, yoksa kişinin renginde baş harf — ve hafif
+            üst üste binerek (-space-x) tek satırda kalır. Dördü aşınca "+N". */}
+        <span className="flex min-w-0 items-center">
           {selectedMembers.length === 0 ? (
             <span className="truncate text-subtle">{placeholder}</span>
           ) : (
-            selectedMembers.map((m) => (
-              <span key={m.id} title={m.name} className="inline-flex h-5 items-center rounded bg-brand-soft px-1.5 text-[11.5px] font-semibold text-brand-strong">
-                {initialsOf(m.name)}
-              </span>
-            ))
+            <span className="flex shrink-0 items-center -space-x-1.5">
+              {selectedMembers.slice(0, MAX_BADGES).map((m) => (
+                <PersonAvatar
+                  key={m.id}
+                  name={m.name}
+                  photoUrl={m.photoUrl}
+                  colorHex={personHex[m.id] ?? null}
+                  size="xs"
+                  ring
+                  title={m.name}
+                />
+              ))}
+              {selectedMembers.length > MAX_BADGES && (
+                <span
+                  title={selectedMembers.slice(MAX_BADGES).map((m) => m.name).join(", ")}
+                  className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-surface-sunken px-1 text-[11px] font-semibold tabular-nums text-muted ring-2 ring-surface"
+                >
+                  +{selectedMembers.length - MAX_BADGES}
+                </span>
+              )}
+            </span>
           )}
         </span>
         <ChevronDown size={13} className={cn("shrink-0 text-subtle transition-transform duration-200 ease-standard", open && "rotate-180")} />

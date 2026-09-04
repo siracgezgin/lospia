@@ -54,13 +54,16 @@ export default async function CalendarPage({
   type ProfileLite = Pick<Profile, "id" | "full_name" | "email" | "avatar_url">;
   type MemberRow = { id: string; user_id: string; role: string; color_key: string | null; icon_key: string | null; profiles: ProfileLite | ProfileLite[] | null };
   const memberRowsData = (membersRes.data ?? []) as unknown as MemberRow[];
-  const members: { id: string; name: string }[] = [];
+  /* Kişi seçicideki rozetler artık FOTOĞRAF taşıyor (List'teki süzgeç
+     baloncuklarıyla aynı dil), o yüzden avatar da toplanır. Renk aşağıda
+     `personHex` ile aynı kaynaktan gelir — kişi her ekranda aynı görünür. */
+  const members: { id: string; name: string; photoUrl?: string | null }[] = [];
   const memberNames: Record<string, string> = {};
   for (const m of memberRowsData) {
     const p = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
     if (p) {
       const name = p.full_name || p.email || "—";
-      members.push({ id: m.user_id, name });
+      members.push({ id: m.user_id, name, photoUrl: p.avatar_url ?? null });
       memberNames[m.user_id] = name;
     }
   }

@@ -26,6 +26,8 @@ interface Props {
   bandCategory?: PlanningCategory;
   bandLabel?: string;
   members: Member[];
+  /** profiles.id → hex; kişi rozetleri her ekranda aynı rengi taşısın. */
+  personHex?: Record<string, string>;
   onClose: () => void;
   onSaved: () => void;
   /** Silme sonrası GERİ ALMA için: silinen toplantının tam kopyası.
@@ -80,7 +82,8 @@ function weekdayLabelOf(iso: string, fallback: string): string {
 }
 
 export function MeetingEditor({
-  meeting, day, slot, dayLabel, bandCategory, bandLabel, members, onClose, onSaved, onDeleted,
+  meeting, day, slot, dayLabel, bandCategory, bandLabel, members, personHex = {},
+  onClose, onSaved, onDeleted,
 }: Props) {
   const { ask, dialog } = useConfirm();
   // Kaydedilmiş toplantının id'si — prop DEĞİL state, çünkü "Bildir" düğmesi
@@ -337,7 +340,7 @@ export function MeetingEditor({
                   aria-label={`Konu ${i + 1}`}
                 />
                 <div className="w-[88px] shrink-0">
-                  <MemberMultiSelect members={members} selected={t.participant_ids} onChange={(ids) => setTopic(i, { participant_ids: ids })} placeholder="Kim" compact />
+                  <MemberMultiSelect members={members} selected={t.participant_ids} onChange={(ids) => setTopic(i, { participant_ids: ids })} placeholder="Kim" compact personHex={personHex} />
                 </div>
                 {/* Sabit genişlik: etiket her durumda "Bildir" ve düğme ölçüsü
                     değişmez — atama sonrası satır kaymaz. Atanmış durum

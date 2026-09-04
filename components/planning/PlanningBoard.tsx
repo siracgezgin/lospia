@@ -212,6 +212,7 @@ export function PlanningBoard({
           bandCategory={editor.bandCategory}
           bandLabel={editor.bandLabel}
           members={members}
+          personHex={personHex}
           onClose={() => setEditor(null)}
           onSaved={() => { setEditor(null); router.refresh(); }}
           onDeleted={(snap) => { setEditor(null); setDeleted(snap); router.refresh(); }}
