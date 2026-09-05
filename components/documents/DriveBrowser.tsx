@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  FolderPlus, Upload, Trash2, Loader2, Download, ChevronRight, Home,
+  FolderPlus, Upload, Trash2, Loader2, Download, ChevronLeft, ChevronRight, Home,
   Lock, Users, Pencil, Plus, FileText, Table2, Link2 as LinkIcon,
   List as ListIcon, LayoutGrid, Check, X, MoreHorizontal, FolderOpen,
   Search, FolderInput, Eye, Folder as FolderIcon, AlertCircle, SearchX,
@@ -531,6 +531,35 @@ export function DriveBrowser({
     folders, docs, sheets, links, files, cwd, searching, needle, typeFilter,
     childCount, pathOf, download, openPreview, onEditLink,
   ]);
+
+  /* ÖNİZLEMEDE GEZİNME. Klasörde otuz görsel varken her birini görmek için
+     pencereyi kapatıp yenisine tıklamak gerekiyordu (Sıraç, 2026-09-06:
+     "önceki sonraki için ikonlar yok"). Sıra EKRANDAKİ sırayla aynıdır —
+     süzgeç ve arama neyi gösteriyorsa gezinme de onun içinde kalır. */
+  const previewSiblings = useMemo(
+    () => items.files.filter((i) => i.previewable).map((i) => i.id),
+    [items.files],
+  );
+  const previewIndex = preview ? previewSiblings.indexOf(preview.id) : -1;
+
+  const stepPreview = useCallback((delta: number) => {
+    if (previewIndex < 0) return;
+    const next = previewSiblings[previewIndex + delta];
+    if (!next) return;
+    const row = files.find((f) => f.id === next);
+    if (row) openPreview(row);
+  }, [previewIndex, previewSiblings, files, openPreview]);
+
+  /* Ok tuşları — Drive'da da böyle. Pencere açıkken dinlenir. */
+  useEffect(() => {
+    if (!preview) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") { e.preventDefault(); stepPreview(-1); }
+      else if (e.key === "ArrowRight") { e.preventDefault(); stepPreview(1); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [preview, stepPreview]);
 
   const resultCount = items.folders.length + items.files.length;
   const filtering = searching || typeFilter !== "all";
@@ -1386,6 +1415,33 @@ export function DriveBrowser({
           size="lg"
           footer={
             <>
+              {/* Gezinme SOLDA, eylemler sağda: "kaçıncısındayım" bilgisi
+                  ikisinin arasında durur ve sayfa değiştikçe okunur. */}
+              {previewSiblings.length > 1 && (
+                <div className="mr-auto flex items-center gap-1">
+                  <IconButton
+                    size="sm"
+                    aria-label="Önceki görsel"
+                    title="Önceki (←)"
+                    disabled={previewIndex <= 0}
+                    onClick={() => stepPreview(-1)}
+                  >
+                    <ChevronLeft size={16} />
+                  </IconButton>
+                  <span className="min-w-[4.5rem] text-center text-[12.5px] tabular-nums text-subtle">
+                    {previewIndex + 1} / {previewSiblings.length}
+                  </span>
+                  <IconButton
+                    size="sm"
+                    aria-label="Sonraki görsel"
+                    title="Sonraki (→)"
+                    disabled={previewIndex < 0 || previewIndex >= previewSiblings.length - 1}
+                    onClick={() => stepPreview(1)}
+                  >
+                    <ChevronRight size={16} />
+                  </IconButton>
+                </div>
+              )}
               <Button variant="ghost" size="sm" onClick={() => setPreview(null)}>Kapat</Button>
               <Button size="sm" onClick={() => download(preview.id)} loading={busy === `dl-${preview.id}`}>
                 <Download size={14} aria-hidden /> İndir
@@ -1404,12 +1460,19 @@ export function DriveBrowser({
               <span className="min-w-0 break-words">{preview.error}</span>
             </div>
           ) : preview.url && preview.mode === "image" ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={preview.url}
-              alt={preview.name}
-              className="mx-auto max-h-[65vh] w-auto max-w-full rounded-control object-contain"
-            />
+            /* SABİT ÇERÇEVE. Önceden yükseklik görsele bağlıydı: küçük bir
+               fotoğraf minicik, büyüğü ekranı kaplayan bir pencere açıyordu ve
+               ileri geri gezinirken pencere her adımda zıplıyordu (Sıraç,
+               2026-09-06: "hepsi eşit boyutta açılmıyor"). Çerçeve sabit,
+               görsel içine object-contain ile oturur. */
+            <div className="grid h-[60vh] place-items-center rounded-control bg-surface-sunken">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={preview.url}
+                alt={preview.name}
+                className="max-h-full max-w-full object-contain"
+              />
+            </div>
           ) : preview.url ? (
             <iframe
               src={preview.url}

@@ -55,7 +55,15 @@ except ImportError:
     sys.exit("❌  openpyxl gerekli:  python3 -m pip install openpyxl")
 
 BUCKET = "documents"
-THUMB_PREFIX = "thumbs"
+# Önizleme, çalışma alanı klasörünün İÇİNDE durur. Depolama politikası
+# (20240312) ilk yol parçasının çalışma alanı kimliği olmasını şart koşuyor:
+#   is_workspace_member((storage.foldername(name))[1]::uuid)
+# İlk sürümde önizleme "thumbs/<ws>/…" idi; ilk parça "thumbs" olduğu için
+# politika geçmiyor, imza ÜRETİLEMİYOR ve seçicide bütün görseller kırık
+# görünüyordu (Sıraç, 2026-09-06). Drive listesi çalışıyordu çünkü o orijinali
+# imzalıyor. Doğru yol: <ws>/thumbs/<özet>.<uzantı>
+THUMB_DIR = "thumbs"
+LEGACY_THUMB_PREFIX = "thumbs"
 THUMB_MAX_PX = 400
 ROOT_FOLDER_DEFAULT = "Excel Görselleri"
 
@@ -294,7 +302,7 @@ def main():
     root_id = ensure_folder(safe_name(args.root))
     print(f"📁  Kök klasör hazır: {safe_name(args.root)}")
 
-    uploaded = skipped = failed = 0
+    uploaded = skipped = failed = repaired = 0
     bytes_original = bytes_thumb = 0
 
     for sheet_name, imgs in per_sheet:
@@ -304,13 +312,41 @@ def main():
             ext = "jpg" if img["ext"] == "jpeg" else img["ext"]
             digest = hashlib.sha256(data).hexdigest()[:16]
 
-            # İdempotenlik: içerik özeti dosya adında; aynı görsel iki kez girmez.
+            # İdempotenlik anahtarı DEPOLAMA YOLUDUR (içerik özetini o taşır),
+            # dosya adı değil: dosya adı artık insan okusun diye sayfa adından
+            # türetiliyor ve değişebilir.
+            storage_path = f"{workspace_id}/{digest}.{ext}"
+            human_name = f"{safe_name(sheet_name)} — görsel {i}.{ext}"
             existing = api.get(
-                f"/rest/v1/operation_documents?select=id&workspace_id=eq.{workspace_id}"
-                f"&file_name=eq.{urllib.parse.quote(digest + '.' + ext)}&limit=1"
+                f"/rest/v1/operation_documents?select=id,file_name,thumb_path"
+                f"&workspace_id=eq.{workspace_id}"
+                f"&file_path=eq.{urllib.parse.quote(storage_path)}&limit=1"
             )
             if existing:
-                skipped += 1
+                row = existing[0]
+                # ONARIM: eski koşulardan kalan kayıtlar özet adıyla ve yanlış
+                # önizleme yoluyla duruyor olabilir. Yeniden yüklemeden düzeltilir.
+                patch = {}
+                if row.get("file_name") != human_name:
+                    patch["file_name"] = human_name
+                wants_thumb = f"{workspace_id}/{THUMB_DIR}/{digest}.{ext}"
+                if row.get("thumb_path") != wants_thumb:
+                    t = resize(data, ext, THUMB_MAX_PX)
+                    if t:
+                        try:
+                            api.upload(wants_thumb, t, mimetypes.types_map.get("." + ext, f"image/{img['ext']}"))
+                            patch["thumb_path"] = wants_thumb
+                        except Exception as e:
+                            print(f"    ⚠  önizleme onarılamadı ({sheet_name} #{i}): {e}")
+                if patch:
+                    try:
+                        api._req("PATCH", f"/rest/v1/operation_documents?id=eq.{row['id']}",
+                                 patch, {"Prefer": "return=minimal"})
+                        repaired += 1
+                    except Exception as e:
+                        print(f"    ⚠  kayıt onarılamadı ({sheet_name} #{i}): {e}")
+                else:
+                    skipped += 1
                 continue
 
             if args.shrink:
@@ -319,8 +355,8 @@ def main():
                     data = smaller
 
             thumb = resize(data, ext, THUMB_MAX_PX)
-            path = f"{workspace_id}/{digest}.{ext}"
-            thumb_path = f"{THUMB_PREFIX}/{workspace_id}/{digest}.{ext}" if thumb else None
+            path = storage_path
+            thumb_path = f"{workspace_id}/{THUMB_DIR}/{digest}.{ext}" if thumb else None
             ctype = mimetypes.types_map.get("." + ext, f"image/{img['ext']}")
 
             try:
@@ -339,7 +375,10 @@ def main():
                     "folder_id": folder_id,
                     "file_path": path,
                     "thumb_path": thumb_path,
-                    "file_name": f"{digest}.{ext}",
+                    # Ad İNSAN İÇİN: "K_15B_176 — görsel 12.jpg". Kimlik özeti
+                    # dosya YOLUNDA duruyor, ekranda değil (Sıraç: "isimler
+                    # neden bu şekilde?").
+                    "file_name": human_name,
                     "file_size": len(data),
                     "file_mime": ctype,
                     "visibility": "all",
@@ -353,10 +392,10 @@ def main():
                 failed += 1
                 print(f"    ⚠  {sheet_name} #{i}: {e}")
 
-        print(f"    ✓ {sheet_name}  ({uploaded} yüklendi, {skipped} atlandı)")
+        print(f"    ✓ {sheet_name}  ({uploaded} yüklendi, {repaired} onarıldı, {skipped} atlandı)")
 
     mb = lambda n: f"{n / 1024 / 1024:.1f} MB"
-    print(f"\n✅  Bitti — {uploaded} yüklendi · {skipped} zaten vardı · {failed} başarısız")
+    print(f"\n✅  Bitti — {uploaded} yüklendi · {repaired} onarıldı · {skipped} zaten vardı · {failed} başarısız")
     print(f"    Depolama: görseller {mb(bytes_original)} + önizlemeler {mb(bytes_thumb)}")
     if failed:
         print("    ⚠  Başarısız olanlar yukarıda listelendi; betiği tekrar çalıştırmak "
