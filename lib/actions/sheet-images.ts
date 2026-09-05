@@ -57,10 +57,17 @@ type FileRow = {
   title: string;
   file_name: string | null;
   file_path: string | null;
+  thumb_path: string | null;
   file_mime: string | null;
   file_size: number | null;
   folder_id: string | null;
 };
+
+/** Gösterilecek yol: ÖNİZLEME varsa o, yoksa orijinal.
+ *  Önizleme isteğe bağlıdır (20240337) — eski kayıtlarda boştur ve o zaman
+ *  orijinal gösterilir, yani hiçbir görsel kaybolmaz. */
+const previewPath = (row: { thumb_path: string | null; file_path: string | null }): string | null =>
+  row.thumb_path ?? row.file_path;
 
 /** Klasör kimliği → "Üst / Alt" okunur yol. Döngüye karşı korumalı. */
 function buildFolderPaths(folders: FolderRow[], rootLabel: string): Map<string, string> {
@@ -100,7 +107,7 @@ export async function listDriveImages(
       .eq("workspace_id", workspaceId),
     supabase
       .from("operation_documents")
-      .select("id, title, file_name, file_path, file_mime, file_size, folder_id")
+      .select("id, title, file_name, file_path, thumb_path, file_mime, file_size, folder_id")
       .eq("workspace_id", workspaceId)
       .not("file_path", "is", null)
       .like("file_mime", "image/%")
@@ -131,7 +138,7 @@ export async function listDriveImages(
   if (page.length) {
     const { data: signed } = await supabase.storage
       .from(BUCKET)
-      .createSignedUrls(page.map((f) => f.file_path as string), SIGN_TTL);
+      .createSignedUrls(page.map((f) => previewPath(f) as string), SIGN_TTL);
     for (const row of signed ?? []) {
       if (row.path && row.signedUrl) signedByPath.set(row.path, row.signedUrl);
     }
@@ -142,7 +149,7 @@ export async function listDriveImages(
       id: f.id,
       name: f.file_name ?? f.title ?? "Adsız görsel",
       folderPath: f.folder_id ? paths.get(f.folder_id) ?? "Drive" : "Drive",
-      url: f.file_path ? signedByPath.get(f.file_path) ?? null : null,
+      url: (() => { const p = previewPath(f); return p ? signedByPath.get(p) ?? null : null; })(),
       sizeBytes: f.file_size,
     })),
     truncated,
@@ -166,23 +173,25 @@ export async function signSheetImages(
 
   const { data, error } = await supabase
     .from("operation_documents")
-    .select("id, file_path")
+    .select("id, file_path, thumb_path")
     .eq("workspace_id", workspaceId)
     .in("id", unique);
   if (error) return { error: "Görsel adresleri alınamadı." };
 
-  const rows = (data ?? []) as { id: string; file_path: string | null }[];
-  const withPath = rows.filter((r) => r.file_path);
+  const rows = (data ?? []) as { id: string; file_path: string | null; thumb_path: string | null }[];
+  /* Hücrede ÖNİZLEME gösterilir: tabloyu açmak 25 MB yerine 1 MB indirsin
+     (bkz. 20240337 migration). Önizlemesi olmayan eski kayıt orijinali gösterir. */
+  const withPath = rows.filter((r) => previewPath(r));
   if (!withPath.length) return { urls: {} };
 
   const { data: signed } = await supabase.storage
     .from(BUCKET)
-    .createSignedUrls(withPath.map((r) => r.file_path as string), SIGN_TTL);
+    .createSignedUrls(withPath.map((r) => previewPath(r) as string), SIGN_TTL);
 
   const byPath = new Map((signed ?? []).map((s) => [s.path ?? "", s.signedUrl as string | null]));
   const urls: Record<string, string> = {};
   for (const r of withPath) {
-    const url = byPath.get(r.file_path as string);
+    const url = byPath.get(previewPath(r) as string);
     if (url) urls[r.id] = url;
   }
   return { urls };
