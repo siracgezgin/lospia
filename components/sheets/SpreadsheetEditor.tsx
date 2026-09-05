@@ -35,7 +35,7 @@ import {
   GUTTER_W, HEAD_H, ROW_H, MAX_COLS, MAX_ROWS,
   activeSheet, colName, colWidth, deleteCol, deleteRow, emptySheet, emptyWorkbook,
   getCell, insertCol, insertRow, key, mergeAt, mergeKey, mergesOf, newSheetId,
-  rowHeight, setCell, toA1, uniqueSheetName, withSheet,
+  rowHeight, setCell, toA1, uniqueSheetName, withCells, withSheet,
   type Cell, type CellStyle, type NumberFormat, type Sheet, type WorkbookSnapshot,
 } from "@/lib/sheets/model";
 import { evaluateSheet, isError, parseNumber, shiftFormula, type Scalar } from "@/lib/sheets/formula";
@@ -63,6 +63,9 @@ const inSel = (s: Sel, r: number, c: number) => {
 };
 
 const OVERSCAN = 6;
+
+/** Bundan geniş bir seçimde (⌘A gibi) biçim yalnız DOLU hücrelere yazılır. */
+const WIDE_SELECTION = 20_000;
 
 /** Dolgu ve yazı paleti — yazı editörüyle (DocEditor.DOC_COLORS) ve kişi
  *  paletiyle AYNI aile. Önce genel bir Tailwind paletiydi; tablodaki kırmızı
@@ -97,6 +100,10 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
   const redoStack = useRef<WorkbookSnapshot[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const editRef = useRef<HTMLInputElement>(null);
+  /* Formül çubuğu ayrı bir ref tutar: aşağıdaki odak etkisi, odak ZATEN fx'te
+     iken hücre kutusuna atlamasın diye buna bakar. Yoksa fx'e yazılan her
+     karakter setEditing ile etkiyi tetikliyor ve imleç hücreye kaçıyordu. */
+  const formulaRef = useRef<HTMLInputElement>(null);
   const wbRef = useRef(wb);
   useEffect(() => { wbRef.current = wb; }, [wb]);
 
@@ -126,7 +133,17 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
     return () => { window.removeEventListener("mousedown", close); window.removeEventListener("resize", close); };
   }, [menu, popover]);
 
-  const values = useMemo(() => evaluateSheet(wb, sheet), [wb, sheet]);
+  /* Hesaplama render sırasında çalışıyor: burada atılan bir istisna (çok derin
+     formül zinciri yığını taşırıyordu) tüm ekranı beyaza çeviriyor ve
+     kaydedilmemiş iş gidiyordu. Hata sınırı yok, o yüzden kapı burada. */
+  const evaluated = useMemo(() => {
+    try {
+      return { values: evaluateSheet(wb, sheet), failed: false };
+    } catch {
+      return { values: new Map<string, Scalar>(), failed: true };
+    }
+  }, [wb, sheet]);
+  const values = evaluated.values;
   const valueAt = useCallback((r: number, c: number): Scalar => values.get(key(r, c)) ?? "", [values]);
 
   // ── Değişiklik kaydı ──────────────────────────────────────────────────────
@@ -198,43 +215,73 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
     setEditing({ r, c, draft: initial !== undefined ? initial : (cell?.f ?? cell?.v ?? "") });
   }, [readOnly]);
 
-  useEffect(() => { if (editing) editRef.current?.focus(); }, [editing]);
+  useEffect(() => {
+    if (!editing) return;
+    if (document.activeElement === formulaRef.current) return;
+    editRef.current?.focus();
+  }, [editing]);
 
   const stopEdit = useCallback((save: boolean, move?: "down" | "right") => {
     setEditing((e) => {
       if (!e) return null;
-      if (save) applyEdit(e.r, e.c, e.draft);
+      /* DEĞİŞMEDİYSE yazma. fx çubuğuna tıklayıp başka yere geçmek de burayı
+         çağırıyor; her seferinde geri-al yığınına boş bir adım eklemesin ve
+         belgeyi kirli işaretleyip gereksiz kayıt tetiklemesin. */
+      const cur = getCell(sheetRef.current, e.r, e.c);
+      if (save && e.draft !== (cur?.f ?? cur?.v ?? "")) applyEdit(e.r, e.c, e.draft);
       if (move === "down") moveTo(e.r + 1, e.c);
       if (move === "right") moveTo(e.r, e.c + 1);
       return null;
     });
   }, [applyEdit, moveTo]);
 
+  /* Seçim DEĞİL, dolu hücreler taranır: ⌘A 5.000×100 = 500.000 hücre seçer ve
+     her setCell haritanın tamamını kopyaladığı için silme O(n²) oluyordu —
+     sekme dakikalarca donuyordu. Boş hücrede silinecek bir şey zaten yok. */
   const clearRange = useCallback((n: Sel, alsoStyle = false) => {
-    let g = sheetRef.current;
-    for (let r = n.r1; r <= n.r2; r++)
-      for (let c = n.c1; c <= n.c2; c++) {
-        const prev = getCell(g, r, c);
-        g = setCell(g, r, c, !alsoStyle && prev?.s ? { s: prev.s } : undefined);
+    const g0 = sheetRef.current;
+    commit(withCells(g0, (put) => {
+      for (const k of Object.keys(g0.cells)) {
+        const sep = k.indexOf(":");
+        const r = Number(k.slice(0, sep));
+        const c = Number(k.slice(sep + 1));
+        if (r < n.r1 || r > n.r2 || c < n.c1 || c > n.c2) continue;
+        const prev = g0.cells[k];
+        put(r, c, !alsoStyle && prev?.s ? { s: prev.s } : undefined);
       }
-    commit(g);
+    }));
   }, [commit]);
 
   // ── Biçim ─────────────────────────────────────────────────────────────────
   const applyStyle = useCallback((patch: Partial<CellStyle>) => {
     if (readOnly) return;
     const n = norm(sel);
-    let g = sheetRef.current;
-    for (let r = n.r1; r <= n.r2; r++)
-      for (let c = n.c1; c <= n.c2; c++) {
-        const prev = getCell(g, r, c);
-        const s: CellStyle = { ...(prev?.s ?? {}), ...patch };
-        for (const k of Object.keys(s) as (keyof CellStyle)[]) {
-          if (s[k] === undefined || s[k] === false || s[k] === "") delete s[k];
-        }
-        g = setCell(g, r, c, { ...(prev ?? {}), s });
+    const g0 = sheetRef.current;
+    const styled = (prev: Cell | undefined): Cell => {
+      const s: CellStyle = { ...(prev?.s ?? {}), ...patch };
+      for (const k of Object.keys(s) as (keyof CellStyle)[]) {
+        if (s[k] === undefined || s[k] === false || s[k] === "") delete s[k];
       }
-    commit(g);
+      return { ...(prev ?? {}), s };
+    };
+    const area = (n.r2 - n.r1 + 1) * (n.c2 - n.c1 + 1);
+    commit(withCells(g0, (put) => {
+      if (area > WIDE_SELECTION) {
+        /* ⌘A + ⌘B seçilen 500.000 hücrenin HEPSİNE stil nesnesi yazıyordu:
+           seyrek harita yarım milyon kayda şişiyor, kaydedilen JSON onlarca
+           MB oluyordu. Excel de görünmeyen boş hücreye biçim taşımaz. */
+        for (const k of Object.keys(g0.cells)) {
+          const sep = k.indexOf(":");
+          const r = Number(k.slice(0, sep));
+          const c = Number(k.slice(sep + 1));
+          if (r < n.r1 || r > n.r2 || c < n.c1 || c > n.c2) continue;
+          put(r, c, styled(g0.cells[k]));
+        }
+        return;
+      }
+      for (let r = n.r1; r <= n.r2; r++)
+        for (let c = n.c1; c <= n.c2; c++) put(r, c, styled(getCell(g0, r, c)));
+    }));
     setPopover(null);
   }, [readOnly, sel, commit]);
 
@@ -323,8 +370,23 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
     const needCols = active.c + Math.max(...rows.map((r) => r.split("\t").length));
     if (needRows > g.rows) g = { ...g, rows: Math.min(MAX_ROWS, needRows) };
     if (needCols > g.cols) g = { ...g, cols: Math.min(MAX_COLS, needCols) };
-    rows.forEach((line, dr) => {
-      line.split("\t").forEach((cellText, dc) => { g = writeCell(g, active.r + dr, active.c + dc, cellText); });
+    // Tek harita kopyası: hücre başına writeCell çağırmak 5.000 hücrelik bir
+    // yapıştırmayı O(n²) yapıyordu.
+    const base = g;
+    g = withCells(base, (put) => {
+      rows.forEach((line, dr) => {
+        line.split("\t").forEach((cellText, dc) => {
+          const r = active.r + dr;
+          const c = active.c + dc;
+          if (r >= base.rows || c >= base.cols) return;   // ızgara sınırını aşma
+          const prev = getCell(base, r, c);
+          const isFormula = cellText.trim().startsWith("=");
+          put(r, c, {
+            ...(prev?.s ? { s: prev.s } : {}),
+            ...(isFormula ? { f: cellText } : cellText !== "" ? { v: cellText } : {}),
+          });
+        });
+      });
     });
     commit(g);
     setSel({
@@ -664,7 +726,10 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
           {selLabel}
         </span>
         <span aria-hidden className="grid h-8 w-7 shrink-0 place-items-center border-r border-hairline text-[13px] font-medium italic text-subtle">fx</span>
+        {/* onBlur ŞART: odak kaybında düzenleme kapanmazsa onKeyDown'daki
+            "if (editing) return" yüzünden ızgara klavyesi tamamen ölüyordu. */}
         <input
+          ref={formulaRef}
           value={formulaBarValue}
           readOnly={readOnly}
           onChange={(e) => setEditing({ r: active.r, c: active.c, draft: e.target.value })}
@@ -673,6 +738,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
             if (e.key === "Escape") { e.preventDefault(); stopEdit(false); }
           }}
           onFocus={() => { if (!editing && !readOnly) startEdit(active.r, active.c); }}
+          onBlur={() => { if (!readOnly) stopEdit(true); }}
           placeholder="Değer veya =formül"
           aria-label="Formül çubuğu"
           className="h-8 min-w-0 flex-1 bg-transparent px-2.5 text-[13.5px] text-ink placeholder:text-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-ring/40"
@@ -917,7 +983,9 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
       {/* ── Durum çubuğu ─────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between gap-3 border-t border-hairline px-3 py-1.5 text-[12px] text-subtle">
         <span className="tabular-nums">{sheet.rows} satır · {sheet.cols} sütun</span>
-        {summary && <span className="truncate font-medium tabular-nums text-muted">{summary}</span>}
+        {evaluated.failed
+          ? <span className="truncate font-medium text-danger">Tablo hesaplanamadı</span>
+          : summary && <span className="truncate font-medium tabular-nums text-muted">{summary}</span>}
       </div>
 
       {/* ── Sağ tık menüsü ───────────────────────────────────────────────── */}

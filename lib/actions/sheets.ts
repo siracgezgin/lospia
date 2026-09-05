@@ -18,6 +18,7 @@ const PERM_DENIED = "Bu işlem için yetkiniz yok.";
 const AUTH_REQUIRED = "Kimlik doğrulama gerekli.";
 const NOT_FOUND = "Tablo bulunamadı.";
 const LOCKED = "Bu tablo kilitli — içerik değiştirilemez.";
+const ARCHIVED = "Bu tablo arşivlendi — içerik değiştirilemez.";
 const ADMIN_ROLES: AppRole[] = ["owner", "admin"];
 
 // Snapshot JSON, serialized on the client. Univer snapshots for a filled sheet
@@ -146,7 +147,9 @@ export async function createOperationSpreadsheet(
     .single();
 
   if (error) return { error: toActionErrorMessage(error) };
-  revalidatePath("/sheets");
+  // Tablolar AF Teamwork klasörlerinde listeleniyor; /sheets yalnız oraya
+  // yönlendiren bir durak — onu tazelemek hiçbir listeyi güncellemiyordu.
+  revalidatePath("/documents");
   return { id: (row as { id: string }).id };
 }
 
@@ -180,7 +183,7 @@ export async function updateOperationSpreadsheetMeta(
     .eq("workspace_id", ctx.workspaceId);
 
   if (error) return { error: toActionErrorMessage(error) };
-  revalidatePath("/sheets");
+  revalidatePath("/documents");
   revalidatePath(`/sheets/${sheetId}`);
   return { ok: true };
 }
@@ -209,8 +212,12 @@ export async function saveSpreadsheetSnapshot(
 
   const editable = await loadEditable(supabase, ctx, sheetId);
   if ("error" in editable) return editable;
-  // Even an admin should consciously unlock before editing a locked sheet.
+  /* Even an admin should consciously unlock before editing a locked sheet.
+     ARŞİV de aynı kapıdır: düzenleyici arşivlenmiş tabloyu "salt okunur"
+     diye gösteriyor ama sunucu yöneticinin yazmasına izin veriyordu — ekranda
+     kapalı, arka planda açık bir kapı. Durumu "Aktif"e almak tek yoldur. */
   if (editable.status === "locked") return { error: LOCKED };
+  if (editable.status === "archived") return { error: ARCHIVED };
 
   const { error } = await supabase
     .from("operation_spreadsheets")
@@ -360,7 +367,8 @@ export async function archiveOperationSpreadsheet(
     .eq("workspace_id", ctx.workspaceId);
 
   if (error) return { error: toActionErrorMessage(error) };
-  revalidatePath("/sheets");
+  revalidatePath("/documents");
+  revalidatePath(`/sheets/${sheetId}`);
   return { ok: true };
 }
 
@@ -400,7 +408,6 @@ export async function setOperationSpreadsheetVisibility(
   if (error) return { error: toActionErrorMessage(error) };
 
   revalidatePath("/documents");
-  revalidatePath("/sheets");
   return { ok: true };
 }
 
@@ -450,7 +457,6 @@ export async function deleteOperationSpreadsheet(
     entityLabel: (doomed as { title?: string } | null)?.title ?? null,
   });
 
-  revalidatePath("/sheets");
   revalidatePath("/documents");
   return { ok: true };
 }

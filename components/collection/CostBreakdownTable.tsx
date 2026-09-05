@@ -82,6 +82,11 @@ function pricingPayload(p: ProductionPricing) {
     notes: p.notes ?? "",
     cost_items: p.cost_items,
     usta_unit_payment: p.usta_unit_payment ?? "",
+    /* Fatura alanları Ödeme Tablosu'nda yaşar ama AYNI `pricing` JSON'unda
+       durur; sunucu bu alanı bütün olarak değiştirdiği için burada taşınmazsa
+       maliyet hücresinden çıkıldığı anda fatura kaydı silinirdi. */
+    invoice_no: p.invoice_no ?? "",
+    invoice_amount: p.invoice_amount ?? "",
   };
 }
 

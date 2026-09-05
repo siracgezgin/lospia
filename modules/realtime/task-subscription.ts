@@ -3,13 +3,14 @@
 //
 // Only subscribes to task_activity for the current task.
 // Must be used inside a Client Component with cleanup on unmount.
-// If risky, leave REALTIME_ENABLED=false (default) — all other features work normally.
+// If risky, leave REALTIME_ENABLED=false (default) — all other features work
+// normally: server actions revalidate after every mutation, so the person who
+// made a change always sees it.
 
 import { useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { featureFlags } from "@/lib/utils/feature-flags";
 import type { TaskActivity } from "@/types";
-import type { RealtimeChannel } from "@supabase/supabase-js";
 
 interface UseTaskActivityRealtimeOptions {
   taskId: string;
@@ -18,11 +19,9 @@ interface UseTaskActivityRealtimeOptions {
 
 /**
  * Subscribe to task_activity inserts for a specific task.
- * Returns a cleanup function (called automatically on unmount via useEffect).
- * No-op when REALTIME_ENABLED=false.
+ * Cleanup runs automatically on unmount. No-op when REALTIME_ENABLED=false.
  */
 export function useTaskActivityRealtime({ taskId, onNewActivity }: UseTaskActivityRealtimeOptions): void {
-  const channelRef = useRef<RealtimeChannel | null>(null);
   const callbackRef = useRef(onNewActivity);
 
   // Keep callback ref current without causing re-subscription
@@ -31,7 +30,7 @@ export function useTaskActivityRealtime({ taskId, onNewActivity }: UseTaskActivi
   });
 
   useEffect(() => {
-    if (!featureFlags.realtime) return;
+    if (!featureFlags.realtime || !taskId) return;
 
     const supabase = createClient();
     const channel = supabase
@@ -45,17 +44,13 @@ export function useTaskActivityRealtime({ taskId, onNewActivity }: UseTaskActivi
           filter: `task_id=eq.${taskId}`,
         },
         (payload) => {
-          const _activity = payload.new as TaskActivity;
-          callbackRef.current(_activity);
-        }
+          callbackRef.current(payload.new as TaskActivity);
+        },
       )
       .subscribe();
 
-    channelRef.current = channel;
-
     return () => {
       supabase.removeChannel(channel).catch(() => {});
-      channelRef.current = null;
     };
   }, [taskId]);
 }

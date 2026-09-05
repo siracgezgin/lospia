@@ -20,6 +20,8 @@
  * kayıtlı hiçbir tablo okunamaz hâle gelmez.
  */
 
+import { shiftRefs } from "./formula";
+
 export type NumberFormat = "auto" | "text" | "number" | "money" | "percent" | "date";
 
 export type CellStyle = {
@@ -363,15 +365,22 @@ function clampInt(v: unknown, min: number, max: number, fallback: number): numbe
 
 // ── Satır / sütun işlemleri ─────────────────────────────────────────────────
 // Hücreler seyrek haritada durduğu için ekleme/silme, etkilenen hücreleri
-// KAYDIRMAK demektir. Formül referansları da kaydırılır (bkz. shiftFormula):
+// KAYDIRMAK demektir. Formül referansları da kaydırılır (bkz. shiftRefs):
 // A1 satırı silinince ona bakan formül #BAŞV! olur, altındaki referanslar bir
-// yukarı kayar — Excel'in davranışı.
+// yukarı kayar — Excel'in davranışı. Bu YAPILMADIĞINDA tablo sessizce yanlış
+// sayı gösteriyordu: üste satır eklendikten sonra =TOPLA(B2:B10) hâlâ eski
+// aralığa bakıyor, ekranda hiçbir hata görünmüyordu.
+
+/** Hücre taşınırken formülündeki başvuruları da kaydırır. */
+function withShiftedRefs(cell: Cell, axis: "row" | "col", at: number, delta: number): Cell {
+  return cell.f ? { ...cell, f: shiftRefs(cell.f, axis, at, delta) } : cell;
+}
 
 export function insertRow(g: Sheet, at: number): Sheet {
   const cells: Record<string, Cell> = {};
   for (const [k, cell] of Object.entries(g.cells)) {
     const [r, c] = k.split(":").map(Number);
-    cells[key(r >= at ? r + 1 : r, c)] = cell;
+    cells[key(r >= at ? r + 1 : r, c)] = withShiftedRefs(cell, "row", at, +1);
   }
   const rowH: Record<number, number> = {};
   for (const [r, h] of Object.entries(g.rowH ?? {})) {
@@ -386,7 +395,7 @@ export function deleteRow(g: Sheet, at: number): Sheet {
   for (const [k, cell] of Object.entries(g.cells)) {
     const [r, c] = k.split(":").map(Number);
     if (r === at) continue;
-    cells[key(r > at ? r - 1 : r, c)] = cell;
+    cells[key(r > at ? r - 1 : r, c)] = withShiftedRefs(cell, "row", at, -1);
   }
   const rowH: Record<number, number> = {};
   for (const [r, h] of Object.entries(g.rowH ?? {})) {
@@ -401,7 +410,7 @@ export function insertCol(g: Sheet, at: number): Sheet {
   const cells: Record<string, Cell> = {};
   for (const [k, cell] of Object.entries(g.cells)) {
     const [r, c] = k.split(":").map(Number);
-    cells[key(r, c >= at ? c + 1 : c)] = cell;
+    cells[key(r, c >= at ? c + 1 : c)] = withShiftedRefs(cell, "col", at, +1);
   }
   const colW: Record<number, number> = {};
   for (const [c, w] of Object.entries(g.colW ?? {})) {
@@ -416,7 +425,7 @@ export function deleteCol(g: Sheet, at: number): Sheet {
   for (const [k, cell] of Object.entries(g.cells)) {
     const [r, c] = k.split(":").map(Number);
     if (c === at) continue;
-    cells[key(r, c > at ? c - 1 : c)] = cell;
+    cells[key(r, c > at ? c - 1 : c)] = withShiftedRefs(cell, "col", at, -1);
   }
   const colW: Record<number, number> = {};
   for (const [c, w] of Object.entries(g.colW ?? {})) {

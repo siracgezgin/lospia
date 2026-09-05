@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { LoginForm } from "@/components/layout/LoginForm";
+import { LoginForm } from "./LoginForm";
 import { getAppBrandForHost } from "@/lib/branding";
 
 export const metadata: Metadata = {
@@ -27,14 +27,20 @@ export default async function LoginPage({
        gizlenince 100vh gerçek görünür alandan büyük kalıyor ve kart yukarı
        kayıyordu. dvh canlı yüksekliği izler; min- olduğu için kart sığmazsa
        sayfa normal şekilde kayar. */
-    <main className="flex min-h-dvh items-center justify-center bg-app px-4 py-10 sm:py-12">
+    /* items-center DEĞİL: kart kaptan uzun kaldığında (telefonda klavye
+       açıkken görünür alan ~300px'e inebiliyor) `align-items: center` kartı
+       YUKARI TAŞIRIR ve taşan kısım kaydırılamaz — logo ve kullanıcı adı
+       alanı erişilemez oluyordu. Dikey ortalama kartın kendi `my-auto`
+       payıyla yapılır: boş alan varken ortalar, yokken 0'a iner ve sayfa
+       normal şekilde kayar. */
+    <main className="flex min-h-dvh justify-center bg-app px-4 py-10 sm:py-12">
       {/* Her sayfanın bir <h1>'i olmalı; burada görsel karşılığı marka
           logosu olduğu için başlık yalnız ekran okuyuculara verilir. Kartın
           DIŞINDA duruyor: sr-only mutlak konumlu olduğu için yer kaplamaz,
           ama kartın `space-y-6` zinciri içinde ilk çocuk olsaydı logoya
           fazladan bir boşluk ekleyecekti. */}
       <h1 className="sr-only">{brand.name} — Giriş</h1>
-      <div className="anim-fade-up w-full max-w-sm space-y-6 rounded-card border border-line bg-surface p-6 shadow-card sm:p-8">
+      <div className="anim-fade-up my-auto w-full max-w-sm space-y-6 rounded-card border border-line bg-surface p-6 shadow-card sm:p-8">
         {/* Brand — the resolved product/pilot logo leads, then a single generic
             supporting line. Logo width is capped so it reads as a confident
             brand mark without overflowing the card. The pilot subline (AF only)

@@ -370,6 +370,34 @@ export function DocEditor({
     refreshFmt();
   }, [focusBody, readOnly, refreshFmt, touch]);
 
+  /**
+   * Girinti. Listede tarayıcının iç içe liste davranışı doğrudur; DÜZ
+   * paragrafta ise execCommand("indent") Chrome'da
+   * `<blockquote style="margin:0 0 0 40px;border:none;padding:0">` üretir.
+   * Temizleyici `margin`/`border`/`padding` kısayollarını geçirmediği için
+   * kaydettikten sonra girinti gider, geriye ALINTI kutusu kalırdı. Bu yüzden
+   * paragrafta girintiyi DOM üzerinden `margin-left` ile yazıyoruz (bu özellik
+   * temizleyicide izinli).
+   */
+  const applyIndent = useCallback((dir: 1 | -1) => {
+    if (readOnly) return;
+    const el = focusBody();
+    if (!el) return;
+    ensureParagraphs(el);
+    const blocks = blocksInSelection(el);
+    if (blocks.some((b) => b.closest("li"))) {
+      exec(dir > 0 ? "indent" : "outdent");
+      return;
+    }
+    for (const b of blocks) {
+      const cur = parseFloat(b.style.marginLeft) || 0;
+      const next = Math.max(0, Math.min(240, cur + dir * 40));
+      b.style.marginLeft = next ? `${next}px` : "";
+    }
+    touch();
+    refreshFmt();
+  }, [exec, focusBody, readOnly, refreshFmt, touch]);
+
   /** Başlık/alıntı/kod: zaten o bloktaysa paragrafa döner. */
   const setBlock = useCallback((tag: string) => {
     exec("formatBlock", tag === "p" ? "P" : tag.toUpperCase());
@@ -610,7 +638,7 @@ export function DocEditor({
       const li = node
         ? (node.nodeType === 1 ? (node as HTMLElement) : node.parentElement)?.closest("li")
         : null;
-      if (li) { e.preventDefault(); exec(e.shiftKey ? "outdent" : "indent"); }
+      if (li) { e.preventDefault(); applyIndent(e.shiftKey ? -1 : 1); }
       // Liste dışında Tab varsayılan kalır: klavye kullanıcısı editörden çıkabilsin.
     }
   }
@@ -771,8 +799,8 @@ export function DocEditor({
               <Btn icon={AlignCenter} label="Ortala" active={fmt.align === "center"} onClick={() => exec("justifyCenter")} />
               <Btn icon={AlignRight} label="Sağa hizala" active={fmt.align === "right"} onClick={() => exec("justifyRight")} />
               <Btn icon={AlignJustify} label="İki yana yasla" active={fmt.align === "justify"} onClick={() => exec("justifyFull")} />
-              <Btn icon={IndentDecrease} label="Girintiyi azalt (Shift+Tab)" onClick={() => exec("outdent")} />
-              <Btn icon={IndentIncrease} label="Girintiyi artır (Tab)" onClick={() => exec("indent")} />
+              <Btn icon={IndentDecrease} label="Girintiyi azalt (Shift+Tab)" onClick={() => applyIndent(-1)} />
+              <Btn icon={IndentIncrease} label="Girintiyi artır (Tab)" onClick={() => applyIndent(1)} />
               <Sep />
               <Btn icon={TableIcon} label="Tablo ekle (3×3)" onClick={insertTable} />
               <Btn icon={ImagePlus} label="Görsel ekle" busy={busyImage} onClick={() => !busyImage && imageRef.current?.click()} />

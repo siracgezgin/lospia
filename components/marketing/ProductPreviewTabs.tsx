@@ -236,12 +236,15 @@ export function ProductPreviewTabs() {
             return (
               <button
                 key={tab.id}
+                id={`preview-tab-${tab.id}`}
                 type="button"
                 role="tab"
                 aria-selected={isActive}
                 aria-controls={`preview-panel-${tab.id}`}
                 onClick={() => setActive(tab.id)}
-                className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 ${
+                /* Parmakla kullanılan gerçek bir kontrol: telefonda 40px,
+                   masaüstünde önizlemenin kompakt yoğunluğu korunur. */
+                className={`inline-flex min-h-[40px] items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 sm:min-h-0 ${
                   isActive
                     ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
                     : "text-slate-500 hover:bg-slate-100 hover:text-slate-800 active:bg-slate-200/70"
@@ -260,6 +263,7 @@ export function ProductPreviewTabs() {
         key={active}
         id={`preview-panel-${active}`}
         role="tabpanel"
+        aria-labelledby={`preview-tab-${active}`}
         className="min-h-[340px] bg-slate-50/70"
         style={{ animation: "lospia-panel-in 260ms cubic-bezier(0.4,0,0.2,1)" }}
       >

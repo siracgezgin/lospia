@@ -89,7 +89,11 @@ export async function changeMyPassword(input: {
     return { error: "Mevcut şifreniz hatalı." };
   }
   // Doğrulama oturumunu hemen kapat — sunucuda açık kalmasın.
-  await verifier.auth.signOut();
+  // KAPSAM 'local' ŞART: varsayılan 'global', kullanıcının BÜTÜN refresh
+  // token'larını iptal eder ve kişiyi kendi tarayıcısından (ve telefonundan)
+  // şifresini değiştirdiği anda dışarı atar. Burada yalnız doğrulama için
+  // üretilen oturum kapatılır.
+  await verifier.auth.signOut({ scope: "local" });
 
   const { error } = await supabase.auth.updateUser({ password: parsed.data.newPassword });
   if (error) return { error: passwordErrorMessage(error.message) };

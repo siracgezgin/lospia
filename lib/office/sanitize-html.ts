@@ -105,8 +105,15 @@ const STYLE_POISON = /(url\s*\(|expression|javascript:|@import|behavior|--|\\|\/
  * değer. Hiçbiri kalmazsa boş dize döner (öznitelik hiç yazılmaz).
  */
 function sanitizeStyle(raw: string): string {
+  // Tarayıcı `font-family: "Times New Roman", Times, serif` gibi TIRNAKLI
+  // değerleri `innerHTML` serileştirmesinde `&quot;` olarak kaçırır. Bildirimi
+  // `;` üzerinden bölmeden önce bu varlığı tek tırnağa çeviriyoruz: yoksa
+  // varlığın içindeki `;` bildirimi ortadan ikiye ayırıp yazı tipini sessizce
+  // düşürüyordu. Tek tırnak hem geçerli CSS hem de `font-family` kalıbında
+  // zaten izinli.
+  const src = raw.replace(/&quot;|&#0*34;|&#x0*22;/gi, "'");
   const out: string[] = [];
-  for (const decl of raw.split(";")) {
+  for (const decl of src.split(";")) {
     const idx = decl.indexOf(":");
     if (idx < 0) continue;
     const prop = decl.slice(0, idx).trim().toLowerCase();

@@ -177,8 +177,10 @@ const CARD_STATUS_CHOICES: { value: TaskStatus; label: string }[] = [
 
 /* Durum değiştirme İZNİ tek yerde tanımlıdır. Satır içi çip ve kart menüsündeki
    "Taşı" bölümü aynı kuralı okur — iki yüzeyde iki farklı kural olsaydı biri
-   sunucunun reddedeceği bir seçeneği sunardı. Kural sunucudaki reorderTask ile
-   aynı: sorumlu ya da yönetici taşır; tamamlanmış işi yalnız yönetici açar. */
+   sunucunun reddedeceği bir seçeneği sunardı. Kural sunucuyla aynı: sorumlu
+   (atanan, oluşturan ya da katılımcı) veya yönetici taşır — reorderTask
+   (sürükleme) ve updateTask'ın yalnız-durum dalı bu kuralı paylaşır;
+   tamamlanmış işi yalnız yönetici açar. */
 function statusMovePermission(ctx: BoardCtxValue | null, task: Task, status: TaskStatus) {
   const canDone = ctx?.canComplete ?? false;
   const doneLocked = status === "done" && !canDone;

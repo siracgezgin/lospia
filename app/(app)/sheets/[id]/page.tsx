@@ -9,6 +9,11 @@ import type { OperationSpreadsheet, WorkspaceDepartment } from "@/types";
 
 export const dynamic = "force-dynamic";
 
+/* TEK TERMİNOLOJİ: tablo AF Teamwork'ün içinde yaşıyor ve uygulama çubuğu
+   (AppHeader PAGE_TITLES) /sheets için "AF Teamwork" yazıyor — sekme adı da
+   aynı olmalı, aynı ekran iki ayrı adla anılmaz. */
+export const metadata = { title: "AF Teamwork" };
+
 export default async function SheetDetailPage({
   params,
 }: {
@@ -31,7 +36,7 @@ export default async function SheetDetailPage({
     return (
       <div className="mx-auto w-full max-w-3xl px-4 py-4 sm:px-6 lg:px-8">
         {/* Tablolar AF Teamwork klasöründe yaşıyor; "Geri" oraya döner. */}
-        <ModulePageHeader title="Sheets" backHref="/documents" />
+        <ModulePageHeader title="AF Teamwork" backHref="/documents" />
         <SetupRequiredNotice
           variant="block"
           title="Tablolar henüz oluşturulmadı"

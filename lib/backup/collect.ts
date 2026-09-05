@@ -89,8 +89,16 @@ const WORKSPACE_TABLES = [
 
    Kapsam supabase/migrations altındaki TÜM `create table` satırlarıyla
    karşılaştırıldı (2026-09-05): yukarıdaki dört tablo dışında şemadaki her
-   tablo yedeğe giriyor. Yeni bir migration tablo eklediğinde bu listeye ya da
-   WORKSPACE_TABLES'a eklenmesi gerekir. */
+   tablo yedeğe giriyor; BACKUP_BUCKETS de migration'larda oluşturulan her
+   depolama kovasını kapsıyor. Yeni bir migration tablo eklediğinde bu listeye
+   ya da WORKSPACE_TABLES'a eklenmesi gerekir.
+
+   DENETİMİ TEKRARLAMAK İÇİN (yeni migration yazan herkes çalıştırsın):
+     grep -rhoiE "create table (if not exists )?(public\.)?[a-z_]+" \
+       supabase/migrations | sed -E 's/.*[. ]([a-z_]+)$/\1/' | sort -u
+   Çıkan her ad ya WORKSPACE_TABLES'ta, ya EXCLUDED_TABLES'ta, ya da
+   collectWorkspaceData'nın sonundaki `in` bloklarında (workspaces, profiles ve
+   sürüm tabloları) görünmelidir. Görünmüyorsa o tablo yedeğe GİRMİYOR. */
 
 /** Bilerek yedeğe alınmayan tablolar — OKUBENI ve özet dosyasında yazılı olsun
  *  ki "neden bu tablo yok?" sorusu yedeğin içinden cevaplanabilsin. */

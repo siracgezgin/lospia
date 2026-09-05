@@ -142,6 +142,7 @@ function emptyState(): ProductionSheetInput {
     pricing: {
       unit_price: "", purchase_cost: "", web_sale_price: "", currency: "TL", notes: "",
       cost_items: emptyCostItems(), usta_unit_payment: "",
+      invoice_no: "", invoice_amount: "",
     },
   };
 }
@@ -198,6 +199,10 @@ function fromSheet(s: ProductionSheet): ProductionSheetInput {
       // ustaya ödeme kabul edilir (bkz. ustaUnitPaymentOf) — veri kaybolmaz.
       cost_items: s.pricing?.cost_items?.length ? s.pricing.cost_items : emptyCostItems(),
       usta_unit_payment: s.pricing?.usta_unit_payment ?? "",
+      /* Fatura alanları Ödeme Tablosu'nda girilir; föy kaydı tüm `pricing`
+         alanını yazdığı için burada taşınmazsa kaydetmek onları silerdi. */
+      invoice_no: s.pricing?.invoice_no ?? "",
+      invoice_amount: s.pricing?.invoice_amount ?? "",
     },
   };
 }

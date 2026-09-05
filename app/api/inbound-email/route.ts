@@ -1,117 +1,274 @@
-// Module: Email-to-task inbound route
-// gated by NEXT_PUBLIC_FEATURE_EMAIL_TO_TASK_ENABLED=true
-//
-// Expected payload (Cloudflare Email Routing worker or local mock):
-//   { subject, body_text, from, workspace_alias, hmac_signature? }
-//
-// Cloudflare Email Routing worker stub: see scripts/cloudflare-email-worker.ts
+/**
+ * E-POSTA → GÖREV — /api/inbound-email
+ *
+ * NEXT_PUBLIC_FEATURE_EMAIL_TO_TASK_ENABLED bayrağı ile açılır; kapalıyken
+ * uç nokta 404 döner (uygulamada bu akışa ait hiçbir düğme yoktur).
+ *
+ * Beklenen istek — Cloudflare Email Routing worker'ı
+ * (modules/email-to-task/cloudflare-worker.ts) tam olarak bunu gönderir:
+ *
+ *   POST /api/inbound-email
+ *   x-email-signature: <ham gövdenin HMAC-SHA256 imzası, hex>
+ *   { "subject": "...", "body_text": "...", "from": "...",
+ *     "workspace_alias": "<workspace slug>" }
+ *
+ * İMZA HAM GÖVDE ÜZERİNDEN doğrulanır. Eskiden imza gövdenin İÇİNDE
+ * (hmac_signature alanı) taşınıyor ve sunucu gövdeyi yeniden JSON'a çevirip
+ * imzalıyordu; alan sırası ya da tek bir boşluk değiştiğinde imza tutmuyordu.
+ * Şimdi imzalanan bayt dizisi ile doğrulanan bayt dizisi aynı: `request.text()`.
+ *
+ * YETKİ: gelen istekte oturum yoktur, dolayısıyla RLS'in dayanacağı bir
+ * auth.uid() de yoktur — normal istemciyle yapılan her insert sessizce
+ * reddedilirdi (uç nokta bu yüzden hiç çalışmıyordu). Yazma bu sebeple
+ * service_role istemcisiyle yapılır: bu SUNUCUYA ÖZEL bir dosyadır, anahtar
+ * tarayıcıya asla gitmez ve kapı HMAC imzasıdır. Bayrak açıkken imza sırrı
+ * (EMAIL_INBOUND_SECRET) zorunludur; yoksa uç nokta kapalı davranır —
+ * "imzasız da kabul et" hâli, herkesin göreve kayıt açabilmesi demekti.
+ */
 
-import { NextRequest, NextResponse } from "next/server";
-import { createHmac, timingSafeEqual } from "crypto";
-import { createClient } from "@/lib/supabase/server";
+import { NextResponse } from "next/server";
+import { createHmac, timingSafeEqual } from "node:crypto";
+import { z } from "zod";
+import { generateKeyBetween } from "fractional-indexing";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { featureFlags } from "@/lib/utils/feature-flags";
 
-const EMAIL_SECRET = process.env.EMAIL_INBOUND_SECRET ?? "";
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-interface InboundPayload {
-  subject: string;
-  body_text?: string;
-  from?: string;
-  workspace_alias: string;
-  hmac_signature?: string;
+/** Gövde üst sınırı — bir e-posta metni için fazlasıyla geniş, DoS'a kapalı. */
+const MAX_BODY_BYTES = 512 * 1024;
+
+/** Görev açıklamasına yazılan metnin üst sınırı. */
+const MAX_TEXT_CHARS = 20_000;
+
+const payloadSchema = z.object({
+  subject: z.string().trim().min(1).max(500),
+  body_text: z.string().max(MAX_TEXT_CHARS).nullish(),
+  from: z.string().max(320).nullish(),
+  // Workspace slug'ı: küçük harf, rakam ve tire (bkz. workspaces.slug).
+  workspace_alias: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .regex(/^[a-zA-Z0-9_-]+$/, "workspace_alias yalnız harf, rakam, tire ve alt çizgi içerebilir"),
+});
+
+/** Anahtar/oturum bilgisi taşımayan düz hata metni. */
+function message(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
-function verifyHmac(payload: string, signature: string): boolean {
-  if (!EMAIL_SECRET) return false;
-  const computed = createHmac("sha256", EMAIL_SECRET)
-    .update(payload)
-    .digest("hex");
-  try {
-    return timingSafeEqual(Buffer.from(computed), Buffer.from(signature));
-  } catch {
-    return false;
-  }
+/** Sabit süreli karşılaştırma — uzunluk farkında da patlamaz. */
+function signatureMatches(expected: string, received: string): boolean {
+  const a = Buffer.from(expected, "utf8");
+  const b = Buffer.from(received, "utf8");
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
+  // Bayrak kapalı → bu uç nokta yokmuş gibi davranır.
   if (!featureFlags.emailToTask) {
-    return NextResponse.json({ error: "Email-to-task feature is disabled" }, { status: 404 });
+    return NextResponse.json(
+      { error: "disabled", mesaj: "E-posta ile görev açma kapalı." },
+      { status: 404 },
+    );
   }
 
-  let body: InboundPayload;
+  const secret = process.env.EMAIL_INBOUND_SECRET ?? "";
+  if (!secret) {
+    console.error("[inbound-email] EMAIL_INBOUND_SECRET tanımsız — istek reddedildi");
+    return NextResponse.json(
+      {
+        error: "not_configured",
+        mesaj: "E-posta girişi sunucuda yapılandırılmamış (imza sırrı eksik).",
+      },
+      { status: 503 },
+    );
+  }
+
+  const admin = getAdminClient();
+  if (!admin) {
+    console.error("[inbound-email] service_role istemcisi yapılandırılmamış");
+    return NextResponse.json(
+      { error: "not_configured", mesaj: "E-posta girişi sunucuda yapılandırılmamış." },
+      { status: 503 },
+    );
+  }
+
+  // ── Ham gövde: imza da ayrıştırma da AYNI bayt dizisi üzerinden ──────────
+  let raw: string;
   try {
-    body = await request.json();
+    raw = await request.text();
+  } catch (error) {
+    console.error("[inbound-email] gövde okunamadı:", message(error));
+    return NextResponse.json(
+      { error: "unreadable_body", mesaj: "İstek gövdesi okunamadı." },
+      { status: 400 },
+    );
+  }
+  if (Buffer.byteLength(raw, "utf8") > MAX_BODY_BYTES) {
+    return NextResponse.json(
+      { error: "payload_too_large", mesaj: "İstek gövdesi çok büyük." },
+      { status: 413 },
+    );
+  }
+
+  const signature = request.headers.get("x-email-signature")?.trim() ?? "";
+  if (!signature) {
+    return NextResponse.json(
+      {
+        error: "missing_signature",
+        mesaj: "İmza eksik: ham gövdenin HMAC-SHA256 imzası x-email-signature başlığında beklenir.",
+      },
+      { status: 401 },
+    );
+  }
+  const expected = createHmac("sha256", secret).update(raw, "utf8").digest("hex");
+  if (!signatureMatches(expected, signature)) {
+    console.error("[inbound-email] imza doğrulanamadı");
+    return NextResponse.json(
+      { error: "invalid_signature", mesaj: "İmza doğrulanamadı." },
+      { status: 401 },
+    );
+  }
+
+  // ── Girdi doğrulama — kötü girdi 4xx döner, sessizce yutulmaz ────────────
+  let parsedJson: unknown;
+  try {
+    parsedJson = JSON.parse(raw);
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    return NextResponse.json(
+      { error: "invalid_json", mesaj: "Gövde geçerli bir JSON değil." },
+      { status: 400 },
+    );
   }
 
-  // Verify HMAC if secret is configured
-  if (EMAIL_SECRET) {
-    const rawBody = JSON.stringify(body);
-    const sig = body.hmac_signature ?? request.headers.get("x-email-signature") ?? "";
-    if (!verifyHmac(rawBody, sig)) {
-      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
-    }
+  const parsed = payloadSchema.safeParse(parsedJson);
+  if (!parsed.success) {
+    // Alan adı + sebep döner; gelen içeriğin kendisi loglanmaz.
+    const issues = parsed.error.issues.map((i) => `${i.path.join(".") || "(gövde)"}: ${i.message}`);
+    console.error("[inbound-email] geçersiz girdi:", issues.join(" | "));
+    return NextResponse.json(
+      { error: "invalid_payload", mesaj: "Eksik ya da geçersiz alanlar var.", alanlar: issues },
+      { status: 400 },
+    );
   }
+  const payload = parsed.data;
 
-  const { subject, body_text, workspace_alias } = body;
-  if (!subject || !workspace_alias) {
-    return NextResponse.json({ error: "Missing subject or workspace_alias" }, { status: 400 });
-  }
-
-  const supabase = await createClient();
-
-  // Resolve workspace by slug
-  const { data: workspace, error: wsError } = await supabase
+  // ── Çalışma alanı ───────────────────────────────────────────────────────
+  const { data: workspaceRow, error: wsError } = await admin
     .from("workspaces")
     .select("id, created_by")
-    .eq("slug", workspace_alias)
-    .single();
+    .eq("slug", payload.workspace_alias)
+    .maybeSingle();
+  const workspace = workspaceRow as { id: string; created_by: string } | null;
 
-  if (wsError || !workspace) {
-    return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
+  if (wsError) {
+    console.error("[inbound-email] çalışma alanı okunamadı:", wsError.message);
+    return NextResponse.json(
+      { error: "lookup_failed", mesaj: "Çalışma alanı okunamadı." },
+      { status: 500 },
+    );
+  }
+  if (!workspace) {
+    return NextResponse.json(
+      { error: "workspace_not_found", mesaj: "Bu adrese karşılık gelen çalışma alanı yok." },
+      { status: 404 },
+    );
   }
 
-  // Log to webhook_events for audit
-  const { error: logError } = await supabase
+  const bodyText = payload.body_text?.trim() ? payload.body_text.trim() : null;
+
+  // ── Denetim kaydı: önce olay, sonra görev ───────────────────────────────
+  // Olay satırı görevden ÖNCE yazılır ki görev açma patlarsa bile gelen
+  // e-postanın izi kalsın (aksi hâlde e-posta sessizce kaybolurdu).
+  const { data: eventRow, error: eventError } = await admin
     .from("webhook_events")
     .insert({
-      workspace_id: (workspace as { id: string }).id,
+      workspace_id: workspace.id,
       source: "email",
-      raw_payload: body as unknown as Record<string, unknown>,
+      raw_payload: {
+        subject: payload.subject,
+        from: payload.from ?? null,
+        workspace_alias: payload.workspace_alias,
+        body_text: bodyText,
+      },
       processed: false,
-    });
+    })
+    .select("id")
+    .single();
+  const event = eventRow as { id: string } | null;
 
-  if (logError) {
-    return NextResponse.json({ error: "Failed to log event" }, { status: 500 });
+  if (eventError || !event) {
+    console.error("[inbound-email] olay kaydı yazılamadı:", eventError?.message ?? "boş yanıt");
+    return NextResponse.json(
+      { error: "log_failed", mesaj: "Gelen e-posta kaydedilemedi." },
+      { status: 500 },
+    );
   }
 
-  // Create task (use workspace owner as creator since no auth in email flow)
-  const { data: task, error: taskError } = await supabase
+  // Panoda en sona düşsün: mevcut en büyük sıradan sonrası. Hesaplanamazsa
+  // varsayılan 'a0' kullanılır — görev yine açılır, yalnız sırası başa gelir.
+  let fractionalIndex = "a0";
+  try {
+    const { data: lastRow } = await admin
+      .from("tasks")
+      .select("fractional_index")
+      .eq("workspace_id", workspace.id)
+      .order("fractional_index", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const last = lastRow as { fractional_index: string | null } | null;
+    fractionalIndex = generateKeyBetween(last?.fractional_index ?? null, null);
+  } catch (error) {
+    console.error("[inbound-email] sıra anahtarı üretilemedi:", message(error));
+  }
+
+  const { data: taskRow, error: taskError } = await admin
     .from("tasks")
     .insert({
-      workspace_id: (workspace as { id: string; created_by: string }).id,
-      title: subject.slice(0, 500),
-      description: body_text ?? null,
+      workspace_id: workspace.id,
+      title: payload.subject.slice(0, 500),
+      description: bodyText,
       status: "backlog",
       priority: "medium",
-      fractional_index: "a0",
-      created_by: (workspace as { id: string; created_by: string }).created_by,
+      fractional_index: fractionalIndex,
+      // Oturum yok: kaydı çalışma alanının kurucusu açmış sayılır.
+      created_by: workspace.created_by,
       tags: ["email-to-task"],
     })
     .select("id")
     .single();
+  const task = taskRow as { id: string } | null;
 
-  if (taskError) {
-    return NextResponse.json({ error: taskError.message }, { status: 500 });
+  if (taskError || !task) {
+    const reason = taskError?.message ?? "boş yanıt";
+    console.error("[inbound-email] görev açılamadı:", reason);
+    // Başarısızlık da SESSİZ KALMAZ: olay satırına sebebi yazılır.
+    await admin
+      .from("webhook_events")
+      .update({ error: reason.slice(0, 500) })
+      .eq("id", event.id);
+    return NextResponse.json(
+      { error: "task_create_failed", mesaj: "Görev açılamadı." },
+      { status: 500 },
+    );
   }
 
-  // Update webhook_event with created task
-  await supabase
+  // YALNIZ bu olay işaretlenir. (Eskiden güncelleme `processed = false` olan
+  // TÜM satırlara uygulanıyordu; bir hata yığılması olduğunda hepsi bu görevin
+  // kimliğiyle "işlendi" damgası yiyordu.)
+  const { error: markError } = await admin
     .from("webhook_events")
-    .update({ processed: true, created_task_id: (task as { id: string }).id })
-    .eq("workspace_id", (workspace as { id: string }).id)
-    .eq("processed", false);
+    .update({ processed: true, created_task_id: task.id })
+    .eq("id", event.id);
+  if (markError) {
+    // Görev açıldı; yalnız denetim satırı güncellenemedi — istek başarılıdır.
+    console.error("[inbound-email] olay işaretlenemedi:", markError.message);
+  }
 
-  return NextResponse.json({ task_id: (task as { id: string }).id });
+  return NextResponse.json({ ok: true, task_id: task.id }, { status: 201 });
 }

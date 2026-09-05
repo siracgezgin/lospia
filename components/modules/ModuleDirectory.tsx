@@ -78,9 +78,20 @@ export function ModuleDirectory({ isAdmin }: { isAdmin: boolean }) {
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            /* Escape alanı temizler — arama kutusunun evrensel davranışı.
+               `type="search"` bunu bazı tarayıcılarda kendiliğinden yapar,
+               bazılarında hiç yapmaz; davranış her yerde aynı olsun. */
+            onKeyDown={(e) => {
+              if (e.key === "Escape" && query !== "") {
+                e.preventDefault();
+                setQuery("");
+              }
+            }}
             placeholder="Modül ara — örn. maliyet, ödeme, takvim"
             autoComplete="off"
-            className="h-10 w-full rounded-control border border-line bg-surface pl-9 pr-10 text-[13.5px] text-ink placeholder:text-subtle focus:border-brand-ring focus:outline-none focus:ring-2 focus:ring-brand-ring/40 [&::-webkit-search-cancel-button]:appearance-none"
+            /* Telefonda 16px altı yazı iOS Safari'yi odakta yakınlaştırmaya
+               zorluyor (bkz. components/ui/Field CONTROL notu). */
+            className="h-10 max-md:pointer-coarse:h-11 w-full rounded-control border border-line bg-surface pl-9 pr-11 text-[13.5px] max-md:pointer-coarse:text-[16px] text-ink placeholder:text-subtle focus:border-brand-ring focus:outline-none focus:ring-2 focus:ring-brand-ring/40 [&::-webkit-search-cancel-button]:appearance-none"
           />
           {hasQuery && (
             <button
@@ -88,7 +99,8 @@ export function ModuleDirectory({ isAdmin }: { isAdmin: boolean }) {
               onClick={() => setQuery("")}
               aria-label="Aramayı temizle"
               title="Aramayı temizle"
-              className="absolute right-1 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-control text-subtle transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
+              /* Parmak hedefi alanın tam yüksekliği kadar (40px). */
+              className="absolute right-0 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-control text-subtle transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
             >
               <X size={15} aria-hidden />
             </button>
@@ -108,7 +120,7 @@ export function ModuleDirectory({ isAdmin }: { isAdmin: boolean }) {
           <button
             type="button"
             onClick={() => setQuery("")}
-            className="mt-4 inline-flex h-9 items-center rounded-control border border-line px-3.5 text-[13.5px] font-medium text-muted transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
+            className="mt-4 inline-flex h-9 pointer-coarse:h-11 items-center rounded-control border border-line px-3.5 text-[13.5px] font-medium text-muted transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
           >
             Tüm modülleri göster
           </button>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { featureFlags } from "@/lib/utils/feature-flags";
@@ -32,20 +32,38 @@ const POLL_MS = 60_000;
  *        scoped) → debounced `router.refresh()`.
  *      - otherwise → light polling that only runs while the tab is visible.
  *
+ * The two layers are not exclusive: polling also runs while the realtime
+ * channel is NOT confirmed subscribed. Realtime needs the `supabase_realtime`
+ * publication to include these tables — if it doesn't (or the socket is
+ * blocked), the flag would otherwise switch live updates off entirely and the
+ * board would quietly go stale.
+ *
  * Renders nothing. Mount once per live view (e.g. the board).
  */
 export function WorkspaceLiveRefresh({ workspaceId }: { workspaceId: string }) {
   const router = useRouter();
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [realtimeLive, setRealtimeLive] = useState(false);
 
   // Debounce refreshes so a burst of changes triggers a single re-render.
-  function scheduleRefresh() {
+  const scheduleRefresh = useCallback(() => {
     if (refreshTimer.current) return;
     refreshTimer.current = setTimeout(() => {
       refreshTimer.current = null;
       if (document.visibilityState === "visible") router.refresh();
     }, 400);
-  }
+  }, [router]);
+
+  // Bekleyen tazeleme, bileşen sökülünce iptal edilir — aksi hâlde sayfadan
+  // ayrıldıktan sonra gereksiz bir refresh tetikleniyordu.
+  useEffect(() => {
+    return () => {
+      if (refreshTimer.current) {
+        clearTimeout(refreshTimer.current);
+        refreshTimer.current = null;
+      }
+    };
+  }, []);
 
   // ── Realtime path ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -59,15 +77,20 @@ export function WorkspaceLiveRefresh({ workspaceId }: { workspaceId: string }) {
         () => scheduleRefresh(),
       );
     }
-    channel.subscribe();
+    // Abonelik gerçekten kurulduysa yoklama durur; kurulamadıysa (yayın listesi
+    // eksik, soket engelli) yoklama devrede kalır.
+    channel.subscribe((status) => {
+      setRealtimeLive(String(status) === "SUBSCRIBED");
+    });
     return () => {
+      setRealtimeLive(false);
       supabase.removeChannel(channel).catch(() => {});
     };
-  }, [workspaceId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [workspaceId, scheduleRefresh]);
 
   // ── Polling fallback ─────────────────────────────────────────────────────
   useEffect(() => {
-    if (featureFlags.realtime) return; // realtime already covers it
+    if (featureFlags.realtime && realtimeLive) return; // canlı abonelik kapsıyor
     let timer: ReturnType<typeof setInterval> | null = null;
 
     function start() {
@@ -90,7 +113,7 @@ export function WorkspaceLiveRefresh({ workspaceId }: { workspaceId: string }) {
       stop();
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [router]);
+  }, [router, realtimeLive]);
 
   return null;
 }

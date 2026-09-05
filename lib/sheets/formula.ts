@@ -86,6 +86,8 @@ function tokenize(src: string): Tok[] | null {
     if (ch === " " || ch === "\t" || ch === "\n") { i++; continue; }
     if (ch === "(") { out.push({ t: "(" }); i++; continue; }
     if (ch === ")") { out.push({ t: ")" }); i++; continue; }
+    // Argüman ayracı. Virgül burada ayraçtır; "rakam-virgül-rakam" kalıbı ise
+    // aşağıdaki sayı dalında ONDALIK olarak yutulur, buraya hiç ulaşmaz.
     if (ch === "," || ch === ";") { out.push({ t: "," }); i++; continue; }
     if (ch === ":") { out.push({ t: ":" }); i++; continue; }
 
@@ -110,11 +112,24 @@ function tokenize(src: string): Tok[] | null {
     if (two === "<>" || two === "<=" || two === ">=") { out.push({ t: "op", v: two }); i += 2; continue; }
     if ("+-*/^&=<>%".includes(ch)) { out.push({ t: "op", v: ch }); i++; continue; }
 
-    // Sayı
+    // Sayı — TÜRKÇE ondalık ayracı formülün İÇİNDE de geçerlidir.
+    // Virgül yalnız "rakam-virgül-rakam" kalıbında ondalıktır; bunun dışında
+    // argüman ayracı kalır, yani Excel'den kopyalanan "TOPLA(A1,B1)" çalışmayı
+    // sürdürür. Eskiden virgül HER ZAMAN ayraçtı ve sonuç sessizce yanlıştı:
+    // =EĞER(A1>1,5;"E";"H") dört argümanlı bir EĞER'e dönüşüyor, =A1*1,5 ise
+    // #AD? veriyordu.
     if (/[0-9]/.test(ch) || (ch === "." && /[0-9]/.test(src[i + 1] ?? ""))) {
       let j = i;
-      while (j < src.length && /[0-9.]/.test(src[j])) j++;
-      const n = Number(src.slice(i, j));
+      let seenSep = false;
+      while (j < src.length) {
+        const d = src[j];
+        if (/[0-9]/.test(d)) { j++; continue; }
+        if ((d === "." || d === ",") && !seenSep && /[0-9]/.test(src[j + 1] ?? "")) {
+          seenSep = true; j++; continue;
+        }
+        break;
+      }
+      const n = Number(src.slice(i, j).replace(",", "."));
       if (!Number.isFinite(n)) return null;
       out.push({ t: "num", v: n });
       i = j;
@@ -367,19 +382,37 @@ type EvalCtx = {
   wb: WorkbookSnapshot;
   /** Önbellek anahtarı "sayfaId|satır:sütun" — sayfalar arası karışmasın. */
   cache: Map<string, Scalar>;
+  /** Ayrıştırılmış formül önbelleği: aynı metin iki kez sözcüklenip
+   *  ayrıştırılmasın (doldurulmuş bir sütunda binlerce hücre var). */
+  asts: Map<string, Parsed>;
   visiting: Set<string>;
   /** Sayfa id → dolu alanın son satır/sütunu (tüm sütun kısayolunu daraltır). */
   bounds: Map<string, { r: number; c: number }>;
   /** Güvenlik sayacı: kötü niyetli/patolojik tabloda tarayıcı donmasın. */
   budget: { left: number };
+  /**
+   * Özyineleme derinliği. Bütçe ve döngü koruması ZİNCİRİ durdurmuyordu:
+   * "=D5+C6" gibi yürüyen bir toplamı binlerce satır aşağı doldurmak
+   * cellValue → evalFormula → evalNode → cellValue zincirini o kadar derine
+   * indiriyor ki JS YIĞINI TAŞIYOR (RangeError) ve ekran bomboş kalıyordu.
+   * `n` anlık derinlik, `hit` sınıra kaç kez dayanıldığı.
+   */
+  depth: { n: number; hit: number };
   /** Hesaplanmakta olan hücre — SATIR()/SÜTUN() bunu okur. */
   cur: { r: number; c: number } | null;
 };
 
+/** Bir geçişte inilebilecek en fazla formül derinliği (yığın taşmasından uzak). */
+const MAX_DEPTH = 500;
+/** Bir geçişin iş bütçesi — patolojik tabloda tarayıcı donmasın. */
+const EVAL_BUDGET = 3_000_000;
+/** En fazla geçiş: MAX_ROWS (5.000) uzunluğunda bir zincir 500'er çözülür. */
+const MAX_PASSES = 12;
+
 const newCtx = (sheet: Sheet, wb: WorkbookSnapshot): EvalCtx => ({
   sheet, wb,
-  cache: new Map(), visiting: new Set(), bounds: new Map(),
-  budget: { left: 3_000_000 }, cur: null,
+  cache: new Map(), asts: new Map(), visiting: new Set(), bounds: new Map(),
+  budget: { left: EVAL_BUDGET }, depth: { n: 0, hit: 0 }, cur: null,
 });
 
 const ck = (sheetId: string, r: number, c: number) => `${sheetId}|${key(r, c)}`;
@@ -451,11 +484,19 @@ function cellValue(ctx: EvalCtx, r: number, c: number, sheetName?: string): Scal
   if (!cell) return "";
 
   if (cell.f && cell.f.trim().startsWith("=")) {
+    // Yığın koruması: bu derinliğin ötesine İNİLMEZ. Sonuç önbelleğe yazılmaz
+    // — ne burada ne de zinciri çağıran atalarda — çünkü yarım kalmış bir
+    // hesap kalıcı olarak yanlış sayı gösterirdi; evaluateSheet bir sonraki
+    // geçişte bu geçişin önbelleğinden devam eder ve zincir 500'er çözülür.
+    if (ctx.depth.n >= MAX_DEPTH) { ctx.depth.hit++; return "#DÖNGÜ!"; }
     ctx.visiting.add(k);
+    const hitBefore = ctx.depth.hit;
+    ctx.depth.n++;
     // Formül KENDİ sayfasının ve KENDİ konumunun bağlamında çözülür.
     const out = evalFormula({ ...ctx, sheet, cur: { r, c } }, cell.f);
+    ctx.depth.n--;
     ctx.visiting.delete(k);
-    ctx.cache.set(k, out);
+    if (ctx.depth.hit === hitBefore) ctx.cache.set(k, out);
     return out;
   }
 
@@ -1214,14 +1255,32 @@ function matchCriteria(v: Scalar, crit: Scalar): boolean {
   return op === "<>" ? a !== b : a === b;
 }
 
+type Parsed = { ok: true; node: Node } | { ok: false; err: FormulaError };
+
+/** Formül metnini ayrıştırır; aynı metin bir daha ayrıştırılmaz (önbellek). */
+function parseFormula(ctx: EvalCtx, src: string): Parsed {
+  const hit = ctx.asts.get(src);
+  if (hit) return hit;
+  let out: Parsed;
+  const toks = tokenize(src);
+  if (!toks) out = { ok: false, err: "#DEĞER!" };
+  else {
+    const node = new Parser(toks).parse();
+    out = node ? { ok: true, node } : { ok: false, err: "#AD?" };
+  }
+  ctx.asts.set(src, out);
+  return out;
+}
+
 function evalFormula(ctx: EvalCtx, formula: string): Scalar {
   const src = formula.trim().replace(/^=/, "");
   if (!src.trim()) return "";
-  const toks = tokenize(src);
-  if (!toks) return "#DEĞER!";
-  const ast = new Parser(toks).parse();
-  if (!ast) return "#AD?";
-  return evalNode(ctx, ast);
+  const p = parseFormula(ctx, src);
+  // Satır/sütun silinince başvurunun yerine "#BAŞV!" yazılır (bkz. shiftRefs).
+  // Böyle bir formül ayrıştırılamaz; ekranda Excel'deki gibi #BAŞV! görünsün,
+  // "#DEĞER!" değil. (Tırnak içindeki "#BAŞV!" metni ayrıştığı için etkilenmez.)
+  if (!p.ok && src.includes("#BAŞV!")) return "#BAŞV!";
+  return p.ok ? evalNode(ctx, p.node) : p.err;
 }
 
 /**
@@ -1231,9 +1290,30 @@ function evalFormula(ctx: EvalCtx, formula: string): Scalar {
  */
 export function evaluateSheet(wb: WorkbookSnapshot, sheet: Sheet): Map<string, Scalar> {
   const ctx: EvalCtx = newCtx(sheet, wb);
-  for (const k of Object.keys(sheet.cells)) {
-    const [r, c] = k.split(":").map(Number);
-    if (Number.isFinite(r) && Number.isFinite(c)) cellValue(ctx, r, c);
+  const keys = Object.keys(sheet.cells);
+  // Derinlik sınırına dayanan zincirler tek geçişte bitmez; her geçiş bir
+  // öncekinin önbelleğinden devam eder, yani zincir 500'er çözülür. Bütçe her
+  // geçişte YENİLENİR — ama yalnız bir önceki geçiş İLERLEME KAYDETTİYSE, yani
+  // döngü kendi kendini beslemez.
+  for (let pass = 0; pass < MAX_PASSES; pass++) {
+    const hitBefore = ctx.depth.hit;
+    // Yön DÖNÜŞÜMLÜ: zincir hangi sırada yazılmışsa iki yönden biri onu tek
+    // geçişte çözer, çünkü her hücrenin bağımlılığı zaten önbellekte olur.
+    for (const k of pass % 2 === 0 ? keys : [...keys].reverse()) {
+      const [r, c] = k.split(":").map(Number);
+      if (Number.isFinite(r) && Number.isFinite(c)) cellValue(ctx, r, c);
+    }
+    if (ctx.depth.hit === hitBefore) break;
+    ctx.budget.left = EVAL_BUDGET;
+  }
+  // Hâlâ çözülememiş hücre kaldıysa boş görünmesin — hata değeri yazılır.
+  if (ctx.depth.hit > 0) {
+    for (const k of keys) {
+      const [r, c] = k.split(":").map(Number);
+      if (!Number.isFinite(r) || !Number.isFinite(c)) continue;
+      const full = ck(sheet.id, r, c);
+      if (!ctx.cache.has(full)) ctx.cache.set(full, "#DÖNGÜ!");
+    }
   }
   // Dışarıya SADE anahtar ("satır:sütun") döndür — çizim tarafı sayfa
   // önekiyle uğraşmasın.
@@ -1308,13 +1388,16 @@ export const FUNCTION_HINTS: { group: string; items: string[] }[] = [
 
 // ── Doldurma için referans kaydırma ─────────────────────────────────────────
 
+type RefMapper = (_r: number, _c: number, _colAbs: boolean, _rowAbs: boolean)
+  => { r: number; c: number } | null;
+
 /**
- * Formüldeki GÖRECELİ referansları kaydırır — doldurma tutamağının temeli.
- * "=A1*B1" bir satır aşağı çekilince "=A2*B2" olmalı; "$A$1" sabit kalır.
- * Metin sabitleri ("...") ve sayfa adları korunur.
+ * Formüldeki her A1 başvurusunu `map` ile yeniden yazar. Metin sabitleri
+ * ("...") ve sayfa adı önekleri ("Sayfa2!", "'Ad'!") korunur; fonksiyon adları
+ * (ardından "(" gelenler) başvuru sayılmaz. `map` null dönerse "#BAŞV!" yazılır.
  */
-export function shiftFormula(formula: string, dr: number, dc: number): string {
-  if (!formula.startsWith("=") || (dr === 0 && dc === 0)) return formula;
+function rewriteRefs(formula: string, map: RefMapper): string {
+  if (!formula.startsWith("=")) return formula;
   let out = "";
   let i = 1;
   const src = formula;
@@ -1344,12 +1427,10 @@ export function shiftFormula(formula: string, dr: number, dc: number): string {
       // Fonksiyon adı olabilir (SUM( gibi) — ardından "(" geliyorsa referans değil
       const after = src[i + whole.length];
       if (after !== "(") {
-        const c0 = colToIndex(colTxt);
-        const r0 = Number(rowTxt) - 1;
-        const nc = colAbs ? c0 : c0 + dc;
-        const nr = rowAbs ? r0 : r0 + dr;
-        if (nc < 0 || nr < 0) { out += "#BAŞV!"; i += whole.length; continue; }
-        out += `${colAbs}${indexToCol(nc)}${rowAbs}${nr + 1}`;
+        const next = map(Number(rowTxt) - 1, colToIndex(colTxt), !!colAbs, !!rowAbs);
+        out += next === null || next.r < 0 || next.c < 0
+          ? "#BAŞV!"
+          : `${colAbs}${indexToCol(next.c)}${rowAbs}${next.r + 1}`;
         i += whole.length;
         continue;
       }
@@ -1358,6 +1439,36 @@ export function shiftFormula(formula: string, dr: number, dc: number): string {
     i++;
   }
   return "=" + out;
+}
+
+/**
+ * Formüldeki GÖRECELİ referansları kaydırır — doldurma tutamağının temeli.
+ * "=A1*B1" bir satır aşağı çekilince "=A2*B2" olmalı; "$A$1" sabit kalır.
+ */
+export function shiftFormula(formula: string, dr: number, dc: number): string {
+  if (dr === 0 && dc === 0) return formula;
+  return rewriteRefs(formula, (r, c, colAbs, rowAbs) => ({
+    r: rowAbs ? r : r + dr,
+    c: colAbs ? c : c + dc,
+  }));
+}
+
+/**
+ * SATIR/SÜTUN EKLENİP SİLİNİNCE başvuruları kaydırır (bkz. model.insertRow).
+ * shiftFormula'dan farkı: burada göreli/mutlak ayrımı YOKTUR — Excel'de satır
+ * silinince $A$5 de kayar. `at` konumundan büyük-eşit koordinat `delta` kadar
+ * kayar; SİLİNEN satıra/sütuna bakan başvuru "#BAŞV!" olur.
+ */
+export function shiftRefs(
+  formula: string, axis: "row" | "col", at: number, delta: number,
+): string {
+  if (delta === 0) return formula;
+  return rewriteRefs(formula, (r, c) => {
+    const idx = axis === "row" ? r : c;
+    if (delta < 0 && idx === at) return null;      // başvurduğu satır/sütun silindi
+    const moved = idx >= at ? idx + delta : idx;
+    return axis === "row" ? { r: moved, c } : { r, c: moved };
+  });
 }
 
 function colToIndex(name: string): number {

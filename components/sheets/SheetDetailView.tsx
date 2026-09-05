@@ -35,6 +35,26 @@ type SaveState = "clean" | "dirty" | "saving" | "saved" | "error";
 /** Yazma durduktan sonra kaydetmeye kadar beklenen süre. */
 const SAVE_DEBOUNCE_MS = 900;
 
+/**
+ * İnen dosyanın adı — önce sunucunun söylediği ad (Content-Disposition),
+ * o okunamazsa tablonun kendi adı. "download.xlsx" diye bir dosya kimseye
+ * hangi tablo olduğunu söylemez.
+ */
+function downloadNameOf(disposition: string | null, fallbackTitle: string): string {
+  const utf8 = disposition ? /filename\*=UTF-8''([^;]+)/i.exec(disposition) : null;
+  if (utf8) {
+    try {
+      return decodeURIComponent(utf8[1]);
+    } catch {
+      // Bozuk kodlama — aşağıdaki yedek adla devam.
+    }
+  }
+  const plain = disposition ? /filename="([^"]+)"/i.exec(disposition) : null;
+  if (plain) return plain[1];
+  const base = (fallbackTitle || "tablo").replace(/[\\/:*?"<>|]+/g, "-").trim() || "tablo";
+  return `${base}.xlsx`;
+}
+
 export function SheetDetailView({
   sheet, departments, tasks, contacts, currentUserId, isAdmin,
 }: Props) {
@@ -43,6 +63,7 @@ export function SheetDetailView({
   const apiRef = useRef<SheetEditorApi | null>(null);
   const [metaOpen, setMetaOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
   const [isBusy, startWork] = useTransition();
 
   // Content edit rights mirror the server rule (saveSpreadsheetSnapshot):
@@ -88,6 +109,8 @@ export function SheetDetailView({
   const queuedRef = useRef(false);
   const mountedRef = useRef(true);
   const runSaveRef = useRef<() => Promise<void>>(async () => {});
+  /** Tablo silindi — bundan sonra hiçbir şey gönderilmez. */
+  const abandonedRef = useRef(false);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -96,7 +119,7 @@ export function SheetDetailView({
 
   const runSave = useCallback(async () => {
     const api = apiRef.current;
-    if (!api || readOnly) return;
+    if (!api || readOnly || abandonedRef.current) return;
     // Uçmakta olan bir kayıt varsa bunu kuyruğa al — iki eşzamanlı yazma
     // birbirinin üstüne binerse eski hâl geri gelebiliyordu.
     if (savingRef.current) { queuedRef.current = true; return; }
@@ -116,7 +139,10 @@ export function SheetDetailView({
 
     if ("error" in result) {
       // Kayıt başarısız — "kirli" bayrağı DURUYOR ki sonraki deneme veriyi
-      // yeniden göndersin.
+      // yeniden göndersin. Kuyruk temizlenir: bekleyen istek zaten aynı
+      // veriyi taşıyordu, tekrar denemeyi kullanıcı ya da bir sonraki
+      // değişiklik başlatır.
+      queuedRef.current = false;
       if (mountedRef.current) { setSaveError(result.error); setSaveState("error"); }
       return;
     }
@@ -200,20 +226,110 @@ export function SheetDetailView({
     setTitle(sheet.title);
   }, [sheet.title]);
 
-  function commitTitle() {
-    const next = title.trim();
-    if (!next) { setTitle(savedTitleRef.current); return; }
-    if (next === savedTitleRef.current) return;
-    startWork(async () => {
-      const res = await renameOperationSpreadsheet(sheet.id, next);
+  /* Ad da ANLIK GÖRÜNTÜ KADAR veridir ve aynı üç kapıdan kaçabiliyordu.
+     Eskiden yalnız kutunun `blur`u gönderiyordu: kullanıcı adı yazıp kutudan
+     çıkmadan başka bir sayfaya geçince (ya da sekmeyi kapatınca) yazdığı ad
+     sessizce yok oluyordu. Artık pencere odağı gidince, sekme gizlenince ve
+     bileşen sökülürken de gönderilir.
+
+     TEK GÖNDERİCİ: kutunun blur'u da bu işlevi çağırır, yoksa pencereden
+     çıkarken ikisi birden aynı adı iki kez yollardı. Gönderilen ad hemen
+     "kayıtlı" sayılır (tekrarı önler); hata dönerse geri alınır ki bir sonraki
+     deneme yeniden göndersin. */
+  const titleRef = useRef(title);
+  useEffect(() => { titleRef.current = title; }, [title]);
+
+  const flushTitle = useCallback(() => {
+    const next = titleRef.current.trim();
+    const prev = savedTitleRef.current;
+    // Silinmiş tabloya ad göndermek anlamsız (bkz. handleDelete).
+    if (!next || next === prev || abandonedRef.current) return;
+    savedTitleRef.current = next;
+    void renameOperationSpreadsheet(sheet.id, next).then((res) => {
       if ("error" in res) {
-        setNotice(res.error);
-        setTitle(savedTitleRef.current);
+        savedTitleRef.current = prev;
+        if (mountedRef.current) setNotice(res.error);
+      } else if (mountedRef.current) {
+        setNotice(null);
+      }
+    });
+  }, [sheet.id]);
+
+  useEffect(() => {
+    if (!canEditMeta) return;
+    function onHiddenTitle() {
+      if (document.visibilityState === "hidden") flushTitle();
+    }
+    window.addEventListener("blur", flushTitle);
+    document.addEventListener("visibilitychange", onHiddenTitle);
+    return () => {
+      window.removeEventListener("blur", flushTitle);
+      document.removeEventListener("visibilitychange", onHiddenTitle);
+      // Uygulama içi gezinme `beforeunload` tetiklemez — sökülürken gönder.
+      flushTitle();
+    };
+  }, [canEditMeta, flushTitle]);
+
+  function commitTitle() {
+    // Adsız tablo olmaz: boş bırakılırsa kutu eski ada döner.
+    if (!titleRef.current.trim()) { setTitle(savedTitleRef.current); return; }
+    flushTitle();
+  }
+
+  /* ── EXCEL'E AKTAR ────────────────────────────────────────────────────────
+     Üç şey aynı anda doğru olmalı:
+      1. İnen dosya EKRANDAKİYLE aynı olsun → bekleyen kayıt önce gönderilir.
+         (Eskiden düz bir <a> vardı: yeni yazılan hücreler henüz kaydedilmeden
+         sunucu eski anlık görüntüyü yazıyordu.)
+      2. Rota bir hata dönerse düzenleyici AÇIK kalsın → dosya `fetch` ile
+         alınır; `window.location` ile gidilseydi hata JSON'u sayfanın yerine
+         geçer, kaydedilmemiş çalışma giderdi.
+      3. Hata SESSİZ kalmasın → sunucunun Türkçe mesajı uyarı satırında yazar.
+     İndirmeden önce tek soru sorulur (uygulama genelindeki indirme kuralı);
+     indirme sunucu tarafında ayrıca günlüğe yazılır. */
+  async function handleExport() {
+    if (exporting) return;
+    const ok = await ask({
+      title: `"${savedTitleRef.current}" Excel'e aktarılsın mı?`,
+      message: "",
+      confirmLabel: "İndir",
+    });
+    if (!ok) return;
+
+    setNotice(null);
+    setExporting(true);
+    try {
+      if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+      if (dirtyRef.current) await runSaveRef.current();
+
+      const res = await fetch(`/sheets/${sheet.id}/export?format=xlsx`, { cache: "no-store" });
+      if (!res.ok) {
+        let message = "Dosya oluşturulamadı. Lütfen tekrar deneyin.";
+        try {
+          const body = (await res.json()) as { error?: string };
+          if (body?.error) message = body.error;
+        } catch {
+          // Gövde JSON değilse genel mesaj kalır.
+        }
+        setNotice(message);
         return;
       }
-      savedTitleRef.current = next;
-      setNotice(null);
-    });
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = downloadNameOf(res.headers.get("content-disposition"), savedTitleRef.current);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      // Serbest bırakılmazsa dosya tarayıcı belleğinde kalır.
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch {
+      setNotice("Dosya indirilemedi. Bağlantınızı kontrol edip tekrar deneyin.");
+    } finally {
+      if (mountedRef.current) setExporting(false);
+    }
   }
 
   function handleDuplicate() {
@@ -242,7 +358,8 @@ export function SheetDetailView({
     startWork(async () => {
       const res = await deleteOperationSpreadsheet(sheet.id);
       if ("error" in res) { setNotice(res.error); return; }
-      // Silinen tabloya bekleyen kaydı göndermeyelim.
+      // Silinen tabloya bekleyen kaydı (ya da adı) göndermeyelim.
+      abandonedRef.current = true;
       if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
       dirtyRef.current = false;
       queuedRef.current = false;
@@ -265,22 +382,17 @@ export function SheetDetailView({
         rightSlot={
           <>
             {/* İNDİRME: gerçek bir GET rotası (bkz. [id]/export/route.ts).
-                Excel'de açılabilmeyen bir tablo "Excel gibi" değildir.
-                • önce bekleyen kayıt gönderilir — indirilen dosya ekrandakiyle
-                  aynı olsun;
-                • yeni sekme: dosya inerken sayfa YERİNDE kalır, bir hata
-                  dönerse de düzenleyici kapanıp yazılanlar gitmez. */}
-            <a
-              href={`/sheets/${sheet.id}/export?format=xlsx`}
-              target="_blank"
-              rel="noopener"
-              onClick={flushNow}
-              className="tap-target inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-control border border-line bg-surface px-3 text-[13px] font-medium whitespace-nowrap text-ink shadow-xs transition-[background-color,border-color,color] duration-150 ease-standard hover:border-line-strong hover:bg-surface-muted pointer-coarse:h-10"
+                Excel'de açılabilmeyen bir tablo "Excel gibi" değildir. */}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => void handleExport()}
+              loading={exporting}
               title="Excel dosyası olarak indir (.xlsx)"
             >
-              <Download size={13} aria-hidden />
+              {!exporting && <Download size={13} aria-hidden />}
               Excel&apos;e aktar
-            </a>
+            </Button>
             <IconButton
               size="sm"
               variant="secondary"
@@ -317,20 +429,37 @@ export function SheetDetailView({
       {/* Ad + kaydetme durumu tek satırda: dikey yer harcamadan "neredeyim"
           ve "kaydedildi mi" sorularının ikisini de yanıtlar. */}
       <div className="mb-2 flex min-w-0 items-center gap-2">
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onBlur={commitTitle}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); }
-            if (e.key === "Escape") { setTitle(savedTitleRef.current); e.currentTarget.blur(); }
-          }}
-          disabled={!canEditMeta || isBusy}
-          aria-label="Tablo adı"
-          title={canEditMeta ? "Tablo adını düzenlemek için tıklayın" : title}
-          maxLength={300}
-          className="min-w-0 flex-1 truncate rounded-control border border-transparent bg-transparent px-2 py-1.5 text-[15px] font-medium text-ink transition-colors duration-150 hover:border-line focus:border-line-strong focus:bg-surface disabled:cursor-default disabled:border-transparent disabled:bg-transparent disabled:text-ink"
-        />
+        {/* Yetkisi olmayan kullanıcıya DÜZENLEME KONTROLÜ GÖSTERİLMEZ: devre
+            dışı bir metin kutusu "burayı değiştirebilirdim" diye okunuyor,
+            tıklanıyor, hiçbir şey olmuyordu. Yetkisiz gözde ad düz başlıktır. */}
+        {canEditMeta ? (
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={commitTitle}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); }
+              if (e.key === "Escape") {
+                /* VAZGEÇ gerçekten vazgeçsin: `blur` React yeniden çizmeden
+                   tetikleniyor, bu yüzden yalnız state'i geri almak yetmiyordu
+                   — kaydedici hâlâ yazılmış adı görüyor ve onu gönderiyordu.
+                   Ref de burada geri alınır. */
+                titleRef.current = savedTitleRef.current;
+                setTitle(savedTitleRef.current);
+                e.currentTarget.blur();
+              }
+            }}
+            disabled={isBusy}
+            aria-label="Tablo adı"
+            title="Tablo adını düzenlemek için tıklayın"
+            maxLength={300}
+            className="min-w-0 flex-1 truncate rounded-control border border-transparent bg-transparent px-2 py-1.5 text-[15px] font-medium text-ink transition-colors duration-150 hover:border-line focus:border-line-strong focus:bg-surface disabled:cursor-default disabled:border-transparent disabled:bg-transparent disabled:text-ink"
+          />
+        ) : (
+          <h2 className="min-w-0 flex-1 truncate px-2 py-1.5 text-[15px] font-medium text-ink" title={title}>
+            {title}
+          </h2>
+        )}
 
         <SaveStatus
           readOnly={readOnly}
@@ -367,7 +496,11 @@ export function SheetDetailView({
           dvh: telefonda adres çubuğu açılıp kapanınca kutu taşmasın.
           min-w-0: geniş ızgara SAYFAYI değil kendi kabını kaydırsın
           (gövdede yatay kaydırma yasak; kaydırma kabı düzenleyicinin içinde). */}
-      <div className="h-[calc(100dvh-17.5rem)] min-h-[360px] w-full min-w-0">
+      {/* Telefonda üst çubuk ALT ALTA diziliyor (geri satırı + aksiyon satırı)
+          ve altta mobil gezinme var: aynı çıkarma değeri kullanılırsa ızgara
+          ekranın altından taşıp sayfayı ikinci kez kaydırılır hâle getiriyordu.
+          Bu yüzden mobilde daha fazla, sm'den itibaren daha az düşülür. */}
+      <div className="h-[calc(100dvh-23rem)] min-h-[320px] w-full min-w-0 sm:h-[calc(100dvh-17.5rem)] sm:min-h-[360px]">
         <SpreadsheetEditor
           initialSnapshot={initialGrid}
           readOnly={readOnly}
@@ -421,9 +554,14 @@ function SaveStatus({
 }) {
   if (readOnly) {
     return (
-      <span className="inline-flex shrink-0 items-center gap-1.5 text-[12.5px] text-subtle">
+      <span
+        className="inline-flex shrink-0 items-center gap-1.5 text-[12.5px] text-subtle"
+        title="Salt okunur"
+      >
         <Info size={13} aria-hidden />
-        <span className="hidden sm:inline">Salt okunur</span>
+        {/* Telefonda yalnız simge kalır (satırda yer yok); anlamı `title` ve
+            ekran okuyucu metni taşır. */}
+        <span className="sr-only sm:not-sr-only">Salt okunur</span>
       </span>
     );
   }
@@ -448,27 +586,23 @@ function SaveStatus({
     );
   }
 
+  const savedLabel = savedClock ? `${savedClock}'de kaydedildi` : "Kaydedildi";
+  const label =
+    state === "saving" || state === "dirty" ? "Kaydediliyor…" : state === "saved" ? savedLabel : null;
+
   return (
     <span
       aria-live="polite"
+      title={label ?? undefined}
       className={cn(
         "inline-flex shrink-0 items-center gap-1.5 text-[12.5px] font-medium",
         state === "saved" ? "text-success" : "text-muted",
       )}
     >
-      {state === "saving" || state === "dirty" ? (
-        <>
-          <Loader2 size={13} className="animate-spin" aria-hidden />
-          <span className="hidden sm:inline">Kaydediliyor…</span>
-        </>
-      ) : state === "saved" ? (
-        <>
-          <Check size={13} aria-hidden />
-          <span className="hidden sm:inline">
-            {savedClock ? `${savedClock}'de kaydedildi` : "Kaydedildi"}
-          </span>
-        </>
-      ) : null}
+      {label && (state === "saved" ? <Check size={13} aria-hidden /> : <Loader2 size={13} className="animate-spin" aria-hidden />)}
+      {/* Dar ekranda metin gizlenir ama SESSİZ KALMAZ: ekran okuyucu ve
+          fare ipucu aynı cümleyi söyler. */}
+      {label && <span className="sr-only sm:not-sr-only">{label}</span>}
     </span>
   );
 }

@@ -109,15 +109,25 @@ export default async function DocumentsPage() {
     .eq("section", "teamwork")
     .order("position")
     .order("name");
-  /* TABLOLAR — artık klasörün içinde yaşıyor (20240329). Kolon yoksa
-     (migration uygulanmamış) sorgu hata verir ve bölüm sessizce boş kalır. */
-  const sheetsRes = await supabase
+  /* TABLOLAR — artık klasörün içinde yaşıyor (20240329). `section` kolonu
+     yoksa (migration uygulanmamış) sorgu hata verir; klasörlerde ve
+     dokümanlarda olduğu gibi burada da kolonsuz tekrar denenir — yoksa
+     migration'sız kurulumda Drive'daki TÜM tablolar görünmez oluyordu. */
+  const sheetsSectioned = await supabase
     .from("operation_spreadsheets")
     .select("id, title, folder_id, created_by, updated_at, visibility")
     .eq("workspace_id", workspaceId)
     .eq("section", "teamwork")
     .neq("status", "archived")
     .order("updated_at", { ascending: false });
+  const sheetsRes = sheetsSectioned.error
+    ? await supabase
+        .from("operation_spreadsheets")
+        .select("id, title, folder_id, created_by, updated_at, visibility")
+        .eq("workspace_id", workspaceId)
+        .neq("status", "archived")
+        .order("updated_at", { ascending: false })
+    : sheetsSectioned;
   const sheets: SheetItem[] = sheetsRes.error
     ? []
     : ((sheetsRes.data ?? []) as unknown as SheetItem[]);
@@ -134,8 +144,12 @@ export default async function DocumentsPage() {
   const filesAvailable = !foldersRes.error;
   // Yüklenmiş dosyalar — bağlantı kayıtlarından ayrı (document_type = 'file').
   type FileRow = DocFile & { file_path: string | null };
+  /* ARŞİVLENEN kayıt Drive'da görünmez. Bağlantılarda bu süzgeç zaten vardı
+     (DocumentsView); dosya ve yazıda yoktu — arşivlenmiş bir dosya klasörde
+     durmaya devam ediyordu. */
   const files: FileRow[] = documents
     .filter((d) => (d as { document_type?: string }).document_type === "file")
+    .filter((d) => d.status !== "archived")
     .map((d) => {
       const r = d as unknown as Record<string, unknown>;
       return {
@@ -157,6 +171,7 @@ export default async function DocumentsPage() {
   // yalnız ilk satırı önizleme olarak gider.
   const docs: DocItem[] = documents
     .filter((d) => (d as { document_type?: string }).document_type === "doc")
+    .filter((d) => d.status !== "archived")
     .map((d) => {
       const r = d as unknown as Record<string, unknown>;
       return {

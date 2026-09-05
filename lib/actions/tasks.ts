@@ -430,6 +430,15 @@ export async function updateTask(
   const onlyAssignment =
     providedFields.length > 0 && providedFields.every((f) => ASSIGNMENT_FIELDS.includes(f));
 
+  // Yalnız DURUM güncellemesi, sürükle-bırakla (reorderTask) aynı işlemdir:
+  // kartı bir sütundan diğerine taşımak. Kural da aynı olmalı — bir göreve
+  // katılımcı olarak eklenmiş üye kartı sürükleyebiliyorsa (reorderTask
+  // katılımcıyı açıkça kabul ediyor), durum çipinden ve kart menüsündeki
+  // "Taşı" bölümünden de taşıyabilmeli. Tamamlandı sınırı aşağıdaki
+  // isForbiddenDoneTransition ile korunmaya devam ediyor.
+  const onlyStatus =
+    providedFields.length === 1 && providedFields[0] === "status";
+
   const canEdit = canEditTask(role, taskPerm, user.id);
   if (touchesAssignment) {
     const isParticipant = canEdit || role !== "member"
@@ -442,7 +451,11 @@ export async function updateTask(
     // edit rights; anything beyond assignment still requires canEditTask below.
     if (!canEdit && !onlyAssignment) return { error: PERM_DENIED };
   } else if (!canEdit) {
-    return { error: PERM_DENIED };
+    const statusMoveAllowed =
+      onlyStatus &&
+      role === "member" &&
+      (await isTaskParticipant(supabase, id, task.workspace_id as string, user.id));
+    if (!statusMoveAllowed) return { error: PERM_DENIED };
   }
 
   // Turning a task admin_only: every current responsible person (participants ∪

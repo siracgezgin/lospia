@@ -81,7 +81,14 @@ export function RequestAccessForm() {
          "şimdi ne yapayım?" sorusunun iki cevabı da burada. */
       <div
         role="status"
-        className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-[0_24px_60px_-30px_rgba(15,23,42,0.25)] ring-1 ring-slate-900/[0.03]"
+        /* Telefonda form, sol sütunun ALTINDA duruyor: gönderimden sonra
+           kullanıcı hâlâ formun ortasına bakıyorsa başarı kartının üst
+           kısmını hiç görmüyordu. Kart çizilir çizilmez görünür alana
+           getirilir. */
+        ref={(el) => {
+          if (el) el.scrollIntoView({ block: "center", behavior: "smooth" });
+        }}
+        className="rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-[0_24px_60px_-30px_rgba(15,23,42,0.25)] ring-1 ring-slate-900/[0.03] sm:p-8"
       >
         <CheckCircle2 className="mx-auto mb-4 h-10 w-10 text-emerald-600" aria-hidden />
         <h2 className="text-lg font-semibold text-slate-900">
@@ -144,17 +151,26 @@ export function RequestAccessForm() {
     }
 
     setSubmitting(true);
-    const result = await submitRequestAccess({
-      ...check.data,
-      [HONEYPOT_FIELD]: payload[HONEYPOT_FIELD],
-    });
-    setSubmitting(false);
-
-    if (result.error) {
-      setError(result.error);
-      return;
+    try {
+      const result = await submitRequestAccess({
+        ...check.data,
+        [HONEYPOT_FIELD]: payload[HONEYPOT_FIELD],
+      });
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      setDone(true);
+    } catch {
+      /* Sunucu eylemi ağ hatasıyla düşerse promise REDDEDİLİR. Önce try/catch
+         yoktu: düğme "Gönderiliyor…" yazısında kilitli kalıyor, kullanıcı ne
+         gönderildiğini ne de hata olduğunu görüyordu. */
+      setError(
+        "Talebiniz gönderilemedi. Bağlantınızı kontrol edip tekrar deneyin."
+      );
+    } finally {
+      setSubmitting(false);
     }
-    setDone(true);
   }
 
   return (
@@ -330,12 +346,12 @@ export function RequestAccessForm() {
       <p className="mt-3.5 text-center text-xs leading-relaxed text-slate-500">
         Bilgileriniz yalnızca kurulum görüşmesi için kullanılır; üçüncü
         taraflarla paylaşılmaz. Detaylar için{" "}
-        <a
+        <Link
           href="/legal/privacy-policy"
           className="rounded-sm font-medium text-indigo-600 underline underline-offset-2 transition-colors duration-150 hover:text-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50"
         >
           Gizlilik Politikası
-        </a>
+        </Link>
         .
       </p>
     </form>

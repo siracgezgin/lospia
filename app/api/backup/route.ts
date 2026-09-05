@@ -42,29 +42,66 @@ function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
+ * Hata yanıtı — indirme, Ayarlar'daki düğmeden düz bir GEZİNME ile başlar
+ * (fetch değil, bkz. components/settings/BackupPanel). Bu yüzden hata JSON
+ * dönerse kullanıcı süslü parantezlerle dolu bir sayfada kalırdı. Tarayıcı
+ * HTML istiyorsa Türkçe, geri dönüş bağlantısı olan küçük bir sayfa döner;
+ * makine çağrıları (curl, izleme) JSON almaya devam eder.
+ */
+function fail(request: Request, status: number, code: string, mesaj: string): Response {
+  const wantsHtml = (request.headers.get("accept") ?? "").includes("text/html");
+  if (!wantsHtml) {
+    return NextResponse.json({ error: code, mesaj }, { status });
+  }
+  const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Yedek alınamadı</title>
+<style>
+  :root { color-scheme: light dark; --bg:#faf9f7; --ink:#1c1b19; --muted:#57534e; --btn:#1c1b19; --btn-ink:#ffffff; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#17161a; --ink:#f4f3f1; --muted:#a8a29e; --btn:#f4f3f1; --btn-ink:#17161a; }
+  }
+  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+         background:var(--bg); color:var(--ink); font: 15px/1.6 ui-sans-serif, system-ui, sans-serif; padding:24px; }
+  main { max-width:34rem; }
+  h1 { font-size:1.15rem; margin:0 0 .5rem; }
+  p { margin:0 0 1.25rem; color:var(--muted); }
+  a { display:inline-block; padding:.6rem 1rem; border-radius:.65rem; background:var(--btn); color:var(--btn-ink);
+      text-decoration:none; min-height:40px; box-sizing:border-box; }
+</style></head><body><main>
+<h1>Yedek alınamadı</h1>
+<p>${escapeHtml(mesaj)}</p>
+<a href="/settings">Ayarlar'a dön</a>
+</main></body></html>`;
+  return new Response(html, {
+    status,
+    headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
+  });
+}
+
 export async function GET(request: Request) {
   const user = await getAuthUser();
   if (!user) {
-    return NextResponse.json(
-      { error: "unauthorized", mesaj: "Oturum bulunamadı. Yeniden giriş yapın." },
-      { status: 401 },
-    );
+    return fail(request, 401, "unauthorized", "Oturum bulunamadı. Yeniden giriş yapın.");
   }
 
   const membership = await getMembership(user.id);
   const workspaceId = membership?.workspace_id;
   const role = (membership?.role ?? "member") as WorkspaceRole;
   if (!workspaceId) {
-    return NextResponse.json(
-      { error: "no_workspace", mesaj: "Bir çalışma alanına bağlı değilsiniz." },
-      { status: 403 },
-    );
+    return fail(request, 403, "no_workspace", "Bir çalışma alanına bağlı değilsiniz.");
   }
   if (!canManageSettings(role)) {
-    return NextResponse.json(
-      { error: "forbidden", mesaj: "Yedek almak yalnız yöneticiye açıktır." },
-      { status: 403 },
-    );
+    return fail(request, 403, "forbidden", "Yedek almak yalnız yöneticiye açıktır.");
   }
 
   const withFiles = new URL(request.url).searchParams.get("files") === "1";
@@ -79,9 +116,11 @@ export async function GET(request: Request) {
     tables = await collectWorkspaceData(supabase, workspaceId);
   } catch (error) {
     console.error("[backup] veri toplanamadı:", message(error));
-    return NextResponse.json(
-      { error: "collect_failed", mesaj: "Yedek verisi okunamadı. Birazdan tekrar deneyin." },
-      { status: 500 },
+    return fail(
+      request,
+      500,
+      "collect_failed",
+      "Yedek verisi okunamadı. Birazdan tekrar deneyin.",
     );
   }
 
@@ -122,6 +161,19 @@ export async function GET(request: Request) {
     console.error(
       "[backup] okunamayan tablolar:",
       failedTables.map((t) => `${t.table}: ${t.error}`).join(" | "),
+    );
+  }
+
+  /* HİÇBİR tablo okunamadıysa (veritabanı erişilemiyor, oturum düştü) ortada
+     yedek yoktur. Böyle bir durumda boş ama geçerli görünen bir .zip indirmek
+     en tehlikeli sonuçtur: kullanıcı "yedeğim var" sanır. Arşiv üretilmez,
+     hata döner. */
+  if (tables.length > 0 && failedTables.length === tables.length) {
+    return fail(
+      request,
+      500,
+      "collect_failed",
+      "Hiçbir tablo okunamadı; boş bir yedek indirilmedi. Birazdan tekrar deneyin.",
     );
   }
 

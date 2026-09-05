@@ -31,7 +31,10 @@ import {
   getDocumentDownloadUrl, deleteDocumentFile,
 } from "@/lib/actions/document-files";
 import { createTeamworkDoc, deleteOperationDocument, setOperationDocumentVisibility } from "@/lib/actions/documents";
-import { createSheetInFolder, deleteOperationSpreadsheet, setOperationSpreadsheetVisibility } from "@/lib/actions/sheets";
+import {
+  createSheetInFolder, deleteOperationSpreadsheet, renameOperationSpreadsheet,
+  setOperationSpreadsheetVisibility,
+} from "@/lib/actions/sheets";
 
 export type DocFolder = {
   id: string;
@@ -155,6 +158,25 @@ type PreviewState = {
  *  bakılır ki 40 MB'lık dosya ağa hiç çıkmadan uyarı alsın. */
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
+/**
+ * YÜKLEME BAYRAĞI HAKKINDA (2026-09-05).
+ *
+ * `NEXT_PUBLIC_FEATURE_UPLOADS_ENABLED` GÖREV EKLERİNİ kapatır
+ * (modules/uploads) — AF Teamwork'ün dosya katmanını DEĞİL. Buradaki yükleme
+ * kendi sunucu aksiyonuna ve kendi özel `documents` bucket'ına dayanır
+ * (20240312), bayraktan bağımsız çalışır. Bu yüzden "Yükle" düğmesi bayrağa
+ * bakmaz: bayrak kapalıyken de ölü değildir. Kapatılırsa modülün ana işlevi
+ * (Drive) çalışmaz hâle gelirdi.
+ */
+
+/* ARAÇ ÇUBUĞUNUN RENKLERİ — hiçbiri elle yazılmaz, hepsi tür kimliğinden
+   türetilir (lib/office/file-kind.ts). Klasör · Yazı · Tablo kendi
+   sabitlerinden; "Bağlantı" genel bağlantı kimliğinden; "Yükle" ise yüklenen
+   dosyaların görsel kimliğinden — böylece listedeki ikonla araç çubuğundaki
+   düğme AYNI rengi taşır ve renk tek yerden değişir. */
+const LINK_HEX = linkKindOf(null).hex;
+const UPLOAD_HEX = fileKindOf("image/png", null).hex;
+
 const TYPE_FILTERS: { key: "all" | ItemType; label: string }[] = [
   { key: "all", label: "Tüm türler" },
   { key: "folder", label: "Klasör" },
@@ -192,6 +214,49 @@ function saveAs(url: string, name: string) {
   document.body.appendChild(a);
   a.click();
   a.remove();
+}
+
+/**
+ * Bırakılan şeyi ayıklar: KLASÖR bırakıldığında tarayıcı boyutu 0 olan sahte
+ * bir File verir; eskiden bu "dosya boş, atlandı" diye geçiyordu ve kullanıcı
+ * neden olmadığını anlamıyordu. Klasörler ayrı toplanır, adlarıyla söylenir.
+ *
+ * `getAsFile()` SENKRON çağrılmalı: ilk `await`ten sonra DataTransfer boşalır.
+ */
+function splitDropped(dt: DataTransfer): { files: File[]; folderNames: string[] } {
+  const files: File[] = [];
+  const folderNames: string[] = [];
+  const items: DataTransferItem[] = dt.items ? Array.from(dt.items) : [];
+  const canInspect = items.length > 0 && typeof items[0].webkitGetAsEntry === "function";
+  if (!canInspect) return { files: dt.files ? Array.from(dt.files) : [], folderNames };
+  for (const item of items) {
+    if (item.kind !== "file") continue;
+    const entry = item.webkitGetAsEntry();
+    const file = item.getAsFile();
+    if (entry?.isDirectory) {
+      folderNames.push(entry.name);
+      continue;
+    }
+    if (file) files.push(file);
+  }
+  return { files, folderNames };
+}
+
+/**
+ * SAĞ TIK = ⋯ MENÜSÜ. Drive'da beklenen hareket sağ tıklamaktır; telefonda
+ * ise sağ tık yoktur, karşılığı satırın/kartın ⋯ düğmesidir. İkisi de AYNI
+ * menüyü açsın diye sağ tık o düğmeye basar — ayrı bir menü kopyası yok.
+ * Menüsü olmayan öğede tarayıcının kendi menüsü kalır.
+ */
+function openMenuOnContext(e: React.MouseEvent<HTMLElement>) {
+  /* BAĞLANTININ ÜSTÜNDE tarayıcının kendi menüsü kalır: yazı ve tablo satırları
+     birer <a>'dır, "bağlantıyı yeni sekmede aç" elinden alınmamalı. Menü
+     satırın boşluğuna, ikona ya da ⋯ düğmesine sağ tıklayınca açılır. */
+  if ((e.target as HTMLElement | null)?.closest("a")) return;
+  const btn = e.currentTarget.querySelector<HTMLButtonElement>("[data-drive-menu] button");
+  if (!btn || btn.disabled) return;
+  e.preventDefault();
+  btn.click();
 }
 
 interface Props {
@@ -259,6 +324,9 @@ export function DriveBrowser({
   const [naming, setNaming] = useState(false);
   /** Kartın içinde adı düzenlenen klasörün id'si. */
   const [renaming, setRenaming] = useState<string | null>(null);
+  /** Kart görünümü DIŞINDA (liste · arama) ya da klasör olmayan öğede adı
+   *  değiştirilen kayıt — küçük bir pencerede sorulur. */
+  const [renameTarget, setRenameTarget] = useState<DriveItem | null>(null);
   /** Arama kutusu — boş değilse TÜM ağaçta arar (Drive gibi). */
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | ItemType>("all");
@@ -267,6 +335,9 @@ export function DriveBrowser({
   /** "Taşı" penceresinde duran öğe. */
   const [moving, setMoving] = useState<DriveItem | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  /** "İptal"e basıldı — kuyruk sıradaki dosyada duracak. Ref işi yapıyor ama
+   *  düğmenin de cevap vermesi gerek; yoksa basılıp basılmadığı belli olmuyor. */
+  const [cancelling, setCancelling] = useState(false);
   const dragDepth = useRef(0);
   const cancelUpload = useRef(false);
   /* Görünüm — Drive'ın iki modu:
@@ -547,10 +618,14 @@ export function DriveBrowser({
    * hatası diğerlerini düşürmesin ve "İptal" kalan kuyruğu durdurabilsin.
    */
   const uploadFiles = useCallback(
-    async (picked: File[]) => {
-      if (picked.length === 0) return;
+    async (picked: File[], rejected: string[] = []) => {
+      if (picked.length === 0 && rejected.length === 0) return;
       setError(null);
-      const errors: string[] = [];
+      /* Dosyalar AÇIK OLAN klasöre iner. Arama ya da tür süzgeci açıkken
+         yüklenen dosya listeye hiç düşmüyor, "kaybolmuş" gibi görünüyordu. */
+      setQuery("");
+      setTypeFilter("all");
+      const errors: string[] = [...rejected];
       const queue: File[] = [];
       for (const f of picked) {
         if (f.size === 0) { errors.push(`${f.name}: dosya boş, atlandı.`); continue; }
@@ -566,6 +641,7 @@ export function DriveBrowser({
         return;
       }
       cancelUpload.current = false;
+      setCancelling(false);
       const target = cwd;
       let done = 0;
       setUpload({ total: queue.length, done, name: queue[0].name, errors: [...errors], finished: false });
@@ -589,6 +665,7 @@ export function DriveBrowser({
       }
       // Hata varsa panel açık kalır (kullanıcı okusun); temizse kendiliğinden kapanır.
       setUpload(errors.length > 0 ? { total: queue.length, done, name: "", errors, finished: true } : null);
+      setCancelling(false);
       router.refresh();
     },
     [cwd, router, section],
@@ -658,29 +735,61 @@ export function DriveBrowser({
     run(`mv-${it.id}`, () => moveDocument(it.id, target));
   }
 
+  /** Kart görünümü dışında (liste · arama) ve tabloda ad değiştirme. */
+  function applyRename(it: DriveItem, raw: string) {
+    const name = raw.trim();
+    if (!name || name === it.name) { setRenameTarget(null); return; }
+    if (it.type === "folder" && it.folder) {
+      const f = it.folder;
+      run(
+        `rn-${f.id}`,
+        () =>
+          saveFolder(f.id, {
+            name,
+            parent_id: f.parent_id,
+            visibility: f.visibility,
+            section: f.section ?? section,
+          }),
+        () => setRenameTarget(null),
+      );
+      return;
+    }
+    if (it.type === "sheet") {
+      run(`rn-${it.id}`, () => renameOperationSpreadsheet(it.id, name), () => setRenameTarget(null));
+    }
+  }
+
   /** Öğeye göre ⋯ menüsünün satırları — liste ve ızgara AYNI menüyü kullanır.
    *  Boş dizi = menü çizilmez (kişinin dokunamadığı öğe). */
   function itemActions(it: DriveItem): MenuAction[] {
     const id = it.id;
+    /* Ad kutusu klasörün KENDİ KARTINDA açılır — ama o kart yalnız KART
+       görünümünde ve klasörün bulunduğu dizinde çizilir. Liste görünümünde ya
+       da arama sonucundayken aynı satır küçük bir pencerede sorulur; eskiden
+       kullanıcı zorla kart görünümüne atılıyor, araması siliniyordu. */
+    const renameInPlace = !searching && view === "grid";
+
+    /* ARAMA SONUCU — "bu dosya neredeydi?" sorusunun eylemi. Yol satırın
+       altında yazıyor ama tıklanamıyordu (kart/satırın kendisi zaten bir
+       bağlantı; içine ikinci bir bağlantı konamaz). Herkese açık: kaydı
+       yönetemeyen de klasörüne gidebilmeli. */
+    const locate: MenuAction[] = searching
+      ? [{
+          label: "Bulunduğu klasöre git",
+          icon: FolderOpen,
+          onSelect: () => { setQuery(""); setTypeFilter("all"); setCwd(it.parentId); },
+        }]
+      : [];
 
     if (it.type === "folder" && it.folder) {
       const f = it.folder;
-      if (!canManage(it)) return [];
+      if (!canManage(it)) return locate;
       return [
-        /* Ad kutusu klasörün KENDİ KARTINDA açılır; o kart yalnız kart
-           görünümünde ve klasörün bulunduğu dizinde çizilir. Liste
-           görünümündeyken ya da arama sonucundayken "Yeniden adlandır"
-           hiçbir şey yapmıyor gibi görünüyordu — önce oraya götürülür. */
+        ...locate,
         {
           label: "Yeniden adlandır",
           icon: Pencil,
-          onSelect: () => {
-            setQuery("");
-            setTypeFilter("all");
-            setView("grid");
-            setCwd(f.parent_id);
-            setRenaming(f.id);
-          },
+          onSelect: () => (renameInPlace ? setRenaming(f.id) : setRenameTarget(it)),
         },
         moveAction(it),
         {
@@ -714,7 +823,7 @@ export function DriveBrowser({
     }
 
     if (it.type === "file") {
-      const out: MenuAction[] = [];
+      const out: MenuAction[] = [...locate];
       if (it.previewable) out.push({ label: "Önizle", icon: Eye, onSelect: () => it.onOpen?.() });
       out.push({ label: "İndir", icon: Download, onSelect: () => download(id) });
       if (!canManage(it)) return out;
@@ -733,8 +842,8 @@ export function DriveBrowser({
     }
 
     if (it.type === "link") {
-      if (!canManage(it)) return [];
-      const out: MenuAction[] = [];
+      if (!canManage(it)) return locate;
+      const out: MenuAction[] = [...locate];
       if (onEditLink) out.push({ label: "Düzenle", icon: Pencil, onSelect: () => onEditLink(id) });
       out.push(moveAction(it));
       out.push(visibilityAction(it, (next) => setOperationDocumentVisibility(id, next), `v-${id}`));
@@ -750,9 +859,13 @@ export function DriveBrowser({
       return out;
     }
 
-    if (!canManage(it)) return [];
+    if (!canManage(it)) return locate;
     if (it.type === "doc") {
+      /* Yazıda "Yeniden adlandır" YOK: başlık gövdeyle birlikte kaydedilir
+         (saveTeamworkDoc), gövdesiz çağrı yazının içeriğini siler. Ad, yazının
+         kendi editöründe değişir — olmayan bir eylemi menüye koymuyoruz. */
       return [
+        ...locate,
         moveAction(it),
         visibilityAction(it, (next) => setOperationDocumentVisibility(id, next), `v-${id}`),
         {
@@ -769,8 +882,11 @@ export function DriveBrowser({
     if (it.type === "sheet") {
       /* Tabloda "Taşı" YOK: `operation_spreadsheets.folder_id`'yi güncelleyen
          bir sunucu aksiyonu henüz yazılmadı; olmayan bir eylemi menüye
-         koymaktansa hiç göstermemek doğru. */
+         koymaktansa hiç göstermemek doğru. Ad ise değişebilir
+         (renameOperationSpreadsheet) — Drive'ın gerisiyle aynı satır. */
       return [
+        ...locate,
+        { label: "Yeniden adlandır", icon: Pencil, onSelect: () => setRenameTarget(it) },
         visibilityAction(it, (next) => setOperationSpreadsheetVisibility(id, next), `v-${id}`),
         {
           label: "Sil",
@@ -783,7 +899,7 @@ export function DriveBrowser({
         },
       ];
     }
-    return [];
+    return locate;
   }
 
   /** Satırın/kartın ⋯ menüsü; eylem yoksa hiç çizilmez. */
@@ -843,7 +959,11 @@ export function DriveBrowser({
         e.preventDefault();
         dragDepth.current = 0;
         setDragOver(false);
-        void uploadFiles(Array.from(e.dataTransfer.files));
+        const { files: dropped, folderNames } = splitDropped(e.dataTransfer);
+        void uploadFiles(
+          dropped,
+          folderNames.map((n) => `${n}: klasör yüklenemez — içindeki dosyaları seçin.`),
+        );
       }}
     >
       {/* SÜRÜKLE-BIRAK. Dosya yüklemenin tek yolu "Yükle" düğmesiydi; Drive'da
@@ -913,7 +1033,9 @@ export function DriveBrowser({
             label="Klasör"
             title="Yeni klasör"
             hex={KIND_FOLDER.hex}
-            onPick={() => { setQuery(""); setRenaming(null); setNaming(true); }}
+            /* Süzgeç de sıfırlanır: "Yüklenen dosya" süzgeci açıkken klasör
+               açılınca yeni klasör listeye hiç düşmüyordu. */
+            onPick={() => { setQuery(""); setTypeFilter("all"); setRenaming(null); setNaming(true); }}
           />
           <CreateButton
             icon={FileText}
@@ -950,7 +1072,9 @@ export function DriveBrowser({
               icon={LinkIcon}
               label="Bağlantı"
               title="Bağlantı ekle (Drive, Canva…)"
-              hex="#5b6e8a"
+              /* Renk ELLE YAZILMAZ: listedeki bağlantı ikonunun rengiyle aynı
+                 kaynaktan gelir (lib/office/file-kind.ts). */
+              hex={LINK_HEX}
               onPick={() => onNewLink(cwd)}
             />
           )}
@@ -958,7 +1082,7 @@ export function DriveBrowser({
             icon={Upload}
             label="Yükle"
             title="Dosya yükle — birden fazla seçebilir ya da sürükleyip bırakabilirsiniz"
-            hex="#7c3aed"
+            hex={UPLOAD_HEX}
             busy={uploading}
             onPick={openFilePicker}
           />
@@ -982,6 +1106,9 @@ export function DriveBrowser({
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              /* Esc = aramadan çık. `type="search"` bazı tarayıcılarda kutuyu
+                 kendiliğinden temizliyor, bazılarında hiçbir şey yapmıyordu. */
+              onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); setQuery(""); } }}
               aria-label="Dosya ve klasörlerde ara"
               placeholder="Ara — tüm klasörlerde"
               className="h-9 pl-8 pr-8 pointer-coarse:h-11"
@@ -1066,8 +1193,15 @@ export function DriveBrowser({
                 <span className="min-w-0 flex-1 truncate text-muted" title={upload.name}>
                   {upload.name}
                 </span>
-                <Button size="sm" variant="ghost" onClick={() => { cancelUpload.current = true; }}>
-                  İptal
+                {/* İptal SIRADAKİ dosyada geçerli: yarım kalan yükleme yarıda
+                    kesilip depoda öksüz kayıt bırakmasın. */}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={cancelling}
+                  onClick={() => { cancelUpload.current = true; setCancelling(true); }}
+                >
+                  {cancelling ? "İptal ediliyor…" : "İptal"}
                 </Button>
               </div>
               <div className="mt-2 h-1 overflow-hidden rounded-full bg-surface-sunken">
@@ -1179,6 +1313,18 @@ export function DriveBrowser({
             </Section>
           )}
         </div>
+      )}
+
+      {/* YENİDEN ADLANDIR — kart görünümü dışında ve tabloda. Kart
+          görünümündeki klasör adını hâlâ kendi kartında yazıyoruz. */}
+      {renameTarget && (
+        <RenameDialog
+          key={renameTarget.key}
+          item={renameTarget}
+          busy={busy === `rn-${renameTarget.id}`}
+          onCancel={() => setRenameTarget(null)}
+          onSave={(name) => applyRename(renameTarget, name)}
+        />
       )}
 
       {/* TAŞI — hedef klasör ağacı. Klasör kendi altına taşınamaz (liste onu
@@ -1534,6 +1680,7 @@ function DriveList({
         {rows.map((it) => (
           <li
             key={it.key}
+            onContextMenu={openMenuOnContext}
             className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 transition-colors duration-150 hover:bg-surface-hover sm:grid-cols-[minmax(0,1fr)_120px_140px_100px_44px]"
           >
             <ItemName item={it} />
@@ -1544,7 +1691,7 @@ function DriveList({
             <span className="hidden whitespace-nowrap text-right text-[12.5px] tabular-nums text-subtle sm:block">
               {it.date ? new Date(it.date).toLocaleDateString("tr-TR") : (it.note ?? "—")}
             </span>
-            <span className="flex items-center justify-end">{menu(it)}</span>
+            <span data-drive-menu="" className="flex items-center justify-end">{menu(it)}</span>
           </li>
         ))}
       </ul>
@@ -1594,7 +1741,11 @@ function DriveGrid({
           /* ⋯ menüsü kartın KARDEŞİ: kart bir <a>/<button>, içine ikinci bir
              düğme giremez. Kartın sağında menü kadar boşluk bırakılır
              ([&>a]:pr-11) ki uzun ad düğmenin altında kalmasın. */
-          <div key={it.key} className={cn("relative min-w-0", actions && "[&>a]:pr-11 [&>button]:pr-11")}>
+          <div
+            key={it.key}
+            onContextMenu={openMenuOnContext}
+            className={cn("relative min-w-0", actions && "[&>a]:pr-11 [&>button]:pr-11")}
+          >
             <Tile
               layout="row"
               href={it.href}
@@ -1649,7 +1800,10 @@ function DriveGrid({
               colorHex={it.kind.hex}
             />
             {actions && (
-              <span className="absolute right-1.5 top-1/2 z-[3] flex -translate-y-1/2 items-center">
+              <span
+                data-drive-menu=""
+                className="absolute right-1.5 top-1/2 z-[3] flex -translate-y-1/2 items-center"
+              >
                 {actions}
               </span>
             )}
@@ -1657,6 +1811,55 @@ function DriveGrid({
         );
       })}
     </TileGrid>
+  );
+}
+
+/**
+ * YENİDEN ADLANDIR PENCERESİ — kart görünümünün DIŞINDA kalan durumlar için.
+ *
+ * Kart görünümündeki klasör adı hâlâ kendi kartında değişir (FolderNameTile);
+ * ama liste görünümünde ve arama sonucunda o kart ekranda yoktur, tablonun da
+ * hiç kartı yoktur. Eskiden bu satır ya hiçbir şey yapmıyor ya da kullanıcıyı
+ * zorla kart görünümüne atıp aramasını siliyordu.
+ */
+function RenameDialog({
+  item, busy, onSave, onCancel,
+}: {
+  item: DriveItem;
+  busy: boolean;
+  onSave: (_name: string) => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState(item.name);
+  const clean = name.trim();
+
+  return (
+    <Overlay
+      open
+      onClose={onCancel}
+      title="Yeniden adlandır"
+      size="sm"
+      dismissOnBackdrop={false}
+      footer={
+        <>
+          <Button variant="ghost" size="sm" onClick={onCancel} disabled={busy}>Vazgeç</Button>
+          <Button size="sm" onClick={() => onSave(clean)} loading={busy} disabled={!clean}>
+            Kaydet
+          </Button>
+        </>
+      }
+    >
+      <form onSubmit={(e) => { e.preventDefault(); if (clean) onSave(clean); }}>
+        <TextInput
+          autoFocus
+          aria-label={item.type === "folder" ? "Klasör adı" : "Tablo adı"}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onFocus={(e) => e.currentTarget.select()}
+          disabled={busy}
+        />
+      </form>
+    </Overlay>
   );
 }
 

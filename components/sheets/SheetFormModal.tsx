@@ -71,7 +71,11 @@ export function SheetFormModal({
     ? SHEET_STATUSES
     : SHEET_STATUSES.filter((s) => s.key === "draft" || s.key === "active");
 
-  const titleMissing = error === "Başlık gerekli.";
+  /* Başlık hatası ALANIN ALTINDA yazar, genel uyarı kutusunda değil. Eşleşme
+     "başlar mı" diye bakar: aynı hata iki yerden gelebiliyor ve metinleri bir
+     nokta farkıyla ayrılıyordu (istemci "Başlık gerekli.", sunucudaki zod
+     şeması "Başlık gerekli") — sunucudan gelen sürüm alanı hiç işaretlemiyordu. */
+  const titleMissing = !!error && error.startsWith("Başlık gerekli");
 
   async function handleCsvFile(file: File) {
     setError(null);
