@@ -41,6 +41,23 @@ interface Props {
 /** Üreticisi girilmemiş föylerin toplandığı kova. */
 const UNKNOWN = "Usta atanmadı";
 
+/** Sunucuya giden fiyat gövdesi — kaydetme ve "değişti mi?" karşılaştırması
+ *  AYNI şekli (aynı alan sırasını) kullansın diye tek yerde kurulur. Şekil
+ *  ayrışırsa JSON.stringify karşılaştırması hep "değişmiş" der. */
+function pricingPayload(p: ProductionPricing) {
+  return {
+    unit_price: p.unit_price ?? "",
+    purchase_cost: p.purchase_cost ?? "",
+    web_sale_price: p.web_sale_price ?? "",
+    currency: p.currency ?? "TL",
+    notes: p.notes ?? "",
+    cost_items: p.cost_items,
+    usta_unit_payment: p.usta_unit_payment ?? "",
+    invoice_no: p.invoice_no ?? "",
+    invoice_amount: p.invoice_amount ?? "",
+  };
+}
+
 // Sticky başlık/dip hücreleri — tablo border-separate olduğundan çizgiler
 // hücrede yaşar (border-collapse sticky ile çizgiyi geride bırakır).
 const thSticky = "sticky top-0 z-10 border-b border-line-strong bg-surface py-2.5";
@@ -81,8 +98,16 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
   const [saveError, setSaveError] = useState<string | null>(null);
   const [, startSave] = useTransition();
   /* Son kaydedilen hâlin parmak izi — blur her hücreden çıkışta tetiklendiği
-     için dokunulmamış satırı tekrar yazmayı önler. */
-  const savedSnapshots = useRef<Record<string, string>>({});
+     için dokunulmamış satırı tekrar yazmayı önler. Açılışta DİSKTEKİ hâlle
+     tohumlanır (Maliyet tablosuyla aynı desen): boş `{}` ile başlayınca her
+     satırın İLK blur'u — hücreye sadece girip çıkmak dahi — gereksiz bir
+     sunucu yazması açıyordu. */
+  const [initialSnapshots] = useState<Record<string, string>>(() => {
+    const m: Record<string, string> = {};
+    for (const r of rows) m[r.id] = JSON.stringify(pricingPayload(r.pricing ?? {}));
+    return m;
+  });
+  const savedSnapshots = useRef<Record<string, string>>(initialSnapshots);
 
   const unitPaymentOf = (id: string) => ustaUnitPaymentOf(pricing[id]);
   const qtyOf = (r: Row) => totalQuantity(r.size_distribution);
@@ -149,18 +174,7 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
     setPricing((p) => ({ ...p, [id]: { ...p[id], invoice_amount: value } }));
 
   function savePayment(id: string) {
-    const p = pricing[id] ?? {};
-    const payload = {
-      unit_price: p.unit_price ?? "",
-      purchase_cost: p.purchase_cost ?? "",
-      web_sale_price: p.web_sale_price ?? "",
-      currency: p.currency ?? "TL",
-      notes: p.notes ?? "",
-      cost_items: p.cost_items,
-      usta_unit_payment: p.usta_unit_payment ?? "",
-      invoice_no: p.invoice_no ?? "",
-      invoice_amount: p.invoice_amount ?? "",
-    };
+    const payload = pricingPayload(pricing[id] ?? {});
     const snapshot = JSON.stringify(payload);
     if (savedSnapshots.current[id] === snapshot) return;
     setSavingId(id);

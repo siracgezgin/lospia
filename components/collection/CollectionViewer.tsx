@@ -1,5 +1,8 @@
 "use client";
 
+// KULLANILMIYOR — 2026-09-05 itibarıyla hiçbir rota bu dosyayı import etmiyor.
+// Canlı koleksiyon ekranı: components/collection/CollectionBrowser.tsx.
+// Silinmesi kullanıcı onayı bekliyor; o güne kadar burada düzeltme yapmayın.
 import { useMemo, useRef, useState } from "react";
 import {
   Boxes, Upload, Search, ShieldAlert, Lock, Info, FileWarning, X,

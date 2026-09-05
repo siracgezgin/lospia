@@ -1,5 +1,9 @@
 "use client";
 
+// KULLANILMIYOR — 2026-09-05 itibarıyla hiçbir rota bu dosyayı import etmiyor.
+// Föy listesi artık Koleksiyon tarayıcısıdır (components/collection/CollectionBrowser.tsx),
+// föy düzenleme components/production/ProductionSheetEditor.tsx'te yaşar.
+// Silinmesi kullanıcı onayı bekliyor; o güne kadar burada düzeltme yapmayın.
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";

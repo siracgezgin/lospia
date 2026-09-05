@@ -76,17 +76,28 @@ export function DeliveryTable({
         })
       : tasks;
 
+    /* CEVABI OLMAYAN HÜCRE (tarihsiz iş · atanmamış kişi) her zaman en SONA.
+       Eskiden bunlar "9999-99-99" ve "￿" gibi sentinel değerlerle sona
+       itiliyordu; sentinel yalnız ARTAN sıralamada işe yarıyordu — başlığa
+       ikinci kez tıklayıp azalana geçen kullanıcı tarihsiz işleri listenin en
+       BAŞINDA buluyordu (yorumun söylediğinin tam tersi). Artık eksik olan,
+       sıralama yönünden BAĞIMSIZ olarak sonda durur; kaybolmaz ama listeyi de
+       yönetmez. */
+    const missing = (t: DueSoonTask): boolean =>
+      sort === "due_date" ? !t.due_date : sort === "who" ? !t.assignee_id : false;
+
     const key = (t: DueSoonTask): string => {
       switch (sort) {
-        // Tarihsiz iş en SONA — "ne zaman?" cevapsız kalanlar listeyi
-        // yönetmesin ama kaybolmasın da.
-        case "due_date": return t.due_date || "9999-99-99";
-        case "who": return t.assignee_id ? nameOf[t.assignee_id] ?? "" : "￿";
+        case "due_date": return t.due_date ?? "";
+        case "who": return t.assignee_id ? nameOf[t.assignee_id] ?? "" : "";
         case "status": return STATUS_LABELS[t.status] ?? "";
         default: return t.title;
       }
     };
     return [...filtered].sort((a, b) => {
+      const aMissing = missing(a);
+      const bMissing = missing(b);
+      if (aMissing !== bMissing) return aMissing ? 1 : -1;
       const r = key(a).localeCompare(key(b), "tr");
       return dir === "asc" ? r : -r;
     });

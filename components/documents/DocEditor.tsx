@@ -477,8 +477,15 @@ export function DocEditor({
 
   const insertTable = useCallback(() => {
     if (readOnly) return;
+    /* İç içe tablo YOK: hücrenin içine tablo eklenince `table-layout:fixed`
+       ile iç tablo hücreyi taşırıyor ve Word çıktısı da bozuluyordu. */
+    if (currentCell(bodyRef.current)) {
+      setError("Tablonun içine tablo eklenemez. Önce tablonun dışına çıkın.");
+      return;
+    }
     const el = focusBody();
     if (!el) return;
+    setError(null);
     ensureParagraphs(el);
     const head = `<tr>${"<th><br></th>".repeat(3)}</tr>`;
     const row = `<tr>${"<td><br></td>".repeat(3)}</tr>`;
@@ -492,7 +499,11 @@ export function DocEditor({
 
   const addRow = useCallback((where: "above" | "below") => {
     const cell = currentCell(bodyRef.current);
-    const row = cell?.parentElement as HTMLTableRowElement | null;
+    /* Tip ZORLAMASI değil gerçek kontrol: yapıştırılan bozuk bir tabloda
+       hücrenin ebeveyni <tr> olmayabilir; `row.cells` okuması editörü
+       çökertip kaydedilmemiş yazıyı götürüyordu. */
+    const parent = cell?.parentElement;
+    const row = parent instanceof HTMLTableRowElement ? parent : null;
     if (!cell || !row) return;
     const fresh = document.createElement("tr");
     for (let i = 0; i < row.cells.length; i++) {
@@ -528,7 +539,8 @@ export function DocEditor({
 
   const removeRow = useCallback(async () => {
     const cell = currentCell(bodyRef.current);
-    const row = cell?.parentElement as HTMLTableRowElement | null;
+    const parent = cell?.parentElement;
+    const row = parent instanceof HTMLTableRowElement ? parent : null;
     const table = cell?.closest("table");
     if (!cell || !row || !table) return;
     if ((row.textContent ?? "").trim() &&
@@ -674,7 +686,10 @@ export function DocEditor({
     document.body.appendChild(a);
     a.click();
     a.remove();
-    URL.revokeObjectURL(url);
+    /* İptal bir sonraki tick'e ERTELENİR: Safari/Firefox indirmeyi senkron
+       başlatmadığı için aynı blokta iptal edilen blob URL'inde düğme sessizce
+       hiçbir şey yapmamış görünüyordu. Tek atımlık, temizlik gerektirmez. */
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   /* ── Görünüm ────────────────────────────────────────────────────────── */
@@ -842,10 +857,20 @@ export function DocEditor({
                   style={{ backgroundColor: c.hex }}
                 />
               ))}
+              {/* YALNIZ açık olan paletin rengini sıfırlar. Eskiden
+                  `removeFormat` çağırıyordu; o da kalın/italik/punto ve
+                  BAĞLANTILARI siliyordu — etiket "Rengi kaldır" diyordu ama
+                  paragrafın tüm biçimi gidiyordu. Gerçek `removeFormat` araç
+                  çubuğundaki "Biçimi temizle" düğmesinde duruyor. Her iki
+                  değer de temizleyicinin SAFE_COLOR kalıbından geçer. */}
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => { exec("removeFormat"); setPanel(null); }}
+                onClick={() => {
+                  exec(panel === "mark" ? "hiliteColor" : "foreColor",
+                    panel === "mark" ? "transparent" : "#111827");
+                  setPanel(null);
+                }}
                 className="ml-1 h-8 rounded-control px-2 text-[12px] font-medium text-muted transition-colors duration-150 hover:bg-surface hover:text-ink"
               >
                 Rengi kaldır
@@ -1181,7 +1206,10 @@ img{max-width:100%}
  */
 const DOC_CSS = `
 .doc-print-title{display:none}
-.doc-body{position:relative;padding:24px 20px;font-size:${DOC_BASE_FONT_PT}pt;line-height:${DOC_BASE_LINE_HEIGHT};color:var(--text);word-break:break-word}
+/* overflow-x:auto — Word/web'den yapıştırılan satır içi genislikler 375px'te
+   SAYFA govdesini kaydiriyordu; genis icerik artik kendi kabinda kayar.
+   Yazdirmada globals.css'teki "overflow:visible" kurali bunu serbest birakir. */
+.doc-body{position:relative;padding:24px 20px;font-size:${DOC_BASE_FONT_PT}pt;line-height:${DOC_BASE_LINE_HEIGHT};color:var(--text);word-break:break-word;overflow-x:auto}
 @media (min-width:640px){.doc-body{padding:28px 32px}}
 .doc-body[data-empty="true"]::before{content:attr(data-placeholder);position:absolute;top:24px;left:20px;color:var(--text-subtle);pointer-events:none}
 @media (min-width:640px){.doc-body[data-empty="true"]::before{top:28px;left:32px}}
@@ -1205,7 +1233,9 @@ const DOC_CSS = `
 .doc-body hr{border:0;border-top:1px solid var(--border);margin:1.1em 0}
 .doc-body a{color:var(--brand);text-decoration:underline}
 .doc-body img{max-width:100%;height:auto;border-radius:8px;margin:.6em 0}
-.doc-body table{border-collapse:collapse;width:100%;margin:.8em 0;table-layout:fixed}
+/* max-width ayri bir ozellik: satir ici width'i !important'siz sinirlar,
+   table-layout:fixed ile sutunlar sikisip sigar. */
+.doc-body table{border-collapse:collapse;width:100%;max-width:100%;margin:.8em 0;table-layout:fixed}
 .doc-body th,.doc-body td{border:1px solid var(--border);padding:6px 8px;vertical-align:top}
 .doc-body th{background:var(--surface-muted);font-weight:640;text-align:left}
 .doc-body sub,.doc-body sup{font-size:.72em;line-height:0}

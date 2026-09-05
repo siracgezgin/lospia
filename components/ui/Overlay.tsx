@@ -48,6 +48,30 @@ function useMounted() {
 
 /** Açık diyalog sayısı — iç içe açılanlarda kilidi erken açmamak için. */
 let lockCount = 0;
+/* Kilit AÇILMADAN ÖNCEKİ body.overflow — MODÜL düzeyinde, kilit 0→1'e
+   geçerken BİR KEZ saklanır. Örnek başına saklanınca şu tuzak vardı: dış
+   pencere, iç pencere (onay kutusu) açıkken bir kez yeniden render olursa
+   effect'i baştan kuruluyor ve "önceki değer" olarak artık "hidden" okuyordu;
+   ikisi de kapanınca body "hidden" kalıyor, sayfa BİR DAHA kaydırılamıyordu. */
+let savedOverflow = "";
+
+/** Çekmece gibi Overlay dışı katmanlar da aynı sayaca katılsın diye dışa
+ *  açık: kilidi al / bırak. (bkz. components/layout/MobileNav) */
+export function lockBodyScroll(): () => void {
+  const body = document.body;
+  if (lockCount === 0) {
+    savedOverflow = body.style.overflow;
+    body.style.overflow = "hidden";
+  }
+  lockCount++;
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    lockCount = Math.max(0, lockCount - 1);
+    if (lockCount === 0) body.style.overflow = savedOverflow;
+  };
+}
 /** Açık pencereler. Esc ve odak tuzağı YALNIZ EN ÜSTTEKİNE aittir; alttakiler
  *  sessiz kalır. "En üstteki" DOM SIRASINDAN okunur (portal düğümleri body'ye
  *  açılış sırasıyla eklenir) — bir dizi/yığın tutmak yanıltıcı olurdu: alttaki
@@ -187,16 +211,12 @@ export function Overlay({
     if (panel) openPanels.add(panel);
     document.addEventListener("keydown", onKey);
 
-    const body = document.body;
-    const prev = body.style.overflow;
-    if (lockCount === 0) body.style.overflow = "hidden";
-    lockCount++;
+    const releaseScroll = lockBodyScroll();
 
     return () => {
       document.removeEventListener("keydown", onKey);
       if (panel) openPanels.delete(panel);
-      lockCount = Math.max(0, lockCount - 1);
-      if (lockCount === 0) body.style.overflow = prev;
+      releaseScroll();
     };
   }, [open, onClose]);
 

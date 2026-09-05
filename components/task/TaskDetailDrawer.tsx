@@ -1,9 +1,10 @@
 "use client";
 
-import { createContext, useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { createContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import { useConfirm } from "@/components/ui/useConfirm";
+import { lockBodyScroll } from "@/components/ui/Overlay";
 
 /**
  * Present only while the task detail renders INSIDE the drawer. Content can use
@@ -20,12 +21,16 @@ export const TaskDrawerContext = createContext<{
   setDirty: (_dirty: boolean) => void;
 } | null>(null);
 
-/* Sayfa kaydırma kilidi SAYAÇLIDIR: yükleme iskeleti ile gerçek içerik kısa
-   bir an iç içe yaşayabilir (loading.tsx → page.tsx geçişi). Tek tek "eski
-   değeri geri koy" yaklaşımı bu anda kilidi düşürüyor, arkadaki pano yeniden
-   kayabiliyordu. */
-let drawerLockCount = 0;
-let drawerPrevOverflow = "";
+/** En son sökülen çekmecenin kimliği ve zamanı — iskelet→içerik geçişini
+ *  ayırt etmek için (aynı commit, aradaki fark ~0ms). Kimlik de gerekir:
+ *  geliştirme kipindeki StrictMode aynı bileşeni bir kez söküp yeniden kurar,
+ *  o durumda "geçiş" yoktur ve açılış animasyonu oynamalıdır. */
+let drawerHandoffAt = 0;
+let drawerHandoffFrom: object | null = null;
+
+/* Sunucuda layout effect çalışmaz; uyarıyı da doğurmasın diye ortam başına
+   tek seferlik seçim (yaygın "isomorphic layout effect" deseni). */
+const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 /** Odak tuzağında gezilebilir öğeler. */
 const FOCUSABLE =
@@ -52,6 +57,7 @@ export function TaskDetailDrawer({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [closing, setClosing] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+  const backdropRef = useRef<HTMLButtonElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const { ask, dialog } = useConfirm();
 
@@ -61,15 +67,46 @@ export function TaskDetailDrawer({ children }: { children: React.ReactNode }) {
   const askingRef = useRef(false);
   const setDirty = useCallback((dirty: boolean) => { dirtyRef.current = dirty; }, []);
 
+  /* KAPANIŞ TEK SEFERLİKTİR.
+     Çıkış animasyonu sürerken (240ms) Esc, arka plan ve kapatma düğmesi hâlâ
+     etkindi: iki hızlı Esc ya da arka plana çift tıklama İKİ `router.back()`
+     çalıştırıyor, kullanıcı panodan da geri atılıp bambaşka bir sayfada
+     buluyordu kendini. */
+  const closingRef = useRef(false);
+  /* Bu çekmece örneğinin değişmez kimliği (bkz. drawerHandoffFrom). */
+  const instanceRef = useRef({});
+  /* Bekleyen `router.back()` zamanlayıcısı. Bileşen sökülürken ORTADA
+     BIRAKILMAZ: iskelet çekmecesi (loading.tsx) gerçek içerik akınca sökülür ve
+     ölü bir zamanlayıcı 240ms sonra, artık bambaşka bir gezinmenin üstüne
+     "geri" basabiliyordu. Sökülürken bekleyen kapatma İSTEĞİ kaybolmasın diye
+     hemen yürütülür (Esc'e iskelet dururken basan kullanıcı yine kapanır),
+     ama gecikmeli/sahipsiz bir geri adım kalmaz. */
+  const backTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const routerRef = useRef(router);
+  useEffect(() => { routerRef.current = router; }, [router]);
+
   // Close = animate out briefly, then pop the intercepted route.
   const finishClose = useCallback(() => {
+    if (closingRef.current) return;
+    closingRef.current = true;
     setClosing(true);
     // Match the exit transition so the panel finishes sliding before unmount.
-    setTimeout(() => router.back(), 240);
+    backTimer.current = setTimeout(() => {
+      backTimer.current = null;
+      router.back();
+    }, 240);
   }, [router]);
 
+  useEffect(() => () => {
+    const pending = backTimer.current;
+    if (!pending) return;
+    clearTimeout(pending);
+    backTimer.current = null;
+    routerRef.current.back();
+  }, []);
+
   const close = useCallback(() => {
-    if (askingRef.current) return;
+    if (closingRef.current || askingRef.current) return;
     if (!dirtyRef.current) { finishClose(); return; }
     askingRef.current = true;
     void (async () => {
@@ -129,22 +166,41 @@ export function TaskDetailDrawer({ children }: { children: React.ReactNode }) {
       }
     }
     document.addEventListener("keydown", onKey);
-    const body = document.body;
-    if (drawerLockCount === 0) {
-      drawerPrevOverflow = body.style.overflow;
-      body.style.overflow = "hidden";
-    }
-    drawerLockCount++;
+    /* KAYDIRMA KİLİDİ TEK SAYAÇTAN geçer (ortak pop-up katmanıyla aynı).
+       Çekmece kendi sayacını tutarken iki mekanizma aynı `body.overflow`
+       değerini yazıyordu: çekmeceden ÖNCE açılmış bir pop-up kapanınca kilit
+       düşüyor, çekmece kapanınca da body kalıcı olarak "hidden" kalıyor,
+       sayfa yenilenmeden bir daha kaydırılamıyordu. Sayaç tek olduğu için
+       iskelet→içerik geçişinde de (iki çekmece bir an iç içe) kilit düşmez. */
+    const releaseScroll = lockBodyScroll();
     return () => {
       document.removeEventListener("keydown", onKey);
-      drawerLockCount = Math.max(0, drawerLockCount - 1);
-      if (drawerLockCount === 0) body.style.overflow = drawerPrevOverflow;
+      releaseScroll();
     };
   }, [close, nestedDialogOpen]);
 
-  // Açılınca odağı panele al — Tab tuşu arkadaki panoda dolaşmasın.
-  useEffect(() => {
-    panelRef.current?.focus();
+  /* İSKELETTEN GERÇEK İÇERİĞE GEÇİŞ TEK BİR AÇILIŞTIR.
+     `loading.tsx` kendi çekmecesini çiziyor; sunucu içeriği akınca o ağaç
+     sökülüp bu ağaç kuruluyor. Aynı commit'te olduğu için "az önce bir çekmece
+     söküldü mü?" sorusu geçişi ayırt etmeye yeter: öyleyse giriş animasyonu
+     İKİNCİ KEZ oynamaz (çekmece bir daha sağdan içeri kaymaz) ve odak yeniden
+     çalınmaz. Sınıf DOM'dan tek seferde alınır; React className'i yalnız değer
+     değiştiğinde yazdığı için sonraki çizimlerde geri gelmez. */
+  useIsomorphicLayoutEffect(() => {
+    const self = instanceRef.current;
+    const handoff =
+      drawerHandoffFrom !== null && drawerHandoffFrom !== self && Date.now() - drawerHandoffAt < 150;
+    if (handoff) {
+      panelRef.current?.classList.remove("anim-drawer-in");
+      backdropRef.current?.classList.remove("anim-fade");
+    } else {
+      // Açılınca odağı panele al — Tab tuşu arkadaki panoda dolaşmasın.
+      panelRef.current?.focus();
+    }
+    return () => {
+      drawerHandoffAt = Date.now();
+      drawerHandoffFrom = self;
+    };
   }, []);
 
   const ctx = useMemo(() => ({ close, setDirty }), [close, setDirty]);
@@ -153,12 +209,14 @@ export function TaskDetailDrawer({ children }: { children: React.ReactNode }) {
     <div ref={rootRef} className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Görev detayı">
       {/* Backdrop — fades in via anim-fade, transitions out on close. */}
       <button
+        ref={backdropRef}
         type="button"
         aria-label="Kapat"
         onClick={close}
+        disabled={closing}
         className={`absolute inset-0 bg-ink/40 ${
           closing
-            ? "opacity-0 transition-opacity duration-200 ease-standard"
+            ? "pointer-events-none opacity-0 transition-opacity duration-200 ease-standard"
             : "anim-fade"
         }`}
       />
@@ -180,6 +238,7 @@ export function TaskDetailDrawer({ children }: { children: React.ReactNode }) {
         <button
           type="button"
           onClick={close}
+          disabled={closing}
           aria-label="Kapat"
           className="tap-target absolute right-3 top-3 z-40 grid size-9 place-items-center rounded-full bg-surface text-muted border border-line shadow-card transition-[background-color,border-color,color] duration-150 ease-standard hover:text-ink hover:bg-surface-muted hover:border-line-strong active:scale-95"
         >

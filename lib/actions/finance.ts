@@ -17,6 +17,21 @@ const NOT_FOUND = "Ödeme kaydı bulunamadı — sayfayı yenileyin.";
 
 const isAdminRole = (r: AppRole) => r === "owner" || r === "admin";
 
+/**
+ * Bugün — İSTANBUL günü ("yyyy-MM-dd").
+ *
+ * `new Date().toISOString()` UTC'ye çevirir: İstanbul UTC+3 olduğu için gece
+ * 00:00–03:00 arasında "Ödendi" işaretlenen kayda BİR GÜN ÖNCE damgalanıyordu.
+ * Sunucunun kendi saat dilimine de güvenilmez (dağıtım ortamı UTC'dir), bu
+ * yüzden bölge açıkça yazılır — lib/planning/timezones.ts ile aynı desen.
+ * `en-CA` biçimi zaten "yyyy-MM-dd" verir.
+ */
+const ISTANBUL_TODAY_FMT = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Europe/Istanbul",
+  year: "numeric", month: "2-digit", day: "2-digit",
+});
+const todayInIstanbul = () => ISTANBUL_TODAY_FMT.format(new Date());
+
 const PaymentSchema = z.object({
   id: z.string().max(64).optional().nullable(),
   title: z.string().min(1, "Başlık gerekli.").max(300),
@@ -78,7 +93,7 @@ export async function savePayment(
     currency: v.currency,
     status: v.status,
     due_date: v.due_date ?? null,
-    paid_at: v.status === "odendi" ? new Date().toISOString().slice(0, 10) : null,
+    paid_at: v.status === "odendi" ? todayInIstanbul() : null,
     category: nn(v.category),
     notes: nn(v.notes),
     updated_by: ctx.userId,
@@ -130,7 +145,7 @@ export async function setPaymentStatus(
     .from("finance_payments")
     .update({
       status,
-      paid_at: status === "odendi" ? new Date().toISOString().slice(0, 10) : null,
+      paid_at: status === "odendi" ? todayInIstanbul() : null,
       updated_by: ctx.userId,
     })
     .eq("id", paymentId)

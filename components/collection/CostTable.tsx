@@ -1,5 +1,8 @@
 "use client";
 
+// KULLANILMIYOR — 2026-09-05 itibarıyla hiçbir rota bu dosyayı import etmiyor.
+// Canlı maliyet ekranı: components/collection/CostBreakdownTable.tsx (kalem kalem).
+// Silinmesi kullanıcı onayı bekliyor; o güne kadar burada düzeltme yapmayın.
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import {

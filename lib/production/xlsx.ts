@@ -22,6 +22,27 @@ const LINE = "FFD9DCE1"; // ince kenarlık
 const MONEY_FMT = '#,##0.00" ₺"';
 const QTY_FMT = "#,##0";
 
+/** Föyün KENDİ para birimine göre hücre biçimi. Her hücreye ₺ basılıyordu:
+ *  dolarla çalışılan bir föyün maliyeti muhasebeye giden dosyada "1.800,00 ₺"
+ *  görünüyordu. Tanınmayan birimde sembol yerine kod yazar. */
+function moneyFmt(currency?: string | null): string {
+  const cur = (currency ?? "TL").trim().toUpperCase();
+  if (cur === "" || cur === "TL" || cur === "TRY") return MONEY_FMT;
+  if (cur === "USD") return '#,##0.00" $"';
+  if (cur === "EUR") return '#,##0.00" €"';
+  if (cur === "GBP") return '#,##0.00" £"';
+  return `#,##0.00" ${cur.replace(/"/g, "")}"`;
+}
+
+/** Bir dosyanın (ya da toplam satırının) ORTAK biçimi: bütün satırlar aynı
+ *  para birimindeyse onu kullanır, karışıksa sembolsüz kalır — karışık bir
+ *  toplamın başına tek bir sembol basmak yanlış olurdu. */
+function sharedMoneyFmt(currencies: (string | null | undefined)[]): string {
+  const set = new Set(currencies.map((c) => (c ?? "TL").trim().toUpperCase() || "TL"));
+  if (set.size === 1) return moneyFmt([...set][0]);
+  return "#,##0.00";
+}
+
 const thin = { style: "thin" as const, color: { argb: LINE } };
 const border = { top: thin, left: thin, bottom: thin, right: thin };
 
@@ -483,6 +504,8 @@ type ComputedCostRow = {
   /** Birim maliyet: kalem varsa toplamı, yoksa eski tek rakam. */
   unit: number;
   qty: number;
+  /** Föyün kendi para birimi — hücre biçimi buna göre seçilir. */
+  currency: string;
 };
 
 function computeRows(
@@ -503,7 +526,11 @@ function computeRows(
     }
     const itemSum = COST_ITEM_DEFS.reduce((a, d) => a + amounts[d.key], 0);
     const unit = itemSum > 0 ? itemSum : parseMoney(row.pricing?.unit_price);
-    return { row, amounts, itemSum, unit, qty: totalQuantity(row.size_distribution) };
+    return {
+      row, amounts, itemSum, unit,
+      qty: totalQuantity(row.size_distribution),
+      currency: (row.pricing?.currency ?? "TL").trim() || "TL",
+    };
   });
 }
 
@@ -586,6 +613,8 @@ export async function buildCostWorkbook(
   const firstDataRow = r;
   for (const c of computed) {
     const { row } = c;
+    // Hücre biçimi FÖYÜN para birimini izler (hepsine ₺ basılıyordu).
+    const rowMoneyFmt = moneyFmt(c.currency);
     const catLabel = row.category ? labelOf(tree, row.category) : "";
     const subLabel = subLabelOf(tree, row.category, row.subcategory);
 
@@ -596,7 +625,7 @@ export async function buildCostWorkbook(
     COST_ITEM_DEFS.forEach((d, i) => {
       const cell = ws.getCell(r, FIRST_ITEM + i);
       cell.value = c.amounts[d.key] > 0 ? c.amounts[d.key] : null;
-      cell.numFmt = MONEY_FMT;
+      cell.numFmt = rowMoneyFmt;
     });
 
     const unitCell = ws.getCell(r, unitCol);
@@ -610,7 +639,7 @@ export async function buildCostWorkbook(
     } else {
       unitCell.value = c.unit > 0 ? c.unit : null;
     }
-    unitCell.numFmt = MONEY_FMT;
+    unitCell.numFmt = rowMoneyFmt;
 
     const qtyCell = ws.getCell(r, qtyCol);
     qtyCell.value = c.qty || null;
@@ -618,7 +647,7 @@ export async function buildCostWorkbook(
 
     const totalCell = ws.getCell(r, totalCol);
     totalCell.value = { formula: `${L(unitCol)}${r}*${L(qtyCol)}${r}`, result: c.qty * c.unit };
-    totalCell.numFmt = MONEY_FMT;
+    totalCell.numFmt = rowMoneyFmt;
 
     for (let col = 1; col <= nCols; col++) {
       const cell = ws.getCell(r, col);
@@ -648,7 +677,9 @@ export async function buildCostWorkbook(
   gtv.value = lastDataRow >= firstDataRow
     ? { formula: `SUBTOTAL(109,${L(totalCol)}${firstDataRow}:${L(totalCol)}${lastDataRow})`, result: grand }
     : 0;
-  gtv.numFmt = MONEY_FMT;
+  /* Genel toplamda sembol ancak BÜTÜN satırlar aynı para birimindeyse
+     basılır; karışık dosyada tek sembol yanlış olurdu. */
+  gtv.numFmt = sharedMoneyFmt(computed.map((c) => c.currency));
   gtv.font = { bold: true, size: 13, color: { argb: INK } };
   gtv.alignment = { vertical: "middle", horizontal: "right", indent: 1 };
   for (let col = 1; col <= nCols; col++) {
@@ -735,13 +766,13 @@ function addQuantitySheet(
     qtyCell.numFmt = QTY_FMT;
     const unitCell = ws.getCell(r, birimCol);
     unitCell.value = c.unit > 0 ? c.unit : null;
-    unitCell.numFmt = MONEY_FMT;
+    unitCell.numFmt = moneyFmt(c.currency);
     const totalCell = ws.getCell(r, toplamCol);
     totalCell.value = {
       formula: `${L(totalAdetCol)}${r}*${L(birimCol)}${r}`,
       result: c.qty * c.unit,
     };
-    totalCell.numFmt = MONEY_FMT;
+    totalCell.numFmt = moneyFmt(c.currency);
 
     for (let col = 1; col <= nCols; col++) {
       const cell = ws.getCell(r, col);
@@ -771,7 +802,9 @@ function addQuantitySheet(
   gtv.value = lastDataRow >= firstDataRow
     ? { formula: `SUBTOTAL(109,${L(toplamCol)}${firstDataRow}:${L(toplamCol)}${lastDataRow})`, result: grand }
     : 0;
-  gtv.numFmt = MONEY_FMT;
+  /* Genel toplamda sembol ancak BÜTÜN satırlar aynı para birimindeyse
+     basılır; karışık dosyada tek sembol yanlış olurdu. */
+  gtv.numFmt = sharedMoneyFmt(computed.map((c) => c.currency));
   gtv.font = { bold: true, size: 13, color: { argb: INK } };
   gtv.alignment = { vertical: "middle", horizontal: "right", indent: 1 };
   for (let col = 1; col <= nCols; col++) {

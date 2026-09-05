@@ -291,14 +291,22 @@ function AddNoteForm({
   workspaceId,
   onAdd,
   onCancel,
+  initialTitle = "",
+  initialBody = "",
+  initialColor = "yellow",
 }: {
   workspaceId: string;
   onAdd: (_title: string, _body: string, _color: NoteColor) => void;
   onCancel: () => void;
+  /* Sunucu notu reddettiğinde form YAZILANLARLA yeniden açılır — kullanıcı
+     cümlesini ikinci kez yazmasın. */
+  initialTitle?: string;
+  initialBody?: string;
+  initialColor?: NoteColor;
 }) {
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
-  const [color, setColor] = useState<NoteColor>("yellow");
+  const [title, setTitle] = useState(initialTitle);
+  const [body, setBody] = useState(initialBody);
+  const [color, setColor] = useState<NoteColor>(initialColor);
   const inputRef = useRef<HTMLInputElement>(null);
   void workspaceId;
 
@@ -394,6 +402,8 @@ export function NotesColumn({
   const mounted = useSyncExternalStore(_subscribeMounted, _getMounted, _getServerMounted);
   const [_isPending, startTransition] = useTransition();
   const [adding, setAdding] = useState(false);
+  /* Kaydedilemeyen notun taslağı — form yeniden açılırken geri yazılır. */
+  const [failedDraft, setFailedDraft] = useState<{ title: string; body: string; color: NoteColor } | null>(null);
 
   // Confirm popup (before a destructive note action) + short-lived undo toast.
   const [confirmAction, setConfirmAction] = useState<
@@ -413,6 +423,10 @@ export function NotesColumn({
      Türkçe gösterir. */
   const [error, setError] = useState<string | null>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /* 7 sn'lik geri-al zamanlayıcısı bileşenle birlikte ölsün: pano sökülüp
+     başka bir sayfaya geçildiğinde sökülmüş bileşende setState çalışıyordu. */
+  useEffect(() => () => { if (undoTimer.current) clearTimeout(undoTimer.current); }, []);
+
   function showUndo(u: NonNullable<typeof undo>) {
     if (undoTimer.current) clearTimeout(undoTimer.current);
     setUndo(u);
@@ -464,7 +478,16 @@ export function NotesColumn({
     startTransition(async () => {
       applyOptimistic({ type: "add", note: tempNote });
       const res = await createNote({ workspace_id: workspaceId, title, body: body || undefined, color });
-      if ("error" in res) { setError(res.error || "Not kaydedilemedi."); return; }
+      if ("error" in res) {
+        /* İyimser not geri alınıyor; form kapalı kalsaydı kullanıcının YAZDIĞI
+           başlık ve gövde de onunla birlikte kaybolurdu. Form aynı metinle
+           yeniden açılır: hata görünür, veri duruyor. */
+        setError(res.error || "Not kaydedilemedi.");
+        setFailedDraft({ title, body, color });
+        setAdding(true);
+        return;
+      }
+      setFailedDraft(null);
       onMutated?.();
     });
   }
@@ -555,7 +578,14 @@ export function NotesColumn({
     setUndo(null);
     setError(null);
     startTransition(async () => {
-      if (u.kind === "convert") await softDeleteTask(u.taskId);
+      /* Geri alma sırasında görev silinemezse kullanıcı hem notu hem de
+         duran görevi elde ediyordu ve bunu hiçbir yerde görmüyordu. Akış
+         durmaz (not yine geri yüklenir), yalnız bildirilir. */
+      let taskCleanupFailed = false;
+      if (u.kind === "convert") {
+        const del = await softDeleteTask(u.taskId);
+        if ("error" in del) taskCleanupFailed = true;
+      }
       const restored: WorkspaceNote = { ...u.note, id: crypto.randomUUID() };
       applyOptimistic({ type: "add", note: restored });
       const res = await createNote({
@@ -565,6 +595,7 @@ export function NotesColumn({
         color: u.note.color,
       });
       if ("error" in res) { setError(res.error || "Not geri alınamadı."); return; }
+      if (taskCleanupFailed) setError("Not geri alındı, fakat oluşturulan görev silinemedi.");
       onMutated?.();
     });
   }
@@ -674,9 +705,13 @@ export function NotesColumn({
           düğme bozuk sanıyordu. */}
       {!readOnly && adding && (
         <AddNoteForm
+          key={failedDraft ? "retry" : "new"}
           workspaceId={workspaceId}
           onAdd={handleAdd}
-          onCancel={() => setAdding(false)}
+          onCancel={() => { setAdding(false); setFailedDraft(null); }}
+          initialTitle={failedDraft?.title ?? ""}
+          initialBody={failedDraft?.body ?? ""}
+          initialColor={failedDraft?.color ?? "yellow"}
         />
       )}
 

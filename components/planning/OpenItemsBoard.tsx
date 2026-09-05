@@ -1,5 +1,8 @@
 "use client";
 
+// KULLANILMIYOR — 2026-09-05 itibarıyla hiçbir rota bu dosyayı import etmiyor.
+// Planlama tek takvime taşındı: components/planning/PlanningBoard.tsx ve alt bileşenleri.
+// Silinmesi kullanıcı onayı bekliyor; o güne kadar burada düzeltme yapmayın.
 import Link from "next/link";
 
 import { useMemo, useState, useTransition } from "react";

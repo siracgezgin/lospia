@@ -42,8 +42,9 @@ export default async function TeamworkDocPage({
   // Bu rota YALNIZ yazılar içindir; dosya/bağlantı kayıtları listede yaşar.
   if (row.document_type !== "doc") notFound();
 
-  const canEdit =
-    isAdmin || (row.created_by === user.id && (row.status === "draft" || row.status === "in_review"));
+  /* Sayfa izni ile server action izni AYNI cümle olmalı (RLS 20240334):
+     yönetici her yazıyı, ekleyen kendi yazısını — durumdan bağımsız. */
+  const canEdit = isAdmin || row.created_by === user.id;
 
   return (
     <div className="w-full px-4 py-4 sm:px-6 lg:px-8">

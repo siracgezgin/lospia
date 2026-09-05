@@ -53,6 +53,10 @@ interface Props {
 }
 
 type Sel = { r1: number; c1: number; r2: number; c2: number };
+type EditState = { r: number; c: number; draft: string };
+
+/** Pano izni reddedildiğinde gösterilir — sessizce hiçbir şey yapmasın. */
+const CLIPBOARD_WRITE_HINT = "Tarayıcı panoya yazamadı — ⌘C / Ctrl+C (kesmek için ⌘X / Ctrl+X) kullanın.";
 const norm = (s: Sel) => ({
   r1: Math.min(s.r1, s.r2), c1: Math.min(s.c1, s.c2),
   r2: Math.max(s.r1, s.r2), c2: Math.max(s.c1, s.c2),
@@ -81,7 +85,17 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
   const { ask, dialog } = useConfirm();
   const [wb, setWb] = useState<WorkbookSnapshot>(() => initialSnapshot ?? emptyWorkbook());
   const [sel, setSel] = useState<Sel>({ r1: 0, c1: 0, r2: 0, c2: 0 });
-  const [editing, setEditing] = useState<{ r: number; c: number; draft: string } | null>(null);
+  const [editing, setEditingState] = useState<EditState | null>(null);
+  /* Düzenleme durumu ref'te DE tutulur: stopEdit yan etkiyi (yazma, geri-al
+     yığını, kayıt tetikleme) setState GÜNCELLEYİCİSİNİN İÇİNDE çalıştırıyordu.
+     React güncelleyiciyi iki kez oynatabilir (StrictMode geliştirmede her
+     zaman oynatır) → her hücre düzenlemesi geri-al yığınına İKİ adım bırakıp
+     kaydı iki kez tetikliyordu. Yan etki artık güncelleyicinin dışında. */
+  const editingRef = useRef<EditState | null>(null);
+  const setEditing = useCallback((next: EditState | null) => {
+    editingRef.current = next;
+    setEditingState(next);
+  }, []);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewH, setViewH] = useState(600);
   const [dragging, setDragging] = useState(false);
@@ -95,6 +109,13 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
   const [menu, setMenu] = useState<{ x: number; y: number; kind: "cell" | "row" | "col"; r: number; c: number } | null>(null);
   const [popover, setPopover] = useState<"fill" | "text" | "border" | null>(null);
   const [renaming, setRenaming] = useState<{ index: number; draft: string } | null>(null);
+  /** Kısa bilgi (durum çubuğunda) — pano izni reddedilince sessiz kalmasın. */
+  const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!notice) return;
+    const t = window.setTimeout(() => setNotice(null), 5000);
+    return () => window.clearTimeout(t);
+  }, [notice]);
 
   const undoStack = useRef<WorkbookSnapshot[]>([]);
   const redoStack = useRef<WorkbookSnapshot[]>([]);
@@ -213,7 +234,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
     if (readOnly) return;
     const cell = getCell(sheetRef.current, r, c);
     setEditing({ r, c, draft: initial !== undefined ? initial : (cell?.f ?? cell?.v ?? "") });
-  }, [readOnly]);
+  }, [readOnly, setEditing]);
 
   useEffect(() => {
     if (!editing) return;
@@ -222,18 +243,17 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
   }, [editing]);
 
   const stopEdit = useCallback((save: boolean, move?: "down" | "right") => {
-    setEditing((e) => {
-      if (!e) return null;
-      /* DEĞİŞMEDİYSE yazma. fx çubuğuna tıklayıp başka yere geçmek de burayı
-         çağırıyor; her seferinde geri-al yığınına boş bir adım eklemesin ve
-         belgeyi kirli işaretleyip gereksiz kayıt tetiklemesin. */
-      const cur = getCell(sheetRef.current, e.r, e.c);
-      if (save && e.draft !== (cur?.f ?? cur?.v ?? "")) applyEdit(e.r, e.c, e.draft);
-      if (move === "down") moveTo(e.r + 1, e.c);
-      if (move === "right") moveTo(e.r, e.c + 1);
-      return null;
-    });
-  }, [applyEdit, moveTo]);
+    const e = editingRef.current;
+    if (!e) return;
+    setEditing(null);
+    /* DEĞİŞMEDİYSE yazma. fx çubuğuna tıklayıp başka yere geçmek de burayı
+       çağırıyor; her seferinde geri-al yığınına boş bir adım eklemesin ve
+       belgeyi kirli işaretleyip gereksiz kayıt tetiklemesin. */
+    const cur = getCell(sheetRef.current, e.r, e.c);
+    if (save && e.draft !== (cur?.f ?? cur?.v ?? "")) applyEdit(e.r, e.c, e.draft);
+    if (move === "down") moveTo(e.r + 1, e.c);
+    if (move === "right") moveTo(e.r, e.c + 1);
+  }, [applyEdit, moveTo, setEditing]);
 
   /* Seçim DEĞİL, dolu hücreler taranır: ⌘A 5.000×100 = 500.000 hücre seçer ve
      her setCell haritanın tamamını kopyaladığı için silme O(n²) oluyordu —
@@ -313,6 +333,42 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
     const er = e.shiftKey ? sel.r2 : active.r;
     const ec = e.shiftKey ? sel.c2 : active.c;
 
+    /* ⌘/Ctrl + ok = blok atlaması (Excel'deki gibi). Duyurulmuştu ama kodda
+       yoktu: ok tuşları `meta` durumuna hiç bakmıyor, Ctrl+Aşağı tek satır
+       iniyordu. Kural: bir sonraki hücre DOLUYSA bloğun son dolu hücresine,
+       BOŞSA boşluğu atlayıp ilk dolu hücreye; hiç yoksa sayfanın ucuna. */
+    if (meta && (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+      e.preventDefault();
+      const g = sheetRef.current;
+      const dr = e.key === "ArrowDown" ? 1 : e.key === "ArrowUp" ? -1 : 0;
+      const dc = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+      const filled = (r: number, c: number) => {
+        const cell = getCell(g, r, c);
+        return !!cell && ((cell.f ?? "") !== "" || (cell.v ?? "") !== "");
+      };
+      const inGrid = (r: number, c: number) => r >= 0 && r < g.rows && c >= 0 && c < g.cols;
+      let tr = er;
+      let tc = ec;
+      if (inGrid(er + dr, ec + dc) && filled(er + dr, ec + dc)) {
+        while (inGrid(tr + dr, tc + dc) && filled(tr + dr, tc + dc)) { tr += dr; tc += dc; }
+      } else {
+        let rr = er + dr;
+        let cc = ec + dc;
+        let found = false;
+        while (inGrid(rr, cc)) {
+          if (filled(rr, cc)) { found = true; break; }
+          rr += dr; cc += dc;
+        }
+        if (found) { tr = rr; tc = cc; }
+        else {
+          tr = dr > 0 ? g.rows - 1 : dr < 0 ? 0 : tr;
+          tc = dc > 0 ? g.cols - 1 : dc < 0 ? 0 : tc;
+        }
+      }
+      moveTo(tr, tc, e.shiftKey);
+      return;
+    }
+
     switch (e.key) {
       case "ArrowUp":    e.preventDefault(); moveTo(er - 1, ec, e.shiftKey); return;
       case "ArrowDown":  e.preventDefault(); moveTo(er + 1, ec, e.shiftKey); return;
@@ -348,6 +404,23 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
     }
     return lines.join("\n");
   }, [sel, sheet]);
+
+  /**
+   * Seçimi panoya yazar; başarılıysa true.
+   *
+   * SAHİPSİZ PROMISE YOKTUR: writeText belge odakta değilken, izin
+   * verilmediğinde ya da güvensiz bağlamda REDDEDİLİR. Eskiden yakalanmıyordu;
+   * "Kes" panoya yazamadığı hâlde hücreleri siliyordu — pano boş, hücreler
+   * boş, veri gitmiş oluyordu.
+   */
+  const writeClipboard = useCallback(async (): Promise<boolean> => {
+    try {
+      await navigator.clipboard.writeText(selectionTsv());
+      return true;
+    } catch {
+      return false;
+    }
+  }, [selectionTsv]);
 
   const onCopy = useCallback((e: React.ClipboardEvent) => {
     if (editing) return;
@@ -501,8 +574,24 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
     setSel({ r1: n.r1, c1: n.c1, r2: Math.max(n.r2, to.r), c2: Math.max(n.c2, to.c) });
   }, [readOnly, commit, writeCell]);
 
-  // Doldurma bırakması pencere seviyesinde — fare ızgaranın dışına çıksa bile.
+  /* Doldurma sürüklemesi pencere seviyesinde dinlenir — fare ızgaranın dışına
+     çıksa bile bırakma yakalansın. POINTER olayları kullanılır: yalnız fare
+     olaylarıyla tutamak TELEFONDA hiç çalışmıyordu (parmak sürüklemesi mouse
+     değil kaydırma üretir). Parmakta hedef hücre `elementFromPoint` ile
+     bulunur; dokunmada pointermove olayları tutamağa yakalandığı için
+     hücrelerin onMouseEnter'ı hiç tetiklenmez. */
   useEffect(() => {
+    function onMove(e: PointerEvent) {
+      if (!fillRef.current) return;
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      const cellEl = el?.closest?.("[data-cell-r]") as HTMLElement | null;
+      if (!cellEl) return;
+      const r = Number(cellEl.dataset.cellR);
+      const c = Number(cellEl.dataset.cellC);
+      if (!Number.isFinite(r) || !Number.isFinite(c)) return;
+      fillRef.current = { ...fillRef.current, to: { r, c } };
+      setFillTo({ r, c });
+    }
     function onUp() {
       const st = fillRef.current;
       fillRef.current = null;
@@ -512,8 +601,14 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
       const to = { r: Math.max(st.to.r, n.r2), c: Math.max(st.to.c, n.c2) };
       if (to.r > n.r2 || to.c > n.c2) doFill(st.from, to);
     }
-    window.addEventListener("mouseup", onUp);
-    return () => window.removeEventListener("mouseup", onUp);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
   }, [doFill]);
 
   // ── Satır / sütun ─────────────────────────────────────────────────────────
@@ -525,7 +620,12 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
   // ── Sayfa sekmeleri ───────────────────────────────────────────────────────
   const addSheet = () => {
     const w = wbRef.current;
-    const s: Sheet = { ...emptySheet(uniqueSheetName(w, `Sayfa${w.sheets.length + 1}`)), id: newSheetId() };
+    // Kayıtlı kitapta eski kimlikler korunuyor; çakışma olmadığını burada da
+    // güvenceye al (aynı kimlik = çift React anahtarı + karışan formül önbelleği).
+    const used = new Set(w.sheets.map((x) => x.id));
+    let id = newSheetId();
+    while (used.has(id)) id = newSheetId();
+    const s: Sheet = { ...emptySheet(uniqueSheetName(w, `Sayfa${w.sheets.length + 1}`)), id };
     commitWb({ engine: "wb", sheets: [...w.sheets, s], active: w.sheets.length });
     setSel({ r1: 0, c1: 0, r2: 0, c2: 0 });
   };
@@ -547,15 +647,21 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
     commitWb({ ...w, sheets: w.sheets.map((s, i) => (i === index ? { ...s, name: clean } : s)) });
   };
   const selectSheet = (index: number) => {
+    if (index === wbRef.current.active) return;
     setWb((w) => ({ ...w, active: index }));
     setSel({ r1: 0, c1: 0, r2: 0, c2: 0 });
     setEditing(null);
+    /* Etkin sayfa KAYDEDİLEN anlık görüntünün parçası. onDirty çağrılmazsa
+       Sayfa2'ye geçip çıkan kullanıcı, tabloyu bir dahaki açışında yine
+       Sayfa1'de buluyordu. (Geri-al yığınını kirletmemek için commitWb değil.) */
+    if (!readOnly) onDirty?.();
   };
 
   // ── Sütun genişliği / satır yüksekliği sürükleme ──────────────────────────
   const resizeRef = useRef<{ kind: "col" | "row"; i: number; start: number; startSize: number } | null>(null);
   useEffect(() => {
-    function onMove(e: MouseEvent) {
+    // POINTER: boyutlandırma çubukları da telefonda çalışsın (bkz. doldurma).
+    function onMove(e: PointerEvent) {
       const st = resizeRef.current;
       if (!st) return;
       if (st.kind === "col") {
@@ -567,9 +673,14 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
       }
     }
     function onUp() { if (resizeRef.current) { resizeRef.current = null; onDirty?.(); } }
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
   }, [onDirty]);
 
   // ── Yerleşim hesapları ────────────────────────────────────────────────────
@@ -778,8 +889,10 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
               >
                 {colName(c)}
                 <span
-                  onMouseDown={(e) => { e.stopPropagation(); resizeRef.current = { kind: "col", i: c, start: e.clientX, startSize: colWidth(sheetRef.current, c) }; }}
-                  className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-brand/40"
+                  onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); resizeRef.current = { kind: "col", i: c, start: e.clientX, startSize: colWidth(sheetRef.current, c) }; }}
+                  style={{ touchAction: "none" }}
+                  title={`${colName(c)} sütun genişliği`}
+                  className="absolute right-0 top-0 h-full w-2.5 cursor-col-resize hover:bg-brand/40"
                 />
               </div>
             ))}
@@ -802,8 +915,10 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                 >
                   {r + 1}
                   <span
-                    onMouseDown={(e) => { e.stopPropagation(); resizeRef.current = { kind: "row", i: r, start: e.clientY, startSize: rowHeight(sheetRef.current, r) }; }}
-                    className="absolute bottom-0 left-0 h-1.5 w-full cursor-row-resize hover:bg-brand/40"
+                    onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); resizeRef.current = { kind: "row", i: r, start: e.clientY, startSize: rowHeight(sheetRef.current, r) }; }}
+                    style={{ touchAction: "none" }}
+                    title={`${r + 1}. satır yüksekliği`}
+                    className="absolute bottom-0 left-0 h-2.5 w-full cursor-row-resize hover:bg-brand/40"
                   />
                 </div>
 
@@ -855,6 +970,10 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                   return (
                     <div
                       key={c}
+                      /* Doldurma sürüklemesi hedef hücreyi elementFromPoint ile
+                         bulur (dokunmada onMouseEnter tetiklenmiyor). */
+                      data-cell-r={r}
+                      data-cell-c={c}
                       onMouseDown={(e) => {
                         if (e.button === 2) return;
                         if (e.detail === 2) { startEdit(r, c); return; }
@@ -902,13 +1021,17 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                       {/* Doldurma tutamağı — seçimin sağ alt köşesi */}
                       {isFillCorner && !readOnly && (
                         <span
-                          onMouseDown={(e) => {
+                          onPointerDown={(e) => {
                             e.stopPropagation(); e.preventDefault();
                             fillRef.current = { from: sel, to: { r, c } };
                             setFillTo({ r, c });
                           }}
+                          /* touch-action: none — parmakla çekince tarayıcı
+                             kaydırmasın; tap-target parmakta görünmez hedefi
+                             büyütür (görsel boyut aynı kalır). */
+                          style={{ touchAction: "none" }}
                           title="Aşağı ya da sağa çekerek doldur"
-                          className="absolute -bottom-[3px] -right-[3px] z-30 h-2 w-2 cursor-crosshair rounded-[1px] bg-brand ring-1 ring-surface"
+                          className="tap-target absolute -bottom-[3px] -right-[3px] z-30 h-2 w-2 cursor-crosshair rounded-[1px] bg-brand ring-1 ring-surface"
                         />
                       )}
                     </div>
@@ -983,9 +1106,11 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
       {/* ── Durum çubuğu ─────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between gap-3 border-t border-hairline px-3 py-1.5 text-[12px] text-subtle">
         <span className="tabular-nums">{sheet.rows} satır · {sheet.cols} sütun</span>
-        {evaluated.failed
-          ? <span className="truncate font-medium text-danger">Tablo hesaplanamadı</span>
-          : summary && <span className="truncate font-medium tabular-nums text-muted">{summary}</span>}
+        {notice
+          ? <span role="status" className="min-w-0 truncate font-medium text-ink">{notice}</span>
+          : evaluated.failed
+            ? <span className="truncate font-medium text-danger">Tablo hesaplanamadı</span>
+            : summary && <span className="truncate font-medium tabular-nums text-muted">{summary}</span>}
       </div>
 
       {/* ── Sağ tık menüsü ───────────────────────────────────────────────── */}
@@ -993,12 +1118,38 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
         <div
           onMouseDown={(e) => e.stopPropagation()}
           role="menu"
-          className="anim-fade fixed z-[70] w-56 rounded-card border border-line bg-surface py-1 shadow-pop"
-          style={{ left: Math.min(menu.x, (typeof window !== "undefined" ? window.innerWidth : 9999) - 240), top: menu.y }}
+          className="anim-fade fixed z-[70] max-h-[80vh] w-56 overflow-y-auto rounded-card border border-line bg-surface py-1 shadow-pop"
+          /* Menü 12 madde ≈ 450px. Eskiden yalnız YATAY eksen kırpılıyordu:
+             ızgaranın alt yarısına sağ tıklandığında "Satırı sil" ve
+             "Sütunu sil" görünür alanın ALTINDA kalıyordu ve menü `fixed`
+             olduğu için kaydırarak da erişilemiyordu. Artık iki eksen de
+             kırpılır, taşarsa menü kendi içinde kayar. */
+          style={{
+            left: Math.max(8, Math.min(menu.x, (typeof window !== "undefined" ? window.innerWidth : 9999) - 232)),
+            top: Math.max(8, Math.min(menu.y, (typeof window !== "undefined" ? window.innerHeight : 9999) - 460)),
+          }}
         >
-          <MenuItem onClick={() => { navigator.clipboard?.writeText(selectionTsv()); setMenu(null); }}>Kopyala</MenuItem>
-          <MenuItem onClick={() => { navigator.clipboard?.writeText(selectionTsv()); clearRange(norm(sel), true); setMenu(null); }}>Kes</MenuItem>
-          <MenuItem onClick={async () => { const t = await navigator.clipboard?.readText?.(); if (t) pasteText(t); setMenu(null); }}>Yapıştır</MenuItem>
+          <MenuItem onClick={async () => {
+            try { if (!(await writeClipboard())) setNotice(CLIPBOARD_WRITE_HINT); }
+            finally { setMenu(null); }
+          }}>Kopyala</MenuItem>
+          {/* Önce panoya YAZ, ancak başarılıysa sil. */}
+          <MenuItem onClick={async () => {
+            try {
+              if (await writeClipboard()) clearRange(norm(sel), true);
+              else setNotice(CLIPBOARD_WRITE_HINT);
+            } finally { setMenu(null); }
+          }}>Kes</MenuItem>
+          <MenuItem onClick={async () => {
+            try {
+              const t = await navigator.clipboard.readText();
+              if (t) pasteText(t);
+            } catch {
+              /* Firefox readText'i web içeriğine hiç açmaz; Chrome'da izin
+                 reddedilebilir. Çalışan onPaste yolunu söyle. */
+              setNotice("Tarayıcı panoya erişemedi — yapıştırmak için ⌘V / Ctrl+V kullanın.");
+            } finally { setMenu(null); }
+          }}>Yapıştır</MenuItem>
           <MenuSep />
           <MenuItem onClick={() => { doInsertRow(selN.r1); setMenu(null); }}>Üste satır ekle</MenuItem>
           <MenuItem onClick={() => { doInsertRow(selN.r2 + 1); setMenu(null); }}>Alta satır ekle</MenuItem>

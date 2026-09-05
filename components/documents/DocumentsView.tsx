@@ -89,9 +89,13 @@ export function DocumentsView({
     [documents],
   );
 
+  /* Kural RLS (20240334) ve server action'larla BİREBİR aynı: yönetici her
+     kaydı, ekleyen kendi kaydını düzenler — DURUMDAN bağımsız. Durum şartı
+     burada kalınca üye yayımlanan kendi kaydını silebiliyor ama
+     düzeltemiyordu; ekran salt-okunur açılırken action izin veriyordu.
+     Durum YÜKSELTME koruması ayrı: üyeye approve/archive seçeneği çıkmıyor. */
   function canMutate(d: OperationDocument) {
-    if (isAdmin) return true;
-    return d.created_by === currentUserId && (d.status === "draft" || d.status === "in_review");
+    return isAdmin || d.created_by === currentUserId;
   }
 
   return (

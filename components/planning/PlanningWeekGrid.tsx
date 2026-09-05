@@ -360,9 +360,14 @@ export function PlanningWeekGrid({
 
       {/* TAŞIMA DURUMU — ızgaranın yerleşimini bozmasın diye ekranın altında
           yüzen tek şerit. Hata kendiliğinden kaybolmaz: kullanıcı okumadan
-          geçmesin (kapatma düğmesi var). */}
+          geçmesin (kapatma düğmesi var).
+
+          KONUM "Geri al" şeridinin BİR KADEME ÜSTÜ (bottom-20): MeetingUndoBar
+          aynı sayfada, aynı z katmanında bottom-4'te duruyor. İkisi aynı anda
+          açıkken üst üste biniyor ve telefonda geri almanın TEK yolu olan
+          düğme bu kutunun altında kalıyordu. */}
       {(isMoving || moveError) && (
-        <div className="mb-bottom-nav pointer-events-none fixed inset-x-0 bottom-4 z-[110] flex justify-center px-4 md:mb-0">
+        <div className="mb-bottom-nav pointer-events-none fixed inset-x-0 bottom-20 z-[110] flex justify-center px-4 md:mb-0">
           <div
             role={moveError ? "alert" : "status"}
             className={cn(

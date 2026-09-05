@@ -30,15 +30,31 @@ function parseQty(raw: string | null | undefined): number {
 const norm = (s: string) =>
   s.toLowerCase().replace(/ı/g, "i").replace(/İ/g, "i").replace(/ü/g, "u").replace(/ş/g, "s");
 
+/**
+ * Üretim adedini taşıyan satırın SIRASI (Excel "üretim adeti" mantığı).
+ * Satır yoksa -1.
+ *
+ * TEK KURAL: okuyan (toplam) ve yazan (maliyet tablosundaki adet hücresi)
+ * taraf aynı satırı seçsin diye burada durur. Yazma tarafında ayrı bir
+ * normalizasyon vardı ve Türkçe harfleri siliyordu ("Üretim adeti" →
+ * "retim adeti"): adet BAŞKA bir satıra yazılıyor, toplam ise üretim
+ * satırından okunuyordu — yazılan sayı toplamı hiç değiştirmiyordu.
+ */
+export function productionRowIndex(sd: SizeDistribution | null | undefined): number {
+  const rows = sd?.rows;
+  if (!Array.isArray(rows) || rows.length === 0) return -1;
+  const production = rows.findIndex((r) => norm(r.label ?? "").includes("uretim adet"));
+  if (production !== -1) return production;
+  const nonLabelRow = rows.findIndex((r) => !norm(r.label ?? "").includes("beden etiket"));
+  return nonLabelRow !== -1 ? nonLabelRow : 0;
+}
+
 /** Üretim adedini taşıyan satırı seç (Excel "üretim adeti" mantığı). */
 function pickProductionRow(
   sd: SizeDistribution | null | undefined,
 ): { label: string; values: string[]; total: string } | null {
-  if (!sd || !Array.isArray(sd.rows) || sd.rows.length === 0) return null;
-  const production = sd.rows.find((r) => norm(r.label ?? "").includes("uretim adet"));
-  if (production) return production;
-  const nonLabelRow = sd.rows.find((r) => !norm(r.label ?? "").includes("beden etiket"));
-  return nonLabelRow ?? sd.rows[0];
+  const i = productionRowIndex(sd);
+  return i === -1 ? null : sd!.rows[i];
 }
 
 /**
@@ -95,8 +111,7 @@ export function withSizeQty(
     return { ...r, values: v };
   });
 
-  let prodIdx = base.rows.findIndex((r) => norm(r.label ?? "").includes("uretim adet"));
-  if (prodIdx === -1) prodIdx = base.rows.findIndex((r) => !norm(r.label ?? "").includes("beden etiket"));
+  let prodIdx = productionRowIndex(base);
   if (prodIdx === -1) prodIdx = 0;
 
   base.rows[prodIdx].values[idx] = value;
@@ -364,12 +379,18 @@ export function sheetCost(
   };
 }
 
-/** 233400 → "₺233.400" (kuruşsuz, binlik nokta — Türkçe). */
+/** 233400 → "₺233.400" (kuruşsuz, binlik nokta — Türkçe).
+ *  TL dışındaki para biriminde SEMBOL YOK ama kod yazar ("233.400 USD"):
+ *  eskiden hiçbir işaret basılmıyordu ve dolarla çalışılan bir föyün tutarı
+ *  ekranda TL'den ayırt edilemiyordu. */
 export function formatMoney(n: number, currency = "TL"): string {
-  const sym = currency === "TL" ? "₺" : "";
   const rounded = Math.round(n);
   const grouped = rounded.toLocaleString("tr-TR");
-  return `${sym}${grouped}`;
+  const cur = (currency || "TL").trim();
+  if (cur === "TL" || cur === "TRY") return `₺${grouped}`;
+  if (cur === "USD") return `$${grouped}`;
+  if (cur === "EUR") return `€${grouped}`;
+  return `${grouped} ${cur}`;
 }
 
 /** Föy tipini kabul eden kısayol (liste öğesi de olur — pricing+size_distribution yeter). */

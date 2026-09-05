@@ -1,5 +1,8 @@
 "use client";
 
+// KULLANILMIYOR — 2026-09-05 itibarıyla hiçbir rota bu dosyayı import etmiyor.
+// Toplantı şablonları yerine haftalık takvim iskeleti: lib/planning/scaffold.ts.
+// Silinmesi kullanıcı onayı bekliyor; o güne kadar burada düzeltme yapmayın.
 import { useState, useTransition } from "react";
 import { Plus, Trash2, Pencil, Power, CalendarRange } from "lucide-react";
 import { cn } from "@/lib/utils/cn";

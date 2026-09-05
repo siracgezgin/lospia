@@ -415,15 +415,38 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
   /* KAYDEDİLMEMİŞ FÖY SESSİZCE KAYBOLMASIN.
      Föy uzun bir formdur ve kaydetme elle yapılır; sekmeyi kapatmak ya da
      tarayıcıyı yenilemek yarım saatlik girişi tek tıkla siliyordu. Tarayıcının
-     kendi onayı çıkar (metni tarayıcı belirler, biz yalnız tetikleriz). */
+     kendi onayı çıkar (metni tarayıcı belirler, biz yalnız tetikleriz).
+
+     UYGULAMA İÇİ ÇIKIŞ DA YAKALANIR: `beforeunload` yalnız sekme kapatma /
+     yenileme için ateşlenir, Next'in istemci tarafı gezinmesinde (sol menü,
+     "Föye dön", mobil çekmece) HİÇ çalışmaz — kaybın en olası hâli buydu.
+     Bağlantı tıklaması yakalama aşamasında kesilir, kullanıcı onaylarsa
+     gezinme devam eder. */
   useEffect(() => {
     if (!dirty) return;
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       e.preventDefault();
       e.returnValue = "";
     };
+    const onClickCapture = (e: MouseEvent) => {
+      // Yeni sekmede açma / indirme / farklı düğme: sayfa yerinde kalır.
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const target = e.target instanceof Element ? e.target : null;
+      const link = target?.closest<HTMLAnchorElement>("a[href]");
+      if (!link) return;
+      if (link.target === "_blank" || link.hasAttribute("download")) return;
+      const href = link.getAttribute("href") ?? "";
+      if (!href || href.startsWith("#")) return;
+      if (window.confirm("Kaydedilmemiş değişiklikler var. Sayfadan ayrılmak istiyor musunuz?")) return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
     window.addEventListener("beforeunload", onBeforeUnload);
-    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+    document.addEventListener("click", onClickCapture, true);
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      document.removeEventListener("click", onClickCapture, true);
+    };
   }, [dirty]);
 
   // Eksiksizlik tek yerde hesaplanır: hem üstteki şerit hem sekme rozetleri
@@ -700,9 +723,11 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
             </DownloadLink>
           )}
           {/* Kaydedilmemiş değişiklik SESSİZ ama görünür: föy elle
-              kaydediliyor, "kaydettim mi?" sorusunun cevabı ekranda dursun. */}
+              kaydediliyor, "kaydettim mi?" sorusunun cevabı ekranda dursun.
+              TELEFONDA DA görünür: `sm:` kısıtı yüzünden uyarı tam da kaybın
+              en olası olduğu ekranda gizleniyordu. */}
           {dirty && !isSaving && (
-            <span role="status" className="hidden items-center gap-1.5 text-[12px] font-medium text-warning sm:inline-flex">
+            <span role="status" className="inline-flex items-center gap-1.5 text-[12px] font-medium text-warning">
               <AlertTriangle size={12} aria-hidden /> Kaydedilmedi
             </span>
           )}
@@ -811,7 +836,12 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
           <LabeledField label="Üretim tarihi" value={form.production_date ?? ""} onChange={(v) => set("production_date", v)} />
           <LabeledField label="Ürün kodu" value={form.product_code ?? ""} onChange={(v) => set("product_code", v)} />
           <LabeledField checkKey="delivery_date" label="Teslim tarihi" value={form.delivery_date ?? ""} onChange={(v) => set("delivery_date", v)} placeholder="21.07.2026" missing={missingKeys.has("delivery_date")} hint={hintOf.get("delivery_date")} />
-          <LabeledField checkKey="description" label="Ürün cinsi" value={form.product_kind ?? ""} onChange={(v) => set("product_kind", v)} placeholder="Etek" missing={missingKeys.has("description")} hint={hintOf.get("description")} />
+          {/* `checkKey` YOK: "Ürün tanımı" denetimi hem burayı hem aşağıdaki
+              "Ürünün açıklaması"nı kabul ediyor, ama `data-check` iki alanda
+              da bulununca "Eksik alana götür" HER ZAMAN ilkine atlıyordu
+              (jumpTo querySelector kullanır). İşaret aşağıdaki açıklama
+              alanında kalır; uyarı vurgusu burada da görünmeye devam eder. */}
+          <LabeledField label="Ürün cinsi" value={form.product_kind ?? ""} onChange={(v) => set("product_kind", v)} placeholder="Etek" missing={missingKeys.has("description")} hint={hintOf.get("description")} />
           {/* RENK — föy kimliğinin üçüncü parçası (model | kumaş | renk),
               Zedonk deseni. Aynı modelin başka rengi için aşağıdaki varyant
               şeridinden "Renk ekle" kullanılır. */}

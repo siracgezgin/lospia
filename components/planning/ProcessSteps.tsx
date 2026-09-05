@@ -1,5 +1,8 @@
 "use client";
 
+// KULLANILMIYOR — 2026-09-05 itibarıyla hiçbir rota bu dosyayı import etmiyor.
+// Planlama tek takvime taşındı: components/planning/PlanningBoard.tsx.
+// Silinmesi kullanıcı onayı bekliyor; o güne kadar burada düzeltme yapmayın.
 import { Workflow } from "lucide-react";
 import { KimBadges } from "./KimBadges";
 import { PlanningSection } from "./PlanningSection";

@@ -133,8 +133,14 @@ function TaskEditor({
   // the sheet (a Link would only change the URL behind it and leave the panel
   // hanging over the board). On the full page it stays a real navigation.
   const drawer = useContext(TaskDrawerContext);
-  const initial = useMemo(() => draftFromTask(task), [task]);
-  const [draft, setDraft] = useState<Draft>(initial);
+  const taskDraft = useMemo(() => draftFromTask(task), [task]);
+  const [draft, setDraft] = useState<Draft>(taskDraft);
+  /* KAYDEDİLEN DEĞERLER yeni karşılaştırma zeminidir. Sunucu yanıtı gelip
+     bileşen yeniden monte olana kadar (task.id:updated_at anahtarı) "kaydedildi
+     ama hâlâ kaydedilmemiş" bir aralık vardı: o aralıkta Esc'e basan kullanıcı
+     "Kaydetmeden kapat" uyarısı alıyor, "Kaydet" düğmesi de etkin kalıyordu. */
+  const [savedDraft, setSavedDraft] = useState<Draft | null>(null);
+  const initial = savedDraft ?? taskDraft;
   const [saving, startSaving] = useTransition();
   const [feedback, setFeedback] = useState<{ kind: "ok" | "err"; msg: string } | null>(null);
 
@@ -225,6 +231,10 @@ function TaskEditor({
         return;
       }
       setFeedback(null);
+      /* Gönderilen değerler artık "kaydedilmiş" sayılır (başlık nasıl
+         gönderildiyse öyle). Böylece `dirty` kendiliğinden söner: çekmece
+         uyarısı da, "Kaydet" düğmesi de aynı gerçeği okur. */
+      setSavedDraft({ ...draft, title: draft.title.trim() || initial.title });
       onSaved();
       router.refresh();
     });

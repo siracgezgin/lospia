@@ -62,6 +62,7 @@ export function SheetDetailView({
   const { ask, dialog } = useConfirm();
   const apiRef = useRef<SheetEditorApi | null>(null);
   const [metaOpen, setMetaOpen] = useState(false);
+  const [metaTitle, setMetaTitle] = useState(sheet.title);
   const [notice, setNotice] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [isBusy, startWork] = useTransition();
@@ -219,12 +220,16 @@ export function SheetDetailView({
   const [title, setTitle] = useState(sheet.title);
   const savedTitleRef = useRef(sheet.title);
 
-  // Künye formundan ad değişirse (router.refresh sonrası) satır içi alan da
-  // güncel kalsın.
-  useEffect(() => {
-    savedTitleRef.current = sheet.title;
+  /* Künye formundan ad değişirse (router.refresh sonrası) satır içi alan da
+     güncel kalsın. Bu, React'in "prop değişince durumu ayarla" deseni: efekt
+     içinde setState çağırmak fazladan bir çizim turu doğurur (ve lint kuralı
+     bunu reddeder), oysa render sırasında ayarlamak tek turda biter. */
+  const [serverTitle, setServerTitle] = useState(sheet.title);
+  if (serverTitle !== sheet.title) {
+    setServerTitle(sheet.title);
     setTitle(sheet.title);
-  }, [sheet.title]);
+  }
+  useEffect(() => { savedTitleRef.current = sheet.title; }, [sheet.title]);
 
   /* Ad da ANLIK GÖRÜNTÜ KADAR veridir ve aynı üç kapıdan kaçabiliyordu.
      Eskiden yalnız kutunun `blur`u gönderiyordu: kullanıcı adı yazıp kutudan
@@ -404,7 +409,13 @@ export function SheetDetailView({
               <Copy size={13} aria-hidden />
             </IconButton>
             {canEditMeta && (
-              <Button variant="secondary" size="sm" onClick={() => setMetaOpen(true)}>
+              <Button
+                variant="secondary"
+                size="sm"
+                /* Formun göreceği ad, pencere AÇILDIĞI andaki kayıtlı addır;
+                   ref'i render sırasında okumak yasak (React kuralı). */
+                onClick={() => { setMetaTitle(savedTitleRef.current); setMetaOpen(true); }}
+              >
                 <Pencil size={13} aria-hidden />
                 Bilgileri düzenle
               </Button>
@@ -520,7 +531,7 @@ export function SheetDetailView({
              yoksa "Bilgileri düzenle" eski adı geri yazıyordu. */
           sheet={{
             id: sheet.id,
-            title: savedTitleRef.current,
+            title: metaTitle,
             description: sheet.description,
             sheet_type: sheet.sheet_type,
             status: sheet.status,

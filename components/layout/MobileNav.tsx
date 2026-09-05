@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { lockBodyScroll } from "@/components/ui/Overlay";
 import { signOut } from "@/lib/actions/auth";
 import {
   NAV_DIRECTORY,
@@ -186,6 +187,15 @@ function MobileMenu({
   const mounted = useMounted();
   const sections = navSectionsForRole(isAdmin);
   const panelRef = useRef<HTMLDivElement>(null);
+  /* Çekmece iki yoldan kapanır: kullanıcı KAPATIR (Esc · "Kapat" · dışarı
+     tıklama) ya da bir satıra dokunup BAŞKA SAYFAYA gider. Odağı açan düğmeye
+     geri vermek yalnız BİRİNCİ durumda doğrudur; gezinmede odak yeni sayfa
+     yerine ekranın en altındaki "Menu" düğmesine dönüyordu. */
+  const navigatingRef = useRef(false);
+  const handleGo = useCallback(() => {
+    navigatingRef.current = true;
+    onClose();
+  }, [onClose]);
 
   // Esc + arkadaki sayfanın kaymasını durdur (Overlay ile aynı sözleşme) +
   // odak çekmecenin İÇİNDE dolaşsın (Tab arkadaki sayfaya kaçmasın).
@@ -220,15 +230,16 @@ function MobileMenu({
     }
 
     document.addEventListener("keydown", onKey);
-    const body = document.body;
-    const prev = body.style.overflow;
-    body.style.overflow = "hidden";
-    // Odağı çekmeceye al; kapanınca açan düğmeye geri ver.
+    /* Kaydırma kilidi Overlay ile AYNI sayaçtan alınır: çekmece ve bir pop-up
+       aynı anda açıksa biri kapanınca kilit erken açılmasın. */
+    const releaseScroll = lockBodyScroll();
+    // Odağı çekmeceye al; KAPATILINCA açan düğmeye geri ver (gezinmede değil).
     panelRef.current?.focus();
     return () => {
       document.removeEventListener("keydown", onKey);
-      body.style.overflow = prev;
-      opener?.focus?.();
+      releaseScroll();
+      if (!navigatingRef.current) opener?.focus?.();
+      navigatingRef.current = false;
     };
   }, [open, onClose]);
 
@@ -273,14 +284,14 @@ function MobileMenu({
               </p>
               <div className="space-y-0.5">
                 {section.items.map((item) => (
-                  <MenuRow key={item.href} item={item} active={item.href === activeHref} onGo={onClose} />
+                  <MenuRow key={item.href} item={item} active={item.href === activeHref} onGo={handleGo} />
                 ))}
               </div>
             </div>
           ))}
 
           <div className="mt-4 border-t border-hairline pt-4">
-            <MenuRow item={NAV_DIRECTORY} active={NAV_DIRECTORY.href === activeHref} onGo={onClose} muted />
+            <MenuRow item={NAV_DIRECTORY} active={NAV_DIRECTORY.href === activeHref} onGo={handleGo} muted />
           </div>
         </nav>
 
@@ -289,7 +300,7 @@ function MobileMenu({
           <MenuRow
             item={{ href: "/profile", label: "Profilim", icon: UserRound, adminOnly: false }}
             active={activeHref === "/profile"}
-            onGo={onClose}
+            onGo={handleGo}
           />
           <form action={signOut}>
             <button

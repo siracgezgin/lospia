@@ -131,10 +131,18 @@ export function parseA1(ref: string): { r: number; c: number } | null {
 
 export const toA1 = (r: number, c: number) => `${colName(c)}${r + 1}`;
 
-let sheetSeq = 0;
+/**
+ * Sayfa kimliği. ESKİDEN sayfa yüklemesi başına DETERMİNİSTİKTİ: sayaç her
+ * yüklemede sıfırlandığı için kayıtlı bir kitaba "+" ile eklenen ilk sayfa,
+ * Sayfa1'in kimliğinin AYNISINI alıyordu. Sonuç: sekme listesinde çift React
+ * anahtarı ve formül motorunun sayfa-kimliğiyle anahtarlanan önbelleği
+ * (bounds/cache) yüzünden çapraz-sayfa formüllerinde değerlerin karışması.
+ */
 export function newSheetId(): string {
-  sheetSeq += 1;
-  return `s${sheetSeq}_${Object.keys({}).length}${sheetSeq * 7919}`;
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `s${crypto.randomUUID().slice(0, 8)}`;
+  }
+  return `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export function emptySheet(name = "Sayfa1", rows = 100, cols = 20): Sheet {

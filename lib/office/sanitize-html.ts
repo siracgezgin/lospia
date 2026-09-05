@@ -13,7 +13,9 @@
  *
  * KAPSAM (2026-09-05, "Word gibi çalışsın"): biçimlendirme etiketleri, listeler,
  * başlıklar, alıntı/kod, YATAY ÇİZGİ, TABLO, bağlantı ve görsel. Buna karşılık:
- *   • `script` / `style` / `iframe` / form öğeleri içeriğiyle birlikte silinir,
+ *   • `script` / `style` / `iframe` / gömülü ortam ve girdi alanları
+ *     içeriğiyle birlikte silinir (sarmalayıcı `form`/`button` ise yalnız
+ *     etiket olarak düşer, metni kalır),
  *   • `on*` ile başlayan hiçbir öznitelik geçmez (allowlist dışı),
  *   • `href`/`src` yalnız http · https · mailto şemasıyla,
  *   • `style` YALNIZ aşağıdaki özellik listesiyle ve her özelliğin kendi değer
@@ -21,10 +23,19 @@
  * `url(...)`, `expression(...)`, `position`, `behavior` gibi hiçbir şey geçmez.
  */
 
-/** İçeriğiyle birlikte TAMAMEN silinen etiketler. */
+/**
+ * İçeriğiyle birlikte TAMAMEN silinen etiketler.
+ *
+ * `form`, `button` ve `select` BİLEREK burada DEĞİL: `form` bir sarmalayıcıdır
+ * ve gövdesinin tamamını tek bir `<form>` içine alan sayfalardan (kurumsal /
+ * ASP.NET) yapıştırılan metnin hepsi sessizce yok oluyordu — kullanıcı
+ * yapıştırıyor, ekranda hiçbir şey çıkmıyordu. Aynı biçimde `button` içindeki
+ * görünür etiket metni de kayboluyordu. Bu üçü ALLOWED_TAGS'te olmadığı için
+ * 2. adımda etiketleri silinir, METİNLERİ korunur — istenen davranış budur.
+ */
 const DROP_WITH_CONTENT = [
   "script", "style", "iframe", "object", "embed", "template", "noscript",
-  "form", "input", "button", "select", "textarea", "option",
+  "input", "textarea", "option",
   "link", "meta", "base", "head", "title", "svg", "math",
   "audio", "video", "source", "canvas", "frame", "frameset",
 ];
@@ -186,7 +197,11 @@ function rebuildAttrs(tag: string, raw: string): string {
 
 /** Kaynağı geçersiz bir `<img>` boş bir kırık kutu bırakır — tamamen atılır. */
 function imgHasSafeSrc(raw: string): boolean {
-  const m = /\bsrc\s*=\s*("[^"]*"|'[^']*'|[^\s"'>]+)/i.exec(raw);
+  // Nitelik SINIRINA sabitlenmiş kalıp: `\b` tire sonrasında da eşleştiği için
+  // `data-src` / `lazy-src` gibi nitelikleri `src` sanıyordu. Tembel yükleyen
+  // sitelerden yapıştırmada yanlış nitelik doğrulanıp gerçek `src` sonra
+  // düşüyor, gövdede kaynaksız boş bir <img> kalıyordu.
+  const m = /(?:^|[\s"'])src\s*=\s*("[^"]*"|'[^']*'|[^\s"'>]+)/i.exec(raw);
   if (!m) return false;
   let v = m[1];
   if (v.startsWith('"') || v.startsWith("'")) v = v.slice(1, -1);

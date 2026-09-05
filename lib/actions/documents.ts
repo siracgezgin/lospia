@@ -27,15 +27,17 @@ const uuidOrNull = z
   .or(z.literal(""));
 
 const DocumentSchema = z.object({
-  title: z.string().min(1, "Başlık gerekli").max(300),
-  description: z.string().max(4000).optional().nullable(),
+  /* Sınır mesajları TÜRKÇE: Zod'un varsayılan metni ("String must contain at
+     most …") doğrudan arayüzdeki hata şeridine basılıyordu. */
+  title: z.string().min(1, "Başlık gerekli").max(300, "Başlık en fazla 300 karakter olabilir."),
+  description: z.string().max(4000, "Açıklama en fazla 4.000 karakter olabilir.").optional().nullable(),
   document_type: z.enum([
     "drive_link", "google_doc", "google_sheet", "canva", "figma", "pdf_link",
     "word_link", "excel_link", "website", "internal_note", "other",
   ]),
   url: z
     .string()
-    .max(2000)
+    .max(2000, "Bağlantı en fazla 2.000 karakter olabilir.")
     .refine((v) => v.trim() === "" || /^https?:\/\//i.test(v.trim()), "Geçerli bir bağlantı girin (https://…)")
     .optional()
     .nullable(),
@@ -43,8 +45,11 @@ const DocumentSchema = z.object({
   department_id: uuidOrNull,
   related_task_id: uuidOrNull,
   related_contact_id: uuidOrNull,
-  tags: z.array(z.string().max(60)).max(20).optional(),
-  notes: z.string().max(4000).optional().nullable(),
+  tags: z
+    .array(z.string().max(60, "Bir etiket en fazla 60 karakter olabilir."))
+    .max(20, "En fazla 20 etiket eklenebilir.")
+    .optional(),
+  notes: z.string().max(4000, "Not en fazla 4.000 karakter olabilir.").optional().nullable(),
   /* Bağlantı da AF Teamwork'te bir KLASÖRÜN içinde yaşar (2026-08-29) —
      "Bağlantılar" diye ayrı bir bölüm kalmadı. */
   folder_id: uuidOrNull,
@@ -107,8 +112,11 @@ async function loadEditable(
   if (!row) return { error: NOT_FOUND };
   const createdBy = row.created_by as string | null;
   const status = row.status as string;
-  const authorEditable =
-    createdBy === ctx.userId && (status === "draft" || status === "in_review");
+  /* Kural RLS'le (20240334) BİREBİR aynı: kaydı ekleyen kendi kaydını her
+     durumda düzenler. Durum şartı bilinçli olarak kalktı — üye yayımlanan
+     kendi yazısını düzeltemiyordu. Durum YÜKSELTME koruması ayrı: aşağıda
+     `updateOperationDocument` üyeyi approve/archive'a geçirmiyor. */
+  const authorEditable = createdBy === ctx.userId;
   if (!isAdmin(ctx) && !authorEditable) return { error: PERM_DENIED };
   return { createdBy, status };
 }
@@ -314,8 +322,12 @@ export async function deleteOperationDocument(
 // Yazı gövdesi HTML'dir ve BURADA temizlenir — veritabanına ham girdi girmez.
 
 const DocBodySchema = z.object({
-  title: z.string().min(1, "Başlık gerekli").max(300),
-  body: z.string().max(400_000).optional().nullable(),
+  title: z.string().min(1, "Başlık gerekli").max(300, "Başlık en fazla 300 karakter olabilir."),
+  body: z
+    .string()
+    .max(400_000, "Yazı çok uzun (400.000 karakter sınırı).")
+    .optional()
+    .nullable(),
 });
 
 export async function createTeamworkDoc(
@@ -323,7 +335,7 @@ export async function createTeamworkDoc(
 ): Promise<{ id: string } | { error: string }> {
   const parsed = z
     .object({
-      title: z.string().min(1, "Başlık gerekli").max(300),
+      title: z.string().min(1, "Başlık gerekli").max(300, "Başlık en fazla 300 karakter olabilir."),
       folder_id: uuidOrNull,
       // Bölüm (20240327) — klasörsüz yazı da doğru ekranda kalsın.
       section: z.enum(["teamwork", "library"]).default("teamwork"),
@@ -398,7 +410,17 @@ export async function saveTeamworkDoc(
  * dosyasında.
  */
 const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
-const IMAGE_MIME = ["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif"];
+/* MIME → uzantı. `file.type` TAMAMEN istemci denetimindedir; bu yüzden hem
+   depolanan uzantı hem de yazılan content-type buradan TÜRETİLİR — istemciden
+   gelen dosya adı ya da başlık olduğu gibi depoya geçmez (public bucket'ta
+   keyfi içerik barındırılmasın). */
+const IMAGE_EXT_BY_MIME: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+  "image/gif": "gif",
+  "image/avif": "avif",
+};
 
 export async function uploadDocImage(
   formData: FormData,
@@ -409,7 +431,9 @@ export async function uploadDocImage(
   if (file.size > IMAGE_MAX_BYTES) {
     return { error: `Görsel 5 MB sınırını aşıyor (${(file.size / 1024 / 1024).toFixed(1)} MB).` };
   }
-  if (!IMAGE_MIME.includes(file.type)) {
+  const mime = file.type.toLowerCase().split(";")[0].trim();
+  const ext = IMAGE_EXT_BY_MIME[mime];
+  if (!ext) {
     return { error: "Yalnız PNG, JPEG, WebP, GIF ve AVIF yüklenebilir." };
   }
 
@@ -417,12 +441,11 @@ export async function uploadDocImage(
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
 
-  const ext = (file.name.split(".").pop() ?? "png").replace(/[^a-z0-9]/gi, "").slice(0, 5) || "png";
   const path = `${ctx.workspaceId}/${crypto.randomUUID()}.${ext}`;
 
   const { error: upErr } = await supabase.storage
     .from("teamwork-images")
-    .upload(path, file, { contentType: file.type, upsert: false });
+    .upload(path, file, { contentType: mime, upsert: false });
   if (upErr) return { error: upErr.message };
 
   const { data } = supabase.storage.from("teamwork-images").getPublicUrl(path);

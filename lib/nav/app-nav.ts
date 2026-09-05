@@ -107,13 +107,24 @@ const ROUTE_OWNER: ReadonlyArray<readonly [prefix: string, owner: string]> = [
   ["/dashboard", "/list"],
   // Kişi bazlı tek sayfa rapor — Raporlar'ın alt sayfası, yani yine List.
   ["/reports", "/list"],
-  // Sheets ve Library sol bardan kalktı; ikisi de AF Teamwork'ün kutucuğu.
+  // Sheets sol bardan kalktı; AF Teamwork'ün kutucuğudur.
+  // (Library henüz bir rota olarak açılmadı — açıldığında buraya "/library"
+  //  satırı eklenir; olmayan rota için burada ölü satır tutmuyoruz.)
   ["/sheets", "/documents"],
-  ["/library", "/documents"],
   // Üretim Föyü editörü Koleksiyon'dan açılır; kendi menü satırı yoktur.
   ["/production", "/collection"],
   // Pano kuralları — Pano'nun kurallar panelinden açılan alt sayfa.
   ["/rules", "/board"],
+  // Görev detayı tam sayfa açılabilir; işlerin listelendiği yüzey List'tir.
+  ["/tasks", "/list"],
+  /* Hareket kaydı · Arşiv · Çöp: /modules hub'ından ve profil menüsünden
+     açılan YÖNETİCİ yüzeyleri. Menüde kendi satırları yok (Admin bölümü üç
+     satırla sınırlı) — hepsi Ayarlar'ın yanında yaşar, o yüzden orada yanar.
+     Eşleme olmadan masaüstünde hiçbir satır, telefonda ise "Menu" sekmesi de
+     yanmıyordu (menuActive activeHref'e bağlı). */
+  ["/activity", "/settings"],
+  ["/archive", "/settings"],
+  ["/trash", "/settings"],
 ];
 
 /**

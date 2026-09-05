@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useOptimistic } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { Archive, RotateCcw } from "lucide-react";
 import { unarchiveTask } from "@/lib/actions/tasks";
@@ -29,7 +29,7 @@ function errText(msg: string | undefined, fallback: string): string {
 
 /* Satır: ad · tarih · (varsa) tek eylem. "Geri al" artık her zaman görünür —
    yalnız hover'da beliren düğmeye telefonda ulaşılamıyordu. */
-function TaskRow({ task, onUnarchive }: { task: Task; onUnarchive: (_id: string) => void }) {
+function TaskRow({ task }: { task: Task }) {
   const [pending, startTransition] = useTransition();
   /* Arşivden çıkarma yetkisi yoksa (üye) sunucu reddediyor ama satır yine de
      listeden siliniyordu: kullanıcı işin olduğunu sanıyordu. Hata artık
@@ -41,7 +41,10 @@ function TaskRow({ task, onUnarchive }: { task: Task; onUnarchive: (_id: string)
     startTransition(async () => {
       const res = await unarchiveTask(task.id);
       if (res && "error" in res) { setError(errText(res.error, "Görev arşivden çıkarılamadı.")); return; }
-      onUnarchive(task.id);
+      /* Satır listeden `unarchiveTask`ın revalidatePath("/archive") tazelemesiyle
+         düşer. Eskiden bir de iyimser silme vardı ama kendisini kuran geçiş aynı
+         karede bittiği için hiç görünmüyordu — iki yarım çözüm yerine tek,
+         sunucunun doğruladığı sonuç. */
     });
   }
 
@@ -83,15 +86,7 @@ function TaskRow({ task, onUnarchive }: { task: Task; onUnarchive: (_id: string)
    edilmez. Bölüm eyebrow'undaki sayı listeyi TARİF eder (kaç kayıt var),
    kimseyi puanlamaz; sadelik kuralına göre serbest. */
 export function ArchiveView({ manuallyArchived, oldCompleted }: Props) {
-  const [archived, setArchived] = useOptimistic(manuallyArchived, (state, id: string) =>
-    state.filter((t) => t.id !== id),
-  );
-  const [_p, startTransition] = useTransition();
-
-  function handleUnarchive(id: string) {
-    startTransition(() => { setArchived(id); });
-  }
-
+  const archived = manuallyArchived;
   const totalCount = archived.length + oldCompleted.length;
 
   return (
@@ -103,7 +98,7 @@ export function ArchiveView({ manuallyArchived, oldCompleted }: Props) {
           </h2>
           <div className="bg-surface border border-line rounded-card shadow-card divide-y divide-hairline overflow-hidden">
             {archived.map((task) => (
-              <TaskRow key={task.id} task={task} onUnarchive={handleUnarchive} />
+              <TaskRow key={task.id} task={task} />
             ))}
           </div>
         </section>
@@ -116,7 +111,7 @@ export function ArchiveView({ manuallyArchived, oldCompleted }: Props) {
           </h2>
           <div className="bg-surface border border-line rounded-card shadow-card divide-y divide-hairline overflow-hidden">
             {oldCompleted.map((task) => (
-              <TaskRow key={task.id} task={task} onUnarchive={() => {}} />
+              <TaskRow key={task.id} task={task} />
             ))}
           </div>
         </section>

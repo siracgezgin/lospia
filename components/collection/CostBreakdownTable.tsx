@@ -11,7 +11,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { DownloadLink } from "@/components/ui/DownloadLink";
 import {
   totalQuantity, formatMoney, COST_ITEM_DEFS, emptyCostItems, unitCostOf,
-  MATERIAL_COST_KEY, bomLineCost, parseMoney,
+  MATERIAL_COST_KEY, bomLineCost, parseMoney, productionRowIndex,
 } from "@/lib/collection/cost";
 import { CollectionTabs } from "./PaymentTable";
 import { SeasonSwitch, type SwitchSeason } from "./SeasonSwitch";
@@ -206,12 +206,9 @@ export function CostBreakdownTable({ rows, seasons = [], bomBySheet = {} }: Prop
     const base: SizeDistribution = sd && Array.isArray(sd.rows)
       ? { ...sd, rows: [...sd.rows] }
       : { sizes: sd?.sizes ?? [], rows: [] };
-    const norm = (v: string) =>
-      v.toLocaleLowerCase("tr").replace(/[İI]/g, "i").replace(/[^a-z ]/g, "").trim();
-    let idx = base.rows.findIndex((r) => norm(r.label ?? "").includes("uretim adet"));
-    if (idx === -1) idx = base.rows.findIndex((r) => !norm(r.label ?? "").includes("beden etiket"));
+    const idx = productionRowIndex(base);
     if (idx === -1) {
-      base.rows.push({ label: "Üretim adet", values: [], total: value });
+      base.rows.push({ label: "Üretim adeti", values: [], total: value });
       return base;
     }
     base.rows[idx] = { ...base.rows[idx], total: value };
@@ -222,13 +219,8 @@ export function CostBreakdownTable({ rows, seasons = [], bomBySheet = {} }: Prop
    *  ne yazdıysa aynen), yoksa değerlerden hesaplanan toplam. */
   function qtyInputValue(r: Row): string {
     const sd = sizeDist[r.id];
-    const norm = (v: string) =>
-      v.toLocaleLowerCase("tr").replace(/[İI]/g, "i").replace(/[^a-z ]/g, "").trim();
-    const list = sd?.rows ?? [];
-    const row =
-      list.find((x) => norm(x.label ?? "").includes("uretim adet")) ??
-      list.find((x) => !norm(x.label ?? "").includes("beden etiket")) ??
-      list[0];
+    const idx = productionRowIndex(sd);
+    const row = idx === -1 ? undefined : sd?.rows?.[idx];
     if (row && row.total !== undefined && row.total !== null && String(row.total) !== "") {
       return String(row.total);
     }

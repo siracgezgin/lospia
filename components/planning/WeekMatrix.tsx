@@ -1,5 +1,8 @@
 "use client";
 
+// KULLANILMIYOR — 2026-09-05 itibarıyla hiçbir rota bu dosyayı import etmiyor.
+// Haftalık ızgara: components/planning/PlanningWeekGrid.tsx.
+// Silinmesi kullanıcı onayı bekliyor; o güne kadar burada düzeltme yapmayın.
 import { Grid2X2 } from "lucide-react";
 import { PlanningSection } from "./PlanningSection";
 import { cn } from "@/lib/utils/cn";

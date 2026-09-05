@@ -351,6 +351,28 @@ class Parser {
         }
         this.i = save;
       }
+      /* Tüm satır kısayolu SAYFA ADIYLA: Sayfa2!1:1
+         Sözcükleyici "Sayfa2!1" için ad belirteci üretiyordu ama ayrıştırıcıda
+         karşılığı yoktu; belirteç hiçbir dala düşmediği için formülün tamamı
+         #AD? oluyordu. (Sayfasız "1:1" yukarıdaki sayı dalında ele alınır;
+         ikinci uç ise sayı olarak sözcüklenir, ikisini de kabul ediyoruz.) */
+      if (ROW_ONLY.test(t.v) && this.peek()?.t === ":") {
+        const save = this.i;
+        this.eat();
+        const t2 = this.peek();
+        const rowOf = (x: Tok): number | null => {
+          if (x.t === "num") return Number.isInteger(x.v) && x.v >= 1 ? x.v : null;
+          if (x.t === "name" && ROW_ONLY.test(x.v)) return Number(x.v.replace("$", ""));
+          return null;
+        };
+        const a = Number(t.v.replace("$", ""));
+        const b = t2 ? rowOf(t2) : null;
+        if (a >= 1 && b !== null) {
+          this.eat();
+          return { k: "range", r1: Math.min(a, b) - 1, c1: 0, r2: Math.max(a, b) - 1, c2: -1, sheet: t.sheet };
+        }
+        this.i = save;
+      }
       if (t.v === "TRUE" || t.v === "DOĞRU") return { k: "num", v: 1 };
       if (t.v === "FALSE" || t.v === "YANLIŞ") return { k: "num", v: 0 };
       if (this.peek()?.t !== "(") return null;   // çıplak ad → #AD?
@@ -630,8 +652,26 @@ function evalNode(ctx: EvalCtx, node: Node): Scalar {
         }
       }
 
-      const a = num(av); if (isError(a)) return a;
-      const b = num(bv); if (isError(b)) return b;
+      const a = num(av);
+      const b = num(bv);
+      /* TARİH ARİTMETİĞİ. Bu tabloda tarih METİNDİR ("05.09.2026"), o yüzden
+         sayısal çevrim tıkanıyor ve ekipteki en sık iki tarih işlemi —
+         "=BUGÜN()+7" ve iki tarihin farkı "=C2-C1" — sessizce #DEĞER!
+         veriyordu. Sayısal yol ÖNCE denenir; yalnız tıkandığında tarihe
+         düşülür, sonuç GÜNSAY/TAMİŞGÜNÜ ile tutarlı kalır. */
+      if ((node.op === "+" || node.op === "-") && (isError(a) || isError(b))) {
+        const ad = isError(a) ? toDate(av) : null;
+        const bd = isError(b) ? toDate(bv) : null;
+        if (ad && bd) {
+          if (node.op === "-") return dayNo(ad) - dayNo(bd);           // gün farkı
+        } else if (ad && !isError(b)) {
+          return fmtDate(fromDayNo(dayNo(ad) + (node.op === "+" ? b : -b)));
+        } else if (bd && !isError(a) && node.op === "+") {
+          return fmtDate(fromDayNo(dayNo(bd) + a));
+        }
+      }
+      if (isError(a)) return a;
+      if (isError(b)) return b;
       switch (node.op) {
         case "+": return a + b;
         case "-": return a - b;
@@ -765,7 +805,9 @@ function callFn(ctx: EvalCtx, node: Extract<Node, { k: "call" }>): Scalar {
     case "ROUNDDOWN": case "AŞAĞIYUVARLA": {
       const a = nAt(0); if (isError(a)) return a;
       const dRaw = optNum(1, 0); if (isError(dRaw)) return dRaw;
-      const p = Math.pow(10, Math.trunc(dRaw));
+      /* Basamak sayısı KISILIR: =YUVARLA(2;5;400) gibi bir yazımda 10^400
+         Infinity oluyor ve sonuç NaN olarak ekrana düşüyordu. */
+      const p = Math.pow(10, Math.max(-10, Math.min(10, Math.trunc(dRaw))));
       const x = (a + (a >= 0 ? Number.EPSILON : -Number.EPSILON)) * p;
       if (name === "ROUNDUP" || name === "YUKARIYUVARLA") return (a < 0 ? -Math.ceil(Math.abs(x)) : Math.ceil(x)) / p;
       if (name === "ROUNDDOWN" || name === "AŞAĞIYUVARLA") return (a < 0 ? -Math.floor(Math.abs(x)) : Math.floor(x)) / p;
@@ -787,7 +829,7 @@ function callFn(ctx: EvalCtx, node: Extract<Node, { k: "call" }>): Scalar {
     case "TRUNC": case "NSAT": {
       const a = nAt(0); if (isError(a)) return a;
       const d = optNum(1, 0); if (isError(d)) return d;
-      const p = Math.pow(10, Math.trunc(d));
+      const p = Math.pow(10, Math.max(-10, Math.min(10, Math.trunc(d))));
       return Math.trunc(a * p) / p;
     }
     case "MOD": case "MODÜLO": {
@@ -924,6 +966,16 @@ function callFn(ctx: EvalCtx, node: Extract<Node, { k: "call" }>): Scalar {
       }
       if (!pairs.length) return "#DEĞER!";
       const base = pairs[0].box;
+      /* BOYUT DENETİMİ: her ölçüt ve toplam kutusu ilk ölçüt kutusuyla AYNI
+         yükseklik/genişlikte olmalı. Yoksa dr/dc indisleri kutunun DIŞINI
+         okuyor, hata verilmeden yanlış toplam çıkıyordu — ölçüt aralığını bir
+         satır uzun seçmek finans tablosunda sessizce yanlış sonuç demek.
+         Excel de uyuşmayan aralıkta #DEĞER! verir. */
+      const bh = base.r2 - base.r1 + 1;
+      const bw = base.c2 - base.c1 + 1;
+      const fits = (b: RangeBox) => b.r2 - b.r1 + 1 === bh && b.c2 - b.c1 + 1 === bw;
+      for (const p of pairs) if (!fits(p.box)) return "#DEĞER!";
+      if (target && !fits(target)) return "#DEĞER!";
       let total = 0;
       let hits = 0;
       for (let dr = 0; dr <= base.r2 - base.r1; dr++) {

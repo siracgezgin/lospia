@@ -79,11 +79,19 @@ export function NotificationBell({ unreadCount: initialCount, notifications = []
      geliyordu — kullanıcı "tıkladım ama olmadı, neden?" diyordu. */
   const [error, setError] = useState<string | null>(null);
 
+  /* HANGİ eylem bekliyor? Tek `pending` ikisi tarafından paylaşılıyordu:
+     listedeki TEK bir bildirimi okundu işaretleyince üstteki "Tümünü okundu
+     işaretle" düğmesi dönmeye başlıyor ve (loading = disabled) tıklanamaz
+     oluyordu — kullanıcı basmadığı düğmenin çalıştığını görüyordu. */
+  const [markingAll, setMarkingAll] = useState(false);
+
   function handleMarkAllRead() {
     setError(null);
+    setMarkingAll(true);
     startTransition(async () => {
       setOptimisticCount(0);
       const res = await markAllNotificationsRead();
+      setMarkingAll(false);
       if ("error" in res) {
         setError("Bildirimler okundu işaretlenemedi. Tekrar deneyin.");
         return;
@@ -115,7 +123,7 @@ export function NotificationBell({ unreadCount: initialCount, notifications = []
       variant="ghost"
       size="sm"
       onClick={handleMarkAllRead}
-      loading={pending}
+      loading={pending && markingAll}
       className="h-7 px-2 text-[12.5px] text-brand hover:text-brand-strong"
     >
       Tümünü okundu işaretle

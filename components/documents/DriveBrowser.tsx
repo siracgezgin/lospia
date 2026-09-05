@@ -367,15 +367,15 @@ export function DriveBrowser({
 
   /** Klasör kimliğinden okunur yol — arama sonucunda "nerede?" sorusu için. */
   const pathOf = useMemo(() => {
+    /* Yollar PEŞİN hesaplanır. Eskiden tembel bir önbellek vardı ama o Map
+       render bittikten SONRA doldurulduğu için React'in kuralını çiğniyordu;
+       klasör sayısı küçük olduğundan hepsini baştan kurmak daha ucuz. */
     const byId = new Map(folders.map((f) => [f.id, f]));
-    const cache = new Map<string, string>();
-    return (id: string | null): string => {
-      if (!id) return rootLabel;
-      const hit = cache.get(id);
-      if (hit !== undefined) return hit;
+    const paths = new Map<string, string>();
+    for (const start of folders) {
       const parts: string[] = [];
       const seen = new Set<string>();
-      let cur: string | null = id;
+      let cur: string | null = start.id;
       while (cur && !seen.has(cur)) {
         seen.add(cur);
         const f: DocFolder | undefined = byId.get(cur);
@@ -383,10 +383,9 @@ export function DriveBrowser({
         parts.unshift(f.name);
         cur = f.parent_id;
       }
-      const value = [rootLabel, ...parts].join(" / ");
-      cache.set(id, value);
-      return value;
-    };
+      paths.set(start.id, [rootLabel, ...parts].join(" / "));
+    }
+    return (id: string | null): string => (id ? paths.get(id) ?? rootLabel : rootLabel);
   }, [folders, rootLabel]);
 
   /** İmzalı adres alır; hem indirme hem önizleme aynı kapıdan geçer. */

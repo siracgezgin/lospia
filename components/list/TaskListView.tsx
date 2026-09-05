@@ -18,7 +18,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, ChevronLeft, ChevronRight, Columns3, Plus, FileSpreadsheet, Lock, ClipboardList, Search, SlidersHorizontal, X, AlertCircle, LayoutDashboard } from "lucide-react";
 import { ADMIN_ONLY_CHIP_LABEL } from "@/lib/utils/visibility";
-import type { Task, SavedView, TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceDepartment } from "@/types";
+import type { Task, SavedView, TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceDepartment, WorkspaceRole } from "@/types";
 import {
   TASK_PRIORITIES,
   PRIORITY_LABELS,
@@ -29,6 +29,7 @@ import {
 import { ViewTabs, VIEW_META, tabClass, type ViewTabItem } from "@/components/shared/ViewTabs";
 import { FIELD_LABELS } from "@/lib/i18n/tr";
 import { updateTaskStatus } from "@/lib/actions/tasks";
+import { canCreateTask } from "@/lib/auth/permissions";
 import { cn } from "@/lib/utils/cn";
 import { formatDateTR } from "@/lib/utils/format-date";
 import { buildDeptMeta } from "@/lib/utils/departments";
@@ -55,6 +56,13 @@ interface Props {
   /** Süzgeç şeridindeki kişi baloncukları — ekip üyeleri, kimlikleriyle. */
   people?: { userId: string; name: string; photoUrl: string | null; colorKey: string | null }[];
   deptMembers?: { department_id: string; member_id: string }[];
+  /* Katılımcılar (task_member_completions) — SORUMLULUK panoyla aynı okunur:
+     katılımcılar ∪ atanan. Hem "Sorumlu" sütununu hem de durum değiştirme
+     yetkisini bu harita belirler. */
+  participantsByTask?: Record<string, { userId: string; name: string }[]>;
+  /* Rolün kendisi: "görev oluştur" düğmesi ve durum değiştirme izni role
+     bakar; `isAdmin` tek başına viewer ile member'ı ayırt edemiyordu. */
+  role?: WorkspaceRole;
   isAdmin?: boolean;
   // Person filter seed from the URL (?person=<member userId | contact id>).
   initialPerson?: string;
@@ -212,10 +220,15 @@ function friendlyError(msg: string | undefined): string {
 // tamamlanmış görev üyeye kilitli görünür ve reddedilen her değişiklik
 // listenin üstünde Türkçe bir uyarıya dönüşür.
 function StatusCell({
-  task, isAdmin, onError,
+  task, isAdmin, canChange, onError,
 }: {
   task: Task;
   isAdmin: boolean;
+  /* Sorumluluk kuralı panodakiyle birebir aynı: yönetici her görevi, üye
+     yalnız atandığı / oluşturduğu / katılımcısı olduğu görevi taşır. Liste bu
+     kuralı bilmediği için yetkisiz kullanıcıya da açılır kutu çiziyor, her
+     denemede kırmızı "Bu işlem için yetkiniz yok." gösteriyordu. */
+  canChange: boolean;
   onError: (_msg: string | null) => void;
 }) {
   const [isPending, startTransition] = useTransition();
@@ -234,6 +247,17 @@ function StatusCell({
       const res = await updateTaskStatus(task.id, newStatus);
       if (res && "error" in res) onError(friendlyError(res.error));
     });
+  }
+
+  if (!canChange && !locked) {
+    /* Yetkisi olmayan kişi durumu OKUR: kilit ikonu yok — kilit "tamamlanmış
+       işi yönetici açar" anlamına ayrılmıştır, burada anlatılacak bir şey yok. */
+    return (
+      <span className="inline-flex items-center gap-1.5 text-[13.5px] text-muted whitespace-nowrap">
+        <span className={cn("h-2 w-2 rounded-full shrink-0", STATUS_DOT[task.status])} aria-hidden />
+        {SIMPLIFIED_STATUS_LABEL[task.status]}
+      </span>
+    );
   }
 
   if (locked) {
@@ -394,6 +418,37 @@ function DueDate({ value, done }: { value: string | null; done: boolean }) {
   );
 }
 
+/* SORUMLU = KATILIMCILAR ∪ ATANAN — pano ve görev detayıyla aynı okuma.
+   Liste yalnız `assignee_id` / `responsible_contact_id` çözüyordu: sorumluları
+   sadece katılımcı satırlarıyla tanımlanmış bir görev listede "—" görünüyor,
+   aynı görev panoda kişinin kartında duruyordu. */
+function responsibleLabelOf(
+  task: Task,
+  responsibleNames: Record<string, string>,
+  participantsByTask: Record<string, { userId: string; name: string }[]>,
+): string {
+  const parts = participantsByTask[task.id];
+  if (parts && parts.length > 0) return parts.map((p) => p.name).join(", ");
+  return (
+    responsibleNames[task.assignee_id ?? ""] ??
+    responsibleNames[(task as { responsible_contact_id?: string | null }).responsible_contact_id ?? ""] ??
+    ""
+  );
+}
+
+/* Durum değiştirme yetkisi — panodaki `isResponsible` ile birebir aynı kural
+   (sunucudaki updateTask'ın yalnız-durum dalı da bunu uygular). */
+function listIsResponsible(
+  task: Task,
+  role: WorkspaceRole,
+  userId: string,
+  participantsByTask: Record<string, { userId: string; name: string }[]>,
+): boolean {
+  if (role === "owner" || role === "admin") return true;
+  if (task.assignee_id === userId || task.created_by === userId) return true;
+  return (participantsByTask[task.id] ?? []).some((p) => p.userId === userId);
+}
+
 // ---- Mobile task card (replaces the wide table below md) ----
 // Telefonda en önemli dört şey: başlık · durum · sorumlu · tarih. Departman
 // düz metin, öncelik yalnız yüksek/acilse. Kart başına TEK rozet (durum).
@@ -401,17 +456,16 @@ function MobileTaskCard({
   task,
   deptMeta,
   responsibleNames,
+  participantsByTask,
 }: {
   task: Task;
   deptMeta: ReturnType<typeof buildDeptMeta>;
   responsibleNames: Record<string, string>;
+  participantsByTask: Record<string, { userId: string; name: string }[]>;
 }) {
   const meta = task.department_id ? deptMeta[task.department_id] : undefined;
   const badge = meta ? getDepartmentBadge(meta.color) : null;
-  const responsible =
-    responsibleNames[task.assignee_id ?? ""] ??
-    responsibleNames[(task as { responsible_contact_id?: string | null }).responsible_contact_id ?? ""] ??
-    "";
+  const responsible = responsibleLabelOf(task, responsibleNames, participantsByTask);
   const done = task.status === "done";
 
   return (
@@ -462,10 +516,15 @@ function MobileTaskCard({
 
 // ---- Main component ----
 
-export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles, contacts, departments = [], members = [], people = [], deptMembers = [], isAdmin = false, initialPerson = "", initialView = "" }: Props) {
+export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles, contacts, departments = [], members = [], people = [], deptMembers = [], participantsByTask = {}, role = "member", isAdmin = false, initialPerson = "", initialView = "" }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const deptMeta = useMemo(() => buildDeptMeta(departments), [departments]);
+  /* Görev oluşturma yetkisi panodakiyle aynı kapıdan geçer (canCreateTask):
+     viewer rolündeki kullanıcı formu açıp doldurup ancak GÖNDERDİĞİNDE
+     reddedildiğini öğreniyordu. */
+  const canCreate = canCreateTask(role);
+
   const responsibleNames = useMemo<Record<string, string>>(() => {
     const map: Record<string, string> = {};
     profiles.forEach((p) => { map[p.id] = p.full_name ?? p.email ?? "?"; });
@@ -516,7 +575,15 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
         if (clean.length > 0) setSorting(clean);
       }
       if (saved.columnVisibility && typeof saved.columnVisibility === "object") {
-        setColumnVisibility(saved.columnVisibility as VisibilityState);
+        /* Sıralamada olduğu gibi görünürlük de SÜZÜLÜR. Eski/bozuk bir tercih
+           `{"title": false}` taşıyorsa başlık sütunu gizleniyor ve menüde
+           karşılığı olmadığı için geri getirilemiyordu — sütun kalıcı olarak
+           kayboluyordu. Yalnız menünün açıp kapatabildiği sütunlar uygulanır. */
+        const vis = Object.fromEntries(
+          Object.entries(saved.columnVisibility as Record<string, unknown>)
+            .filter(([k, v]) => COLUMN_LABELS[k] !== undefined && typeof v === "boolean"),
+        ) as VisibilityState;
+        if (Object.keys(vis).length > 0) setColumnVisibility((prev) => ({ ...prev, ...vis }));
       }
     } catch {
       /* Bozuk/erişilemeyen tercih varsayılanı bozmasın. */
@@ -750,7 +817,12 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
       id: "status",
       header: FIELD_LABELS.status,
       cell: (info) => (
-        <StatusCell task={info.row.original} isAdmin={isAdmin} onError={setActionError} />
+        <StatusCell
+          task={info.row.original}
+          isAdmin={isAdmin}
+          canChange={listIsResponsible(info.row.original, role, userId, participantsByTask)}
+          onError={setActionError}
+        />
       ),
       sortingFn: (a, b) => {
         const order: TaskStatus[] = ["backlog", "ready", "in_progress", "review", "blocked", "done", "archived"];
@@ -776,14 +848,14 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
     }),
     // Responsible column — reads assignee_id or responsible_contact_id
     columnHelper.accessor(
-      (row) => responsibleNames[row.assignee_id ?? ""] ?? responsibleNames[(row as { responsible_contact_id?: string | null }).responsible_contact_id ?? ""] ?? "",
+      (row) => responsibleLabelOf(row, responsibleNames, participantsByTask),
       {
         id: "responsible",
         header: FIELD_LABELS.assignee,
         cell: (info) => <span className="text-[13.5px] text-muted whitespace-nowrap">{info.getValue() || "—"}</span>,
         sortingFn: (a, b) => {
-          const na = responsibleNames[a.original.assignee_id ?? ""] ?? responsibleNames[(a.original as { responsible_contact_id?: string | null }).responsible_contact_id ?? ""] ?? "";
-          const nb = responsibleNames[b.original.assignee_id ?? ""] ?? responsibleNames[(b.original as { responsible_contact_id?: string | null }).responsible_contact_id ?? ""] ?? "";
+          const na = responsibleLabelOf(a.original, responsibleNames, participantsByTask);
+          const nb = responsibleLabelOf(b.original, responsibleNames, participantsByTask);
           return na.localeCompare(nb, "tr", { sensitivity: "base" });
         },
       }
@@ -846,7 +918,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
         return da < db ? -1 : da > db ? 1 : 0;
       },
     }),
-  ], [responsibleNames, deptMeta, isAdmin]); // closure deps
+  ], [responsibleNames, deptMeta, isAdmin, role, userId, participantsByTask]); // closure deps
 
   const table = useReactTable({
     data: filteredTasks,
@@ -888,16 +960,16 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
       description={
         hasActiveFilters
           ? "Geçerli filtrelerle eşleşen görev yok."
-          : "İlk görevi oluşturarak başlayın."
+          : canCreate ? "İlk görevi oluşturarak başlayın." : "Bu çalışma alanında henüz görev yok."
       }
       action={
         hasActiveFilters ? (
           <Button variant="secondary" size="sm" onClick={clearFilters}>Filtreleri temizle</Button>
-        ) : (
+        ) : canCreate ? (
           <Button size="sm" onClick={() => setModalOpen(true)}>
             <Plus size={14} aria-hidden /> Görev oluştur
           </Button>
-        )
+        ) : undefined
       }
     />
   );
@@ -937,10 +1009,12 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
           durum · kişi. Öncelik "Filtreler"in arkasında; "Temizle" yalnız bir
           süzgeç uygulanmışken. Sağdaki sayı listeyi tarif eder. */}
       <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 bg-surface border-b border-hairline shrink-0">
-        <Button onClick={() => setModalOpen(true)}>
-          <Plus size={14} aria-hidden />
-          Görev oluştur
-        </Button>
+        {canCreate && (
+          <Button onClick={() => setModalOpen(true)}>
+            <Plus size={14} aria-hidden />
+            Görev oluştur
+          </Button>
+        )}
         {/* CSV içe aktar — geri bildirimle şimdilik gizlendi (kod/action korunur). */}
         {false && isAdmin && (
           <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
@@ -948,7 +1022,9 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
             CSV&apos;den içe aktar
           </Button>
         )}
-        <div className="hidden sm:block w-px h-5 bg-line mx-1" aria-hidden />
+        {/* Ayraç yalnız solunda bir düğme VARSA anlamlıdır; yetkisiz kullanıcıda
+            araç çubuğu başıboş bir çizgiyle başlıyordu. */}
+        {canCreate && <div className="hidden sm:block w-px h-5 bg-line mx-1" aria-hidden />}
 
         <div className="relative flex-1 min-w-[12rem] sm:flex-none sm:w-64">
           <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-subtle" aria-hidden />
@@ -1121,6 +1197,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
                 task={row.original}
                 deptMeta={deptMeta}
                 responsibleNames={responsibleNames}
+                participantsByTask={participantsByTask}
               />
             ))}
           </div>
@@ -1231,7 +1308,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
         </div>
       )}
 
-      {modalOpen && (
+      {modalOpen && canCreate && (
         <CreateTaskModal
           onClose={() => setModalOpen(false)}
           workspaceId={workspaceId}

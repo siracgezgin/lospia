@@ -2,6 +2,14 @@ import Link from "next/link";
 import type { ModuleEntry } from "@/lib/modules/registry";
 
 /**
+ * @deprecated KULLANILMIYOR — silinmeyi bekliyor (dosya silmek kullanıcı onayı
+ * ister, bkz. CLAUDE.md "Ask before deleting any file").
+ *
+ * Ana Sayfa'daki kısayol ızgarası 2026-08-29'da kaldırıldı ("zaten yanda var
+ * her şey"); gezinme artık sol menü + /modules hub'ıdır. Bileşen geride kaldı
+ * ve hiçbir yerden import edilmiyor. YENİDEN BAĞLAMA: Ana Sayfa'ya kısayol
+ * eklemek o kararı geri almak olur.
+ *
  * Home Page kısayolu — KOMPAKT çip.
  *
  * Aslı Hanım (2026-08-24): "Bu haliyle her şey aynı geliyor, karmaşık geliyor."

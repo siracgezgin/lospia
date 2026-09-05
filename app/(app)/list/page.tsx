@@ -1,7 +1,7 @@
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { TaskListView } from "@/components/list/TaskListView";
-import type { Task, SavedView, Profile, WorkspaceContact, WorkspaceDepartment } from "@/types";
+import type { Task, SavedView, Profile, WorkspaceContact, WorkspaceDepartment, WorkspaceRole } from "@/types";
 
 export const metadata = { title: "List" };
 
@@ -24,7 +24,8 @@ export default async function ListPage({
     .limit(1);
   const workspaceId = memberRows?.[0]?.workspace_id;
   if (!workspaceId) return <div className="p-8 text-muted">Çalışma alanı bulunamadı.</div>;
-  const isAdmin = memberRows?.[0]?.role === "owner" || memberRows?.[0]?.role === "admin";
+  const role = (memberRows?.[0]?.role ?? "member") as WorkspaceRole;
+  const isAdmin = role === "owner" || role === "admin";
 
   // Non-admins never see admin_only tasks (RLS + explicit filter as backstop).
   const tasksQuery = supabase
@@ -36,7 +37,10 @@ export default async function ListPage({
     .is("deleted_at", null);
   if (!isAdmin) tasksQuery.eq("visibility", "workspace");
 
-  const [tasksResult, viewsResult, membersResult, contactsResult, deptsResult, deptMembersResult] = await Promise.all([
+  const [
+    tasksResult, viewsResult, membersResult, contactsResult, deptsResult, deptMembersResult,
+    completionsResult,
+  ] = await Promise.all([
     tasksQuery.order("created_at", { ascending: false }),
     supabase
       .from("saved_views")
@@ -64,6 +68,15 @@ export default async function ListPage({
     supabase
       .from("department_members")
       .select("department_id, member_id")
+      .eq("workspace_id", workspaceId),
+    /* Kişi bazlı tamamlama satırları = KATILIMCILAR. Pano ve görev detayı
+       sorumluyu "katılımcılar ∪ atanan" diye okuyor; liste bunu bilmediği için
+       sorumluları yalnız katılımcı olarak tanımlanmış görevlerde "—" yazıyor,
+       üstelik durum açılır kutusunu yetkisi olmayana da açıyordu. Yeni bir
+       sıralı tur değil — aynı paralel turun bir sorgusu daha. */
+    supabase
+      .from("task_member_completions")
+      .select("task_id, workspace_members(id, profiles(id, full_name, email))")
       .eq("workspace_id", workspaceId),
   ]);
 
@@ -111,6 +124,25 @@ export default async function ListPage({
     };
   });
   const deptMembers = (deptMembersResult.data ?? []) as { department_id: string; member_id: string }[];
+  /* task → katılımcılar (kimlik + ad). Panodaki `participantsByTask` ile aynı
+     şekil, aynı kaynak. */
+  type CompRow = {
+    task_id: string;
+    workspace_members:
+      | { id: string; profiles: ProfileLite | ProfileLite[] | null }
+      | { id: string; profiles: ProfileLite | ProfileLite[] | null }[]
+      | null;
+  };
+  const participantsByTask: Record<string, { userId: string; name: string }[]> = {};
+  for (const row of (completionsResult.data ?? []) as unknown as CompRow[]) {
+    const wm = Array.isArray(row.workspace_members) ? row.workspace_members[0] : row.workspace_members;
+    const prof = wm && (Array.isArray(wm.profiles) ? wm.profiles[0] : wm.profiles);
+    if (!prof) continue;
+    (participantsByTask[row.task_id] ??= []).push({
+      userId: prof.id,
+      name: prof.full_name ?? prof.email ?? "—",
+    });
+  }
   const contacts: WorkspaceContact[] = (contactsResult.data ?? []) as WorkspaceContact[];
   const departments = (deptsResult.data ?? []) as WorkspaceDepartment[];
 
@@ -126,6 +158,8 @@ export default async function ListPage({
       members={members}
       people={people}
       deptMembers={deptMembers}
+      participantsByTask={participantsByTask}
+      role={role}
       isAdmin={isAdmin}
       initialPerson={initialPerson}
       initialView={initialView}

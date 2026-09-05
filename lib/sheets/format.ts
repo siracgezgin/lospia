@@ -20,6 +20,9 @@ export function formatValue(value: Scalar, style?: CellStyle): string {
   if (fmt === "text") return String(value);
 
   if (typeof value !== "number") return String(value);
+  /* NaN / Infinity ekrana SIZMASIN: taşan bir hesap (ör. 10^400) hücreye
+     "NaN" yazıyordu; kullanıcı bunu bir değer sanıyor. Excel gibi hata göster. */
+  if (!Number.isFinite(value)) return "#DEĞER!";
 
   const d = style?.d;
   switch (fmt) {

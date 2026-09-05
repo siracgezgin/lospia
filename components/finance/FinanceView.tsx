@@ -64,7 +64,10 @@ function norm(s: string): string {
     .replace(/İ/g, "i");
 }
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
+/* BUGÜN YEREL GÜNDÜR, UTC günü değil. `toISOString()` UTC'ye çevirdiği için
+   İstanbul'da (UTC+3) gece 00:00–03:00 arasında hâlâ "dün"ü söylüyordu:
+   gecikmiş rozeti üç saat geç beliriyordu. */
+const todayISO = () => format(new Date(), "yyyy-MM-dd");
 
 /** Bekleyen + vadesi geçmiş = gecikmiş. Ödenmiş kayıt asla "gecikmiş" değildir. */
 function isOverdue(p: FinancePayment): boolean {
@@ -263,7 +266,18 @@ export function FinanceView({ payments }: Props) {
     // Alan hataları alanın altında — genel kutu yalnız sunucu hatası için.
     if (!draft.title.trim()) { setTitleError("Başlık gerekli."); return; }
     setTitleError(null);
-    const amountNum = draft.amount.trim() === "" ? null : Number(draft.amount.replace(",", "."));
+    /* TUTAR TÜRKÇE BİÇİMDE OKUNUR. Liste tutarı "₺1.250,50" diye gösteriyor,
+       yani ekran bu biçimi öğretiyor; alan ise yalnız ilk virgülü noktaya
+       çevirdiği için "1.250,50" → "1.250.50" → NaN oluyordu. Kural
+       lib/collection/cost.ts'teki parseMoney ile aynı: virgül varsa noktalar
+       binliktir. */
+    const rawAmount = draft.amount.trim();
+    let cleanedAmount = rawAmount.replace(/[^\d.,-]/g, "");
+    if (cleanedAmount.includes(",")) {
+      cleanedAmount = cleanedAmount.replace(/\./g, "").replace(",", ".");
+    }
+    const amountNum =
+      rawAmount === "" ? null : cleanedAmount === "" ? Number.NaN : Number(cleanedAmount);
     if (amountNum != null && Number.isNaN(amountNum)) { setAmountError("Tutar sayı olmalı (ör. 1250,50)."); return; }
     // Negatif tutar sunucuda zaten reddediliyordu; hatayı alanın altında ve
     // bir tur beklemeden söyle.

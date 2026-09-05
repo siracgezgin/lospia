@@ -175,6 +175,13 @@ const CARD_STATUS_CHOICES: { value: TaskStatus; label: string }[] = [
   { value: "done",        label: "Tamamlandı" },
 ];
 
+/* Taşıma bildirimi TEK CÜMLEDİR. Aynı işlem iki ayrı yüzeyde iki ayrı
+   cümleyle ("…sekmesine taşındı" / "…aşamasına taşındı") anlatılıyordu; üstelik
+   "sekme" yalnız telefonda var, masaüstünde sütun. Metin yüzeyden bağımsızdır. */
+function movedToast(status: TaskStatus): string {
+  return `Görev "${STATUS_LABELS[status]}" durumuna taşındı.`;
+}
+
 /* Durum değiştirme İZNİ tek yerde tanımlıdır. Satır içi çip ve kart menüsündeki
    "Taşı" bölümü aynı kuralı okur — iki yüzeyde iki farklı kural olsaydı biri
    sunucunun reddedeceği bir seçeneği sunardı. Kural sunucuyla aynı: sorumlu
@@ -238,7 +245,7 @@ function CardStatusChip({ task }: { task: Task }) {
       ctx!.afterMutation();
       /* Kart, telefonda bulunduğu sekmeden KAYBOLUR (her sekme bir durum).
          Nereye gittiğini söylemezsek kullanıcı görevi sildiğini sanıyor. */
-      ctx!.showToast(`Görev "${STATUS_LABELS[s]}" sekmesine taşındı.`);
+      ctx!.showToast(movedToast(s));
     });
   }
 
@@ -970,7 +977,7 @@ function CardContent({
         return;
       }
       boardCtx?.afterMutation();
-      boardCtx?.showToast(`Görev "${STATUS_LABELS[status]}" aşamasına taşındı.`);
+      boardCtx?.showToast(movedToast(status));
     });
   }
   const hrefSuffix = boardCtx?.taskHrefSuffix ?? "";
@@ -1624,10 +1631,22 @@ export function KanbanBoard({
   // Toast notifications (optionally with an action link, e.g. "open in Tüm işler")
   type Toast = { id: string; msg: string; action?: { label: string; href: string } };
   const [toasts, setToasts] = useState<Toast[]>([]);
+  /* Bildirim zamanlayıcıları panoyla birlikte ölür: toast görünürken başka bir
+     sayfaya geçildiğinde (ör. toast'taki "Çöp kutusu" bağlantısı) sökülmüş
+     bileşende setState çalışıyordu. */
+  const toastTimers = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  useEffect(() => {
+    const timers = toastTimers.current;
+    return () => { timers.forEach(clearTimeout); timers.clear(); };
+  }, []);
   function showToast(msg: string, action?: Toast["action"]) {
     const id = Math.random().toString(36).slice(2);
     setToasts((p) => [...p, { id, msg, action }]);
-    setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), action ? 7000 : 3000);
+    const timer = setTimeout(() => {
+      toastTimers.current.delete(timer);
+      setToasts((p) => p.filter((t) => t.id !== id));
+    }, action ? 7000 : 3000);
+    toastTimers.current.add(timer);
   }
   function dismissToast(id: string) {
     setToasts((p) => p.filter((t) => t.id !== id));

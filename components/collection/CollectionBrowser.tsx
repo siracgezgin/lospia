@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Boxes, Plus, Search, ChevronLeft, FileDown, Printer, Shirt, Scissors,
   Footprints, Handbag, FileSpreadsheet, ClipboardList, ShieldCheck, AlertTriangle,
@@ -139,6 +139,14 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
      düzenleme. Tek pencere üç işi de yapar (bkz. CategoryManagerDialog). */
   const [catEditor, setCatEditor] = useState<CategoryNode | "new" | null>(null);
   const router = useRouter();
+  const params = useSearchParams();
+  /* Toplu indirme EKRANDAKİ sezonu izler: ekran süzülüyken tüm sezonları
+     indirmek "listeyle dosya tutmuyor" demekti (Maliyet indirmesiyle aynı
+     kural). */
+  const exportAllHref = (() => {
+    const sezon = params.get("sezon");
+    return sezon ? `/production/export-all?sezon=${encodeURIComponent(sezon)}` : "/production/export-all";
+  })();
   const { ask, dialog } = useConfirm();
   const [isDeleting, startDelete] = useTransition();
 
@@ -286,7 +294,7 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
             <SeasonSwitch seasons={seasons} />
             {visible.length > 0 && (
               <DownloadLink
-                href="/production/export-all"
+                href={exportAllHref}
                 what="Tüm föyler"
                 title="Tüm föyleri tek Excel dosyası olarak indir"
                 className={secondaryBtnCls}

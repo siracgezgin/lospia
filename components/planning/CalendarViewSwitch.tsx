@@ -46,20 +46,27 @@ export function CalendarViewSwitch({ scale }: { scale: CalendarScale }) {
     const q = new URLSearchParams(params.toString());
     const rawDay = q.get("d");
     const day = rawDay && isValid(parseISO(rawDay)) ? rawDay : null;
+    /* HAFTA ölçeğinde `d` hiç yazılmaz (aşağıda siliniyor), elde yalnız `week`
+       kalır. Ay ve Yıl bakılan tarihi `d`den okuduğu için hafta → ay/yıl
+       geçişinde kullanıcı bugünün ayına düşüyordu; hafta parametresi köprü. */
+    const rawWeek = q.get("week");
+    const week = rawWeek && isValid(parseISO(rawWeek)) ? rawWeek : null;
+    const target = day ?? week ?? todayIso();
 
     if (next === "hafta") {
       q.delete("v");
       q.delete("d");
       if (day) q.set("week", mondayOf(day));
-    } else {
+    } else if (next === "gun") {
       q.set("v", next);
       /* GÜN ayrı bir sayfa değil, haftanın üstünde açılan karttır: hangi günün
          açılacağını `d` söyler. Değer yoksa bugün. */
-      if (next === "gun") {
-        const target = day ?? todayIso();
-        q.set("d", target);
-        q.set("week", mondayOf(target));
-      }
+      q.set("d", target);
+      q.set("week", mondayOf(target));
+    } else {
+      q.set("v", next);
+      // Ay / Yıl bakılan tarihi `d`den okur — hafta bilgisi de buraya taşınır.
+      q.set("d", target);
     }
     const qs = q.toString();
     router.push(qs ? `/planning?${qs}` : "/planning");
