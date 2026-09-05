@@ -29,8 +29,12 @@ export function SettingsSection({
       <div className="mb-4 flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h2 className="text-[15px] font-semibold tracking-tight text-ink">{title}</h2>
+          {/* GENİŞLİK KAPAĞI YOK: `max-w-prose` (65ch ≈ 520px) açıklamayı kartın
+              yarısı kadar bir yere sıkıştırıyordu; tek satıra rahat sığan cümle
+              ikinci satıra düşüyordu (Sıraç, 2026-09-06). Tam genişlik kuralı —
+              okunurluk sınırı zaten kartın kendi genişliği. */}
           {description && (
-            <p className="mt-0.5 max-w-prose text-[13px] leading-relaxed text-muted">{description}</p>
+            <p className="mt-0.5 text-[13px] leading-relaxed text-muted">{description}</p>
           )}
         </div>
         {aside}

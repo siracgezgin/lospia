@@ -146,14 +146,17 @@ export default async function SettingsPage() {
     return { ...r, profiles: prof ?? null } as DepartmentMember & { profiles?: Partial<Profile> | null };
   });
 
-  // Canonical display e-mail — the SAME helper the AppHeader profile menu uses,
-  // so the top-right menu and this card can never disagree. @lospia.local login
-  // placeholders are never shown as the person's address.
-  const displayEmail = pickDisplayEmail({
+  /* Giriş adresi ile bildirim adresi AYRI tutulur ve kartta ayrı yazılır.
+     Yer tutucu @lospia.local adresleri hiçbir zaman kişinin adresi gibi
+     gösterilmez (pickDisplayEmail bunları eler). */
+  const loginEmail = pickDisplayEmail({
     profileEmail: profile?.email ?? null,
     authEmail: user.email,
+  });
+  const notificationEmail = pickDisplayEmail({
     notificationEmail: memberRows?.[0]?.notification_email ?? null,
   });
+
   const memberCount = (membersResult.data ?? []).length;
 
   // Kişi Kimliği listesi. Tohum profiles.id (userId) — pano, liste ve raporlar
@@ -296,8 +299,18 @@ export default async function SettingsPage() {
                     </div>
                   </div>
                   <dl className="divide-y divide-hairline border-t border-hairline">
-                    <InfoRow label="E-posta">
-                      {displayEmail ?? <span className="font-normal text-subtle">E-posta eklenmedi</span>}
+                    {/* İKİ ADRES AYRI YAZILIR. Tek satır "E-posta" deyip GİRİŞ
+                        adresini gösteriyordu; kullanıcı sistem maillerinin
+                        gittiği adresi orada görmeyince "mailim yanlış kayıtlı"
+                        sanıyordu (Sıraç, 2026-09-06). Etiketler /profile
+                        sayfasıyla birebir aynı — tek terminoloji kuralı. */}
+                    <InfoRow label="Giriş adresi">
+                      {loginEmail ?? <span className="font-normal text-subtle">Giriş adresi yok</span>}
+                    </InfoRow>
+                    <InfoRow label="Bildirim e-postası">
+                      {notificationEmail ?? (
+                        <span className="font-normal text-subtle">Giriş adresine gönderilir</span>
+                      )}
                     </InfoRow>
                     {profile?.username && <InfoRow label="Kullanıcı adı">@{profile.username}</InfoRow>}
                   </dl>
