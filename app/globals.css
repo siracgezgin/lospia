@@ -123,6 +123,23 @@
      enter/exit of larger surfaces (drawers, sheets). */
   --ease-standard:   cubic-bezier(0.2, 0, 0, 1);
   --ease-emphasized: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* HAREKETİN VARSAYILANI — uygulamanın kendi eğrisi.
+     Sıraç (2026-08-30): "Her yeri daha yumuşak dokunuşlarla, hoverlarla
+     estetik olsun."
+     Ölçüm: 340 etkileşimli öğenin 216'sı Tailwind'in FABRİKA eğrisini
+     (cubic-bezier(.4,0,.2,1)) kullanıyordu; yalnız 124'ü projenin kendi
+     eğrisini. Yani uygulamanın imzası olarak tanımlanan `ease-standard`
+     çoğu yerde hiç devreye girmiyordu — aynı hover kimi kartta yumuşak,
+     kimi düğmede fabrika hissi veriyordu. Sebep: `transition-colors
+     duration-150` yazan sınıf eğriyi belirtmediği için Tailwind'in
+     varsayılanına düşüyor.
+     `@theme`teki bu iki değer, eğriyi ve süreyi SÖYLEMEYEN her geçişin
+     varsayılanını değiştirir; `ease-emphasized` gibi açık seçimler (çekmece,
+     yaprak) aynen üstün gelir.
+     MALİYETİ YOK: yeni geçiş eklemez, var olanların eğrisini değiştirir. */
+  --default-transition-timing-function: var(--ease-standard);
+  --default-transition-duration: 150ms;
 }
 
 /* Tailwind v4 dropped the v3 default border color. Restore a SOFT default in

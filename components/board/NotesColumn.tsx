@@ -175,7 +175,7 @@ function NoteCardContent({
       ref={containerRef}
       style={containerStyle}
       className={cn(
-        "rounded-card border p-2.5 shadow-card group transition-shadow duration-200 ease-standard hover:shadow-card-hover",
+        "rounded-card border p-2.5 shadow-card group transition-shadow duration-150 ease-standard hover:shadow-card-hover",
         colors.bg, colors.border,
         isDragging && "opacity-40 shadow-pop",
       )}

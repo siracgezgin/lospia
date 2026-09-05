@@ -381,10 +381,10 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
                    farklı köşe yan yana durmasın. Hover'da yer değiştirme yok. */
                 className="group flex w-full flex-col items-center justify-center gap-2.5 rounded-card border-2 border-dashed border-line px-3 pb-5 pt-6 text-center sm:gap-3 sm:px-4 sm:pb-6 sm:pt-8 transition-[border-color,background-color] duration-150 ease-standard hover:border-brand-ring hover:bg-brand-soft/30"
               >
-                <span className="grid size-16 shrink-0 place-items-center rounded-full bg-surface-sunken text-subtle transition-colors duration-200 group-hover:bg-brand-soft group-hover:text-brand sm:size-24">
+                <span className="grid size-16 shrink-0 place-items-center rounded-full bg-surface-sunken text-subtle transition-colors duration-150 group-hover:bg-brand-soft group-hover:text-brand sm:size-24">
                   <FolderPlus size={30} strokeWidth={1.6} className="sm:size-[34px]" />
                 </span>
-                <span className="block text-[16px] font-semibold tracking-tight text-muted transition-colors duration-200 group-hover:text-brand-strong sm:text-[19px]">
+                <span className="block text-[16px] font-semibold tracking-tight text-muted transition-colors duration-150 group-hover:text-brand-strong sm:text-[19px]">
                   Kategori ekle
                 </span>
               </button>

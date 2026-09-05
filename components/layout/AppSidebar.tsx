@@ -186,7 +186,7 @@ export function AppSidebar({
               src={brand.logo}
               alt={brand.name}
               className={cn(
-                "w-auto max-w-[75%] select-none object-contain opacity-90 transition-opacity duration-200 hover:opacity-100",
+                "w-auto max-w-[75%] select-none object-contain opacity-90 transition-opacity duration-150 hover:opacity-100",
                 brand.footerLogoHeightClass,
               )}
               draggable={false}
