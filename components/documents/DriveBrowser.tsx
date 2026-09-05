@@ -11,6 +11,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { useAnchoredMenu } from "@/lib/utils/use-anchored-menu";
 import { useConfirm } from "@/components/ui/useConfirm";
 import { Button, IconButton } from "@/components/ui/Button";
 import { TextInput } from "@/components/ui/Field";
@@ -560,7 +561,7 @@ export function DriveBrowser({
           {/* Görünüm — Drive'daki gibi kart / liste.
               SIRA: önce KART (varsayılan), sonra LİSTE — açılıştaki mod solda
               durur (2026-08-29: "iki ikonun da yerini değiştir"). */}
-          <div role="group" aria-label="Görünüm" className="inline-flex h-9 items-center rounded-control border border-line bg-surface p-0.5">
+          <div role="group" aria-label="Görünüm" className="inline-flex h-9 items-center rounded-control border border-line bg-surface p-0.5 pointer-coarse:h-11">
             <button
               type="button"
               onClick={() => setView("grid")}
@@ -764,28 +765,11 @@ function ItemMenu({ label, actions, busy }: { label: string; actions: MenuAction
   // ekrandan sarkmasın.
   useEffect(() => { if (open) place(); }, [open, place]);
 
-  useEffect(() => {
-    if (!open) return;
-    function onDown(e: MouseEvent) {
-      const t = e.target as Node;
-      if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return;
-      setOpen(false);
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") { e.stopPropagation(); setOpen(false); btnRef.current?.focus(); }
-    }
-    const dismiss = () => setOpen(false);
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    window.addEventListener("scroll", dismiss, true);
-    window.addEventListener("resize", dismiss);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-      window.removeEventListener("scroll", dismiss, true);
-      window.removeEventListener("resize", dismiss);
-    };
-  }, [open]);
+  /* Kapanma/konum davranışı ORTAK kuralda (lib/utils/use-anchored-menu):
+     menünün kendi kaydırması yok sayılır, dışarıdaki kaydırmada menü düğmeyi
+     TAKİP eder, düğme ekrandan çıkarsa kapanır. Esc'te odak düğmeye döner. */
+  const closeMenu = useCallback(() => { setOpen(false); btnRef.current?.focus(); }, []);
+  useAnchoredMenu({ open, onClose: closeMenu, triggerRef: btnRef, menuRef, reposition: place });
 
   return (
     <>

@@ -59,6 +59,7 @@ import { SelectInput, TextInput } from "@/components/ui/Field";
 import { useConfirm } from "@/components/ui/useConfirm";
 import { reorderTask, updateTask, softDeleteTask, archiveTask, duplicateTask } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils/cn";
+import { useAnchoredMenu } from "@/lib/utils/use-anchored-menu";
 import { formatDateTR } from "@/lib/utils/format-date";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { buildAssignablePeople } from "@/lib/people/assignable";
@@ -185,7 +186,11 @@ function CardStatusChip({ task }: { task: Task }) {
 
   const tone = STATUS_CHIP_TONE[optStatus] ?? "bg-surface-sunken text-muted";
   // Meta metin 12px'in altına inmez (tipografi tabanı); çip Badge ölçüsünde.
-  const chipCls = cn("text-[12px] rounded-md px-1.5 py-0.5 leading-none font-medium", tone);
+  /* Çip bir DÜĞME olarak da kullanılıyor (satır içi durum değiştirme) ve
+     telefonda 16px yüksekliğinde ölçülüyordu — parmakla isabet ettirilemez.
+     `tap-target` görünümü büyütmeden hedefi 40×40'a çıkarır (yalnız kaba
+     işaretçide); çipin ölçüsü ve satırın hizası aynen kalır. */
+  const chipCls = cn("tap-target text-[12px] rounded-md px-1.5 py-0.5 leading-none font-medium", tone);
   const canDone = ctx?.canComplete ?? false;
   // A done task is locked for non-admins — they can neither change nor reopen it.
   const doneLocked = optStatus === "done" && !canDone;
@@ -632,26 +637,17 @@ function CardMenu({
     if (open) place();
   }, [open, place]);
 
-  useEffect(() => {
-    if (!open) return;
-    function handleOutsideClick(e: MouseEvent) {
-      const target = e.target as Node;
-      if (ref.current?.contains(target) || menuRef.current?.contains(target)) return;
-      setOpen(false);
-    }
-    // A fixed menu can't follow the column scroll — close instead of drifting.
-    function dismiss() {
-      setOpen(false);
-    }
-    document.addEventListener("mousedown", handleOutsideClick);
-    window.addEventListener("scroll", dismiss, true);
-    window.addEventListener("resize", dismiss);
-    return () => {
-      document.removeEventListener("mousedown", handleOutsideClick);
-      window.removeEventListener("scroll", dismiss, true);
-      window.removeEventListener("resize", dismiss);
-    };
-  }, [open]);
+  /* Kapanma/konum davranışı ORTAK kuralda (lib/utils/use-anchored-menu):
+     menünün kendi kaydırması yok sayılır, dışarıdaki kaydırmada menü kartı
+     TAKİP eder (eskiden kapanıyordu — kolonu kaydıran kullanıcı menüyü
+     kaybediyordu), kart ekrandan çıkarsa kapanır. */
+  useAnchoredMenu({
+    open,
+    onClose: useCallback(() => setOpen(false), []),
+    triggerRef: ref,
+    menuRef,
+    reposition: place,
+  });
 
   async function requestDelete() {
     setOpen(false);
@@ -1987,7 +1983,9 @@ export function KanbanBoard({
                   aria-pressed={on}
                   onClick={() => { setAdminVisibility(v); syncAdminUrl(v, adminManager); }}
                   className={cn(
-                    "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors duration-150",
+                    // Dokunmatikte parmağa göre (mobil denetimde 32px ölçüldü);
+                    // farede yoğunluk korunur.
+                    "inline-flex min-h-8 items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors duration-150 pointer-coarse:min-h-10",
                     on ? "bg-surface text-ink shadow-xs" : "text-muted hover:text-ink",
                   )}
                 >

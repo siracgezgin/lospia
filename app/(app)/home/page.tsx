@@ -446,7 +446,9 @@ function SeeAll({ href, label }: { href: string; label: string }) {
   return (
     <Link
       href={href}
-      className="group inline-flex shrink-0 items-center gap-1 text-[12.5px] font-medium text-brand transition-colors duration-150 hover:text-brand-strong"
+      /* tap-target: 19px'lik bir metin bağlantısı parmakla zor tutuluyordu;
+         görünüm aynı kalır, hedef kaba işaretçide 40px olur. */
+      className="tap-target group inline-flex shrink-0 items-center gap-1 text-[12.5px] font-medium text-brand transition-colors duration-150 hover:text-brand-strong"
     >
       {label}
       <ArrowRight size={12} className="transition-transform duration-150 ease-standard group-hover:translate-x-0.5" />
@@ -459,7 +461,7 @@ function MoreLink({ href }: { href: string }) {
   return (
     <Link
       href={href}
-      className="mt-1 block rounded-lg py-1.5 text-center text-[12.5px] font-medium text-brand transition-colors duration-150 hover:bg-surface-hover hover:text-brand-strong"
+      className="mt-1 flex min-h-9 items-center justify-center rounded-lg py-1.5 text-center text-[12.5px] font-medium text-brand transition-colors duration-150 hover:bg-surface-hover hover:text-brand-strong pointer-coarse:min-h-11"
     >
       Kalanları listede gör
     </Link>
@@ -476,7 +478,7 @@ function MeetingRow({ meeting, day }: { meeting: HomeMeeting; day?: string }) {
     <li>
       <Link
         href={`/planning?v=gun&d=${iso}`}
-        className="-mx-2 flex items-baseline gap-2.5 rounded-lg px-2 py-1 text-[13.5px] transition-colors duration-150 hover:bg-surface-hover"
+        className="-mx-2 flex min-h-9 items-baseline gap-2.5 rounded-lg px-2 py-1.5 text-[13.5px] transition-colors duration-150 hover:bg-surface-hover pointer-coarse:min-h-11"
       >
       <span className="w-11 shrink-0 font-semibold tabular-nums text-ink">
         {meeting.time_slot.slice(0, 5)}

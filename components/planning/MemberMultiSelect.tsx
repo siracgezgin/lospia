@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useAnchoredMenu } from "@/lib/utils/use-anchored-menu";
 import { createPortal } from "react-dom";
 import { Users, Check, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
@@ -47,6 +48,7 @@ export function MemberMultiSelect({
   const [pos, setPos] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const close = useCallback(() => setOpen(false), []);
 
   const place = useCallback(() => {
     const trigger = ref.current;
@@ -78,41 +80,10 @@ export function MemberMultiSelect({
     if (open) place();
   }, [open, place]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (ref.current?.contains(t) || listRef.current?.contains(t)) return;
-      setOpen(false);
-    };
-    /* KAYDIRINCA KAPANMAZ, TAKİP EDER.
-       Sıraç (2026-08-30): "Scroll olunca kapanmamalı."
-       Önce iki kusur vardı: (1) dinleyici yakalama fazındaydı ve listenin
-       KENDİ kaydırmasını da yakalayıp kapatıyordu — aşağı inmek imkânsızdı;
-       (2) sayfa kaydırılınca liste tamamen kapanıyordu, oysa kullanıcı
-       seçimini bitirmemişti. `fixed` katman tetikleyiciyi kendiliğinden takip
-       etmez; çözüm kapatmak değil, YENİDEN KONUMLANDIRMAK. Tetikleyici
-       görüş alanından tamamen çıkarsa liste kapanır — havada asılı kalmasın. */
-    const onScroll = (e: Event) => {
-      const t = e.target as Node | null;
-      if (t && listRef.current?.contains(t)) return; // listenin kendi kaydırması
-      const r = ref.current?.getBoundingClientRect();
-      if (!r || r.bottom < 0 || r.top > window.innerHeight) { setOpen(false); return; }
-      place();
-    };
-    const onResize = () => setOpen(false);
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onKey);
-    window.addEventListener("scroll", onScroll, true);
-    window.addEventListener("resize", onResize);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onKey);
-      window.removeEventListener("scroll", onScroll, true);
-      window.removeEventListener("resize", onResize);
-    };
-  }, [open, place]);
+  /* Kapanma/konum davranışı ORTAK kurala taşındı (lib/utils/use-anchored-menu):
+     menünün kendi kaydırması yok sayılır, dışarıdaki kaydırmada liste
+     tetikleyicisini takip eder, tetikleyici ekrandan çıkarsa kapanır. */
+  useAnchoredMenu({ open, onClose: close, triggerRef: ref, menuRef: listRef, reposition: place });
 
   const toggle = (id: string) =>
     onChange(selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id]);
@@ -120,12 +91,26 @@ export function MemberMultiSelect({
   const selectedMembers = members.filter((m) => selected.includes(m.id));
 
   const list = open && (
+    /* TELEFONDA ALTTAN YAPRAK, MASAÜSTÜNDE TETİKLEYİCİYE BAĞLI LİSTE.
+       Sıraç (2026-08-30): "Kişilerin açılır kartları istediğim gibi değil,
+       daha anlaşılır responsive olsun." Dar ekranda tetikleyicinin altına
+       açılan 224px'lik kutu hem küçük kalıyor hem de klavye/adres çubuğu
+       aç-kapa oldukça yer değiştiriyordu. Telefonda liste ekranın altına
+       tam genişlikte oturur (satırlar parmağa göre), masaüstünde eski
+       davranış aynen sürer. */
     <div
       ref={listRef}
       role="listbox"
       aria-multiselectable="true"
-      style={pos ? { top: pos.top, left: pos.left, width: pos.width, maxHeight: pos.maxHeight } : { opacity: 0 }}
-      className="anim-fade-down fixed z-[120] overflow-y-auto overscroll-contain rounded-control border border-line bg-surface p-1 shadow-pop"
+      style={pos ? { ["--mm-top" as string]: `${pos.top}px`, ["--mm-left" as string]: `${pos.left}px`, ["--mm-w" as string]: `${pos.width}px`, ["--mm-max" as string]: `${pos.maxHeight}px` } : { opacity: 0 }}
+      className={cn(
+        "fixed z-[120] overflow-y-auto overscroll-contain border border-line bg-surface shadow-pop",
+        // Telefon: alttan yaprak, tam genişlik, güvenli alan payı.
+        "anim-slide-up inset-x-0 bottom-0 max-h-[60dvh] rounded-t-modal p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]",
+        // sm ve üstü: tetikleyiciye bağlı klasik liste.
+        "sm:anim-fade-down sm:inset-x-auto sm:bottom-auto sm:rounded-control sm:p-1",
+        "sm:left-[var(--mm-left)] sm:top-[var(--mm-top)] sm:w-[var(--mm-w)] sm:max-h-[var(--mm-max)]",
+      )}
     >
       {members.length === 0 ? (
         <p className="px-2 py-1.5 text-[12px] text-subtle">Üye bulunamadı.</p>
@@ -140,7 +125,9 @@ export function MemberMultiSelect({
               aria-selected={on}
               onClick={() => toggle(m.id)}
               className={cn(
-                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors duration-150",
+                "flex w-full items-center gap-2.5 rounded-md px-2 text-left text-[13.5px] transition-colors duration-150",
+                // Telefonda satır parmağa göre; masaüstünde kompakt kalır.
+                "min-h-11 sm:min-h-0 sm:gap-2 sm:py-1.5 sm:text-[13px]",
                 on ? "bg-brand-soft font-medium text-brand-strong" : "text-ink hover:bg-surface-muted active:bg-surface-hover",
               )}
             >

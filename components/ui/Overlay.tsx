@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useSyncExternalStore } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
@@ -92,6 +92,34 @@ export function Overlay({
   const panelRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
 
+  /* KAPANIŞ ANİMASYONU.
+     Pop-up açılırken canlanıyor ama kapanırken BİR ANDA yok oluyordu
+     (Sıraç, 2026-08-30: "pop-up açılırken kapanırken responsive olmuyor").
+     Sebebi: `open` false olur olmaz bileşen null dönüyordu. Artık katman
+     çıkış animasyonu bitene kadar DOM'da kalır, sonra sökülür.
+
+     Durum RENDER sırasında uyarlanır (React'in "prop değişince state'i
+     düzelt" deseni), effect içinde DEĞİL: effect'te senkron setState hem
+     basamaklı render uyarısı veriyor hem de projenin lint kuralına takılıyor
+     (bkz. AppSidebar daraltma tercihi). */
+  const [prevOpen, setPrevOpen] = useState(open);
+  const [closing, setClosing] = useState(false);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    setClosing(prevOpen && !open);
+  }
+  const render = open || closing;
+
+  useEffect(() => {
+    if (!closing) return;
+    // Hareket azaltma açıksa bekleme yok — anında kapanır.
+    const reduce =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const t = window.setTimeout(() => setClosing(false), reduce ? 0 : 170);
+    return () => window.clearTimeout(t);
+  }, [closing]);
+
   // Esc + sayfa kaydırma kilidi. Arkadaki liste kayıyordu; diyalogu kapatınca
   // kullanıcı bambaşka bir yerde buluyordu kendini.
   useEffect(() => {
@@ -126,11 +154,17 @@ export function Overlay({
     (first ?? panelRef.current)?.focus();
   }, [open]);
 
-  if (!open || !mounted) return null;
+  if (!render || !mounted) return null;
 
   return createPortal(
     <div
-      className="anim-fade fixed inset-0 z-[100] flex items-end justify-center bg-ink/50 sm:items-center sm:p-6"
+      className={cn(
+        "fixed inset-0 z-[100] flex items-end justify-center bg-ink/50 sm:items-center sm:p-6",
+        // Kapanırken tıklamayı YUTMASIN: çıkış animasyonu sürerken (~170ms)
+        // katman hâlâ ekranı kaplıyor; altındaki düğmeye basan kullanıcı
+        // "tıklamam gitmedi" yaşıyordu.
+        closing ? "anim-fade-out pointer-events-none" : "anim-fade",
+      )}
       onMouseDown={(e) => {
         // mousedown: form içinde metin seçip dışarıda bırakınca kapanmasın.
         if (dismissOnBackdrop && e.target === e.currentTarget) onClose();
@@ -146,8 +180,9 @@ export function Overlay({
         className={cn(
           // Mobil: alttan yaprak, üst köşeler yuvarlak, ekranın çoğu.
           // Masaüstü: ortada kart.
-          "anim-slide-up relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-modal border border-line bg-surface shadow-drawer outline-none",
-          "sm:anim-scale-in sm:max-h-[86dvh] sm:rounded-modal",
+          "relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-modal border border-line bg-surface shadow-drawer outline-none",
+          "sm:max-h-[86dvh] sm:rounded-modal",
+          closing ? "anim-slide-down sm:anim-scale-out" : "anim-slide-up sm:anim-scale-in",
           WIDTH[size],
           className,
         )}

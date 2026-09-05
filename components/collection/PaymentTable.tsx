@@ -378,7 +378,8 @@ export function CollectionTabs({
 
   return (
     <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-      <div className="inline-flex h-9 max-w-full items-center overflow-x-auto rounded-control border border-line bg-surface-muted p-0.5 no-scrollbar">
+      {/* Sekme şeridi dokunmatikte bir kademe iri — telefonda 32px ölçülüyordu. */}
+      <div className="inline-flex h-9 max-w-full items-center overflow-x-auto rounded-control border border-line bg-surface-muted p-0.5 no-scrollbar pointer-coarse:h-11">
         {TABS.map((t, i) => {
           const isActive = t.key === active;
           /* AYIRICI: sekmeler bitişikken tek bir uzun düğme gibi okunuyordu
@@ -392,14 +393,14 @@ export function CollectionTabs({
               {isActive ? (
                 <span
                   aria-current="page"
-                  className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-surface px-3 text-[13px] font-semibold text-ink shadow-xs ring-1 ring-line/70"
+                  className="inline-flex h-8 pointer-coarse:h-10 shrink-0 items-center gap-1.5 rounded-md bg-surface px-3 text-[13px] font-semibold text-ink shadow-xs ring-1 ring-line/70"
                 >
                   <t.icon size={15} /> <span className="hidden sm:inline">{t.label}</span>
                 </span>
               ) : (
                 <Link
                   href={t.href}
-                  className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium text-muted transition-colors duration-150 hover:bg-surface hover:text-ink"
+                  className="inline-flex h-8 pointer-coarse:h-10 shrink-0 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium text-muted transition-colors duration-150 hover:bg-surface hover:text-ink"
                 >
                   <t.icon size={15} /> <span className="hidden sm:inline">{t.label}</span>
                 </Link>

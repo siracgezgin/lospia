@@ -51,7 +51,7 @@ export function CalendarViewSwitch({ scale }: { scale: CalendarScale }) {
     <div
       role="tablist"
       aria-label="Takvim ölçeği"
-      className="inline-flex h-9 shrink-0 items-stretch overflow-hidden rounded-control border border-line bg-surface"
+      className="inline-flex h-9 shrink-0 items-stretch overflow-hidden rounded-control border border-line bg-surface pointer-coarse:h-11"
     >
       {CALENDAR_SCALES.map(({ id, label, icon: Icon }, i) => {
         const active = id === scale;

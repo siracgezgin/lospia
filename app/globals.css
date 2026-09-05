@@ -391,6 +391,14 @@ body {
 @keyframes anim-slide-up  { from { opacity: 0; transform: translateY(20px) } to { opacity: 1; transform: none } }
 @keyframes anim-shimmer   { from { background-position: 200% 0 } to { background-position: -200% 0 } }
 
+/* ÇIKIŞ animasyonları — pop-up açılırken canlanıp kapanırken BİR ANDA yok
+   oluyordu (Sıraç, 2026-08-30: "pop-up açılırken kapanırken responsive
+   olmuyor"). Kapanış girişin aynası: mobil yaprak aşağı iner, masaüstü kartı
+   hafifçe küçülür, perde söner. Süreler girişten KISA — kapanış beklenmez. */
+@keyframes anim-fade-out   { from { opacity: 1 } to { opacity: 0 } }
+@keyframes anim-slide-down { from { opacity: 1; transform: none } to { opacity: 0; transform: translateY(16px) } }
+@keyframes anim-scale-out  { from { opacity: 1; transform: none } to { opacity: 0; transform: scale(0.98) } }
+
 @layer utilities {
   .anim-fade      { animation: anim-fade      var(--duration-normal) var(--ease-standard) both; }
   .anim-fade-up   { animation: anim-fade-up   240ms var(--ease-standard) both; }
@@ -400,6 +408,11 @@ body {
   /* Soldan gelen mobil menü — sol menünün telefondaki karşılığı. */
   .anim-drawer-left { animation: anim-drawer-left 260ms var(--ease-emphasized) both; }
   .anim-slide-up  { animation: anim-slide-up  260ms var(--ease-emphasized) both; } /* mobil sheet */
+
+  /* Kapanış — girişin aynası, bir tık hızlı. */
+  .anim-fade-out   { animation: anim-fade-out   140ms var(--ease-standard) both; }
+  .anim-slide-down { animation: anim-slide-down 160ms var(--ease-emphasized) both; }
+  .anim-scale-out  { animation: anim-scale-out  140ms var(--ease-standard) both; }
 
   /* Yükleme iskeletleri — bileşen bg-gradient verir, bu sınıf hareket ettirir. */
   .anim-shimmer {

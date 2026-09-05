@@ -239,7 +239,7 @@ export function CrmView({
           return (
             <Link
               href={`/list?person=${info.row.original.id}`}
-              className="inline-flex items-center gap-1 whitespace-nowrap text-[13px] font-medium text-brand transition-colors duration-150 hover:text-brand-strong"
+              className="tap-target inline-flex items-center gap-1 whitespace-nowrap text-[13px] font-medium text-brand transition-colors duration-150 hover:text-brand-strong"
             >
               Görevleri aç <ExternalLink size={12} aria-hidden />
             </Link>
@@ -446,7 +446,7 @@ export function CrmView({
                     </span>
                   )}
                   {(taskCounts[c.id] ?? 0) > 0 && (
-                    <Link href={`/list?person=${c.id}`} className="inline-flex items-center gap-1 font-medium text-brand">
+                    <Link href={`/list?person=${c.id}`} className="tap-target inline-flex items-center gap-1 font-medium text-brand">
                       Görevleri aç <ExternalLink size={11} aria-hidden />
                     </Link>
                   )}

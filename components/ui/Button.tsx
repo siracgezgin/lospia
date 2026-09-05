@@ -28,10 +28,17 @@ const VARIANT: Record<ButtonVariant, string> = {
 };
 
 /* Metin ≥13px: birincil arayüz metni 13.5px altına düşmez; `sm` kompakt araç
-   çubuğu ölçüsüdür ve 13px'te kalır. */
+   çubuğu ölçüsüdür ve 13px'te kalır.
+
+   DOKUNMATİKTE BİR KADEME İRİ (`pointer-coarse`). Sıraç (2026-08-30):
+   "Butonlar tam değil… mobil tarafında özellikle uyumlu olmalı." Telefonda
+   ölçüldüğünde "Kişi ekle", "Görev oluştur", "Fotoğraf yükle" gibi düğmeler
+   32px yüksekliğindeydi — parmak hedefi için düşük. Fare/trackpad'de yoğunluk
+   korunur (masaüstünde düğmeler büyümez); yalnız KABA işaretçide 40/44px'e
+   çıkar. Genişlik değil YÜKSEKLİK büyür: satır düzenleri bozulmasın. */
 const SIZE: Record<ButtonSize, string> = {
-  sm: "h-8 px-3 text-[13px] gap-1.5",
-  md: "h-9 px-3.5 text-[13.5px] gap-1.5",
+  sm: "h-8 pointer-coarse:h-10 px-3 text-[13px] gap-1.5",
+  md: "h-9 pointer-coarse:h-11 px-3.5 text-[13.5px] gap-1.5",
 };
 
 /* Devre dışı: okunur nötr — opacity değil renk. Yükleme sırasında UYGULANMAZ,
@@ -106,7 +113,8 @@ export const IconButton = forwardRef<
         "transition-[background-color,border-color,color,box-shadow,transform] duration-150 ease-standard active:scale-[0.96]",
         DISABLED,
         VARIANT[variant],
-        size === "sm" ? "size-8" : "size-9",
+        // Kare ikon düğmesi de dokunmatikte büyür (bkz. SIZE notu).
+        size === "sm" ? "size-8 pointer-coarse:size-10" : "size-9 pointer-coarse:size-11",
         className,
       )}
       {...rest}
