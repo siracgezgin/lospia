@@ -37,6 +37,27 @@ export type CellStyle = {
   /** metni kaydır (satır yüksekliği artar) */ w?: boolean;
 };
 
+/** Hücreye konan GÖRSEL — bayt değil REFERANS.
+ *
+ *  Sıraç (2026-09-06): "Aynı resmi birkaç defa yüklemek sistemi gereksiz
+ *  ağırlaştırır. Excel'de resim ekle kısmı olsun, + basıp sistemdeki klasörden
+ *  seçelim."
+ *
+ *  Bu yüzden hücre yalnız Drive kaydının kimliğini tutar. Görselin kendisi
+ *  bir kez yüklenir (operation_documents + `documents` kovası) ve kaç yerde
+ *  kullanılırsa kullanılsın tek kopya kalır: föyde, tabloda, lookbook'ta hep
+ *  aynı dosya. Fotoğraf değişince her yerde değişir.
+ *
+ *  Adres BURADA TUTULMAZ: `documents` kovası özeldir, adres imzalıdır ve
+ *  saatlik geçerlidir. Kaydedilen anlık görüntüye imzalı adres yazmak, bir
+ *  gün sonra açıldığında kırık resim demek olurdu. */
+export type CellImage = {
+  /** operation_documents.id — Drive'daki dosyanın kimliği. */
+  id: string;
+  /** Kullanıcının gördüğü ad; ipucu ve erişilebilirlik metni için. */
+  name?: string;
+};
+
 export type Cell = {
   /** Ham değer (formül yoksa gösterilen şey). */
   v?: string;
@@ -44,6 +65,8 @@ export type Cell = {
   f?: string;
   /** Biçim. */
   s?: CellStyle;
+  /** Drive'dan seçilmiş görsel (varsa metnin yerine o çizilir). */
+  img?: CellImage;
 };
 
 /** Tek bir sayfa (Excel'deki "Sheet1"). */
@@ -220,6 +243,9 @@ export function isEmptyCell(cell: Cell | undefined): boolean {
     !cell ||
     ((cell.v === undefined || cell.v === "") &&
       (cell.f === undefined || cell.f === "") &&
+      // Görsel tek başına da hücreyi DOLU yapar: metni olmayan bir resim
+      // hücresi aksi hâlde seyrek haritadan silinip kaybolurdu.
+      !cell.img &&
       (!cell.s || Object.keys(cell.s).length === 0))
   );
 }

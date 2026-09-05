@@ -26,11 +26,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight,
   Undo2, Redo2, Sigma, Plus, WrapText,
-  PaintBucket, Baseline, Square, Combine, X, Pencil,
+  PaintBucket, Baseline, Square, Combine, X, Pencil, ImagePlus, ImageOff,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { useConfirm } from "@/components/ui/useConfirm";
 import { SelectInput } from "@/components/ui/Field";
+import { ImagePicker } from "./ImagePicker";
+import { signSheetImages } from "@/lib/actions/sheet-images";
 import {
   GUTTER_W, HEAD_H, ROW_H, MAX_COLS, MAX_ROWS,
   activeSheet, colName, colWidth, deleteCol, deleteRow, emptySheet, emptyWorkbook,
@@ -83,6 +85,11 @@ const TEXT_COLORS = [
 
 export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, onDirty }: Props) {
   const { ask, dialog } = useConfirm();
+  /* GÖRSEL HÜCRESİ. Hücre yalnız Drive kaydının kimliğini tutar; görüntülenebilir
+     adres imzalıdır ve saatliktir, o yüzden burada AYRI tutulur — anlık
+     görüntüye yazılsaydı yarın kırık resim olurdu (lib/actions/sheet-images). */
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
   const [wb, setWb] = useState<WorkbookSnapshot>(() => initialSnapshot ?? emptyWorkbook());
   const [sel, setSel] = useState<Sel>({ r1: 0, c1: 0, r2: 0, c2: 0 });
   const [editing, setEditingState] = useState<EditState | null>(null);
@@ -273,6 +280,58 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
   }, [commit]);
 
   // ── Biçim ─────────────────────────────────────────────────────────────────
+  /* Etkin sayfadaki görsellerin adresleri. Kimlik kümesi değişmedikçe yeni
+     istek atılmaz (yoksa her tuş vuruşunda imza üretilirdi); anahtar sıralı
+     kimlik dizisidir. */
+  const imageIdKey = useMemo(() => {
+    const ids = new Set<string>();
+    for (const cell of Object.values(sheet.cells)) if (cell.img?.id) ids.add(cell.img.id);
+    return [...ids].sort().join(",");
+  }, [sheet.cells]);
+
+  useEffect(() => {
+    /* Hiç görsel yoksa DURUM SIFIRLANMAZ: efekt içinde senkron setState
+       fazladan bir çizim turu doğurur (ve lint kuralı reddeder). Harita
+       kimlikle anahtarlı olduğu için eski adreslerin durması zararsız —
+       kullanılmayan kimse okunmuyor. */
+    if (!imageIdKey) return;
+    let cancelled = false;
+    (async () => {
+      const res = await signSheetImages(imageIdKey.split(","));
+      if (cancelled || "error" in res) return;
+      setImageUrls(res.urls);
+    })();
+    return () => { cancelled = true; };
+  }, [imageIdKey]);
+
+  /* Seçili hücreye Drive'dan seçilen görseli koyar. Metni SİLMEZ: kullanıcı
+     hem ürün adını hem fotoğrafını aynı hücrede tutmak isteyebilir; görsel
+     varsa çizimde o öne geçer. */
+  const putImage = useCallback((image: { id: string; name: string }) => {
+    if (readOnly) return;
+    const g0 = sheetRef.current;
+    const prev = getCell(g0, active.r, active.c);
+    commit(setCell(g0, active.r, active.c, { ...(prev ?? {}), img: { id: image.id, name: image.name } }));
+  }, [readOnly, active.r, active.c, commit]);
+
+  /** Seçimdeki görselleri kaldırır (metin ve biçim kalır). */
+  const clearImages = useCallback(() => {
+    if (readOnly) return;
+    const n = norm(sel);
+    const g0 = sheetRef.current;
+    commit(withCells(g0, (put) => {
+      for (let r = n.r1; r <= n.r2; r++) {
+        for (let c = n.c1; c <= n.c2; c++) {
+          const prev = getCell(g0, r, c);
+          if (!prev?.img) continue;
+          const next = { ...prev };
+          delete next.img;
+          put(r, c, next);
+        }
+      }
+    }));
+  }, [readOnly, sel, commit]);
+
   const applyStyle = useCallback((patch: Partial<CellStyle>) => {
     if (readOnly) return;
     const n = norm(sel);
@@ -814,6 +873,12 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
           <TBtn onClick={() => applyStyle({ a: "r" })} active={activeStyle.a === "r"} title="Sağa yasla"><AlignRight size={15} /></TBtn>
           <TBtn onClick={() => applyStyle({ w: !activeStyle.w })} active={!!activeStyle.w} title="Metni kaydır"><WrapText size={15} /></TBtn>
           <TBtn onClick={toggleMerge} active={!!mergeAt(sheet, active.r, active.c)} title="Hücreleri birleştir / çöz"><Combine size={15} /></TBtn>
+          {/* GÖRSEL: hücreye dosya YÜKLENMEZ, Drive'da duran bir görsel SEÇİLİR
+              — aynı fotoğraf her yerde tek kopya (Sıraç, 2026-09-06). */}
+          <TBtn onClick={() => setPickerOpen(true)} title="Görsel ekle (Drive'dan seç)"><ImagePlus size={15} /></TBtn>
+          {getCell(sheet, active.r, active.c)?.img && (
+            <TBtn onClick={clearImages} title="Görseli kaldır"><ImageOff size={15} /></TBtn>
+          )}
 
           <Sep />
           {/* Ortak SelectInput — araç çubuğu boyuna (h-8) indirilmiş. */}
@@ -1015,9 +1080,36 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                         borderLeft: st?.bd?.includes("l") ? "1.5px solid var(--color-ink)" : undefined,
                         borderRight: st?.bd?.includes("r") ? "1.5px solid var(--color-ink)" : undefined,
                       }}
-                      title={cell?.f ? `${cell.f} → ${formatValue(val, st)}` : undefined}
+                      title={
+                        cell?.img
+                          ? cell.img.name ?? "Görsel"
+                          : cell?.f ? `${cell.f} → ${formatValue(val, st)}` : undefined
+                      }
                     >
-                      {formatValue(val, st)}
+                      {cell?.img ? (
+                        /* GÖRSEL hücreyi doldurur ama TAŞMAZ: object-contain,
+                           oranı bozmadan sığdırır. Satır yüksekliğini kullanıcı
+                           belirler — resim yüksekliği dayatmaz, yoksa tablo
+                           kendiliğinden şişerdi. */
+                        imageUrls[cell.img.id] ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={imageUrls[cell.img.id]}
+                            alt={cell.img.name ?? "Görsel"}
+                            loading="lazy"
+                            draggable={false}
+                            className="pointer-events-none absolute inset-0 h-full w-full object-contain p-0.5"
+                          />
+                        ) : (
+                          /* Adres henüz gelmediyse ya da kayıt silindiyse hücre
+                             BOŞ kalmaz; kullanıcı neyin eksik olduğunu görür. */
+                          <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-subtle">
+                            <ImageOff size={14} aria-hidden />
+                          </span>
+                        )
+                      ) : (
+                        formatValue(val, st)
+                      )}
                       {/* Doldurma tutamağı — seçimin sağ alt köşesi */}
                       {isFillCorner && !readOnly && (
                         <span
@@ -1160,9 +1252,15 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
           <MenuItem onClick={() => { doDeleteCol(selN.c1); setMenu(null); }} danger>Sütunu sil</MenuItem>
           <MenuSep />
           <MenuItem onClick={() => { toggleMerge(); setMenu(null); }}>Hücreleri birleştir / çöz</MenuItem>
+          <MenuSep />
+          <MenuItem onClick={() => { setPickerOpen(true); setMenu(null); }}>Görsel ekle…</MenuItem>
+          <MenuItem onClick={() => { clearImages(); setMenu(null); }}>Görseli kaldır</MenuItem>
+          <MenuSep />
           <MenuItem onClick={() => { clearRange(norm(sel), true); setMenu(null); }} danger>İçeriği ve biçimi temizle</MenuItem>
         </div>
       )}
+      {/* Drive görsel seçici — hücreye kimlik yazar, bayt değil. */}
+      <ImagePicker open={pickerOpen} onClose={() => setPickerOpen(false)} onPick={putImage} />
       {dialog}
     </div>
   );
