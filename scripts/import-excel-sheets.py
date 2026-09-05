@@ -271,11 +271,15 @@ def main():
                 cs = max(1, to.col - c)
                 rs = max(1, to.row - r)
             else:
-                ext = getattr(im.anchor, "ext", None)
-                if ext is not None:
+                # DİKKAT: değişken adı `emu` — `ext` dosya UZANTISIDIR ve bir
+                # üstte hesaplanır. Burada `ext` diye yazmak onu eziyor ve dosya
+                # adı ".jpg" yerine bir nesneyle üretiliyordu; 1040 görselin
+                # hiçbiri eşleşmemişti (Sıraç, 2026-09-06).
+                emu = getattr(im.anchor, "ext", None)
+                if emu is not None:
                     # 914400 EMU = 1 inç; 96 px/inç varsayımı.
-                    px_w = (ext.cx or 0) / 914400 * 96
-                    px_h = (ext.cy or 0) / 914400 * 96
+                    px_w = (emu.cx or 0) / 914400 * 96
+                    px_h = (emu.cy or 0) / 914400 * 96
                     cs = max(1, round(px_w / DEFAULT_COL_W))
                     rs = max(1, round(px_h / 30))
             anchors.setdefault(name, {})[(r, c)] = {
