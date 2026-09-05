@@ -187,6 +187,24 @@ const PROD_HELP = [
   "    service_role anahtarı GİZLİDİR: depoya, sohbete ya da bir dosyaya yazmayın.",
 ].join("\n");
 
+/** Anahtarın YAZMA yetkisi var mı? Publishable/anon anahtar RLS'e tabidir:
+ *  sorgu hata vermez, sessizce 0 satır döner ve "çalışma alanı bulunamadı"
+ *  gibi görünür (Sıraç, 2026-09-06 — canlı koşuda tam olarak bu oldu). */
+function keyKind(key: string): "secret" | "publishable" | "unknown" {
+  if (key.startsWith("sb_secret_")) return "secret";
+  if (key.startsWith("sb_publishable_")) return "publishable";
+  if (key.startsWith("eyJ")) {
+    try {
+      const payload = JSON.parse(Buffer.from(key.split(".")[1], "base64").toString("utf8"));
+      if (payload?.role === "service_role") return "secret";
+      if (payload?.role === "anon") return "publishable";
+    } catch {
+      // Çözülemeyen jeton — aşağıda "unknown" olarak ele alınır.
+    }
+  }
+  return "unknown";
+}
+
 function resolveTarget(): { url: string; key: string; label: string } {
   const envUrl = process.env.IMPORT_SUPABASE_URL;
   const envKey = process.env.IMPORT_SUPABASE_SERVICE_ROLE_KEY;
@@ -202,6 +220,13 @@ function resolveTarget(): { url: string; key: string; label: string } {
     if (!/^https?:\/\//.test(envUrl)) {
       console.error(`❌  IMPORT_SUPABASE_URL geçerli bir adres değil: "${envUrl}"`);
       console.error("    https://<proje>.supabase.co biçiminde OLMALI — komuttaki \u2026 bir yer tutucudur, gerçek adresi yazın.");
+      console.error(PROD_HELP);
+      process.exit(1);
+    }
+    if (keyKind(envKey) === "publishable") {
+      console.error("❌  IMPORT_SUPABASE_SERVICE_ROLE_KEY bir TARAYICI anahtarı (publishable/anon).");
+      console.error("    Bu anahtar RLS'e tabidir: yazamaz ve sorgular sessizce BOŞ döner.");
+      console.error("    Panelde 'Secret keys' bölümündeki `default` anahtarını (sb_secret_…) kullanın.");
       console.error(PROD_HELP);
       process.exit(1);
     }
@@ -411,6 +436,16 @@ async function main() {
   if (wsErr || !wsList?.length) {
     const msg = wsErr?.message ?? "(boş)";
     console.error("❌  Çalışma alanı bulunamadı:", msg);
+    /* Hata YOK ama satır da YOK: neredeyse her zaman anahtar RLS'i aşmıyordur.
+       Boş bir veritabanıyla karıştırılmasın diye ayrı ayrı söylenir. */
+    if (!wsErr) {
+      console.error("    Sorgu hatasız çalıştı ama 0 satır döndü. En olası sebep: anahtar RLS'i AŞMIYOR.");
+      console.error(`    Kullanılan anahtarın türü: ${keyKind(key)} (beklenen: secret)`);
+      console.error("    Panelde Settings → API → 'Secret keys' → default (sb_secret_…) anahtarını kullanın;");
+      console.error("    'Publishable key' ve 'anon' anahtarları bu iş için ÇALIŞMAZ.");
+      console.error("    Anahtar doğruysa: bu projede gerçekten çalışma alanı olmayabilir — adresi kontrol edin:");
+      console.error(`      ${url}`);
+    }
     /* "fetch failed" = sunucuya hiç ulaşılamadı. Yerelde bunun tek anlamı
        Supabase'in ayakta olmamasıdır; genel mesaj bunu söylemiyordu. */
     if (/fetch failed/i.test(msg)) {
