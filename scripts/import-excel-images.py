@@ -248,6 +248,33 @@ def main():
     workspace_id = ws["id"]
     print(f"✅  Çalışma alanı: {ws['name']} ({workspace_id})")
 
+    # ── ÖN DENETİM: şema hazır mı? ───────────────────────────────────────────
+    # Bu denetim OLMADAN betik görselleri önce depoya yüklüyor, sonra satırı
+    # yazamayıp hata veriyordu: depoda sahipsiz dosyalar kalıyordu (Sıraç,
+    # 2026-09-06 — prod'a migration uygulanmadan çalıştırıldı). Artık tek bir
+    # bayt yüklenmeden önce durulur.
+    required = ["thumb_path", "visibility", "section", "document_type", "owner_id"]
+    missing = []
+    for col in required:
+        try:
+            api.get(f"/rest/v1/operation_documents?select={col}&limit=1")
+        except RuntimeError as e:
+            if "PGRST204" in str(e) or "does not exist" in str(e) or "schema cache" in str(e):
+                missing.append(col)
+            else:
+                raise
+    if missing:
+        sys.exit(
+            "❌  Veritabanı şeması hazır değil — eksik sütun(lar): " + ", ".join(missing) + "\n"
+            "\n    Bekleyen migration'lar bu hedefe UYGULANMAMIŞ. Hiçbir şey yüklenmedi.\n"
+            "\n    Uygulamak için (projeye bağlıysanız):\n"
+            "        supabase link --project-ref <proje-ref>\n"
+            "        supabase db push\n"
+            "\n    Ya da panelden: SQL Editor'e supabase/migrations/ altındaki\n"
+            "    uygulanmamış dosyaların içeriğini sırayla yapıştırıp çalıştırın.\n"
+            "\n    Sonra bu betiği tekrar çalıştırın — kaldığı yerden devam eder."
+        )
+
     owner = api.get(f"/rest/v1/workspace_members?select=user_id&workspace_id=eq.{workspace_id}&role=eq.owner&limit=1")
     created_by = owner[0]["user_id"] if owner else None
 
