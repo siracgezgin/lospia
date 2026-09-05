@@ -25,6 +25,8 @@ interface Props {
   rowCountOfSlot: Map<string, number>;
   extraSlots: string[];
   memberNames: Record<string, string>;
+  /** profiles.id → fotoğraf; kişi rozetleri yuvarlak kart. */
+  memberPhotos?: Record<string, string | null>;
   /** Kişi rengi (profiles.id → hex) — baş harf rozetleri kendi renginde. */
   personHex?: Record<string, string>;
   isAdmin: boolean;
@@ -88,7 +90,7 @@ function keyboardOpen(enabled: boolean, onOpen: () => void) {
  * tıklama düzenleyiciyi açar.
  */
 export function PlanningWeekGrid({
-  weekDays, byCell, topicRows, rowCountOfSlot, extraSlots, memberNames, personHex = {},
+  weekDays, byCell, topicRows, rowCountOfSlot, extraSlots, memberNames, memberPhotos = {}, personHex = {},
   isAdmin, todayIso, onOpen, bands,
 }: Props) {
   const router = useRouter();
@@ -181,7 +183,7 @@ export function PlanningWeekGrid({
             hasBand={!!bandCategory}
             isAdmin={isAdmin}
             draggable={mounted && isAdmin}
-            memberNames={memberNames}
+            memberNames={memberNames} memberPhotos={memberPhotos}
             personHex={personHex}
             onOpen={() => onOpen(iso, slot, i)}
           />
@@ -203,7 +205,7 @@ export function PlanningWeekGrid({
             isToday={iso === todayIso}
             isAdmin={isAdmin}
             draggable={mounted && isAdmin}
-            memberNames={memberNames}
+            memberNames={memberNames} memberPhotos={memberPhotos}
             personHex={personHex}
             onOpen={() => onOpen(iso, slot, i)}
           />
@@ -351,7 +353,7 @@ export function PlanningWeekGrid({
  * hücreye tıklamak düzenleyiciyi açmaya devam eder.
  */
 function TitleCell({
-  cellId, cell, meta, hasBand, isAdmin, draggable, memberNames, personHex, onOpen,
+  cellId, cell, meta, hasBand, isAdmin, draggable, memberNames, memberPhotos = {}, personHex, onOpen,
 }: {
   cellId: string;
   cell: PlanningMeetingWithTopics[];
@@ -360,6 +362,7 @@ function TitleCell({
   isAdmin: boolean;
   draggable: boolean;
   memberNames: Record<string, string>;
+  memberPhotos?: Record<string, string | null>;
   personHex: Record<string, string>;
   onOpen: () => void;
 }) {
@@ -412,7 +415,7 @@ function TitleCell({
         <span className={cn("block text-[12.5px] font-bold leading-[1.25] tracking-tight", meta.title)}>
           {title}
         </span>
-        <KimBadges ids={ids} kim={kim} collaboratorIds={collabIds} memberNames={memberNames} personHex={personHex} />
+        <KimBadges ids={ids} kim={kim} collaboratorIds={collabIds} memberNames={memberNames} memberPhotos={memberPhotos} personHex={personHex} />
         {content && (
           <span className="mt-0.5 block whitespace-pre-line text-[12px] leading-snug text-ink/70">
             {content}
@@ -431,7 +434,7 @@ function TitleCell({
  * taşınabilir; hedef hücrede toplantı yoksa sunucu sessizce açar.
  */
 function TopicCell({
-  cellId, topic, isToday, isAdmin, draggable, memberNames, personHex, onOpen,
+  cellId, topic, isToday, isAdmin, draggable, memberNames, memberPhotos = {}, personHex, onOpen,
 }: {
   cellId: string;
   topic: PlanningTopic | null;
@@ -439,6 +442,7 @@ function TopicCell({
   isAdmin: boolean;
   draggable: boolean;
   memberNames: Record<string, string>;
+  memberPhotos?: Record<string, string | null>;
   personHex: Record<string, string>;
   onOpen: () => void;
 }) {
@@ -481,7 +485,7 @@ function TopicCell({
           ids={topic.participant_ids}
           kim={topic.kim}
           collaboratorIds={topic.collaborator_ids}
-          memberNames={memberNames}
+          memberNames={memberNames} memberPhotos={memberPhotos}
           personHex={personHex}
         />
       )}

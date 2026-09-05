@@ -22,6 +22,8 @@ interface Props {
   weekStart: string;    // Pazartesi yyyy-MM-dd
   members: Member[];
   memberNames: Record<string, string>;
+  /** profiles.id → fotoğraf; kişi rozetleri yuvarlak kart olarak çizilir. */
+  memberPhotos?: Record<string, string | null>;
   /** Kişi rengi (profiles.id → hex) — baş harf rozetleri kendi renginde. */
   personHex?: Record<string, string>;
   isAdmin: boolean;
@@ -50,7 +52,7 @@ interface Props {
 const DEFAULT_TOPIC_ROWS = 3;
 
 export function PlanningBoard({
-  meetings, weekDays, weekStart, members, memberNames, personHex = {}, isAdmin, bands, openDay = null,
+  meetings, weekDays, weekStart, members, memberNames, memberPhotos = {}, personHex = {}, isAdmin, bands, openDay = null,
 }: Props) {
   const router = useRouter();
   const [editor, setEditor] = useState<
@@ -205,6 +207,7 @@ export function PlanningBoard({
         rowCountOfSlot={rowCountOfSlot}
         extraSlots={extraSlots}
         memberNames={memberNames}
+        memberPhotos={memberPhotos}
         personHex={personHex}
         isAdmin={isAdmin}
         todayIso={todayIso}
@@ -217,6 +220,7 @@ export function PlanningBoard({
         topicRows={topicRows}
         extraSlots={extraSlots}
         memberNames={memberNames}
+        memberPhotos={memberPhotos}
         personHex={personHex}
         isAdmin={isAdmin}
         todayIso={todayIso}
@@ -248,6 +252,7 @@ export function PlanningBoard({
           topicRows={topicRows}
           extraSlots={extraSlots}
           memberNames={memberNames}
+          memberPhotos={memberPhotos}
           personHex={personHex}
           isAdmin={isAdmin}
           bands={bands}

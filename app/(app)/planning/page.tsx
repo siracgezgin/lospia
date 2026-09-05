@@ -59,12 +59,17 @@ export default async function CalendarPage({
      `personHex` ile aynı kaynaktan gelir — kişi her ekranda aynı görünür. */
   const members: { id: string; name: string; photoUrl?: string | null }[] = [];
   const memberNames: Record<string, string> = {};
+  /** profiles.id → fotoğraf. Kişi rozetleri artık YUVARLAK KART: fotoğrafı
+   *  olanın fotoğrafı, olmayanın kendi renginde baş harfi (Sıraç, 2026-08-30:
+   *  "isimler her yerde kart olmalı, harf olarak değil"). */
+  const memberPhotos: Record<string, string | null> = {};
   for (const m of memberRowsData) {
     const p = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
     if (p) {
       const name = p.full_name || p.email || "—";
       members.push({ id: m.user_id, name, photoUrl: p.avatar_url ?? null });
       memberNames[m.user_id] = name;
+      memberPhotos[m.user_id] = p.avatar_url ?? null;
     }
   }
 
@@ -305,6 +310,7 @@ export default async function CalendarPage({
       weekStart={weekStart}
       members={members}
       memberNames={memberNames}
+      memberPhotos={memberPhotos}
       personHex={personHex}
       isAdmin={isAdmin}
       bands={bands}

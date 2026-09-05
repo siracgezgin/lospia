@@ -19,6 +19,8 @@ interface Props {
   topicRows: Map<string, (PlanningTopic | null)[]>;
   extraSlots: string[];
   memberNames: Record<string, string>;
+  /** profiles.id → fotoğraf; kişi rozetleri yuvarlak kart. */
+  memberPhotos?: Record<string, string | null>;
   /** Kişi rengi (profiles.id → hex) — baş harf rozetleri kendi renginde. */
   personHex?: Record<string, string>;
   isAdmin: boolean;
@@ -41,7 +43,7 @@ interface Props {
  * okunur — bilgi aynı, gezinme parmakla mümkün.
  */
 export function PlanningDayList({
-  weekDays, byCell, topicRows, extraSlots, memberNames, personHex = {}, isAdmin, todayIso,
+  weekDays, byCell, topicRows, extraSlots, memberNames, memberPhotos = {}, personHex = {}, isAdmin, todayIso,
   onOpen, bands, singleDay = false,
 }: Props) {
   const todayIdx = weekDays.indexOf(todayIso);
@@ -193,7 +195,7 @@ export function PlanningDayList({
                 <span className={cn("block font-semibold leading-snug tracking-tight", z.title, meta.title)}>
                   {title || "—"}
                 </span>
-                <KimBadges ids={ids} kim={kim} collaboratorIds={collabIds} memberNames={memberNames} className="ml-0 mt-1" personHex={personHex} />
+                <KimBadges ids={ids} kim={kim} collaboratorIds={collabIds} memberNames={memberNames} memberPhotos={memberPhotos} className="ml-0 mt-1" personHex={personHex} />
                 {content && (
                   <span className={cn("mt-1 block whitespace-pre-line leading-snug text-ink/70", z.content)}>
                     {content}
@@ -248,7 +250,7 @@ export function PlanningDayList({
                         {t.task_id && (
                           <CheckCircle2 size={12} className="ml-1 inline shrink-0 text-success" aria-label="Göreve atandı" />
                         )}
-                        <KimBadges ids={t.participant_ids} kim={t.kim} collaboratorIds={t.collaborator_ids} memberNames={memberNames} personHex={personHex} />
+                        <KimBadges ids={t.participant_ids} kim={t.kim} collaboratorIds={t.collaborator_ids} memberNames={memberNames} memberPhotos={memberPhotos} personHex={personHex} />
                         {/* Yalnız o günden FARKLI teslim tarihi yazılır. */}
                         {t.due_date && t.due_date.slice(0, 10) !== iso && (
                           <span className="ml-1 whitespace-nowrap text-[12px] tabular-nums text-subtle">

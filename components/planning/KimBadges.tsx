@@ -1,7 +1,8 @@
 "use client";
 
 import { cn } from "@/lib/utils/cn";
-import { initialsOf, unresolvedKim } from "@/lib/planning/initials";
+import { unresolvedKim } from "@/lib/planning/initials";
+import { PersonAvatar } from "@/components/ui/PersonAvatar";
 
 interface Props {
   /** Sistem üyelerinin id'leri — baş harfe çevrilir (Selen Ergül → SE). */
@@ -12,6 +13,8 @@ interface Props {
    *  Aslı Hanım, 2026-08-19: "Sorumlu kişinin iş birliğini koyacaksın." */
   collaboratorIds?: string[] | null;
   memberNames: Record<string, string>;
+  /** profiles.id → fotoğraf. Varsa rozet FOTOĞRAF gösterir. */
+  memberPhotos?: Record<string, string | null>;
   /** profiles.id → hex. Boşsa marka rengine düşülür (kimse renksiz kalmaz). */
   personHex?: Record<string, string>;
   className?: string;
@@ -24,7 +27,7 @@ interface Props {
  * haftanın tamamının sığmasını engelliyordu. Bilgi kaybolmasın diye rozetler
  * metnin akışına alındı: satır kırılınca isim cümlenin ortasına düşmez.
  */
-export function KimBadges({ ids, kim, collaboratorIds, memberNames, personHex = {}, className }: Props) {
+export function KimBadges({ ids, kim, collaboratorIds, memberNames, memberPhotos = {}, personHex = {}, className }: Props) {
   const list = ids ?? [];
   // Sorumlu olarak zaten görünen kişi ikinci kez iş birliği rozetiyle çıkmasın.
   const collabs = (collaboratorIds ?? []).filter((id) => !list.includes(id));
@@ -37,31 +40,32 @@ export function KimBadges({ ids, kim, collaboratorIds, memberNames, personHex = 
       {/* Sistem üyesi — marka rengiyle dolu rozet. Konu metninin içinde
           kaybolmasın diye kontrast bilinçli olarak yüksek tutulur. */}
       {list.map((id) => (
-        <span
+        <PersonAvatar
           key={id}
+          name={memberNames[id] ?? "—"}
+          photoUrl={memberPhotos[id] ?? null}
+          colorHex={personHex[id] ?? null}
+          size="xs"
           title={memberNames[id] ?? ""}
-          className={cn(
-            "inline-flex items-center rounded-md px-1.5 py-px text-[11.5px] font-semibold uppercase leading-4 tracking-wide text-white",
-            !personHex[id] && "bg-brand",
-          )}
-          style={personHex[id] ? { backgroundColor: personHex[id] } : undefined}
-        >
-          {initialsOf(memberNames[id])}
-        </span>
+        />
       ))}
       {/* İş birliği — sorumludan görsel olarak bir kademe geride: dolu değil,
           kesikli çerçeveli. "Kim" bakışta hâlâ tek bir kişiyi işaret eder. */}
       {collabs.map((id) => (
+        /* İş birliği SORUMLUDAN ayrışmalı (Aslı Hanım, 2026-08-19). Aynı
+           yuvarlak kart, ama kesikli bir halka içinde ve bir tık soluk:
+           "yanında çalışıyor", "sorumlu" değil. */
         <span
           key={`c-${id}`}
           title={`${memberNames[id] ?? ""} — iş birliği`}
-          className={cn(
-            "inline-flex items-center rounded-md border border-dashed bg-surface px-1.5 py-px text-[11.5px] font-semibold uppercase leading-4 tracking-wide",
-            !personHex[id] && "border-brand/50 text-brand-strong",
-          )}
-          style={personHex[id] ? { borderColor: personHex[id], color: personHex[id] } : undefined}
+          className="inline-grid place-items-center rounded-full border border-dashed border-line-strong p-px opacity-80"
         >
-          {initialsOf(memberNames[id])}
+          <PersonAvatar
+            name={memberNames[id] ?? "—"}
+            photoUrl={memberPhotos[id] ?? null}
+            colorHex={personHex[id] ?? null}
+            size="xs"
+          />
         </span>
       ))}
       {/* Sistemde kullanıcısı olmayan kişi (Meral, Nihal Hoca) — okunur ama

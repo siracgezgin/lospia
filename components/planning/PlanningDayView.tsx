@@ -17,6 +17,8 @@ interface Props {
   topicRows: Map<string, (PlanningTopic | null)[]>;
   extraSlots: string[];
   memberNames: Record<string, string>;
+  /** profiles.id → fotoğraf; kişi rozetleri yuvarlak kart. */
+  memberPhotos?: Record<string, string | null>;
   personHex?: Record<string, string>;
   isAdmin: boolean;
   bands: RuntimeBand[];
@@ -47,7 +49,7 @@ interface Props {
  * saat çifti (New York · İstanbul), bir kademe iri ölçü.
  */
 export function PlanningDayView({
-  day, byCell, topicRows, extraSlots, memberNames, personHex = {}, isAdmin, bands,
+  day, byCell, topicRows, extraSlots, memberNames, memberPhotos = {}, personHex = {}, isAdmin, bands,
   todayIso, onDayChange, onOpenSlot, onClose,
 }: Props) {
   const d = parseISO(day);
@@ -111,7 +113,7 @@ export function PlanningDayView({
         byCell={byCell}
         topicRows={topicRows}
         extraSlots={extraSlots}
-        memberNames={memberNames}
+        memberNames={memberNames} memberPhotos={memberPhotos}
         personHex={personHex}
         isAdmin={isAdmin}
         todayIso={todayIso}

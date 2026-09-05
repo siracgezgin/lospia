@@ -8,8 +8,8 @@ import {
   ClipboardList, Plus, Trash2, Loader2, Send, CheckCircle2, Check, Undo2, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { PersonAvatar } from "@/components/ui/PersonAvatar";
 import { TextInput } from "@/components/ui/Field";
-import { initialsOf } from "@/lib/planning/initials";
 import { categoryMeta } from "@/lib/planning/categories";
 import {
   createOpenItem, updateOpenItem, setOpenItemDone, deleteOpenItem, assignOpenItemAsTask,
@@ -179,9 +179,15 @@ export function OpenItemsBoard({ items, members, currentUserId, isAdmin, availab
           >
             {/* Blok başlığı — kişi */}
             <div className="flex items-center gap-2 border-b border-hairline bg-surface-muted px-3 py-2">
-              <span className="inline-flex h-6 w-7 shrink-0 items-center justify-center rounded bg-surface text-[11.5px] font-semibold text-muted">
-                {col.label === GENERAL ? "∷" : initialsOf(col.label)}
-              </span>
+              {/* Kişi = YUVARLAK KART, köşeli harf kutusu değil
+                  (Sıraç, 2026-08-30: "isimler her yerde kart olmalı"). */}
+              {col.label === GENERAL ? (
+                <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-surface text-[11.5px] font-semibold text-muted">
+                  ∷
+                </span>
+              ) : (
+                <PersonAvatar name={col.label} size="xs" title={col.label} />
+              )}
               <span className="min-w-0 flex-1 truncate text-[13px] font-semibold tracking-tight text-ink" title={col.label}>
                 {col.label}
               </span>

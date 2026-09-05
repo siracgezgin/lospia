@@ -5,7 +5,7 @@ import { useAnchoredMenu } from "@/lib/utils/use-anchored-menu";
 import { createPortal } from "react-dom";
 import { Users, Check, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import { initialsOf } from "@/lib/planning/initials";
+
 import { PersonAvatar } from "@/components/ui/PersonAvatar";
 
 export type Member = {
@@ -205,16 +205,30 @@ export function MemberMultiSelect({
  *  `extra` — sistemde kullanıcısı olmayan kişiler (Aslı'nın "Kim" metninden
  *  çözülemeyen adlar); ham hâliyle, daha soluk gösterilir. */
 export function MemberInitials({
-  ids, memberNames, extra = [], className,
-}: { ids: string[]; memberNames: Record<string, string>; extra?: string[]; className?: string }) {
+  ids, memberNames, memberPhotos = {}, personHex = {}, extra = [], className,
+}: {
+  ids: string[];
+  memberNames: Record<string, string>;
+  memberPhotos?: Record<string, string | null>;
+  personHex?: Record<string, string>;
+  extra?: string[];
+  className?: string;
+}) {
   if (!ids?.length && !extra.length) return null;
   return (
     <span className={cn("inline-flex flex-wrap items-center gap-1", className)}>
       <Users size={11} className="text-ink/50" aria-hidden />
+      {/* Kişi = YUVARLAK KART (fotoğraf ya da kendi renginde baş harf),
+          düz harf çipi değil (Sıraç, 2026-08-30). */}
       {ids.map((id) => (
-        <span key={id} title={memberNames[id] ?? ""} className="rounded bg-black/5 px-1 text-[11.5px] font-semibold text-ink/70">
-          {initialsOf(memberNames[id])}
-        </span>
+        <PersonAvatar
+          key={id}
+          name={memberNames[id] ?? "—"}
+          photoUrl={memberPhotos[id] ?? null}
+          colorHex={personHex[id] ?? null}
+          size="xs"
+          title={memberNames[id] ?? ""}
+        />
       ))}
       {extra.map((name) => (
         <span key={name} title={`${name} — sistemde kullanıcı değil`} className="rounded bg-black/5 px-1 text-[12px] font-medium text-ink/60">
