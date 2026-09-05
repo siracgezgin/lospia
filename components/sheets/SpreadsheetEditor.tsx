@@ -1114,7 +1114,12 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                         st?.w ? "whitespace-pre-wrap break-words leading-[1.35]" : "whitespace-nowrap",
                         selected ? "bg-brand-soft/50" : "bg-surface",
                         inFill && "bg-brand-soft/30",
-                        isActive && "outline outline-2 -outline-offset-2 outline-brand",
+                        /* Yayılan görselde seçim çerçevesi hücreye DEĞİL
+                           görselin kendisine çizilir (aşağıda): küçük çapa
+                           hücresinin etrafındaki kutu, kocaman bir görselin
+                           yanında "hangi satır seçili?" sorusunu
+                           cevaplamıyordu (Sıraç, 2026-09-06). */
+                        isActive && !imgSpan && "outline outline-2 -outline-offset-2 outline-brand",
                         isError(val) && "text-danger",
                         st?.b && "font-semibold",
                         st?.i && "italic",
@@ -1152,7 +1157,14 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                             alt={cell.img.name ?? "Görsel"}
                             loading="lazy"
                             draggable={false}
-                            className="pointer-events-none absolute left-0 top-0 object-contain p-0.5"
+                            className={cn(
+                              "pointer-events-none absolute left-0 top-0 object-contain p-0.5",
+                              /* Sınır HER ZAMAN görünür: görselin nerede
+                                 başlayıp bittiği, dolayısıyla hangi hücreye
+                                 ait olduğu ızgaradan okunabilsin. */
+                              "rounded-[2px] ring-1 ring-inset ring-hairline",
+                              isActive && "ring-2 ring-brand",
+                            )}
                             style={{ width: imgSpan?.w ?? w, height: imgSpan?.h ?? h }}
                           />
                         ) : (
@@ -1300,11 +1312,19 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
           <MenuSep />
           <MenuItem onClick={() => { doInsertRow(selN.r1); setMenu(null); }}>Üste satır ekle</MenuItem>
           <MenuItem onClick={() => { doInsertRow(selN.r2 + 1); setMenu(null); }}>Alta satır ekle</MenuItem>
-          <MenuItem onClick={() => { doDeleteRow(selN.r1); setMenu(null); }} danger>Satırı sil</MenuItem>
+          {/* HANGİ satır/sütun olduğu YAZILIR. "Satırı sil" derken kullanıcı
+              hangisinin gideceğini kestirmek zorunda kalıyordu — kocaman bir
+              görselin altında seçim iyice belirsizleşiyor (Sıraç, 2026-09-06).
+              Silinen satırdaki görsel de ayrıca söylenir. */}
+          <MenuItem onClick={() => { doDeleteRow(selN.r1); setMenu(null); }} danger>
+            {selN.r1 + 1}. satırı sil
+          </MenuItem>
           <MenuSep />
           <MenuItem onClick={() => { doInsertCol(selN.c1); setMenu(null); }}>Sola sütun ekle</MenuItem>
           <MenuItem onClick={() => { doInsertCol(selN.c2 + 1); setMenu(null); }}>Sağa sütun ekle</MenuItem>
-          <MenuItem onClick={() => { doDeleteCol(selN.c1); setMenu(null); }} danger>Sütunu sil</MenuItem>
+          <MenuItem onClick={() => { doDeleteCol(selN.c1); setMenu(null); }} danger>
+            {colName(selN.c1)} sütununu sil
+          </MenuItem>
           <MenuSep />
           <MenuItem onClick={() => { toggleMerge(); setMenu(null); }}>Hücreleri birleştir / çöz</MenuItem>
           <MenuSep />
