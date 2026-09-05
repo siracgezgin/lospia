@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition, useOptimistic } from "react";
+import { useState, useTransition, useOptimistic } from "react";
 import Link from "next/link";
 import { Archive, RotateCcw } from "lucide-react";
 import { unarchiveTask } from "@/lib/actions/tasks";
@@ -20,10 +20,31 @@ function formatDate(iso: string | null) {
   return formatDateTR(iso, { day: "numeric", month: "short", year: "numeric" });
 }
 
+/* Sunucu bazen İngilizce teknik metin döner; kullanıcıya Türkçe cümle. */
+function errText(msg: string | undefined, fallback: string): string {
+  if (!msg) return fallback;
+  if (/not authenticated/i.test(msg)) return "Oturumunuz sona ermiş. Sayfayı yenileyip tekrar deneyin.";
+  return msg;
+}
+
 /* Satır: ad · tarih · (varsa) tek eylem. "Geri al" artık her zaman görünür —
    yalnız hover'da beliren düğmeye telefonda ulaşılamıyordu. */
 function TaskRow({ task, onUnarchive }: { task: Task; onUnarchive: (_id: string) => void }) {
   const [pending, startTransition] = useTransition();
+  /* Arşivden çıkarma yetkisi yoksa (üye) sunucu reddediyor ama satır yine de
+     listeden siliniyordu: kullanıcı işin olduğunu sanıyordu. Hata artık
+     görünür, satır yerinde kalır. */
+  const [error, setError] = useState<string | null>(null);
+
+  function handleUnarchive() {
+    setError(null);
+    startTransition(async () => {
+      const res = await unarchiveTask(task.id);
+      if (res && "error" in res) { setError(errText(res.error, "Görev arşivden çıkarılamadı.")); return; }
+      onUnarchive(task.id);
+    });
+  }
+
   return (
     <div className="flex items-center justify-between gap-3 py-2.5 px-4 sm:px-5 hover:bg-surface-hover transition-colors duration-150">
       <div className="flex-1 min-w-0">
@@ -38,13 +59,17 @@ function TaskRow({ task, onUnarchive }: { task: Task; onUnarchive: (_id: string)
             ? `Arşivlendi: ${formatDate(task.archived_at)}`
             : `Tamamlandı: ${formatDate(task.completed_at)}`}
         </p>
+        {error && (
+          <p role="alert" className="anim-fade-down mt-1 text-[12.5px] text-danger">{error}</p>
+        )}
       </div>
       {task.archived_at && (
         <Button
           variant="ghost"
           size="sm"
           loading={pending}
-          onClick={() => startTransition(async () => { await unarchiveTask(task.id); onUnarchive(task.id); })}
+          onClick={handleUnarchive}
+          title="Görevi arşivden çıkar"
           className="shrink-0"
         >
           {!pending && <RotateCcw size={13} aria-hidden />} Geri al

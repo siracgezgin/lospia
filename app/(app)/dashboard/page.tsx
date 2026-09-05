@@ -2,11 +2,14 @@ import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { DashboardView, type DueSoonTask, type ReportPerson } from "@/components/dashboard/DashboardView";
 import { MemberDashboardView } from "@/components/dashboard/MemberDashboardView";
-import { getMemberDashboardData } from "@/lib/points/queries";
+import { istanbulTodayISO } from "@/components/dashboard/today";
 import { assignPersonTones } from "@/lib/design/person-colors";
 import type { Profile } from "@/types";
 
 export const metadata = { title: "Reports" };
+
+/** Kullanıcıya gösterilecek tek cümlelik hata metni — ham SQL/RLS metni asla. */
+const FETCH_FAILED = "İşler getirilemedi. Sayfayı yenileyin; sorun sürerse yöneticinize bildirin.";
 
 /**
  * Reports.
@@ -27,18 +30,60 @@ export default async function DashboardPage() {
 
   const { data: memberRows } = await supabase
     .from("workspace_members")
-    .select("workspace_id, role")
+    .select("id, workspace_id, role")
     .eq("user_id", user.id)
     .limit(1);
   const workspaceId = memberRows?.[0]?.workspace_id;
   if (!workspaceId) return <div className="p-8 text-[13.5px] text-muted">Çalışma alanı bulunamadı.</div>;
   const isAdmin = memberRows?.[0]?.role === "owner" || memberRows?.[0]?.role === "admin";
+  const myMemberId = (memberRows?.[0]?.id as string | undefined) ?? null;
+
+  /* "Bugün" İSTANBUL takvim günüdür. Sunucu (Vercel) UTC olduğu için
+     `new Date().toISOString()` gece yarısı–03:00 arasında bir önceki günü
+     verir ve bugün teslim edilecek işler "gecikmiş" görünürdü. */
+  const today = istanbulTodayISO();
 
   // ── Üye raporu = kesinlikle kişisel. Ekip geneli hiçbir veri istemciye
   //    gönderilmez. ──────────────────────────────────────────────────────────
   if (!isAdmin) {
-    const personal = await getMemberDashboardData(supabase, workspaceId, user.id);
-    return <MemberDashboardView data={personal} />;
+    /* SORUMLULUK KURALI panonunkiyle AYNI (applyPersonFilter): atanan ∪
+       KATILIMCI ∪ iş birliği. Eski kaynak (getMemberDashboardData.dueSoon)
+       yalnız 14 gün içinde teslim edilecek TARİHLİ işleri döndürüyordu:
+       tarihi olmayan ya da uzak tarihli işler "İşlerim" başlığının altında
+       hiç görünmüyordu. */
+    const { data: compRows } = myMemberId
+      ? await supabase
+          .from("task_member_completions")
+          .select("task_id")
+          .eq("workspace_id", workspaceId)
+          .eq("member_id", myMemberId)
+      : { data: [] as { task_id: string }[] };
+    const participantTaskIds = [...new Set(((compRows ?? []) as { task_id: string }[]).map((c) => c.task_id))];
+
+    const or = [
+      `assignee_id.eq.${user.id}`,
+      `custom_fields->collaborators.cs.["${user.id}"]`,
+      ...(participantTaskIds.length > 0 ? [`id.in.(${participantTaskIds.join(",")})`] : []),
+    ].join(",");
+
+    const mineResult = await supabase
+      .from("tasks")
+      .select("id, title, status, priority, due_date, assignee_id")
+      .eq("workspace_id", workspaceId)
+      .eq("visibility", "workspace")
+      .not("status", "in", "(done,archived)")
+      .is("archived_at", null)
+      .is("deleted_at", null)
+      .or(or)
+      .order("due_date", { ascending: true, nullsFirst: false });
+
+    return (
+      <MemberDashboardView
+        tasks={(mineResult.data ?? []) as DueSoonTask[]}
+        today={today}
+        error={mineResult.error ? FETCH_FAILED : null}
+      />
+    );
   }
 
   // ── Yönetici raporu = ekip görünümü. ──────────────────────────────────────
@@ -101,6 +146,10 @@ export default async function DashboardPage() {
       nameOf={nameOf}
       people={people}
       isAdmin={isAdmin}
+      today={today}
+      /* Sessiz boş sayfa YOK: sorgu patladıysa kullanıcı Türkçe bir uyarı
+         görür, "iş yok" sanıp yoluna devam etmez. */
+      error={dueSoonResult.error || membersResult.error ? FETCH_FAILED : null}
     />
   );
 }

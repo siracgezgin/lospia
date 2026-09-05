@@ -163,3 +163,37 @@ export const SHEET_STATUS_TONE: Record<string, string> = {
   locked: "bg-[#f6ecd4] text-[#8a6516]",
   archived: "bg-[#eef0f2] text-[#7a828b]",
 };
+
+// ── Yazı Editörü (Word karşılığı) ────────────────────────────────────────────
+//
+// Aslı Hanım (2026-08-28): "Excel'in yanına Word'ü de gir." Sözlükler burada
+// durur ki editör ile temizleyicinin (lib/office/sanitize-html.ts) izin verdiği
+// değerler tek yerden okunsun.
+
+/** Yazı tipi ailesi — kısa liste; her değer temizleyicinin `font-family`
+ *  kalıbına uyar (harf, rakam, boşluk, virgül, tırnak, tire). */
+export const DOC_FONTS: { value: string; label: string }[] = [
+  { value: "Inter, sans-serif", label: "Inter" },
+  { value: "Arial, Helvetica, sans-serif", label: "Arial" },
+  { value: "Calibri, Candara, sans-serif", label: "Calibri" },
+  { value: "Verdana, Geneva, sans-serif", label: "Verdana" },
+  { value: "Tahoma, Verdana, sans-serif", label: "Tahoma" },
+  { value: "Georgia, serif", label: "Georgia" },
+  { value: "Times New Roman, Times, serif", label: "Times New Roman" },
+  { value: "Courier New, Courier, monospace", label: "Courier New" },
+];
+
+/** Punto (pt) — Word'ün ölçüsü. Gövdenin varsayılanı 12 pt. */
+export const DOC_FONT_SIZES = ["9", "10", "11", "12", "14", "16", "18", "24", "32", "48"];
+
+/** Satır aralığı — Word'ün dört standart adımı. */
+export const DOC_LINE_SPACING: { value: string; label: string }[] = [
+  { value: "1", label: "1,0" },
+  { value: "1.15", label: "1,15" },
+  { value: "1.5", label: "1,5" },
+  { value: "2", label: "2,0" },
+];
+
+/** Gövdenin varsayılan ölçüleri — hem editör hem yazdırma bunları kullanır. */
+export const DOC_BASE_FONT_PT = "12";
+export const DOC_BASE_LINE_HEIGHT = "1.5";

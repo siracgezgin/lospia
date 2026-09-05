@@ -27,6 +27,8 @@ interface Props {
   onDayChange: (_iso: string) => void;
   /** Bir saate tıklandı → toplantı penceresi. */
   onOpenSlot: (_iso: string, _slot: string) => void;
+  /** "Toplantı ekle" — o saatte kayıt olsa bile BOŞ pencere açar. */
+  onAddMeeting?: (_iso: string, _slot: string) => void;
   onClose: () => void;
 }
 
@@ -50,7 +52,7 @@ interface Props {
  */
 export function PlanningDayView({
   day, byCell, topicRows, extraSlots, memberNames, memberPhotos = {}, personHex = {}, isAdmin, bands,
-  todayIso, onDayChange, onOpenSlot, onClose,
+  todayIso, onDayChange, onOpenSlot, onAddMeeting, onClose,
 }: Props) {
   const d = parseISO(day);
   const weekday = WEEKDAY_LONG_TR[(d.getDay() + 6) % 7];
@@ -84,7 +86,10 @@ export function PlanningDayView({
             <button
               type="button"
               onClick={() => onDayChange(todayIso)}
-              className="whitespace-nowrap border-x border-line px-2.5 text-[12.5px] font-medium text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
+              title="Bugüne git"
+              aria-label="Bugüne git"
+              disabled={day === todayIso}
+              className="whitespace-nowrap border-x border-line px-2.5 text-[12.5px] font-medium text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink disabled:cursor-default disabled:text-subtle disabled:hover:bg-transparent"
             >
               Bugün
             </button>
@@ -101,7 +106,7 @@ export function PlanningDayView({
       }
       footer={
         isAdmin ? (
-          <Button size="sm" onClick={() => onOpenSlot(day, firstFreeSlot())}>
+          <Button size="sm" onClick={() => (onAddMeeting ?? onOpenSlot)(day, firstFreeSlot())}>
             <Plus size={14} aria-hidden /> Toplantı ekle
           </Button>
         ) : undefined

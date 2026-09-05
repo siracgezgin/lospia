@@ -5,7 +5,7 @@ import {
   createContext, useContext,
 } from "react";
 import {
-  DndContext, type DragEndEvent, PointerSensor, useSensor, useSensors, closestCenter,
+  DndContext, type DragEndEvent, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter,
 } from "@dnd-kit/core";
 import {
   SortableContext, verticalListSortingStrategy, useSortable, arrayMove,
@@ -188,8 +188,9 @@ function NoteCardContent({
           <button
             {...dragHandleProps}
             type="button"
-            className="mt-0.5 shrink-0 cursor-grab rounded p-0.5 text-subtle/70 transition-colors duration-150 hover:text-muted active:cursor-grabbing"
+            className="mt-0.5 shrink-0 cursor-grab touch-manipulation rounded p-0.5 text-subtle/70 transition-colors duration-150 hover:text-muted active:cursor-grabbing"
             aria-label="Sürükle"
+            title="Sürükleyerek sırasını değiştirin — dokunmatikte basılı tutun"
             tabIndex={-1}
           >
             <GripVertical size={13} />
@@ -363,6 +364,7 @@ export function NotesColumn({
   isAdmin = false,
   feed,
   feedLabel = "Bu haftaki görev notları",
+  onMutated,
 }: {
   notes: WorkspaceNote[];
   workspaceId: string;
@@ -379,6 +381,11 @@ export function NotesColumn({
   // Feed heading — the board overrides it with the selected week's label when
   // the user is browsing a week other than the current one.
   feedLabel?: string;
+  /* Başarılı bir not işleminden sonra çağrılır. Not eylemleri yalnız
+     revalidatePath("/board") çağırıyor; Yönetici Pano ayrı bir rota olduğu için
+     orada iyimser değişiklik eski veriyle geri alınıyordu (eklenen not anında
+     kayboluyordu). Pano bu kancayla o rotayı tazeler. */
+  onMutated?: () => void;
 }) {
   // A note is modifiable by an owner/admin, or by the member who authored it.
   const canModifyNote = (note: WorkspaceNote) =>
@@ -399,6 +406,12 @@ export function NotesColumn({
     | { kind: "convert"; note: WorkspaceNote; taskId: string }
     | null
   >(null);
+  /* HATA GÖRÜNÜRLÜĞÜ.
+     Not ekleme/düzenleme/silme/sıralama sunucu cevabını hiç okumuyordu: işlem
+     reddedilince iyimser değişiklik sessizce geri alınıyor, kullanıcı yazdığı
+     notun neden kaybolduğunu anlamıyordu. Artık her eylem hatasını bu satırda
+     Türkçe gösterir. */
+  const [error, setError] = useState<string | null>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   function showUndo(u: NonNullable<typeof undo>) {
     if (undoTimer.current) clearTimeout(undoTimer.current);
@@ -406,7 +419,13 @@ export function NotesColumn({
     undoTimer.current = setTimeout(() => setUndo(null), 7000);
   }
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  /* Pano kartlarıyla AYNI algılayıcı düzeni: fare 5px hareketle, parmak 220ms
+     basılı tutmayla sürükler. Tek PointerSensor varken dokunmatikte tutamaca
+     dokunmak sütunun kaydırmasını kilitliyordu. */
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
+  );
 
   const [optimisticNotes, applyOptimistic] = useOptimistic(
     initialNotes,
@@ -441,16 +460,22 @@ export function NotesColumn({
       updated_at: new Date().toISOString(),
     };
     setAdding(false);
+    setError(null);
     startTransition(async () => {
       applyOptimistic({ type: "add", note: tempNote });
-      await createNote({ workspace_id: workspaceId, title, body: body || undefined, color });
+      const res = await createNote({ workspace_id: workspaceId, title, body: body || undefined, color });
+      if ("error" in res) { setError(res.error || "Not kaydedilemedi."); return; }
+      onMutated?.();
     });
   }
 
   function handleUpdate(id: string, title: string, body: string, color: NoteColor) {
+    setError(null);
     startTransition(async () => {
       applyOptimistic({ type: "update", id, title, body, color });
-      await updateNote({ id, title, body: body || null, color });
+      const res = await updateNote({ id, title, body: body || null, color });
+      if ("error" in res) { setError(res.error || "Not güncellenemedi."); return; }
+      onMutated?.();
     });
   }
 
@@ -467,14 +492,26 @@ export function NotesColumn({
   }
 
   function performDelete(note: WorkspaceNote) {
+    setError(null);
     startTransition(async () => {
       applyOptimistic({ type: "delete", id: note.id });
-      await deleteNote(note.id);
+      const res = await deleteNote(note.id);
+      if ("error" in res) {
+        setError(res.error || "Not silinemedi.");
+        return;
+      }
+      onMutated?.();
       showUndo({ kind: "delete", note });
     });
   }
 
+  /* GÖREVE DÖNÜŞTÜR — sıra hayatidir.
+     Eskiden görev oluşturma sonucu HİÇ kontrol edilmiyordu: createTask hata
+     dönerse bile not siliniyordu. Sonuç: ne görev var, ne not — yazılan iş
+     tamamen kayboluyordu. Artık görev oluşmadıysa not YERİNDE KALIR ve hata
+     yazılır; not ancak görev gerçekten oluştuktan sonra silinir. */
   function performConvert(note: WorkspaceNote) {
+    setError(null);
     startTransition(async () => {
       const created = await createTask({
         workspace_id: workspaceId,
@@ -486,9 +523,19 @@ export function NotesColumn({
         custom_fields: {},
         participant_member_ids: [],
       });
+      if ("error" in created) {
+        setError(created.error || "Görev oluşturulamadı; not silinmedi.");
+        return;
+      }
       applyOptimistic({ type: "delete", id: note.id });
-      await deleteNote(note.id);
-      if (created && "id" in created) showUndo({ kind: "convert", note, taskId: created.id });
+      const removed = await deleteNote(note.id);
+      if ("error" in removed) {
+        // Görev oluştu ama not kaldırılamadı — kullanıcı ikisini de görmeli.
+        setError("Görev oluşturuldu, fakat not listeden kaldırılamadı.");
+        return;
+      }
+      onMutated?.();
+      showUndo({ kind: "convert", note, taskId: created.id });
     });
   }
 
@@ -506,16 +553,19 @@ export function NotesColumn({
     if (!undo) return;
     const u = undo;
     setUndo(null);
+    setError(null);
     startTransition(async () => {
       if (u.kind === "convert") await softDeleteTask(u.taskId);
       const restored: WorkspaceNote = { ...u.note, id: crypto.randomUUID() };
       applyOptimistic({ type: "add", note: restored });
-      await createNote({
+      const res = await createNote({
         workspace_id: workspaceId,
         title: u.note.title,
         body: u.note.body || undefined,
         color: u.note.color,
       });
+      if ("error" in res) { setError(res.error || "Not geri alınamadı."); return; }
+      onMutated?.();
     });
   }
 
@@ -528,9 +578,14 @@ export function NotesColumn({
     if (oldIndex === -1 || newIndex === -1) return;
 
     const reordered = arrayMove(optimisticNotes, oldIndex, newIndex).map((n, i) => ({ ...n, position: i }));
+    setError(null);
     startTransition(async () => {
       applyOptimistic({ type: "reorder", notes: reordered });
-      await reorderNotes(reordered.map((n) => ({ id: n.id, position: n.position })));
+      const res = await reorderNotes(reordered.map((n) => ({ id: n.id, position: n.position })));
+      // Sıra kaydedilemediyse iyimser dizilim geri alınır (useOptimistic) —
+      // kullanıcı da NEDEN eski sırayı gördüğünü öğrenmeli.
+      if ("error" in res) { setError(res.error || "Not sırası kaydedilemedi."); return; }
+      onMutated?.();
     });
   }
 
@@ -567,6 +622,26 @@ export function NotesColumn({
         </div>
       </div>
 
+      {/* Hata satırı — sütunun içinde, kapatılabilir. Sunucu bir işlemi
+          reddettiğinde kullanıcı bunu okumadan devam edemesin. */}
+      {error && (
+        <div
+          role="alert"
+          className="anim-fade flex items-start gap-2 rounded-card border border-danger/30 bg-danger/10 px-2.5 py-2 text-[12.5px] leading-snug text-danger"
+        >
+          <span className="min-w-0 flex-1 break-words">{error}</span>
+          <button
+            type="button"
+            onClick={() => setError(null)}
+            className="tap-target shrink-0 rounded-md text-danger/70 transition-colors duration-150 hover:text-danger"
+            aria-label="Hata mesajını kapat"
+            title="Kapat"
+          >
+            <X size={13} />
+          </button>
+        </div>
+      )}
+
       {/* Haftanın Not Akışı — primary content */}
       {feed && (
         <div className="flex flex-col gap-1.5">
@@ -594,6 +669,26 @@ export function NotesColumn({
         )}
       </div>
 
+      {/* Yeni not formu listenin ÜSTÜNDE açılır. Altta açılıyordu: notlar
+          çoğaldıkça "+" düğmesine basan kişi ekranda hiçbir şey görmüyor,
+          düğme bozuk sanıyordu. */}
+      {!readOnly && adding && (
+        <AddNoteForm
+          workspaceId={workspaceId}
+          onAdd={handleAdd}
+          onCancel={() => setAdding(false)}
+        />
+      )}
+
+      {/* Boş liste: tek satırlık davet — "+" düğmesinin ne yaptığını söyler. */}
+      {!adding && optimisticNotes.length === 0 && (
+        <p className="px-1 text-[12.5px] leading-snug text-subtle">
+          {readOnly
+            ? "Henüz pano notu yok."
+            : "Henüz pano notu yok. Yukarıdaki + ile hatırlatma ekleyin."}
+        </p>
+      )}
+
       {/* Pre-mount: static list — no dnd-kit, no aria-describedby generation */}
       {!mounted && (
         <div className={listCls}>
@@ -614,14 +709,6 @@ export function NotesColumn({
             </div>
           </SortableContext>
         </DndContext>
-      )}
-
-      {!readOnly && adding && (
-        <AddNoteForm
-          workspaceId={workspaceId}
-          onAdd={handleAdd}
-          onCancel={() => setAdding(false)}
-        />
       )}
 
       {/* Confirm before converting / deleting a note (guards against misclicks) */}

@@ -23,7 +23,17 @@ export default async function LoginPage({
      (gradient arka plan); marka ışıması değil görsel gürültüydü — kaldırıldı.
      Kart telefonda kenardan 16px içeride ve daha dar dolgu (p-6). */
   return (
-    <main className="flex min-h-screen items-center justify-center bg-app px-4 py-10 sm:py-12">
+    /* min-h-dvh (100vh DEĞİL): telefonda klavye açılınca ya da tarayıcı çubuğu
+       gizlenince 100vh gerçek görünür alandan büyük kalıyor ve kart yukarı
+       kayıyordu. dvh canlı yüksekliği izler; min- olduğu için kart sığmazsa
+       sayfa normal şekilde kayar. */
+    <main className="flex min-h-dvh items-center justify-center bg-app px-4 py-10 sm:py-12">
+      {/* Her sayfanın bir <h1>'i olmalı; burada görsel karşılığı marka
+          logosu olduğu için başlık yalnız ekran okuyuculara verilir. Kartın
+          DIŞINDA duruyor: sr-only mutlak konumlu olduğu için yer kaplamaz,
+          ama kartın `space-y-6` zinciri içinde ilk çocuk olsaydı logoya
+          fazladan bir boşluk ekleyecekti. */}
+      <h1 className="sr-only">{brand.name} — Giriş</h1>
       <div className="anim-fade-up w-full max-w-sm space-y-6 rounded-card border border-line bg-surface p-6 shadow-card sm:p-8">
         {/* Brand — the resolved product/pilot logo leads, then a single generic
             supporting line. Logo width is capped so it reads as a confident

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   Wallet, ClipboardList, Check, Loader2, HandCoins, ChevronLeft, Scissors, Boxes,
@@ -9,7 +9,7 @@ import {
 import { cn } from "@/lib/utils/cn";
 import { updateProductionSheetPricing } from "@/lib/actions/production";
 import {
-  totalQuantity, formatMoney, ustaUnitPaymentOf,
+  totalQuantity, formatMoney, ustaUnitPaymentOf, parseMoney,
 } from "@/lib/collection/cost";
 import { assignPersonTones } from "@/lib/design/person-colors";
 import { getPersonInitials } from "@/lib/utils/person-display";
@@ -75,17 +75,24 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
   const [openUsta, setOpenUsta] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
+  /* KAYDETME HATASI GÖRÜNÜR. Hata sessizce yutuluyordu: yazdığınız tutar
+     ekranda duruyor ama sunucuya geçmemiş oluyordu ve bunu ancak sayfayı
+     yenileyince fark ediyordunuz. */
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [, startSave] = useTransition();
+  /* Son kaydedilen hâlin parmak izi — blur her hücreden çıkışta tetiklendiği
+     için dokunulmamış satırı tekrar yazmayı önler. */
+  const savedSnapshots = useRef<Record<string, string>>({});
 
   const unitPaymentOf = (id: string) => ustaUnitPaymentOf(pricing[id]);
   const qtyOf = (r: Row) => totalQuantity(r.size_distribution);
   const lineTotal = (r: Row) => qtyOf(r) * unitPaymentOf(r.id);
-  /** Faturalanan tutar toplamı — ödenen toplamla karşılaştırmak için. */
+  /** Faturalanan tutar toplamı — ödenen toplamla karşılaştırmak için.
+   *  Tutar ayrıştırma TEK yerden (parseMoney): burada ayrı bir çevirici vardı
+   *  ve "1.800,50" gibi Türkçe biçimi NaN'a düşürüp fatura toplamını sessizce
+   *  sıfırlıyordu. */
   const invoiceTotal = (rs: Row[]) =>
-    rs.reduce((a, r) => {
-      const v = Number(String(pricing[r.id]?.invoice_amount ?? "").replace(",", "."));
-      return a + (Number.isFinite(v) ? v : 0);
-    }, 0);
+    rs.reduce((a, r) => a + parseMoney(pricing[r.id]?.invoice_amount), 0);
 
   const byId = useMemo(() => {
     const m: Record<string, PaymentManufacturer> = {};
@@ -142,22 +149,31 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
     setPricing((p) => ({ ...p, [id]: { ...p[id], invoice_amount: value } }));
 
   function savePayment(id: string) {
+    const p = pricing[id] ?? {};
+    const payload = {
+      unit_price: p.unit_price ?? "",
+      purchase_cost: p.purchase_cost ?? "",
+      web_sale_price: p.web_sale_price ?? "",
+      currency: p.currency ?? "TL",
+      notes: p.notes ?? "",
+      cost_items: p.cost_items,
+      usta_unit_payment: p.usta_unit_payment ?? "",
+      invoice_no: p.invoice_no ?? "",
+      invoice_amount: p.invoice_amount ?? "",
+    };
+    const snapshot = JSON.stringify(payload);
+    if (savedSnapshots.current[id] === snapshot) return;
     setSavingId(id);
     startSave(async () => {
-      const p = pricing[id] ?? {};
-      const res = await updateProductionSheetPricing(id, {
-        unit_price: p.unit_price ?? "",
-        purchase_cost: p.purchase_cost ?? "",
-        web_sale_price: p.web_sale_price ?? "",
-        currency: p.currency ?? "TL",
-        notes: p.notes ?? "",
-        cost_items: p.cost_items,
-        usta_unit_payment: p.usta_unit_payment ?? "",
-        invoice_no: p.invoice_no ?? "",
-        invoice_amount: p.invoice_amount ?? "",
-      });
+      const res = await updateProductionSheetPricing(id, payload);
       setSavingId(null);
-      if (!("error" in res)) flash(id);
+      if ("error" in res) {
+        setSaveError("Ödeme bilgisi kaydedilemedi. İnternet bağlantınızı kontrol edip tekrar deneyin.");
+        return;
+      }
+      savedSnapshots.current[id] = snapshot;
+      setSaveError(null);
+      flash(id);
     });
   }
 
@@ -168,6 +184,12 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
       {/* Başlık uygulama çubuğunda; aksiyonlar sekme satırının SAĞINDA. */}
       <h1 className="sr-only">Payment Table</h1>
       <CollectionTabs active="odeme" actions={<SeasonSwitch seasons={seasons} />} />
+
+      {saveError && (
+        <p role="alert" className="anim-fade-down mb-3 rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[13.5px] font-medium text-danger">
+          {saveError}
+        </p>
+      )}
 
       {rows.length === 0 ? (
         <EmptyState icon={HandCoins} className="anim-fade-up" title="Henüz ürün yok." description="Collection’a föy ekleyin; ustalar burada görünür." />
@@ -216,7 +238,9 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
                   {/* Dikey çizgi yok; yalnız ÖDEME ile FATURA grubu arasında
                       tek ince ayırıcı — iki ayrı defter olduğu okunsun. */}
                   <tr className="text-[12px] font-semibold uppercase tracking-[0.06em] text-muted">
-                    <th className={cn(thSticky, "min-w-[220px] px-3 text-left")}>Ürün</th>
+                    {/* Ürün sütunu yatayda da sabit — telefonda fatura
+                        sütunlarına kayarken satırın kimliği kaybolmasın. */}
+                    <th className={cn(thSticky, "sticky left-0 z-20 min-w-[168px] border-r border-hairline px-3 text-left sm:min-w-[220px]")}>Ürün</th>
                     <th className={cn(thSticky, "px-2 text-right")}>Adet</th>
                     <th className={cn(thSticky, "w-36 px-2 text-right")}>Birim ödeme</th>
                     <th className={cn(thSticky, "min-w-[120px] px-3 text-right")}>Toplam</th>
@@ -227,8 +251,8 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
                 </thead>
                 <tbody className="[&>tr:last-child>td]:border-b-0 [&>tr>td]:border-b [&>tr>td]:border-b-hairline">
                   {active.rows.map((r) => (
-                    <tr key={r.id} className="transition-colors duration-150 hover:bg-surface-hover">
-                      <td className="px-3 py-1.5">
+                    <tr key={r.id} className="group/row transition-colors duration-150 hover:bg-surface-hover">
+                      <td className="sticky left-0 z-[1] border-r border-hairline bg-surface px-3 py-1.5 transition-colors duration-150 group-hover/row:bg-surface-hover">
                         <Link href={`/production/${r.id}`} className="font-medium text-ink transition-colors duration-150 hover:text-brand-strong">
                           {r.title}
                         </Link>
@@ -285,7 +309,7 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
                 </tbody>
                 <tfoot>
                   <tr className="text-[13px] font-semibold">
-                    <td className={cn(tfSticky, "px-3 text-ink")}>Toplam</td>
+                    <td className={cn(tfSticky, "sticky left-0 z-20 border-r border-hairline px-3 text-ink")}>Toplam</td>
                     <td className={cn(tfSticky, "px-2 text-right tabular-nums text-ink")}>{active.qty}</td>
                     <td className={tfSticky} />
                     <td className={cn(tfSticky, "px-3 text-right tabular-nums text-ink")}>{formatMoney(active.total)}</td>
@@ -390,19 +414,28 @@ export function CollectionTabs({
           return (
             <span key={t.key} className="flex h-full items-center">
               {divider && <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-line" />}
+              {/* TELEFONDA DA ADI OLAN SEKME. Etiket `sm` altında tamamen
+                  gizleniyordu: dört ikon yan yana kalıyor, hangisinin ne
+                  olduğu ne gözle ne ekran okuyucuyla anlaşılıyordu. Artık
+                  SEÇİLİ sekmenin adı her boyutta yazar ("neredeyim?"),
+                  diğerleri ikon kalır ama adını `title` ve ekran okuyucu
+                  metniyle taşır. */}
               {isActive ? (
                 <span
                   aria-current="page"
+                  title={t.label}
                   className="inline-flex h-8 pointer-coarse:h-10 shrink-0 items-center gap-1.5 rounded-md bg-surface px-3 text-[13px] font-semibold text-ink shadow-xs ring-1 ring-line/70"
                 >
-                  <t.icon size={15} /> <span className="hidden sm:inline">{t.label}</span>
+                  <t.icon size={15} aria-hidden /> <span>{t.label}</span>
                 </span>
               ) : (
                 <Link
                   href={t.href}
+                  title={t.label}
+                  aria-label={t.label}
                   className="inline-flex h-8 pointer-coarse:h-10 shrink-0 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium text-muted transition-colors duration-150 hover:bg-surface hover:text-ink"
                 >
-                  <t.icon size={15} /> <span className="hidden sm:inline">{t.label}</span>
+                  <t.icon size={15} aria-hidden /> <span className="hidden sm:inline">{t.label}</span>
                 </Link>
               )}
             </span>

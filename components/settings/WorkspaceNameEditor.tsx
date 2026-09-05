@@ -23,11 +23,13 @@ export function WorkspaceNameEditor({ workspaceId, currentName }: Props) {
   const [name, setName] = useState(currentName);
   const [draft, setDraft] = useState(currentName);
   const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   function startEdit() {
     setDraft(name);
     setError(null);
+    setSaved(false);
     setEditing(true);
   }
 
@@ -48,14 +50,25 @@ export function WorkspaceNameEditor({ workspaceId, currentName }: Props) {
       }
       setName(draft.trim());
       setEditing(false);
+      setSaved(true);
     });
   }
 
   if (!editing) {
     return (
       <div className="flex items-center justify-end gap-1">
+        {saved && (
+          <span role="status" className="anim-fade mr-1 inline-flex shrink-0 items-center gap-1 text-[12px] font-medium text-success">
+            <Check size={12} aria-hidden /> Kaydedildi
+          </span>
+        )}
         <span className="min-w-0 truncate text-[13.5px] font-medium text-ink">{name}</span>
-        <IconButton size="sm" onClick={startEdit} aria-label="Çalışma alanı adını düzenle">
+        <IconButton
+          size="sm"
+          onClick={startEdit}
+          aria-label="Çalışma alanı adını düzenle"
+          title="Çalışma alanı adını düzenle"
+        >
           <Pencil size={13} />
         </IconButton>
       </div>
@@ -83,10 +96,11 @@ export function WorkspaceNameEditor({ workspaceId, currentName }: Props) {
           onClick={save}
           disabled={isPending || !draft.trim()}
           aria-label="Kaydet"
+          title="Kaydet"
         >
           <Check size={14} />
         </IconButton>
-        <IconButton size="sm" onClick={cancel} disabled={isPending} aria-label="Vazgeç">
+        <IconButton size="sm" onClick={cancel} disabled={isPending} aria-label="Vazgeç" title="Vazgeç">
           <X size={14} />
         </IconButton>
       </div>

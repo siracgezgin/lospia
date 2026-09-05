@@ -5,7 +5,8 @@ import {
   type DragEndEvent,
   type DragStartEvent,
   DragOverlay,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   closestCorners,
@@ -130,6 +131,15 @@ type BoardCtxValue = {
   canDeleteTask: (task: Task) => boolean;     // admin → any; member → only own-created
   showToast: (msg: string) => void;
   taskHrefSuffix: string;                     // appended to /tasks/{id} (e.g. ?from=admin-board)
+  /* Başarılı bir yazma işleminden SONRA çağrılır.
+     Görev eylemleri (lib/actions/tasks) yalnız revalidatePath("/board") çağırır;
+     Yönetici Pano AYRI bir rotadır (/admin-board) ve o yolda tazelenmez. Sonuç:
+     yönetici kartı taşıyor, iyimser güncelleme bitince sunucudan ESKİ veri
+     geliyor ve kart kendiliğinden eski sütununa geri dönüyordu — "kaydetmeyen
+     düzenleme" tam olarak buydu. Yönetici panosunda rotayı elle tazeliyoruz.
+     (Kalıcı çözüm eylemlere revalidatePath("/admin-board") eklemek; lib/actions
+     bu düzeltmenin kapsamı dışında.) */
+  afterMutation: () => void;
 };
 const BoardContext = createContext<BoardCtxValue | null>(null);
 
@@ -165,6 +175,16 @@ const CARD_STATUS_CHOICES: { value: TaskStatus; label: string }[] = [
   { value: "done",        label: "Tamamlandı" },
 ];
 
+/* Durum değiştirme İZNİ tek yerde tanımlıdır. Satır içi çip ve kart menüsündeki
+   "Taşı" bölümü aynı kuralı okur — iki yüzeyde iki farklı kural olsaydı biri
+   sunucunun reddedeceği bir seçeneği sunardı. Kural sunucudaki reorderTask ile
+   aynı: sorumlu ya da yönetici taşır; tamamlanmış işi yalnız yönetici açar. */
+function statusMovePermission(ctx: BoardCtxValue | null, task: Task, status: TaskStatus) {
+  const canDone = ctx?.canComplete ?? false;
+  const doneLocked = status === "done" && !canDone;
+  return { canDone, canChange: (ctx?.isResponsible(task) ?? false) && !doneLocked };
+}
+
 /** Clickable status chip with a small dropdown — an alternative to drag/drop.
  *  Enforces the same permissions: non-responsible members get a static chip;
  *  members can't pick Tamamlandı. */
@@ -172,7 +192,7 @@ function CardStatusChip({ task }: { task: Task }) {
   const ctx = useContext(BoardContext);
   const [open, setOpen] = useState(false);
   const [optStatus, setOptStatus] = useOptimistic<TaskStatus>(task.status);
-  const [, startT] = useTransition();
+  const [pending, startT] = useTransition();
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -191,10 +211,8 @@ function CardStatusChip({ task }: { task: Task }) {
      `tap-target` görünümü büyütmeden hedefi 40×40'a çıkarır (yalnız kaba
      işaretçide); çipin ölçüsü ve satırın hizası aynen kalır. */
   const chipCls = cn("tap-target text-[12px] rounded-md px-1.5 py-0.5 leading-none font-medium", tone);
-  const canDone = ctx?.canComplete ?? false;
   // A done task is locked for non-admins — they can neither change nor reopen it.
-  const doneLocked = optStatus === "done" && !canDone;
-  const canChange = (ctx?.isResponsible(task) ?? false) && !doneLocked;
+  const { canDone, canChange } = statusMovePermission(ctx, task, optStatus);
 
   // No permission to change → plain, non-interactive chip.
   if (!ctx || !canChange) {
@@ -211,7 +229,14 @@ function CardStatusChip({ task }: { task: Task }) {
     startT(async () => {
       setOptStatus(s);
       const res = await updateTask({ id: task.id, status: s });
-      if (res && "error" in res) ctx!.showToast(res.error || "Durum değiştirilemedi.");
+      if (res && "error" in res) {
+        ctx!.showToast(res.error || "Durum değiştirilemedi.");
+        return;
+      }
+      ctx!.afterMutation();
+      /* Kart, telefonda bulunduğu sekmeden KAYBOLUR (her sekme bir durum).
+         Nereye gittiğini söylemezsek kullanıcı görevi sildiğini sanıyor. */
+      ctx!.showToast(`Görev "${STATUS_LABELS[s]}" sekmesine taşındı.`);
     });
   }
 
@@ -220,8 +245,14 @@ function CardStatusChip({ task }: { task: Task }) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className={cn(chipCls, "tap-target inline-flex items-center gap-0.5 hover:brightness-95 active:brightness-90 transition duration-150")}
-        title="Durumu değiştir"
+        disabled={pending}
+        className={cn(
+          chipCls,
+          "tap-target inline-flex items-center gap-0.5 hover:brightness-95 active:brightness-90 transition duration-150",
+          // Kaydedilirken çip söner ve tıklanamaz: aynı görevi iki kez göndermek yok.
+          pending && "cursor-wait opacity-60",
+        )}
+        title={pending ? "Kaydediliyor…" : "Durumu değiştir"}
         aria-haspopup="menu"
         aria-expanded={open}
       >
@@ -591,6 +622,8 @@ function CardMenu({
   canArchive = true,
   canDelete = true,
   canDuplicate = true,
+  moveTargets = [],
+  onMove,
 }: {
   onEdit: () => void;
   onDuplicate: () => void;
@@ -599,6 +632,11 @@ function CardMenu({
   canArchive?: boolean;
   canDelete?: boolean;
   canDuplicate?: boolean;
+  /* "Taşı" bölümü — sürükle-bırakın KLAVYE ve DOKUNMATİK karşılığı. Sürükleme
+     yalnız fareyle (ya da basılı tutmayla) yapılabiliyordu; klavyeyle çalışan
+     birinin kartı taşımasının hiçbir yolu yoktu. Boş dizi → bölüm çizilmez. */
+  moveTargets?: { value: TaskStatus; label: string; active: boolean; disabled: boolean }[];
+  onMove?: (_status: TaskStatus) => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -619,7 +657,11 @@ function CardMenu({
     const trigger = ref.current;
     if (!trigger) return;
     const r = trigger.getBoundingClientRect();
-    const height = menuRef.current?.offsetHeight ?? MENU_EST_HEIGHT;
+    /* İlk karede menü henüz ölçülmemiştir; tahmin "Taşı" bölümünü de saymalı,
+       yoksa alttaki kart menüsü ilk karede aşağı taşıp sonra zıplıyordu.
+       Satır ≈33px, bölüm başlığı + ayraç ≈32px. */
+    const estimated = MENU_EST_HEIGHT + (moveTargets.length > 0 ? 32 + moveTargets.length * 33 : 0);
+    const height = menuRef.current?.offsetHeight ?? estimated;
     const left = Math.min(
       Math.max(8, r.right - MENU_WIDTH),
       Math.max(8, window.innerWidth - MENU_WIDTH - 8),
@@ -629,7 +671,7 @@ function CardMenu({
       ? Math.max(8, r.top - height - 4)
       : below;
     setPos((prev) => (prev && prev.top === top && prev.left === left ? prev : { top, left }));
-  }, []);
+  }, [moveTargets.length]);
 
   // Re-place once the real height is known, so a flipped menu never hangs off
   // the viewport.
@@ -690,11 +732,38 @@ function CardMenu({
           ref={menuRef}
           role="menu"
           style={{ top: pos?.top ?? -9999, left: pos?.left ?? -9999, width: MENU_WIDTH }}
-          className="fixed z-[100] bg-surface border border-line rounded-control shadow-pop py-1 origin-top-right anim-fade-down"
+          /* Menü uzarsa (Taşı bölümü) ekranın dışına taşmaz, kendi içinde kayar. */
+          className="fixed z-[100] max-h-[70vh] overflow-y-auto overscroll-contain bg-surface border border-line rounded-control shadow-pop py-1 origin-top-right anim-fade-down"
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
         >
+          {moveTargets.length > 0 && onMove && (
+            <>
+              <p className="px-3 pb-1 pt-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle">
+                Taşı
+              </p>
+              {moveTargets.map((t) => (
+                <button
+                  key={t.value}
+                  type="button"
+                  role="menuitem"
+                  disabled={t.disabled || t.active}
+                  onClick={() => { setOpen(false); onMove(t.value); }}
+                  className={cn(
+                    MENU_ITEM,
+                    t.active && "font-semibold text-brand",
+                    (t.disabled || t.active) && "cursor-not-allowed opacity-50 hover:bg-transparent",
+                  )}
+                  title={t.disabled ? "Yalnızca yöneticiler tamamlayabilir" : undefined}
+                >
+                  {t.label}
+                  {t.active && <Check size={12} className="ml-auto" />}
+                </button>
+              ))}
+              <div className="my-1 border-t border-hairline" />
+            </>
+          )}
           <button type="button" role="menuitem" onClick={() => { setOpen(false); onEdit(); }} className={MENU_ITEM}>
             <Pencil size={13} /> Düzenle
           </button>
@@ -770,7 +839,9 @@ function QuickAssigneeSelect({
       const res = await updateTask({ id: task.id, assignee_id, responsible_contact_id });
       if (res && "error" in res) {
         ctx?.showToast(res.error || "Sorumlu kişi değiştirilemedi.");
+        return;
       }
+      ctx?.afterMutation();
     });
   }
 
@@ -866,6 +937,40 @@ function CardContent({
 }) {
   // Detail link keeps the originating board's context (so "← geri" returns here).
   const boardCtx = useContext(BoardContext);
+  const router = useRouter();
+  const [movePending, startMove] = useTransition();
+
+  /* Kart menüsündeki "Taşı" — sürükle-bırakla AYNI işi yapar, ama fare
+     gerektirmez: klavyeyle çalışan ya da sürüklemeyi bilmeyen biri de kartı
+     taşıyabilsin. İzin kuralı satır içi çiple tek kaynaktan gelir.
+     Mobil kartta ÇİZİLMEZ (showStatus): orada durum çipi zaten aynı işi yapar,
+     iki yol birden aynı karta konursa gereksiz kalabalık olur. */
+  const { canDone: canMoveToDone, canChange: canMoveCard } =
+    statusMovePermission(boardCtx, task, task.status);
+  const moveTargets = canMoveCard && !showStatus
+    ? CARD_STATUS_CHOICES.map((c) => ({
+        value: c.value,
+        label: c.label,
+        active: c.value === task.status,
+        disabled: c.value === "done" && !canMoveToDone,
+      }))
+    : [];
+  function handleMove(status: TaskStatus) {
+    if (status === task.status) return;
+    if (status === "done" && !canMoveToDone) {
+      boardCtx?.showToast("Tamamlandı aşamasına yalnızca yöneticiler taşıyabilir.");
+      return;
+    }
+    startMove(async () => {
+      const res = await updateTask({ id: task.id, status });
+      if (res && "error" in res) {
+        boardCtx?.showToast(res.error || "Görev taşınamadı.");
+        return;
+      }
+      boardCtx?.afterMutation();
+      boardCtx?.showToast(`Görev "${STATUS_LABELS[status]}" aşamasına taşındı.`);
+    });
+  }
   const hrefSuffix = boardCtx?.taskHrefSuffix ?? "";
   const taskHref = `/tasks/${task.id}${hrefSuffix}`;
   // Per-card delete: members may only delete tasks they created (server-enforced).
@@ -905,7 +1010,9 @@ function CardContent({
       : null;
 
   return (
-    <div className="flex-1 min-w-0">
+    /* Taşınırken kart söner: sunucu cevabı gelene kadar "bir şey oluyor" görünür
+       ve aynı işlem iki kez tetiklenmez. */
+    <div className={cn("flex-1 min-w-0 transition-opacity duration-150", movePending && "pointer-events-none opacity-50")}>
       {/* Üst satır: tek rozet (varsa) + kart menüsü */}
       <div className="flex items-start justify-between gap-1">
         <div className="min-w-0 flex-1">
@@ -918,13 +1025,19 @@ function CardContent({
         </div>
         {interactive && showMenu && onDelete && onArchive && onDuplicate && (
           <CardMenu
-            onEdit={() => { window.location.href = taskHref; }}
+            /* Uygulama içi gezinme (router.push). window.location.href TÜM
+               sayfayı yeniden yüklüyordu: kabuk, pano verisi ve seçili kişi
+               sıfırdan kuruluyor, "Düzenle" saniyelerce beyaz ekran demek
+               oluyordu. */
+            onEdit={() => router.push(taskHref)}
             onDuplicate={() => onDuplicate(task.id)}
             onArchive={() => onArchive(task.id)}
             onDelete={() => onDelete(task.id)}
             canArchive={canArchiveCard}
             canDelete={canDeleteThis}
             canDuplicate={canDuplicateThis}
+            moveTargets={moveTargets}
+            onMove={handleMove}
           />
         )}
       </div>
@@ -1086,8 +1199,8 @@ function TaskCard({
 
   // The WHOLE card opens the task detail — except interactive children (status
   // chip, assignee select, menu, links) which stop propagation and are filtered
-  // by the closest() guard as a second net. A real drag (PointerSensor fires
-  // only after 5px of movement) must not navigate on release, so we remember
+  // by the closest() guard as a second net. A real drag (the mouse sensor fires
+  // only after 5px, touch only after a 220ms press) must not navigate on release, so we remember
   // that a drag happened and swallow exactly the click that follows it.
   const wasDragged = useRef(false);
   useEffect(() => {
@@ -1111,7 +1224,11 @@ function TaskCard({
       /* Sürükleme dönüşümü ile kişi rengi AYNI style nesnesinde birleşir —
          ayrı verilirse biri diğerini eziyor. */
       style={{ ...em.style, transform: CSS.Transform.toString(transform), transition }}
-      className={`rounded-card border ${em.widthCls} p-3 ${em.shadow} group ${colorCls} ${stateCls} ${dragCls}`}
+      /* touch-manipulation: dokunmatikte çift-dokunma yakınlaştırma gecikmesi
+         kalkar ama SAYFA/SÜTUN KAYDIRMASI çalışmaya devam eder (touch-none
+         verilseydi tablette sütun hiç kaydırılamazdı). TouchSensor'ın basılı
+         tutma eşiği sürüklemeyi zaten ayırıyor. */
+      className={`rounded-card border ${em.widthCls} p-3 ${em.shadow} group touch-manipulation ${colorCls} ${stateCls} ${dragCls}`}
       {...dragProps}
       onClick={openDetail}
       onKeyDown={(e) => {
@@ -1132,6 +1249,7 @@ function TaskCard({
             disableDrag ? "text-transparent" : "cursor-grab text-subtle/70 group-hover:text-muted"
           }`}
           aria-hidden
+          title={disableDrag ? undefined : "Sürükleyerek taşıyın — dokunmatik ekranda kartı basılı tutun"}
         >
           <GripVertical size={14} />
         </span>
@@ -1430,11 +1548,26 @@ export function KanbanBoard({
   const mounted = useSyncExternalStore(subscribeMounted, getMounted, getServerMounted);
   const router = useRouter();
 
+  /* SÜRÜKLEME ALGILAYICILARI — fare ve parmak ayrı ayrı.
+     Eskiden tek `PointerSensor` vardı. PointerSensor parmağı da yakalar ama
+     sürüklemeyi ilk 5px'te başlatır; dokunmatikte o ilk 5px KAYDIRMA hareketinin
+     kendisidir — tablette sütunu kaydırmaya çalışan kişi farkında olmadan kartı
+     sürüklüyor, gerçek sürükleme ise tarayıcı kaydırmayı üstlendiği an
+     (pointercancel) yarıda kalıyordu.
+     Artık: fare 5px hareketle, parmak 220ms BASILI TUTMA ile sürükler. Basılı
+     tutmadan yapılan her dokunuş kaydırma veya tıklama olarak tarayıcıda kalır;
+     8px tolerans, parmağın doğal titremesini sürükleme sanmaz. */
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
   );
 
   const [_isPending, startTransition] = useTransition();
+  /* Bkz. BoardCtxValue.afterMutation — Yönetici Pano rotası sunucu eylemlerinin
+     revalidatePath("/board") çağrısıyla tazelenmiyor. */
+  const afterMutation = useCallback(() => {
+    if (isAdminBoard) router.refresh();
+  }, [isAdminBoard, router]);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -1598,19 +1731,36 @@ export function KanbanBoard({
 
   // ── Card lifecycle handlers ──────────────────────────────────────────────────
 
+  /* Yıkıcı işlemler SESSİZ KALAMAZ. Eskiden sonuç okunmuyordu: sunucu "yetkiniz
+     yok" dese bile kart iyimser olarak listeden siliniyor ve "çöp kutusuna
+     taşındı" yazıyordu; kart bir sonraki yenilemede geri geliyordu ve kimse
+     neden olduğunu bilmiyordu. Artık hata Türkçe gösterilir ve router.refresh()
+     ile pano sunucudaki GERÇEK duruma geri döner. */
   function handleDeleteCard(id: string) {
     startTransition(async () => {
       setOptimisticTasks({ type: "remove", id });
-      await softDeleteTask(id);
-      showToast("Görev çöp kutusuna taşındı.");
+      const res = await softDeleteTask(id);
+      if ("error" in res) {
+        showToast(res.error || "Görev silinemedi.");
+        router.refresh();
+        return;
+      }
+      afterMutation();
+      showToast("Görev çöp kutusuna taşındı.", { label: "Çöp kutusu", href: "/trash" });
     });
   }
 
   function handleArchiveCard(id: string) {
     startTransition(async () => {
       setOptimisticTasks({ type: "remove", id });
-      await archiveTask(id);
-      showToast("Görev arşivlendi.");
+      const res = await archiveTask(id);
+      if ("error" in res) {
+        showToast(res.error || "Görev arşivlenemedi.");
+        router.refresh();
+        return;
+      }
+      afterMutation();
+      showToast("Görev arşivlendi.", { label: "Arşiv", href: "/archive" });
     });
   }
 
@@ -1687,6 +1837,13 @@ export function KanbanBoard({
     const task = findTask(event.active.id as string);
     if (task) setActiveTask(task);
   }, [optimisticTasks]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* Sürükleme İPTAL edilebilir: Esc'e basmak, parmağın ekrandan çıkması,
+     tarayıcının dokunuşu kaydırmaya çevirmesi… Bu durumda dnd-kit onDragEnd'i
+     DEĞİL onDragCancel'ı çağırır. Bu kanca yokken activeTask temizlenmiyordu ve
+     ekranın ortasında hiçbir yere bırakılamayan hayalet bir kart asılı kalıyordu
+     (kurtuluşu sayfayı yenilemekti). */
+  const onDragCancel = useCallback(() => setActiveTask(null), []);
 
   const onDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
@@ -1775,7 +1932,9 @@ export function KanbanBoard({
         // Never fail silently — explain and resync so the card snaps back cleanly.
         showToast(result.error || "Görev taşınamadı.");
         router.refresh();
+        return;
       }
+      afterMutation();
     });
   }, [optimisticTasks, tasksByCol]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1857,8 +2016,8 @@ export function KanbanBoard({
   );
 
   const boardCtx = useMemo<BoardCtxValue>(
-    () => ({ canComplete, isResponsible, canDeleteTask: canDeleteTaskFn, showToast, taskHrefSuffix }),
-    [canComplete, isResponsible, canDeleteTaskFn, taskHrefSuffix], // eslint-disable-line react-hooks/exhaustive-deps -- showToast uses stable setToasts
+    () => ({ canComplete, isResponsible, canDeleteTask: canDeleteTaskFn, showToast, taskHrefSuffix, afterMutation }),
+    [canComplete, isResponsible, canDeleteTaskFn, taskHrefSuffix, afterMutation], // eslint-disable-line react-hooks/exhaustive-deps -- showToast uses stable setToasts
   );
 
   // ── Haftanın Not Akışı: week-scoped feed items ────────────────────────────
@@ -1945,6 +2104,7 @@ export function KanbanBoard({
       currentUserId={userId}
       isViewer={isViewer}
       acks={noteAcks}
+      onMutated={afterMutation}
     />
   );
   // Heading follows the feed's week: the selected week's label while browsing a
@@ -2280,7 +2440,7 @@ export function KanbanBoard({
               {/* Not sütunu Yönetici Panoda da çizilir: pano dili her iki yüzeyde
                   aynı olmalı ve yönetici notları/akışı burada da lazım. Sütunun
                   kendi izin davranışı (readOnly / isAdmin) değişmez. */}
-              <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} currentUserId={userId} isAdmin={canComplete} feed={feedNode} feedLabel={feedLabel} />
+              <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} currentUserId={userId} isAdmin={canComplete} feed={feedNode} feedLabel={feedLabel} onMutated={afterMutation} />
               {BOARD_COLUMNS.map((col) => (
                 <StaticKanbanColumn
                   key={col.id}
@@ -2303,13 +2463,14 @@ export function KanbanBoard({
           collisionDetection={closestCorners}
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
+          onDragCancel={onDragCancel}
         >
           <div className="hidden md:block overflow-auto flex-1 min-h-0">
             <div className="relative min-w-max">
               {/* Continuous sticky band behind every column header (no gaps/peek). */}
               <div aria-hidden className="sticky top-0 z-10 h-11 border-b border-line bg-app" />
               <div className="flex gap-3 sm:gap-4 px-3 sm:px-4 pb-4 items-start -mt-11">
-                <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} currentUserId={userId} isAdmin={canComplete} feed={feedNode} feedLabel={feedLabel} />
+                <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} currentUserId={userId} isAdmin={canComplete} feed={feedNode} feedLabel={feedLabel} onMutated={afterMutation} />
                 {BOARD_COLUMNS.map((col) => (
                   <KanbanColumn
                     key={col.id}
@@ -2384,7 +2545,7 @@ export function KanbanBoard({
         {/* Single column content — flows into the page scroll (no inner scroll) */}
         <div className="px-3 py-3">
           {!isAdminBoard && mobileSeg === "notes" ? (
-            <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} currentUserId={userId} isAdmin={canComplete} mobile feed={feedNode} feedLabel={feedLabel} />
+            <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} currentUserId={userId} isAdmin={canComplete} mobile feed={feedNode} feedLabel={feedLabel} onMutated={afterMutation} />
           ) : (
             (() => {
               const colTasks = tasksByCol[mobileSeg as BoardColId] ?? [];
@@ -2395,8 +2556,20 @@ export function KanbanBoard({
                     compact
                     className="anim-fade"
                     title="Görev yok"
+                    /* Yeni görev, BULUNULAN sekmenin durumunda açılır. Eskiden
+                       her sekmeden "Yapılacak" olarak oluşuyordu: "Kontrol"
+                       sekmesinde görev oluşturan kişi listenin yine boş
+                       kaldığını görüyordu. */
                     action={canCreate ? (
-                      <Button variant="secondary" size="sm" onClick={() => { setModalDefaultStatus("ready"); setModalOpen(true); }}>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          const col = BOARD_COLUMNS.find((c) => c.id === mobileSeg);
+                          setModalDefaultStatus(col?.targetStatus ?? "ready");
+                          setModalOpen(true);
+                        }}
+                      >
                         <Plus size={14} /> Görev oluştur
                       </Button>
                     ) : undefined}

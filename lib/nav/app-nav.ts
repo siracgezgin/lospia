@@ -92,15 +92,39 @@ export function navSectionsForRole(isAdmin: boolean): NavSection[] {
 }
 
 /**
+ * MENÜDE SATIRI OLMAYAN ROTALARIN SAHİBİ.
+ *
+ * Bazı ekranlar kendi rotasında yaşar ama menüde kendi satırı YOKTUR — çünkü
+ * bir başka yüzeyin sekmesi ya da alt sayfasıdır (tek rota = tek isim kuralı,
+ * ikinci kapı açmıyoruz). Eşleme olmadan o sayfalarda menüde hiçbir satır
+ * yanmıyor, kullanıcı "neredeyim?" sorusunu kaybediyordu.
+ *
+ * Anahtar bir ÖNEK'tir: "/x" hem "/x" hem "/x/…" ile eşleşir. Değer, menüde
+ * yanacak satırın href'idir ve NAV_SECTIONS içinde GERÇEKTEN bulunmalıdır.
+ */
+const ROUTE_OWNER: ReadonlyArray<readonly [prefix: string, owner: string]> = [
+  // Raporlar List yüzeyinin son sekmesidir (bkz. components/shared/SurfaceTabs).
+  ["/dashboard", "/list"],
+  // Kişi bazlı tek sayfa rapor — Raporlar'ın alt sayfası, yani yine List.
+  ["/reports", "/list"],
+  // Sheets ve Library sol bardan kalktı; ikisi de AF Teamwork'ün kutucuğu.
+  ["/sheets", "/documents"],
+  ["/library", "/documents"],
+  // Üretim Föyü editörü Koleksiyon'dan açılır; kendi menü satırı yoktur.
+  ["/production", "/collection"],
+  // Pano kuralları — Pano'nun kurallar panelinden açılan alt sayfa.
+  ["/rules", "/board"],
+];
+
+/**
  * Aktif satır = EN UZUN eşleşen href (tek kazanan).
  * /collection/maliyet açıkken hem Collection hem Cost yanmasın diye.
  */
 export function activeNavHref(pathname: string): string | null {
-  /* Raporlar artık List yüzeyinin bir SEKMESİ (bkz. SurfaceTabs) ama kendi
-     rotasında yaşıyor. Menüde kendi satırı olmadığı için /dashboard'dayken
-     hiçbir satır yanmıyordu — kullanıcı "neredeyim?" sorusunu kaybediyordu.
-     Sekme hangi yüzeye aitse menüde o satır yanar. */
-  if (pathname === "/dashboard" || pathname.startsWith("/dashboard/")) return "/list";
+  const owned = ROUTE_OWNER.find(
+    ([prefix]) => pathname === prefix || pathname.startsWith(prefix + "/"),
+  );
+  if (owned) return owned[1];
 
   return (
     [...NAV_SECTIONS.flatMap((s) => s.items), NAV_DIRECTORY]

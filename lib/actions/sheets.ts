@@ -24,6 +24,9 @@ const ADMIN_ROLES: AppRole[] = ["owner", "admin"];
 // can get large; 4 MB keeps us far from Postgres limits while allowing real use.
 const MAX_SNAPSHOT_CHARS = 4_000_000;
 
+/** İki sürüm kaydı arasındaki en kısa süre (bkz. saveSpreadsheetSnapshot). */
+const VERSION_MIN_GAP_MS = 3 * 60 * 1000;
+
 const uuidOrNull = z
   .string()
   .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
@@ -217,23 +220,128 @@ export async function saveSpreadsheetSnapshot(
 
   if (error) return { error: toActionErrorMessage(error) };
 
-  // Version history — best effort, never blocks the save.
+  /* SÜRÜM GEÇMİŞİ — kısıtlı.
+     Otomatik kaydetme yazma durduktan ~1 sn sonra çalışıyor; her kayıtta bir
+     sürüm yazmak yarım saatlik bir çalışmada yüzlerce TAM anlık görüntü
+     biriktiriyordu (tablo şişiyor, kayıt yavaşlıyor). Artık en fazla
+     VERSION_MIN_GAP_MS'de bir sürüm alınır: kurtarma noktası olarak yeterli,
+     maliyeti sabit. Yazılamazsa kayıt yine de başarılıdır. */
   const { data: last } = await supabase
     .from("operation_spreadsheet_versions")
-    .select("version_no")
+    .select("version_no, created_at")
     .eq("spreadsheet_id", sheetId)
     .order("version_no", { ascending: false })
     .limit(1)
     .maybeSingle();
-  await supabase.from("operation_spreadsheet_versions").insert({
-    spreadsheet_id: sheetId,
-    snapshot,
-    version_no: ((last?.version_no as number | undefined) ?? 0) + 1,
-    created_by: ctx.userId,
-  });
 
-  revalidatePath(`/sheets/${sheetId}`);
+  const lastAt = last?.created_at ? Date.parse(last.created_at as string) : 0;
+  const tooSoon = Number.isFinite(lastAt) && Date.now() - lastAt < VERSION_MIN_GAP_MS;
+  if (!tooSoon) {
+    await supabase.from("operation_spreadsheet_versions").insert({
+      spreadsheet_id: sheetId,
+      snapshot,
+      version_no: ((last?.version_no as number | undefined) ?? 0) + 1,
+      created_by: ctx.userId,
+    });
+  }
+
+  /* revalidatePath BİLEREK ÇAĞRILMIYOR.
+     Sunucu eyleminde yol geçersiz kılmak, istemci yönlendiricisini de
+     tazeliyor: otomatik kaydetme her tetiklendiğinde /sheets/[id] yeniden
+     sunucuda çiziliyor (departmanlar + 300 görev + kişiler sorgusu) ve
+     düzenleyici yazarken donuyordu. Anlık görüntünün doğruluk kaynağı zaten
+     tarayıcıdaki düzenleyici; sayfa bir sonraki gezinmede tazelenir. */
   return { ok: true };
+}
+
+/**
+ * Yalnız BAŞLIĞI değiştirir — tablo editöründeki satır içi yeniden adlandırma.
+ * Künye formunun tamamını göndermeden ad değiştirebilmek için ayrı duruyor
+ * (aynı desen yazılarda da var).
+ */
+export async function renameOperationSpreadsheet(
+  sheetId: string,
+  title: string,
+): Promise<{ ok: true } | { error: string }> {
+  const clean = (title ?? "").trim();
+  if (!clean) return { error: "Başlık gerekli." };
+  if (clean.length > 300) return { error: "Başlık en fazla 300 karakter olabilir." };
+
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+
+  const editable = await loadEditable(supabase, ctx, sheetId);
+  if ("error" in editable) return editable;
+
+  const { error } = await supabase
+    .from("operation_spreadsheets")
+    .update({ title: clean })
+    .eq("id", sheetId)
+    .eq("workspace_id", ctx.workspaceId);
+
+  if (error) return { error: toActionErrorMessage(error) };
+  revalidatePath("/documents");
+  return { ok: true };
+}
+
+/**
+ * KOPYALA — tablonun içeriğiyle birlikte aynı klasörde bir eşini açar.
+ * "Geçen sezonun listesini bozmadan üstünde çalışayım" akışı; Drive'daki
+ * "Bir kopyasını oluştur" ile aynı beklenti.
+ */
+export async function duplicateOperationSpreadsheet(
+  sheetId: string,
+): Promise<{ id: string } | { error: string }> {
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+
+  const { data: src, error: readError } = await supabase
+    .from("operation_spreadsheets")
+    .select(
+      "title, description, sheet_type, department_id, related_task_id, related_contact_id, tags, snapshot, folder_id, section, visibility",
+    )
+    .eq("id", sheetId)
+    .eq("workspace_id", ctx.workspaceId)
+    .maybeSingle();
+
+  if (readError) return { error: toActionErrorMessage(readError) };
+  if (!src) return { error: NOT_FOUND };
+
+  const row = src as {
+    title: string; description: string | null; sheet_type: string;
+    department_id: string | null; related_task_id: string | null;
+    related_contact_id: string | null; tags: string[] | null;
+    snapshot: unknown; folder_id: string | null; section: string;
+    visibility: string;
+  };
+
+  const { data: made, error } = await supabase
+    .from("operation_spreadsheets")
+    .insert({
+      workspace_id: ctx.workspaceId,
+      created_by: ctx.userId,
+      owner_id: ctx.userId,
+      title: `${row.title} (kopya)`.slice(0, 300),
+      description: row.description,
+      sheet_type: row.sheet_type,
+      status: isAdmin(ctx) ? "active" : "draft",
+      department_id: row.department_id,
+      related_task_id: row.related_task_id,
+      related_contact_id: row.related_contact_id,
+      tags: row.tags ?? [],
+      snapshot: (row.snapshot ?? {}) as Record<string, unknown>,
+      folder_id: row.folder_id,
+      section: row.section,
+      visibility: row.visibility,
+    })
+    .select("id")
+    .single();
+
+  if (error) return { error: toActionErrorMessage(error) };
+  revalidatePath("/documents");
+  return { id: (made as { id: string }).id };
 }
 
 // Prefer archive over hard delete — non-destructive; admin-only.

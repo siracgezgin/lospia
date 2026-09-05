@@ -9,6 +9,11 @@ import type {
 } from "@/types";
 import type { BoardMember } from "@/app/(app)/board/page";
 
+/* Sekme başlığı sidebar/registry/AppHeader ile BİREBİR aynı ad olmalı (tek
+   terminoloji kuralı); bu sayfada hiç yoktu ve tarayıcı sekmesinde uygulamanın
+   genel adı yazıyordu. */
+export const metadata = { title: "Admin Board" };
+
 export default async function AdminBoardPage({
   searchParams,
 }: {

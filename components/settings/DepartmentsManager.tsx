@@ -153,6 +153,9 @@ function DeptCard({
   const [renaming, setRenaming] = useState(false);
   const [draftName, setDraftName] = useState(dept.name);
   const [savingName, startRename] = useTransition();
+  /* Satır içi hata — yeniden adlandırma ve üye çıkarma sessizce başarısız
+     oluyordu ("Bu isimde bir departman zaten var" hiç görünmüyordu). */
+  const [rowError, setRowError] = useState<string | null>(null);
 
   function commitRename() {
     const clean = draftName.trim();
@@ -161,8 +164,14 @@ function DeptCard({
       setDraftName(dept.name);
       return;
     }
+    setRowError(null);
     startRename(async () => {
-      await updateDepartment(dept.id, { name: clean });
+      const res = await updateDepartment(dept.id, { name: clean });
+      if ("error" in res) {
+        setRowError(res.error);
+        setDraftName(dept.name);
+        return;
+      }
       router.refresh();
     });
   }
@@ -182,9 +191,11 @@ function DeptCard({
   function confirmRemoveMember() {
     if (!removeTarget) return;
     const id = removeTarget.id;
+    setRowError(null);
     startTransition(async () => {
-      await removeDepartmentMember(id);
+      const res = await removeDepartmentMember(id);
       setRemoveTarget(null);
+      if ("error" in res) { setRowError(res.error); return; }
       router.refresh();
     });
   }
@@ -262,6 +273,12 @@ function DeptCard({
           </div>
         )}
       </div>
+
+      {rowError && (
+        <p role="alert" className="anim-fade-down mb-1 ml-6 text-[12.5px] leading-relaxed text-danger">
+          {rowError}
+        </p>
+      )}
 
       {open && (
         <div className="anim-fade space-y-1 pb-2 pl-6">
@@ -361,6 +378,7 @@ export function DepartmentsManager({ departments, deptMembers, workspaceMembers,
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [provisionErr, setProvisionErr] = useState<string | null>(null);
   const [provisionOk, setProvisionOk] = useState(false);
+  const [deleteErr, setDeleteErr] = useState<string | null>(null);
 
   const topLevel = departments.filter((d) => d.parent_id === null).sort((a, b) => a.position - b.position);
   const children = (parentId: string) =>
@@ -398,9 +416,13 @@ export function DepartmentsManager({ departments, deptMembers, workspaceMembers,
   function confirmDelete() {
     if (!deleteTarget) return;
     const id = deleteTarget.id;
+    setDeleteErr(null);
     startDelete(async () => {
-      await deleteDepartment(id);
+      const res = await deleteDepartment(id);
       setDeleteTarget(null);
+      // Silme sessizce başarısız oluyordu: pencere kapanıyor, departman
+      // listede kalıyor, kullanıcı sebebini hiç öğrenmiyordu.
+      if ("error" in res) setDeleteErr(res.error);
     });
   }
 
@@ -416,6 +438,15 @@ export function DepartmentsManager({ departments, deptMembers, workspaceMembers,
 
   return (
     <div className="space-y-4">
+      {deleteErr && (
+        <p
+          role="alert"
+          className="anim-fade-down rounded-control border border-danger/25 bg-danger/8 px-3 py-2 text-[12.5px] leading-relaxed text-danger"
+        >
+          {deleteErr}
+        </p>
+      )}
+
       {/* AF departman ağacı hiç yüklenmemişse: sakin bir uyarı + tek eylem.
           Ham amber kutu ve amber düğme token'lı warning yüzeyine döndü. */}
       {canManage && departments.length === 0 && (

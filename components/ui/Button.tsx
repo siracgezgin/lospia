@@ -101,17 +101,28 @@ export const IconButton = forwardRef<
     "aria-label": string;
     variant?: Exclude<ButtonVariant, "primary" | "destructive"> | "primary" | "destructive";
     size?: ButtonSize;
+    loading?: boolean;
     children: React.ReactNode;
   }
->(function IconButton({ variant = "ghost", size = "md", className, children, type = "button", ...rest }, ref) {
+>(function IconButton(
+  { variant = "ghost", size = "md", loading = false, disabled, className, children, type = "button", ...rest },
+  ref,
+) {
   return (
     <button
       ref={ref}
       type={type}
+      /* Yükleme durumu Button ile AYNI sözleşme: düğme kendi rengini korur
+         ("bekliyor" ≠ "kapalı"), tıklamayı almaz ve ikonun yerine dönen halka
+         çizilir — yerleşim kaymaz. Eskiden IconButton'ın yükleme hâli yoktu:
+         satır içi sil/kaydet düğmeleri basıldıktan sonra hiçbir şey söylemiyor,
+         kullanıcı ikinci kez basıyordu. */
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
       className={cn(
         "tap-target inline-flex shrink-0 items-center justify-center rounded-control select-none",
         "transition-[background-color,border-color,color,box-shadow,transform] duration-150 ease-standard active:scale-[0.96]",
-        DISABLED,
+        loading ? "pointer-events-none" : DISABLED,
         VARIANT[variant],
         // Kare ikon düğmesi de dokunmatikte büyür (bkz. SIZE notu).
         size === "sm" ? "size-8 pointer-coarse:size-10" : "size-9 pointer-coarse:size-11",
@@ -119,7 +130,7 @@ export const IconButton = forwardRef<
       )}
       {...rest}
     >
-      {children}
+      {loading ? <Loader2 size={size === "sm" ? 14 : 16} className="animate-spin" aria-hidden /> : children}
     </button>
   );
 });

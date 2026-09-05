@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Printer } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Button } from "@/components/ui/Button";
@@ -32,6 +33,8 @@ interface Props {
   today: string;      // yyyy-MM-dd
   /** Ekibin tamamının kimliği — renk panodakiyle aynı çıksın diye. */
   teamIdentity?: { id: string; colorKey: string | null; iconKey: string | null }[];
+  /** Veri getirilemediyse Türkçe uyarı — boş rapor "işi yok" gibi okunmasın. */
+  error?: string | null;
 }
 
 const GUNLER = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
@@ -58,7 +61,7 @@ const trTarih = (iso: string) => {
  * sayfa (bkz. globals.css @media print).
  */
 export function PersonReport({
-  person, tasks, meetings, departments, today, teamIdentity,
+  person, tasks, meetings, departments, today, teamIdentity, error,
 }: Props) {
   /* Renk EKİP GENELİ atamadan gelir. Tek kişi için hesaplamak, panoda çakışma
      yüzünden kayan tonu ve yöneticinin Ayarlar'daki seçimini görmez; kişinin
@@ -70,15 +73,23 @@ export function PersonReport({
   const tone = assignPersonTones(seeds, choices)[person.id] ?? assignPersonTones([person.id])[person.id]!;
 
   const open = tasks.filter((t) => t.status !== "done");
-  const overdue = open.filter((t) => t.due_date && t.due_date < today);
+  const overdueAll = open.filter((t) => t.due_date && t.due_date < today);
 
   // Yaklaşanlar: tarihi olan açık işler, gecikmişler hariç, en yakın 8.
-  const upcoming = open
+  const upcomingAll = open
     .filter((t) => t.due_date && t.due_date >= today)
-    .sort((a, b) => (a.due_date ?? "").localeCompare(b.due_date ?? ""))
-    .slice(0, 8);
+    .sort((a, b) => (a.due_date ?? "").localeCompare(b.due_date ?? ""));
   // Tarihsizler ayrı: "ne zaman?" sorusu görünür olsun.
-  const undated = open.filter((t) => !t.due_date).slice(0, 6);
+  const undatedAll = open.filter((t) => !t.due_date);
+
+  /* Sayfa A4'e SIĞMALI, bu yüzden liste kesilir. Ama kesildiğini SÖYLEMEZSE
+     rapor yalan söyler: on iki gecikmiş işi olan kişinin raporunda sekiz satır
+     görünüp gerisi sessizce kayboluyordu. Kesildiğinde tam listeye giden bir
+     bağlantı düşer (kâğıda basılmaz). SAYI YAZMAZ — kimseyi puanlamaz. */
+  const overdue = overdueAll.slice(0, 8);
+  const upcoming = upcomingAll.slice(0, 8);
+  const undated = undatedAll.slice(0, 6);
+  const allHref = `/list?person=${person.id}`;
 
   return (
     <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
@@ -97,7 +108,7 @@ export function PersonReport({
           kâğıtta kaldırır. */}
       <article className="print-page mx-auto max-w-3xl rounded-card border border-line bg-surface p-6 shadow-card sm:p-8">
         {/* Kimlik */}
-        <header className="flex items-center gap-4 border-b border-line-strong pb-4">
+        <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line-strong pb-4">
           {/* Fotoğraf, yoksa kişinin renginde baş harfleri. */}
           <PersonAvatar
             name={person.name}
@@ -105,8 +116,8 @@ export function PersonReport({
             colorHex={tone.hex}
             size="lg"
           />
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-2xl font-semibold tracking-tight text-ink">
+          <div className="min-w-0 flex-1 basis-40">
+            <h1 className="truncate text-xl font-semibold tracking-tight text-ink sm:text-2xl">
               {getPersonDisplayName(person.name)}
             </h1>
             <p className="mt-0.5 text-[13px] text-muted">
@@ -122,10 +133,11 @@ export function PersonReport({
         {overdue.length > 0 && (
           <Block title="Gecikmiş işler" tone="danger">
             <ul className="divide-y divide-hairline">
-              {overdue.slice(0, 8).map((t) => (
+              {overdue.map((t) => (
                 <Row key={t.id} title={t.title} right={trTarih(t.due_date!)} rightTone="text-danger" />
               ))}
             </ul>
+            {overdueAll.length > overdue.length && <AllLink href={allHref} />}
           </Block>
         )}
 
@@ -136,6 +148,7 @@ export function PersonReport({
                 <Row key={t.id} title={t.title} right={trTarih(t.due_date!)} />
               ))}
             </ul>
+            {upcomingAll.length > upcoming.length && <AllLink href={allHref} />}
           </Block>
         )}
 
@@ -160,16 +173,38 @@ export function PersonReport({
                 <Row key={t.id} title={t.title} right="tarih yok" rightTone="text-subtle" />
               ))}
             </ul>
+            {undatedAll.length > undated.length && <AllLink href={allHref} />}
           </Block>
         )}
 
-        {open.length === 0 && meetings.length === 0 && (
-          <p className="mt-4 rounded-control border border-line bg-surface-muted px-3 py-4 text-center text-[13.5px] text-subtle">
-            Açık iş ve toplantı yok.
+        {error ? (
+          <p
+            role="alert"
+            className="mt-4 rounded-control border border-danger/30 bg-danger/5 px-3 py-4 text-center text-[13.5px] text-ink"
+          >
+            {error}
           </p>
+        ) : (
+          open.length === 0 && meetings.length === 0 && (
+            <p className="mt-4 rounded-control border border-line bg-surface-muted px-3 py-4 text-center text-[13.5px] text-subtle">
+              Açık iş ve toplantı yok. Masası temiz.
+            </p>
+          )
         )}
       </article>
     </div>
+  );
+}
+
+/** Kesilen listenin altındaki tek satır — ekranda bağlantı, kâğıtta yok. */
+function AllLink({ href }: { href: string }) {
+  return (
+    <Link
+      href={href}
+      className="no-print mt-1.5 inline-flex min-h-9 items-center text-[12.5px] font-medium text-brand transition-colors duration-150 hover:text-brand-strong pointer-coarse:min-h-11"
+    >
+      Tümünü listede gör
+    </Link>
   );
 }
 

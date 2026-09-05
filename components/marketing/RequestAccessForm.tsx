@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { CheckCircle2, ChevronDown } from "lucide-react";
 import { submitRequestAccess } from "@/lib/actions/leads";
 import {
@@ -17,11 +18,14 @@ const inputClass =
 const selectClass = `${inputClass} appearance-none pr-10`;
 
 function Field({
+  name,
   label,
   required,
   error,
   children,
 }: {
+  /** Alan adı — hata metninin id'sini üretir (aria-describedby ile eşleşir). */
+  name: string;
   label: string;
   required?: boolean;
   error?: string;
@@ -31,10 +35,19 @@ function Field({
     <label className="block space-y-1.5">
       <span className="text-sm font-medium text-slate-800">
         {label}
-        {required && <span className="text-rose-500"> *</span>}
+        {required && (
+          <>
+            <span aria-hidden className="text-rose-500"> *</span>
+            <span className="sr-only"> (zorunlu)</span>
+          </>
+        )}
       </span>
       {children}
-      {error && <span className="block text-xs text-rose-600">{error}</span>}
+      {error && (
+        <span id={`${name}-error`} className="block text-xs text-rose-600">
+          {error}
+        </span>
+      )}
     </label>
   );
 }
@@ -64,14 +77,33 @@ export function RequestAccessForm() {
 
   if (done) {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-[0_24px_60px_-30px_rgba(15,23,42,0.25)] ring-1 ring-slate-900/[0.03]">
-        <CheckCircle2 className="mx-auto mb-4 h-10 w-10 text-emerald-600" />
+      /* Başarı kartı çıkmaz sokaktı: teşekkür yazıp bırakıyordu. Artık
+         "şimdi ne yapayım?" sorusunun iki cevabı da burada. */
+      <div
+        role="status"
+        className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-[0_24px_60px_-30px_rgba(15,23,42,0.25)] ring-1 ring-slate-900/[0.03]"
+      >
+        <CheckCircle2 className="mx-auto mb-4 h-10 w-10 text-emerald-600" aria-hidden />
         <h2 className="text-lg font-semibold text-slate-900">
           Talebiniz alındı.
         </h2>
         <p className="mt-2 text-sm leading-relaxed text-slate-600">
           Genellikle 1 iş günü içinde dönüş yapar, kısa bir görüşme planlarız.
         </p>
+        <div className="mt-6 flex flex-col gap-2.5 sm:flex-row sm:justify-center">
+          <Link
+            href="/"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-slate-300 bg-white px-5 text-sm font-medium text-slate-800 shadow-sm transition-colors duration-150 hover:border-slate-400 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-2"
+          >
+            Ana sayfaya dön
+          </Link>
+          <Link
+            href="/#urun"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-slate-200 px-5 text-sm font-medium text-slate-600 transition-colors duration-150 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-2"
+          >
+            Ürünü incelemeye devam et
+          </Link>
+        </div>
       </div>
     );
   }
@@ -134,22 +166,31 @@ export function RequestAccessForm() {
         <GroupHeading>İletişim bilgileri</GroupHeading>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Ad Soyad" required error={fieldErrors.name}>
+          <Field name="name" label="Ad Soyad" required error={fieldErrors.name}>
             <input
               name="name"
               required
               maxLength={80}
+              autoComplete="name"
+              aria-invalid={fieldErrors.name ? true : undefined}
+              aria-describedby={fieldErrors.name ? "name-error" : undefined}
               className={inputClass}
               placeholder="Adınız Soyadınız"
             />
           </Field>
 
-          <Field label="E-posta" required error={fieldErrors.email}>
+          <Field name="email" label="E-posta" required error={fieldErrors.email}>
             <input
               name="email"
               type="email"
               required
               maxLength={255}
+              autoComplete="email"
+              autoCapitalize="none"
+              spellCheck={false}
+              inputMode="email"
+              aria-invalid={fieldErrors.email ? true : undefined}
+              aria-describedby={fieldErrors.email ? "email-error" : undefined}
               className={inputClass}
               placeholder="ornek@markaniz.com"
             />
@@ -157,22 +198,34 @@ export function RequestAccessForm() {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Şirket / marka adı" required error={fieldErrors.company_name}>
+          <Field
+            name="company_name"
+            label="Şirket / marka adı"
+            required
+            error={fieldErrors.company_name}
+          >
             <input
               name="company_name"
               required
               maxLength={120}
+              autoComplete="organization"
+              aria-invalid={fieldErrors.company_name ? true : undefined}
+              aria-describedby={fieldErrors.company_name ? "company_name-error" : undefined}
               className={inputClass}
               placeholder="Markanızın adı"
             />
           </Field>
 
-          <Field label="Telefon" required error={fieldErrors.phone}>
+          <Field name="phone" label="Telefon" required error={fieldErrors.phone}>
             <input
               name="phone"
               type="tel"
               required
               maxLength={30}
+              autoComplete="tel"
+              inputMode="tel"
+              aria-invalid={fieldErrors.phone ? true : undefined}
+              aria-describedby={fieldErrors.phone ? "phone-error" : undefined}
               className={inputClass}
               placeholder="05xx xxx xx xx"
             />
@@ -184,7 +237,7 @@ export function RequestAccessForm() {
         <GroupHeading>Operasyon yapınız</GroupHeading>
 
         <div className="grid gap-4 sm:grid-cols-2 sm:items-end">
-          <Field label="Ekip büyüklüğü">
+          <Field name="team_size" label="Ekip büyüklüğü">
             <SelectWrap>
               <select name="team_size" className={selectClass} defaultValue="">
                 <option value="">Seçin</option>
@@ -197,7 +250,10 @@ export function RequestAccessForm() {
             </SelectWrap>
           </Field>
 
-          <Field label="Şu anda işleri nasıl takip ediyorsunuz?">
+          <Field
+            name="current_workflow_tool"
+            label="Şu anda işleri nasıl takip ediyorsunuz?"
+          >
             <SelectWrap>
               <select
                 name="current_workflow_tool"
@@ -216,6 +272,7 @@ export function RequestAccessForm() {
         </div>
 
         <Field
+          name="main_operational_pain"
           label="En büyük operasyon problemi nedir?"
           error={fieldErrors.main_operational_pain}
         >
@@ -223,6 +280,10 @@ export function RequestAccessForm() {
             name="main_operational_pain"
             rows={3}
             maxLength={1000}
+            aria-invalid={fieldErrors.main_operational_pain ? true : undefined}
+            aria-describedby={
+              fieldErrors.main_operational_pain ? "main_operational_pain-error" : undefined
+            }
             className={inputClass}
             placeholder="Örn: Onaylar WhatsApp'ta kayboluyor, teslim tarihlerini takip edemiyoruz…"
           />
@@ -244,16 +305,25 @@ export function RequestAccessForm() {
         </label>
       </div>
 
-      {error && (
-        <p className="mt-4 rounded-lg border border-rose-100 bg-rose-50 px-3.5 py-2.5 text-sm text-rose-700">
-          {error}
-        </p>
-      )}
+      {/* Hata kutusu sessizce çiziliyordu; ekran okuyucu duyurmuyordu. Kutu
+          artık HER ZAMAN DOM'da (boşken sr-only) — canlı bölge ancak
+          önceden var olduğunda duyurur. */}
+      <p
+        aria-live="assertive"
+        aria-atomic="true"
+        className={
+          error
+            ? "mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-sm text-rose-700"
+            : "sr-only"
+        }
+      >
+        {error}
+      </p>
 
       <button
         type="submit"
         disabled={submitting}
-        className="mt-6 w-full rounded-lg bg-indigo-600 px-6 py-3 text-base font-medium text-white shadow-[0_8px_22px_-8px_rgba(79,70,229,0.55)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-indigo-700 hover:shadow-[0_12px_28px_-10px_rgba(79,70,229,0.65)] active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:bg-indigo-600 disabled:hover:shadow-[0_8px_22px_-8px_rgba(79,70,229,0.55)]"
+        className="mt-6 min-h-[48px] w-full rounded-lg bg-indigo-600 px-6 py-3 text-base font-medium text-white shadow-[0_8px_22px_-8px_rgba(79,70,229,0.55)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-indigo-700 hover:shadow-[0_12px_28px_-10px_rgba(79,70,229,0.65)] active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:bg-indigo-600 disabled:hover:shadow-[0_8px_22px_-8px_rgba(79,70,229,0.55)]"
       >
         {submitting ? "Gönderiliyor…" : "Görüşme talebi gönder"}
       </button>

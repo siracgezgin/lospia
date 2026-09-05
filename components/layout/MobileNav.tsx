@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import {
   Boxes,
@@ -78,11 +78,16 @@ export function MobileNav({
   const closeMenu = useCallback(() => setOpenedAt(null), []);
   const activeHref = activeNavHref(pathname);
 
-  const menuActive = menuOpen || (activeHref !== null && !TABS.some((t) => t.href === activeHref));
+  /* "Menu" sekmesi, bulunduğun ekran dört sekmenin dışındaysa yanar.
+     /profile YALNIZ çekmeceden ulaşılır; menüde karşılığı olmadığı için o
+     sayfada hiçbir sekme yanmıyor, telefonda "neredeyim?" cevapsız kalıyordu. */
+  const drawerOnly = pathname.startsWith("/profile");
+  const menuActive =
+    menuOpen || drawerOnly || (activeHref !== null && !TABS.some((t) => t.href === activeHref));
 
   return (
     <>
-      <nav className="safe-bottom fixed bottom-0 left-0 right-0 z-40 border-t border-line bg-surface md:hidden">
+      <nav aria-label="Alt gezinme" className="safe-bottom fixed bottom-0 left-0 right-0 z-40 border-t border-line bg-surface md:hidden">
         <div className="flex h-14 items-stretch justify-around">
           {TABS.map(({ href, label, icon: Icon }) => (
             <TabButton
@@ -180,20 +185,50 @@ function MobileMenu({
 }) {
   const mounted = useMounted();
   const sections = navSectionsForRole(isAdmin);
+  const panelRef = useRef<HTMLDivElement>(null);
 
-  // Esc + arkadaki sayfanın kaymasını durdur (Overlay ile aynı sözleşme).
+  // Esc + arkadaki sayfanın kaymasını durdur (Overlay ile aynı sözleşme) +
+  // odak çekmecenin İÇİNDE dolaşsın (Tab arkadaki sayfaya kaçmasın).
   useEffect(() => {
     if (!open) return;
+    const opener = document.activeElement as HTMLElement | null;
+
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const panel = panelRef.current;
+      if (!panel) return;
+      const focusables = Array.from(
+        panel.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((el) => el.offsetParent !== null);
+      if (focusables.length === 0) return;
+      const first = focusables[0]!;
+      const last = focusables[focusables.length - 1]!;
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || !panel.contains(active))) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
     }
+
     document.addEventListener("keydown", onKey);
     const body = document.body;
     const prev = body.style.overflow;
     body.style.overflow = "hidden";
+    // Odağı çekmeceye al; kapanınca açan düğmeye geri ver.
+    panelRef.current?.focus();
     return () => {
       document.removeEventListener("keydown", onKey);
       body.style.overflow = prev;
+      opener?.focus?.();
     };
   }, [open, onClose]);
 
@@ -209,7 +244,11 @@ function MobileMenu({
       aria-modal="true"
       aria-label="Menü"
     >
-      <div className="anim-drawer-left absolute inset-y-0 left-0 flex w-[19rem] max-w-[86vw] flex-col bg-surface shadow-drawer">
+      <div
+        ref={panelRef}
+        tabIndex={-1}
+        className="anim-drawer-left absolute inset-y-0 left-0 flex w-[19rem] max-w-[86vw] flex-col bg-surface shadow-drawer outline-none"
+      >
         <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-line px-4">
           <div className="flex min-w-0 items-center gap-2.5">
             {brandIcon && (
@@ -226,7 +265,7 @@ function MobileMenu({
           </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-2.5 py-3">
+        <nav aria-label="Ana gezinme" className="flex-1 overflow-y-auto px-2.5 py-3">
           {sections.map((section, i) => (
             <div key={section.title} className={i > 0 ? "mt-4 border-t border-hairline pt-4" : ""}>
               <p className="mb-1.5 select-none px-2.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle">

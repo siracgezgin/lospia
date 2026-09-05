@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import { format, isValid, parseISO, startOfWeek } from "date-fns";
 import { Calendar1, CalendarRange, CalendarDays, CalendarClock } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 // Ölçek sözlüğü sunucu-güvenli modülde: `?v=` çözümlemesini sayfa orada yapar.
@@ -29,19 +30,36 @@ export function CalendarViewSwitch({ scale }: { scale: CalendarScale }) {
   const router = useRouter();
   const params = useSearchParams();
 
+  /** Bir günün pazartesi'si — hafta parametresi hep güne uyar. */
+  function mondayOf(iso: string): string {
+    return format(startOfWeek(parseISO(iso), { weekStartsOn: 1 }), "yyyy-MM-dd");
+  }
+  const todayIso = () => format(new Date(), "yyyy-MM-dd");
+
+  /* ÖLÇEK DEĞİŞİNCE BAKILAN TARİH KORUNUR. Eskiden yalnız `v` değişiyordu:
+     Kasım'daki bir günden "Gün"e geçince `week` Kasım'da, `d` bugünde kalıyor
+     ve kart hafta dışında bir güne bakıyordu (boş açılıyordu); "Gün"den
+     "Hafta"ya dönünce de kullanıcı bulunduğu haftayı kaybediyordu. Artık her
+     geçişte gün ve hafta birlikte taşınır. */
   function go(next: CalendarScale) {
     if (next === scale) return;
     const q = new URLSearchParams(params.toString());
-    if (next === "hafta") { q.delete("v"); q.delete("d"); }
-    else q.set("v", next);
-    /* GÜN ayrı bir sayfa değil, haftanın üstünde açılan karttır: hangi günün
-       açılacağını `d` söyler. Değer yoksa bugün. Diğer ölçeklerden geçerken
-       `d` boş kalabiliyordu ve kart "bugün"e düşüyordu — açık yazmak, bağlantı
-       paylaşıldığında da aynı günü getirir. */
-    if (next === "gun" && !q.get("d")) {
-      const now = new Date();
-      const iso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-      q.set("d", iso);
+    const rawDay = q.get("d");
+    const day = rawDay && isValid(parseISO(rawDay)) ? rawDay : null;
+
+    if (next === "hafta") {
+      q.delete("v");
+      q.delete("d");
+      if (day) q.set("week", mondayOf(day));
+    } else {
+      q.set("v", next);
+      /* GÜN ayrı bir sayfa değil, haftanın üstünde açılan karttır: hangi günün
+         açılacağını `d` söyler. Değer yoksa bugün. */
+      if (next === "gun") {
+        const target = day ?? todayIso();
+        q.set("d", target);
+        q.set("week", mondayOf(target));
+      }
     }
     const qs = q.toString();
     router.push(qs ? `/planning?${qs}` : "/planning");

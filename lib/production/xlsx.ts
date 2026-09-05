@@ -4,18 +4,23 @@
 // biçimlendirme (kalın başlıklar, gölgeli şeritler, kenarlıklar, kaydırılmış
 // uzun metin). Salt-yazım; kullanıcı verisi güvenli.
 import ExcelJS from "exceljs";
-import type { ProductionSheet } from "@/types";
-import { categoryLabel, subcategoryLabel } from "@/lib/collection/taxonomy";
+import type { ProductionSheet, MaterialCategory, CostItemKey } from "@/types";
+import { COLLECTION_TAXONOMY, type CategoryNode } from "@/lib/collection/taxonomy";
+import { labelOf, subLabelOf } from "@/lib/collection/category-tree";
 import {
-  totalQuantity, quantityBySize, orderSizes, canonicalSize, formatMoney,
-  STANDARD_SIZES,
-  unitCostOf,
+  totalQuantity, quantityBySize, orderSizes, canonicalSize,
+  STANDARD_SIZES, COST_ITEM_DEFS, MATERIAL_COST_KEY, parseMoney,
 } from "@/lib/collection/cost";
 
 const COLS = 9; // A–I
 const INK = "FF1F2937"; // koyu başlık şeridi
 const TH = "FFE5E7EB"; // tablo başlığı
 const LINE = "FFD9DCE1"; // ince kenarlık
+
+/** Para hücresi biçimi — Excel'de SAYI olarak durur, metin değil. Böylece
+ *  kullanıcı kendi toplamını alabilir, sıralayabilir, süzebilir. */
+const MONEY_FMT = '#,##0.00" ₺"';
+const QTY_FMT = "#,##0";
 
 const thin = { style: "thin" as const, color: { argb: LINE } };
 const border = { top: thin, left: thin, bottom: thin, right: thin };
@@ -422,106 +427,357 @@ export async function buildAllProductionSheetsWorkbook(
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
 
-// ── Maliyet tablosu → Excel (Aslı'nın "Üretim Adetleri" sayfası karşılığı) ──────
+// ── Maliyet tablosu → Excel ────────────────────────────────────────────────
+//
+//  İKİ SAYFA:
+//    1) "Maliyet"         — ekrandaki maliyet tablosunun birebir karşılığı
+//                           (ürün · kalem kalem maliyet · birim · adet · toplam)
+//    2) "Üretim Adetleri" — Aslı Hanım'ın alışkın olduğu beden dağılımı ızgarası
+//
+//  Para ve adet hücreleri METİN DEĞİL SAYIDIR ve toplam sütunları gerçek Excel
+//  FORMÜLÜ taşır: dosyayı açan kişi adedi değiştirince toplam kendi kendine
+//  güncellenir, süzgeç ve sıralama çalışır. Eskiden her tutar "₺1.800" gibi
+//  metin yazılıyordu — Excel'de toplanamıyor, sıralanamıyordu.
 type CostRow = Pick<
   ProductionSheet,
   "id" | "title" | "product_kind" | "category" | "subcategory" | "pricing" | "size_distribution"
->;
+> & Partial<Pick<ProductionSheet, "product_code" | "producer">>;
 
-/** Tüm ürünlerin maliyetini Excel'deki düzende (beden kolonları + toplam) üretir. */
-export function buildCostWorkbook(rows: CostRow[]): Promise<Buffer> {
+/** Maliyet dosyasının ihtiyaç duyduğu sade reçete satırı. */
+export type CostBomLite = {
+  consumption: number;
+  waste_pct: number;
+  material: { id: string; category: MaterialCategory; unit_price: number | null } | null;
+};
+
+export type CostWorkbookOptions = {
+  /** föy id → reçete satırları. Malzeme kalemleri BURADAN hesaplanır. */
+  bomBySheet?: Record<string, CostBomLite[]>;
+  /** Çalışma alanının düzenlenebilir kategori ağacı. Verilmezse varsayılanlar. */
+  categories?: CategoryNode[];
+  /** Dosyanın kapsadığı sezon — başlık şeridinde yazar. */
+  seasonName?: string | null;
+};
+
+/** Bir föyün reçeteden gelen kalem tutarları (ekrandaki hesapla AYNI formül). */
+function bomAmountsOf(list: CostBomLite[] | undefined): Partial<Record<CostItemKey, number>> {
+  const out: Partial<Record<CostItemKey, number>> = {};
+  for (const r of list ?? []) {
+    const key = MATERIAL_COST_KEY[r.material?.category ?? "diger"] ?? "diger";
+    const price = Number(r.material?.unit_price ?? 0);
+    const qty = Number(r.consumption ?? 0);
+    const waste = Number(r.waste_pct ?? 0) / 100;
+    if (!Number.isFinite(price) || !Number.isFinite(qty)) continue;
+    out[key] = (out[key] ?? 0) + qty * price * (1 + (Number.isFinite(waste) ? waste : 0));
+  }
+  return out;
+}
+
+/** Bir satırın hesaplanmış hâli — iki sayfa da AYNI sayıyı kullansın diye
+ *  bir kez türetilir. */
+type ComputedCostRow = {
+  row: CostRow;
+  amounts: Record<CostItemKey, number>;
+  /** Kalemlerin toplamı (reçete + elle girilen). */
+  itemSum: number;
+  /** Birim maliyet: kalem varsa toplamı, yoksa eski tek rakam. */
+  unit: number;
+  qty: number;
+};
+
+function computeRows(
+  rows: CostRow[],
+  bomBySheet: Record<string, CostBomLite[]>,
+): ComputedCostRow[] {
+  return rows.map((row) => {
+    const bom = bomAmountsOf(bomBySheet[row.id]);
+    const items = row.pricing?.cost_items ?? [];
+    const amounts = {} as Record<CostItemKey, number>;
+    for (const d of COST_ITEM_DEFS) {
+      if (bom[d.key] != null) {
+        amounts[d.key] = bom[d.key]!;
+      } else {
+        const it = items.find((x) => x.key === d.key);
+        amounts[d.key] = it ? parseMoney(it.amount) : 0;
+      }
+    }
+    const itemSum = COST_ITEM_DEFS.reduce((a, d) => a + amounts[d.key], 0);
+    const unit = itemSum > 0 ? itemSum : parseMoney(row.pricing?.unit_price);
+    return { row, amounts, itemSum, unit, qty: totalQuantity(row.size_distribution) };
+  });
+}
+
+/** Tüm ürünlerin maliyetini Excel dosyası olarak üretir. */
+export async function buildCostWorkbook(
+  rows: CostRow[],
+  options: CostWorkbookOptions = {},
+): Promise<Buffer> {
+  const { bomBySheet = {}, seasonName = null } = options;
+  const tree = options.categories?.length ? options.categories : COLLECTION_TAXONOMY;
+  const computed = computeRows(rows, bomBySheet);
   const wb = newWorkbook();
+
+  /* ── 1. sayfa: MALİYET (kalem kalem) ─────────────────────────────────── */
   const ws = wb.addWorksheet("Maliyet", {
-    views: [{ showGridLines: false }],
+    // Başlık satırı ve ürün sütunu DONDURULUR: uzun listede kaydırırken
+    // hangi satırda/sütunda olunduğu kaybolmasın.
+    views: [{ state: "frozen", xSplit: 1, ySplit: 3, showGridLines: false }],
+    pageSetup: {
+      paperSize: 9, orientation: "landscape",
+      fitToPage: true, fitToWidth: 1, fitToHeight: 0,
+      margins: { left: 0.3, right: 0.3, top: 0.35, bottom: 0.35, header: 0.2, footer: 0.2 },
+    },
+  });
+
+  const FIRST_ITEM = 4;                     // D sütunu — ilk maliyet kalemi
+  const unitCol = FIRST_ITEM + COST_ITEM_DEFS.length;
+  const qtyCol = unitCol + 1;
+  const totalCol = qtyCol + 1;
+  const nCols = totalCol;
+  const L = (c: number) => ws.getColumn(c).letter;
+
+  ws.columns = [
+    { width: 34 }, { width: 14 }, { width: 22 },
+    ...COST_ITEM_DEFS.map(() => ({ width: 13 })),
+    { width: 15 }, { width: 9 }, { width: 17 },
+  ];
+
+  let r = 1;
+  ws.mergeCells(r, 1, r, nCols);
+  const capTitle = ws.getCell(r, 1);
+  capTitle.value = seasonName ? `MALİYET — ${seasonName.toLocaleUpperCase("tr-TR")}` : "MALİYET";
+  capTitle.font = { bold: true, size: 14, color: { argb: "FFFFFFFF" } };
+  capTitle.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+  for (let c = 1; c <= nCols; c++) {
+    ws.getCell(r, c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: INK } };
+  }
+  ws.getRow(r).height = 26;
+  r++;
+
+  ws.mergeCells(r, 1, r, nCols);
+  const capNote = ws.getCell(r, 1);
+  capNote.value =
+    "Birim maliyet = kalemlerin toplamı. Ustaya ödenen tutar bu tabloda DEĞİLDİR — o ayrı bir defterdir (Ödeme Tablosu).";
+  capNote.font = { size: 9.5, italic: true, color: { argb: "FF6B7280" } };
+  capNote.alignment = { vertical: "middle", indent: 1 };
+  ws.getRow(r).height = 16;
+  r++;
+
+  const headRow = r;
+  const headers = [
+    "ÜRÜN", "ÜRÜN KODU", "KATEGORİ",
+    ...COST_ITEM_DEFS.map((d) => d.label.toLocaleUpperCase("tr-TR")),
+    "BİRİM MALİYET", "ADET", "TOPLAM",
+  ];
+  headers.forEach((h, i) => {
+    const cell = ws.getCell(headRow, i + 1);
+    cell.value = h;
+    cell.font = { bold: true, size: 10, color: { argb: "FF374151" } };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: TH } };
+    cell.border = border;
+    cell.alignment = {
+      vertical: "middle", horizontal: i === 0 ? "left" : "center",
+      indent: i === 0 ? 1 : 0, wrapText: true,
+    };
+  });
+  ws.getRow(headRow).height = 22;
+  r++;
+
+  const firstDataRow = r;
+  for (const c of computed) {
+    const { row } = c;
+    const catLabel = row.category ? labelOf(tree, row.category) : "";
+    const subLabel = subLabelOf(tree, row.category, row.subcategory);
+
+    ws.getCell(r, 1).value = row.title;
+    ws.getCell(r, 2).value = row.product_code ?? "";
+    ws.getCell(r, 3).value = [catLabel, subLabel].filter(Boolean).join(" › ");
+
+    COST_ITEM_DEFS.forEach((d, i) => {
+      const cell = ws.getCell(r, FIRST_ITEM + i);
+      cell.value = c.amounts[d.key] > 0 ? c.amounts[d.key] : null;
+      cell.numFmt = MONEY_FMT;
+    });
+
+    const unitCell = ws.getCell(r, unitCol);
+    if (c.itemSum > 0) {
+      // GERÇEK FORMÜL: dosyada bir kalemi düzeltince birim maliyet ve toplam
+      // kendi kendine güncellenir.
+      unitCell.value = {
+        formula: `SUM(${L(FIRST_ITEM)}${r}:${L(unitCol - 1)}${r})`,
+        result: c.unit,
+      };
+    } else {
+      unitCell.value = c.unit > 0 ? c.unit : null;
+    }
+    unitCell.numFmt = MONEY_FMT;
+
+    const qtyCell = ws.getCell(r, qtyCol);
+    qtyCell.value = c.qty || null;
+    qtyCell.numFmt = QTY_FMT;
+
+    const totalCell = ws.getCell(r, totalCol);
+    totalCell.value = { formula: `${L(unitCol)}${r}*${L(qtyCol)}${r}`, result: c.qty * c.unit };
+    totalCell.numFmt = MONEY_FMT;
+
+    for (let col = 1; col <= nCols; col++) {
+      const cell = ws.getCell(r, col);
+      cell.border = border;
+      cell.font = { size: 10.5, bold: col === totalCol };
+      cell.alignment = { vertical: "middle", horizontal: col <= 3 ? "left" : "right", indent: 1 };
+    }
+    ws.getRow(r).height = 16;
+    r++;
+  }
+  const lastDataRow = r - 1;
+
+  // Süzgeç + sıralama Excel'in kendi araçlarıyla yapılabilsin.
+  if (lastDataRow >= firstDataRow) {
+    ws.autoFilter = { from: { row: headRow, column: 1 }, to: { row: lastDataRow, column: nCols } };
+  }
+
+  // Genel toplam — SUBTOTAL(109): süzgeçle gizlenen satırları saymaz, yani
+  // kullanıcı bir kategoriyi süzdüğünde toplam da o kategoriyi anlatır.
+  ws.mergeCells(r, 1, r, totalCol - 1);
+  const gt = ws.getCell(r, 1);
+  gt.value = "GENEL TOPLAM (KDV hariç)";
+  gt.font = { bold: true, size: 12, color: { argb: INK } };
+  gt.alignment = { vertical: "middle", horizontal: "right", indent: 1 };
+  const gtv = ws.getCell(r, totalCol);
+  const grand = computed.reduce((a, c) => a + c.qty * c.unit, 0);
+  gtv.value = lastDataRow >= firstDataRow
+    ? { formula: `SUBTOTAL(109,${L(totalCol)}${firstDataRow}:${L(totalCol)}${lastDataRow})`, result: grand }
+    : 0;
+  gtv.numFmt = MONEY_FMT;
+  gtv.font = { bold: true, size: 13, color: { argb: INK } };
+  gtv.alignment = { vertical: "middle", horizontal: "right", indent: 1 };
+  for (let col = 1; col <= nCols; col++) {
+    ws.getCell(r, col).fill = { type: "pattern", pattern: "solid", fgColor: { argb: TH } };
+    ws.getCell(r, col).border = { top: { style: "medium", color: { argb: LINE } } };
+  }
+  ws.getRow(r).height = 24;
+  ws.pageSetup.printArea = `A1:${L(nCols)}${r}`;
+
+  /* ── 2. sayfa: ÜRETİM ADETLERİ (beden dağılımı) ───────────────────────── */
+  addQuantitySheet(wb, computed, seasonName);
+
+  return Buffer.from(await wb.xlsx.writeBuffer());
+}
+
+/** Beden dağılımı ızgarası — Aslı Hanım'ın "Üretim Adetleri" sayfası. */
+function addQuantitySheet(
+  wb: ExcelJS.Workbook,
+  computed: ComputedCostRow[],
+  seasonName: string | null,
+): void {
+  const ws = wb.addWorksheet("Üretim Adetleri", {
+    views: [{ state: "frozen", xSplit: 1, ySplit: 3, showGridLines: false }],
     pageSetup: { paperSize: 9, orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
   });
 
-  // Beden kolonları — tüm standart bedenler (ekrandaki maliyet tablosuyla aynı)
-  // + veride olan standart-dışı bedenler.
+  // Beden kolonları — tüm standart bedenler + veride olan standart-dışı olanlar.
   const sizeSet = new Set<string>(STANDARD_SIZES);
-  for (const row of rows) Object.keys(quantityBySize(row.size_distribution)).forEach((s) => sizeSet.add(s));
+  for (const c of computed) {
+    Object.keys(quantityBySize(c.row.size_distribution)).forEach((s) => sizeSet.add(s));
+  }
   const sizes = orderSizes([...sizeSet]);
 
-  // Kolonlar: Ürün | {beden} | TOPLAM ADET | BİRİM FİYAT | TOPLAM
   const nCols = 1 + sizes.length + 3;
   const totalAdetCol = 1 + sizes.length + 1;
   const birimCol = totalAdetCol + 1;
   const toplamCol = birimCol + 1;
-  ws.columns = [
-    { width: 30 },
-    ...sizes.map(() => ({ width: 8 })),
-    { width: 13 }, { width: 13 }, { width: 15 },
-  ];
-  let r = 1;
+  const L = (c: number) => ws.getColumn(c).letter;
 
-  // Başlık şeridi
+  ws.columns = [
+    { width: 32 },
+    ...sizes.map(() => ({ width: 8 })),
+    { width: 13 }, { width: 15 }, { width: 17 },
+  ];
+
+  let r = 1;
   ws.mergeCells(r, 1, r, nCols);
   const title = ws.getCell(r, 1);
-  title.value = "MALİYET — BİRİM MALİYET × ÜRETİM ADEDİ";
+  title.value = seasonName
+    ? `ÜRETİM ADETLERİ — ${seasonName.toLocaleUpperCase("tr-TR")}`
+    : "ÜRETİM ADETLERİ — BİRİM MALİYET × ADET";
   title.font = { bold: true, size: 14, color: { argb: "FFFFFFFF" } };
   title.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
   for (let c = 1; c <= nCols; c++) {
     ws.getCell(r, c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: INK } };
   }
   ws.getRow(r).height = 26;
-  r++;
-  r++;
+  r += 2;
 
-  // Tablo başlığı
-  const headers = ["ÜRÜN", ...sizes, "TOPLAM ADET", "BİRİM MALİYET", "TOPLAM"];
-  headers.forEach((h, i) => {
-    const cell = ws.getCell(r, i + 1);
+  const headRow = r;
+  ["ÜRÜN", ...sizes, "TOPLAM ADET", "BİRİM MALİYET", "TOPLAM"].forEach((h, i) => {
+    const cell = ws.getCell(headRow, i + 1);
     cell.value = h;
     cell.font = { bold: true, size: 10, color: { argb: "FF374151" } };
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: TH } };
     cell.border = border;
     cell.alignment = { vertical: "middle", horizontal: i === 0 ? "left" : "center", indent: i === 0 ? 1 : 0 };
   });
-  ws.getRow(r).height = 18;
+  ws.getRow(headRow).height = 18;
   r++;
 
-  const money = (n: number) => (n > 0 ? formatMoney(n) : "");
-  let grand = 0;
+  const firstDataRow = r;
+  for (const c of computed) {
+    const qbs = quantityBySize(c.row.size_distribution);
 
-  for (const row of rows) {
-    const qbs = quantityBySize(row.size_distribution);
-    const qty = totalQuantity(row.size_distribution);
-    // Birim MALİYET = kalemlerin toplamı (Aslı Hanım, 2026-08-19).
-    const unit = unitCostOf(row.pricing);
-    const lineTotal = qty * unit;
-    grand += lineTotal;
+    ws.getCell(r, 1).value = c.row.title;
+    sizes.forEach((s, i) => {
+      const cell = ws.getCell(r, 2 + i);
+      cell.value = qbs[s] || null;
+      cell.numFmt = QTY_FMT;
+    });
+    const qtyCell = ws.getCell(r, totalAdetCol);
+    qtyCell.value = c.qty || null;
+    qtyCell.numFmt = QTY_FMT;
+    const unitCell = ws.getCell(r, birimCol);
+    unitCell.value = c.unit > 0 ? c.unit : null;
+    unitCell.numFmt = MONEY_FMT;
+    const totalCell = ws.getCell(r, toplamCol);
+    totalCell.value = {
+      formula: `${L(totalAdetCol)}${r}*${L(birimCol)}${r}`,
+      result: c.qty * c.unit,
+    };
+    totalCell.numFmt = MONEY_FMT;
 
-    ws.getCell(r, 1).value = row.title;
-    sizes.forEach((s, i) => { ws.getCell(r, 2 + i).value = qbs[s] || ""; });
-    ws.getCell(r, totalAdetCol).value = qty || "";
-    ws.getCell(r, birimCol).value = money(unit);
-    ws.getCell(r, toplamCol).value = money(lineTotal);
-
-    for (let i = 1; i <= nCols; i++) {
-      const cell = ws.getCell(r, i);
+    for (let col = 1; col <= nCols; col++) {
+      const cell = ws.getCell(r, col);
       cell.border = border;
-      cell.font = { size: 10.5, bold: i === toplamCol };
-      cell.alignment = { vertical: "middle", horizontal: i === 1 ? "left" : i >= birimCol ? "right" : "center", indent: i === 1 || i >= birimCol ? 1 : 0 };
+      cell.font = { size: 10.5, bold: col === toplamCol };
+      cell.alignment = {
+        vertical: "middle",
+        horizontal: col === 1 ? "left" : col >= birimCol ? "right" : "center",
+        indent: col === 1 || col >= birimCol ? 1 : 0,
+      };
     }
     ws.getRow(r).height = 16;
     r++;
   }
+  const lastDataRow = r - 1;
+  if (lastDataRow >= firstDataRow) {
+    ws.autoFilter = { from: { row: headRow, column: 1 }, to: { row: lastDataRow, column: nCols } };
+  }
 
-  // Genel toplam
   ws.mergeCells(r, 1, r, toplamCol - 1);
   const gt = ws.getCell(r, 1);
   gt.value = "GENEL TOPLAM (KDV hariç)";
   gt.font = { bold: true, size: 12, color: { argb: INK } };
   gt.alignment = { vertical: "middle", horizontal: "right", indent: 1 };
   const gtv = ws.getCell(r, toplamCol);
-  gtv.value = formatMoney(grand);
+  const grand = computed.reduce((a, c) => a + c.qty * c.unit, 0);
+  gtv.value = lastDataRow >= firstDataRow
+    ? { formula: `SUBTOTAL(109,${L(toplamCol)}${firstDataRow}:${L(toplamCol)}${lastDataRow})`, result: grand }
+    : 0;
+  gtv.numFmt = MONEY_FMT;
   gtv.font = { bold: true, size: 13, color: { argb: INK } };
   gtv.alignment = { vertical: "middle", horizontal: "right", indent: 1 };
-  for (let i = 1; i <= nCols; i++) {
-    ws.getCell(r, i).fill = { type: "pattern", pattern: "solid", fgColor: { argb: TH } };
-    ws.getCell(r, i).border = { top: { style: "medium", color: { argb: LINE } } };
+  for (let col = 1; col <= nCols; col++) {
+    ws.getCell(r, col).fill = { type: "pattern", pattern: "solid", fgColor: { argb: TH } };
+    ws.getCell(r, col).border = { top: { style: "medium", color: { argb: LINE } } };
   }
   ws.getRow(r).height = 24;
-
-  return wb.xlsx.writeBuffer().then((b) => Buffer.from(b));
+  ws.pageSetup.printArea = `A1:${L(nCols)}${r}`;
 }

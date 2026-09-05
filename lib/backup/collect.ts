@@ -85,9 +85,33 @@ const WORKSPACE_TABLES = [
      workspace_backups → indirme günlüğü; yedeğin kendi geçmişini yedeklemenin
                        geri yüklemede bir karşılığı yok.
      webhook_events  → teknik kuyruk kaydı, geri yüklemede bir anlamı yok.
-     request_access_leads → pazarlama sitesinin formu; çalışma alanına ait değil. */
+     request_access_leads → pazarlama sitesinin formu; çalışma alanına ait değil.
+
+   Kapsam supabase/migrations altındaki TÜM `create table` satırlarıyla
+   karşılaştırıldı (2026-09-05): yukarıdaki dört tablo dışında şemadaki her
+   tablo yedeğe giriyor. Yeni bir migration tablo eklediğinde bu listeye ya da
+   WORKSPACE_TABLES'a eklenmesi gerekir. */
+
+/** Bilerek yedeğe alınmayan tablolar — OKUBENI ve özet dosyasında yazılı olsun
+ *  ki "neden bu tablo yok?" sorusu yedeğin içinden cevaplanabilsin. */
+export const EXCLUDED_TABLES: ReadonlyArray<{ table: string; reason: string }> = [
+  { table: "notifications", reason: "kişiye özel bildirim kutusu; türetilmiş veri" },
+  { table: "workspace_backups", reason: "yedek indirme günlüğü" },
+  { table: "webhook_events", reason: "teknik kuyruk kaydı" },
+  { table: "request_access_leads", reason: "pazarlama sitesi formu; çalışma alanına ait değil" },
+];
 
 const PAGE = 1000;
+
+/** `in(...)` filtresi URL'ye yazılır; binlerce kimlik URL'yi taşırır (HTTP 414)
+ *  ve tablo yedeğe "hata" olarak girerdi. Kimlikler paketlere bölünür. */
+const ID_CHUNK = 200;
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
 
 /** Tek tabloyu sayfalayarak tamamen okur. */
 async function readAll(
@@ -96,20 +120,37 @@ async function readAll(
   scope: Scope,
 ): Promise<TableResult> {
   const rows: Record<string, unknown>[] = [];
-  for (let from = 0; ; from += PAGE) {
-    let q = supabase.from(table).select("*").range(from, from + PAGE - 1);
-    if (scope.by === "workspace_id") q = q.eq("workspace_id", scope.value);
-    else if (scope.by === "id") q = q.eq("id", scope.value);
-    else {
-      const ids = scope.ids();
-      if (ids.length === 0) return { table, rows: [] };
-      q = q.in(scope.column, ids);
+
+  // `in` kapsamı paketlere bölünür; diğer kapsamlar tek geçiştir.
+  let batches: (string[] | null)[] = [null];
+  if (scope.by === "in") {
+    const ids = scope.ids();
+    if (ids.length === 0) return { table, rows: [] };
+    batches = chunk(ids, ID_CHUNK);
+  }
+
+  for (const ids of batches) {
+    for (let from = 0; ; from += PAGE) {
+      /* SIRALAMA ŞART: sıralaması olmayan bir sorguda `range` sayfaları
+         Postgres'te kararlı değildir — aynı satır iki sayfada birden gelebilir
+         ya da hiç gelmeyebilir, yani 1000 satırı geçen her tablo sessizce
+         EKSİK yedeklenirdi. Kapsamdaki tabloların hepsinde `id` sütunu var
+         (bkz. supabase/migrations). */
+      let q = supabase
+        .from(table)
+        .select("*")
+        .order("id", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (scope.by === "workspace_id") q = q.eq("workspace_id", scope.value);
+      else if (scope.by === "id") q = q.eq("id", scope.value);
+      else q = q.in(scope.column, ids ?? []);
+
+      const { data, error } = await q;
+      if (error) return { table, rows, error: error.message };
+      const page = (data ?? []) as Record<string, unknown>[];
+      rows.push(...page);
+      if (page.length < PAGE) break;
     }
-    const { data, error } = await q;
-    if (error) return { table, rows, error: error.message };
-    const page = (data ?? []) as Record<string, unknown>[];
-    rows.push(...page);
-    if (page.length < PAGE) break;
   }
   return { table, rows };
 }

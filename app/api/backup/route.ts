@@ -3,10 +3,12 @@ import { createClient, getAuthUser, getMembership } from "@/lib/supabase/server"
 import { canManageSettings } from "@/lib/auth/permissions";
 import {
   BACKUP_BUCKETS,
+  EXCLUDED_TABLES,
   collectWorkspaceData,
   listBucketFiles,
   rowsToCsv,
   type StorageFile,
+  type TableResult,
 } from "@/lib/backup/collect";
 import { createZipStream, textEntry, type ZipEntry } from "@/lib/backup/zip";
 import type { WorkspaceRole } from "@/types";
@@ -35,21 +37,53 @@ export const maxDuration = 300;
 /** Dosyalı yedek için üst sınır: ZIP64 yazmıyoruz, 4 GB'a yaklaşılmamalı. */
 const FILE_BUDGET_BYTES = 1_500_000_000;
 
+/** Hata mesajı — anahtar/oturum bilgisi taşımayan düz metin. */
+function message(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export async function GET(request: Request) {
   const user = await getAuthUser();
-  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!user) {
+    return NextResponse.json(
+      { error: "unauthorized", mesaj: "Oturum bulunamadı. Yeniden giriş yapın." },
+      { status: 401 },
+    );
+  }
 
   const membership = await getMembership(user.id);
   const workspaceId = membership?.workspace_id;
   const role = (membership?.role ?? "member") as WorkspaceRole;
-  if (!workspaceId) return NextResponse.json({ error: "no_workspace" }, { status: 403 });
-  if (!canManageSettings(role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!workspaceId) {
+    return NextResponse.json(
+      { error: "no_workspace", mesaj: "Bir çalışma alanına bağlı değilsiniz." },
+      { status: 403 },
+    );
+  }
+  if (!canManageSettings(role)) {
+    return NextResponse.json(
+      { error: "forbidden", mesaj: "Yedek almak yalnız yöneticiye açıktır." },
+      { status: 403 },
+    );
+  }
 
   const withFiles = new URL(request.url).searchParams.get("files") === "1";
   const supabase = await createClient();
 
   // Veri her hâlükârda toplanır (küçük ve hızlı); dosyalar yalnız istenirse.
-  const tables = await collectWorkspaceData(supabase, workspaceId);
+  // Toplama sırasındaki bir çöküş, akış BAŞLAMADAN yakalanır: kullanıcı bozuk
+  // bir .zip yerine Türkçe bir hata görür (akış başladıktan sonra artık HTTP
+  // durumu değiştirilemez — bu yüzden burada yakalanması şart).
+  let tables: TableResult[];
+  try {
+    tables = await collectWorkspaceData(supabase, workspaceId);
+  } catch (error) {
+    console.error("[backup] veri toplanamadı:", message(error));
+    return NextResponse.json(
+      { error: "collect_failed", mesaj: "Yedek verisi okunamadı. Birazdan tekrar deneyin." },
+      { status: 500 },
+    );
+  }
 
   let files: StorageFile[] = [];
   let truncated = false;
@@ -57,11 +91,18 @@ export async function GET(request: Request) {
   if (withFiles) {
     let budget = FILE_BUDGET_BYTES;
     for (const bucket of BACKUP_BUCKETS) {
-      const res = await listBucketFiles(supabase, bucket, budget);
-      if (res.error) bucketErrors[bucket] = res.error;
-      if (res.truncated) truncated = true;
-      files = files.concat(res.files);
-      budget -= res.files.reduce((n, f) => n + f.size, 0);
+      try {
+        const res = await listBucketFiles(supabase, bucket, budget);
+        if (res.error) bucketErrors[bucket] = res.error;
+        if (res.truncated) truncated = true;
+        files = files.concat(res.files);
+        budget -= res.files.reduce((n, f) => n + f.size, 0);
+      } catch (error) {
+        // Tek bir kova listelenemedi diye yedeğin tamamı iptal olmaz; hangi
+        // kovanın atlandığı OKUBENI ve ozet.json'a yazılır.
+        bucketErrors[bucket] = message(error);
+        console.error(`[backup] "${bucket}" kovası listelenemedi:`, bucketErrors[bucket]);
+      }
       if (budget <= 0) {
         truncated = true;
         break;
@@ -74,24 +115,62 @@ export async function GET(request: Request) {
   const wsName = (tables.find((t) => t.table === "workspaces")?.rows[0]?.name as string) ?? "workspace";
 
   const rowTotal = tables.reduce((n, t) => n + t.rows.length, 0);
+  /* Okunamayan tablolar SESSİZ KALMAMALI: yedeğin değeri "eksiksiz olduğunu
+     bilmek"tir. Hem sunucu günlüğüne, hem arşivin ilk sayfasına yazılır. */
+  const failedTables = tables.filter((t) => t.error);
+  if (failedTables.length > 0) {
+    console.error(
+      "[backup] okunamayan tablolar:",
+      failedTables.map((t) => `${t.table}: ${t.error}`).join(" | "),
+    );
+  }
+
   const manifest = {
     alinma_zamani: takenAt.toISOString(),
     calisma_alani: { id: workspaceId, ad: wsName },
     alan_kisi: { id: user.id, eposta: user.email ?? null, rol: role },
     kapsam: withFiles ? "veri + dosyalar" : "yalnız veri",
     tablolar: tables.map((t) => ({ tablo: t.table, satir: t.rows.length, hata: t.error ?? null })),
+    okunamayan_tablolar: failedTables.map((t) => ({ tablo: t.table, hata: t.error ?? null })),
+    kapsam_disi_tablolar: EXCLUDED_TABLES.map((t) => ({ tablo: t.table, neden: t.reason })),
     toplam_satir: rowTotal,
     dosyalar: withFiles
       ? { adet: files.length, bayt: files.reduce((n, f) => n + f.size, 0), kova_hatalari: bucketErrors, kesildi: truncated }
       : null,
   };
 
+  const warnings: string[] = [];
+  if (failedTables.length > 0) {
+    warnings.push(
+      `UYARI: ${failedTables.length} tablo okunamadı, bu yedek EKSİKTİR:`,
+      ...failedTables.map((t) => `  · ${t.table} — ${t.error}`),
+      `Yedeği tekrar alın; sorun sürerse ozet.json'daki mesajı iletin.`,
+      ``,
+    );
+  }
+  if (Object.keys(bucketErrors).length > 0) {
+    warnings.push(
+      `UYARI: bazı dosya kovaları listelenemedi:`,
+      ...Object.entries(bucketErrors).map(([b, e]) => `  · ${b} — ${e}`),
+      ``,
+    );
+  }
+  if (truncated) {
+    warnings.push(
+      `UYARI: dosya boyutu sınırına ulaşıldı; arşivdeki dosya listesi eksik.`,
+      `       ozet.json içindeki "kesildi" alanına bakın.`,
+      ``,
+    );
+  }
+
   const readme = [
     `AF OPERASYON — YEDEK`,
     `Çalışma alanı : ${wsName}`,
     `Alınma zamanı : ${takenAt.toLocaleString("tr-TR")}`,
     `Kapsam        : ${manifest.kapsam}`,
+    `Kayıt         : ${tables.length} tablo · ${rowTotal} satır`,
     ``,
+    ...(warnings.length > 0 ? [...warnings] : [`Durum         : eksiksiz, uyarı yok.`, ``]),
     `KLASÖRLER`,
     `  veri/     Her tablonun tam JSON dökümü. Geri yükleme bunlardan yapılır.`,
     `  tablo/    Aynı kayıtların CSV hâli — Excel'de çift tıkla açılır.`,
@@ -99,15 +178,14 @@ export async function GET(request: Request) {
     `  ozet.json Ne alındığının dökümü: tablo tablo satır sayıları.`,
     ``,
     `NELER YEDEKLENMEZ`,
-    `  Bildirimler ve teknik kuyruk kayıtları. İkisi de türetilmiş veridir;`,
-    `  bildirimler kişiye özeldir ve yedeği alan kişinin göreceği kadarı`,
-    `  dosyaya eksik bir liste olarak girerdi.`,
+    ...EXCLUDED_TABLES.map((t) => `  ${t.table.padEnd(22)} ${t.reason}`),
+    `  Hepsi türetilmiş veridir; bildirimler ayrıca kişiye özeldir ve yedeği`,
+    `  alan kişinin göreceği kadarı dosyaya eksik bir liste olarak girerdi.`,
     ``,
     `SAKLAMA`,
     `  Bu dosyayı sistemin dışında bir yerde saklayın (harici disk ya da başka`,
     `  bir bulut hesabı). Yedeğin amacı, sistemin kendisi kaybolduğunda elde`,
     `  kalan kopya olmaktır.`,
-    truncated ? `\nUYARI: dosya boyutu sınırına ulaşıldı; arşivdeki dosya listesi eksik.\n       ozet.json içindeki "kesildi" alanına bakın.` : ``,
   ].join("\n");
 
   async function* entries(): AsyncGenerator<ZipEntry> {
@@ -122,26 +200,53 @@ export async function GET(request: Request) {
       }
     }
 
+    const skippedFiles: string[] = [];
     for (const f of files) {
-      const { data, error } = await supabase.storage.from(f.bucket).download(f.path);
-      if (error || !data) continue; // erişilemeyen dosya arşivi bozmasın
-      const buf = new Uint8Array(await data.arrayBuffer());
-      yield { name: `dosyalar/${f.bucket}/${f.path}`, data: buf };
+      // Tek bir dosya inmediği için arşiv bozulmaz; atlananlar sonda listelenir.
+      try {
+        const { data, error } = await supabase.storage.from(f.bucket).download(f.path);
+        if (error || !data) {
+          skippedFiles.push(`${f.bucket}/${f.path} — ${error?.message ?? "içerik boş"}`);
+          continue;
+        }
+        const buf = new Uint8Array(await data.arrayBuffer());
+        yield { name: `dosyalar/${f.bucket}/${f.path}`, data: buf };
+      } catch (error) {
+        skippedFiles.push(`${f.bucket}/${f.path} — ${message(error)}`);
+      }
+    }
+    if (skippedFiles.length > 0) {
+      console.error(`[backup] ${skippedFiles.length} dosya indirilemedi`);
+      yield textEntry(
+        "dosyalar/INDIRILEMEYENLER.txt",
+        [
+          "Bu dosyalar depolamadan alınamadı ve arşive girmedi:",
+          "",
+          ...skippedFiles.map((s) => `  · ${s}`),
+        ].join("\n"),
+      );
     }
   }
 
   /* Yedek KAYDI — "en son ne zaman yedek aldık?" sorusunun cevabı. Akış
      başlamadan önce yazılır; tablo henüz migrate edilmemişse indirme yine de
-     çalışır (kayıt sessizce atlanır, yedeğin kendisi asla buna takılmaz). */
-  await supabase.from("workspace_backups").insert({
-    workspace_id: workspaceId,
-    created_by: user.id,
-    kind: withFiles ? "full" : "data",
-    table_count: tables.length,
-    row_count: rowTotal,
-    file_count: files.length,
-    byte_size: files.reduce((n, f) => n + f.size, 0),
-  });
+     çalışır (kayıt sunucuya loglanır, yedeğin kendisi asla buna takılmaz).
+     Kayıt yazılamazsa Ayarlar'daki "7 günden eski yedek" uyarısı yanlış kalır,
+     bu yüzden sessiz geçilmez. */
+  try {
+    const { error: logError } = await supabase.from("workspace_backups").insert({
+      workspace_id: workspaceId,
+      created_by: user.id,
+      kind: withFiles ? "full" : "data",
+      table_count: tables.length,
+      row_count: rowTotal,
+      file_count: files.length,
+      byte_size: files.reduce((n, f) => n + f.size, 0),
+    });
+    if (logError) console.error("[backup] yedek kaydı yazılamadı:", logError.message);
+  } catch (error) {
+    console.error("[backup] yedek kaydı yazılamadı:", message(error));
+  }
 
   const fileName = `af-operasyon-yedek-${stamp}${withFiles ? "-dosyalarla" : ""}.zip`;
 

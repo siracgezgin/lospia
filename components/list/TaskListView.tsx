@@ -5,16 +5,18 @@ import {
   getCoreRowModel,
   getSortedRowModel,
   getFilteredRowModel,
+  getPaginationRowModel,
   flexRender,
   createColumnHelper,
   type SortingState,
   type ColumnFiltersState,
   type VisibilityState,
+  type Table as ReactTableInstance,
 } from "@tanstack/react-table";
-import { useState, useOptimistic, useTransition, useMemo, useCallback } from "react";
+import { useState, useOptimistic, useTransition, useMemo, useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, Plus, FileSpreadsheet, Lock, ClipboardList, Search, SlidersHorizontal, X, AlertCircle, LayoutDashboard } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Columns3, Plus, FileSpreadsheet, Lock, ClipboardList, Search, SlidersHorizontal, X, AlertCircle, LayoutDashboard } from "lucide-react";
 import { ADMIN_ONLY_CHIP_LABEL } from "@/lib/utils/visibility";
 import type { Task, SavedView, TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceDepartment } from "@/types";
 import {
@@ -188,23 +190,71 @@ const TH_TEXT = "text-[12px] font-semibold uppercase tracking-[0.08em] text-subt
 /* Sağa hizalı (tarih) sütunlar — sayı/tarih hep tabular ve sağda. */
 const RIGHT_ALIGNED = new Set(["due_date", "updated_at"]);
 
+/* Sunucudan gelen hata bazen ham Postgres/İngilizce metindir. Kullanıcıya
+   Türkçe, ne yapacağını söyleyen cümle gösterilir; teknik metin konsola düşer. */
+const TECHNICAL_ERROR = /duplicate key|violates|permission denied|jwt|pgrst|relation|column|null value|syntax|invalid input|not authenticated|not found|fetch failed|network|unexpected/i;
+function friendlyError(msg: string | undefined): string {
+  if (!msg || TECHNICAL_ERROR.test(msg)) {
+    if (msg) console.error("[list]", msg);
+    return "İşlem tamamlanamadı. Lütfen tekrar deneyin.";
+  }
+  return msg;
+}
+
 // ---- Status cell (inline editable) ----
 // Minimum dekorasyon: renkli nokta + metin; dolgulu çip yok. Görünmez <select>
 // üstte durur, tıklayınca durum değişir (davranış korunuyor).
-function StatusCell({ task }: { task: Task }) {
-  const [_isPending, startTransition] = useTransition();
+//
+// SORUMLULUK KURALI: "Tamamlandı" durumunu HER İKİ YÖNDE de yalnız yönetici
+// değiştirir. Liste bunu bilmiyordu — üye "Tamamlandı"yı seçebiliyor, sunucu
+// sessizce reddediyordu (ekranda kısa bir an tamamlanmış görünüp eski hâline
+// dönüyordu, hiçbir açıklama yok). Artık seçenek üyeye hiç gösterilmez,
+// tamamlanmış görev üyeye kilitli görünür ve reddedilen her değişiklik
+// listenin üstünde Türkçe bir uyarıya dönüşür.
+function StatusCell({
+  task, isAdmin, onError,
+}: {
+  task: Task;
+  isAdmin: boolean;
+  onError: (_msg: string | null) => void;
+}) {
+  const [isPending, startTransition] = useTransition();
   const [optimisticStatus, setOptimisticStatus] = useOptimistic<TaskStatus>(task.status);
 
+  const locked = !isAdmin && task.status === "done";
+  const options = isAdmin || task.status === "done"
+    ? CARD_STATUS_OPTIONS
+    : CARD_STATUS_OPTIONS.filter((o) => o.value !== "done");
+
   function handleChange(newStatus: TaskStatus) {
+    if (newStatus === optimisticStatus) return;
+    onError(null);
     startTransition(async () => {
       setOptimisticStatus(newStatus);
-      await updateTaskStatus(task.id, newStatus);
+      const res = await updateTaskStatus(task.id, newStatus);
+      if (res && "error" in res) onError(friendlyError(res.error));
     });
+  }
+
+  if (locked) {
+    return (
+      <span
+        className="inline-flex items-center gap-1.5 text-[13.5px] text-muted whitespace-nowrap"
+        title="Tamamlanmış görevi yalnızca yönetici değiştirebilir"
+      >
+        <span className={cn("h-2 w-2 rounded-full shrink-0", STATUS_DOT[task.status])} aria-hidden />
+        {SIMPLIFIED_STATUS_LABEL[task.status]}
+        <Lock size={11} className="shrink-0 text-subtle" aria-label="Kilitli" />
+      </span>
+    );
   }
 
   return (
     <div className="group/status relative inline-flex items-center rounded-control -ml-1.5 pl-1.5 pr-1 py-0.5 hover:bg-surface-sunken transition-colors duration-150">
-      <span className="inline-flex items-center gap-1.5 text-[13.5px] text-ink whitespace-nowrap pointer-events-none">
+      <span className={cn(
+        "inline-flex items-center gap-1.5 text-[13.5px] whitespace-nowrap pointer-events-none",
+        isPending ? "text-muted" : "text-ink",
+      )}>
         <span className={cn("h-2 w-2 rounded-full shrink-0", STATUS_DOT[optimisticStatus])} aria-hidden />
         {SIMPLIFIED_STATUS_LABEL[optimisticStatus]}
         <ChevronDown
@@ -218,13 +268,99 @@ function StatusCell({ task }: { task: Task }) {
         value={optimisticStatus}
         onChange={(e) => handleChange(e.target.value as TaskStatus)}
         onClick={(e) => e.stopPropagation()}
-        className="absolute inset-0 opacity-0 cursor-pointer w-full"
-        aria-label="Durum değiştir"
+        disabled={isPending}
+        className="absolute inset-0 opacity-0 cursor-pointer w-full disabled:cursor-wait"
+        aria-label={`Durum değiştir — ${task.title}`}
       >
-        {CARD_STATUS_OPTIONS.map((o) => (
+        {options.map((o) => (
           <option key={o.value} value={o.value}>{o.label}</option>
         ))}
       </select>
+    </div>
+  );
+}
+
+/* Sütun görünürlüğü — hangi sütunların görüneceğine kullanıcı karar verir.
+   Durum zaten vardı (columnVisibility) ama onu değiştirecek HİÇBİR arayüz
+   yoktu: gizlenen üç sütun kalıcı olarak kayıptı. Menü yalnız masaüstünde
+   çizilir; telefonda tablo yerine kart listesi var. */
+const COLUMN_LABELS: Record<string, string> = {
+  description:   "Açıklama",
+  department:    "Departman",
+  konu:          "Konu",
+  status:        "Durum",
+  priority:      "Öncelik",
+  due_date:      "Teslim",
+  responsible:   "Sorumlu",
+  collaborators: "İş birliği",
+  updated_at:    "Güncellendi",
+};
+
+const KNOWN_COLUMN_IDS = new Set([...Object.keys(COLUMN_LABELS), "title", "created_at"]);
+
+/** Sıralama + sütun tercihlerinin tarayıcıdaki anahtarı. */
+const LIST_PREFS_KEY = "af.list.prefs.v1";
+/** Sayfa başına satır — daha uzun listeler sayfalanır. */
+const LIST_PAGE_SIZE = 50;
+
+function ColumnMenu({ table }: { table: ReactTableInstance<Task> }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDown(e: MouseEvent) {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") { e.preventDefault(); setOpen(false); }
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const toggleable = table.getAllLeafColumns().filter((c) => COLUMN_LABELS[c.id]);
+
+  return (
+    <div className="relative hidden md:block" ref={ref}>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-haspopup="true"
+        title="Görünecek sütunları seçin"
+        className="h-9"
+      >
+        <Columns3 size={14} aria-hidden />
+        Sütunlar
+      </Button>
+      {open && (
+        <div
+          role="group"
+          aria-label="Görünecek sütunlar"
+          className="anim-fade-down absolute right-0 z-30 mt-1 w-52 rounded-control border border-line bg-surface shadow-pop py-1"
+        >
+          {toggleable.map((col) => (
+            <label
+              key={col.id}
+              className="flex items-center gap-2 px-3 py-1.5 text-[13.5px] cursor-pointer hover:bg-surface-hover transition-colors duration-150"
+            >
+              <input
+                type="checkbox"
+                checked={col.getIsVisible()}
+                onChange={col.getToggleVisibilityHandler()}
+                className="rounded border-line accent-brand"
+              />
+              <span className="flex-1 truncate text-ink">{COLUMN_LABELS[col.id]}</span>
+            </label>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -362,6 +498,43 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
     description: false,
   });
 
+  /* Sıralama ve sütun tercihleri tarayıcıda kalır: kullanıcı listeyi kendine
+     göre kurup bir göreve girip döndüğünde her şey sıfırlanıyordu. Okuma
+     MONTAJDAN SONRA yapılır — sunucu HTML'iyle ilk boyama aynı kalsın. */
+  const prefsLoaded = useRef(false);
+  useEffect(() => {
+    if (prefsLoaded.current) return;
+    prefsLoaded.current = true;
+    try {
+      const raw = window.localStorage.getItem(LIST_PREFS_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw) as { sorting?: unknown; columnVisibility?: unknown };
+      if (Array.isArray(saved.sorting)) {
+        const clean = (saved.sorting as SortingState).filter(
+          (s) => s && typeof s.id === "string" && KNOWN_COLUMN_IDS.has(s.id),
+        );
+        if (clean.length > 0) setSorting(clean);
+      }
+      if (saved.columnVisibility && typeof saved.columnVisibility === "object") {
+        setColumnVisibility(saved.columnVisibility as VisibilityState);
+      }
+    } catch {
+      /* Bozuk/erişilemeyen tercih varsayılanı bozmasın. */
+    }
+  }, []);
+  useEffect(() => {
+    if (!prefsLoaded.current) return;
+    try {
+      window.localStorage.setItem(LIST_PREFS_KEY, JSON.stringify({ sorting, columnVisibility }));
+    } catch {
+      /* Gizli sekmede depolama kapalı olabilir — sessizce geç. */
+    }
+  }, [sorting, columnVisibility]);
+
+  /* Sunucu bir işlemi reddettiğinde (ör. üyenin "Tamamlandı" denemesi)
+     kullanıcı bunu GÖRÜR; sessiz yutma yok. */
+  const [actionError, setActionError] = useState<string | null>(null);
+
   const [search, setSearch] = useState("");
   const [filterStatusKey, setFilterStatusKey] = useState<StatusFilterKey>("all");
   const [filterPriority, setFilterPriority] = useState<TaskPriority | "all">("all");
@@ -416,13 +589,25 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
     [tasks, viewSlug, userId],
   );
 
+  /* Arama artık yalnız başlığa bakmıyor: açıklama, konu ve etiketler de
+     taranır — "arama çalışmıyor" şikâyetinin kaynağı buydu. Türkçe kıyas
+     (İ/ı) için toLocaleLowerCase("tr"). */
+  const searchTerm = search.trim().toLocaleLowerCase("tr");
   const filteredTasks = useMemo(() => viewedTasks.filter((t) => {
     if (allowedStatuses.length > 0 && !allowedStatuses.includes(t.status)) return false;
     if (filterPriority !== "all" && t.priority !== filterPriority) return false;
     if (personDescriptor && !taskMatchesPerson(t, personDescriptor)) return false;
-    if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
+    if (searchTerm) {
+      const haystack = [
+        t.title,
+        t.description ?? "",
+        safeCategory(t),
+        (t.tags ?? []).join(" "),
+      ].join(" ").toLocaleLowerCase("tr");
+      if (!haystack.includes(searchTerm)) return false;
+    }
     return true;
-  }), [viewedTasks, allowedStatuses, filterPriority, personDescriptor, search]);
+  }), [viewedTasks, allowedStatuses, filterPriority, personDescriptor, searchTerm]);
 
   const hasActiveFilters =
     !!search || filterStatusKey !== "all" || filterPriority !== "all" || !!personFilter;
@@ -564,7 +749,9 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
     columnHelper.accessor("status", {
       id: "status",
       header: FIELD_LABELS.status,
-      cell: (info) => <StatusCell task={info.row.original} />,
+      cell: (info) => (
+        <StatusCell task={info.row.original} isAdmin={isAdmin} onError={setActionError} />
+      ),
       sortingFn: (a, b) => {
         const order: TaskStatus[] = ["backlog", "ready", "in_progress", "review", "blocked", "done", "archived"];
         return order.indexOf(a.original.status) - order.indexOf(b.original.status);
@@ -659,7 +846,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
         return da < db ? -1 : da > db ? 1 : 0;
       },
     }),
-  ], [responsibleNames, deptMeta]); // closure deps
+  ], [responsibleNames, deptMeta, isAdmin]); // closure deps
 
   const table = useReactTable({
     data: filteredTasks,
@@ -671,13 +858,49 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    // Uzun listeler sayfalanır — beş yüz satırlık bir tablo hem yavaş hem
+    // okunmazdı. Süzgeç değişince TanStack sayfayı kendiliğinden başa alır.
+    getPaginationRowModel: getPaginationRowModel(),
+    initialState: { pagination: { pageIndex: 0, pageSize: LIST_PAGE_SIZE } },
   });
 
   const totalRows = table.getFilteredRowModel().rows.length;
+  /* Sayfa değişince tablo kaydırması başa döner — yoksa kullanıcı yeni
+     sayfanın ortasında açılıyordu. */
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  const goToPage = useCallback((move: () => void) => {
+    move();
+    tableScrollRef.current?.scrollTo({ top: 0 });
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
   /* Nadir süzgeçler: gizli bir süzgeç listeyi sessizce daraltmasın — öncelik
      ya da DIŞ KİŞİ seçiliyse bölüm kendiliğinden açık kalır. */
   const contactFilterActive = !!personFilter && contacts.some((c) => c.id === personFilter);
   const showPriorityFilter = moreFilters || filterPriority !== "all" || contactFilterActive;
+
+  /* BOŞ DURUM tek yerde tanımlanır — telefon kart listesi ve masaüstü tablo
+     aynı cümleyi söyler. Süzgeç yokken kullanıcı çıkmaz sokakta bırakılmaz:
+     doğrudan görev oluşturma önerilir. */
+  const emptyStateNode = (
+    <EmptyState
+      icon={ClipboardList}
+      title={hasActiveFilters ? "Görev bulunamadı" : "Henüz görev yok"}
+      description={
+        hasActiveFilters
+          ? "Geçerli filtrelerle eşleşen görev yok."
+          : "İlk görevi oluşturarak başlayın."
+      }
+      action={
+        hasActiveFilters ? (
+          <Button variant="secondary" size="sm" onClick={clearFilters}>Filtreleri temizle</Button>
+        ) : (
+          <Button size="sm" onClick={() => setModalOpen(true)}>
+            <Plus size={14} aria-hidden /> Görev oluştur
+          </Button>
+        )
+      }
+    />
+  );
 
   return (
     // Desktop: fixed-height shell, table scrolls internally. Mobile (max-md):
@@ -760,7 +983,9 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
             Dış kişiler (tedarikçi/usta) ekip değildir — onlar "Filtreler"in
             altında listelenir, satırı kalabalıklaştırmazlar. */}
         {people.length > 0 && (
-          <div className="flex items-center gap-1" role="group" aria-label="Kişiye göre filtrele">
+          /* Telefonda yüzler satıra sığmayıp sayfayı yatay kaydırıyordu —
+             artık kendi içinde sarar. */
+          <div className="flex flex-wrap items-center gap-1 max-w-full" role="group" aria-label="Kişiye göre filtrele">
             {people.map((p) => {
               const on = personFilter === p.userId;
               return (
@@ -844,8 +1069,32 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
           </Button>
         )}
 
+        <ColumnMenu table={table} />
+
         <span className="ml-auto text-[12.5px] font-medium text-muted self-center tabular-nums whitespace-nowrap">{totalRows} görev</span>
       </div>
+
+      {/* Sunucu bir işlemi reddettiyse kullanıcı bunu burada görür. */}
+      {actionError && (
+        <div
+          role="alert"
+          className="anim-fade-down flex items-center justify-between gap-2 px-4 py-2 bg-danger/10 border-b border-danger/25 shrink-0"
+        >
+          <span className="flex items-center gap-1.5 text-[13px] text-danger min-w-0">
+            <AlertCircle size={14} className="shrink-0" aria-hidden />
+            <span className="min-w-0">{actionError}</span>
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setActionError(null)}
+            aria-label="Uyarıyı kapat"
+            className="shrink-0 text-danger hover:text-danger"
+          >
+            Kapat
+          </Button>
+        </div>
+      )}
 
       {/* Active person filter banner — makes a deep-link from CRM explicit and
           gives a one-click way to clear it. */}
@@ -863,12 +1112,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
       {/* Mobile: card list (no horizontal table) — flows into the page scroll */}
       <div className="md:hidden bg-app px-3 py-3">
         {table.getRowModel().rows.length === 0 ? (
-          <EmptyState
-            icon={ClipboardList}
-            title="Görev bulunamadı"
-            description={hasActiveFilters ? "Geçerli filtrelerle eşleşen görev yok." : undefined}
-            action={hasActiveFilters ? <Button variant="secondary" size="sm" onClick={clearFilters}>Filtreleri temizle</Button> : undefined}
-          />
+          emptyStateNode
         ) : (
           <div className="flex flex-col gap-2.5">
             {table.getRowModel().rows.map((row) => (
@@ -886,7 +1130,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
       {/* Table — desktop / tablet. Wide content scrolls INSIDE this wrapper
           (overflow-x-auto); the page itself never scrolls horizontally.
           Gerçek tablo: yapışkan düz başlık, dikey kenarlık yok, tarih sağda. */}
-      <div className="hidden md:block flex-1 overflow-x-auto overflow-y-auto bg-app">
+      <div ref={tableScrollRef} className="hidden md:block flex-1 overflow-x-auto overflow-y-auto bg-app">
         <table className="w-full min-w-[56rem] text-[13.5px] border-collapse">
           <thead className="sticky top-0 z-10 bg-surface shadow-[inset_0_-1px_0_var(--color-line)]">
             {table.getHeaderGroups().map((hg) => (
@@ -924,13 +1168,8 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
           <tbody className="divide-y divide-hairline bg-surface">
             {table.getRowModel().rows.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className="p-0">
-                  <EmptyState
-                    icon={ClipboardList}
-                    title="Görev bulunamadı"
-                    description={hasActiveFilters ? "Geçerli filtrelerle eşleşen görev yok." : undefined}
-                    action={hasActiveFilters ? <Button variant="secondary" size="sm" onClick={clearFilters}>Filtreleri temizle</Button> : undefined}
-                  />
+                <td colSpan={table.getVisibleLeafColumns().length} className="p-0">
+                  {emptyStateNode}
                 </td>
               </tr>
             ) : (
@@ -959,6 +1198,38 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
           </tbody>
         </table>
       </div>
+
+      {/* Sayfalama — yalnız birden çok sayfa varken çizilir. Telefon ve
+          masaüstünde AYNI şerit: kart listesi de sayfalanıyor. */}
+      {table.getPageCount() > 1 && (
+        <div className="flex items-center justify-between gap-3 border-t border-line bg-surface px-4 py-2 shrink-0">
+          <span className="text-[12.5px] text-muted tabular-nums">
+            Sayfa {table.getState().pagination.pageIndex + 1} / {table.getPageCount()}
+          </span>
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => goToPage(() => table.previousPage())}
+              disabled={!table.getCanPreviousPage()}
+              aria-label="Önceki sayfa"
+            >
+              <ChevronLeft size={14} aria-hidden />
+              Önceki
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => goToPage(() => table.nextPage())}
+              disabled={!table.getCanNextPage()}
+              aria-label="Sonraki sayfa"
+            >
+              Sonraki
+              <ChevronRight size={14} aria-hidden />
+            </Button>
+          </div>
+        </div>
+      )}
 
       {modalOpen && (
         <CreateTaskModal

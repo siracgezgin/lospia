@@ -11,7 +11,7 @@ import { sheetStatusLabel, SHEET_STATUS_TONE } from "@/lib/office/constants";
 import { cn } from "@/lib/utils/cn";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Button, IconButton } from "@/components/ui/Button";
-import { TextInput } from "@/components/ui/Field";
+import { SelectInput, TextInput } from "@/components/ui/Field";
 import { useConfirm } from "@/components/ui/useConfirm";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { SheetFormModal } from "./SheetFormModal";
@@ -54,6 +54,7 @@ export function SheetsView({
   const [status, setStatus] = useState("");
   const [deptFilter, setDeptFilter] = useState("");
   const [showArchived, setShowArchived] = useState(false);
+  const [sort, setSort] = useState<"recent" | "title">("recent");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<SheetListItem | null>(null);
   const [isBusy, startWork] = useTransition();
@@ -66,7 +67,7 @@ export function SheetsView({
 
   const filtered = useMemo(() => {
     const q = norm(query.trim());
-    return sheets.filter((s) => {
+    const rows = sheets.filter((s) => {
       if (!showArchived && s.status === "archived") return false;
       if (typeFilter && s.sheet_type !== typeFilter) return false;
       if (status && s.status !== status) return false;
@@ -76,7 +77,15 @@ export function SheetsView({
         [s.title, s.description, ...(s.tags ?? [])].filter(Boolean).join(" "),
       ).includes(q);
     });
-  }, [sheets, query, typeFilter, status, deptFilter, showArchived]);
+    /* SIRALAMA gerçekten çalışır: varsayılan "son çalışılan üstte", alternatif
+       alfabetik (Türkçe harf sırasıyla). Sıralama listeyi TARİF eder, kimseyi
+       puanlamaz — sadelik kuralına takılmaz. */
+    return [...rows].sort((a, b) =>
+      sort === "title"
+        ? a.title.localeCompare(b.title, "tr")
+        : Date.parse(b.updated_at) - Date.parse(a.updated_at),
+    );
+  }, [sheets, query, typeFilter, status, deptFilter, showArchived, sort]);
 
   function canMutate(s: SheetListItem) {
     if (isAdmin) return true;
@@ -103,7 +112,9 @@ export function SheetsView({
   async function handleDelete(s: SheetListItem) {
     if (!(await ask({
       title: "Tablo silinsin mi?",
-      message: `"${s.title}" kalıcı olarak silinir. Yalnız gözden kaldırmak için "Arşivle"yi kullanın.`,
+      message: `"${s.title}" kalıcı olarak silinir; içindeki bütün veriler gider. Yalnız gözden kaldırmak için "Arşivle"yi kullanın.`,
+      confirmLabel: "Sil",
+      tone: "danger",
     }))) return;
     setError(null);
     startWork(async () => {
@@ -142,11 +153,28 @@ export function SheetsView({
             bir avuç tablo için fazlaydı ve arama kutusunu bastırıyordu.
             Departman süzgeci ancak birden fazla departmana tablo dağılmışsa
             anlamlı; o zaman da arama yeterli. (Sadelik kuralı.) */}
-        <label className="flex h-9 cursor-pointer select-none items-center gap-1.5 rounded-control px-2 text-[12.5px] text-muted transition-colors duration-150 hover:text-ink">
-          <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} className="h-3.5 w-3.5 accent-brand" />
+        <SelectInput
+          value={sort}
+          onChange={(e) => setSort(e.target.value === "title" ? "title" : "recent")}
+          aria-label="Sıralama"
+          className="h-9 w-auto min-w-[9.5rem]"
+        >
+          <option value="recent">Son çalışılan üstte</option>
+          <option value="title">Ada göre (A→Z)</option>
+        </SelectInput>
+        <label className="flex h-10 min-h-10 cursor-pointer select-none items-center gap-1.5 rounded-control px-2 text-[12.5px] text-muted transition-colors duration-150 hover:text-ink sm:h-9">
+          <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} className="h-4 w-4 accent-brand" />
           Arşivi göster
         </label>
       </div>
+
+      {/* Hata, listenin ALTINDA değil ÜSTÜNDE: uzun bir ızgaranın dibinde
+          kalan uyarıyı kimse görmüyordu. */}
+      {error && (
+        <p role="alert" className="anim-fade-down mb-3 rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[12.5px] text-danger">
+          {error}
+        </p>
+      )}
 
       {/* Cards */}
       {filtered.length === 0 ? (
@@ -233,12 +261,6 @@ export function SheetsView({
             </div>
           ))}
         </div>
-      )}
-
-      {error && (
-        <p role="alert" className="anim-fade-down mt-3 rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[12.5px] text-danger">
-          {error}
-        </p>
       )}
 
       {dialog}

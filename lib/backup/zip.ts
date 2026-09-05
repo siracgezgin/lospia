@@ -80,45 +80,86 @@ export function createZipStream(entries: AsyncIterable<ZipEntry>): ReadableStrea
   const iterator = entries[Symbol.asyncIterator]();
 
   const encoder = new TextEncoder();
+  /** Girdi üreteci patlarsa arşiv yine de KAPATILIR; sebep HATA.txt'ye yazılır. */
+  let failure: string | null = null;
+  let exhausted = false;
 
   function push(controller: ReadableStreamDefaultController<Uint8Array>, chunk: Uint8Array) {
     controller.enqueue(chunk);
     offset += chunk.length;
   }
 
+  function writeEntry(
+    controller: ReadableStreamDefaultController<Uint8Array>,
+    entry: ZipEntry,
+  ) {
+    const name = encoder.encode(entry.name);
+    const raw = entry.data;
+    const store = entry.store ?? isPrecompressed(entry.name);
+    const body = store ? raw : new Uint8Array(deflateRawSync(raw, { level: 6 }));
+    const method = store ? 0 : 8;
+    const { time, date } = dosDateTime(new Date());
+    const crc = crc32(raw);
+
+    const header = new DataView(new ArrayBuffer(30));
+    header.setUint32(0, 0x04034b50, true); // local file header
+    header.setUint16(4, 20, true);         // gereken sürüm: 2.0
+    header.setUint16(6, 0x0800, true);     // bit 11: ad UTF-8
+    header.setUint16(8, method, true);
+    header.setUint16(10, time, true);
+    header.setUint16(12, date, true);
+    header.setUint32(14, crc, true);
+    header.setUint32(18, body.length, true);
+    header.setUint32(22, raw.length, true);
+    header.setUint16(26, name.length, true);
+    header.setUint16(28, 0, true);         // extra alanı yok
+
+    central.push({ name, crc, csize: body.length, usize: raw.length, offset, method, time, date });
+
+    push(controller, new Uint8Array(header.buffer));
+    push(controller, name);
+    push(controller, body);
+  }
+
   return new ReadableStream<Uint8Array>({
     async pull(controller) {
-      const next = await iterator.next();
+      if (!exhausted) {
+        /* Üreteç bir dosyada patlarsa (depolama erişilemedi, bellek yetmedi…)
+           akışı hata ile kapatmak KIRIK bir .zip indirir: tarayıcı dosyayı
+           kaydeder, kullanıcı "yedeğim var" sanır, açmaya kalkınca bozuk çıkar.
+           Bunun yerine ne kadarı yazıldıysa o geçerli bir arşiv olarak kapanır
+           ve içine HATA.txt konur. */
+        let next: IteratorResult<ZipEntry>;
+        try {
+          next = await iterator.next();
+        } catch (err) {
+          failure = err instanceof Error ? err.message : String(err);
+          next = { done: true, value: undefined };
+        }
 
-      if (!next.done) {
-        const entry = next.value;
-        const name = encoder.encode(entry.name);
-        const raw = entry.data;
-        const store = entry.store ?? isPrecompressed(entry.name);
-        const body = store ? raw : new Uint8Array(deflateRawSync(raw, { level: 6 }));
-        const method = store ? 0 : 8;
-        const { time, date } = dosDateTime(new Date());
-        const crc = crc32(raw);
+        if (!next.done) {
+          writeEntry(controller, next.value);
+          return;
+        }
+        exhausted = true;
 
-        const header = new DataView(new ArrayBuffer(30));
-        header.setUint32(0, 0x04034b50, true); // local file header
-        header.setUint16(4, 20, true);         // gereken sürüm: 2.0
-        header.setUint16(6, 0x0800, true);     // bit 11: ad UTF-8
-        header.setUint16(8, method, true);
-        header.setUint16(10, time, true);
-        header.setUint16(12, date, true);
-        header.setUint32(14, crc, true);
-        header.setUint32(18, body.length, true);
-        header.setUint32(22, raw.length, true);
-        header.setUint16(26, name.length, true);
-        header.setUint16(28, 0, true);         // extra alanı yok
-
-        central.push({ name, crc, csize: body.length, usize: raw.length, offset, method, time, date });
-
-        push(controller, new Uint8Array(header.buffer));
-        push(controller, name);
-        push(controller, body);
-        return;
+        if (failure) {
+          writeEntry(
+            controller,
+            textEntry(
+              "HATA.txt",
+              [
+                "YEDEK YARIM KALDI",
+                "",
+                "Arşiv oluşturulurken bir hata çıktı; bu dosyada yalnız hataya",
+                "kadar yazılabilen kayıtlar var. Yedeği tekrar alın.",
+                "",
+                `Hata: ${failure}`,
+              ].join("\n"),
+            ),
+          );
+          return;
+        }
       }
 
       // Girdiler bitti → merkezi dizin + son kayıt.
@@ -159,6 +200,13 @@ export function createZipStream(entries: AsyncIterable<ZipEntry>): ReadableStrea
       push(controller, new Uint8Array(end.buffer));
 
       controller.close();
+    },
+
+    /* Kullanıcı indirmeyi iptal ederse (sekmeyi kapattı, "vazgeç" dedi) üretici
+       de durdurulur; yoksa sunucu kimsenin beklemediği dosyaları indirmeye
+       devam eder. */
+    async cancel() {
+      await iterator.return?.(undefined);
     },
   });
 }

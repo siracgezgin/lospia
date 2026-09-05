@@ -20,8 +20,18 @@ import { cn } from "@/lib/utils/cn";
  * kendi kenarlığını kırmızıya çevirir. Elle `invalid` de verilebilir.
  */
 
+/* DOKUNMATİKTE BİR KADEME İRİ — düğmelerle aynı kural (bkz. ui/Button SIZE).
+   İki somut sorun vardı, ikisi de yalnız telefonda:
+     • 36px'lik alan parmak hedefi için düşüktü (proje kuralı: ≥40px).
+     • iOS Safari, yazı boyu 16px'in ALTINDA olan bir alana odaklanınca sayfayı
+       KENDİLİĞİNDEN yakınlaştırır ve geri çıkmaz: kullanıcı her form
+       dokunuşunda yamuk, taşan bir sayfada kalıyordu. 16px o davranışı
+       tamamen kapatır.
+   Kural TELEFONA (max-md) + PARMAĞA (pointer-coarse) bağlıdır: masaüstü ve
+   tablet yoğunluğu aynen kalır; iPad Safari zaten odakta yakınlaştırmaz. */
 const CONTROL =
-  "h-9 w-full rounded-control border border-line bg-surface px-3 text-[13.5px] text-ink " +
+  "h-9 max-md:pointer-coarse:h-11 w-full rounded-control border border-line bg-surface px-3 " +
+  "text-[13.5px] max-md:pointer-coarse:text-[16px] text-ink " +
   "transition-[border-color,box-shadow,background-color] duration-150 " +
   "placeholder:text-subtle hover:border-line-strong " +
   "focus:border-brand-ring focus:outline-none focus:ring-2 focus:ring-brand-ring/40 " +
@@ -43,7 +53,10 @@ export const TextArea = forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttrib
         ref={ref}
         rows={rows}
         aria-invalid={invalid || props["aria-invalid"] || undefined}
-        className={cn(CONTROL, "h-auto resize-y py-2 leading-relaxed", className)}
+        /* max-md:pointer-coarse:h-auto ŞART: CONTROL telefonda h-11 veriyor ve
+           `h-auto` başka bir varyant grubunda olduğu için onu ezmiyordu —
+           çok satırlı alan telefonda tek satıra kilitleniyordu. */
+        className={cn(CONTROL, "h-auto max-md:pointer-coarse:h-auto resize-y py-2 leading-relaxed", className)}
         {...props}
       />
     );

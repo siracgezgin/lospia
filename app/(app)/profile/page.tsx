@@ -7,6 +7,7 @@ import {
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { AvatarUploader } from "@/components/settings/AvatarUploader";
 import { ProfileForm } from "@/components/profile/ProfileForm";
+import { PasswordForm } from "@/components/profile/PasswordForm";
 import { Button } from "@/components/ui/Button";
 import { assignPersonTones } from "@/lib/design/person-colors";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
@@ -122,6 +123,21 @@ export default async function ProfilePage() {
               notificationEmail={me?.notification_email ?? null}
             />
           </div>
+
+          {/* GÜVENLİK — şifre değiştirme. Sistemde e-posta ile sıfırlama yok
+              (hesaplar iç kullanıcı adıyla açılıyor); kişinin kendi şifresini
+              değiştirebileceği tek yer burası. Kapalı başlar: sayfanın ana işi
+              ad/ünvan düzenlemek. */}
+          <div className="border-t border-hairline px-5 py-5">
+            <h2 className="mb-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle">
+              Güvenlik
+            </h2>
+            <p className="mb-3 text-[12.5px] leading-relaxed text-muted">
+              Giriş şifrenizi buradan değiştirebilirsiniz. Şifrenizi unuttuysanız yöneticiden
+              sıfırlamasını isteyin.
+            </p>
+            <PasswordForm />
+          </div>
         </section>
 
         {/* ── Hesap + kısayollar ───────────────────────────────────────── */}
@@ -185,7 +201,8 @@ function Row({ icon: Icon, label, value }: { icon: LucideIcon; label: string; va
         <Icon size={14} className="shrink-0 text-subtle" aria-hidden />
         {label}
       </dt>
-      <dd className="min-w-0 truncate text-[13.5px] font-medium text-ink">{value}</dd>
+      {/* break-words: uzun giriş adresi telefonda kırpılıp okunmaz oluyordu. */}
+      <dd className="min-w-0 break-words text-right text-[13.5px] font-medium text-ink" title={value}>{value}</dd>
     </div>
   );
 }

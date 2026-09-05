@@ -158,3 +158,94 @@
     grid-column: 3;
   }
 }
+
+/* ── Login link (desktop only) ─────────────────────────────────────────
+   Marketing sitesinde mevcut bir müşterinin giriş yapacak yeri yoktu:
+   başlıkta yalnız CTA vardı, "Giriş" sadece sayfanın en altındaki
+   footer'da duruyordu. Masaüstünde CTA'nın soluna sade bir metin
+   bağlantısı, telefonda ise alttaki gezinme şeridinin son maddesi olarak
+   eklendi. */
+.loginLink {
+  display: inline-flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 12px;
+  margin-right: 4px;
+  color: #475569;
+  font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
+  border-radius: 8px;
+  transition: color 180ms ease, background 180ms ease;
+}
+
+.loginLink:hover {
+  color: #0f172a;
+  background: rgba(148, 163, 184, 0.14);
+}
+
+/* ── Mobile / tablet nav strip ─────────────────────────────────────────
+   980px altında .nav gizleniyordu ve yerine HİÇBİR ŞEY gelmiyordu: telefonda
+   "Ürün / Nasıl çalışır? / Fiyatlandırma / Demo" bölümlerine gidilecek bir
+   kontrol kalmıyordu. Açılır menü yerine yatay kayan tek satırlık şerit:
+   JavaScript yok, açık/kapalı durumu yok, dokunma hedefi 40px. */
+.mobileNav {
+  display: none;
+}
+
+/* Şerit 980px altında açılır (aşağıdaki media query) — bağlantı görünümü
+   media query DIŞINDA tanımlı: CSS Module'ün sınıfı her koşulda dışa
+   aktardığından emin olmak için. */
+.mobileNavLink {
+  display: inline-flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 8px;
+  color: #475569;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: color 180ms ease, background 180ms ease;
+}
+
+.mobileNavLink:hover,
+.mobileNavLink:active {
+  color: #0f172a;
+  background: rgba(148, 163, 184, 0.16);
+}
+
+@media (max-width: 980px) {
+  .mobileNav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 48px;
+    padding: 0 12px;
+    border-top: 1px solid rgba(226, 232, 240, 0.8);
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .mobileNav::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Başlık iki satır oldu — ara boşluk da onunla birlikte büyümeli, yoksa
+     içerik sabit çubuğun altında kalır. */
+  .spacer {
+    height: 120px;
+  }
+
+  .loginLink {
+    display: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .spacer {
+    height: 112px;
+  }
+}

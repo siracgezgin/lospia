@@ -369,7 +369,7 @@ export function MarketingHome() {
 
       {/* ── Problem — scattered vs organized ──────────────────────────── */}
       <section className="bg-white">
-        <div className={`${CONTAINER} py-24`}>
+        <div className={`${CONTAINER} py-16 sm:py-20 lg:py-24`}>
           <SectionIntro
             kicker="Problem"
             title="Dağınık takip neden kırılır?"
@@ -454,7 +454,7 @@ export function MarketingHome() {
 
       {/* ── System map — how Lospia pulls it together ─────────────────── */}
       <section className="border-y border-slate-200 bg-slate-50">
-        <div className={`${CONTAINER} py-24`}>
+        <div className={`${CONTAINER} py-16 sm:py-20 lg:py-24`}>
           <SectionIntro
             kicker="Sistem"
             title="Lospia dağınık işleri nasıl toplar?"
@@ -484,8 +484,8 @@ export function MarketingHome() {
       </section>
 
       {/* ── Interactive product preview ────────────────────────────────── */}
-      <section id="urun" className="scroll-mt-20 bg-white">
-        <div className={`${CONTAINER} py-24`}>
+      <section id="urun" className="scroll-mt-[124px] lg:scroll-mt-20 bg-white">
+        <div className={`${CONTAINER} py-16 sm:py-20 lg:py-24`}>
           <SectionIntro
             kicker="Ürün"
             title="Ürünü şimdi inceleyin — sekmeler tıklanabilir."
@@ -517,7 +517,7 @@ export function MarketingHome() {
           aria-hidden
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_45%_50%_at_20%_10%,rgba(99,102,241,0.16),transparent_60%)]"
         />
-        <div className={`${CONTAINER} relative grid items-center gap-14 py-24 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]`}>
+        <div className={`${CONTAINER} relative grid items-center gap-14 py-16 sm:py-20 lg:py-24 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]`}>
           <div>
             <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-indigo-400">
               Haftalık görünürlük
@@ -583,8 +583,8 @@ export function MarketingHome() {
       </section>
 
       {/* ── Setup-supported system ─────────────────────────────────────── */}
-      <section id="nasil-calisir" className="scroll-mt-20 bg-white">
-        <div className={`${CONTAINER} py-24`}>
+      <section id="nasil-calisir" className="scroll-mt-[124px] lg:scroll-mt-20 bg-white">
+        <div className={`${CONTAINER} py-16 sm:py-20 lg:py-24`}>
           <SectionIntro
             kicker="Kurulum destekli sistem"
             title="Kurulumun tamamı bizde; dört adımda ekibinizle oturur."
@@ -609,8 +609,8 @@ export function MarketingHome() {
       </section>
 
       {/* ── Use contexts — where Lospia creates value fastest ─────────── */}
-      <section id="kimler" className="scroll-mt-20 border-y border-slate-200 bg-slate-50">
-        <div className={`${CONTAINER} py-24`}>
+      <section id="kimler" className="scroll-mt-[124px] lg:scroll-mt-20 border-y border-slate-200 bg-slate-50">
+        <div className={`${CONTAINER} py-16 sm:py-20 lg:py-24`}>
           <SectionIntro
             kicker="Kullanım alanları"
             title="Lospia hangi ekiplerde en hızlı değer üretir?"
@@ -634,8 +634,8 @@ export function MarketingHome() {
       </section>
 
       {/* ── Demo ───────────────────────────────────────────────────────── */}
-      <section id="demo" className="scroll-mt-20 bg-white">
-        <div className={`${CONTAINER} py-24`}>
+      <section id="demo" className="scroll-mt-[124px] lg:scroll-mt-20 bg-white">
+        <div className={`${CONTAINER} py-16 sm:py-20 lg:py-24`}>
           {videoReady ? (
             <SectionIntro
               kicker="Demo"
@@ -654,8 +654,8 @@ export function MarketingHome() {
       </section>
 
       {/* ── Pricing — setup-supported B2B packages ─────────────────────── */}
-      <section id="fiyatlandirma" className="scroll-mt-20 border-y border-slate-200 bg-slate-50">
-        <div className={`${CONTAINER} py-24`}>
+      <section id="fiyatlandirma" className="scroll-mt-[124px] lg:scroll-mt-20 border-y border-slate-200 bg-slate-50">
+        <div className={`${CONTAINER} py-16 sm:py-20 lg:py-24`}>
           <SectionIntro
             kicker="Paketler"
             title="Kurulum destekli Lospia paketleri"
@@ -738,7 +738,7 @@ export function MarketingHome() {
 
       {/* ── FAQ ────────────────────────────────────────────────────────── */}
       <section className="bg-white">
-        <div className={`${CONTAINER} grid gap-12 py-24 lg:grid-cols-[1fr_2fr]`}>
+        <div className={`${CONTAINER} grid gap-12 py-16 sm:py-20 lg:py-24 lg:grid-cols-[1fr_2fr]`}>
           <div>
             <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-indigo-600">SSS</p>
             <h2 className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
@@ -773,7 +773,7 @@ export function MarketingHome() {
           aria-hidden
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_50%_60%_at_50%_120%,rgba(99,102,241,0.3),transparent_60%)]"
         />
-        <div className={`${CONTAINER} relative grid items-center gap-10 py-24 lg:grid-cols-[2fr_1fr]`}>
+        <div className={`${CONTAINER} relative grid items-center gap-10 py-16 sm:py-20 lg:py-24 lg:grid-cols-[2fr_1fr]`}>
           <div>
             <h2 className="max-w-2xl text-3xl font-semibold tracking-tight text-white sm:text-4xl">
               Operasyonunuzu tek panele taşıyalım.

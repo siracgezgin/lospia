@@ -93,7 +93,9 @@ function NoteItem({
   const { ask, dialog } = useConfirm();
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(note.content);
-  const [ackError, setAckError] = useState<string | null>(null);
+  /* Not işlemlerinin (düzenle · sabitle · sil) hatası eskiden yutuluyordu:
+     düğmeye basılıyor, hiçbir şey olmuyor, kimse nedenini bilmiyordu. */
+  const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const authorName = note.author?.full_name ?? note.author?.email ?? "Bilinmeyen kullanıcı";
@@ -132,24 +134,30 @@ function NoteItem({
       : null;
 
   function handleAck(action: "seen" | "claimed") {
-    setAckError(null);
+    setError(null);
     startTransition(async () => {
       const res = await acknowledgeTaskNote(note.id, action);
-      if ("error" in res) setAckError(res.error);
+      if ("error" in res) setError(res.error);
     });
   }
 
   function handleSaveEdit() {
-    setEditing(false);
-    if (editValue.trim() === note.content) return;
+    setError(null);
+    if (!editValue.trim()) { setError("Not boş olamaz."); return; }
+    if (editValue.trim() === note.content) { setEditing(false); return; }
     startTransition(async () => {
-      await updateTaskNote(note.id, taskId, editValue);
+      const res = await updateTaskNote(note.id, taskId, editValue);
+      // Kayıt başarısızsa düzenleme AÇIK kalır — yazılan metin kaybolmaz.
+      if (res && "error" in res) { setError(res.error || "Not kaydedilemedi."); return; }
+      setEditing(false);
     });
   }
 
   function handlePin() {
+    setError(null);
     startTransition(async () => {
-      await toggleNotePin(note.id, taskId, !note.is_pinned);
+      const res = await toggleNotePin(note.id, taskId, !note.is_pinned);
+      if (res && "error" in res) setError(res.error || "Not sabitlenemedi.");
     });
   }
 
@@ -160,8 +168,10 @@ function NoteItem({
       confirmLabel: "Sil",
       tone: "danger",
     }))) return;
+    setError(null);
     startTransition(async () => {
-      await deleteTaskNote(note.id, taskId);
+      const res = await deleteTaskNote(note.id, taskId);
+      if (res && "error" in res) setError(res.error || "Not silinemedi.");
     });
   }
 
@@ -206,7 +216,14 @@ function NoteItem({
               onChange={(e) => setEditValue(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && e.ctrlKey) handleSaveEdit();
-                if (e.key === "Escape") { setEditing(false); setEditValue(note.content); }
+                if (e.key === "Escape") {
+                  // Esc yalnız düzenlemeyi kapatır — çekmeceyi DEĞİL.
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setEditing(false);
+                  setEditValue(note.content);
+                  setError(null);
+                }
               }}
               autoFocus
               rows={3}
@@ -242,7 +259,6 @@ function NoteItem({
               <Eye size={13} aria-hidden /> Gördüm
             </Button>
           )}
-          {ackError && <span role="alert" className="anim-fade-down text-[12px] text-danger">{ackError}</span>}
         </div>
       )}
 
@@ -256,22 +272,23 @@ function NoteItem({
         <div className="flex items-center gap-0.5 shrink-0">
           {editing ? (
             <>
-              <Button variant="ghost" size="sm" onClick={() => { setEditing(false); setEditValue(note.content); }}>
+              <Button variant="ghost" size="sm" disabled={pending} onClick={() => { setEditing(false); setEditValue(note.content); setError(null); }}>
                 Vazgeç
               </Button>
-              <Button variant="ghost" size="sm" onClick={handleSaveEdit} className="text-brand hover:text-brand-strong">
+              <Button variant="ghost" size="sm" loading={pending} onClick={handleSaveEdit} className="text-brand hover:text-brand-strong">
                 Kaydet
               </Button>
             </>
           ) : (
             <>
               {canEdit && (
-                <IconButton size="sm" onClick={() => setEditing(true)} aria-label="Notu düzenle" title="Düzenle">
+                <IconButton size="sm" disabled={pending} onClick={() => setEditing(true)} aria-label="Notu düzenle" title="Düzenle">
                   <PencilLine size={14} />
                 </IconButton>
               )}
               <IconButton
                 size="sm"
+                disabled={pending}
                 onClick={handlePin}
                 aria-pressed={note.is_pinned}
                 aria-label={note.is_pinned ? "Sabitlemeyi kaldır" : "Sabitle"}
@@ -283,6 +300,7 @@ function NoteItem({
               {canDelete && (
                 <IconButton
                   size="sm"
+                  disabled={pending}
                   onClick={handleDelete}
                   aria-label="Notu sil"
                   title="Sil"
@@ -295,6 +313,10 @@ function NoteItem({
           )}
         </div>
       </div>
+
+      {error && (
+        <p role="alert" className="anim-fade-down text-[12.5px] text-danger">{error}</p>
+      )}
       {dialog}
     </li>
   );
@@ -324,19 +346,22 @@ function PeoplePicker({
     function onDown(e: MouseEvent) {
       if (!ref.current?.contains(e.target as Node)) setOpen(false);
     }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
     document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
+    return () => document.removeEventListener("mousedown", onDown);
   }, [open]);
 
   return (
-    <div className="relative" ref={ref}>
+    /* Esc, document dinleyicisiyle değil React olayıyla yakalanır: çekmecenin
+       kendi Esc'i document üzerindedir ve daha önce kaydedilmiştir — React
+       olayı önce koştuğu için preventDefault ile listeyi kapatıp çekmeceyi
+       açık bırakabiliyoruz. */
+    <div
+      className="relative"
+      ref={ref}
+      onKeyDown={(e) => {
+        if (open && e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setOpen(false); }
+      }}
+    >
       {/* Field'ın kontrol görünümüyle aynı ölçü/çerçeve (h-9, rounded-control). */}
       <button
         id={id}

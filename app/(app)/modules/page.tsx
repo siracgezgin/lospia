@@ -1,26 +1,11 @@
 import { redirect } from "next/navigation";
 import { requireModuleMember } from "@/lib/modules/context";
 import { AccessDenied } from "@/components/modules/AccessDenied";
-import {
-  MODULE_GROUP_TITLES,
-  modulesForRole,
-  type ModuleGroup,
-} from "@/lib/modules/registry";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
-import { OfficeCenterCard } from "@/components/modules/OfficeCenterCard";
+import { ModuleDirectory } from "@/components/modules/ModuleDirectory";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Operation Modules" };
-
-/** Bölüm sırası sol menüdekiyle AYNI — göz aynı sırayı iki kez öğrenmesin. */
-const GROUP_ORDER: ModuleGroup[] = ["calisma", "urun", "yonetim"];
-
-/** Bölümün ne işe yaradığı — tek satır, ekran adlarını TEKRARLAMADAN. */
-const GROUP_NOTES: Record<ModuleGroup, string> = {
-  calisma: "Günün ritmi: ne yapılacak, ne zaman, hangi aşamada.",
-  urun: "Üzerinde çalışılan şeyler: koleksiyon, dosyalar, kişiler.",
-  yonetim: "Yalnız yönetici: para akışı, hareket kaydı, arşiv ve çalışma alanı.",
-};
 
 /**
  * Operation Modules — sistemin DİZİNİ.
@@ -43,8 +28,9 @@ const GROUP_NOTES: Record<ModuleGroup, string> = {
  * beslendiği için ayrışmaları imkânsız: menü sık kullanılanı taşır, burası
  * hepsini listeler.
  *
- * Sayaç yok (Aslı Hanım, 2026-08-24: "boş hesap istemiyorum") — sayfa hiç
- * sayım sorgusu atmaz.
+ * Listenin kendisi (süzgeç + kartlar) ModuleDirectory'de yaşar; sunucu yalnız
+ * yetkiyi çözer. Sayaç yok (Aslı Hanım, 2026-08-24: "boş hesap istemiyorum")
+ * — sayfa hiç sayım sorgusu atmaz.
  */
 export default async function ModulesPage() {
   // Herkes görür; yalnız Yönetim bölümü yöneticiye çıkar (veri düzeyinde de kapalı).
@@ -52,45 +38,17 @@ export default async function ModulesPage() {
   if (gate === "login") redirect("/login");
   if (gate !== "ok" || !workspaceId) return <AccessDenied />;
 
-  const modules = modulesForRole(isAdmin);
-
   return (
     <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
       <ModulePageHeader title="Operation Modules" />
 
       {/* Tek satırlık yön tarifi: menü ile bu sayfanın işi FARKLI. */}
-      <p className="mb-6 text-[13.5px] text-muted">
+      <p className="mb-5 text-[13.5px] text-muted">
         Sol menü her gün açtığınız ekranları taşır; burası sistemdeki her ekranın listesidir.
         Bir ekran sistemde tek isimle yaşar — buradaki ad, menüdeki ad ve sayfanın başlığı hep aynıdır.
       </p>
 
-      <div className="space-y-8">
-        {GROUP_ORDER.map((group) => {
-          const items = modules.filter((m) => m.group === group);
-          if (items.length === 0) return null;
-          return (
-            <section key={group}>
-              <div className="mb-3 border-b border-hairline pb-2">
-                <h2 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle">
-                  {MODULE_GROUP_TITLES[group]}
-                </h2>
-                <p className="mt-1 text-[13px] text-muted">{GROUP_NOTES[group]}</p>
-              </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-                {items.map((m) => (
-                  <OfficeCenterCard
-                    key={m.key}
-                    title={m.title}
-                    description={m.description}
-                    href={m.href}
-                    icon={m.icon}
-                  />
-                ))}
-              </div>
-            </section>
-          );
-        })}
-      </div>
+      <ModuleDirectory isAdmin={isAdmin} />
     </div>
   );
 }

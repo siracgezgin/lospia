@@ -11,7 +11,7 @@ import {
   createColumnHelper,
   type SortingState,
 } from "@tanstack/react-table";
-import { Plus, Search, Users, Pencil, Trash2, ExternalLink, Eye } from "lucide-react";
+import { Plus, Search, Users, Pencil, Trash2, ExternalLink, Eye, UserPlus, AlertCircle } from "lucide-react";
 import { deleteCrmContact } from "@/lib/actions/crm";
 import {
   CRM_SEGMENTS,
@@ -31,13 +31,17 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { seedingStep, nextSeedingStep, SEEDING_TOTAL } from "@/lib/crm/seeding";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { SetupRequiredNotice } from "@/components/modules/SetupRequiredNotice";
+import { PersonAvatar } from "@/components/ui/PersonAvatar";
 import { CrmContactModal } from "./CrmContactModal";
+import { ContactMatchingPanel } from "./ContactMatchingPanel";
 import type { WorkspaceContact } from "@/types";
 
 export interface CrmMember {
   userId: string;
   name: string;
   email?: string | null;
+  /** profiles.avatar_url — eşleştirilmiş kişi listede fotoğrafıyla çıkar. */
+  photoUrl?: string | null;
 }
 type Member = CrmMember;
 
@@ -117,11 +121,25 @@ export function CrmView({
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<WorkspaceContact | null>(null);
   const [isDeleting, startDelete] = useTransition();
+  /* Silme hatası GÖRÜNÜR olmalı: `deleteCrmContact` sonucu hiç okunmuyordu,
+     yetki/RLS hatasında ekran hiçbir şey söylemeden aynı kalıyordu. */
+  const [error, setError] = useState<string | null>(null);
+  /* Kişi eşleştirme paneli — 2026-08-29 tasarım turunda görünürlüğü sağlayan
+     düğmeyle birlikte düşmüştü ve bileşen ERİŞİLEMEZ kalmıştı. Liste sakin
+     kalsın diye kapalı başlar, yönetici açar. */
+  const [showMatching, setShowMatching] = useState(false);
 
   const memberName = useMemo(
     () => new Map(members.map((m) => [m.userId, m.name])),
     [members],
   );
+  const memberPhoto = useMemo(
+    () => new Map(members.map((m) => [m.userId, m.photoUrl ?? null])),
+    [members],
+  );
+  /* Kişi kartı — Pano/Takvim ile AYNI dil: fotoğraf varsa fotoğraf, yoksa
+     baş harf. Sistem hesabına bağlıysa o kişinin fotoğrafı kullanılır. */
+  const photoOf = (c: WorkspaceContact) => (c.user_id ? memberPhoto.get(c.user_id) ?? null : null);
 
   const filtered = useMemo(() => {
     const q = norm(query.trim());
@@ -150,8 +168,10 @@ export function CrmView({
       title: "İlişki kaydı silinsin mi?",
       message: `"${c.name}" CRM’den kalıcı olarak silinir.`,
     }))) return;
+    setError(null);
     startDelete(async () => {
-      await deleteCrmContact(c.id);
+      const res = await deleteCrmContact(c.id);
+      if ("error" in res) { setError(res.error); return; }
       router.refresh();
     });
   }
@@ -164,9 +184,12 @@ export function CrmView({
           /* Ad birincil; kurum ve rol ikincil tek satırda. */
           const sub = [c.organization, c.role_label].filter(Boolean).join(" · ");
           return (
-            <div className="min-w-0">
-              <div className="truncate text-[13.5px] font-medium text-ink">{c.name}</div>
-              {sub && <div className="truncate text-[12.5px] text-subtle">{sub}</div>}
+            <div className="flex min-w-0 items-center gap-2.5">
+              <PersonAvatar name={c.name} photoUrl={photoOf(c)} size="sm" title={c.name} />
+              <div className="min-w-0">
+                <div className="truncate text-[13.5px] font-medium text-ink">{c.name}</div>
+                {sub && <div className="truncate text-[12.5px] text-subtle">{sub}</div>}
+              </div>
             </div>
           );
         },
@@ -272,7 +295,7 @@ export function CrmView({
           ]
         : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    ], [isAdmin, isDeleting, memberName, taskCounts]);
+    ], [isAdmin, isDeleting, memberName, memberPhoto, taskCounts]);
 
   const table = useReactTable({
     data: filtered,
@@ -356,7 +379,38 @@ export function CrmView({
             <option key={s.key} value={s.key}>{s.label}</option>
           ))}
         </SelectInput>
+        {/* Süzgeç kuralı gereği araç çubuğunda üçüncü bir SELECT yok: eşleştirme
+            ayrı bir eylemdir, açılıp kapanan bir panel olarak yaşar. */}
+        {isAdmin && !setupRequired && (
+          <Button
+            variant="secondary"
+            onClick={() => setShowMatching((v) => !v)}
+            aria-expanded={showMatching}
+            aria-controls="crm-matching-panel"
+            title="CRM kişilerini sistem hesaplarıyla eşleştir"
+          >
+            <UserPlus size={15} aria-hidden />
+            {showMatching ? "Eşleştirmeyi kapat" : "Kişi eşleştirme"}
+          </Button>
+        )}
       </div>
+
+      {/* Silme / eşleştirme hatası — sessizce yutulmaz. */}
+      {error && (
+        <div
+          role="alert"
+          className="anim-fade-down mb-3 flex items-start gap-2 rounded-control border border-danger/25 bg-danger/8 px-3 py-2.5 text-[13px] leading-relaxed text-danger"
+        >
+          <AlertCircle size={15} className="mt-0.5 shrink-0" aria-hidden />
+          <span className="min-w-0 break-words">{error}</span>
+        </div>
+      )}
+
+      {isAdmin && showMatching && !setupRequired && (
+        <div id="crm-matching-panel">
+          <ContactMatchingPanel contacts={contacts} members={members} />
+        </div>
+      )}
 
       {/* Geniş ekran: tablo. Dar ekran: kart listesi (aşağıda). */}
       <div className="anim-fade-up hidden overflow-x-auto rounded-card border border-line bg-surface shadow-card lg:block">
@@ -424,6 +478,7 @@ export function CrmView({
             return (
               <div key={c.id} className="anim-fade-up rounded-card border border-line bg-surface p-3.5 shadow-card">
                 <div className="flex items-start justify-between gap-3">
+                  <PersonAvatar name={c.name} photoUrl={photoOf(c)} size="sm" title={c.name} />
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[13.5px] font-medium text-ink">{c.name}</div>
                     {sub && <div className="truncate text-[12.5px] text-subtle">{sub}</div>}

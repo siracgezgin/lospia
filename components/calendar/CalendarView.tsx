@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef, useSyncExternalStore } from "react";
+import { useState, useEffect, useRef, useSyncExternalStore, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   startOfMonth,
   endOfMonth,
@@ -20,7 +21,7 @@ import {
   startOfToday,
 } from "date-fns";
 import { tr } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Plus, CalendarDays, ChevronDown, Lock } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, CalendarDays, ChevronDown, Lock, Loader2, X } from "lucide-react";
 import type { TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceDepartment } from "@/types";
 import { cn } from "@/lib/utils/cn";
 import { Button, IconButton } from "@/components/ui/Button";
@@ -29,6 +30,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { CalendarToolbar } from "@/components/planning/CalendarToolbar";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
+import { updateTask } from "@/lib/actions/tasks";
 import { buildDeptMeta } from "@/lib/utils/departments";
 import { getDepartmentCardStyle } from "@/lib/design/semantics";
 
@@ -224,6 +226,48 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
   const [selectedDay, setSelectedDay] = useState<Date>(seedDay);
   const [createModalDate, setCreateModalDate] = useState<string | null>(null);
 
+  /* TARİH DEĞİŞTİRME — takvim artık okunan değil, ÇALIŞILAN bir ekran.
+     Bir işin teslim tarihini değiştirmek için görev detayını açmak
+     gerekiyordu; ay görünümünde tarih zaten gözün önündedir. Gün panelindeki
+     her satır kendi tarih alanını taşır (telefonda da çalışır, sürüklemenin
+     aksine). Sunucu reddederse (yetkisi olmayan üye, geçersiz tarih) hata
+     TÜRKÇE olarak panelde yazar — sessiz başarısızlık yok. */
+  const router = useRouter();
+  /* Telefonda gün paneli IZGARANIN ALTINDA duruyor: bir güne dokununca liste
+     ekranın dışında güncelleniyor ve "hiçbir şey olmadı" hissi veriyordu.
+     Dar ekranda seçim yapılınca panel görüş alanına getirilir. */
+  const agendaRef = useRef<HTMLElement>(null);
+  function selectDay(day: Date) {
+    setSelectedDay(day);
+    if (typeof window !== "undefined" && !window.matchMedia("(min-width: 1024px)").matches) {
+      agendaRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+  const [dateError, setDateError] = useState<string | null>(null);
+  const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
+  const [, startDateSave] = useTransition();
+
+  function changeDueDate(task: CalTask, iso: string) {
+    const currentIso = (task.due_date ?? "").slice(0, 10);
+    if (!iso || iso === currentIso) return;
+    const next = safeParseISO(iso);
+    if (!next) { setDateError("Geçersiz tarih."); return; }
+    setDateError(null);
+    setSavingTaskId(task.id);
+    startDateSave(async () => {
+      const res = await updateTask({ id: task.id, due_date: iso });
+      setSavingTaskId(null);
+      if ("error" in res) {
+        setDateError(`“${task.title}” taşınamadı: ${res.error}`);
+        return;
+      }
+      // İş yeni gününde görünsün — kullanıcı "kayboldu" sanmasın.
+      setCurrent(next);
+      setSelectedDay(next);
+      router.refresh();
+    });
+  }
+
   // The whole grid is derived from `new Date()`, which differs between the
   // server (UTC) and the client (local TZ). Rendering it during SSR produced a
   // hydration mismatch that left the calendar half-drawn until a manual refresh.
@@ -351,7 +395,7 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
                 <button
                   key={day.toISOString()}
                   type="button"
-                  onClick={() => setSelectedDay(day)}
+                  onClick={() => selectDay(day)}
                   aria-current={isToday ? "date" : undefined}
                   aria-pressed={isSelected}
                   aria-label={`${format(day, "d MMMM EEEE", { locale: tr })}${dayTasks.length ? `, ${dayTasks.length} iş` : ""}`}
@@ -429,7 +473,7 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
 
         {/* Seçili günün listesi — masaüstünde sağ panel, telefonda ızgaranın
             altında. TEK gövde, iki yerleşim. */}
-        <aside className="flex shrink-0 flex-col overflow-hidden rounded-card border border-line bg-surface lg:min-h-0 lg:w-80">
+        <aside ref={agendaRef} className="flex shrink-0 flex-col overflow-hidden rounded-card border border-line bg-surface lg:min-h-0 lg:w-80">
           <div className="flex shrink-0 items-center gap-2 border-b border-hairline px-4 py-3">
             <CalendarDays size={15} className="shrink-0 text-brand" aria-hidden />
             <h2 className="min-w-0 flex-1 truncate text-[14px] font-semibold capitalize tracking-tight text-ink">
@@ -443,30 +487,73 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
             ) : (
               selectedDayTasks.map((task) => {
                 const late = isOverdue(task);
+                const dueIso = (task.due_date ?? "").slice(0, 10);
                 return (
-                  <Link
+                  /* SATIR = bağlantı + tarih alanı. İkisi KARDEŞ: bir <a>
+                     içine form kontrolü koymak hem geçersiz HTML hem de
+                     tıklamayı yanlış hedefe götürür. */
+                  <div
                     key={task.id}
-                    prefetch={false}
-                    href={`/tasks/${task.id}`}
-                    className={cn(
-                      "group flex min-h-[44px] items-center gap-2.5 rounded-control border border-hairline px-2.5 py-2 transition-colors duration-150 hover:border-line hover:bg-surface-hover",
-                    )}
+                    className="group flex min-h-[44px] items-center gap-2 rounded-control border border-hairline pl-2.5 pr-1.5 py-1.5 transition-colors duration-150 hover:border-line hover:bg-surface-hover"
                   >
-                    <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", dotFor(task))} aria-hidden />
-                    {task.visibility === "admin_only" && <Lock size={12} className="shrink-0 text-warning" aria-label="Yalnız yönetici" />}
-                    <span className={cn(
-                      "min-w-0 flex-1 truncate text-[13.5px] text-ink group-hover:text-brand-strong",
-                      task.status === "done" && "text-subtle line-through",
-                      late && "text-overdue",
-                    )}>
-                      {task.title}
-                    </span>
-                    {late && <Badge className="bg-overdue/10 text-overdue">Gecikmiş</Badge>}
-                  </Link>
+                    <Link
+                      prefetch={false}
+                      href={`/tasks/${task.id}`}
+                      title={task.title}
+                      className="flex min-w-0 flex-1 items-center gap-2.5 rounded-control focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
+                    >
+                      <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", dotFor(task))} aria-hidden />
+                      {task.visibility === "admin_only" && <Lock size={12} className="shrink-0 text-warning" aria-label="Yalnız yönetici" />}
+                      <span className={cn(
+                        "min-w-0 flex-1 truncate text-[13.5px] text-ink group-hover:text-brand-strong",
+                        task.status === "done" && "text-subtle line-through",
+                        late && "font-medium text-overdue",
+                      )}>
+                        {task.title}
+                      </span>
+                    </Link>
+                    {savingTaskId === task.id ? (
+                      <span className="grid size-9 shrink-0 place-items-center text-muted" role="status" aria-label="Kaydediliyor">
+                        <Loader2 size={14} className="animate-spin" aria-hidden />
+                      </span>
+                    ) : (
+                      /* Teslim tarihi YERİNDE değişir. Tarayıcının kendi
+                         tarih seçicisi kullanılır: telefonda tekerlek, masaüstünde
+                         takvim — ayrıca bir pencere açmaya gerek yok. */
+                      <input
+                        type="date"
+                        value={dueIso}
+                        onChange={(e) => changeDueDate(task, e.target.value)}
+                        aria-label={`${task.title} — teslim tarihi`}
+                        title={late ? "Teslim tarihi geçti — değiştirmek için tıklayın" : "Teslim tarihini değiştir"}
+                        className={cn(
+                          "h-9 w-[7.5rem] shrink-0 rounded-control border bg-surface px-2 text-[12.5px] tabular-nums text-muted",
+                          "transition-[border-color,box-shadow] duration-150 hover:border-line-strong",
+                          "focus:border-brand-ring focus:outline-none focus:ring-2 focus:ring-brand-ring/40",
+                          late ? "border-overdue/40 text-overdue" : "border-line",
+                        )}
+                      />
+                    )}
+                  </div>
                 );
               })
             )}
           </div>
+
+          {dateError && (
+            <p role="alert" className="anim-fade-down mx-3 mb-2 flex items-start gap-2 rounded-control border border-danger/30 bg-danger/10 px-2.5 py-2 text-[12.5px] font-medium text-danger">
+              <span className="min-w-0 flex-1">{dateError}</span>
+              <button
+                type="button"
+                onClick={() => setDateError(null)}
+                aria-label="Hatayı kapat"
+                title="Kapat"
+                className="tap-target grid size-6 shrink-0 place-items-center rounded text-danger/70 transition-colors duration-150 hover:text-danger"
+              >
+                <X size={14} aria-hidden />
+              </button>
+            </p>
+          )}
           <div className="shrink-0 border-t border-hairline px-3 py-3">
             <Button className="w-full" onClick={() => setCreateModalDate(format(selectedDay, "yyyy-MM-dd"))}>
               <Plus size={14} aria-hidden />

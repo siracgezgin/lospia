@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { requireModuleMember } from "@/lib/modules/context";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { SheetPrintSheet } from "@/components/production/SheetPrintSheet";
+import { getCategoryTree, labelOf, subLabelOf } from "@/lib/collection/category-tree";
 import type { ProductionSheet, SheetMaterialWithMaterial } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -66,12 +67,19 @@ export default async function ProductionSheetPrintPage({
     seasonName = (s.data as { name: string } | null)?.name ?? null;
   }
 
+  /* Kategori adı ÇALIŞMA ALANININ ağacından okunur. Kâğıt, kod içindeki sabit
+     listeden okuyordu; kullanıcının açtığı bir kategori (ör. "Bags") föyde
+     seçili olsa bile çıktıda "Kategorisiz" yazıyordu. */
+  const categories = await getCategoryTree(supabase, workspaceId);
+
   return (
     <SheetPrintSheet
       sheet={sheet}
       bom={bom}
       manufacturerName={manufacturerName}
       seasonName={seasonName}
+      categoryName={sheet.category ? labelOf(categories, sheet.category) : null}
+      subcategoryName={subLabelOf(categories, sheet.category, sheet.subcategory) || null}
       showPricing={fiyat === "1"}
     />
   );

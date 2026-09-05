@@ -54,6 +54,11 @@ export function DocumentFormModal({
   const isEdit = !!doc;
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  /* Hata hangi ALANA ait? Önceden yalnız hata metni tutuluyor ve "Başlık
+     gerekli." dizesiyle karşılaştırılarak alan tahmin ediliyordu; adres
+     hatası ise hiç yakalanmıyordu — kullanıcı "Ekle"ye basıyor, sunucudan
+     dönen cümleyi formun en altında görüyordu. */
+  const [errorField, setErrorField] = useState<"title" | "url" | null>(null);
   const [typeTouched, setTypeTouched] = useState(isEdit);
 
   const [form, setForm] = useState({
@@ -72,6 +77,7 @@ export function DocumentFormModal({
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   function handleUrlChange(v: string) {
+    if (errorField === "url") { setErrorField(null); setError(null); }
     setForm((f) => ({
       ...f,
       url: v,
@@ -85,12 +91,30 @@ export function DocumentFormModal({
     ? OFFICE_STATUSES
     : OFFICE_STATUSES.filter((s) => s.key === "draft" || s.key === "in_review");
 
-  const titleMissing = error === "Başlık gerekli.";
+  const titleMissing = errorField === "title";
+
+  /** Adres ZORUNLU mu? Yalnız "Dahili not" ve "Diğer" adressiz durabilir —
+   *  gerisi bir yere GİTMEK için var. Adressiz bir "Drive klasörü" kaydı
+   *  ızgarada tıklanınca hiçbir şey yapmayan bir satır olarak duruyordu. */
+  const urlRequired = form.document_type !== "internal_note" && form.document_type !== "other";
+
+  function fail(field: "title" | "url", message: string) {
+    setErrorField(field);
+    setError(message);
+  }
 
   function handleSave() {
     if (readOnly) return onClose();
     setError(null);
-    if (!form.title.trim()) return setError("Başlık gerekli.");
+    setErrorField(null);
+    if (!form.title.trim()) return fail("title", "Başlık gerekli.");
+    const url = form.url.trim();
+    if (url && !/^https?:\/\//i.test(url)) {
+      return fail("url", "Adres https:// ya da http:// ile başlamalı.");
+    }
+    if (!url && urlRequired) {
+      return fail("url", 'Bu tür için bir adres gerekli. Adressiz bir kayıt için türü "Dahili not" seçin.');
+    }
     const payload = {
       title: form.title,
       description: form.description,
@@ -109,7 +133,7 @@ export function DocumentFormModal({
       const result = isEdit
         ? await updateOperationDocument(doc!.id, payload)
         : await createOperationDocument(payload);
-      if ("error" in result) return setError(result.error);
+      if ("error" in result) { setErrorField(null); return setError(result.error); }
       onSaved();
     });
   }
@@ -141,19 +165,29 @@ export function DocumentFormModal({
         <Field label="Başlık" required error={titleMissing ? error : null}>
           <TextInput
             value={form.title}
-            onChange={(e) => set("title", e.target.value)}
+            onChange={(e) => {
+              if (errorField === "title") { setErrorField(null); setError(null); }
+              set("title", e.target.value);
+            }}
             autoFocus={!readOnly}
             disabled={readOnly}
+            invalid={titleMissing}
           />
         </Field>
 
-        <Field label="Bağlantı (URL)" hint="Dahili not için boş bırakılabilir.">
+        <Field
+          label="Bağlantı (URL)"
+          required={urlRequired}
+          hint={urlRequired ? "Türü adresten kendiliğinden tahmin edilir." : "Dahili not için boş bırakılabilir."}
+          error={errorField === "url" ? error : null}
+        >
           <TextInput
             value={form.url}
             onChange={(e) => handleUrlChange(e.target.value)}
             placeholder="https://…"
             inputMode="url"
             disabled={readOnly}
+            invalid={errorField === "url"}
             className="truncate"
           />
         </Field>
@@ -233,7 +267,7 @@ export function DocumentFormModal({
           />
         </Field>
 
-        {error && !titleMissing && (
+        {error && !errorField && (
           <div role="alert" className="anim-fade-down flex items-start gap-2 rounded-control border border-danger/30 bg-danger/10 px-3 py-2.5 text-[12.5px] leading-relaxed text-danger">
             <AlertCircle size={15} className="mt-0.5 shrink-0" aria-hidden />
             <span className="min-w-0 break-words">{error}</span>

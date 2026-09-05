@@ -124,6 +124,7 @@ export function AppSidebar({
       </div>
 
       <nav
+        aria-label="Ana gezinme"
         className={cn(
           "flex-1 overflow-y-auto overflow-x-hidden py-3",
           collapsed ? "px-2" : "px-2.5",

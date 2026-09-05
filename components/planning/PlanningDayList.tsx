@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { format, parseISO } from "date-fns";
 import { tr } from "date-fns/locale";
-import { CheckCircle2, Clock, Pencil, Plus } from "lucide-react";
+import { CalendarOff, CheckCircle2, Clock, Pencil, Plus } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { IconButton } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { categoryMeta } from "@/lib/planning/categories";
 import { WEEKDAY_LONG_TR, WEEKDAY_SHORT_TR, type RuntimeBand } from "@/lib/planning/bands";
 import { BandEditor } from "./BandEditor";
-import { istanbulLabel, AWAY_LABEL } from "@/lib/planning/timezones";
+import { istanbulLabel, AWAY_LABEL, HOME_LABEL } from "@/lib/planning/timezones";
 import { KimBadges } from "./KimBadges";
 import type { PlanningMeetingWithTopics, PlanningTopic } from "@/types";
 
@@ -89,6 +90,13 @@ export function PlanningDayList({
     return mins(a) - mins(b);
   });
 
+  /** O günde ÇİZİLECEK saatler. Üyeye boş şerit gösterilmez (düzenleyemez);
+   *  yöneticide hepsi durur, çünkü boş şerit onun ekleme yeridir. */
+  const hasContent = (slot: string) =>
+    (byCell.get(`${iso}|${slot}`) ?? []).some((m) => m.title || m.content)
+    || (topicRows.get(`${iso}|${slot}`) ?? []).some(Boolean);
+  const visibleSlots = isAdmin ? slots : slots.filter(hasContent);
+
   return (
     <div className={singleDay ? undefined : "lg:hidden"}>
       {/* Gün seçici — HAFTANIN TAMAMI tek bakışta, yedi sütun.
@@ -150,7 +158,20 @@ export function PlanningDayList({
       </p>
 
       <div className={z.gap}>
-        {slots.map((slot) => {
+        {/* BOŞ GÜN ARTIK KONUŞUR. Üye görünümünde toplantısı olmayan gün
+            bomboş bir beyazlıktı: ekranın yüklenmediği mi, o gün gerçekten
+            boş mu olduğu anlaşılmıyordu. */}
+        {visibleSlots.length === 0 && (
+          <EmptyState
+            compact
+            icon={CalendarOff}
+            title="Bu gün için toplantı yok."
+            description={isAdmin ? undefined : "Takvimi yöneticiler düzenler."}
+            className="rounded-card border border-dashed border-line bg-surface/60"
+          />
+        )}
+
+        {visibleSlots.map((slot) => {
           const band = bands.find((b) => b.slot === slot);
           const cell = byCell.get(`${iso}|${slot}`) ?? [];
           const meta = categoryMeta(band?.category ?? cell[0]?.category ?? "other");
@@ -162,13 +183,15 @@ export function PlanningDayList({
           const topics = (topicRows.get(`${iso}|${slot}`) ?? []).filter(Boolean) as PlanningTopic[];
           const ist = istanbulLabel(iso, slot);
 
-          // Boş şeridi üyeye gösterme — yönetici ekleyebilsin diye ona kalır.
-          if (!title && !content && topics.length === 0 && !isAdmin) return null;
-
           if (isAdmin && band && editingBand === slot) {
             return (
               <div key={slot} className="overflow-hidden rounded-card border border-brand-ring bg-surface">
-                <BandEditor band={band} refDay={weekRefDay} onClose={() => setEditingBand(null)} />
+                <BandEditor
+                  band={band}
+                  refDay={weekRefDay}
+                  takenSlots={bands.filter((b) => b.slot !== band.slot).map((b) => b.slot)}
+                  onClose={() => setEditingBand(null)}
+                />
               </div>
             );
           }
@@ -181,10 +204,17 @@ export function PlanningDayList({
               {/* Saat çifti — kayıtlı New York saati ve İstanbul karşılığı
                   (Aslı Hanım, 2026-08-28). */}
               <span className={cn("mt-px shrink-0 rounded-md bg-ink/[0.07] text-center leading-tight", big ? "px-2.5 py-1" : "px-1.5 py-0.5")}>
-                <span className={cn("block font-semibold tabular-nums text-ink/75", z.slot)}>{slot}</span>
+                {/* Üstteki saat KAYITLI saattir ve New York'undur; etiketsiz
+                    bırakılınca altındaki "IST 16:00" ile hangisinin hangisi
+                    olduğu karışıyordu (masaüstü ızgarasında ikisi de etiketli).
+                    Aynı satır, aynı sözlük: NY üstte, IST altta. */}
+                <span className={cn("block font-semibold tabular-nums text-ink/75", z.slot)}>
+                  <span className={cn("mr-1 font-semibold uppercase tracking-[0.06em] text-ink/45", z.slotAway)}>{HOME_LABEL}</span>
+                  {slot}
+                </span>
                 {ist && (
                   <span className={cn("block font-medium tabular-nums text-ink/50", z.slotAway)}>
-                    {AWAY_LABEL} {ist}
+                    <span className="mr-1 uppercase tracking-[0.06em]">{AWAY_LABEL}</span>{ist}
                   </span>
                 )}
               </span>
@@ -285,6 +315,7 @@ export function PlanningDayList({
               <BandEditor
                 band={{ id: null, slot: "13:00", category: "other", label: "", topicRows: 3, columns: [] }}
                 refDay={weekRefDay}
+                takenSlots={bands.map((b) => b.slot)}
                 onClose={() => setEditingBand(null)}
               />
             </div>

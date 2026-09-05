@@ -11,6 +11,9 @@ import { toActionErrorMessage } from "@/lib/utils/supabase-errors";
 
 const AUTH_REQUIRED = "Kimlik doğrulama gerekli.";
 const ADMIN_ONLY = "Finans kayıtları yalnız yöneticilere açık.";
+/* Kayıt bulunamadı = ya silinmiş ya da başka bir çalışma alanına ait.
+   Supabase 0 satırlık update/delete'i hata saymaz; sessiz "başarı" olmasın. */
+const NOT_FOUND = "Ödeme kaydı bulunamadı — sayfayı yenileyin.";
 
 const isAdminRole = (r: AppRole) => r === "owner" || r === "admin";
 
@@ -18,12 +21,23 @@ const PaymentSchema = z.object({
   id: z.string().max(64).optional().nullable(),
   title: z.string().min(1, "Başlık gerekli.").max(300),
   payee: z.string().max(300).optional().nullable(),
-  amount: z.number().min(0).max(999_999_999).optional().nullable(),
+  /* Hata metinleri TÜRKÇE yazılır: zod varsayılanları ("Number must be greater
+     than or equal to 0") doğrudan kullanıcıya çıkıyordu. */
+  amount: z
+    .number("Tutar sayı olmalı.")
+    .min(0, "Tutar negatif olamaz.")
+    .max(999_999_999, "Tutar çok büyük.")
+    .optional()
+    .nullable(),
   currency: z.string().min(1).max(8).default("TRY"),
   status: z.enum(["bekliyor", "odendi"]).default("bekliyor"),
-  due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-  category: z.string().max(120).optional().nullable(),
-  notes: z.string().max(4000).optional().nullable(),
+  due_date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Geçersiz vade tarihi.")
+    .optional()
+    .nullable(),
+  category: z.string().max(120, "Etiket çok uzun.").optional().nullable(),
+  notes: z.string().max(4000, "Not çok uzun.").optional().nullable(),
 });
 export type PaymentInput = z.infer<typeof PaymentSchema>;
 
@@ -81,12 +95,14 @@ export async function savePayment(
     if (cur?.status === "odendi" && v.status === "odendi" && cur.paid_at) {
       payload.paid_at = cur.paid_at as string;
     }
-    const { error } = await supabase
+    const { data: updated, error } = await supabase
       .from("finance_payments")
       .update(payload)
       .eq("id", v.id)
-      .eq("workspace_id", ctx.workspaceId);
+      .eq("workspace_id", ctx.workspaceId)
+      .select("id");
     if (error) return { error: toActionErrorMessage(error) };
+    if (!updated || updated.length === 0) return { error: NOT_FOUND };
     revalidatePath("/finance");
     return { id: v.id };
   }
@@ -110,7 +126,7 @@ export async function setPaymentStatus(
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
   if (!isAdminRole(ctx.role)) return { error: ADMIN_ONLY };
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("finance_payments")
     .update({
       status,
@@ -118,8 +134,10 @@ export async function setPaymentStatus(
       updated_by: ctx.userId,
     })
     .eq("id", paymentId)
-    .eq("workspace_id", ctx.workspaceId);
+    .eq("workspace_id", ctx.workspaceId)
+    .select("id");
   if (error) return { error: toActionErrorMessage(error) };
+  if (!updated || updated.length === 0) return { error: NOT_FOUND };
   revalidatePath("/finance");
   return { ok: true };
 }
@@ -131,12 +149,14 @@ export async function deletePayment(
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
   if (!isAdminRole(ctx.role)) return { error: ADMIN_ONLY };
-  const { error } = await supabase
+  const { data: removed, error } = await supabase
     .from("finance_payments")
     .delete()
     .eq("id", paymentId)
-    .eq("workspace_id", ctx.workspaceId);
+    .eq("workspace_id", ctx.workspaceId)
+    .select("id");
   if (error) return { error: toActionErrorMessage(error) };
+  if (!removed || removed.length === 0) return { error: NOT_FOUND };
   revalidatePath("/finance");
   return { ok: true };
 }

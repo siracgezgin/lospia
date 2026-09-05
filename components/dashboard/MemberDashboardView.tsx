@@ -1,16 +1,17 @@
-import Link from "next/link";
 import { Sparkles } from "lucide-react";
 import { SurfaceTabs } from "@/components/shared/SurfaceTabs";
-import { cn } from "@/lib/utils/cn";
-import { formatDateTR } from "@/lib/utils/format-date";
-import { Card, CardHeader } from "@/components/ui/Card";
+import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
-import type { MemberDashboardData, MemberPointsSummary } from "@/lib/points/queries";
+import { DeliveryTable } from "./DeliveryTable";
+import type { DueSoonTask } from "./DashboardView";
 
 interface Props {
-  data: MemberDashboardData;
-  /** Puan özeti artık çizilmiyor; sözleşme bozulmasın diye alınmaya devam eder. */
-  points?: MemberPointsSummary;
+  /** Kişinin AÇIK işlerinin TAMAMI — tarihsizler ve uzak tarihliler dahil. */
+  tasks: DueSoonTask[];
+  /** "Bugün" (YYYY-MM-DD, İstanbul) — sunucudan gelir. */
+  today: string;
+  /** Sorgu hata verdiyse Türkçe mesaj; sessiz boş liste gösterilmez. */
+  error?: string | null;
 }
 
 /**
@@ -23,11 +24,16 @@ interface Props {
  * Mühendis gibi hissetmek istemiyorum."
  * Karolar zaten alttaki listenin sayımıydı — liste kaldı, sayaçlar gitti.
  *
+ * SONRA (2026-09-05): liste yalnız "yaklaşan" işleri gösteriyordu. Besleyen
+ * sorgu (getMemberDashboardData.dueSoon) TARİHİ OLMAYAN ve 14 GÜNDEN UZAK
+ * işleri hiç eklemiyordu; kişi "İşlerim" başlığına bakıp işinin çoğunu
+ * göremiyordu. Artık yönetici raporundaki AYNI tablo kullanılıyor (arama +
+ * sıralama çalışır), yalnız "Kim" sütunu yok — kişi kendi listesinde her
+ * satırda kendi adını okumaz.
+ *
  * Başlık uygulama çubuğunda yazıyor; burada yalnız ekran okuyucu için durur.
  */
-export function MemberDashboardView({ data }: Props) {
-  const today = new Date().toISOString().slice(0, 10);
-
+export function MemberDashboardView({ tasks, today, error }: Props) {
   return (
     <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
       <h1 className="sr-only">Reports</h1>
@@ -37,45 +43,26 @@ export function MemberDashboardView({ data }: Props) {
         <SurfaceTabs />
       </div>
 
-      <Card>
-        <CardHeader title="İşlerim" />
-        {data.dueSoon.length === 0 ? (
+      {error ? (
+        <Card>
+          <EmptyState
+            compact
+            title="İşleriniz getirilemedi."
+            description={error}
+          />
+        </Card>
+      ) : tasks.length === 0 ? (
+        <Card>
           <EmptyState
             compact
             icon={Sparkles}
-            title="Yaklaşan teslim yok"
-            description="Takviminiz temiz."
+            title="Açık işiniz yok"
+            description="Masanız temiz. Yeni bir iş atandığında burada görünür."
           />
-        ) : (
-          <div className="divide-y divide-hairline px-2 py-1 sm:px-3">
-            {data.dueSoon.map((t) => {
-              const isOverdue = t.due_date < today;
-              return (
-                <Link
-                  key={t.id}
-                  prefetch={false}
-                  href={`/tasks/${t.id}`}
-                  className="group flex items-center justify-between gap-3 rounded-control px-2 py-2.5 transition-colors duration-150 ease-standard hover:bg-surface-hover"
-                >
-                  <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-ink transition-colors duration-150 group-hover:text-brand">
-                    {t.title}
-                  </span>
-                  <span
-                    className={cn(
-                      "shrink-0 text-[12.5px] font-medium tabular-nums",
-                      isOverdue ? "text-danger" : "text-muted",
-                    )}
-                  >
-                    {/* Renk tek başına sinyal değil — ekran okuyucuya da söylenir. */}
-                    {isOverdue && <span className="sr-only">Gecikti: </span>}
-                    {formatDateTR(t.due_date, { day: "numeric", month: "short" })}
-                  </span>
-                </Link>
-              );
-            })}
-          </div>
-        )}
-      </Card>
+        </Card>
+      ) : (
+        <DeliveryTable tasks={tasks} nameOf={{}} today={today} showWho={false} />
+      )}
     </div>
   );
 }

@@ -90,7 +90,7 @@ function MatchRow({ contact, members }: { contact: WorkspaceContact; members: Cr
       {/* Link status + controls. Renkler token'dan: yeşil = bağlı (tamamlanmış
           eşleşme), mavi = öneri (bilgi). Metin her zaman yanında. */}
       {linkedMember ? (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           <Badge className="bg-success/10 text-success">
             <UserCheck size={13} aria-hidden />
             Sistem hesabı: {linkedMember.name}
@@ -106,7 +106,7 @@ function MatchRow({ contact, members }: { contact: WorkspaceContact; members: Cr
           </Button>
         </div>
       ) : (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           {suggestion ? (
             <Badge className="bg-info/10 text-info">Öneri: {suggestion.name}</Badge>
           ) : (
@@ -116,7 +116,7 @@ function MatchRow({ contact, members }: { contact: WorkspaceContact; members: Cr
             value={selected}
             onChange={(e) => setSelected(e.target.value)}
             aria-label={`${contact.name} için sistem hesabı`}
-            className="h-8 w-auto min-w-[160px] text-[12.5px] text-muted"
+            className="min-w-[160px] text-[12.5px] text-muted sm:w-auto"
           >
             <option value="">Sistem hesabı seç…</option>
             {members.map((m) => (

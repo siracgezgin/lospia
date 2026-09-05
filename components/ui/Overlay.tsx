@@ -48,6 +48,21 @@ function useMounted() {
 
 /** Açık diyalog sayısı — iç içe açılanlarda kilidi erken açmamak için. */
 let lockCount = 0;
+/** Açık pencereler. Esc ve odak tuzağı YALNIZ EN ÜSTTEKİNE aittir; alttakiler
+ *  sessiz kalır. "En üstteki" DOM SIRASINDAN okunur (portal düğümleri body'ye
+ *  açılış sırasıyla eklenir) — bir dizi/yığın tutmak yanıltıcı olurdu: alttaki
+ *  pencere yeniden çizilince kendini yığının tepesine taşır ve Esc'i çalardı. */
+const openPanels = new Set<HTMLDivElement>();
+
+function isTopmostOverlay(panel: HTMLDivElement | null): boolean {
+  if (!panel) return false;
+  for (const other of openPanels) {
+    if (other === panel) continue;
+    const after = (panel.compareDocumentPosition(other) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+    if (after) return false;
+  }
+  return true;
+}
 
 export interface OverlayProps {
   open: boolean;
@@ -126,11 +141,50 @@ export function Overlay({
     if (!open) return;
 
     function onKey(e: KeyboardEvent) {
+      /* İÇ İÇE PENCERELERDE YALNIZ EN ÜSTTEKİ cevap verir. Dinleyici
+         `document` üzerinde olduğu için Esc AÇIK OLAN HER pencereyi birden
+         kapatıyordu (ör. föy içinden açılan onay kutusunda Esc, onayla
+         birlikte föy penceresini de kapatıyordu). */
+      if (!isTopmostOverlay(panelRef.current)) return;
+
       if (e.key === "Escape") {
         e.stopPropagation();
         onClose();
+        return;
+      }
+      /* ODAK TUZAĞI. Esc ve kaydırma kilidi vardı ama Tab tuşu katmanın
+         DIŞINA çıkabiliyordu: pencere açıkken klavye kullanıcısı arkadaki
+         sayfanın bağlantılarında dolaşıyor, ekran okuyucu "modal" derken imleç
+         başka yerde oluyordu. Tab artık pencerenin içinde döner. */
+      if (e.key !== "Tab") return;
+      const panel = panelRef.current;
+      if (!panel) return;
+      const focusables = Array.from(
+        panel.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((el) => el.offsetParent !== null || el === document.activeElement);
+      if (focusables.length === 0) {
+        e.preventDefault();
+        panel.focus();
+        return;
+      }
+      const first = focusables[0]!;
+      const last = focusables[focusables.length - 1]!;
+      const active = document.activeElement;
+      if (!panel.contains(active)) {
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus();
+      } else if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
       }
     }
+    const panel = panelRef.current;
+    if (panel) openPanels.add(panel);
     document.addEventListener("keydown", onKey);
 
     const body = document.body;
@@ -140,6 +194,7 @@ export function Overlay({
 
     return () => {
       document.removeEventListener("keydown", onKey);
+      if (panel) openPanels.delete(panel);
       lockCount = Math.max(0, lockCount - 1);
       if (lockCount === 0) body.style.overflow = prev;
     };
@@ -171,8 +226,11 @@ export function Overlay({
       }}
       role="dialog"
       aria-modal="true"
-      aria-labelledby={title ? titleId : undefined}
-      aria-label={title ? undefined : "Pencere"}
+      /* Ad: h2 çiziliyorsa ona bağlan; `titleNode` verilmişse (h2 yok) düz
+         metin `title` ad olarak kullanılır. Eskiden titleNode'lu pencereler
+         ekran okuyucuya "Pencere" diye açılıyordu. */
+      aria-labelledby={title && !titleNode ? titleId : undefined}
+      aria-label={title && !titleNode ? undefined : (title ?? "Pencere")}
     >
       <div
         ref={panelRef}

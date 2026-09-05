@@ -38,9 +38,12 @@ export default async function CrmPage({
       .eq("kind", "external")
       .eq("workspace_id", workspaceId)
       .order("name"),
+    /* avatar_url da alınır: sistem hesabıyla EŞLEŞTİRİLMİŞ bir CRM kişisi
+       listede o kişinin fotoğrafıyla görünsün — aynı insan her ekranda aynı
+       görünür (PersonAvatar tek kaynak). */
     supabase
       .from("workspace_members")
-      .select("user_id, role, profiles(id, full_name, email)")
+      .select("user_id, role, profiles(id, full_name, email, avatar_url)")
       .eq("workspace_id", workspaceId),
     // Fields needed to relate a task to a contact (same logic + scope the List
     // filter uses — non-deleted, non-archived — so the "X görev" count and the
@@ -65,7 +68,7 @@ export default async function CrmPage({
 
   const contacts = (contactsResult.data ?? []) as WorkspaceContact[];
 
-  type ProfileLite = Pick<Profile, "id" | "full_name" | "email">;
+  type ProfileLite = Pick<Profile, "id" | "full_name" | "email" | "avatar_url">;
   type MemberRow = { user_id: string; role: string; profiles: ProfileLite | ProfileLite[] | null };
   const members = ((membersResult.data ?? []) as unknown as MemberRow[]).map((m) => {
     const prof = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
@@ -73,6 +76,7 @@ export default async function CrmPage({
       userId: m.user_id,
       name: prof?.full_name ?? prof?.email ?? "—",
       email: prof?.email ?? null,
+      photoUrl: prof?.avatar_url ?? null,
     };
   });
 

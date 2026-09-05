@@ -73,6 +73,8 @@ interface Draft {
   priority: TaskPriority;
   start_date: string;
   due_date: string;
+  /** Virgülle ayrılmış etiketler — kaydederken diziye çevrilir. */
+  tags: string;
   visibility: TaskVisibility;
 }
 
@@ -85,6 +87,7 @@ function draftFromTask(task: Task): Draft {
     priority: task.priority,
     start_date: task.start_date ?? "",
     due_date: task.due_date ?? "",
+    tags: (task.tags ?? []).join(", "),
     visibility: asVisibility((task as unknown as Record<string, unknown>).visibility),
   };
 }
@@ -110,6 +113,7 @@ const BAR_BLEED = "-mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8";
 function TaskEditor({
   task, departments, canEdit, canComplete, isAdmin, backHref,
   responsiblePeople, participantsSlot, notesSlot, effortSlot, activitySlot,
+  justSaved, onSaved,
 }: {
   task: Task; departments: WorkspaceDepartment[]; canEdit: boolean; canComplete: boolean;
   isAdmin: boolean; backHref: string; backLabel: string;
@@ -118,6 +122,11 @@ function TaskEditor({
   notesSlot?: React.ReactNode;
   effortSlot?: React.ReactNode;
   activitySlot: React.ReactNode;
+  /** Kaydetme onayı editörün DIŞINDA tutulur: kayıttan sonra bileşen
+   *  yeniden monte edildiği için içeride tutulan "Kaydedildi." anında
+   *  kayboluyordu. */
+  justSaved: boolean;
+  onSaved: () => void;
 }) {
   const router = useRouter();
   // Inside the drawer the detail is an overlay, not a page: "geri" must close
@@ -143,6 +152,27 @@ function TaskEditor({
     () => (Object.keys(initial) as (keyof Draft)[]).some((k) => draft[k] !== initial[k]),
     [draft, initial],
   );
+
+  /* KAYDEDİLMEMİŞ DEĞİŞİKLİK KORUMASI.
+     Başlığı ya da açıklamayı düzenleyip Esc'e basmak (veya çekmecenin arka
+     planına dokunmak) yazılanı uyarısız siliyordu. Çekmecede ortak onay
+     penceresi sorar; tam sayfada tarayıcının kendi "sayfadan ayrıl" uyarısı
+     devreye girer. */
+  const drawerSetDirty = drawer?.setDirty;
+  useEffect(() => {
+    if (!drawerSetDirty) return;
+    drawerSetDirty(dirty);
+    return () => drawerSetDirty(false);
+  }, [dirty, drawerSetDirty]);
+  useEffect(() => {
+    if (!dirty || drawerSetDirty) return;
+    function onBeforeUnload(e: BeforeUnloadEvent) {
+      e.preventDefault();
+      e.returnValue = "";
+    }
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [dirty, drawerSetDirty]);
 
   // A done task is locked for non-admins: they can neither edit fields nor reopen.
   const doneLocked = task.status === "done" && !canComplete;
@@ -174,6 +204,13 @@ function TaskEditor({
     if (draft.priority !== initial.priority) updates.priority = draft.priority;
     if (draft.start_date !== initial.start_date) updates.start_date = draft.start_date || null;
     if (draft.due_date !== initial.due_date) updates.due_date = draft.due_date || null;
+    if (draft.tags !== initial.tags) {
+      updates.tags = draft.tags
+        .split(",")
+        .map((t) => t.trim().slice(0, 50))
+        .filter(Boolean)
+        .slice(0, 20);
+    }
     if (draft.department_id !== initial.department_id) {
       (updates as Record<string, unknown>).department_id = draft.department_id || null;
     }
@@ -187,7 +224,8 @@ function TaskEditor({
         setFeedback({ kind: "err", msg: friendlyError(res.error) });
         return;
       }
-      setFeedback({ kind: "ok", msg: "Kaydedildi." });
+      setFeedback(null);
+      onSaved();
       router.refresh();
     });
   }
@@ -200,18 +238,23 @@ function TaskEditor({
     : null;
   const saveHint = !canEdit
     ? "Düzenleme yetkiniz yok"
-    : doneLocked ? "Tamamlanmış görevi yalnızca yönetici değiştirebilir" : undefined;
+    : doneLocked
+      ? "Tamamlanmış görevi yalnızca yönetici değiştirebilir"
+      : !dirty ? "Kaydedilecek bir değişiklik yok" : "Değişiklikleri kaydet";
 
-  const feedbackNode = feedback && (
+  const shown: { kind: "ok" | "err"; msg: string } | null =
+    feedback ?? (justSaved ? { kind: "ok", msg: "Kaydedildi." } : null);
+
+  const feedbackNode = shown && (
     <span
-      role={feedback.kind === "err" ? "alert" : "status"}
+      role={shown.kind === "err" ? "alert" : "status"}
       className={cn(
         "anim-fade inline-flex items-center gap-1 text-[12.5px]",
-        feedback.kind === "ok" ? "text-success" : "text-danger",
+        shown.kind === "ok" ? "text-success" : "text-danger",
       )}
     >
-      {feedback.kind === "ok" ? <Check size={13} aria-hidden /> : <AlertCircle size={13} aria-hidden />}
-      {feedback.msg}
+      {shown.kind === "ok" ? <Check size={13} aria-hidden /> : <AlertCircle size={13} aria-hidden />}
+      {shown.msg}
     </span>
   );
 
@@ -426,6 +469,19 @@ function TaskEditor({
               </Field>
             </FieldGrid>
 
+            {/* ETİKETLER. Liste ve pano etiketleri gösteriyordu ama hiçbir
+                ekranda DÜZENLENEMİYORDU — bir kez yazılan etiket sonsuza kadar
+                öyle kalıyordu. Tek satır, virgülle: ayrı bir çip düzenleyicisi
+                icat etmeye gerek yok. */}
+            <Field label="Etiketler" hint="Virgülle ayırın — en fazla 10 etiket kaydedilir">
+              <TextInput
+                value={draft.tags}
+                onChange={(e) => set("tags", e.target.value)}
+                disabled={fieldsDisabled}
+                placeholder="ör. lookbook, acil"
+              />
+            </Field>
+
             {/* Görünürlük — admin-only. Members never see or edit this. */}
             {isAdmin && (
               <div>
@@ -468,7 +524,7 @@ function TaskEditor({
           </div>
 
           {/* Inline feedback (also visible on mobile, where the top bar hides it). */}
-          {feedback && <div className="mt-4 sm:hidden">{feedbackNode}</div>}
+          {shown && <div className="mt-4 sm:hidden">{feedbackNode}</div>}
           {!canEdit && !doneLocked && (
             <p className="mt-4 text-[12px] text-subtle">Bu görevi düzenleme yetkiniz yok.</p>
           )}
@@ -567,6 +623,16 @@ export function TaskDetail({
   // refresh) so the draft resets cleanly — no setState-in-effect needed.
   const version = `${task.id}:${task.updated_at}`;
 
+  /* "Kaydedildi." onayı bu seviyede tutulur: kayıttan sonra editör yeniden
+     monte edildiği için içeride tutulduğunda anında kayboluyor, kullanıcı
+     kaydın gerçekleştiğini göremiyordu. Üç saniye sonra kendiliğinden siliner. */
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+  useEffect(() => {
+    if (savedAt === null) return;
+    const t = window.setTimeout(() => setSavedAt(null), 3000);
+    return () => window.clearTimeout(t);
+  }, [savedAt]);
+
   return (
     // Tam genişlik (max-w kapağı yok) — çekmecede zaten 720–760px'e sığar.
     <div className={cn("w-full", PAGE_PAD)}>
@@ -584,6 +650,8 @@ export function TaskDetail({
         notesSlot={notesSlot}
         effortSlot={effortSlot}
         activitySlot={<ActivityLogSection logs={activityLogs} profiles={profiles} contacts={contacts} />}
+        justSaved={savedAt !== null}
+        onSaved={() => setSavedAt(Date.now())}
       />
     </div>
   );

@@ -51,7 +51,7 @@ function useIsDesktop() {
 export function NotificationBell({ unreadCount: initialCount, notifications = [], deadTaskIds = [] }: Props) {
   const deadSet = new Set(deadTaskIds);
   const [open, setOpen] = useState(false);
-  const [_pending, startTransition] = useTransition();
+  const [pending, startTransition] = useTransition();
   const [optimisticCount, setOptimisticCount] = useOptimistic(initialCount);
   const isDesktop = useIsDesktop();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -73,26 +73,51 @@ export function NotificationBell({ unreadCount: initialCount, notifications = []
     };
   }, [open, isDesktop]);
 
+  /* HATA GÖRÜNÜRLÜĞÜ. "Okundu işaretle" bir server action çağırıyor ve action
+     `{ error }` dönebiliyordu; sonuç hiç okunmuyordu. Ağ koptuğunda ya da
+     oturum düştüğünde rozet iyimser olarak sıfırlanıyor, sonra sessizce geri
+     geliyordu — kullanıcı "tıkladım ama olmadı, neden?" diyordu. */
+  const [error, setError] = useState<string | null>(null);
+
   function handleMarkAllRead() {
+    setError(null);
     startTransition(async () => {
       setOptimisticCount(0);
-      await markAllNotificationsRead();
+      const res = await markAllNotificationsRead();
+      if ("error" in res) {
+        setError("Bildirimler okundu işaretlenemedi. Tekrar deneyin.");
+        return;
+      }
       setOpen(false);
     });
   }
 
   function handleMarkOneRead(id: string) {
+    setError(null);
     startTransition(async () => {
       setOptimisticCount((c) => Math.max(0, c - 1));
-      await markNotificationsRead([id]);
+      const res = await markNotificationsRead([id]);
+      if ("error" in res) setError("Bildirim okundu işaretlenemedi. Tekrar deneyin.");
     });
   }
+
+  const errorRow = error && (
+    <p role="alert" className="border-b border-hairline bg-danger/8 px-4 py-2 text-[12.5px] leading-snug text-danger">
+      {error}
+    </p>
+  );
 
   const countBadge = optimisticCount > 0 && (
     <Badge size="xs" className="bg-danger text-white">{optimisticCount}</Badge>
   );
   const markAll = optimisticCount > 0 && (
-    <Button variant="ghost" size="sm" onClick={handleMarkAllRead} className="h-7 px-2 text-[12.5px] text-brand hover:text-brand-strong">
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={handleMarkAllRead}
+      loading={pending}
+      className="h-7 px-2 text-[12.5px] text-brand hover:text-brand-strong"
+    >
       Tümünü okundu işaretle
     </Button>
   );
@@ -229,6 +254,7 @@ export function NotificationBell({ unreadCount: initialCount, notifications = []
           className="anim-fade-down absolute right-0 top-11 z-50 w-[min(100vw-1.5rem,22rem)] overflow-hidden rounded-card border border-line bg-surface shadow-pop"
         >
           {header}
+          {errorRow}
           <div className="max-h-80 overflow-y-auto overscroll-contain">{list}</div>
         </div>
       )}
@@ -239,6 +265,7 @@ export function NotificationBell({ unreadCount: initialCount, notifications = []
           open
           onClose={() => setOpen(false)}
           size="sm"
+          title="Bildirimler"
           titleNode={
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-[15px] font-semibold tracking-tight text-ink">Bildirimler</h2>
@@ -248,7 +275,10 @@ export function NotificationBell({ unreadCount: initialCount, notifications = []
           }
         >
           {/* Satırlar kendi iç boşluğunu taşır; gövdenin dolgusu geri alınır. */}
-          <div className="-mx-5 -my-4">{list}</div>
+          <div className="-mx-5 -my-4">
+            {errorRow}
+            {list}
+          </div>
         </Overlay>
       )}
     </div>

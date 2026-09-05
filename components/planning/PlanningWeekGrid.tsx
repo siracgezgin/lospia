@@ -8,7 +8,7 @@ import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   useDraggable, useDroppable, type DragEndEvent, type DragStartEvent,
 } from "@dnd-kit/core";
-import { CheckCircle2, Plus, Pencil } from "lucide-react";
+import { CheckCircle2, Plus, Pencil, X, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { categoryMeta } from "@/lib/planning/categories";
 import { WEEKDAY_SHORT_EN, WEEKDAY_LONG_TR, type RuntimeBand } from "@/lib/planning/bands";
@@ -100,7 +100,12 @@ export function PlanningWeekGrid({
   const [editingBand, setEditingBand] = useState<string | null>(null);
   /** Sürüklenen şeyin ekranda gösterilecek etiketi (toplantı ya da konu). */
   const [dragging, setDragging] = useState<string | null>(null);
-  const [, startMove] = useTransition();
+  /* Taşıma SESSİZ BAŞARISIZ OLUYORDU: sunucu hata döndürdüğünde kart eski
+     yerine geri kayıyor ve ekranda hiçbir şey yazmıyordu — kullanıcı taşımanın
+     tutmadığını ancak sayfayı yenileyince anlıyordu. Artık hata yazılır,
+     taşıma sürerken de kısa bir "Taşınıyor…" şeridi görünür. */
+  const [moveError, setMoveError] = useState<string | null>(null);
+  const [isMoving, startMove] = useTransition();
 
   const sensors = useSensors(
     // 5px eşiği: hücreye TIKLAMAK hâlâ düzenleyiciyi açar, sürükleme ayrı.
@@ -140,6 +145,7 @@ export function PlanningWeekGrid({
      ya da "topic:<id>". */
   function handleDragEnd(e: DragEndEvent) {
     setDragging(null);
+    setMoveError(null);
     const activeId = String(e.active.id);
     const overId = e.over ? String(e.over.id) : "";
     const from = String(e.active.data.current?.cell ?? "");
@@ -156,14 +162,16 @@ export function PlanningWeekGrid({
       const position = rowPart === undefined ? 50 : Math.min(50, Math.max(0, Number(rowPart) || 0));
       startMove(async () => {
         const res = await moveTopic(topicId, { meeting_date, time_slot, position });
-        if (!("error" in res)) router.refresh();
+        if ("error" in res) { setMoveError(`Konu taşınamadı: ${res.error}`); return; }
+        router.refresh();
       });
       return;
     }
 
     startMove(async () => {
       const res = await moveMeeting(activeId, { meeting_date, time_slot });
-      if (!("error" in res)) router.refresh();
+      if ("error" in res) { setMoveError(`Toplantı taşınamadı: ${res.error}`); return; }
+      router.refresh();
     });
   }
 
@@ -271,7 +279,12 @@ export function PlanningWeekGrid({
               {band && (
                 <div className={cn("border-y border-hairline", categoryMeta(band.category).chip)}>
                   {open ? (
-                    <BandEditor band={band} refDay={weekRefDay} onClose={() => setEditingBand(null)} />
+                    <BandEditor
+                      band={band}
+                      refDay={weekRefDay}
+                      takenSlots={bands.filter((b) => b.slot !== band.slot).map((b) => b.slot)}
+                      onClose={() => setEditingBand(null)}
+                    />
                   ) : (
                     isAdmin ? (
                       <button
@@ -306,6 +319,7 @@ export function PlanningWeekGrid({
               <BandEditor
                 band={{ id: null, slot: "13:00", category: "other", label: "", topicRows: 3, columns: [] }}
                 refDay={weekRefDay}
+                takenSlots={bands.map((b) => b.slot)}
                 onClose={() => setEditingBand(null)}
               />
             ) : (
@@ -343,6 +357,40 @@ export function PlanningWeekGrid({
           </div>
         )}
       </DragOverlay>
+
+      {/* TAŞIMA DURUMU — ızgaranın yerleşimini bozmasın diye ekranın altında
+          yüzen tek şerit. Hata kendiliğinden kaybolmaz: kullanıcı okumadan
+          geçmesin (kapatma düğmesi var). */}
+      {(isMoving || moveError) && (
+        <div className="mb-bottom-nav pointer-events-none fixed inset-x-0 bottom-4 z-[110] flex justify-center px-4 md:mb-0">
+          <div
+            role={moveError ? "alert" : "status"}
+            className={cn(
+              "anim-fade-up pointer-events-auto flex max-w-full items-center gap-2.5 rounded-card border bg-surface px-4 py-2.5 shadow-pop",
+              moveError ? "border-danger/30" : "border-line",
+            )}
+          >
+            {moveError ? (
+              <>
+                <span className="min-w-0 text-[13.5px] font-medium text-danger">{moveError}</span>
+                <button
+                  type="button"
+                  onClick={() => setMoveError(null)}
+                  aria-label="Uyarıyı kapat"
+                  title="Kapat"
+                  className="tap-target grid size-8 shrink-0 place-items-center rounded-control text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
+                >
+                  <X size={15} aria-hidden />
+                </button>
+              </>
+            ) : (
+              <span className="flex items-center gap-2 text-[13.5px] text-muted">
+                <Loader2 size={14} className="animate-spin" aria-hidden /> Taşınıyor…
+              </span>
+            )}
+          </div>
+        </div>
+      )}
     </DndContext>
   );
 }

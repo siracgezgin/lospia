@@ -181,14 +181,37 @@ export function uniqueSheetName(wb: WorkbookSnapshot, wanted: string, skipIndex 
 export function setCell(g: Sheet, r: number, c: number, cell: Cell | undefined): Sheet {
   const cells = { ...g.cells };
   const k = key(r, c);
-  const empty =
+  if (isEmptyCell(cell)) delete cells[k];
+  else cells[k] = cell as Cell;
+  return { ...g, cells };
+}
+
+/**
+ * TOPLU yazma. setCell her çağrıda hücre haritasının TAMAMINI kopyalıyor;
+ * 5.000 hücrelik bir yapıştırma ya da "tümünü seç + sil" bu yüzden O(n²)
+ * oluyor ve tarayıcı donuyordu. Burada harita bir kez kopyalanır, düzenleme
+ * `put` ile yapılır.
+ */
+export function withCells(g: Sheet, edit: (_put: CellWriter) => void): Sheet {
+  const cells = { ...g.cells };
+  edit((r, c, cell) => {
+    const k = key(r, c);
+    if (isEmptyCell(cell)) delete cells[k];
+    else cells[k] = cell as Cell;
+  });
+  return { ...g, cells };
+}
+
+export type CellWriter = (_r: number, _c: number, _cell: Cell | undefined) => void;
+
+/** Hücre tamamen boş mu? (seyrek haritada yer kaplamamalı) */
+export function isEmptyCell(cell: Cell | undefined): boolean {
+  return (
     !cell ||
     ((cell.v === undefined || cell.v === "") &&
       (cell.f === undefined || cell.f === "") &&
-      (!cell.s || Object.keys(cell.s).length === 0));
-  if (empty) delete cells[k];
-  else cells[k] = cell;
-  return { ...g, cells };
+      (!cell.s || Object.keys(cell.s).length === 0))
+  );
 }
 
 export function colWidth(g: Sheet, c: number): number {

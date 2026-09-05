@@ -57,6 +57,10 @@ export function CrmContactModal({ onClose, onSaved, members, contact }: Props) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
+  /* E-posta hatası ALANIN ALTINDA. Sunucu "Geçersiz e-posta" diyordu ama mesaj
+     formun dibindeki genel kutuda çıkıyordu: hangi alanın yanlış olduğu, üç
+     bölüm yukarıdaki kutuyu bulana kadar anlaşılmıyordu. */
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   // Ekranda seçimi yok ama kayıtta duruyor — düzenlerken sıfırlanmasın.
   const kind = ((contact as { kind?: string } | null | undefined)?.kind === "team" ? "team" : "external") as
@@ -88,8 +92,15 @@ export function CrmContactModal({ onClose, onSaved, members, contact }: Props) {
       return;
     }
     setNameError(null);
+    const email = form.email.trim();
+    // Sunucudaki zod kuralının aynısı, bir tur beklemeden.
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setEmailError("Geçerli bir e-posta yazın (ör. ad@ornek.com).");
+      return;
+    }
+    setEmailError(null);
     startTransition(async () => {
-      const payload = { ...form, kind };
+      const payload = { ...form, email, kind };
       const result = isEdit ? await updateCrmContact(contact!.id, payload) : await createCrmContact(payload);
       if ("error" in result) {
         setError(result.error);
@@ -156,8 +167,13 @@ export function CrmContactModal({ onClose, onSaved, members, contact }: Props) {
 
         <Group title="İletişim">
           <FieldGrid>
-            <Field label="E-posta">
-              <TextInput type="email" value={form.email} onChange={(e) => set("email", e.target.value)} />
+            <Field label="E-posta" error={emailError}>
+              <TextInput
+                type="email"
+                value={form.email}
+                onChange={(e) => { set("email", e.target.value); if (emailError) setEmailError(null); }}
+                placeholder="ad@ornek.com"
+              />
             </Field>
             <Field label="Telefon">
               <TextInput type="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)} />

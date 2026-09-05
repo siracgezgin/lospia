@@ -16,6 +16,10 @@ const hexUuid = (msg: string) =>
   z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, msg);
 
 const PERM_DENIED = "Bu işlem için yetkiniz yok.";
+/* Supabase, 0 satıra dokunan bir update/delete'i HATA SAYMAZ. Kontrol
+   edilmezse ekran "kaydedildi" der ama hiçbir şey değişmemiştir (kayıt
+   silinmiş ya da başka bir çalışma alanına ait). */
+const NOT_FOUND = "Kayıt bulunamadı — sayfayı yenileyin.";
 const dateOrNull = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Geçersiz tarih")
@@ -120,13 +124,15 @@ export async function updateCrmContact(
   const ctx = await requireContactAdmin(supabase);
   if ("error" in ctx) return { error: ctx.error };
 
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("workspace_contacts")
     .update(clean(parsed.data))
     .eq("id", contactId)
-    .eq("workspace_id", ctx.workspaceId);
+    .eq("workspace_id", ctx.workspaceId)
+    .select("id");
 
   if (error) return { error: toActionErrorMessage(error) };
+  if (!updated || updated.length === 0) return { error: NOT_FOUND };
   revalidatePath("/crm");
   revalidatePath("/settings");
   return { ok: true };
@@ -156,12 +162,14 @@ export async function linkContactToUser(
     .maybeSingle();
   if (!member) return { error: "Seçilen kişi bu çalışma alanının üyesi değil." };
 
-  const { error } = await supabase
+  const { data: linked, error } = await supabase
     .from("workspace_contacts")
     .update({ user_id: userId })
     .eq("id", contactId)
-    .eq("workspace_id", ctx.workspaceId);
+    .eq("workspace_id", ctx.workspaceId)
+    .select("id");
 
+  if (!error && (!linked || linked.length === 0)) return { error: NOT_FOUND };
   if (error) {
     if (error.code === "23505") return { error: "Bu sistem hesabı başka bir kişiyle zaten eşleşmiş." };
     return { error: toActionErrorMessage(error) };
@@ -180,13 +188,15 @@ export async function unlinkContactUser(
   const ctx = await requireContactAdmin(supabase);
   if ("error" in ctx) return { error: ctx.error };
 
-  const { error } = await supabase
+  const { data: unlinked, error } = await supabase
     .from("workspace_contacts")
     .update({ user_id: null })
     .eq("id", contactId)
-    .eq("workspace_id", ctx.workspaceId);
+    .eq("workspace_id", ctx.workspaceId)
+    .select("id");
 
   if (error) return { error: toActionErrorMessage(error) };
+  if (!unlinked || unlinked.length === 0) return { error: NOT_FOUND };
   revalidatePath("/crm");
   revalidatePath("/settings");
   return { ok: true };
@@ -206,13 +216,15 @@ export async function deleteCrmContact(
     .eq("workspace_id", ctx.workspaceId)
     .maybeSingle();
 
-  const { error } = await supabase
+  const { data: removed, error } = await supabase
     .from("workspace_contacts")
     .delete()
     .eq("id", contactId)
-    .eq("workspace_id", ctx.workspaceId);
+    .eq("workspace_id", ctx.workspaceId)
+    .select("id");
 
   if (error) return { error: toActionErrorMessage(error) };
+  if (!removed || removed.length === 0) return { error: NOT_FOUND };
 
   await logWorkspaceActivity(supabase, {
     workspaceId: ctx.workspaceId,

@@ -237,10 +237,15 @@ export default async function CalendarPage({
       ? (sp.d && isValid(parseISO(sp.d)) ? sp.d.slice(0, 10) : format(new Date(), "yyyy-MM-dd"))
       : null;
 
-  const ref = sp.week && isValid(parseISO(sp.week))
-    ? parseISO(sp.week)
-    : openDay
-      ? parseISO(openDay)   // kart hangi gündeyse o günün haftası yüklenir
+  /* GÜN KARTI AÇIKSA HAFTA ONDAN TÜRER. Önce `?week=` önceliğe sahipti:
+     ölçek seçicisiyle başka bir haftadan "Gün"e geçince (week=eski hafta,
+     d=bugün) sunucu ESKİ haftayı yüklüyor, kart ise o haftada olmayan bir güne
+     bakıyordu — hücre haritası boş olduğu için gün kartı, o günde toplantı olsa
+     bile BOŞ açılıyordu. Kartın günü tek doğrudur; hafta ona uyar. */
+  const ref = openDay
+    ? parseISO(openDay)
+    : sp.week && isValid(parseISO(sp.week))
+      ? parseISO(sp.week)
       : new Date();
   const monday = startOfWeek(ref, { weekStartsOn: 1 });
   const days = Array.from({ length: 7 }, (_, i) => addDays(monday, i));

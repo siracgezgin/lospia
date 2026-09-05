@@ -55,10 +55,14 @@ export function PhotoNudge({ name, colorHex }: { name: string; colorHex?: string
   }
 
   return (
-    <div className="anim-fade-down mb-4 flex items-center gap-3 rounded-card border border-brand-ring/40 bg-brand-soft/50 px-4 py-3">
+    /* `flex-wrap` + metnin `basis-40`'ı: 375px'te avatar, iki satırlık metin,
+       düğme ve kapatma tek satıra sığmıyordu — metin dört satıra bölünüp
+       düğme daralıyordu. Artık eylemler dar ekranda TEK BLOK hâlinde alt
+       satıra iner ve sağa yaslanır; geniş ekranda görünüm aynı kalır. */
+    <div className="anim-fade-down mb-4 flex flex-wrap items-center gap-x-3 gap-y-2.5 rounded-card border border-brand-ring/40 bg-brand-soft/50 px-4 py-3">
       {/* Kişinin ŞU ANKİ hâli — davet soyut kalmasın. */}
       <PersonAvatar name={name} colorHex={colorHex ?? null} size="md" />
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 basis-40">
         <p className="text-[13.5px] font-medium text-ink">
           Fotoğrafınızı ekleyin, işleriniz sizin yüzünüzle görünsün.
         </p>
@@ -66,20 +70,23 @@ export function PhotoNudge({ name, colorHex }: { name: string; colorHex?: string
           Takvimde ve panoda size ait olanı bir bakışta fark edersiniz.
         </p>
       </div>
-      <Link
-        href="/profile"
-        className="inline-flex h-9 shrink-0 items-center rounded-control bg-brand px-3.5 text-[13.5px] font-medium text-white transition-colors duration-150 hover:bg-brand-strong pointer-coarse:h-11"
-      >
-        Fotoğraf ekle
-      </Link>
-      <button
-        type="button"
-        onClick={dismiss}
-        aria-label="Kapat"
-        className="tap-target grid size-8 shrink-0 place-items-center rounded-control text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
-      >
-        <X size={15} aria-hidden />
-      </button>
+      <div className="ml-auto flex shrink-0 items-center gap-1.5">
+        <Link
+          href="/profile"
+          className="inline-flex h-9 shrink-0 items-center rounded-control bg-brand px-3.5 text-[13.5px] font-medium text-white transition-colors duration-150 hover:bg-brand-strong pointer-coarse:h-11"
+        >
+          Fotoğraf ekle
+        </Link>
+        <button
+          type="button"
+          onClick={dismiss}
+          aria-label="Kapat"
+          title="Kapat"
+          className="tap-target grid size-8 shrink-0 place-items-center rounded-control text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
+        >
+          <X size={15} aria-hidden />
+        </button>
+      </div>
     </div>
   );
 }

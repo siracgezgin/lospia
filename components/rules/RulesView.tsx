@@ -98,15 +98,11 @@ function RuleCard({
 
 function RuleForm({
   initial,
-  workspaceId,
-  ruleCount,
   departmentNames,
   onSave,
   onCancel,
 }: {
   initial?: WorkspaceRule;
-  workspaceId: string;
-  ruleCount: number;
   departmentNames: string[];
   onSave: (_data: { title: string; body: string; category: string }) => void;
   onCancel: () => void;
@@ -116,9 +112,6 @@ function RuleForm({
   const [category, setCategory] = useState(initial?.category ?? ALL_WORKSPACE);
   const options = [ALL_WORKSPACE, ...departmentNames];
   const inputRef = useRef<HTMLInputElement>(null);
-
-  void workspaceId;
-  void ruleCount;
 
   useEffect(() => { inputRef.current?.focus(); }, []);
 
@@ -373,8 +366,6 @@ export function RulesView({
 
         {isManager && adding && (
           <RuleForm
-            workspaceId={workspaceId}
-            ruleCount={optimisticRules.length}
             departmentNames={departmentNames}
             onSave={handleAdd}
             onCancel={() => setAdding(false)}
@@ -384,8 +375,6 @@ export function RulesView({
         {isManager && editing && (
           <RuleForm
             initial={editing}
-            workspaceId={workspaceId}
-            ruleCount={optimisticRules.length}
             departmentNames={departmentNames}
             onSave={handleUpdate}
             onCancel={() => setEditing(null)}

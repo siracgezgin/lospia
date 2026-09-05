@@ -64,11 +64,28 @@ export function MarketingHeader() {
           ))}
         </nav>
         <div className={styles.cta}>
+          <Link href="/login" className={styles.loginLink}>
+            Giriş
+          </Link>
           <Link href="/request-access" className={styles.ctaLink}>
             Kurulum görüşmesi planla
           </Link>
         </div>
       </div>
+
+      {/* 980px altında üstteki .nav gizleniyor. Eskiden yerine hiçbir şey
+          gelmiyordu; telefonda bölümlere gidilecek bir kontrol kalmıyordu.
+          Yatay kayan tek satırlık şerit: açılır menü, durum, JS yok. */}
+      <nav className={styles.mobileNav} aria-label="Bölümler">
+        {NAV_LINKS.map((l) => (
+          <Link key={l.href} href={l.href} className={styles.mobileNavLink}>
+            {l.label}
+          </Link>
+        ))}
+        <Link href="/login" className={styles.mobileNavLink}>
+          Giriş
+        </Link>
+      </nav>
     </header>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { Plus, Trash2, Send, CheckCircle2 } from "lucide-react";
+import { useMemo, useState, useTransition } from "react";
+import { Plus, Trash2, Send, CheckCircle2, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { useConfirm } from "@/components/ui/useConfirm";
 import { Overlay } from "@/components/ui/Overlay";
@@ -28,6 +28,10 @@ interface Props {
   members: Member[];
   /** profiles.id → hex; kişi rozetleri her ekranda aynı rengi taşısın. */
   personHex?: Record<string, string>;
+  /** Görüntülenen haftadaki DİĞER toplantılar — aynı gün + saate ikinci bir
+   *  toplantı yazılırken uyarmak için. Yalnız bilgi: kayıt engellenmez, çünkü
+   *  aynı hücrede iki başlık meşru olabiliyor (ızgara ikisini de gösterir). */
+  weekMeetings?: { id: string; date: string; slot: string; title: string }[];
   onClose: () => void;
   onSaved: () => void;
   /** Silme sonrası GERİ ALMA için: silinen toplantının tam kopyası.
@@ -83,7 +87,7 @@ function weekdayLabelOf(iso: string, fallback: string): string {
 
 export function MeetingEditor({
   meeting, day, slot, dayLabel, bandCategory, bandLabel, members, personHex = {},
-  onClose, onSaved, onDeleted,
+  weekMeetings = [], onClose, onSaved, onDeleted,
 }: Props) {
   const { ask, dialog } = useConfirm();
   // Kaydedilmiş toplantının id'si — prop DEĞİL state, çünkü "Bildir" düğmesi
@@ -141,6 +145,21 @@ export function MeetingEditor({
   const meta = categoryMeta(category);
   const ist = istanbulLabel(dateIso, time);
 
+  /* ÇAKIŞMA UYARISI — "aynı saate ikinci toplantı" sessizce oluyordu: gün ya da
+     saat değiştirilip kaydedilince iki başlık aynı hücrede birleşiyor ve
+     ızgarada tek satır gibi görünüyordu (2026-08-30). Uyarı engellemez, sadece
+     söyler; hafta dışına çıkan tarihler için veri elde olmadığından susar. */
+  const conflict = useMemo(() => {
+    const slotNow = normalizeSlot(time) || normalizeSlot(slot);
+    if (!dateIso || !slotNow) return null;
+    const hits = weekMeetings.filter(
+      (m) => m.id !== meetingId && m.date === dateIso && normalizeSlot(m.slot) === slotNow,
+    );
+    if (!hits.length) return null;
+    const names = hits.map((m) => m.title.trim()).filter(Boolean);
+    return names.length ? names.join(" · ") : "başlıksız bir toplantı";
+  }, [weekMeetings, meetingId, dateIso, time, slot]);
+
   const setTopic = (i: number, patch: Partial<TopicDraft>) =>
     setTopics((ts) => ts.map((t, idx) => (idx === i ? { ...t, ...patch } : t)));
   const addTopic = () =>
@@ -170,7 +189,10 @@ export function MeetingEditor({
       id,
       topics.map((t, i) => ({
         id: t.id, position: i, text: t.text, participant_ids: t.participant_ids,
-        collaborator_ids: t.collaborator_ids, due_date: t.due_date || day,
+        /* Konunun teslim tarihi TOPLANTININ GÜNÜdür. Eskiden hücreden gelen
+           sabit `day` yazılıyordu: pencerede gün değiştirilip kaydedilince
+           toplantı taşınıyor ama konuların tarihi eski günde kalıyordu. */
+        collaborator_ids: t.collaborator_ids, due_date: t.due_date || dateIso || day,
       })),
     );
     if ("error" in tRes) return { error: tRes.error };
@@ -203,7 +225,7 @@ export function MeetingEditor({
       /* Teslim tarihi = konunun kendi tarihi yoksa TOPLANTININ GÜNÜ.
          Aslı Hanım (2026-08-29): "Bir de yanında tarih olması saçma; zaten ben
          o tarihi seçip konu ekliyorum." Tarihi hücre söylüyor. */
-      const aRes = await assignTopicAsTask(topicId, { dueDate: topics[i].due_date || day });
+      const aRes = await assignTopicAsTask(topicId, { dueDate: topics[i].due_date || dateIso || day });
       setAssigningIdx(null);
       if ("error" in aRes) { setError(aRes.error); return; }
       setTopics((ts) => ts.map((t, idx) => (idx === i ? { ...t, task_id: aRes.taskId } : t)));
@@ -294,6 +316,13 @@ export function MeetingEditor({
         {error && (
           <p role="alert" className="anim-fade-down rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[12.5px] font-medium text-danger">
             {error}
+          </p>
+        )}
+
+        {conflict && (
+          <p className="anim-fade-down flex items-start gap-2 rounded-control border border-warning/40 bg-warning/10 px-3 py-2 text-[12.5px] font-medium text-ink">
+            <AlertTriangle size={14} className="mt-px shrink-0 text-warning" aria-hidden />
+            <span>Bu gün ve saatte zaten bir toplantı var: {conflict}. Kaydederseniz ikisi aynı hücrede birlikte görünür.</span>
           </p>
         )}
 

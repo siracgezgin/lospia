@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   Boxes, Plus, Search, ChevronLeft, FileDown, Printer, Shirt, Scissors,
   Footprints, Handbag, FileSpreadsheet, ClipboardList, ShieldCheck, AlertTriangle,
-  Pencil, FolderPlus, SwatchBook, Trash2, Image as ImageIcon,
+  Pencil, FolderPlus, SwatchBook, Trash2, Image as ImageIcon, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { deleteProductionSheet } from "@/lib/actions/production";
@@ -145,6 +145,9 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
   /* Kapak yükleme hatası — tek satır, insan dili. Kart üstünde yer yok,
      ızgaranın üstünde gösterilir. */
   const [coverError, setCoverError] = useState<string | null>(null);
+  /* Silme gibi kart eylemlerinin hatası — sayfanın üstünde, kaybolmayan
+     tek satır (kart o sırada listede kalmış olabilir). */
+  const [actionError, setActionError] = useState<string | null>(null);
 
   async function removeSheet(sheet: CollectionItem) {
     if (!(await ask({
@@ -152,7 +155,15 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
       message: `“${sheet.title}” ve içindeki bütün bilgiler kalıcı olarak silinir.\nYalnız gözden kaldırmak istiyorsanız föyü açıp durumunu Arşiv yapın.`,
     }))) return;
     startDelete(async () => {
-      await deleteProductionSheet(sheet.id);
+      /* SİLME HATASI GÖRÜNÜR. Sonuç hiç okunmuyordu: yetkisi olmayan ya da
+         başarısız bir silmeden sonra ekran tazeleniyor, kart yerinde
+         duruyor ve kullanıcı "tıkladım ama olmadı" ile baş başa kalıyordu. */
+      const res = await deleteProductionSheet(sheet.id);
+      if (res && "error" in res) {
+        setActionError(`“${sheet.title}” silinemedi: ${res.error}`);
+        return;
+      }
+      setActionError(null);
       router.refresh();
     });
   }
@@ -236,14 +247,28 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
      etiket yerine ikon + aria-label — arama kutusu evrensel bir desendir. */
   const search = (
     <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
-      <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-subtle" />
+      <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-subtle" aria-hidden />
       <TextInput
         value={query}
         onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Escape") setQuery(""); }}
         placeholder="Ürün ara…"
         aria-label="Ürün ara"
-        className="pl-9"
+        className={cn("pl-9", query && "pr-9")}
       />
+      {/* TEMİZLE. Aramayı boşaltmak için metni elle silmek gerekiyordu;
+          telefonda kutunun içine dokunup seçmek zahmetliydi. */}
+      {query && (
+        <button
+          type="button"
+          onClick={() => setQuery("")}
+          title="Aramayı temizle"
+          aria-label="Aramayı temizle"
+          className="tap-target absolute right-1 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-subtle transition-colors duration-150 hover:text-ink"
+        >
+          <X size={14} aria-hidden />
+        </button>
+      )}
     </div>
   );
 
@@ -291,6 +316,12 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
 
 
       {dialog}
+
+      {actionError && (
+        <p role="alert" className="anim-fade-down mb-3 rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[13.5px] font-medium text-danger">
+          {actionError}
+        </p>
+      )}
 
       {catEditor && (
         <CategoryManagerDialog

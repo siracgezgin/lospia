@@ -60,7 +60,14 @@ export function DocumentsView({
   const [linkFolder, setLinkFolder] = useState<string | null>(null);
 
   /* Bağlantılar = dosya ve yazı DIŞINDAKİ kayıtlar (Drive, Canva, Figma…).
-     Arşivlenmiş olan ızgarada görünmez; kayıt silinmez, yalnız gözden kalkar. */
+     Arşivlenmiş olan ızgarada görünmez; kayıt silinmez, yalnız gözden kalkar.
+
+     `created_by` ve `visibility` TAŞINIR (2026-09-05). Taşınmadığı sürece
+     Drive tarafında bağlantının sahibi bilinmiyordu: üye kendi eklediği
+     bağlantıyı düzenleyemiyor, silemiyordu (⋯ menüsü boş çıkıyordu) ve
+     "Sahibi" sütunu hep "—" yazıyordu. `visibility` kolonu üretilen tipte
+     yok — satır Supabase'den `select("*")` ile geldiği için değer elde var,
+     yalnız okunması gerekiyor. */
   const links: LinkItem[] = useMemo(
     () =>
       documents
@@ -73,6 +80,11 @@ export function DocumentsView({
           url: d.url,
           document_type: d.document_type,
           updated_at: d.updated_at,
+          created_by: d.created_by ?? null,
+          visibility:
+            ((d as unknown as { visibility?: string | null }).visibility ?? "all") === "admin"
+              ? ("admin" as const)
+              : ("all" as const),
         })),
     [documents],
   );

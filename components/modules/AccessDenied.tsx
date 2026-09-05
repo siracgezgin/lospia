@@ -20,7 +20,7 @@ export function AccessDenied() {
         </p>
         <Link
           href="/home"
-          className="mt-5 inline-flex h-9 items-center gap-1.5 rounded-control bg-brand px-3.5 text-[13.5px] font-medium text-white shadow-xs transition-[background-color,transform] duration-150 ease-standard hover:bg-brand-strong active:scale-[0.98]"
+          className="mt-5 inline-flex h-10 items-center gap-1.5 rounded-control bg-brand px-4 text-[13.5px] font-medium text-white shadow-xs transition-[background-color,transform] duration-150 ease-standard hover:bg-brand-strong active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring focus-visible:ring-offset-2"
         >
           <ArrowLeft size={15} aria-hidden />
           Ana Sayfa&apos;ya dön

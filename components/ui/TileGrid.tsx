@@ -160,6 +160,8 @@ export function Tile({
               "block truncate text-muted",
               row ? "text-[12px]" : compact ? "mt-0.5 line-clamp-2 text-[12px] leading-snug" : "mt-1 text-[13px]",
             )}
+            // Kırpılan tarif satırı fareyle üzerine gelince tam okunur.
+            title={typeof meta === "string" && !metaNode ? meta : undefined}
           >
             {metaNode ?? meta}
           </span>
@@ -189,7 +191,10 @@ export function Tile({
   /** Eylemler varsa kart göreli bir sarmalayıcıya alınır (bkz. `actions`). */
   const wrap = (el: ReactNode) =>
     actions ? (
-      <div className="relative">
+      /* min-w-0: ızgara hücresinin varsayılan asgari genişliği "auto"dur;
+         sarmalayıcı sıfıra inemeyince uzun başlıklı kart komşusunu itip
+         satırı taşırıyordu (proje kuralı: ızgara hücresi min-w-0 ister). */
+      <div className="relative min-w-0">
         {el}
         <div className="absolute right-2 top-2 z-10">{actions}</div>
       </div>
@@ -218,10 +223,21 @@ export function Tile({
       </Link>,
     );
   }
+  if (onClick) {
+    return wrap(
+      <button type="button" onClick={onClick} className={cls} style={style}>
+        {inner}
+      </button>,
+    );
+  }
+  /* Ne bağlantı ne eylem → TIKLANMAZ kart. Eskiden yine <button> çiziliyordu:
+     imleç el oluyor, basılıyor, hiçbir şey olmuyordu (klavyeyle de duruyordu).
+     "Sitede işlevsiz şey olmasın" kuralı: eylemi olmayan kutucuk bir düğme
+     gibi DAVRANMAZ, yalnız bilgi gösterir. */
   return wrap(
-    <button type="button" onClick={onClick} className={cls} style={style}>
+    <div className={cn(cls, "cursor-default")} style={style}>
       {inner}
-    </button>,
+    </div>,
   );
 }
 

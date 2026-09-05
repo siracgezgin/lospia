@@ -43,7 +43,12 @@ export function ClampedText({
      yok ederdi. Durum yalnız aşağıdaki düğmeyle değiştiği için ayna ref de
      orada yazılır — render sırasında ref'e dokunulmaz. */
   const expandedRef = useRef(false);
-  function toggle() {
+  function toggle(e: React.MouseEvent<HTMLButtonElement>) {
+    /* Not kartları tıklanabilir bir kabın içinde durabiliyor (satırın kendisi
+       görevi açıyor). "Devamını oku" o kabı da tetikleyince kullanıcı metni
+       açmak isterken başka bir sayfaya düşüyordu. */
+    e.preventDefault();
+    e.stopPropagation();
     const next = !expanded;
     expandedRef.current = next;
     setExpanded(next);
@@ -75,7 +80,8 @@ export function ClampedText({
         <button
           type="button"
           onClick={toggle}
-          className="tap-target mt-0.5 inline-flex text-[12.5px] font-medium text-brand transition-colors duration-150 hover:text-brand-strong"
+          aria-expanded={expanded}
+          className="tap-target mt-0.5 inline-flex rounded-control text-[12.5px] font-medium text-brand transition-colors duration-150 hover:text-brand-strong focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
         >
           {expanded ? "Daha az" : "Devamını oku"}
         </button>

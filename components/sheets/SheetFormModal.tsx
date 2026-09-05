@@ -75,15 +75,22 @@ export function SheetFormModal({
 
   async function handleCsvFile(file: File) {
     setError(null);
+    // Tarayıcı belleğini kilitleyecek dosyayı sessizce yutmak yerine söyle.
+    if (file.size > 8 * 1024 * 1024) {
+      return setError("Dosya çok büyük (en fazla 8 MB). Veriyi bölerek deneyin.");
+    }
     try {
-      const text = await file.text();
+      const raw = await file.text();
+      // BOM: Excel'in kaydettiği CSV "﻿" ile başlar ve ilk başlık hücresi
+      // görünmez bir karakterle bozuluyordu.
+      const text = raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
       const grid = normalizeGrid(parseCsv(text));
       if (grid.length === 0) return setError("CSV dosyası boş görünüyor.");
       // CSV doğrudan hesap tablosu ızgarasına girer; ilk satır kalın yazılır.
       const snapshot = workbookFromRows(grid);
       setImportedSnapshotJson(JSON.stringify(snapshot));
       setImportInfo({ name: file.name, rows: grid.length - 1, cols: grid[0].length });
-      if (!form.title.trim()) set("title", file.name.replace(/\.csv$/i, ""));
+      if (!form.title.trim()) set("title", file.name.replace(/\.(csv|tsv|txt)$/i, ""));
     } catch {
       setError("CSV dosyası okunamadı. Dosyayı kontrol edip tekrar deneyin.");
     }
@@ -168,8 +175,20 @@ export function SheetFormModal({
               ))}
             </SelectInput>
           </Field>
-          <Field label="Durum">
-            <SelectInput value={form.status} onChange={(e) => set("status", e.target.value)} disabled={readOnly}>
+          {/* DURUM. Sunucu yeni tabloyu üye açtığında her hâlükârda "Taslak"
+              olarak kaydediyor (createOperationSpreadsheet). Seçilebilir bir
+              kutu göstermek yalan olurdu: kullanıcı "Aktif" seçiyor, kayıt
+              taslak dönüyordu. Yönetici değilken oluşturmada alan kilitli ve
+              sebebi tek satırla yazıyor. */}
+          <Field
+            label="Durum"
+            hint={!isAdmin && !isEdit ? "Yeni tablolar taslak olarak başlar." : undefined}
+          >
+            <SelectInput
+              value={!isAdmin && !isEdit ? "draft" : form.status}
+              onChange={(e) => set("status", e.target.value)}
+              disabled={readOnly || (!isAdmin && !isEdit)}
+            >
               {statusOptions.map((s) => (
                 <option key={s.key} value={s.key}>{s.label}</option>
               ))}
@@ -221,7 +240,7 @@ export function SheetFormModal({
             <input
               ref={fileRef}
               type="file"
-              accept=".csv,text/csv"
+              accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain"
               className="hidden"
               aria-label="CSV dosyası"
               onChange={(e) => {

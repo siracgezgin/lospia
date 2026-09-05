@@ -341,7 +341,8 @@ function InfoRow({ label, children }: { label: string; children: React.ReactNode
   return (
     <div className="flex items-center justify-between gap-3 py-2.5">
       <dt className="shrink-0 text-[13px] text-muted">{label}</dt>
-      <dd className="min-w-0 flex-1 text-right text-[13.5px] font-medium text-ink">{children}</dd>
+      {/* break-words: uzun e-posta adresi dar ekranda satırı taşırıyordu. */}
+      <dd className="min-w-0 flex-1 break-words text-right text-[13.5px] font-medium text-ink">{children}</dd>
     </div>
   );
 }

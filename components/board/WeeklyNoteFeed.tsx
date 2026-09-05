@@ -51,12 +51,14 @@ function FeedCard({
   currentUserId,
   isViewer,
   acks,
+  onMutated,
 }: {
   item: BoardNoteFeedItem;
   deptMeta: Record<string, DeptMeta>;
   currentUserId: string;
   isViewer: boolean;
   acks: AckRow[];
+  onMutated?: () => void;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -71,7 +73,11 @@ function FeedCard({
     setError(null);
     startTransition(async () => {
       const res = await acknowledgeTaskNote(item.id, action);
-      if ("error" in res) setError(res.error);
+      if ("error" in res) {
+        setError(res.error);
+        return;
+      }
+      onMutated?.();
     });
   }
 
@@ -155,12 +161,17 @@ export function WeeklyNoteFeed({
   currentUserId,
   isViewer,
   acks,
+  onMutated,
 }: {
   items: BoardNoteFeedItem[];
   deptMeta: Record<string, DeptMeta>;
   currentUserId: string;
   isViewer: boolean;
   acks: AckRow[];
+  /* Başarılı "Gördüm / Üzerime aldım" sonrası. acknowledgeTaskNote yalnız
+     revalidatePath("/board") çağırıyor; Yönetici Pano ayrı bir rota olduğu için
+     orada düğmeler hiçbir görünür sonuç üretmiyordu. */
+  onMutated?: () => void;
 }) {
   const [showAll, setShowAll] = useState(false);
   const visible = useMemo(
@@ -187,6 +198,7 @@ export function WeeklyNoteFeed({
           currentUserId={currentUserId}
           isViewer={isViewer}
           acks={acks}
+          onMutated={onMutated}
         />
       ))}
       {items.length > VISIBLE_LIMIT && (

@@ -21,7 +21,7 @@ export function OfficeCenterCard({ title, description, href, icon: Icon }: Props
   return (
     <Link
       href={href}
-      className="group flex gap-3.5 rounded-card border border-line bg-surface p-4 shadow-card transition-[box-shadow,border-color] duration-150 ease-standard hover:border-line-strong hover:shadow-card-hover"
+      className="group flex gap-3.5 rounded-card border border-line bg-surface p-4 shadow-card transition-[box-shadow,border-color] duration-150 ease-standard hover:border-line-strong hover:shadow-card-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring focus-visible:ring-offset-2"
     >
       <div className="grid h-10 w-10 shrink-0 place-items-center rounded-control bg-brand-soft text-brand">
         <Icon size={18} aria-hidden />

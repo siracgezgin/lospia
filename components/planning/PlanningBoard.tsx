@@ -109,6 +109,18 @@ export function PlanningBoard({
     return { topicRows, rowCountOfSlot };
   }, [byCell, meetings, weekDays, bands]);
 
+  /* Düzenleyicinin ÇAKIŞMA uyarısı için: haftadaki toplantıların gün/saat
+     kimliği. Yalnız uyarı verir (kayıt engellenmez), o yüzden hafif tutulur. */
+  const weekMeetings = useMemo(
+    () => meetings.map((m) => ({
+      id: m.id,
+      date: String(m.meeting_date).slice(0, 10),
+      slot: m.time_slot,
+      title: m.title ?? "",
+    })),
+    [meetings],
+  );
+
   /* Silinen toplantı — "Geri al" şeridi ve Ctrl+Z bunun üzerinden çalışır. */
   const [deleted, setDeleted] = useState<DeletedMeeting | null>(null);
 
@@ -130,13 +142,16 @@ export function PlanningBoard({
   };
   const closeDayCard = () => router.push(`/planning?week=${weekStart}`);
 
-  const openEditor = (iso: string, slot: string, i: number) => {
+  /** `blank` → hücrede toplantı olsa bile YENİ toplantı açılır. Gün kartındaki
+   *  "Toplantı ekle" bunu ister: iskelet her şeridi doldurduğu için boş saat
+   *  kalmıyor ve düğme sessizce var olan toplantıyı DÜZENLEMEYE açıyordu. */
+  const openEditor = (iso: string, slot: string, i: number, blank = false) => {
     if (!isAdmin) return;
     const cell = byCell.get(`${iso}|${slot}`) ?? [];
     // Toplantı, oturduğu ŞERİDİN kimliğini alır — renk seçtirilmiyor.
     const band = bands.find((b) => b.slot === slot);
     setEditor({
-      meeting: cell[0] ?? null,
+      meeting: blank ? null : (cell[0] ?? null),
       day: iso,
       slot,
       dayLabel: `${WEEKDAY_LONG_TR[i]} ${format(parseISO(iso), "d MMM", { locale: tr })}`,
@@ -152,7 +167,10 @@ export function PlanningBoard({
        başlığı zaten uygulama çubuğu yazıyordu. Yerine tek satırlık ince bir
        araç çubuğu geldi; ızgara kalan yüksekliğin TAMAMINI alıyor. */
     <div className="flex h-full min-h-0 w-full flex-col">
-      <CalendarToolbar viewSwitch={<CalendarViewSwitch scale="hafta" />}>
+      {/* Ölçek seçicide GÜN kartı açıkken "Gün" işaretli durur: kart açıkken
+          "Hafta" seçili görünüyordu, yani ekranda hangi ölçekte olduğumuz
+          yanlış yazıyordu. "Hafta"ya basmak kartı kapatır (v ve d düşer). */}
+      <CalendarToolbar viewSwitch={<CalendarViewSwitch scale={openDay ? "gun" : "hafta"} />}>
         {/* HAFTA GEZİNMESİ — ortada TARİH, gerekince "Bu haftaya dön".
             Sıraç (2026-08-30): "Bu hafta değil de bugünün tarihi yazsın; ok
             tuşları bir sonraki haftanın pazartesine geçsin; geçince de yanında
@@ -239,6 +257,7 @@ export function PlanningBoard({
           bandLabel={editor.bandLabel}
           members={members}
           personHex={personHex}
+          weekMeetings={weekMeetings}
           onClose={() => setEditor(null)}
           onSaved={() => { setEditor(null); router.refresh(); }}
           onDeleted={(snap) => { setEditor(null); setDeleted(snap); router.refresh(); }}
@@ -259,6 +278,7 @@ export function PlanningBoard({
           todayIso={todayIso}
           onDayChange={openDayCard}
           onOpenSlot={(iso, slot) => openEditor(iso, slot, Math.max(0, weekDays.indexOf(iso)))}
+          onAddMeeting={(iso, slot) => openEditor(iso, slot, Math.max(0, weekDays.indexOf(iso)), true)}
           onClose={closeDayCard}
         />
       )}

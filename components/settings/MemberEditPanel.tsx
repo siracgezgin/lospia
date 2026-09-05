@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { Check, RotateCcw } from "lucide-react";
+import { useState, useTransition } from "react";
+import { Check, Eye, EyeOff, KeyRound, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Field, FieldGrid, TextInput, SelectInput } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
+import { resetMemberPassword } from "@/lib/actions/account";
 import { ASSIGNABLE_ROLE_OPTIONS } from "@/lib/utils/roles";
 import { PERSON_TONES, isHexColor } from "@/lib/design/person-colors";
 import type { IdentityMember } from "@/components/settings/PersonIdentityManager";
@@ -39,13 +40,133 @@ export type MemberDraft = {
  * Yüzey: bölüm kartının içinde İKİNCİ bir kart değil, yumuşak bir dolgu
  * (kenarlık ve gölge yok) — "düzenleniyor" hissini verir, katman eklemez.
  */
+/**
+ * ŞİFRE SIFIRLAMA (yönetici).
+ *
+ * Sistemde e-posta ile şifre sıfırlama yok — hesaplar `<kullanıcı>@lospia.local`
+ * iç yer tutucusuyla açılıyor. Şifresini unutan kişinin TEK kurtuluşu budur ve
+ * bugüne kadar hiçbir ekranda yoktu: yönetici hesabı silip yeniden açmak
+ * zorunda kalıyordu.
+ *
+ * Kendi başına kaydeder (panelin "Kaydet"iyle karışmasın): şifre yazmak diğer
+ * alanlarla aynı işlem değil, kazara gönderilmemeli.
+ */
+function PasswordReset({ memberId, name, busy }: { memberId: string; name: string; busy: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState("");
+  const [reveal, setReveal] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+  const [pending, start] = useTransition();
+
+  const tooShort = value.length > 0 && value.length < 6;
+
+  function submit() {
+    if (value.length < 6) return;
+    setError(null);
+    setDone(false);
+    start(async () => {
+      const res = await resetMemberPassword({ memberId, newPassword: value });
+      if ("error" in res) { setError(res.error); return; }
+      setValue("");
+      setOpen(false);
+      setDone(true);
+    });
+  }
+
+  return (
+    <div className="border-t border-hairline pt-4">
+      <p className="mb-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle">Şifre</p>
+      {open ? (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <Field
+            label="Yeni şifre"
+            className="flex-1"
+            hint={`En az 6 karakter. ${name} bu şifreyle giriş yapar.`}
+            error={tooShort ? "Şifre en az 6 karakter olmalı." : null}
+          >
+            <TextInput
+              type={reveal ? "text" : "password"}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              autoComplete="new-password"
+              disabled={pending || busy}
+              placeholder="Yeni şifre"
+            />
+          </Field>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setReveal((v) => !v)}
+              aria-pressed={reveal}
+              aria-label={reveal ? "Şifreyi gizle" : "Şifreyi göster"}
+              title={reveal ? "Şifreyi gizle" : "Şifreyi göster"}
+            >
+              {reveal ? <EyeOff size={14} aria-hidden /> : <Eye size={14} aria-hidden />}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={submit}
+              loading={pending}
+              disabled={value.length < 6 || busy}
+            >
+              Şifreyi ata
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => { setOpen(false); setValue(""); setError(null); }}
+              disabled={pending}
+            >
+              Vazgeç
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => { setOpen(true); setDone(false); }}
+            disabled={busy}
+            title={`${name} için yeni bir giriş şifresi belirleyin`}
+          >
+            <KeyRound size={14} aria-hidden /> Şifre sıfırla
+          </Button>
+          {done && (
+            <span role="status" className="anim-fade inline-flex items-center gap-1.5 text-[12.5px] font-medium text-success">
+              <Check size={14} aria-hidden /> Yeni şifre atandı. Kişiye kendiniz iletin.
+            </span>
+          )}
+          {!done && (
+            <span className="text-[12px] text-subtle">Şifresini unutan kişi için yeni bir şifre belirleyin.</span>
+          )}
+        </div>
+      )}
+      {error && (
+        <p role="alert" className="anim-fade-down mt-2 text-[12.5px] text-danger">{error}</p>
+      )}
+    </div>
+  );
+}
+
 export function MemberEditPanel({
-  member, draft: initial, canManageRole, canManageIdentity, usedColors, busy, onCancel, onSave, onResetIdentity,
+  member, memberId, draft: initial, canManageRole, canManageIdentity, canResetPassword,
+  usedColors, busy, onCancel, onSave, onResetIdentity,
 }: {
   member: IdentityMember | null;
+  /** workspace_members.id — şifre sıfırlama bu satıra bakar. */
+  memberId: string;
   draft: MemberDraft;
   canManageRole: boolean;
   canManageIdentity: boolean;
+  /** Yönetici bu kişinin şifresini sıfırlayabilir mi (sahip ve kendisi hariç). */
+  canResetPassword: boolean;
   /** colorKey → o rengi kullanan kişinin adı. */
   usedColors: Map<string, string>;
   busy: boolean;
@@ -181,6 +302,10 @@ export function MemberEditPanel({
             />
           </div>
         </div>
+      )}
+
+      {canResetPassword && (
+        <PasswordReset memberId={memberId} name={d.fullName.trim() || member?.name || "Bu kişi"} busy={busy} />
       )}
 
       {/* Kaydet sağda primary, Vazgeç solunda ghost; "Otomatik renk" en solda

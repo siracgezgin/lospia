@@ -28,11 +28,15 @@ import type { RuntimeBand } from "@/lib/planning/bands";
  * içinde olduğu için boy h-8'e çekilir, biçim aynı kalır.
  */
 export function BandEditor({
-  band, refDay, onClose,
+  band, refDay, takenSlots = [], onClose,
 }: {
   band: RuntimeBand;
   /** Saat çevirimi için haftanın ilk günü. */
   refDay: string;
+  /** DİĞER şeritlerin saatleri — aynı saate ikinci şerit açılırken uyarmak
+   *  için. Aynı saatte iki şerit ızgarada birbirinin kopyası gibi iki satır
+   *  çizer; kullanıcı hangisine yazdığını kaybeder. */
+  takenSlots?: string[];
   onClose: () => void;
 }) {
   const { ask, dialog } = useConfirm();
@@ -49,6 +53,9 @@ export function BandEditor({
   const [busy, start] = useTransition();
 
   const ist = istanbulLabel(refDay, slot);
+  /** Aynı saatte başka bir şerit var mı? (`takenSlots` düzenlenen şeridi
+   *  İÇERMEZ — dışlamayı çağıran yapar.) */
+  const duplicateSlot = takenSlots.some((s) => normalizeSlot(s) === normalizeSlot(slot));
 
   function save() {
     setError(null);
@@ -151,6 +158,11 @@ export function BandEditor({
       {error && (
         <p role="alert" className="basis-full rounded-control border border-danger/30 bg-danger/10 px-2.5 py-1.5 text-[12px] font-medium text-danger">
           {error}
+        </p>
+      )}
+      {!error && duplicateSlot && (
+        <p className="basis-full rounded-control border border-warning/40 bg-warning/10 px-2.5 py-1.5 text-[12px] font-medium text-ink">
+          {normalizeSlot(slot)} saatinde zaten bir şerit var — ızgarada iki ayrı satır olarak görünürler.
         </p>
       )}
       {dialog}

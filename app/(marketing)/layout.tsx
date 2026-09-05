@@ -31,7 +31,10 @@ export default async function MarketingLayout({
 }) {
   const host = (await headers()).get("host");
   if (!isMarketingHost(host)) {
-    redirect("/board");
+    // Giriş rotası /home (CLAUDE.md) — AF host'unda tanıtım sayfaları hiç
+    // sunulmaz. Önce /board'a atıyordu; kullanıcı "Board" ekranında,
+    // beklemediği bir yerde buluyordu kendini.
+    redirect("/home");
   }
   return <MarketingShell>{children}</MarketingShell>;
 }

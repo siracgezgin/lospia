@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Printer, Tag, TagIcon } from "lucide-react";
-import { categoryLabel, subcategoryLabel } from "@/lib/collection/taxonomy";
 import {
   formatMoney, orderSizes, quantityBySize, totalQuantity, unitCostOf,
   bomLineCost, parseMoney,
@@ -17,6 +16,11 @@ interface Props {
   bom: SheetMaterialWithMaterial[];
   manufacturerName: string | null;
   seasonName: string | null;
+  /** Kategori adları SUNUCUDA çözülür: taksonomi düzenlenebilir olduğu için
+   *  kod içindeki sabit listeden okumak, kullanıcının açtığı kategorileri
+   *  kâğıtta "Kategorisiz" gösteriyordu. */
+  categoryName?: string | null;
+  subcategoryName?: string | null;
   /** Fiyat/maliyet blokları basılsın mı. Üreticiye giden kopyada VARSAYILAN
    *  KAPALI — atölyenin web satış fiyatını görmesi gerekmiyor. */
   showPricing: boolean;
@@ -151,6 +155,7 @@ function NumberedRows({
 
 export function SheetPrintSheet({
   sheet, bom, manufacturerName, seasonName, showPricing,
+  categoryName = null, subcategoryName = null,
 }: Props) {
   const pageRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
@@ -300,8 +305,8 @@ export function SheetPrintSheet({
                     <KV k="Ürün cinsi" v={sheet.product_kind} />
                     <KV k="Renk" v={sheet.colorway} />
                     <KV k="Sezon" v={seasonName ?? sheet.season} />
-                    <KV k="Kategori" v={sheet.category ? categoryLabel(sheet.category) : null} />
-                    <KV k="Alt kategori" v={subcategoryLabel(sheet.category, sheet.subcategory)} />
+                    <KV k="Kategori" v={categoryName} />
+                    <KV k="Alt kategori" v={subcategoryName} />
                     <KV k="Üretici" v={manufacturerName ?? sheet.producer} />
                     <KV k="Üretim tarihi" v={sheet.production_date} />
                     <KV k="Teslim tarihi" v={sheet.delivery_date} />

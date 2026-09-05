@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
@@ -167,8 +167,13 @@ function fromSheet(s: ProductionSheet): ProductionSheetInput {
     delivery_date: s.delivery_date ?? "",
     sewing_delivery_date: s.sewing_delivery_date ?? "",
     meterage: s.meterage ?? "",
-    measurements: s.measurements?.length ? s.measurements : [{ no: "1", label: "", value: "" }],
-    delivered_items: s.delivered_items?.length ? s.delivered_items : [{ no: "1", label: "", qty: "" }],
+    /* Sıra numarası satırın YERİNDEN türer. Eski föylerde silinen satırlar
+       yüzünden `no` kaymış olabilir; ekranda hep index+1 yazdığı için bu
+       yalnızca çıktıda ve Excel'de görünen sessiz bir tutarsızlıktı. */
+    measurements: (s.measurements?.length ? s.measurements : [{ no: "1", label: "", value: "" }])
+      .map((m, i) => ({ ...m, no: String(i + 1) })),
+    delivered_items: (s.delivered_items?.length ? s.delivered_items : [{ no: "1", label: "", qty: "" }])
+      .map((d, i) => ({ ...d, no: String(i + 1) })),
     size_distribution: sd,
     photo_refs: s.photo_refs ?? [],
     wash_instruction: s.wash_instruction ?? "",
@@ -402,6 +407,20 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
     setForm((f) => ({ ...f, [key]: value }));
   };
 
+  /* KAYDEDİLMEMİŞ FÖY SESSİZCE KAYBOLMASIN.
+     Föy uzun bir formdur ve kaydetme elle yapılır; sekmeyi kapatmak ya da
+     tarayıcıyı yenilemek yarım saatlik girişi tek tıkla siliyordu. Tarayıcının
+     kendi onayı çıkar (metni tarayıcı belirler, biz yalnız tetikleriz). */
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [dirty]);
+
   // Eksiksizlik tek yerde hesaplanır: hem üstteki şerit hem sekme rozetleri
   // aynı sonucu kullansın (iki ayrı hesap er geç ayrışır).
   const checks = checkSheet({
@@ -450,21 +469,29 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
     }
   }
 
+  /* SIRA NUMARASI HER ZAMAN SIRAYI GÖSTERİR.
+     Ekranda numara `index + 1` ile çiziliyor ama kayda giden `no` alanı satır
+     silinince eskisinde kalıyordu: ikinci ölçüyü silince ekranda "1, 2",
+     çıktıda ve Excel'de "1, 3" görünüyordu (kâğıt üreticiye gidiyor —
+     numaralar tutmalı). Ekle/sil sonrası satırlar yeniden numaralanır. */
+  const renumber = <T extends { no: string }>(rows: T[]): T[] =>
+    rows.map((r, i) => (r.no === String(i + 1) ? r : { ...r, no: String(i + 1) }));
+
   // ── Ölçüler ──
   const updateMeasurement = (i: number, patch: Partial<MeasurementRow>) =>
     set("measurements", form.measurements.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
   const addMeasurement = () =>
-    set("measurements", [...form.measurements, { no: String(form.measurements.length + 1), label: "", value: "" }]);
+    set("measurements", renumber([...form.measurements, { no: "", label: "", value: "" }]));
   const removeMeasurement = (i: number) =>
-    set("measurements", form.measurements.filter((_, idx) => idx !== i));
+    set("measurements", renumber(form.measurements.filter((_, idx) => idx !== i)));
 
   // ── Teslim edilen ürünler ──
   const updateDelivered = (i: number, patch: Partial<DeliveredItemRow>) =>
     set("delivered_items", form.delivered_items.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
   const addDelivered = () =>
-    set("delivered_items", [...form.delivered_items, { no: String(form.delivered_items.length + 1), label: "", qty: "" }]);
+    set("delivered_items", renumber([...form.delivered_items, { no: "", label: "", qty: "" }]));
   const removeDelivered = (i: number) =>
-    set("delivered_items", form.delivered_items.filter((_, idx) => idx !== i));
+    set("delivered_items", renumber(form.delivered_items.filter((_, idx) => idx !== i)));
 
   // ── Beden dağılımı ── (kolonlar sabit standart set; başlıklar düzenlenmez)
   const sd = form.size_distribution;
@@ -493,15 +520,21 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
   function handleSave() {
     setError(null);
     setSaved(false);
-    if (!form.title.trim()) { setError("Föy başlığı (ürün adı) gerekli."); return; }
+    if (!form.title.trim()) {
+      setError("Föy başlığı (ürün adı) gerekli.");
+      // Başlık "Ürün" sekmesinde: eksik alan hangi sekmedeyse oraya götür.
+      jumpTo("title");
+      return;
+    }
     startSave(async () => {
       const res = isNew ? await createProductionSheet(form) : await updateProductionSheet(sheet!.id, form);
       if ("error" in res) { setError(res.error); return; }
+      // Kaydedilmemiş değişiklik uyarısı kalksın: föy artık diskte.
+      setDirty(false);
       if (isNew && "id" in res) {
         router.replace(`/production/${res.id}`);
       } else {
         setSaved(true);
-        setDirty(false);
         window.setTimeout(() => setSaved(false), 2600);
         router.refresh();
       }
@@ -518,7 +551,11 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
     startDelete(async () => {
       const res = await deleteProductionSheet(sheet.id);
       if ("error" in res) { setError(res.error); return; }
-      router.push("/production");
+      // Silinen föyün kaydedilmemiş taslağı için uyarı çıkmasın.
+      setDirty(false);
+      // Föy listesi Koleksiyon'dur; /production yalnız oraya yönlendiren
+      // bir ara duraktı.
+      router.push("/collection");
       router.refresh();
     });
   }
@@ -656,6 +693,13 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
             >
               <FileDown size={15} aria-hidden /> <span className="hidden sm:inline">Excel indir</span><span className="sr-only sm:hidden">Excel indir</span>
             </DownloadLink>
+          )}
+          {/* Kaydedilmemiş değişiklik SESSİZ ama görünür: föy elle
+              kaydediliyor, "kaydettim mi?" sorusunun cevabı ekranda dursun. */}
+          {dirty && !isSaving && (
+            <span role="status" className="hidden items-center gap-1.5 text-[12px] font-medium text-warning sm:inline-flex">
+              <AlertTriangle size={12} aria-hidden /> Kaydedilmedi
+            </span>
           )}
           {SaveBtn}
         </div>
@@ -958,6 +1002,9 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
             <b className="font-semibold text-muted">Grup</b> satırı ikili bedenleri
             eşler: XS-S <b>1</b>, M-L <b>2</b>, XL-XXL <b>3</b>, tek beden <b>OS</b>.
             Hücreye yazarak değiştirebilirsiniz.
+            {/* Dar ekranda tablo kendi kabında yana kayar; kaydırılabildiği
+                söylenmezse kolonların bittiği sanılıyordu. */}
+            <span className="mt-1 block sm:hidden">Tablo yana kaydırılabilir →</span>
           </p>
           {/* Hizalı, çizgili ızgara — sabit başlıklar + eşit genişlikte kutucuklar */}
           <div className="overflow-x-auto">

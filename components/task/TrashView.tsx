@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition, useOptimistic } from "react";
+import { useState, useTransition, useOptimistic } from "react";
 import Link from "next/link";
 import { Trash2, RotateCcw, X } from "lucide-react";
 import { restoreTask, permanentDeleteTask } from "@/lib/actions/tasks";
@@ -20,6 +20,13 @@ function formatDate(iso: string | null) {
   return formatDateTR(iso, { day: "numeric", month: "short", year: "numeric" });
 }
 
+/* Sunucu bazen İngilizce teknik metin döner; kullanıcıya Türkçe cümle. */
+function errText(msg: string | undefined, fallback: string): string {
+  if (!msg) return fallback;
+  if (/not authenticated/i.test(msg)) return "Oturumunuz sona ermiş. Sayfayı yenileyip tekrar deneyin.";
+  return msg;
+}
+
 /* Satır: ad · silinme tarihi · iki eylem (geri yükle / kalıcı sil). Eylemler
    her zaman görünür — hover'a saklanan düğme telefonda yoktu. Kalıcı silme
    satır içi "Evet/İptal" yerine ortak onay penceresinden geçer. */
@@ -31,6 +38,10 @@ function TrashRow({
   onRemove: (_id: string) => void;
 }) {
   const [pending, startTransition] = useTransition();
+  /* Sunucu reddettiğinde satır eskiden yine de listeden siliniyor, kullanıcı
+     yenileyene kadar işlemin tuttuğunu sanıyordu. Artık hata GÖRÜNÜR ve satır
+     yerinde kalır. */
+  const [error, setError] = useState<string | null>(null);
   const { ask, dialog } = useConfirm();
 
   async function handlePermanentDelete() {
@@ -40,11 +51,26 @@ function TrashRow({
       confirmLabel: "Kalıcı sil",
       tone: "danger",
     }))) return;
-    startTransition(async () => { await permanentDeleteTask(task.id); onRemove(task.id); });
+    setError(null);
+    startTransition(async () => {
+      const res = await permanentDeleteTask(task.id);
+      if (res && "error" in res) { setError(errText(res.error, "Görev silinemedi.")); return; }
+      onRemove(task.id);
+    });
+  }
+
+  function handleRestore() {
+    setError(null);
+    startTransition(async () => {
+      const res = await restoreTask(task.id);
+      if (res && "error" in res) { setError(errText(res.error, "Görev geri yüklenemedi.")); return; }
+      onRemove(task.id);
+    });
   }
 
   return (
-    <div className="flex items-center justify-between gap-3 py-2.5 px-4 sm:px-5 hover:bg-surface-hover transition-colors duration-150">
+    /* Telefonda ad ve iki eylem tek satıra sığmıyordu — alt alta düşer. */
+    <div className="flex flex-col gap-2 py-2.5 px-4 sm:px-5 sm:flex-row sm:items-center sm:justify-between sm:gap-3 hover:bg-surface-hover transition-colors duration-150">
       <div className="flex-1 min-w-0">
         <Link
           href={`/tasks/${task.id}`}
@@ -55,6 +81,9 @@ function TrashRow({
         <p className="text-[12px] text-subtle mt-0.5 tabular-nums">
           Silindi: {formatDate(task.deleted_at)}
         </p>
+        {error && (
+          <p role="alert" className="anim-fade-down mt-1 text-[12.5px] text-danger">{error}</p>
+        )}
       </div>
 
       <div className="flex items-center gap-1 shrink-0">
@@ -62,7 +91,8 @@ function TrashRow({
           variant="ghost"
           size="sm"
           disabled={pending}
-          onClick={() => startTransition(async () => { await restoreTask(task.id); onRemove(task.id); })}
+          onClick={handleRestore}
+          title="Görevi listeye geri getir"
         >
           <RotateCcw size={13} aria-hidden /> Geri yükle
         </Button>

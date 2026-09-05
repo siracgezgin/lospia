@@ -35,6 +35,10 @@ interface Props {
   /** Raporun kapısı: kişi kartları (tek sayfalık kişi raporuna gider). */
   people: ReportPerson[];
   isAdmin: boolean;
+  /** "Bugün" (YYYY-MM-DD, İstanbul) — sunucudan gelir; tabloya devredilir. */
+  today?: string;
+  /** Sorgu hata verdiyse Türkçe mesaj; sessizce boş sayfa gösterilmez. */
+  error?: string | null;
   adminPoints?: AdminPointsData | null;
   memberPoints?: MemberPointsSummary;
 }
@@ -62,7 +66,7 @@ interface Props {
  * Hanım: "kimseyi orada puanlamak istemiyorum"). "Neyi, ne zaman" sorusunun
  * cevabı alttaki tabloda, işin kendi satırında duruyor.
  */
-export function DashboardView({ dueSoonTasks, nameOf, people }: Props) {
+export function DashboardView({ dueSoonTasks, nameOf, people, today, error }: Props) {
   /* SIRA ALFABETİK — Pano'nun kişi ızgarasıyla aynı gerekçe: kart her açılışta
      aynı yerde dursun, aranan isim ezberlenen noktada bulunsun. Kartlar artık
      yalnız fotoğraf + isim taşıdığı için "en yakın teslime göre" gibi görünmeyen
@@ -80,20 +84,35 @@ export function DashboardView({ dueSoonTasks, nameOf, people }: Props) {
         <SurfaceTabs />
       </div>
 
-      {/* ── Kapı: kişiler ─────────────────────────────────────────────────── */}
-      {orderedPeople.length > 0 && (
-        <div className="mb-5">
-          <div className="mb-3">
-            <BackLink />
-            <h2 className="mt-1 text-[15px] font-semibold tracking-tight text-ink">
-              Kim, neyi, ne zaman teslim edecek?
-            </h2>
-            <p className="mt-0.5 text-[13px] text-muted">
-              Kişiye tıklayın; tek sayfalık raporu açılır.
-            </p>
-          </div>
+      {/* Sorgu patladıysa kullanıcı bunu GÖRMELİ — sessiz boş sayfa, "sistem
+          bozuk mu, iş mi yok?" sorusunu cevapsız bırakıyordu. */}
+      {error && (
+        <div
+          role="alert"
+          className="mb-4 rounded-card border border-danger/30 bg-danger/5 px-4 py-3 text-[13.5px] text-ink"
+        >
+          {error}
+        </div>
+      )}
 
-          {/* KOMPAKT kartlar: ekip tek bakışta yan yana sığsın (2026-08-29). */}
+      {/* ── Kapı: kişiler ─────────────────────────────────────────────────── */}
+      {/* Başlık, ekip listesi boş olsa da durur: aksi hâlde sayfa başlıksız
+          açılıyor ve "Geri" bağlantısı da kayboluyordu. */}
+      <div className="mb-5">
+        <div className="mb-3">
+          <BackLink />
+          <h2 className="mt-1 text-[15px] font-semibold tracking-tight text-ink">
+            Kim, neyi, ne zaman teslim edecek?
+          </h2>
+          <p className="mt-0.5 text-[13px] text-muted">
+            {orderedPeople.length > 0
+              ? "Kişiye tıklayın; tek sayfalık raporu açılır."
+              : "Çalışma alanında henüz kimse yok. Ayarlar → Ekip'ten kişi ekleyin."}
+          </p>
+        </div>
+
+        {orderedPeople.length > 0 && (
+          /* KOMPAKT kartlar: ekip tek bakışta yan yana sığsın (2026-08-29). */
           <TileGrid compact>
             {orderedPeople.map((p) => (
                 /* KART = FOTOĞRAF + İSİM, o kadar (2026-08-29: "açıklamayı
@@ -113,8 +132,8 @@ export function DashboardView({ dueSoonTasks, nameOf, people }: Props) {
                 />
             ))}
           </TileGrid>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* ── Neyi, ne zaman: TÜM açık işler, tek tablo, sıralanabilir ──────── */}
       {dueSoonTasks.length === 0 ? (
@@ -123,11 +142,11 @@ export function DashboardView({ dueSoonTasks, nameOf, people }: Props) {
             compact
             icon={Sparkles}
             title="Açık iş yok"
-            description="Herkesin masası temiz."
+            description={error ? "Liste getirilemedi." : "Herkesin masası temiz."}
           />
         </Card>
       ) : (
-        <DeliveryTable tasks={dueSoonTasks} nameOf={nameOf} />
+        <DeliveryTable tasks={dueSoonTasks} nameOf={nameOf} today={today} />
       )}
     </div>
   );

@@ -53,7 +53,18 @@ export function DownloadLink({
 
   return (
     <>
-      <button type="button" onClick={go} title={title} className={className}>
+      {/* Yalnız ikon taşıyan kullanımda düğmenin ERİŞİLEBİLİR ADI yoktu:
+          ekran okuyucu "düğme" diyor, ne indireceğini söylemiyordu. `what`
+          zaten insan diliyle yazılmış ("Beyaz Dantel Etek föyü"). */}
+      <button
+        type="button"
+        onClick={go}
+        title={title ?? `${what} indir`}
+        /* Görünür metin varsa onu EZME (görünen ad ile okunan ad aynı kalsın);
+           ad yalnız çıplak ikon kullanımında dışarıdan verilir. */
+        aria-label={children ? undefined : (title ?? `${what} indir`)}
+        className={className}
+      >
         {children ?? <Download size={13} />}
       </button>
       {dialog}

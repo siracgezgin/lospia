@@ -103,21 +103,28 @@ export default async function HomePage() {
   const monday = startOfWeek(new Date(`${todayIso}T12:00:00`), { weekStartsOn: 1 });
   const weekEnd = format(addDays(monday, 6), "yyyy-MM-dd");
 
-  /* SORUMLULUK KURALI panonunkiyle AYNI: atanan VEYA katılımcı
-     (applyPersonFilter). Yalnız assignee_id'ye bakılırsa katılımcı olarak
-     yürütülen işler sayılmaz ve Ana Sayfa ile Pano farklı şey gösterir
-     (Aslı Hanım, 2026-08-24: "bu kısımlar doğru çalışmıyor"). */
-  const myTasksQuery = supabase
-    .from("tasks")
-    .select("id, title, status, priority, due_date")
-    .eq("workspace_id", workspaceId)
-    .or(`assignee_id.eq.${user.id},custom_fields->collaborators.cs.["${user.id}"]`)
-    .not("status", "in", "(done,archived)")
-    .is("deleted_at", null)
-    .is("archived_at", null)
-    .order("due_date", { ascending: true, nullsFirst: false })
-    .limit(100);
-  if (!isAdmin) myTasksQuery.eq("visibility", "workspace");
+  /* SORUMLULUK KURALI panonunkiyle AYNI: atanan ∪ KATILIMCI ∪ iş birliği
+     (applyPersonFilter).
+
+     Katılımcı adımının yorumu vardı ama kodu yoktu: sorgu yalnız assignee_id
+     ve custom_fields.collaborators'a bakıyordu. Oysa çok kişili bir görevde
+     assignee_id yalnız İLK sorumluya eşitlenir (bkz. lib/actions/completions);
+     ikinci ve üçüncü sorumlu görevi Pano'da görüyor, Ana Sayfa'da HİÇ
+     görmüyordu (Aslı Hanım, 2026-08-24: "bu kısımlar doğru çalışmıyor").
+
+     Katılımcı satırları TEK turda çekilir (gömülü `workspace_members!inner`
+     süzgeci): önce üyelik satırını, sonra katılımları sormak Ana Sayfa'ya iki
+     bağımlı tur bindiriyordu. Sorgu patlarsa (tablo taşınmamış vb.) liste boş
+     döner ve sayfa eski davranışına düşer — çökmez. */
+  const participantTaskIdsPromise = (async () => {
+    const { data, error } = await supabase
+      .from("task_member_completions")
+      .select("task_id, workspace_members!inner(user_id)")
+      .eq("workspace_id", workspaceId)
+      .eq("workspace_members.user_id", user.id);
+    if (error) return [] as string[];
+    return [...new Set(((data ?? []) as unknown as { task_id: string }[]).map((r) => r.task_id))];
+  })();
 
   /* YEDEK HATIRLATMASI — yalnız yöneticiye, yalnız süresi geçtiyse.
      Sıraç (2026-08-29): "Haftada bir bu yedeği alıp indirmemiz gerekiyor."
@@ -132,8 +139,8 @@ export default async function HomePage() {
         .limit(1)
     : Promise.resolve({ data: [] as { created_at: string }[] });
 
-  const [myTasksRes, meetingsRes, profile, lastBackupRes] = await Promise.all([
-    myTasksQuery,
+  const [participantTaskIds, meetingsRes, profile, lastBackupRes] = await Promise.all([
+    participantTaskIdsPromise,
     supabase
       .from("planning_meetings")
       .select("id, meeting_date, time_slot, category, title")
@@ -161,6 +168,30 @@ export default async function HomePage() {
     : null;
   const backupDue = isAdmin && (backupAgeDays === null || backupAgeDays >= 7);
 
+  const myTasksQuery = supabase
+    .from("tasks")
+    .select("id, title, status, priority, due_date")
+    .eq("workspace_id", workspaceId)
+    .or(
+      [
+        `assignee_id.eq.${user.id}`,
+        `custom_fields->collaborators.cs.["${user.id}"]`,
+        ...(participantTaskIds.length > 0 ? [`id.in.(${participantTaskIds.join(",")})`] : []),
+      ].join(","),
+    )
+    .not("status", "in", "(done,archived)")
+    .is("deleted_at", null)
+    .is("archived_at", null)
+    .order("due_date", { ascending: true, nullsFirst: false })
+    .limit(200);
+  if (!isAdmin) myTasksQuery.eq("visibility", "workspace");
+  const myTasksRes = await myTasksQuery;
+
+  /* Sorgu patlarsa SESSİZ kalmaz: "işim yok" ile "liste gelmedi" birbirinden
+     ayırt edilebilir olmalı. */
+  const tasksError = myTasksRes.error
+    ? "İşleriniz getirilemedi. Sayfayı yenileyin; sorun sürerse yöneticinize bildirin."
+    : null;
   const myTasks = (myTasksRes.data ?? []) as MyTask[];
 
   /* ZAMAN KOVALARI — sayfanın omurgası. Bir tasarımcı "hangisi bugüne ait?"
@@ -192,7 +223,7 @@ export default async function HomePage() {
     ...(buckets.find((b) => b.key === "later")?.items ?? []),
     ...(buckets.find((b) => b.key === "undated")?.items ?? []),
   ];
-  const nothingAtAll = myTasks.length === 0 && meetings.length === 0;
+  const nothingAtAll = !tasksError && myTasks.length === 0 && meetings.length === 0;
 
   /* İkincil kutular TEK listede: hangisinin dolu olduğuna göre ızgaraya
      sırayla dizilirler. Böylece "bu hafta boş" diye sayfanın yarısı
@@ -203,11 +234,16 @@ export default async function HomePage() {
     panels.push({
       key: "late",
       node: (
-        <Panel title="Gecikmiş" tone="danger" href="/list?view=mine">
+        /* "Tümü" GERÇEKTEN o kümeyi açar: gecikenler Gecikenler merceğine,
+           bu hafta Bu hafta merceğine gider. Üçü de "Bana atananlar"a
+           gidiyordu; kullanıcı listede aradığı satırı tekrar süzmek zorunda
+           kalıyordu. `person=` süzgeci de eklenir: mercek herkesin işini
+           gösterir, kutu ise KİŞİNİN işini gösteriyordu. */
+        <Panel title="Gecikmiş" tone="danger" href={`/list?view=overdue&person=${user.id}`}>
           <ul className="divide-y divide-hairline">
             {late.slice(0, CAP).map((t) => <TaskRow key={t.id} task={t} overdue />)}
           </ul>
-          {late.length > CAP && <MoreLink href="/list?view=mine" />}
+          {late.length > CAP && <MoreLink href={`/list?view=overdue&person=${user.id}`} />}
         </Panel>
       ),
     });
@@ -216,11 +252,11 @@ export default async function HomePage() {
     panels.push({
       key: "week",
       node: (
-        <Panel title="Bu hafta" href="/list?view=mine">
+        <Panel title="Bu hafta" href={`/list?view=this-week&person=${user.id}`}>
           <ul className="divide-y divide-hairline">
             {week.slice(0, CAP).map((t) => <TaskRow key={t.id} task={t} />)}
           </ul>
-          {week.length > CAP && <MoreLink href="/list?view=mine" />}
+          {week.length > CAP && <MoreLink href={`/list?view=this-week&person=${user.id}`} />}
         </Panel>
       ),
     });
@@ -243,11 +279,11 @@ export default async function HomePage() {
     panels.push({
       key: "rest",
       node: (
-        <Panel title="Sonrası" href="/list?view=mine">
+        <Panel title="Sonrası" href={`/list?person=${user.id}`}>
           <ul className="divide-y divide-hairline">
             {rest.slice(0, CAP).map((t) => <TaskRow key={t.id} task={t} />)}
           </ul>
-          {rest.length > CAP && <MoreLink href="/list?view=mine" />}
+          {rest.length > CAP && <MoreLink href={`/list?person=${user.id}`} />}
         </Panel>
       ),
     });
@@ -270,33 +306,63 @@ export default async function HomePage() {
         <PhotoNudge name={fullName ?? "—"} colorHex={null} />
       )}
 
-      {/* Yedek hatırlatması — tek satır, yalnız zamanı geldiğinde. */}
+      {/* Yedek hatırlatması — tek satır, yalnız zamanı geldiğinde.
+          Metin nereye gidileceğini SÖYLER ("Ayarlar → Yedekleme"): Ayarlar
+          sekmesi URL'e yazılmadığı için sayfa ilk sekmede açılıyor ve
+          "yedek nerede?" sorusu bağlantının ucunda kalıyordu.
+          `truncate` KALDIRILDI: telefonda cümlenin yarısı kesiliyordu; satır
+          artık sarmalanır ve ok her genişlikte yerinde durur. */}
       {backupDue && (
         <Link
           href="/settings"
           className="anim-fade mb-4 flex items-center justify-between gap-3 rounded-card border border-warning/30 bg-warning/5 px-4 py-2.5 transition-colors duration-150 hover:bg-warning/10"
         >
-          <span className="flex min-w-0 items-center gap-2.5 text-[13.5px] text-ink">
-            <ShieldAlert size={16} className="shrink-0 text-warning" />
-            <span className="truncate">
+          <span className="flex min-w-0 items-start gap-2.5 text-[13.5px] text-ink sm:items-center">
+            <ShieldAlert size={16} className="mt-0.5 shrink-0 text-warning sm:mt-0" aria-hidden />
+            <span className="min-w-0">
               {backupAgeDays === null
                 ? "Sistemin yedeği hiç alınmadı."
                 : `Son yedek ${backupAgeDays} gün önce alındı.`}{" "}
-              <span className="text-muted">Haftalık yedeği indirin.</span>
+              <span className="text-muted">Ayarlar &rsaquo; Yedekleme&apos;den haftalık yedeği indirin.</span>
             </span>
           </span>
-          <ArrowRight size={15} className="shrink-0 text-warning" />
+          <ArrowRight size={15} className="shrink-0 self-center text-warning" aria-hidden />
         </Link>
       )}
 
+      {/* Liste GELMEDİYSE bunu söyle: sessiz boş sayfa "işim yok" gibi
+          okunuyordu. */}
+      {tasksError && (
+        <div
+          role="alert"
+          className="mb-4 rounded-card border border-danger/30 bg-danger/5 px-4 py-3 text-[13.5px] text-ink"
+        >
+          {tasksError}
+        </div>
+      )}
+
       {nothingAtAll ? (
-        <div className="rounded-card border border-dashed border-line bg-surface px-6 py-14 text-center">
-          <p className="text-sm font-medium text-ink">Bugün için planlanmış bir şey yok.</p>
-          <p className="mt-1 text-[13px] text-muted">
-            <Link href="/board" className="font-medium text-brand hover:text-brand-strong">Pano</Link>
-            {" · "}
-            <Link href="/planning" className="font-medium text-brand hover:text-brand-strong">Calendar</Link>
+        <div className="rounded-card border border-dashed border-line bg-surface px-6 py-12 text-center sm:py-14">
+          <p className="text-[15px] font-semibold tracking-tight text-ink">Masanız temiz.</p>
+          <p className="mx-auto mt-1 max-w-sm text-[13.5px] leading-relaxed text-muted">
+            Size atanmış açık bir iş ve bu hafta için planlanmış bir toplantı yok.
+            Yeni bir iş atandığında burada görünür.
           </p>
+          {/* Boş ekran çıkmaz sokak olmasın: iki gerçek kapı. */}
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+            <Link
+              href="/board"
+              className="inline-flex h-9 items-center rounded-control border border-line bg-surface px-3.5 text-[13.5px] font-medium text-ink transition-colors duration-150 hover:bg-surface-hover pointer-coarse:h-11"
+            >
+              Pano&apos;ya git
+            </Link>
+            <Link
+              href="/planning"
+              className="inline-flex h-9 items-center rounded-control border border-line bg-surface px-3.5 text-[13.5px] font-medium text-ink transition-colors duration-150 hover:bg-surface-hover pointer-coarse:h-11"
+            >
+              Calendar&apos;ı aç
+            </Link>
+          </div>
         </div>
       ) : (
         <div className="space-y-4">
@@ -333,7 +399,7 @@ export default async function HomePage() {
               <div className="min-w-0 p-5">
                 <div className="mb-2.5 flex items-center justify-between gap-2">
                   <h3 className="text-[13px] font-semibold tracking-tight text-ink">Teslim edilecek</h3>
-                  <SeeAll href="/list?view=mine" label="İşlerim" />
+                  <SeeAll href={`/list?person=${user.id}`} label="İşlerim" />
                 </div>
                 {today.length === 0 ? (
                   <p className="text-[13.5px] text-subtle">Bugün teslim edilecek iş yok.</p>

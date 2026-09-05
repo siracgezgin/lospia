@@ -12,6 +12,8 @@ import { EFFORT_LABELS, isEffortSize } from "@/lib/points/effort";
 import { VISIBILITY_LABELS } from "@/lib/utils/visibility";
 import { cn } from "@/lib/utils/cn";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Button } from "@/components/ui/Button";
+import { loadMoreActivity } from "@/app/(app)/activity/actions";
 import type { TaskStatus, TaskPriority } from "@/types";
 
 // One audit row, flattened on the server (actor/task joins resolved to scalars).
@@ -98,9 +100,12 @@ const ACTION_META: Record<string, ActionMeta> = {
 };
 
 const FALLBACK_META: ActionMeta = { verb: "görevi güncelledi", tone: "neutral", icon: ActivityIcon };
+/* Göreve bağlı OLMAYAN, tanınmayan olay: "görevi güncelledi" demek yanlış
+   olurdu (ortada görev yok — föy, kategori, klasör olabilir). */
+const FALLBACK_WORKSPACE_META: ActionMeta = { verb: "bir işlem yaptı", tone: "neutral", icon: ActivityIcon };
 
-function metaFor(action: string): ActionMeta {
-  return ACTION_META[action] ?? FALLBACK_META;
+function metaFor(row: { action: string; task_id: string | null }): ActionMeta {
+  return ACTION_META[row.action] ?? (row.task_id === null ? FALLBACK_WORKSPACE_META : FALLBACK_META);
 }
 
 // ── Filters (user-facing groups → action sets) ────────────────────────────────
@@ -180,8 +185,41 @@ function Transition({ detail }: { detail: { label: string; from: string; to: str
  * duruyorlar (listeyi tarif eder: "Silme 12"). Panel ve başlık gitti; başlık
  * uygulama çubuğunda zaten yazıyor.
  */
-export function ActivityLogView({ rows }: { rows: ActivityRow[] }) {
+export function ActivityLogView({
+  rows: initialRows,
+  initialCursor = null,
+}: {
+  rows: ActivityRow[];
+  /** Bir sonraki turun başlangıcı; null ise akış bitmiştir. */
+  initialCursor?: string | null;
+}) {
   const [filter, setFilter] = useState<FilterKey>("all");
+
+  /* SAYFALAMA. Akış 200 satırda kesiliyor ve orada BİTİYORDU — daha eskisine
+     ulaşmanın hiçbir yolu yoktu. Süzgeç seçimi istemcide durduğu için tam
+     sayfa gezinmesi yerine eylemle yükleniyor: "Silme"yi seçip daha fazla
+     istediğinizde süzgeç yerinde kalır. */
+  const [rows, setRows] = useState<ActivityRow[]>(initialRows);
+  const [cursor, setCursor] = useState<string | null>(initialCursor);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  function loadMore() {
+    if (!cursor || loading) return;
+    setLoading(true);
+    setLoadError(null);
+    void loadMoreActivity(cursor)
+      .then((res) => {
+        if ("error" in res) { setLoadError(res.error); return; }
+        setRows((prev) => {
+          const seen = new Set(prev.map((r) => r.id));
+          return [...prev, ...res.rows.filter((r) => !seen.has(r.id))];
+        });
+        setCursor(res.nextCursor);
+      })
+      .catch(() => setLoadError("Kayıtlar yüklenemedi. Lütfen tekrar deneyin."))
+      .finally(() => setLoading(false));
+  }
 
   const counts = useMemo(() => {
     const c: Record<FilterKey, number> = {
@@ -263,11 +301,20 @@ export function ActivityLogView({ rows }: { rows: ActivityRow[] }) {
       {/* ── Akış ─────────────────────────────────────────────────────────────── */}
       <div key={filter} className="anim-fade divide-y divide-hairline overflow-hidden rounded-card border border-line bg-surface shadow-card">
         {groups.length === 0 ? (
-          <EmptyState compact title="Bu süzgeçle eşleşen kayıt yok." />
+          <EmptyState
+            compact
+            icon={ActivityIcon}
+            title={rows.length === 0 ? "Henüz kayıt yok." : "Bu süzgeçle eşleşen kayıt yok."}
+            description={
+              rows.length === 0
+                ? "Görev oluşturma, durum değişikliği, indirme ve silme işlemleri burada birikir."
+                : "Başka bir süzgeç deneyin ya da daha eski kayıtları yükleyin."
+            }
+          />
         ) : (
           groups.map((g) => {
             const head = g.rows[0];
-            const headMeta = metaFor(head.action);
+            const headMeta = metaFor(head);
             const HeadIcon = headMeta.icon;
             const actorName = getPersonDisplayName(head.actor_name);
             const isGroup = g.rows.length > 1;
@@ -321,7 +368,7 @@ export function ActivityLogView({ rows }: { rows: ActivityRow[] }) {
                     // Grouped: one compact line per change (no repeated actor/task).
                     <ul className="mt-1 space-y-0.5">
                       {g.rows.map((r) => {
-                        const m = metaFor(r.action);
+                        const m = metaFor(r);
                         const RowIcon = m.icon;
                         const detail = changeDetail(r);
                         return (
@@ -340,6 +387,26 @@ export function ActivityLogView({ rows }: { rows: ActivityRow[] }) {
           })
         )}
       </div>
+
+      {/* ── Daha eskisi ──────────────────────────────────────────────────────
+          Akış imleçle ilerler; her tur sabit maliyettedir. Bittiğinde düğme
+          yerine tek satırlık bir kapanış yazar — "yükleniyor mu, bitti mi"
+          sorusu ekranda kalmasın. */}
+      {(cursor || loadError) && (
+        <div className="mt-3 flex flex-col items-center gap-2">
+          {loadError && (
+            <p role="alert" className="anim-fade-down text-[12.5px] text-danger">{loadError}</p>
+          )}
+          {cursor && (
+            <Button variant="secondary" size="sm" onClick={loadMore} loading={loading}>
+              Daha fazla yükle
+            </Button>
+          )}
+        </div>
+      )}
+      {!cursor && !loadError && rows.length > 0 && (
+        <p className="mt-3 text-center text-[12px] text-subtle">Kayıtların tamamı listelendi.</p>
+      )}
     </div>
   );
 }

@@ -67,6 +67,22 @@ export default async function ListPage({
       .eq("workspace_id", workspaceId),
   ]);
 
+  /* Görev sorgusu hata verdiğinde ekran BOŞ bir liste gösteriyordu: kullanıcı
+     "hiç görevim yok" sanıyordu. Hata artık görünür ve ne yapacağını söyler. */
+  if (tasksResult.error) {
+    console.error("[list] tasks query failed:", tasksResult.error.message);
+    return (
+      <div className="w-full px-4 py-10 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-md rounded-card border border-danger/25 bg-danger/10 p-5 text-center">
+          <p className="text-[14px] font-medium text-danger">Görevler yüklenemedi.</p>
+          <p className="mt-1 text-[13px] text-muted">
+            Bağlantı kurulamadı. Sayfayı yenileyin; sorun sürerse yöneticinize bildirin.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const tasks: Task[] = tasksResult.data ?? [];
   const savedViews: SavedView[] = viewsResult.data ?? [];
   type ProfileLite = Pick<Profile, "id" | "full_name" | "email" | "avatar_url">;

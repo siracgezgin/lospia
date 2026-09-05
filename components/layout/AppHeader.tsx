@@ -34,10 +34,17 @@ const PAGE_TITLES: { match: (p: string) => boolean; title: string }[] = [
   { match: (p) => p.startsWith("/admin-board"), title: "Admin Board" },
   { match: (p) => p.startsWith("/board"), title: "Board" },
   { match: (p) => p.startsWith("/planning"), title: "Calendar" },
-  // Raporlar List yüzeyinin son sekmesidir; başlık yüzeyin adını söyler,
-  // hangi sekmede olunduğunu şeridin kendisi gösterir.
   { match: (p) => p.startsWith("/list"), title: "List" },
-  { match: (p) => p.startsWith("/dashboard"), title: "List" },
+  /* Raporlar List yüzeyinin son SEKMESİDİR ama kendi adı vardır: dizinde
+     (MODULE_DIRECTORY) ve sayfanın metadata.title'ında "Reports" yazıyor.
+     Başlık "List" derken kart "Reports" diyordu — kullanıcı "Reports"a
+     tıklayıp "List" yazan bir ekrana düşüyordu (tek terminoloji kuralı).
+     Menüde yine List satırı yanar (bkz. lib/nav/app-nav → ROUTE_OWNER):
+     yüzey aynı, ekranın adı kendi adı. */
+  { match: (p) => p.startsWith("/dashboard"), title: "Reports" },
+  /* Kişi bazlı tek sayfa rapor — /reports/[id]. Eşleşme yoktu ve başlık
+     çubuğu bomboş çiziliyordu. */
+  { match: (p) => p.startsWith("/reports"), title: "Person Report" },
   // "/collection/maliyet" kendi adını taşır — sıra önemli (startsWith).
   { match: (p) => p.startsWith("/collection/maliyet"), title: "Cost" },
   { match: (p) => p.startsWith("/collection/veri"), title: "Product Data" },
@@ -91,6 +98,7 @@ function ProfileMenu({
   const subtitle = personTitle({ jobTitle, role, viewerIsAdmin });
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -98,7 +106,12 @@ function ProfileMenu({
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
+      /* Esc menüyü kapatır ve odağı AÇAN düğmeye geri verir. Geri vermeyince
+         klavye kullanıcısı sayfanın en başına düşüyordu. */
+      if (e.key === "Escape") {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
     }
     document.addEventListener("mousedown", onDoc);
     document.addEventListener("keydown", onKey);
@@ -111,10 +124,13 @@ function ProfileMenu({
   return (
     <div ref={ref} className="relative">
       <button
+        ref={triggerRef}
+        type="button"
         onClick={() => setOpen((o) => !o)}
         className="flex h-9 items-center gap-2 rounded-control py-1 pl-2 pr-1.5 transition-colors duration-150 hover:bg-surface-muted active:bg-surface-sunken"
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-label={`Hesap menüsü — ${displayName}`}
         title={subtitle ? `${displayName} · ${subtitle}` : displayName}
       >
         <PersonAvatar name={displayName} photoUrl={photoUrl} size="sm" />
@@ -225,17 +241,23 @@ export function AppHeader({
        z-30'daydı ve DOM'da sonra geldiği için profil menüsünün ÜSTÜNE
        çiziliyordu — menü kırpılmış görünüyordu (2026-08-20 geri bildirimi). */
     <header className="relative z-40 flex h-14 shrink-0 items-center justify-between border-b border-line bg-surface px-4 sm:px-5">
-      <div className="flex items-center gap-2.5 min-w-0">
-        {/* key={pathname} — rota değişince başlık yumuşakça belirir. */}
-        <h1
-          key={pathname}
-          className="text-[15px] font-semibold tracking-tight text-ink truncate anim-fade"
-        >
-          {title}
-        </h1>
+      <div className="flex min-w-0 items-center gap-2.5">
+        {/* key={pathname} — rota değişince başlık yumuşakça belirir.
+            Eşleşme yoksa BOŞ bir <h1> çizilmez: ekran okuyucuya adsız başlık
+            duyuruluyordu. */}
+        {title && (
+          <h1
+            key={pathname}
+            className="anim-fade truncate text-[15px] font-semibold tracking-tight text-ink"
+          >
+            {title}
+          </h1>
+        )}
       </div>
 
-      <div className="flex items-center gap-3">
+      {/* shrink-0: uzun sayfa başlığı çan/profil alanını sıkıştırmasın —
+          telefonda başlık uzayınca çan düğmesi eziliyordu. */}
+      <div className="flex shrink-0 items-center gap-2 sm:gap-3">
         <NotificationBell unreadCount={unreadCount} userId={userId} notifications={notifications} deadTaskIds={deadTaskIds} />
         <div className="hidden md:block">
           <ProfileMenu

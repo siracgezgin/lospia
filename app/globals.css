@@ -255,6 +255,19 @@ body {
   label:has(> input[type="radio"]:not(:disabled)) {
     cursor: pointer;
   }
+
+  /* KAPALI KONTROL "kapalı" hissettirmeli. Devre dışı bir alanın üstünde imleç
+     hâlâ metin/ok imleciydi; kullanıcı tıklıyor, hiçbir şey olmuyor ve bunun
+     bir hata mı yoksa kilit mi olduğunu anlamıyordu. (Devre dışı DÜĞMELER
+     `pointer-events: none` taşıdığı için zaten imleç almaz — bu kural
+     esas olarak alanlar, seçiciler ve aria ile kapatılmış öğeler içindir.) */
+  button:disabled,
+  input:disabled,
+  select:disabled,
+  textarea:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
 }
 
 /* ──────────────────────────────────────────────────────────────────────────

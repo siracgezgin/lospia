@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { X, UserMinus, Pencil, UserPlus } from "lucide-react";
+import { X, UserMinus, Pencil, UserPlus, Check } from "lucide-react";
 import {
   revokeTeamAccess,
   changeWorkspaceMemberRole,
@@ -64,6 +64,9 @@ export function MembersManager({
   const [grants, setGrants] = useState(pendingGrants);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  /* "Kaydedildi" geri bildirimi. Panel kapanınca ekranda hiçbir iz kalmıyordu;
+     kullanıcı kaydın gidip gitmediğini anlamıyordu. */
+  const [notice, setNotice] = useState<string | null>(null);
 
   /* KİMLİK (renk + fotoğraf) — ayrı bölüm değil, üyenin kendi satırında.
      Önce iki ayrı kart aynı sekiz kişiyi iki kez listeliyordu. */
@@ -76,6 +79,7 @@ export function MembersManager({
     next: { colorKey?: string | null; iconKey?: string | null; jobTitle?: string | null },
   ) {
     setError(null);
+    setNotice(null);
     startTransition(async () => {
       const res = await saveMemberIdentity(m.id, {
         colorKey: next.colorKey !== undefined ? next.colorKey : m.colorKey,
@@ -90,10 +94,13 @@ export function MembersManager({
   /** Açık düzenleme paneli — üye başına TEK. */
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
 
-  /** Silme/kaldırma onayı — üye satırı ya da bekleyen davet. */
+  /** Silme/kaldırma onayı — üye satırı ya da bekleyen davet.
+   *  Üye silme ÇİFT ONAYLIDIR (`stage`): ilk pencere ne olacağını anlatır,
+   *  ikincisi son onayı ister. Bir kişinin hesabını silmek geri alınamaz ve
+   *  tek tıkla olmamalı. */
   const [confirm, setConfirm] = useState<
-    | { kind: "member"; id: string; label: string }
-    | { kind: "grant"; id: string; label: string }
+    | { kind: "member"; id: string; label: string; stage: 1 | 2 }
+    | { kind: "grant"; id: string; label: string; stage: 1 }
     | null
   >(null);
 
@@ -116,6 +123,7 @@ export function MembersManager({
     },
   ) {
     setError(null);
+    setNotice(null);
     startTransition(async () => {
       const name = next.fullName.trim();
       if (name && name !== (m.profiles?.full_name ?? "")) {
@@ -164,6 +172,7 @@ export function MembersManager({
       }
 
       setEditingMemberId(null);
+      setNotice(`${name || "Üye"} kaydedildi.`);
       router.refresh();
     });
   }
@@ -182,7 +191,13 @@ export function MembersManager({
   function runConfirmedDelete() {
     if (!confirm) return;
     const target = confirm;
+    // Üye silmede ilk pencere yalnız ANLATIR; asıl işlem ikinci onaydan sonra.
+    if (target.kind === "member" && target.stage === 1) {
+      setConfirm({ ...target, stage: 2 });
+      return;
+    }
     setError(null);
+    setNotice(null);
     startTransition(async () => {
       if (target.kind === "grant") {
         const result = await revokeTeamAccess(target.id);
@@ -191,6 +206,14 @@ export function MembersManager({
       } else {
         const result = await removeWorkspaceMemberAccount(target.id);
         if ("error" in result) { setError(result.error); setConfirm(null); return; }
+        /* YARIM BAŞARI da söylenir: kişi görev geçmişinde kullanıldıysa hesabı
+           tamamen silinemez, yalnız erişimi kalkar. Bu sonuç sessizce
+           yutuluyordu ve yönetici "sildim" sanıyordu. */
+        setNotice(
+          result.hardDeleted
+            ? `${target.label || "Kişi"} silindi.`
+            : `${target.label || "Kişi"} için giriş erişimi kaldırıldı. Geçmiş kayıtlarda kullanıldığı için hesabı tamamen silinemedi.`,
+        );
         setMembers((prev) => prev.filter((m) => m.id !== target.id));
         // Reflect the server-side cleanup (auth user / profile removal) so the
         // list can't show a stale row after a refresh.
@@ -202,6 +225,36 @@ export function MembersManager({
 
   return (
     <div className="space-y-4">
+      {/* HATA EN ÜSTTE. Önce listenin ALTINDA duruyordu: sekiz kişilik bir
+          listede "rol değiştirilemedi" mesajı ekranın dışında kalıyor, kullanıcı
+          hiçbir şey olmadı sanıyordu. */}
+      {error && (
+        <div
+          role="alert"
+          className="anim-fade-down flex items-start justify-between gap-3 rounded-control border border-danger/25 bg-danger/8 px-3 py-2 text-[13px] leading-relaxed text-danger"
+        >
+          <span className="min-w-0 break-words py-1">{error}</span>
+          <IconButton
+            size="sm"
+            aria-label="Kapat"
+            title="Kapat"
+            onClick={() => setError(null)}
+            className="-mr-1 shrink-0 text-danger hover:bg-danger/10 hover:text-danger"
+          >
+            <X size={14} />
+          </IconButton>
+        </div>
+      )}
+
+      {notice && !error && (
+        <p
+          role="status"
+          className="anim-fade-down inline-flex items-center gap-1.5 rounded-control bg-success/10 px-3 py-1.5 text-[12.5px] font-medium text-success"
+        >
+          <Check size={14} aria-hidden /> {notice}
+        </p>
+      )}
+
       {/* Kişi ekle — ayrı bir "Hesap oluştur" kartı DEĞİL. Aslı Hanım
           (2026-08-23): "Bunların tamamı aynı başlıkta toplanabilir."
           Ekibe kişi eklemek ekip yönetiminin parçası; formu isteyen açar. */}
@@ -292,7 +345,8 @@ export function MembersManager({
                     <IconButton
                       size="sm"
                       onClick={() => setEditingMemberId(editing ? null : m.id)}
-                      aria-label="Üyeyi düzenle"
+                      aria-label={editing ? "Düzenlemeyi kapat" : "Üyeyi düzenle"}
+                      title={editing ? "Düzenlemeyi kapat" : "Üyeyi düzenle"}
                       aria-expanded={editing}
                       className={cn(editing && "bg-surface-muted text-ink")}
                     >
@@ -306,9 +360,11 @@ export function MembersManager({
                         kind: "member",
                         id: m.id,
                         label: m.profiles?.full_name ?? m.profiles?.email ?? "",
+                        stage: 1,
                       })}
                       disabled={isPending}
                       aria-label="Üyeyi kaldır"
+                      title="Üyeyi kaldır"
                       className="hover:bg-danger/10 hover:text-danger"
                     >
                       <UserMinus size={14} />
@@ -320,6 +376,8 @@ export function MembersManager({
               {editing && (
                 <MemberEditPanel
                   member={ident}
+                  memberId={m.id}
+                  canResetPassword={canManageIdentity && !isSelf && !isOwnerRow}
                   draft={{
                     fullName: m.profiles?.full_name ?? "",
                     username: m.profiles?.username ?? "",
@@ -363,9 +421,10 @@ export function MembersManager({
                 </div>
                 <IconButton
                   size="sm"
-                  onClick={() => setConfirm({ kind: "grant", id: g.id, label: g.email })}
+                  onClick={() => setConfirm({ kind: "grant", id: g.id, label: g.email, stage: 1 })}
                   disabled={isPending}
                   aria-label="Erişimi kaldır"
+                  title="Erişimi kaldır"
                   className="hover:bg-danger/10 hover:text-danger"
                 >
                   <X size={14} />
@@ -376,22 +435,26 @@ export function MembersManager({
         </div>
       )}
 
-      {error && <p role="alert" className="anim-fade-down text-[12.5px] text-danger">{error}</p>}
-
       <ConfirmDialog
         open={confirm !== null}
         pending={isPending}
         title={
-          confirm?.kind === "member"
-            ? "Bu kişiyi silmek istiyor musunuz?"
-            : "Erişimi kaldırmak istiyor musunuz?"
+          confirm?.kind !== "member"
+            ? "Erişimi kaldırmak istiyor musunuz?"
+            : confirm.stage === 1
+              ? "Bu kişiyi silmek istiyor musunuz?"
+              : `Son onay — ${confirm.label || "bu kişi"}`
         }
-        confirmLabel={confirm?.kind === "member" ? "Evet, sil" : "Kaldır"}
+        confirmLabel={
+          confirm?.kind !== "member" ? "Kaldır" : confirm.stage === 1 ? "Devam et" : "Evet, sil"
+        }
         message={
           confirm?.kind === "grant"
             ? `${confirm.label} için ekip erişimi kaldırılacak.`
             : confirm?.kind === "member"
-              ? `${confirm.label} silinecek: giriş erişimi kalkar, hesabı sistemden temizlenir. Oluşturduğu görev ve notlar korunur.`
+              ? confirm.stage === 1
+                ? `${confirm.label || "Bu kişi"} silinecek:\n• Uygulamaya bir daha giriş yapamaz.\n• Hesabı, kullanıcı adı ve fotoğrafı sistemden kaldırılır.\n• Oluşturduğu görevler, notlar ve geçmiş kayıtları KORUNUR.`
+                : "Bu işlem geri alınamaz. Kişi yeniden çalışacaksa hesabı yeniden açmanız gerekir."
               : ""
         }
         onConfirm={runConfirmedDelete}
