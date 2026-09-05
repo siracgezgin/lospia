@@ -106,7 +106,21 @@ export function Tile({
           !row && (compact ? "size-9 sm:size-10" : "size-16 sm:size-24"),
           !st && "bg-surface-sunken text-muted",
         )}
-        style={st ? { backgroundColor: st.hex + "1A", color: st.hex, ["--tile-ring" as string]: st.hex + "59" } : undefined}
+        /* KİŞİ ile KATEGORİ farklı boyanır — ama kişi HER YERDE aynı boyanır.
+           Sıraç (2026-08-30): "Uyumsuzluktan nefret ederim, her yerde aynı
+           mantıkla olmalı." Baş harfli kart (yani KİŞİ) burada soluk zemin +
+           renkli yazıyla çiziliyordu; oysa takvimdeki, listedeki ve başlıktaki
+           aynı kişi DOLU renk + beyaz yazıyla görünüyor (PersonAvatar). Aynı
+           insan iki ayrı görünüşe sahipti. Kişi artık her yerde PersonAvatar
+           ile aynı: dolu renk, beyaz baş harf. İkonlu kart (kategori, klasör)
+           eski soluk zeminini korur — o bir kişi değil. */
+        style={
+          st
+            ? initials && !photoUrl
+              ? { backgroundColor: st.hex, color: "#fff", ["--tile-ring" as string]: st.hex + "59" }
+              : { backgroundColor: st.hex + "1A", color: st.hex, ["--tile-ring" as string]: st.hex + "59" }
+            : undefined
+        }
       >
         {photoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element

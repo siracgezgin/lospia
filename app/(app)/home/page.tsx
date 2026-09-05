@@ -5,6 +5,7 @@ import { startOfWeek, addDays, format } from "date-fns";
 import { requireModuleMember } from "@/lib/modules/context";
 import { getProfile } from "@/lib/supabase/server";
 import { AccessDenied } from "@/components/modules/AccessDenied";
+import { PhotoNudge } from "@/components/home/PhotoNudge";
 import { categoryMeta } from "@/lib/planning/categories";
 import { cn } from "@/lib/utils/cn";
 import type { TaskPriority, TaskStatus } from "@/types";
@@ -262,6 +263,12 @@ export default async function HomePage() {
         </h1>
         <p className="mt-0.5 text-[13px] text-muted sm:text-sm">{longDate}</p>
       </header>
+
+      {/* FOTOĞRAF DAVETİ — yalnız fotoğrafı olmayana. Kişi kendi rozetini
+          görüp tek tıkla profiline gider (bkz. PhotoNudge). */}
+      {!profile?.avatar_url && (
+        <PhotoNudge name={fullName ?? "—"} colorHex={null} />
+      )}
 
       {/* Yedek hatırlatması — tek satır, yalnız zamanı geldiğinde. */}
       {backupDue && (

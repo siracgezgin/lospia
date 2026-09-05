@@ -19,6 +19,7 @@ import { uploadAvatar, removeAvatar } from "@/lib/actions/avatars";
 import { compressImage } from "@/lib/utils/compress-image";
 import { PersonAvatar } from "@/components/ui/PersonAvatar";
 import { Button } from "@/components/ui/Button";
+import { AvatarCropper } from "./AvatarCropper";
 
 const MAX_ORIGINAL_BYTES = 5 * 1024 * 1024;
 
@@ -42,17 +43,27 @@ export function AvatarUploader({ userId, name, photoUrl, colorHex, disabled, nam
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  /* Seçilen ham dosya önce KIRPMA penceresine gider; yükleme oradan döner.
+     Fotoğrafın kare olması "kişi her yerde aynı görünsün" kuralının veri
+     düzeyindeki garantisidir (bkz. AvatarCropper). */
+  const [pending, setPending] = useState<File | null>(null);
 
-  async function handleFile(file: File | undefined) {
+  function pickFile(file: File | undefined) {
     if (!file) return;
     setError(null);
     if (file.size > MAX_ORIGINAL_BYTES) {
       setError("Fotoğraf 5 MB sınırını aşıyor.");
       return;
     }
+    setPending(file);
+  }
+
+  async function handleFile(file: File | undefined) {
+    if (!file) return;
+    setError(null);
     setBusy(true);
     try {
-      // Kare ve küçük: rozet en fazla 96px çiziliyor, 512px fazlasıyla yeter.
+      // Kırpıcı zaten 512×512 kare üretti; burada yalnız güvenlik ağı.
       const compressed = await compressImage(file, { maxDim: 512, quality: 0.85 });
       const fd = new FormData();
       fd.append("file", compressed);
@@ -93,7 +104,7 @@ export function AvatarUploader({ userId, name, photoUrl, colorHex, disabled, nam
         className="hidden"
         aria-label="Fotoğraf seç"
         tabIndex={-1}
-        onChange={(e) => handleFile(e.target.files?.[0])}
+        onChange={(e) => pickFile(e.target.files?.[0])}
       />
 
       {/* Yükleme ikincil bir eylem: sayfanın tek primary'si "Kaydet". */}
@@ -122,6 +133,14 @@ export function AvatarUploader({ userId, name, photoUrl, colorHex, disabled, nam
       )}
 
       {error && <p role="alert" className="w-full text-[12px] text-danger">{error}</p>}
+
+      {pending && (
+        <AvatarCropper
+          file={pending}
+          onCancel={() => { setPending(null); if (inputRef.current) inputRef.current.value = ""; }}
+          onDone={(square) => { setPending(null); void handleFile(square); }}
+        />
+      )}
     </div>
   );
 }
