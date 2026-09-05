@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   FolderPlus, Upload, Trash2, Loader2, Download, ChevronLeft, ChevronRight, Home,
   Lock, Users, Pencil, Plus, FileText, Table2, Link2 as LinkIcon,
@@ -317,7 +317,22 @@ export function DriveBrowser({
      Drive'da da öyle. `section` alanı veritabanında duruyor, hep 'teamwork'. */
   const section = "teamwork" as const;
   const router = useRouter();
-  const [cwd, setCwd] = useState<string | null>(null);   // null = kök
+  /* AÇIK KLASÖR ADRESTE TUTULUR (?f=<id>).
+     Önce yalnız bileşen durumundaydı: bir klasörün içindeyken sayfayı
+     yenileyince kullanıcı köke atılıyordu ve klasör bağlantısı da
+     paylaşılamıyordu (Sıraç, 2026-09-06). Adres tek doğruluk kaynağı olunca
+     yenileme, geri/ileri ve bağlantı paylaşımı kendiliğinden çalışıyor. */
+  const searchParams = useSearchParams();
+  const cwd = searchParams.get("f");
+  const setCwd = useCallback((id: string | null) => {
+    const next = new URLSearchParams(searchParams.toString());
+    if (id) next.set("f", id);
+    else next.delete("f");
+    const qs = next.toString();
+    /* scroll:false — klasör değiştirmek sayfanın başına atmasın; Drive'da da
+       liste yerinde kalır. */
+    router.push(qs ? `?${qs}` : "?", { scroll: false });
+  }, [router, searchParams]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   /** Yeni klasörün adı yazılıyor — kart, klasörlerin başında yerinde açılır. */
@@ -1465,7 +1480,7 @@ export function DriveBrowser({
                ileri geri gezinirken pencere her adımda zıplıyordu (Sıraç,
                2026-09-06: "hepsi eşit boyutta açılmıyor"). Çerçeve sabit,
                görsel içine object-contain ile oturur. */
-            <div className="grid h-[60vh] place-items-center rounded-control bg-surface-sunken">
+            <div className="grid h-[60vh] place-items-center overflow-hidden rounded-control bg-surface-sunken">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={preview.url}
