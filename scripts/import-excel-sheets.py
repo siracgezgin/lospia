@@ -174,6 +174,56 @@ def cell_text(v):
     return str(v).strip() or None
 
 
+def _rgb(color):
+    """openpyxl rengi → "#rrggbb". Tema/indeksli renkler ATLANIR: onların
+    gerçek karşılığı çalışma kitabının tema paletinde ve yanlış tahmin etmek
+    hücreyi olduğundan farklı boyar."""
+    if color is None or getattr(color, "type", None) != "rgb":
+        return None
+    v = getattr(color, "rgb", None)
+    if not isinstance(v, str) or len(v) != 8:
+        return None
+    if v[:2] == "00":            # tamamen saydam
+        return None
+    hexv = v[2:].lower()
+    return None if hexv in ("ffffff", "000000") else f"#{hexv}"
+
+
+def cell_style(cell):
+    """Excel biçimi → lib/sheets/model CellStyle.
+
+    Sıraç (2026-09-06) ekran görüntüsüyle bildirdi: uzun metinler kırpılıyor ve
+    birleştirilmiş başlıklar iki satıra yayılınca yazı kesiliyordu. Sebep
+    biçimin HİÇ aktarılmamasıydı — özellikle "metni kaydır" ve satır
+    yüksekliği. Kalın/italik/hizalama da buradan gelir; tablo Aslı Hanım'ın
+    Excel'ine benzesin.
+    """
+    st = {}
+    f = cell.font
+    if f is not None:
+        if f.bold:
+            st["b"] = True
+        if f.italic:
+            st["i"] = True
+        if f.underline:
+            st["u"] = True
+        fg = _rgb(f.color)
+        if fg:
+            st["fg"] = fg
+    a = cell.alignment
+    if a is not None:
+        if a.wrap_text:
+            st["w"] = True
+        if a.horizontal in ("left", "center", "right"):
+            st["a"] = {"left": "l", "center": "c", "right": "r"}[a.horizontal]
+    fill = cell.fill
+    if fill is not None and getattr(fill, "patternType", None) == "solid":
+        bg = _rgb(fill.start_color)
+        if bg:
+            st["bg"] = bg
+    return st or None
+
+
 def main():
     ap = argparse.ArgumentParser(description="Excel kitabını AF Teamwork tablosuna aktarır")
     ap.add_argument("--file", required=True)
@@ -223,13 +273,38 @@ def main():
         if (ws.max_row or 0) > MAX_ROWS or (ws.max_column or 0) > MAX_COLS:
             truncated.append(f"{name} ({ws.max_row}×{ws.max_column} → {max_r}×{max_c})")
 
-        cells = {}
+        # İKİ GEÇİŞ. Excel sayfalarında boş ama BİÇİMLİ dev bölgeler oluyor
+        # (bütün satıra dolgu verilmiş gibi). Hepsini yazınca üretim föyü
+        # dosyası 3.248 hücreden 84.690'a çıktı — anlık görüntü şişiyor ve
+        # tablo yavaşlıyor. Bu yüzden biçim, YAZI OLAN hücrelerin çevrelediği
+        # alanın dışına taşmaz; başlık bandındaki dolgular korunur, sayfanın
+        # boş kuyruğu atılır.
+        text_cells = {}
+        last_r = last_c = -1
         for row in ws.iter_rows(min_row=1, max_row=max_r, max_col=max_c):
             for cell in row:
                 text = cell_text(cell.value)
                 if text is None:
                     continue
-                cells[f"{cell.row - 1}:{cell.column - 1}"] = {"v": text}
+                r0, c0 = cell.row - 1, cell.column - 1
+                text_cells[(r0, c0)] = text
+                last_r, last_c = max(last_r, r0), max(last_c, c0)
+
+        cells = {}
+        for row in ws.iter_rows(min_row=1, max_row=min(max_r, last_r + 1) or 1,
+                                max_col=min(max_c, last_c + 1) or 1):
+            for cell in row:
+                r0, c0 = cell.row - 1, cell.column - 1
+                text = text_cells.get((r0, c0))
+                st = cell_style(cell)
+                if text is None and st is None:
+                    continue
+                out = {}
+                if text is not None:
+                    out["v"] = text
+                if st:
+                    out["s"] = st
+                cells[f"{r0}:{c0}"] = out
 
         # Sütun genişlikleri — Aslı Hanım'ın düzeni bozulmasın.
         col_w = {}
@@ -243,6 +318,16 @@ def main():
             if 0 <= idx < MAX_COLS:
                 col_w[str(idx)] = max(48, min(400, round(dim.width * PX_PER_CHAR)))
 
+        # Satır yükseklikleri. Excel'de punto, ekranda piksel (1 pt = 4/3 px).
+        # Aktarılmadığında iki satıra yayılmış başlıklar 30 pikselde kalıp
+        # yazıyı kesiyordu.
+        row_h = {}
+        for idx, dim in (ws.row_dimensions or {}).items():
+            if not dim.height or not isinstance(idx, int):
+                continue
+            if 0 <= idx - 1 < max_r:
+                row_h[str(idx - 1)] = max(20, min(400, round(dim.height * 4 / 3)))
+
         # Birleştirilmiş hücreler — "r1:c1:r2:c2"
         merges = []
         for rng in (ws.merged_cells.ranges if ws.merged_cells else []):
@@ -253,7 +338,7 @@ def main():
 
         sheets.append({
             "name": name[:60], "rows": max(max_r, 30), "cols": max(max_c, 12),
-            "cells": cells, "colW": col_w, "merges": merges,
+            "cells": cells, "colW": col_w, "rowH": row_h, "merges": merges,
             "_anchors": anchors.get(name, {}),
         })
         image_slots += len(anchors.get(name, {}))

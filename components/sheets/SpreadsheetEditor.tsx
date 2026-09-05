@@ -1032,6 +1032,10 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                     );
                   }
 
+                  /* Sağdaki hücre boşsa metin oraya taşabilir (bkz. className). */
+                  const spill =
+                    !st?.w && !cell?.img && formatValue(val, st) !== "" && !getCell(sheet, r, c + 1);
+
                   return (
                     <div
                       key={c}
@@ -1059,7 +1063,14 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                         setMenu({ x: e.clientX, y: e.clientY, kind: "cell", r, c });
                       }}
                       className={cn(
-                        "relative shrink-0 select-none overflow-hidden border-b border-r border-hairline px-1.5 text-[13.5px] tabular-nums",
+                        "relative shrink-0 select-none border-b border-r border-hairline px-1.5 text-[13.5px] tabular-nums",
+                        /* TAŞMA — Excel davranışı. Uzun bir metin, sağındaki
+                           hücre BOŞSA onun üzerine taşar; Excel'de de böyledir.
+                           Önce her hücre overflow-hidden'dı ve uzun başlıklar
+                           ortadan kesiliyordu (Sıraç, 2026-09-06). Kaydırma
+                           açıksa ya da sağdaki hücre doluysa yine kırpılır —
+                           yoksa iki metin üst üste binerdi. */
+                        spill ? "overflow-visible" : "overflow-hidden",
                         st?.w ? "whitespace-pre-wrap break-words leading-[1.35]" : "whitespace-nowrap",
                         selected ? "bg-brand-soft/50" : "bg-surface",
                         inFill && "bg-brand-soft/30",
@@ -1071,6 +1082,9 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                       )}
                       style={{
                         width: w, height: h,
+                        /* Taşan hücre komşusunun ZEMİNİNİN üstünde kalmalı;
+                           yoksa boş komşu kendi arka planıyla yazıyı örterdi. */
+                        zIndex: spill ? 1 : undefined,
                         textAlign: alignOf(val, st),
                         lineHeight: st?.w ? undefined : `${h - 1}px`,
                         background: st?.bg || undefined,
