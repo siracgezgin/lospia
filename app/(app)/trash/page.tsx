@@ -1,5 +1,6 @@
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { TrashView } from "@/components/task/TrashView";
 import { canViewDestructivePages } from "@/lib/auth/permissions";
 import type { Task, WorkspaceRole } from "@/types";
@@ -10,7 +11,7 @@ export const metadata = { title: "Trash" };
 export default async function TrashPage() {
   const supabase = await createClient();
   const user = await getAuthUser();
-  if (!user) redirect("/login");
+  if (!user) redirectToSignIn();
 
   const { data: memberRows } = await supabase
     .from("workspace_members")

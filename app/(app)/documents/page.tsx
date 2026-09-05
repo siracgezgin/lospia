@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { requireModuleMember } from "@/lib/modules/context";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
@@ -13,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 export default async function DocumentsPage() {
   const { supabase, user, workspaceId, isAdmin, gate } = await requireModuleMember();
-  if (gate === "login") redirect("/login");
+  if (gate === "login") redirectToSignIn();
   if (gate !== "ok" || !workspaceId || !user) return <AccessDenied />;
 
   /* AF Teamwork YALNIZ kendi bölümünü gösterir (20240327). `section` kolonu

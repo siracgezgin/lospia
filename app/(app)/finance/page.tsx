@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { SetupRequiredNotice } from "@/components/modules/SetupRequiredNotice";
@@ -14,7 +15,7 @@ export const metadata = { title: "Finance" };
 // karşılığı; okuma dahil admin-only (RLS + sayfa kapısı).
 export default async function FinancePage() {
   const { supabase, workspaceId, gate } = await requireModuleAdmin();
-  if (gate === "login") redirect("/login");
+  if (gate === "login") redirectToSignIn();
   if (gate !== "ok" || !workspaceId) return <AccessDenied />;
 
   const res = await supabase

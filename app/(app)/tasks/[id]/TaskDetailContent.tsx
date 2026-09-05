@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
+import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { TaskDetail } from "@/components/task/TaskDetail";
 import type { Task, TaskActivity, TaskActivityLogWithActor, TimeEntry, CustomFieldDefinition, Profile, WorkspaceContact, WorkspaceDepartment, TaskNoteWithAuthor } from "@/types";
 import { TaskNotesPanel, type NotePerson } from "@/components/task/TaskNotesPanel";
@@ -31,7 +32,7 @@ export async function TaskDetailContent({
 }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  if (!user) redirectToSignIn();
 
   // Back link follows the board the task was opened from (Yönetici Pano keeps its
   // visibility/manager tab); anything else falls back to the normal board.

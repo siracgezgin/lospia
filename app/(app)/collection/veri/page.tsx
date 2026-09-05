@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { requireModuleMember } from "@/lib/modules/context";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { CollectionTabs } from "@/components/collection/PaymentTable";
@@ -30,7 +31,7 @@ export const metadata = { title: "Product Data" };
  */
 export default async function CollectionDataPage() {
   const { supabase, user, workspaceId, isAdmin, gate } = await requireModuleMember();
-  if (gate === "login") redirect("/login");
+  if (gate === "login") redirectToSignIn();
   if (gate !== "ok" || !workspaceId || !user) return <AccessDenied />;
 
   const [

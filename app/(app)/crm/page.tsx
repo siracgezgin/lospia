@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { requireModuleMember } from "@/lib/modules/context";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { CrmView } from "@/components/crm/CrmView";
@@ -21,7 +22,7 @@ export default async function CrmPage({
   // Herkes görür, yönetici düzenler — CrmView isAdmin=false iken tüm yazma
   // aksiyonlarını gizler; RLS zaten üye okumasına izin veriyor.
   const { supabase, workspaceId, isAdmin, gate } = await requireModuleMember();
-  if (gate === "login") redirect("/login");
+  if (gate === "login") redirectToSignIn();
   if (gate !== "ok" || !workspaceId) return <AccessDenied />;
 
   const [contactsResult, membersResult, tasksResult, probeResult] = await Promise.all([

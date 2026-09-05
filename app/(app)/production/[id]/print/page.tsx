@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { requireModuleMember } from "@/lib/modules/context";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { SheetPrintSheet } from "@/components/production/SheetPrintSheet";
@@ -31,7 +32,7 @@ export default async function ProductionSheetPrintPage({
   const { id } = await params;
   const { fiyat } = await searchParams;
   const { supabase, workspaceId, gate } = await requireModuleMember();
-  if (gate === "login") redirect("/login");
+  if (gate === "login") redirectToSignIn();
   if (gate !== "ok" || !workspaceId) return <AccessDenied />;
 
   const { data, error } = await supabase

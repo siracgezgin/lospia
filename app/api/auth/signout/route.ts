@@ -28,7 +28,15 @@ async function signOutAndRedirect(request: Request): Promise<NextResponse> {
     console.error("[signout] oturum kapatılamadı:", errorMessage(error));
   }
 
-  const response = NextResponse.redirect(new URL("/login", request.url), { status: 303 });
+  /* `?reason=session` ile gelindiyse bunu giriş ekranına taşırız: hem proxy
+     oturumu tazeymiş gibi görüp kullanıcıyı geri sektirmesin (yönlendirme
+     döngüsünün ikinci kilidi), hem de ekranda "oturumun sona ermiş" denebilsin.
+     Bkz. lib/auth/session-redirect.ts. */
+  const reason = new URL(request.url).searchParams.get("reason");
+  const target = new URL("/login", request.url);
+  if (reason === "session") target.searchParams.set("e", "session");
+
+  const response = NextResponse.redirect(target, { status: 303 });
   response.headers.set("cache-control", "no-store");
 
   try {

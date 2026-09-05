@@ -1,5 +1,6 @@
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { TaskListView } from "@/components/list/TaskListView";
 import type { Task, SavedView, Profile, WorkspaceContact, WorkspaceDepartment, WorkspaceRole } from "@/types";
 
@@ -15,7 +16,7 @@ export default async function ListPage({
   const initialView = typeof params.view === "string" ? params.view : "";
   const supabase = await createClient();
   const user = await getAuthUser();
-  if (!user) redirect("/login");
+  if (!user) redirectToSignIn();
 
   const { data: memberRows } = await supabase
     .from("workspace_members")

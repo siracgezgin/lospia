@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { Boxes } from "lucide-react";
 import { requireModuleMember } from "@/lib/modules/context";
 import { AccessDenied } from "@/components/modules/AccessDenied";
@@ -27,7 +28,7 @@ export default async function CollectionPage({
   searchParams: Promise<{ sezon?: string }>;
 }) {
   const { supabase, user, workspaceId, isAdmin, gate } = await requireModuleMember();
-  if (gate === "login") redirect("/login");
+  if (gate === "login") redirectToSignIn();
   if (gate !== "ok" || !workspaceId || !user) return <AccessDenied />;
 
   const sp = await searchParams;

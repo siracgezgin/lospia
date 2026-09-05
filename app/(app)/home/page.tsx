@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { ArrowRight, ShieldAlert } from "lucide-react";
 import { startOfWeek, addDays, format } from "date-fns";
 import { requireModuleMember } from "@/lib/modules/context";
@@ -91,7 +92,7 @@ type HomeMeeting = {
  */
 export default async function HomePage() {
   const { supabase, user, workspaceId, isAdmin, gate } = await requireModuleMember();
-  if (gate === "login") redirect("/login");
+  if (gate === "login") redirectToSignIn();
   if (gate !== "ok" || !workspaceId || !user) return <AccessDenied />;
 
   const { hour, todayIso, longDate } = istanbulNowParts();

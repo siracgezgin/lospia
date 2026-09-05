@@ -60,8 +60,17 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  /* Oturumu geçersiz bulan bir SAYFA bizi buraya gönderdiyse ("?e=") geri
+     sektirme. Sayfalar getUser() ile (gerçek sunucu turu), bu proxy ise
+     getClaims() ile (yerel JWT doğrulaması) karar veriyor; ikisi çeliştiğinde
+     /home → /login → /home döngüsü oluşuyordu (Sıraç, 2026-09-05: "çok fazla
+     yönlendirme oldu"). Çıkış kapısı çerezleri sildiği için normalde buraya
+     claims'siz gelinir; bu koşul, silme bir sebeple tutmazsa döngüyü yine de
+     keser. Bkz. lib/auth/session-redirect.ts. */
+  const cameFromFailedGate = request.nextUrl.searchParams.has("e");
+
   // Redirect authenticated users away from /login — Ana Sayfa karşılar.
-  if (user && pathname === "/login") {
+  if (user && pathname === "/login" && !cameFromFailedGate) {
     const url = request.nextUrl.clone();
     url.pathname = "/home";
     return NextResponse.redirect(url);

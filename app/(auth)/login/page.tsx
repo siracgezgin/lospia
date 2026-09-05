@@ -10,10 +10,14 @@ export const metadata: Metadata = {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ email?: string }>;
+  searchParams: Promise<{ email?: string; e?: string }>;
 }) {
   const params = await searchParams;
   const initialEmail = params.email ?? "";
+  /* Oturum düşünce sayfalar çıkış kapısından buraya gelir (?e=session). Sebebi
+     yazmazsak kullanıcı "neden atıldım?" diye kalıyor. Bkz.
+     lib/auth/session-redirect.ts. */
+  const sessionExpired = params.e === "session";
 
   // Host-aware login brand: the AF Operasyon pilot host keeps its own login
   // logo (and its pilot subline); everything else is the Lospia product mark.
@@ -64,6 +68,15 @@ export default async function LoginPage({
         </div>
 
         <div aria-hidden className="border-t border-hairline" />
+
+        {sessionExpired && (
+          <p
+            role="status"
+            className="rounded-control border border-warning/30 bg-warning/5 px-3 py-2 text-[13px] leading-relaxed text-ink"
+          >
+            Oturumunuz sona ermiş. Lütfen tekrar giriş yapın.
+          </p>
+        )}
 
         <LoginForm initialEmail={initialEmail} />
       </div>

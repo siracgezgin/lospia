@@ -1,4 +1,5 @@
 import { redirect, notFound } from "next/navigation";
+import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { requireModuleMember } from "@/lib/modules/context";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { BackLink } from "@/components/modules/BackLink";
@@ -22,7 +23,7 @@ export default async function TeamworkDocPage({
   params: Promise<{ id: string }>;
 }) {
   const { supabase, user, workspaceId, isAdmin, gate } = await requireModuleMember();
-  if (gate === "login") redirect("/login");
+  if (gate === "login") redirectToSignIn();
   if (gate !== "ok" || !workspaceId || !user) return <AccessDenied />;
 
   const { id } = await params;

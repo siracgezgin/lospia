@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { CalendarRange } from "lucide-react";
 import { startOfWeek, addDays, format, parseISO, isValid, startOfYear, endOfYear } from "date-fns";
 import { requireModuleMember } from "@/lib/modules/context";
@@ -37,7 +38,7 @@ export default async function CalendarPage({
   searchParams: Promise<{ week?: string; v?: string; d?: string }>;
 }) {
   const { supabase, user, workspaceId, isAdmin, gate } = await requireModuleMember();
-  if (gate === "login") redirect("/login");
+  if (gate === "login") redirectToSignIn();
   if (gate !== "ok" || !workspaceId || !user) return <AccessDenied />;
 
   const sp = await searchParams;

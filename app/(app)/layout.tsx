@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { headers } from "next/headers";
 import { createClient, getAuthUser, getMembership, getProfile } from "@/lib/supabase/server";
 import { getAppBrandForHost } from "@/lib/branding";
@@ -37,7 +38,7 @@ export default async function AppLayout({
   const user = await getAuthUser();
 
   if (!user) {
-    redirect("/login");
+    redirectToSignIn();
   }
 
   /* KABUK EN FAZLA İKİ TUR ATAR.

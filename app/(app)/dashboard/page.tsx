@@ -1,5 +1,6 @@
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { DashboardView, type DueSoonTask, type ReportPerson } from "@/components/dashboard/DashboardView";
 import { MemberDashboardView } from "@/components/dashboard/MemberDashboardView";
 import { istanbulTodayISO } from "@/components/dashboard/today";
@@ -26,7 +27,7 @@ const FETCH_FAILED = "İşler getirilemedi. Sayfayı yenileyin; sorun sürerse y
 export default async function DashboardPage() {
   const supabase = await createClient();
   const user = await getAuthUser();
-  if (!user) redirect("/login");
+  if (!user) redirectToSignIn();
 
   const { data: memberRows } = await supabase
     .from("workspace_members")

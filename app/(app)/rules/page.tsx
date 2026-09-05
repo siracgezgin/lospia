@@ -1,5 +1,6 @@
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { RulesView } from "@/components/rules/RulesView";
 import { markRulesSeen } from "@/lib/actions/members";
 import type { WorkspaceRule, WorkspaceRole, WorkspaceDepartment } from "@/types";
@@ -11,7 +12,7 @@ export const metadata = { title: "Rules" };
 export default async function RulesPage() {
   const supabase = await createClient();
   const user = await getAuthUser();
-  if (!user) redirect("/login");
+  if (!user) redirectToSignIn();
 
   const { data: member } = await supabase
     .from("workspace_members")
@@ -21,7 +22,7 @@ export default async function RulesPage() {
 
   const workspaceId = member?.workspace_id;
   const userRole = (member?.role ?? "member") as WorkspaceRole;
-  if (!workspaceId) redirect("/login");
+  if (!workspaceId) redirectToSignIn();
 
   const [rulesResult, deptsResult] = await Promise.all([
     supabase

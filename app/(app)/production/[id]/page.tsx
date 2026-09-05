@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { requireModuleMember } from "@/lib/modules/context";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { ProductionSheetEditor } from "@/components/production/ProductionSheetEditor";
@@ -19,7 +20,7 @@ export default async function ProductionSheetPage({
   const { id } = await params;
   const sp = await searchParams;
   const { supabase, user, workspaceId, isAdmin, gate } = await requireModuleMember();
-  if (gate === "login") redirect("/login");
+  if (gate === "login") redirectToSignIn();
   if (gate !== "ok" || !workspaceId || !user) return <AccessDenied />;
 
   // Üye adları — oluşturan/son giren rozetleri için.

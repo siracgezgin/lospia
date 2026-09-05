@@ -1,5 +1,6 @@
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { KanbanBoard } from "@/components/board/KanbanBoard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import type { Task, SavedView, Profile, WorkspaceContact, WorkspaceNote, WorkspaceRole, WorkspaceDepartment, TaskParticipant, BoardNoteFeedItem } from "@/types";
@@ -31,7 +32,7 @@ export default async function BoardPage({
 }) {
   const supabase = await createClient();
   const user = await getAuthUser();
-  if (!user) redirect("/login");
+  if (!user) redirectToSignIn();
 
   const params = await searchParams;
   const weekIso = parseWeekParam(params.week);

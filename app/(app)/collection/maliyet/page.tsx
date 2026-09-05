@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { Wallet } from "lucide-react";
 import { requireModuleMember } from "@/lib/modules/context";
 import { resolveSeasonId } from "@/lib/collection/season";
@@ -24,7 +25,7 @@ export default async function CostPage({
   searchParams: Promise<{ sezon?: string }>;
 }) {
   const { supabase, user, workspaceId, isAdmin, gate } = await requireModuleMember();
-  if (gate === "login") redirect("/login");
+  if (gate === "login") redirectToSignIn();
   if (gate !== "ok" || !workspaceId || !user) return <AccessDenied />;
 
   const sp = await searchParams;

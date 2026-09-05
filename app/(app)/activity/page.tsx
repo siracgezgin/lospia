@@ -1,5 +1,6 @@
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { ActivityLogView } from "@/components/activity/ActivityLogView";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { canManageSettings } from "@/lib/auth/permissions";
@@ -18,7 +19,7 @@ export const metadata = { title: "Activity Log" };
 export default async function ActivityLogPage() {
   const supabase = await createClient();
   const user = await getAuthUser();
-  if (!user) redirect("/login");
+  if (!user) redirectToSignIn();
 
   const { data: member } = await supabase
     .from("workspace_members")

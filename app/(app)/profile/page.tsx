@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import {
   AtSign, LogOut, Shield, Home, ListChecks, CalendarDays, Settings as SettingsIcon,
   type LucideIcon,
@@ -39,7 +40,7 @@ export const metadata = { title: "Profile" };
 export default async function ProfilePage() {
   const supabase = await createClient();
   const user = await getAuthUser();
-  if (!user) redirect("/login");
+  if (!user) redirectToSignIn();
 
   const { data: memberRows } = await supabase
     .from("workspace_members")

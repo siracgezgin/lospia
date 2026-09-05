@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { requireModuleMember } from "@/lib/modules/context";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
@@ -35,7 +36,7 @@ export const metadata = { title: "Operation Modules" };
 export default async function ModulesPage() {
   // Herkes görür; yalnız Yönetim bölümü yöneticiye çıkar (veri düzeyinde de kapalı).
   const { workspaceId, isAdmin, gate } = await requireModuleMember();
-  if (gate === "login") redirect("/login");
+  if (gate === "login") redirectToSignIn();
   if (gate !== "ok" || !workspaceId) return <AccessDenied />;
 
   return (

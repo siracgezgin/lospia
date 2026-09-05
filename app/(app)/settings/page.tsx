@@ -1,6 +1,7 @@
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { WorkspaceNameEditor } from "@/components/settings/WorkspaceNameEditor";
 import { MembersManager } from "@/components/settings/MembersManager";
 import { CreateAccountPanel } from "@/components/settings/CreateAccountPanel";
@@ -24,7 +25,7 @@ import type {
 export default async function SettingsPage() {
   const supabase = await createClient();
   const user = await getAuthUser();
-  if (!user) redirect("/login");
+  if (!user) redirectToSignIn();
 
   const { data: memberRows } = await supabase
     .from("workspace_members")
