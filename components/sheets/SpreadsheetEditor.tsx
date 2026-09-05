@@ -307,11 +307,33 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
   /* Seçili hücreye Drive'dan seçilen görseli koyar. Metni SİLMEZ: kullanıcı
      hem ürün adını hem fotoğrafını aynı hücrede tutmak isteyebilir; görsel
      varsa çizimde o öne geçer. */
+  /* Elle eklenen görselin VARSAYILAN boyu. Tek hücre 128×30 piksel; oraya
+     sıkışan fotoğraf "küçücük" görünüyordu (Sıraç, 2026-09-06). Excel'den
+     gelen görseller kendi yayılmasını taşıyor, elle eklenende öyle bir bilgi
+     yok — bu yüzden görülebilir bir başlangıç veriyoruz. Kullanıcı sağ tık
+     menüsünden büyütüp küçültebilir. */
+  const DEFAULT_IMG_CS = 3;
+  const DEFAULT_IMG_RS = 4;
+
   const putImage = useCallback((image: { id: string; name: string }) => {
     if (readOnly) return;
     const g0 = sheetRef.current;
     const prev = getCell(g0, active.r, active.c);
-    commit(setCell(g0, active.r, active.c, { ...(prev ?? {}), img: { id: image.id, name: image.name } }));
+    commit(setCell(g0, active.r, active.c, {
+      ...(prev ?? {}),
+      img: { id: image.id, name: image.name, cs: DEFAULT_IMG_CS, rs: DEFAULT_IMG_RS },
+    }));
+  }, [readOnly, active.r, active.c, commit]);
+
+  /** Seçili hücredeki görseli büyütür/küçültür (en az 1 hücre). */
+  const resizeImage = useCallback((delta: number) => {
+    if (readOnly) return;
+    const g0 = sheetRef.current;
+    const prev = getCell(g0, active.r, active.c);
+    if (!prev?.img) return;
+    const cs = Math.max(1, Math.min(20, (prev.img.cs ?? 1) + delta));
+    const rs = Math.max(1, Math.min(40, (prev.img.rs ?? 1) + delta));
+    commit(setCell(g0, active.r, active.c, { ...prev, img: { ...prev.img, cs, rs } }));
   }, [readOnly, active.r, active.c, commit]);
 
   /** Seçimdeki görselleri kaldırır (metin ve biçim kalır). */
@@ -1033,8 +1055,26 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                   }
 
                   /* Sağdaki hücre boşsa metin oraya taşabilir (bkz. className). */
-                  const spill =
+                  const textSpill =
                     !st?.w && !cell?.img && formatValue(val, st) !== "" && !getCell(sheet, r, c + 1);
+
+                  /* GÖRSEL YAYILMASI — Excel'de görsel hücrenin içinde değil
+                     ÜSTÜNDE yüzer ve birden çok hücreyi kaplar. Hücreler
+                     BİRLEŞTİRİLMEZ (altlarındaki metin kaybolmasın); görsel
+                     mutlak konumlu olarak kaplayacağı alan kadar çizilir. */
+                  const imgSpan = cell?.img
+                    ? {
+                        w: Array.from(
+                          { length: Math.max(1, cell.img.cs ?? 1) },
+                          (_, i) => colWidth(sheet, c + i),
+                        ).reduce((a, b) => a + b, 0),
+                        h: Array.from(
+                          { length: Math.max(1, cell.img.rs ?? 1) },
+                          (_, i) => rowHeight(sheet, r + i),
+                        ).reduce((a, b) => a + b, 0),
+                      }
+                    : null;
+                  const spill = textSpill || (imgSpan !== null && ((cell?.img?.cs ?? 1) > 1 || (cell?.img?.rs ?? 1) > 1));
 
                   return (
                     <div
@@ -1112,7 +1152,8 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                             alt={cell.img.name ?? "Görsel"}
                             loading="lazy"
                             draggable={false}
-                            className="pointer-events-none absolute inset-0 h-full w-full object-contain p-0.5"
+                            className="pointer-events-none absolute left-0 top-0 object-contain p-0.5"
+                            style={{ width: imgSpan?.w ?? w, height: imgSpan?.h ?? h }}
                           />
                         ) : (
                           /* Adres henüz gelmediyse ya da kayıt silindiyse hücre
@@ -1268,6 +1309,12 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
           <MenuItem onClick={() => { toggleMerge(); setMenu(null); }}>Hücreleri birleştir / çöz</MenuItem>
           <MenuSep />
           <MenuItem onClick={() => { setPickerOpen(true); setMenu(null); }}>Görsel ekle…</MenuItem>
+          {getCell(sheet, active.r, active.c)?.img && (
+            <>
+              <MenuItem onClick={() => { resizeImage(1); setMenu(null); }}>Görseli büyüt</MenuItem>
+              <MenuItem onClick={() => { resizeImage(-1); setMenu(null); }}>Görseli küçült</MenuItem>
+            </>
+          )}
           <MenuItem onClick={() => { clearImages(); setMenu(null); }}>Görseli kaldır</MenuItem>
           <MenuSep />
           <MenuItem onClick={() => { clearRange(norm(sel), true); setMenu(null); }} danger>İçeriği ve biçimi temizle</MenuItem>

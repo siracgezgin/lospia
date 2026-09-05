@@ -56,6 +56,13 @@ export type CellImage = {
   id: string;
   /** Kullanıcının gördüğü ad; ipucu ve erişilebilirlik metni için. */
   name?: string;
+  /** Kaç SÜTUNA yayılır (varsayılan 1). Excel'de görsel hücrenin içinde
+   *  değil ÜSTÜNDE yüzer ve birden çok hücreyi kaplar; tek hücreye
+   *  sıkıştırınca "üç kareye bölünmüş" gibi duruyordu (Sıraç, 2026-09-06).
+   *  Hücreleri BİRLEŞTİRMİYORUZ — altlarındaki metin kaybolmasın. */
+  cs?: number;
+  /** Kaç SATIRA yayılır (varsayılan 1). */
+  rs?: number;
 };
 
 export type Cell = {

@@ -261,7 +261,27 @@ def main():
                 r, c = im.anchor._from.row, im.anchor._from.col
             except Exception:
                 continue
-            anchors.setdefault(name, {})[(r, c)] = f"{hashlib.sha256(data).hexdigest()[:16]}.{ext}"
+            # YAYILMA. Excel'de görsel hücrenin içinde değil ÜSTÜNDE yüzer ve
+            # genelde birkaç satır/sütunu kaplar. twoCellAnchor'da bitiş hücresi
+            # doğrudan verilir; oneCellAnchor'da yalnız boyut (EMU) vardır ve
+            # ortalama hücre ölçüsüyle kaç hücreye denk geldiği kestirilir.
+            cs = rs = 1
+            to = getattr(im.anchor, "to", None)
+            if to is not None:
+                cs = max(1, to.col - c)
+                rs = max(1, to.row - r)
+            else:
+                ext = getattr(im.anchor, "ext", None)
+                if ext is not None:
+                    # 914400 EMU = 1 inç; 96 px/inç varsayımı.
+                    px_w = (ext.cx or 0) / 914400 * 96
+                    px_h = (ext.cy or 0) / 914400 * 96
+                    cs = max(1, round(px_w / DEFAULT_COL_W))
+                    rs = max(1, round(px_h / 30))
+            anchors.setdefault(name, {})[(r, c)] = {
+                "file": f"{hashlib.sha256(data).hexdigest()[:16]}.{ext}",
+                "cs": min(cs, 20), "rs": min(rs, 40),
+            }
 
     sheets = []
     truncated = []
@@ -327,6 +347,26 @@ def main():
                 continue
             if 0 <= idx - 1 < max_r:
                 row_h[str(idx - 1)] = max(20, min(400, round(dim.height * 4 / 3)))
+
+        # SARILAN METNE YETECEK YÜKSEKLİK. Excel'in satır yüksekliği kendi
+        # yazı tipine göredir; bizim tablo 13,5px / 1.35 satır aralığıyla
+        # çiziyor, o yüzden aynı metin bir satır daha kaplayabiliyor ve alt
+        # satır kesiliyordu (Sıraç, 2026-09-06 ekran görüntüsü). Kaydırma açık
+        # olan hücreler için gereken yükseklik kestirilip Excel'inkiyle
+        # karşılaştırılır; BÜYÜK olan kazanır — yani Excel'in düzeni bozulmaz,
+        # yalnız kesilme engellenir.
+        LINE_PX = 18.5
+        for (r0, c0), text in text_cells.items():
+            k = f"{r0}:{c0}"
+            style = (cells.get(k) or {}).get("s") or {}
+            if not style.get("w"):
+                continue
+            width = col_w.get(str(c0), DEFAULT_COL_W)
+            per_line = max(4, int(width / 6.6))
+            lines = max(1, -(-len(text) // per_line))
+            needed = round(lines * LINE_PX + 8)
+            key_r = str(r0)
+            row_h[key_r] = min(400, max(row_h.get(key_r, 0), needed))
 
         # Birleştirilmiş hücreler — "r1:c1:r2:c2"
         merges = []
@@ -406,16 +446,22 @@ def main():
     # Çapaları hücre referansına çevir.
     linked = missing = 0
     for i, s in enumerate(sheets):
-        for (r, c), fname in s.pop("_anchors").items():
+        for (r, c), meta in s.pop("_anchors").items():
             if r >= s["rows"] or c >= s["cols"]:
                 continue
+            fname = meta["file"]
             hit = drive.get(fname)
             if not hit:
                 missing += 1
                 continue
             k = f"{r}:{c}"
             cell = s["cells"].get(k, {})
-            cell["img"] = {"id": hit["id"], "name": hit["name"] or fname}
+            img = {"id": hit["id"], "name": hit["name"] or fname}
+            if meta["cs"] > 1:
+                img["cs"] = meta["cs"]
+            if meta["rs"] > 1:
+                img["rs"] = meta["rs"]
+            cell["img"] = img
             s["cells"][k] = cell
             linked += 1
         s["id"] = f"s{i + 1}"
