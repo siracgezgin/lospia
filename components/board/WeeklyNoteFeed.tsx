@@ -17,6 +17,7 @@ import { formatDateTR } from "@/lib/utils/format-date";
 import { cn } from "@/lib/utils/cn";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { ClampedText } from "@/components/ui/ClampedText";
 import type { DeptMeta } from "@/lib/utils/departments";
 
 const VISIBLE_LIMIT = 6;
@@ -76,7 +77,7 @@ function FeedCard({
 
   return (
     // Hover'da yalnız gölge; kart yerinden oynamaz (translate yok).
-    <div className="space-y-1.5 rounded-card border border-line bg-surface p-2.5 shadow-card transition-shadow duration-150 ease-standard hover:shadow-card-hover">
+    <div className="space-y-1.5 rounded-card border border-line bg-surface p-3 shadow-card transition-shadow duration-150 ease-standard hover:shadow-card-hover">
       {/* Tek rozet: not türü */}
       <Badge size="xs" className={NOTE_TYPE_TONE[item.noteType]}>
         {NOTE_TYPE_LABELS[item.noteType]}
@@ -89,7 +90,9 @@ function FeedCard({
         className="group/task flex items-start gap-1 text-[13.5px] font-semibold leading-snug tracking-tight text-ink transition-colors duration-150 hover:text-brand"
         title={item.taskTitle}
       >
-        <span className="line-clamp-2 min-w-0 flex-1 break-words">{item.taskTitle}</span>
+        {/* Başlık KESİLMEZ: not akışı sütunu zaten kaydırılabilir, kesilen
+            başlık kartı okunmaz kılıyordu. */}
+        <span className="min-w-0 flex-1 break-words">{item.taskTitle}</span>
         <ArrowUpRight
           size={12}
           aria-hidden
@@ -97,10 +100,8 @@ function FeedCard({
         />
       </Link>
 
-      {/* Note snippet */}
-      <p className="line-clamp-3 whitespace-pre-wrap break-words text-[13px] leading-relaxed text-muted">
-        {item.content}
-      </p>
+      {/* Not metni — uzunsa kesilir, devamı kartın içinde açılır. */}
+      <ClampedText text={item.content} lines={3} className="text-[13px] leading-relaxed text-muted" />
 
       {/* Meta: yazar · departman · teslim · muhatap — hepsi düz metin */}
       <p className="text-[12px] leading-snug text-subtle">

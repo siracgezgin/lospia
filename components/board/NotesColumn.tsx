@@ -18,6 +18,7 @@ import { createTask, softDeleteTask } from "@/lib/actions/tasks";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Button, IconButton } from "@/components/ui/Button";
 import { TextArea, TextInput } from "@/components/ui/Field";
+import { ClampedText } from "@/components/ui/ClampedText";
 import type { WorkspaceNote, NoteColor } from "@/types";
 
 // ── Not renkleri — durum token'larından, az doygun ───────────────────────────
@@ -137,7 +138,7 @@ function NoteCardContent({
     return (
       <div
         className={cn(
-          "rounded-card border p-2.5 shadow-card flex flex-col gap-1.5 anim-scale-in",
+          "rounded-card border p-3 shadow-card flex flex-col gap-1.5 anim-scale-in",
           editColors.bg, editColors.border,
         )}
       >
@@ -175,7 +176,7 @@ function NoteCardContent({
       ref={containerRef}
       style={containerStyle}
       className={cn(
-        "rounded-card border p-2.5 shadow-card group transition-shadow duration-150 ease-standard hover:shadow-card-hover",
+        "rounded-card border p-3 shadow-card group transition-shadow duration-150 ease-standard hover:shadow-card-hover",
         colors.bg, colors.border,
         isDragging && "opacity-40 shadow-pop",
       )}
@@ -236,9 +237,9 @@ function NoteCardContent({
             )}
           </div>
           {note.body && (
-            <p className="mt-1 line-clamp-4 whitespace-pre-wrap break-words text-[13px] leading-relaxed text-muted">
-              {note.body}
-            </p>
+            <div className="mt-1">
+              <ClampedText text={note.body} lines={4} className="text-[13px] leading-relaxed text-muted" />
+            </div>
           )}
           <NoteMeta note={note} />
         </div>
@@ -313,7 +314,7 @@ function AddNoteForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className={cn("rounded-card border p-2.5 shadow-card flex flex-col gap-1.5 anim-scale-in", editColors.bg, editColors.border)}
+      className={cn("rounded-card border p-3 shadow-card flex flex-col gap-1.5 anim-scale-in", editColors.bg, editColors.border)}
     >
       <ColorDots value={color} onChange={setColor} />
       <TextInput

@@ -1192,7 +1192,8 @@ function MobileTaskCard({
   }
   return (
     <div
-      className={`rounded-card border ${em.widthCls} p-3.5 ${em.shadow} cursor-pointer ${colorCls} transition-transform duration-[var(--duration-fast)] ease-standard active:scale-[0.99]`}
+      /* İç boşluk masaüstü kartıyla AYNI (p-3): aynı kart iki ölçüde durmaz. */
+      className={`rounded-card border ${em.widthCls} p-3 ${em.shadow} cursor-pointer ${colorCls} transition-transform duration-[var(--duration-fast)] ease-standard active:scale-[0.99]`}
       style={em.style}
       onClick={openDetail}
     >
