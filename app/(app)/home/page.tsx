@@ -228,7 +228,7 @@ export default async function HomePage() {
     panels.push({
       key: "meetings",
       node: (
-        <Panel title="Haftanın kalanı" href="/planning">
+        <Panel title="Haftanın kalanı" href={`/planning?week=${todayIso}`}>
           <ul className="space-y-2 pt-1">
             {laterMeetings.slice(0, 8).map((m) => (
               <MeetingRow key={m.id} meeting={m} day={weekdayTr(m.meeting_date)} />
@@ -304,7 +304,12 @@ export default async function HomePage() {
               <div className="min-w-0 p-5">
                 <div className="mb-2.5 flex items-center justify-between gap-2">
                   <h3 className="text-[13px] font-semibold tracking-tight text-ink">Toplantılar</h3>
-                  <SeeAll href="/planning" label="Calendar" />
+                  {/* Takvimin BUGÜNÜNE açılır (gün kartı), genel takvime değil.
+                      Sıraç (2026-08-30): "Ana sayfaya da burayla ilişkili bir
+                      şeyler ekleyelim ki giren kişi anlasın." Ana Sayfa
+                      "bugün ne var?" diye soruyor; bağlantı da aynı günü
+                      açmalı — kullanıcı haftada kendi gününü aramasın. */}
+                  <SeeAll href={`/planning?v=gun&d=${todayIso}`} label="Günü aç" />
                 </div>
                 {todayMeetings.length === 0 ? (
                   <p className="text-[13.5px] text-subtle">Planlı toplantı yok.</p>
@@ -461,11 +466,18 @@ function MoreLink({ href }: { href: string }) {
   );
 }
 
-/** Tek toplantı satırı — saat · renk · başlık. "İsim, iş, tarih." */
+/** Tek toplantı satırı — saat · renk · başlık. "İsim, iş, tarih."
+ *  Satırın tamamı o GÜNÜN takvim kartına gider: Ana Sayfa'da bir toplantı
+ *  görüp "detayı nerede?" diye aramak gerekmesin. */
 function MeetingRow({ meeting, day }: { meeting: HomeMeeting; day?: string }) {
   const meta = categoryMeta(meeting.category);
+  const iso = String(meeting.meeting_date).slice(0, 10);
   return (
-    <li className="flex items-baseline gap-2.5 text-[13.5px]">
+    <li>
+      <Link
+        href={`/planning?v=gun&d=${iso}`}
+        className="-mx-2 flex items-baseline gap-2.5 rounded-lg px-2 py-1 text-[13.5px] transition-colors duration-150 hover:bg-surface-hover"
+      >
       <span className="w-11 shrink-0 font-semibold tabular-nums text-ink">
         {meeting.time_slot.slice(0, 5)}
       </span>
@@ -474,6 +486,7 @@ function MeetingRow({ meeting, day }: { meeting: HomeMeeting; day?: string }) {
         {meeting.title?.trim() || meta.label}
       </span>
       {day && <span className="shrink-0 text-[12px] text-subtle">{day}</span>}
+      </Link>
     </li>
   );
 }

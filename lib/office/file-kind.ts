@@ -1,6 +1,6 @@
 import {
   Folder, FileText, Table2, Image as ImageIcon, FileType2, FileSpreadsheet,
-  FileArchive, Film, Music, File as FileIcon, FolderOpen, Palette, Globe,
+  FileArchive, Film, Music, File as FileIcon, FolderOpen, Palette, Globe, ExternalLink,
   StickyNote, Link2 as LinkIcon, type LucideIcon,
 } from "lucide-react";
 
@@ -54,7 +54,11 @@ export function fileKindOf(mime: string | null | undefined, name: string | null 
 /** Dış bağlantı türü → kimlik. Drive/Canva/Figma… hepsi kendi rengiyle. */
 export function linkKindOf(documentType: string | null | undefined): FileKind {
   switch (documentType) {
-    case "drive_link":   return { icon: FolderOpen, hex: "#1f6e4d", label: "Drive" };
+    /* Drive BAĞLANTISI klasör ikonuyla çiziliyordu: listede gerçek klasörle
+       birebir aynı görünüyor, tıklayınca dışarı çıkıyordu (Sıraç, 2026-08-30:
+       "drive'a tıklıyorum linke gidiyor ama ikonu dosya olarak kalmış").
+       İkon nereye götürdüğünü söylemeli — dış bağlantı. */
+    case "drive_link":   return { icon: ExternalLink, hex: "#1f6e4d", label: "Drive bağlantısı" };
     case "google_doc":   return { icon: FileText, hex: "#2563c9", label: "Google Doküman" };
     case "google_sheet": return { icon: FileSpreadsheet, hex: "#1f6e4d", label: "Google E-Tablo" };
     case "canva":        return { icon: Palette, hex: "#1796a4", label: "Canva" };

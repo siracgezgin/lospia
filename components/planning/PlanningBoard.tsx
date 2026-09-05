@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format, parseISO, addDays, subDays, startOfWeek } from "date-fns";
 import { tr } from "date-fns/locale";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { CalendarCheck, ChevronLeft, ChevronRight } from "lucide-react";
 import { TOPIC_ROWS, WEEKDAY_LONG_TR, type RuntimeBand } from "@/lib/planning/bands";
 import { MeetingEditor } from "./MeetingEditor";
 import { PlanningWeekGrid } from "./PlanningWeekGrid";
@@ -111,6 +111,13 @@ export function PlanningBoard({
   const [deleted, setDeleted] = useState<DeletedMeeting | null>(null);
 
   const gotoWeek = (isoMonday: string) => router.push(`/planning?week=${isoMonday}`);
+  const todayIso = format(new Date(), "yyyy-MM-dd");
+
+  /* Görüntülenen haftanın aralığı ("31 Ağu – 6 Eyl") ve bu hafta mı olduğu.
+     Etiket haftayı TARİF eder; "bugün"ü değil, ekranda ne olduğunu söyler. */
+  const weekEndIso = weekDays[6] ?? weekStart;
+  const weekRangeLabel = `${format(parseISO(weekStart), "d MMM", { locale: tr })} – ${format(parseISO(weekEndIso), "d MMM", { locale: tr })}`;
+  const isCurrentWeek = weekDays.includes(todayIso);
 
   /* GÜN KARTI. Rota tek doğrudur: ?v=gun&d=<gün> kart AÇIK demektir, kapatmak
      onu URL'den düşürür. Böylece bağlantı paylaşılabilir, geri tuşu beklendiği
@@ -120,7 +127,6 @@ export function PlanningBoard({
     router.push(`/planning?week=${monday}&v=gun&d=${iso}`);
   };
   const closeDayCard = () => router.push(`/planning?week=${weekStart}`);
-  const todayIso = format(new Date(), "yyyy-MM-dd");
 
   const openEditor = (iso: string, slot: string, i: number) => {
     if (!isAdmin) return;
@@ -145,31 +151,47 @@ export function PlanningBoard({
        araç çubuğu geldi; ızgara kalan yüksekliğin TAMAMINI alıyor. */
     <div className="flex h-full min-h-0 w-full flex-col">
       <CalendarToolbar viewSwitch={<CalendarViewSwitch scale="hafta" />}>
+        {/* HAFTA GEZİNMESİ — ortada TARİH, gerekince "Bu haftaya dön".
+            Sıraç (2026-08-30): "Bu hafta değil de bugünün tarihi yazsın; ok
+            tuşları bir sonraki haftanın pazartesine geçsin; geçince de yanında
+            bu haftaya dön diye tıklanacağı anlaşılan bir buton çıksın."
+            Ortadaki yer eskiden "Bu hafta" YAZAN bir DÜĞMEYDİ: hem nerede
+            olduğunu söylemiyor hem de tıklanabilir olduğu anlaşılmıyordu.
+            Artık orası bilgi (görüntülenen haftanın pazartesi–pazar aralığı),
+            geri dönüş ise ayrı ve ancak BAŞKA bir haftadayken beliren bir
+            düğme — yani ekranda yalnız işe yarayan şey duruyor. */}
         <div className="inline-flex h-9 shrink-0 items-stretch overflow-hidden rounded-control border border-line bg-surface">
           <button
             type="button"
             onClick={() => gotoWeek(format(subDays(parseISO(weekStart), 7), "yyyy-MM-dd"))}
             className="tap-target inline-flex w-9 items-center justify-center text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
-            title="Önceki hafta" aria-label="Önceki hafta"
+            title="Önceki haftanın pazartesi günü" aria-label="Önceki hafta"
           >
             <ChevronLeft size={16} />
           </button>
-          <button
-            type="button"
-            onClick={() => gotoWeek(format(new Date(), "yyyy-MM-dd"))}
-            className="whitespace-nowrap border-x border-line px-3 text-[13px] font-medium text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
-          >
-            Bu hafta
-          </button>
+          <span className="flex items-center whitespace-nowrap border-x border-line px-3 text-[13px] font-semibold tabular-nums text-ink">
+            {weekRangeLabel}
+          </span>
           <button
             type="button"
             onClick={() => gotoWeek(format(addDays(parseISO(weekStart), 7), "yyyy-MM-dd"))}
             className="tap-target inline-flex w-9 items-center justify-center text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
-            title="Sonraki hafta" aria-label="Sonraki hafta"
+            title="Sonraki haftanın pazartesi günü" aria-label="Sonraki hafta"
           >
             <ChevronRight size={16} />
           </button>
         </div>
+
+        {!isCurrentWeek && (
+          <button
+            type="button"
+            onClick={() => gotoWeek(format(new Date(), "yyyy-MM-dd"))}
+            className="anim-fade-down tap-target inline-flex h-9 shrink-0 items-center gap-1.5 rounded-control border border-brand-ring bg-brand-soft px-3 text-[13px] font-medium text-brand-strong transition-colors duration-150 hover:bg-brand hover:text-white"
+          >
+            <CalendarCheck size={14} aria-hidden />
+            Bu haftaya dön
+          </button>
+        )}
       </CalendarToolbar>
 
       <div className="min-h-0 flex-1 overflow-auto p-2 sm:p-3 lg:overflow-hidden lg:p-3">

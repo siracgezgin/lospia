@@ -221,23 +221,34 @@ export function PlanningWeekGrid({
           <div className="grid" style={{ gridTemplateColumns: cols }}>
             <HeadCell>Gün</HeadCell>
             {weekDays.map((iso, i) => (
+              /* BUGÜN — soluk bir zemin yetmiyordu.
+                 Sıraç (2026-08-30): "Hangi günde olduğumuz daha belirgin olmalı,
+                 anlaşılmıyor." Yedi sütunun biri yalnız bir tık açık maviydi;
+                 göz onu ancak arayınca buluyordu. Artık üç sinyal birlikte
+                 çalışıyor: DOLU marka zemini + beyaz yazı + üstte 3px'lik
+                 çubuk. Renk tek başına anlam taşımasın diye ayrıca "BUGÜN"
+                 yazar (ekran okuyucuya da `aria-current`). */
               <div
                 key={iso}
                 title={WEEKDAY_LONG_TR[i]}
+                aria-current={iso === todayIso ? "date" : undefined}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-0.5 border-r border-hairline px-1 py-1.5 leading-none last:border-r-0",
-                  iso === todayIso ? "bg-brand-soft" : "",
+                  "relative flex flex-col items-center justify-center gap-0.5 border-r border-hairline px-1 py-1.5 leading-none last:border-r-0",
+                  iso === todayIso && "bg-brand",
                 )}
               >
+                {iso === todayIso && (
+                  <span aria-hidden className="absolute inset-x-0 top-0 h-[3px] bg-brand-strong" />
+                )}
                 <span className={cn(
                   "text-[12px] font-semibold uppercase tracking-[0.08em]",
-                  iso === todayIso ? "text-brand-strong" : "text-subtle",
+                  iso === todayIso ? "text-white/80" : "text-subtle",
                 )}>
-                  {WEEKDAY_SHORT_EN[i]}
+                  {iso === todayIso ? "BUGÜN" : WEEKDAY_SHORT_EN[i]}
                 </span>
                 <span className={cn(
                   "whitespace-nowrap text-[12.5px] font-semibold tabular-nums",
-                  iso === todayIso ? "text-brand-strong" : "text-ink",
+                  iso === todayIso ? "text-white" : "text-ink",
                 )}>
                   {/* Daraltılmış (boş) sütunda uzun ay adı satır kırıyordu. */}
                   {format(parseISO(iso), dayFilled[i] ? "d MMMM" : "d MMM", { locale: tr })}
@@ -451,7 +462,10 @@ function TopicCell({
       title={canDrag ? "Sürükleyip başka gün/saate ya da satıra taşıyabilirsiniz" : undefined}
       className={cn(
         "relative min-h-[30px] border-r border-hairline px-2 py-1.5 text-[12px] leading-snug text-ink/90 last:border-r-0",
-        isToday && "bg-brand-soft/25",
+        // Bugünün sütunu gövdede de sürer — göz başlıktan aşağı inince
+        // hangi sütunda olduğunu kaybetmesin. Zemin bilerek ÇOK açık:
+        // hücrelerdeki metin ve kategori renkleri okunur kalmalı.
+        isToday && "bg-brand-soft/40",
         isAdmin && HOVER_VEIL,
         canDrag && "active:cursor-grabbing",
         isOver && "ring-2 ring-inset ring-brand-ring",
