@@ -75,6 +75,11 @@ asli_filinta_logo_transparent.png
 
 # local utility scripts not for production
 scripts/import-*.ts
+# ...ama toplantı takvimi içe aktarıcısı DEPODA DURUR: içinde gizli anahtar yok
+# (hepsi ortam değişkeninden okunur) ve Excel → planning eşlemesinin tek kaydı o.
+# Kardeşi scripts/import-production-foys.py da zaten izleniyor; yukarıdaki kalıbın
+# yalnız .ts yakalaması kasıtlı bir ayrım değil, glob'un yan etkisiydi.
+!scripts/import-planning-calendar.ts
 
 # üretim föyü kaynak Excel/PDF dosyaları — uygulamaya seed edildi, repo'ya girmez
 uretim_foyu/
