@@ -38,7 +38,7 @@ export default async function TeamworkDocPage({
 
   const row = data as {
     id: string; title: string; body: string | null; status: string;
-    created_by: string | null; document_type: string;
+    created_by: string | null; document_type: string; folder_id: string | null;
   };
   // Bu rota YALNIZ yazılar içindir; dosya/bağlantı kayıtları listede yaşar.
   if (row.document_type !== "doc") notFound();
@@ -52,7 +52,9 @@ export default async function TeamworkDocPage({
       {/* Başlık uygulama çubuğunda; "Geri" editörün başlık satırında. */}
       <h1 className="sr-only">AF Teamwork</h1>
       <DocEditor
-        backSlot={<BackLink href="/documents" />}
+        /* "Geri" YAZININ KENDİ KLASÖRÜNE döner, köke değil (bkz.
+           SheetDetailView'daki aynı düzeltme). */
+        backSlot={<BackLink href={row.folder_id ? `/documents?f=${row.folder_id}` : "/documents"} />}
         docId={row.id}
         initialTitle={row.title}
         initialBody={row.body ?? ""}

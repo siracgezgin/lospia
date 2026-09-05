@@ -379,11 +379,14 @@ export function SheetDetailView({
 
   return (
     <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
-      {/* Tablo AF Teamwork'ün klasöründe yaşıyor (20240329); "Geri" oraya
-          döner. /sheets zaten /documents'a yönlendiriyor — ara durak yok. */}
+      {/* "Geri" TABLONUN KENDİ KLASÖRÜNE döner, köke değil. Önce hep
+          /documents'a gidiyordu ve bir klasörün içinden gelen kullanıcı en
+          başa atılıyordu (Sıraç, 2026-09-06). Klasör adreste taşındığı için
+          (DriveBrowser ?f=<id>) buradan üretmek yeterli; tarayıcı geçmişine
+          bağlı değil, doğrudan bağlantıyla açıldığında da doğru çalışır. */}
       <ModulePageHeader
         title={sheet.title}
-        backHref="/documents"
+        backHref={sheet.folder_id ? `/documents?f=${sheet.folder_id}` : "/documents"}
         rightSlot={
           <>
             {/* İNDİRME: gerçek bir GET rotası (bkz. [id]/export/route.ts).
