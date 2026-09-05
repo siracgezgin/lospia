@@ -11,7 +11,8 @@
     "import:afr-af": "npx tsx scripts/import-afr-af.ts",
     "prepare:af-live": "npx tsx scripts/prepare-af-live-data.ts",
     "seed:demo-workspace": "npx tsx scripts/seed-demo-workspace.ts",
-    "import:planning": "npx tsx scripts/import-planning-calendar.ts"
+    "import:planning": "npx tsx scripts/import-planning-calendar.ts",
+    "storage:usage": "npx tsx scripts/storage-usage.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
