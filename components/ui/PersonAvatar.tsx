@@ -22,16 +22,20 @@ import Image from "next/image";
 import { cn } from "@/lib/utils/cn";
 import { getPersonInitials } from "@/lib/utils/person-display";
 
-export type PersonAvatarSize = "xs" | "sm" | "md" | "lg" | "xl";
+/** "2xs" yalnız KİMLİK İŞARETİ içindir: kartın köşesinde "bunu kim yaptı"
+ *  sorusunu cevaplar, kişiyi tanıtmaz. Sıraç (2026-09-06): "kişi resminin bu
+ *  kadar büyük olmasına gerek yok, minimalist olsa yeter." */
+export type PersonAvatarSize = "2xs" | "xs" | "sm" | "md" | "lg" | "xl";
 
 const BOX: Record<PersonAvatarSize, string> = {
+  "2xs": "h-[18px] w-[18px] text-[8.5px]",
   xs: "h-6 w-6 text-[10px]",
   sm: "h-8 w-8 text-[11.5px]",
   md: "h-10 w-10 text-[13px]",
   lg: "h-14 w-14 text-[17px]",
   xl: "h-20 w-20 text-[24px] sm:h-24 sm:w-24 sm:text-[28px]",
 };
-const PX: Record<PersonAvatarSize, number> = { xs: 24, sm: 32, md: 40, lg: 56, xl: 96 };
+const PX: Record<PersonAvatarSize, number> = { "2xs": 18, xs: 24, sm: 32, md: 40, lg: 56, xl: 96 };
 
 interface Props {
   name: string;

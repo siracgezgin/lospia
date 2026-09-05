@@ -1851,11 +1851,13 @@ function DriveGrid({
                     )}
                     {ownerId && ownerName && (
                       <>
+                        {/* Kart üzerinde kişi bir KİMLİK İŞARETİDİR, portre
+                            değil: "kim yaptı" anlaşılsın yeter. */}
                         <PersonAvatar
                           name={ownerName}
                           photoUrl={memberAvatars[ownerId] ?? null}
                           colorHex={personTone(ownerId).hex}
-                          size="xs"
+                          size="2xs"
                           title={ownerName}
                         />
                         <span className="sr-only">{ownerName}</span>
