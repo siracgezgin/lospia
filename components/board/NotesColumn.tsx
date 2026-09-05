@@ -19,6 +19,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Button, IconButton } from "@/components/ui/Button";
 import { TextArea, TextInput } from "@/components/ui/Field";
 import { ClampedText } from "@/components/ui/ClampedText";
+import { PersonAvatar } from "@/components/ui/PersonAvatar";
 import type { WorkspaceNote, NoteColor } from "@/types";
 
 // ── Not renkleri — durum token'larından, az doygun ───────────────────────────
@@ -68,6 +69,13 @@ const INLINE_TEXTAREA =
 
 // ── Note author resolution (created_by → display name) ────────────────────────
 const NoteAuthorsContext = createContext<Record<string, string>>({});
+
+/* Kişi kimliği — pano kartlarıyla AYNI dil: fotoğrafı olanın fotoğrafı,
+   olmayanın kendi renginde yuvarlak baş harfi (Sıraç, 2026-08-30: "isimler her
+   yerde kart olmalı, harf olarak değil"). Notun yazarı da bir kişidir; aynı
+   insan panoda kart, notta düz yazı olarak görünmesin. */
+export type NotePerson = { name: string; photoUrl: string | null; colorHex: string | null };
+const NotePeopleContext = createContext<Record<string, NotePerson>>({});
 
 // "Bugün 14:32" / "Dün 18:10" / "5 Oca 09:00" — compact, professional metadata.
 function formatNoteMeta(iso: string): string {
@@ -252,13 +260,28 @@ function NoteCardContent({
 // ── Author + timestamp metadata row ───────────────────────────────────────────
 function NoteMeta({ note }: { note: WorkspaceNote }) {
   const authors = useContext(NoteAuthorsContext);
+  const people = useContext(NotePeopleContext);
   const author = note.created_by ? authors[note.created_by] ?? "Bilinmeyen kullanıcı" : "Bilinmeyen kullanıcı";
+  const who = note.created_by ? people[note.created_by] : undefined;
   const when = note.created_at ? formatNoteMeta(note.created_at) : "";
   return (
-    <p className="mt-1.5 truncate text-[12px] text-subtle">
-      <span className="font-medium text-muted">{author}</span>
-      {when && <span> · {when}</span>}
-    </p>
+    /* Kişi kartı + ad; kart 24px, satır min-w-0 (dar sütunda ad kesilir,
+       kart ezilmez). */
+    <div className="mt-1.5 flex min-w-0 items-center gap-1.5 text-[12px] text-subtle">
+      {note.created_by && (
+        <PersonAvatar
+          name={author}
+          photoUrl={who?.photoUrl ?? null}
+          colorHex={who?.colorHex ?? null}
+          size="xs"
+          title={author}
+        />
+      )}
+      <p className="min-w-0 flex-1 truncate">
+        <span className="font-medium text-muted">{author}</span>
+        {when && <span> · {when}</span>}
+      </p>
+    </div>
   );
 }
 
@@ -367,6 +390,7 @@ export function NotesColumn({
   workspaceId,
   readOnly = false,
   authorsById = {},
+  people = {},
   mobile = false,
   currentUserId,
   isAdmin = false,
@@ -378,6 +402,9 @@ export function NotesColumn({
   workspaceId: string;
   readOnly?: boolean;
   authorsById?: Record<string, string>;
+  /** profiles.id → kişi kimliği (fotoğraf + kendi rengi). Not yazarı panodaki
+   *  kartla aynı yuvarlak kişi kartıyla çizilir. */
+  people?: Record<string, NotePerson>;
   // Mobile single-column view: drop the fixed kanban width and fill the screen.
   mobile?: boolean;
   // Per-note edit/delete gating: admins manage any note; members only their own.
@@ -635,6 +662,7 @@ export function NotesColumn({
 
   return (
     <NoteAuthorsContext.Provider value={authorsById}>
+    <NotePeopleContext.Provider value={people}>
     <div className={cn("flex flex-col gap-2 shrink-0", mobile ? "w-full" : "w-[80vw] max-w-64 sm:w-64")}>
       {/* Header */}
       {/* Başlık, görev sütunlarıyla BİREBİR aynı hizada.
@@ -793,6 +821,7 @@ export function NotesColumn({
         </div>
       )}
     </div>
+    </NotePeopleContext.Provider>
     </NoteAuthorsContext.Provider>
   );
 }

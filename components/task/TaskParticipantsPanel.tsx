@@ -2,7 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { Check, UserPlus, Users, X } from "lucide-react";
-import { Avatar } from "@/components/ui/Avatar";
+/* Kişi = YUVARLAK KART. Panel TaskDetail'in altında çizildiği için fotoğraf
+   ve renk oradaki kimlik bağlamından gelir — yeni sorgu ya da yeni prop yok
+   (Sıraç, 2026-08-30: "isimler her yerde kart olmalı, harf olarak değil"). */
+import { TaskPersonAvatar } from "@/components/task/TaskDetail";
 import { Button, IconButton } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { cn } from "@/lib/utils/cn";
@@ -50,9 +53,10 @@ interface Props {
 const ASSIGN_DENIED_NOTE = "Bu göreve sorumlu kişi atama yetkiniz yok.";
 
 /* Kişi seçme çipi (pill yalnız chip/avatar için serbest). Seçili = marka
-   dolgusu + onay işareti; renk tek başına sinyal değil. */
+   dolgusu + onay işareti; renk tek başına sinyal değil.
+   min-h-10: kişi kartı 24px olunca çip parmakla basılabilir kalsın (≥40px). */
 const PICK_CHIP =
-  "inline-flex items-center gap-1.5 rounded-full border pl-1 pr-2.5 py-1 text-[12.5px] transition-colors duration-150 ease-standard active:scale-[0.98] disabled:pointer-events-none disabled:text-subtle";
+  "inline-flex min-h-10 items-center gap-1.5 rounded-full border pl-1 pr-2.5 py-1 text-[12.5px] transition-colors duration-150 ease-standard active:scale-[0.98] disabled:pointer-events-none disabled:text-subtle";
 const PICK_ON = "bg-brand-soft border-brand-ring text-brand-strong font-medium";
 const PICK_OFF = "bg-surface border-line text-muted hover:bg-surface-hover hover:border-line-strong";
 
@@ -69,8 +73,8 @@ export function TaskParticipantsPanel({
   const pickerMembers = members.filter((m) => !adminOnly || m.isAdmin);
   const pickerContacts = adminOnly ? [] : contacts;
 
-  const nameOf = (memberId: string) =>
-    getPersonDisplayName(members.find((m) => m.memberId === memberId)?.name ?? null);
+  const memberOf = (memberId: string) => members.find((m) => m.memberId === memberId);
+  const nameOf = (memberId: string) => getPersonDisplayName(memberOf(memberId)?.name ?? null);
 
   const participantIds = new Set(participants.map((p) => p.memberId));
   const mine = currentMemberId ? participants.find((p) => p.memberId === currentMemberId) : undefined;
@@ -145,7 +149,13 @@ export function TaskParticipantsPanel({
                   p.completed ? "bg-success/5 hover:bg-success/10" : "bg-surface hover:bg-surface-hover",
                 )}
               >
-                <Avatar name={name} size="sm" className={p.completed ? "ring-2 ring-success" : ""} />
+                {/* Halka dili Pano'yla aynı: tamamlayanda yeşil, diğerinde yok. */}
+                <TaskPersonAvatar
+                  id={memberOf(p.memberId)?.userId}
+                  name={name}
+                  size="sm"
+                  className={p.completed ? "ring-2 ring-success" : undefined}
+                />
                 <div className="min-w-0 flex-1">
                   <p className="text-ink truncate">
                     {name}
@@ -185,7 +195,11 @@ export function TaskParticipantsPanel({
           })}
           {responsibleContact && (
             <li className="flex items-center gap-2.5 px-3 py-2 text-[13.5px] bg-surface hover:bg-surface-hover transition-colors duration-150">
-              <Avatar name={responsibleContact.name} size="sm" />
+              <TaskPersonAvatar
+                id={responsibleContact.contactId}
+                name={getPersonDisplayName(responsibleContact.name)}
+                size="sm"
+              />
               <div className="min-w-0 flex-1">
                 <p className="text-ink truncate">
                   {getPersonDisplayName(responsibleContact.name)}
@@ -255,7 +269,7 @@ export function TaskParticipantsPanel({
                   aria-pressed={on}
                   className={cn(PICK_CHIP, on ? PICK_ON : PICK_OFF)}
                 >
-                  <Avatar name={m.name} size="xs" />
+                  <TaskPersonAvatar id={m.userId} name={m.name} size="xs" />
                   {getPersonDisplayName(m.name)}
                   {on && <Check size={11} aria-hidden />}
                 </button>
@@ -282,7 +296,7 @@ export function TaskParticipantsPanel({
                       aria-pressed={on}
                       className={cn(PICK_CHIP, on ? PICK_ON : PICK_OFF)}
                     >
-                      <Avatar name={c.name} size="xs" />
+                      <TaskPersonAvatar id={c.contactId} name={c.name} size="xs" />
                       {getPersonDisplayName(c.name)}
                       {on && <Check size={11} aria-hidden />}
                     </button>

@@ -13,7 +13,10 @@ import {
   NOTE_ASSIGNMENT_LABELS, type NoteAssignmentAction,
 } from "@/lib/notes/note-types";
 import { formatNoteTimeTR, formatDateTR } from "@/lib/utils/format-date";
-import { Avatar } from "@/components/ui/Avatar";
+/* Kişi = YUVARLAK KART (fotoğraf ya da kendi renginde baş harf). Panel
+   TaskDetail'in altında çizilir; fotoğraf/renk oradaki kimlik bağlamından
+   gelir — Pano'daki not akışıyla (WeeklyNoteFeed) aynı dil. */
+import { TaskPersonAvatar } from "@/components/task/TaskDetail";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Field, TextArea, TextInput, SelectInput } from "@/components/ui/Field";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -264,7 +267,7 @@ function NoteItem({
 
       <div className="flex items-center justify-between gap-2 text-[12px] text-subtle">
         <span className="flex items-center gap-1.5 min-w-0" title={authorName}>
-          <Avatar name={authorName} size="xs" />
+          <TaskPersonAvatar id={note.author_id} name={authorName} size="xs" />
           <span className="font-medium text-muted truncate max-w-[10rem]">{authorName}</span>
           <span className="text-subtle shrink-0">·</span>
           <span className="shrink-0 whitespace-nowrap tabular-nums">{formatNoteTimeTR(note.created_at)}</span>
@@ -386,7 +389,7 @@ function PeoplePicker({
             return (
               <label
                 key={p.id}
-                className="flex items-center gap-2 px-3 py-1.5 text-[13.5px] cursor-pointer hover:bg-surface-hover transition-colors duration-150"
+                className="flex min-h-10 items-center gap-2 px-3 py-1.5 text-[13.5px] cursor-pointer hover:bg-surface-hover transition-colors duration-150"
               >
                 <input
                   type="checkbox"
@@ -394,7 +397,9 @@ function PeoplePicker({
                   onChange={() => onToggle(p.id)}
                   className="rounded border-line accent-brand"
                 />
-                <span className="flex-1 truncate text-ink">{p.name}</span>
+                {/* Kişi listede de kartıyla tanınsın — adı okumak zorunda kalma. */}
+                <TaskPersonAvatar id={p.userId ?? p.contactId} name={p.name} size="xs" />
+                <span className="min-w-0 flex-1 truncate text-ink">{p.name}</span>
                 {p.type === "contact" && (
                   <span className="text-[12px] text-subtle shrink-0">kişi</span>
                 )}

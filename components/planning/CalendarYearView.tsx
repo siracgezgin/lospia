@@ -4,9 +4,13 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarToolbar } from "./CalendarToolbar";
 import {
-  startOfYear, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
+  startOfMonth, startOfWeek, addDays,
   eachDayOfInterval, format, isSameMonth, isToday,
 } from "date-fns";
+/* Ay adı yazan HER format çağrısı locale ALMALI — locale'siz `format(day,
+   "d MMMM")` üstüne gelme metnini İngilizce yazıyordu ("5 September").
+   `yyyy-MM-dd` gibi MAKİNE anahtarları locale almaz, öyle kalır. */
+import { tr } from "date-fns/locale";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Button } from "@/components/ui/Button";
@@ -40,12 +44,16 @@ export function CalendarYearView({ loadByDay, initialYear, viewSwitch }: Props) 
   const router = useRouter();
   const [year, setYear] = useState(initialYear);
 
+  /* HER AY SABİT 6 HAFTA (42 gün).
+     Ayın kendi hafta sayısı 5 ya da 6 olabiliyor; ızgara satırındaki kartlar
+     en uzun karta göre gerildiği için kimi ay kutucukları diğerlerinden
+     büyük/boşluklu görünüyordu. 42 güne tamamlanan ızgarada 12 kart da birebir
+     aynı yükseklikte ve gün kutuları birebir aynı boyutta olur. */
   const months = useMemo(() => {
-    const jan = startOfYear(new Date(year, 0, 1));
     return Array.from({ length: 12 }, (_, i) => {
-      const monthStart = startOfMonth(new Date(jan.getFullYear(), i, 1));
+      const monthStart = startOfMonth(new Date(year, i, 1));
       const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
-      const gridEnd = endOfWeek(endOfMonth(monthStart), { weekStartsOn: 1 });
+      const gridEnd = addDays(gridStart, 41);
       return { monthStart, days: eachDayOfInterval({ start: gridStart, end: gridEnd }) };
     });
   }, [year]);
@@ -78,7 +86,7 @@ export function CalendarYearView({ loadByDay, initialYear, viewSwitch }: Props) 
       {/* Yıl gezgini — hafta ve ay görünümleriyle AYNI çubuk gövdesi
           (2026-08-29: "hepsi aynı yerde olsun"). */}
       <CalendarToolbar viewSwitch={viewSwitch}>
-        <div className="inline-flex h-9 items-stretch overflow-hidden rounded-control border border-line bg-surface">
+        <div className="inline-flex h-9 items-stretch overflow-hidden rounded-control border border-line bg-surface pointer-coarse:h-11">
           <button
             type="button"
             onClick={() => setYear((y) => y - 1)}
@@ -114,18 +122,28 @@ export function CalendarYearView({ loadByDay, initialYear, viewSwitch }: Props) 
         </span>
       </CalendarToolbar>
 
-      {/* 12 mini ay — telefonda 1, tablette 2-3, masaüstünde 4 sütun */}
-      <div className="grid min-h-0 flex-1 gap-3 overflow-auto p-3 sm:grid-cols-2 sm:p-4 lg:grid-cols-3 xl:grid-cols-4">
+      {/* 12 mini ay — telefonda 1, tablette 2-3, masaüstünde 4 sütun.
+
+          `auto-rows-max` ŞART: bu kap `flex-1` ile KESİN bir yüksekliğe oturuyor
+          ve ay kartlarının `overflow-hidden`'ı (yuvarlak köşeler için gerekli)
+          onların otomatik asgari boyutunu 0 yapıyor. Varsayılan `auto` satırlar
+          bu yüzden kabın boyuna sığacak kadar SIKIŞIYOR, kartlar da içeriğini
+          kırpıyordu: her ay yalnız ilk 3-4 haftasını gösteriyordu (ölçüldü:
+          kart 211px, içerik 299px; ızgaranın kaydırması hiç oluşmuyordu).
+          Satırlar `max-content` olunca kartlar TAM boyunda çizilir, taşma
+          ızgaranın kendi dikey kaydırmasına gider. `content-start` de satırları
+          artan boşlukta germemesi için açıkça söyler. */}
+      <div className="grid min-h-0 flex-1 auto-rows-max content-start grid-cols-1 gap-3 overflow-auto p-3 sm:grid-cols-2 sm:p-4 lg:grid-cols-3 xl:grid-cols-4">
         {months.map(({ monthStart, days }, mi) => (
-          <div key={mi} className="overflow-hidden rounded-card border border-line bg-surface">
+          <div key={mi} className="min-w-0 overflow-hidden rounded-card border border-line bg-surface">
             <button
               type="button"
               onClick={() => router.push(`/planning?v=ay&d=${format(monthStart, "yyyy-MM-dd")}`)}
               aria-label={`${TR_MONTHS[mi]} ${year} — ay görünümünde aç`}
-              className="flex min-h-[40px] w-full items-center justify-between border-b border-hairline bg-surface-muted px-3 py-2 text-left transition-colors duration-150 hover:bg-surface-hover"
+              className="flex min-h-[40px] w-full items-center justify-between gap-2 border-b border-hairline bg-surface-muted px-3 py-2 text-left transition-colors duration-150 hover:bg-surface-hover"
             >
-              <span className="text-[13.5px] font-semibold tracking-tight text-ink">{TR_MONTHS[mi]}</span>
-              <span className="text-[12px] font-medium text-subtle" aria-hidden>aç →</span>
+              <span className="truncate text-[13.5px] font-semibold tracking-tight text-ink">{TR_MONTHS[mi]}</span>
+              <span className="shrink-0 text-[12px] font-medium text-subtle" aria-hidden>aç →</span>
             </button>
 
             <div className="grid grid-cols-7 px-2 pb-2 pt-1.5">
@@ -136,6 +154,8 @@ export function CalendarYearView({ loadByDay, initialYear, viewSwitch }: Props) 
               ))}
               {days.map((day) => {
                 const iso = format(day, "yyyy-MM-dd");
+                // Ay dışı günler görünmez dolgudur (ızgara 6 haftaya tamamlanır):
+                // tıklanmaz, ekran okuyucuya da okunmaz.
                 const inMonth = isSameMonth(day, monthStart);
                 const load = loadByDay[iso];
                 const total = (load?.tasks ?? 0) + (load?.meetings ?? 0);
@@ -145,10 +165,11 @@ export function CalendarYearView({ loadByDay, initialYear, viewSwitch }: Props) 
                     type="button"
                     onClick={() => goDay(iso)}
                     disabled={!inMonth}
+                    aria-hidden={!inMonth || undefined}
                     aria-label={inMonth ? `${format(day, "d")} ${TR_MONTHS[mi]}${total ? ` — ${load!.meetings} toplantı, ${load!.tasks} görev` : ""}` : undefined}
                     title={
                       inMonth && total
-                        ? `${format(day, "d MMMM")} — ${load!.meetings} toplantı, ${load!.tasks} görev`
+                        ? `${format(day, "d MMMM", { locale: tr })} — ${load!.meetings} toplantı, ${load!.tasks} görev`
                         : undefined
                     }
                     className={cn(

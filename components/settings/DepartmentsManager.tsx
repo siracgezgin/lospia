@@ -1,17 +1,18 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Building2, ChevronRight, Plus, Trash2, UserPlus, UserMinus, Pencil } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import type { WorkspaceDepartment, DepartmentMember, WorkspaceMember, Profile } from "@/types";
-import { Avatar, AvatarGroup } from "@/components/ui/Avatar";
+import { PersonAvatar } from "@/components/ui/PersonAvatar";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Button, IconButton } from "@/components/ui/Button";
 import { TextInput, SelectInput } from "@/components/ui/Field";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { resolveDeptColorKey } from "@/lib/utils/departments";
 import { getDepartmentBadge } from "@/lib/design/semantics";
+import { assignPersonTones } from "@/lib/design/person-colors";
 import { cn } from "@/lib/utils/cn";
 import {
   provisionAfDepartments,
@@ -23,10 +24,18 @@ import {
 } from "@/lib/actions/departments";
 
 type MemberRow = WorkspaceMember & { profiles?: Partial<Profile> | null };
+type DeptMemberRowData = DepartmentMember & { profiles?: Partial<Profile> | null };
+
+/* Kişi kartının çizimi için gereken her şey — Sıraç (2026-08-30): "İsimler her
+   yerde kart olmalı, harf olarak değil." Departman listesi baş-harf çipiyle
+   kalmış son ekrandı; fotoğrafı olan kişi burada hiç görünmüyordu. */
+type PersonIdentity = { name: string; photoUrl: string | null; colorHex: string | null };
+/** workspace_members.id → kişi kartı verisi. department_members.member_id bu id'dir. */
+type IdentityMap = Map<string, PersonIdentity>;
 
 interface Props {
   departments: WorkspaceDepartment[];
-  deptMembers: (DepartmentMember & { profiles?: Partial<Profile> | null })[];
+  deptMembers: DeptMemberRowData[];
   workspaceMembers: MemberRow[];
   canManage: boolean;
 }
@@ -35,27 +44,74 @@ function memberName(m: MemberRow) {
   return m.profiles?.full_name ?? m.profiles?.email ?? "—";
 }
 
+/** Kimliği bilinmeyen satır için yedek: elde yalnız gömülü profil vardır. */
+function fallbackIdentity(dm: DeptMemberRowData): PersonIdentity {
+  return {
+    name: getPersonDisplayName(dm.profiles ?? dm.member_id.slice(0, 8)),
+    photoUrl: null,
+    colorHex: null,
+  };
+}
+
+/** Kapalı departman başlığındaki üst üste binmiş kişi kartları. */
+function PeopleStack({ people, max = 3 }: { people: PersonIdentity[]; max?: number }) {
+  const shown = people.slice(0, max);
+  const rest = people.slice(shown.length);
+  return (
+    <span className="flex items-center -space-x-1.5">
+      {shown.map((p, i) => (
+        <PersonAvatar
+          key={i}
+          name={p.name}
+          photoUrl={p.photoUrl}
+          colorHex={p.colorHex}
+          size="xs"
+          ring
+        />
+      ))}
+      {rest.length > 0 && (
+        <span
+          role="img"
+          aria-label={`Ayrıca ${rest.map((p) => p.name).join(", ")}`}
+          title={rest.map((p) => p.name).join(", ")}
+          className="grid size-6 shrink-0 place-items-center rounded-full bg-surface-sunken text-[10px] font-semibold tabular-nums text-muted ring-2 ring-surface"
+        >
+          +{rest.length}
+        </span>
+      )}
+    </span>
+  );
+}
+
 function DeptMemberRow({
   dm,
+  who,
   canManage,
   onRemove,
 }: {
-  dm: DepartmentMember & { profiles?: Partial<Profile> | null };
+  dm: DeptMemberRowData;
+  who: PersonIdentity;
   canManage: boolean;
   onRemove: (_id: string) => void;
 }) {
-  const name = getPersonDisplayName(dm.profiles ?? dm.member_id.slice(0, 8));
   return (
-    <div className="flex items-center justify-between gap-2 py-1">
+    <div className="flex min-h-[40px] items-center justify-between gap-2 py-1">
       <div className="flex min-w-0 items-center gap-2 text-[13.5px] text-ink">
-        <Avatar name={name} size="sm" />
-        <span className="truncate" title={name}>{name}</span>
+        {/* Fotoğrafı olanın fotoğrafı, olmayanın KENDİ renginde baş harfi —
+            panodaki, takvimdeki ve üye listesindeki kartla birebir aynı. */}
+        <PersonAvatar
+          name={who.name}
+          photoUrl={who.photoUrl}
+          colorHex={who.colorHex}
+          size="sm"
+        />
+        <span className="truncate" title={who.name}>{who.name}</span>
       </div>
       {canManage && (
         <IconButton
           size="sm"
           onClick={() => onRemove(dm.id)}
-          aria-label={`${name} — departmandan çıkar`}
+          aria-label={`${who.name} — departmandan çıkar`}
           title="Departmandan çıkar"
           className="hover:bg-danger/10 hover:text-danger"
         >
@@ -127,6 +183,7 @@ function DeptCard({
   children,
   deptMembers,
   aggregateMembers,
+  identityOf,
   colorKey,
   workspaceMembers,
   canManage,
@@ -134,10 +191,12 @@ function DeptCard({
 }: {
   dept: WorkspaceDepartment;
   children?: React.ReactNode;
-  deptMembers: (DepartmentMember & { profiles?: Partial<Profile> | null })[];
+  deptMembers: DeptMemberRowData[];
   // Deduped members across this department + (for top-level) its children.
   // Drives the collapsed header count/avatars so a parent reflects its sub-teams.
-  aggregateMembers: (DepartmentMember & { profiles?: Partial<Profile> | null })[];
+  aggregateMembers: DeptMemberRowData[];
+  // workspace_members.id → kişi kartı (fotoğraf + kendi rengi).
+  identityOf: IdentityMap;
   // Effective colour key (canonical AF override / stored / inherited from parent).
   colorKey: string | null;
   workspaceMembers: MemberRow[];
@@ -185,7 +244,8 @@ function DeptCard({
 
   function requestRemoveMember(dmId: string) {
     const dm = myMembers.find((m) => m.id === dmId);
-    setRemoveTarget({ id: dmId, name: getPersonDisplayName(dm?.profiles ?? dmId.slice(0, 8)) });
+    const who = dm ? identityOf.get(dm.member_id) ?? fallbackIdentity(dm) : null;
+    setRemoveTarget({ id: dmId, name: who?.name ?? "Bu kişi" });
   }
 
   function confirmRemoveMember() {
@@ -236,19 +296,25 @@ function DeptCard({
               aria-hidden
               className={cn("shrink-0 text-subtle transition-transform duration-200 ease-standard", open && "rotate-90")}
             />
-            {/* Departmanın rengi — satırdaki TEK rozet. */}
-            <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[12.5px] font-semibold ring-1", badge.chip, badge.ring, savingName && "opacity-60")}>
+            {/* Departmanın rengi — satırdaki TEK rozet. Dar ekranda ad
+                kısalır, satırı taşırmaz. */}
+            <span className={cn("inline-flex min-w-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[12.5px] font-semibold ring-1", badge.chip, badge.ring, savingName && "opacity-60")}>
               <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", badge.dot)} aria-hidden />
-              {dept.name}
+              <span className="truncate" title={dept.name}>{dept.name}</span>
             </span>
           </button>
         )}
         {/* "N kişi" listeyi tarif eder, kimseyi puanlamaz. Düğmenin DIŞINDA:
-            AvatarGroup blok öğe, düğme içinde geçersiz olurdu. */}
+            kişi kartı yığını blok öğe, düğme içinde geçersiz olurdu. */}
         {!renaming && aggregateMembers.length > 0 && (
           <span className="flex shrink-0 items-center gap-1.5 pr-1">
-            <AvatarGroup names={aggregateMembers.map((dm) => getPersonDisplayName(dm.profiles ?? dm.member_id.slice(0, 8)))} max={4} />
-            <span className="whitespace-nowrap text-[12px] tabular-nums text-subtle">{aggregateMembers.length} kişi</span>
+            <PeopleStack
+              people={aggregateMembers.map((dm) => identityOf.get(dm.member_id) ?? fallbackIdentity(dm))}
+              max={3}
+            />
+            <span className="hidden whitespace-nowrap text-[12px] tabular-nums text-subtle sm:inline">
+              {aggregateMembers.length} kişi
+            </span>
           </span>
         )}
         {canManage && !renaming && (
@@ -290,6 +356,7 @@ function DeptCard({
             <DeptMemberRow
               key={dm.id}
               dm={dm}
+              who={identityOf.get(dm.member_id) ?? fallbackIdentity(dm)}
               canManage={canManage}
               onRemove={requestRemoveMember}
             />
@@ -383,6 +450,30 @@ export function DepartmentsManager({ departments, deptMembers, workspaceMembers,
   const topLevel = departments.filter((d) => d.parent_id === null).sort((a, b) => a.position - b.position);
   const children = (parentId: string) =>
     departments.filter((d) => d.parent_id === parentId).sort((a, b) => a.position - b.position);
+
+  /* KİŞİ KARTI KAYNAĞI — departman satırları workspace üyelerinden beslenir.
+     Renk tohumu profiles.id (user_id): pano, takvim ve üye listesi de onu
+     kullanıyor, workspace_members.id kullanılırsa aynı kişi bu ekranda BAŞKA
+     bir renkte çıkar. Yöneticinin Ayarlar'dan seçtiği renk (color_key) atamayı
+     ezer — hex ELLE yazılmaz, hep person-colors'tan gelir. */
+  const identityOf: IdentityMap = useMemo(() => {
+    const tones = assignPersonTones(
+      workspaceMembers.map((m) => m.user_id),
+      Object.fromEntries(
+        workspaceMembers.map((m) => [m.user_id, { colorKey: m.color_key, iconKey: m.icon_key }]),
+      ),
+    );
+    return new Map(
+      workspaceMembers.map((m) => [
+        m.id,
+        {
+          name: getPersonDisplayName(m.profiles ?? null),
+          photoUrl: m.profiles?.avatar_url ?? null,
+          colorHex: tones[m.user_id]?.hex ?? null,
+        },
+      ]),
+    );
+  }, [workspaceMembers]);
 
   // Deduped member rows for a department's collapsed header. A top-level
   // department aggregates its own members plus everyone in its child
@@ -482,6 +573,7 @@ export function DepartmentsManager({ departments, deptMembers, workspaceMembers,
                 dept={dept}
                 deptMembers={deptMembers}
                 aggregateMembers={aggregateFor(dept.id)}
+                identityOf={identityOf}
                 colorKey={colorFor(dept)}
                 workspaceMembers={workspaceMembers}
                 canManage={canManage}
@@ -494,6 +586,7 @@ export function DepartmentsManager({ departments, deptMembers, workspaceMembers,
                     dept={child}
                     deptMembers={deptMembers}
                     aggregateMembers={aggregateFor(child.id)}
+                    identityOf={identityOf}
                     colorKey={colorFor(child)}
                     workspaceMembers={workspaceMembers}
                     canManage={canManage}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useTransition, useRef, useEffect, useContext } from "react";
+import { createContext, useState, useMemo, useTransition, useRef, useEffect, useContext } from "react";
 import { useRouter } from "next/navigation";
 import { formatDateTimeTR, formatDateOnlyTR } from "@/lib/utils/format-date";
 import { ArrowLeft, History, Check, AlertCircle, Lock, Users, CalendarDays } from "lucide-react";
@@ -24,11 +24,12 @@ import { activityMessage } from "@/components/task/activity-messages";
 import {
   STATUS_CHIP_TONE, PRIORITY_SHOW_ON_BOARD, getTaskStateMarkers,
 } from "@/lib/design/semantics";
-import { Avatar } from "@/components/ui/Avatar";
+import { PersonAvatar, type PersonAvatarSize } from "@/components/ui/PersonAvatar";
 import { Button } from "@/components/ui/Button";
 import { Field, FieldGrid, TextInput, TextArea, SelectInput } from "@/components/ui/Field";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { getPersonDisplayName } from "@/lib/utils/person-display";
+import { assignPersonTones, personTone, type PersonChoice } from "@/lib/design/person-colors";
+import { getPersonDisplayName, personNameKey } from "@/lib/utils/person-display";
 import { cn } from "@/lib/utils/cn";
 import { BackLink } from "@/components/modules/BackLink";
 import { TaskDrawerContext } from "@/components/task/TaskDetailDrawer";
@@ -36,6 +37,72 @@ import {
   TASK_VISIBILITIES, VISIBILITY_LABELS, VISIBILITY_DESCRIPTIONS,
   ADMIN_ONLY_CHIP_LABEL, asVisibility, type TaskVisibility,
 } from "@/lib/utils/visibility";
+
+/* ── Kişi kimliği: FOTOĞRAF + KENDİ RENGİ ────────────────────────────────────
+   Sıraç (2026-08-30): "İsimler her yerde kart olmalı, harf olarak değil."
+
+   Görev ekranları son baş-harf çipleriydi: `components/ui/Avatar` yalnız harf
+   çizer ve `photoUrl` girdisi bile yoktur, bu yüzden fotoğrafı olan kişi
+   burada ASLA görünmüyordu. Artık Pano (ParticipantChips) ve Takvim
+   (KimBadges) ile aynı dil: `PersonAvatar` — fotoğrafı olanın fotoğrafı,
+   olmayanın kendi renginde yuvarlak baş harfi.
+
+   Fotoğraf ve renk YENİ SORGU İSTEMEZ: bu ekran zaten `profiles`
+   (avatar_url) ve `contacts` alıyor. Sorumlu paneli ile not paneli bu veriyi
+   prop olarak almıyor ama TaskDetail'in ALTINDA (slot olarak) çiziliyor, o
+   yüzden kimlik bir bağlamla paylaşılır — üst sunucu bileşenine dokunulmadı.
+
+   Tohum kümesi Pano'nunkiyle aynıdır (üye profilleri ∪ üyeyle eşleşmeyen CRM
+   kişileri), böylece aynı insan panoda ve görev ekranında aynı rengi taşır. */
+export type TaskPersonIdentity = { photoUrl: string | null; colorHex: string };
+type TaskPeopleIndex = {
+  /** profiles.id | contacts.id → kimlik. */
+  byId: Record<string, TaskPersonIdentity>;
+  /** Yalnız adı bilinen yerler için (başlıktaki sorumlu listesi id taşımaz). */
+  byName: Record<string, TaskPersonIdentity>;
+};
+const TaskPeopleContext = createContext<TaskPeopleIndex>({ byId: {}, byName: {} });
+
+/**
+ * Kişi bulunamazsa nötr griye DÜŞMEZ: adından türeyen kalıcı palet rengi
+ * verilir (person-colors) — kimse renksiz kalmasın, aynı ad hep aynı renk.
+ */
+export function useTaskPersonIdentity(
+  id: string | null | undefined,
+  name: string,
+): TaskPersonIdentity {
+  const index = useContext(TaskPeopleContext);
+  const byId = id ? index.byId[id] : undefined;
+  const found = byId ?? index.byName[personNameKey(name)];
+  return found ?? { photoUrl: null, colorHex: personTone(name).hex };
+}
+
+/**
+ * Görev ekranlarının TEK kişi rozeti. Pano'daki kart diliyle birebir aynı:
+ * xs = 24px yuvarlak kart, ad `title`/`aria-label` ile okunur.
+ */
+export function TaskPersonAvatar({
+  id, name, size = "xs", title, className,
+}: {
+  /** profiles.id ya da workspace_contacts.id — fotoğrafı/rengi buradan bulur. */
+  id?: string | null;
+  name: string;
+  size?: PersonAvatarSize;
+  title?: string;
+  className?: string;
+}) {
+  const who = useTaskPersonIdentity(id, name);
+  return (
+    <PersonAvatar
+      name={name}
+      photoUrl={who.photoUrl}
+      colorHex={who.colorHex}
+      size={size}
+      title={title ?? name}
+      className={className}
+    />
+  );
+}
 
 interface Props {
   task: Task;
@@ -56,6 +123,10 @@ interface Props {
   // Display names of the current responsible people (participants ∪ assignee
   // fallback) — shown under the title in the header card.
   responsiblePeople?: string[];
+  /** Yöneticinin Ayarlar'dan seçtiği renk (kişi id → seçim). Boşsa renk id'den
+   *  deterministik türetilir — Pano ile aynı tohum kümesi kullanıldığı için
+   *  seçim yapılmamış kişilerde iki ekran zaten aynı rengi verir. */
+  personChoices?: Record<string, PersonChoice>;
   // Page-composed panels, positioned by this layout in a single column:
   // Görev bilgileri → Sorumlu kişiler → Notlar → Puan & Motivasyon → Aktivite.
   participantsSlot?: React.ReactNode;
@@ -343,9 +414,11 @@ function TaskEditor({
               <span className="text-subtle">Sorumlu atanmadı</span>
             ) : (
               <span className="flex items-center gap-1.5 flex-wrap">
+                {/* Kişi = YUVARLAK KART (fotoğraf ya da kendi rengi), harf
+                    çipi değil. Ad yanında tam yazdığı için kesme/"+N" yok. */}
                 {responsiblePeople.map((name) => (
-                  <span key={name} className="inline-flex items-center gap-1 text-ink font-medium">
-                    <Avatar name={name} size="xs" />
+                  <span key={name} className="inline-flex items-center gap-1.5 text-ink font-medium">
+                    <TaskPersonAvatar name={name} size="xs" />
                     {getPersonDisplayName(name)}
                   </span>
                 ))}
@@ -589,7 +662,13 @@ function ActivityLogSection({
               ?? (log.actor_id ? "Bilinmeyen kullanıcı" : "Sistem");
             return (
               <li key={log.id} className="flex gap-3 text-[13.5px] rounded-control px-2 py-1.5 hover:bg-surface-hover transition-colors duration-150">
-                <Avatar name={actorName} size="xs" tone={log.actor_id ? "color" : "neutral"} className="mt-0.5" />
+                {/* Kişi kartı; "Sistem" satırı bir insan DEĞİL, o yüzden
+                    kimlik rengi almaz (nötr daire). */}
+                {log.actor_id ? (
+                  <TaskPersonAvatar id={log.actor_id} name={actorName} size="xs" className="mt-0.5" />
+                ) : (
+                  <PersonAvatar name={actorName} colorHex={null} size="xs" className="mt-0.5" />
+                )}
                 <div className="flex-1 min-w-0">
                   <p className="text-muted leading-snug">
                     <span className="font-medium text-ink">{actorName}</span>{" "}
@@ -620,6 +699,7 @@ export function TaskDetail({
   backHref = "/board",
   backLabel = "Board’a dön",
   responsiblePeople = [],
+  personChoices,
   participantsSlot,
   notesSlot,
   effortSlot,
@@ -643,8 +723,41 @@ export function TaskDetail({
     return () => window.clearTimeout(t);
   }, [savedAt]);
 
+  /* Kişi kartlarının kaynağı — sayfanın ZATEN çektiği veri. Tohum kümesi ve
+     sıralaması Pano'yla aynı olduğu için renk ataması da aynı çıkar. */
+  const people = useMemo<TaskPeopleIndex>(() => {
+    // Üyeyle eşleşen CRM kişisi ayrı bir renk almaz — o insan zaten profil
+    // olarak sayıldı (buildAssignablePeople'ın çakışma kuralı).
+    const contactSeeds = contacts.filter(
+      (c) => !c.user_id || !profiles.some((p) => p.id === c.user_id),
+    );
+    const tones = assignPersonTones(
+      [...profiles.map((p) => p.id), ...contactSeeds.map((c) => c.id)],
+      personChoices ?? {},
+    );
+    const byId: Record<string, TaskPersonIdentity> = {};
+    const byName: Record<string, TaskPersonIdentity> = {};
+    const add = (id: string, name: string, photoUrl: string | null) => {
+      const rec: TaskPersonIdentity = {
+        photoUrl,
+        colorHex: tones[id]?.hex ?? personTone(id).hex,
+      };
+      byId[id] = rec;
+      const key = personNameKey(name);
+      // İlk kayıt kazanır: üyeler önce eklendiği için aynı adlı CRM kişisi
+      // üyenin fotoğrafını/rengini bastıramaz.
+      if (key && !byName[key]) byName[key] = rec;
+    };
+    for (const p of profiles) add(p.id, p.full_name ?? p.email ?? "—", p.avatar_url ?? null);
+    for (const c of contactSeeds) add(c.id, c.name, null);
+    return { byId, byName };
+  }, [profiles, contacts, personChoices]);
+
   return (
-    // Tam genişlik (max-w kapağı yok) — çekmecede zaten 720–760px'e sığar.
+    /* Sağlayıcı sorumlu/not panellerini de kapsar: slot olarak gelseler de
+       ÇİZİM ağacı burasıdır, kişi kartları aynı kimliği okur. */
+    <TaskPeopleContext.Provider value={people}>
+    {/* Tam genişlik (max-w kapağı yok) — çekmecede zaten 720–760px'e sığar. */}
     <div className={cn("w-full", PAGE_PAD)}>
       <TaskEditor
         key={version}
@@ -664,5 +777,6 @@ export function TaskDetail({
         onSaved={() => setSavedAt(Date.now())}
       />
     </div>
+    </TaskPeopleContext.Provider>
   );
 }

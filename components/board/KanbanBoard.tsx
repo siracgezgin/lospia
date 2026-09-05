@@ -38,7 +38,7 @@ import {
   ChevronLeft, ChevronRight, ChevronDown, MoreVertical, Pencil, Copy, Archive, Trash2, AlertTriangle, Lock, ShieldCheck,
 } from "lucide-react";
 import { ADMIN_ONLY_CHIP_LABEL, asVisibility, VISIBILITY_LABELS, type TaskVisibility } from "@/lib/utils/visibility";
-import { Avatar } from "@/components/ui/Avatar";
+import { PersonAvatar } from "@/components/ui/PersonAvatar";
 import {
   BOARD_COLUMNS,
   getTaskColId,
@@ -111,6 +111,17 @@ function useTaskPersonColor(task: Task): string | null {
   }
   return null;
 }
+
+/* Kişi kimliği — FOTOĞRAF + KENDİ RENGİ.
+   Sıraç (2026-08-30): "İsimler her yerde kart olmalı, harf olarak değil."
+   Takvim bu dile b8a4078'de geçti (KimBadges → PersonAvatar); pano kartları
+   ise hâlâ köşeli baş-harf çipi çiziyordu, fotoğrafı olanın fotoğrafı hiç
+   görünmüyordu. Artık pano da AYNI kaynaktan besleniyor: fotoğrafı olanın
+   fotoğrafı, olmayanın kişi paletindeki kendi renginde yuvarlak baş harfi.
+   Anahtar profiles.id (ya da CRM kişisinin id'si) — kişi ızgarası, kart rengi
+   ve rozetler tek tohumu paylaşır. */
+export type PersonIdentity = { name: string; photoUrl: string | null; colorHex: string | null };
+const PersonIdentityContext = createContext<Record<string, PersonIdentity>>({});
 
 // Participant completions (taskId → [{name, completed}]) for card chips.
 const ParticipantsContext = createContext<Record<string, TaskParticipant[]>>({});
@@ -298,32 +309,85 @@ function CardStatusChip({ task }: { task: Task }) {
   );
 }
 
-/** Bottom-right initials chips for member participants, with completion ring. */
+/**
+ * Kart üzerindeki KİŞİ KARTI — pano ailesindeki TEK kural.
+ *
+ * Önceden iki kural vardı: katılımcı rozetleri her zaman halkalıydı (nötr →
+ * tamamlayanda yeşil), tek sorumlu rozeti ise YALNIZ görev bittiğinde halka
+ * alıyordu. Aynı kartın aynı köşesinde iki farklı dil konuşuluyordu. Artık
+ * sorumlu da katılımcı da bu bileşenden çizilir.
+ *
+ * Tamamlandı sinyali: yeşil halka TEK BAŞINA yetmiyor — tamamlanmış kartın
+ * zemini de yeşil (DONE_STYLE #d6f0e1), yeşil halka o zeminde eriyip
+ * kayboluyordu. Halkanın altına beyaz bir ayraç (ring-offset) konur ve köşeye
+ * onay işareti gelir; ikisi de hem beyaz hem yeşil zeminde okunur. Yeni bir
+ * rozet değil — katılımcı rozetinin zaten kullandığı işaret, artık her yerde.
+ */
+function PersonBadge({
+  name, photoUrl, colorHex, completed, label, className,
+}: {
+  name: string;
+  photoUrl: string | null;
+  colorHex: string | null;
+  completed: boolean;
+  label: string;
+  className?: string;
+}) {
+  return (
+    <span role="img" aria-label={label} title={label} className={cn("relative inline-flex", className)}>
+      <PersonAvatar
+        name={name}
+        photoUrl={photoUrl}
+        colorHex={colorHex}
+        size="xs"
+        title={label}
+        /* Halka: nötr (kartın zemininden ayrılsın) → tamamlayanda yeşil,
+           araya beyaz ayraç girer ki yeşil zeminde de ayrışsın. */
+        className={completed
+          ? "ring-2 ring-success ring-offset-1 ring-offset-surface"
+          : "ring-2 ring-surface"}
+      />
+      {completed && (
+        <Check size={9} className="absolute -bottom-0.5 -right-0.5 rounded-full bg-surface text-success" strokeWidth={3} />
+      )}
+    </span>
+  );
+}
+
+/** Kartın sağ altındaki KİŞİ KARTLARI — fotoğraf, yoksa kendi renginde baş harf.
+ *  Tamamlama bilgisi kartın KENDİSİNDE değil, çevresinde yaşar: bitiren kişinin
+ *  halkası yeşile döner ve köşesine onay işareti gelir. Böylece kimlik (kim)
+ *  ile durum (bitirdi mi) birbirini yemez. */
 function ParticipantChips({ participants }: { participants: TaskParticipant[] }) {
+  const people = useContext(PersonIdentityContext);
   if (participants.length === 0) return null;
   const shown = participants.slice(0, 4);
-  const overflow = participants.length - shown.length;
+  const rest = participants.slice(shown.length);
   return (
-    <span className="ml-auto flex items-center -space-x-1 shrink-0">
-      {shown.map((p) => (
-        <span key={p.memberId} className="relative" title={`${p.name} — ${p.completed ? "Tamamladı" : "Tamamlanmadı"}`}>
-          {/* Neutral until this person completes; green (with check) once done. */}
-          <Avatar
+    <span className="ml-auto flex items-center -space-x-1.5 shrink-0">
+      {shown.map((p) => {
+        const who = people[p.userId];
+        return (
+          <PersonBadge
+            key={p.memberId}
             name={p.name}
-            size="xs"
-            tone={p.completed ? "done" : "neutral"}
-            title={`${p.name} — ${p.completed ? "Tamamladı" : "Tamamlanmadı"}`}
-            className="ring-1 ring-surface"
+            photoUrl={who?.photoUrl ?? null}
+            colorHex={who?.colorHex ?? null}
+            completed={p.completed}
+            label={`${p.name} — ${p.completed ? "Tamamladı" : "Tamamlanmadı"}`}
           />
-          {p.completed && (
-            <Check size={8} className="absolute -bottom-0.5 -right-0.5 rounded-full bg-surface text-success" strokeWidth={3} />
-          )}
-        </span>
-      ))}
-      {/* Avatar boyu (16px) — rozet içi tek işaret, tipografi tabanı burada uygulanmaz. */}
-      {overflow > 0 && (
-        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-surface-sunken text-muted text-[8px] font-semibold ring-1 ring-surface">
-          +{overflow}
+        );
+      })}
+      {/* Taşma göstergesi de AYNI yuvarlak dilde; üzerine gelince kimlerin
+          kaldığı okunur. Bu bir puan değil, listenin devamıdır. */}
+      {rest.length > 0 && (
+        <span
+          role="img"
+          aria-label={`Ayrıca ${rest.map((p) => p.name).join(", ")}`}
+          title={rest.map((p) => p.name).join(", ")}
+          className="grid size-6 shrink-0 place-items-center rounded-full bg-surface-sunken text-[10px] font-semibold text-muted ring-2 ring-surface"
+        >
+          +{rest.length}
         </span>
       )}
     </span>
@@ -824,14 +888,17 @@ function QuickAssigneeSelect({
   responsibleNames: Record<string, string>;
 }) {
   const ctx = useContext(BoardContext);
+  const people = useContext(PersonIdentityContext);
   const [_p, startTransition] = useTransition();
   const [encoded, setEncoded] = useOptimistic<string>(encodeResponsible(task));
 
-  const currentName = encoded.startsWith("member:")
-    ? responsibleNames[encoded.slice(7)] ?? "—"
+  const currentId = encoded.startsWith("member:")
+    ? encoded.slice(7)
     : encoded.startsWith("contact:")
-    ? responsibleNames[encoded.slice(8)] ?? "—"
+    ? encoded.slice(8)
     : null;
+  const currentName = currentId ? responsibleNames[currentId] ?? "—" : null;
+  const who = currentId ? people[currentId] : undefined;
 
   // Assignment mirrors the server rule (canManageTaskAssignment): admins any
   // task; a member only tasks they created / own / are responsible for. Others
@@ -854,13 +921,17 @@ function QuickAssigneeSelect({
     });
   }
 
+  const avatarLabel = currentName
+    ? `${currentName} — ${task.status === "done" ? "Tamamladı" : "Tamamlanmadı"}`
+    : "";
   const avatar = currentName ? (
-    // Initials only; neutral until the task is done (never "green by default").
-    <Avatar
+    /* Kişi kartı: katılımcı rozetiyle AYNI bileşen, aynı halka dili. */
+    <PersonBadge
       name={currentName}
-      size="xs"
-      tone={task.status === "done" ? "done" : "neutral"}
-      title={`${currentName} — ${task.status === "done" ? "Tamamladı" : "Tamamlanmadı"}`}
+      photoUrl={who?.photoUrl ?? null}
+      colorHex={who?.colorHex ?? null}
+      completed={task.status === "done"}
+      label={avatarLabel}
     />
   ) : (
     <span className="text-[12px] text-subtle pointer-events-none">—</span>
@@ -990,9 +1061,14 @@ function CardContent({
   const taskDone = task.status === "done";
   // Active member participants (with per-person completion) drive the people chips.
   const participants = useTaskParticipants(task.id);
-  const responsibleName =
-    responsibleNames[task.assignee_id ?? ""] ??
-    responsibleNames[task.responsible_contact_id ?? ""];
+  const people = useContext(PersonIdentityContext);
+  // Sorumlu kişinin kimliği (fotoğraf + renk) için id de gerekiyor, yalnız ad değil.
+  const responsibleId =
+    (task.assignee_id && responsibleNames[task.assignee_id] ? task.assignee_id : null) ??
+    (task.responsible_contact_id && responsibleNames[task.responsible_contact_id]
+      ? task.responsible_contact_id
+      : null);
+  const responsibleName = responsibleId ? responsibleNames[responsibleId] : undefined;
 
   // State is an OVERLAY only: a chip + due-date color. Never the card color.
   const markers = getTaskStateMarkers(task);
@@ -1108,12 +1184,13 @@ function CardContent({
             responsibleNames={responsibleNames}
           />
         ) : responsibleName ? (
-          <Avatar
+          <PersonBadge
             name={responsibleName}
-            size="xs"
-            tone={taskDone ? "done" : "neutral"}
-            title={`${responsibleName} — ${taskDone ? "Tamamladı" : "Tamamlanmadı"}`}
-            className="shrink-0 ml-auto"
+            photoUrl={people[responsibleId ?? ""]?.photoUrl ?? null}
+            colorHex={people[responsibleId ?? ""]?.colorHex ?? null}
+            completed={taskDone}
+            label={`${responsibleName} — ${taskDone ? "Tamamladı" : "Tamamlanmadı"}`}
+            className="ml-auto shrink-0"
           />
         ) : null}
       </div>
@@ -2030,6 +2107,21 @@ export function KanbanBoard({
     return out;
   }, [personTones]);
 
+  /** Kişi kartlarının verisi: id → ad + fotoğraf + hex. Kişi ızgarasıyla AYNI
+   *  kaynak (gridPeople + personTones), böylece aynı insan pano kartında,
+   *  ızgarada ve not akışında birebir aynı görünür. */
+  const personIdentities = useMemo<Record<string, PersonIdentity>>(() => {
+    const out: Record<string, PersonIdentity> = {};
+    for (const p of gridPeople) {
+      out[p.id] = {
+        name: p.name,
+        photoUrl: p.avatarUrl ?? null,
+        colorHex: personTones[p.id]?.hex ?? null,
+      };
+    }
+    return out;
+  }, [gridPeople, personTones]);
+
   /** Seçili kişinin ızgaradaki kaydı — üst şeritteki renkli başlık için. */
   const selectedPerson = useMemo(
     () => gridPeople.find((p) => p.filterKey === personFilter) ?? null,
@@ -2121,6 +2213,7 @@ export function KanbanBoard({
   const feedNode = (
     <WeeklyNoteFeed
       items={weekFeedItems}
+      people={personIdentities}
       deptMeta={deptMeta}
       currentUserId={userId}
       isViewer={isViewer}
@@ -2138,6 +2231,7 @@ export function KanbanBoard({
   return (
     <DeptMetaContext.Provider value={deptMeta}>
     <PersonColorContext.Provider value={personColorMap}>
+    <PersonIdentityContext.Provider value={personIdentities}>
     <ParticipantsContext.Provider value={participantsByTask}>
     <NoteSignalsContext.Provider value={noteSignals}>
     <BoardContext.Provider value={boardCtx}>
@@ -2461,7 +2555,7 @@ export function KanbanBoard({
               {/* Not sütunu Yönetici Panoda da çizilir: pano dili her iki yüzeyde
                   aynı olmalı ve yönetici notları/akışı burada da lazım. Sütunun
                   kendi izin davranışı (readOnly / isAdmin) değişmez. */}
-              <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} currentUserId={userId} isAdmin={canComplete} feed={feedNode} feedLabel={feedLabel} onMutated={afterMutation} />
+              <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} people={personIdentities} currentUserId={userId} isAdmin={canComplete} feed={feedNode} feedLabel={feedLabel} onMutated={afterMutation} />
               {BOARD_COLUMNS.map((col) => (
                 <StaticKanbanColumn
                   key={col.id}
@@ -2491,7 +2585,7 @@ export function KanbanBoard({
               {/* Continuous sticky band behind every column header (no gaps/peek). */}
               <div aria-hidden className="sticky top-0 z-10 h-11 border-b border-line bg-app" />
               <div className="flex gap-3 sm:gap-4 px-3 sm:px-4 pb-4 items-start -mt-11">
-                <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} currentUserId={userId} isAdmin={canComplete} feed={feedNode} feedLabel={feedLabel} onMutated={afterMutation} />
+                <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} people={personIdentities} currentUserId={userId} isAdmin={canComplete} feed={feedNode} feedLabel={feedLabel} onMutated={afterMutation} />
                 {BOARD_COLUMNS.map((col) => (
                   <KanbanColumn
                     key={col.id}
@@ -2566,7 +2660,7 @@ export function KanbanBoard({
         {/* Single column content — flows into the page scroll (no inner scroll) */}
         <div className="px-3 py-3">
           {!isAdminBoard && mobileSeg === "notes" ? (
-            <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} currentUserId={userId} isAdmin={canComplete} mobile feed={feedNode} feedLabel={feedLabel} onMutated={afterMutation} />
+            <NotesColumn notes={notes} workspaceId={workspaceId} readOnly={isViewer} authorsById={responsibleNames} people={personIdentities} currentUserId={userId} isAdmin={canComplete} mobile feed={feedNode} feedLabel={feedLabel} onMutated={afterMutation} />
           ) : (
             (() => {
               const colTasks = tasksByCol[mobileSeg as BoardColId] ?? [];
@@ -2679,6 +2773,7 @@ export function KanbanBoard({
     </BoardContext.Provider>
     </NoteSignalsContext.Provider>
     </ParticipantsContext.Provider>
+    </PersonIdentityContext.Provider>
     </PersonColorContext.Provider>
     </DeptMetaContext.Provider>
   );

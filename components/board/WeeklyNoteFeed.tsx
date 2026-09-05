@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils/cn";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { ClampedText } from "@/components/ui/ClampedText";
+import { PersonAvatar } from "@/components/ui/PersonAvatar";
 import type { DeptMeta } from "@/lib/utils/departments";
 
 const VISIBLE_LIMIT = 6;
@@ -36,6 +37,12 @@ const NOTE_TYPE_TONE: Record<TaskNoteType, string> = {
 
 type AckRow = { note_id: string; user_id: string; action: string };
 
+/* Kişi kimliği — panodaki görev kartlarıyla AYNI dil: fotoğrafı olanın
+   fotoğrafı, olmayanın kendi renginde yuvarlak baş harfi (Sıraç, 2026-08-30:
+   "isimler her yerde kart olmalı, harf olarak değil"). Notu yazan kişi burada
+   düz metindi; aynı insan bir ekranda kart, diğerinde yazı olmasın. */
+export type FeedPerson = { name: string; photoUrl: string | null; colorHex: string | null };
+
 function shortDate(iso: string | null): string {
   if (!iso) return "";
   try {
@@ -47,6 +54,7 @@ function shortDate(iso: string | null): string {
 
 function FeedCard({
   item,
+  people,
   deptMeta,
   currentUserId,
   isViewer,
@@ -54,6 +62,7 @@ function FeedCard({
   onMutated,
 }: {
   item: BoardNoteFeedItem;
+  people: Record<string, FeedPerson>;
   deptMeta: Record<string, DeptMeta>;
   currentUserId: string;
   isViewer: boolean;
@@ -64,6 +73,7 @@ function FeedCard({
   const [pending, startTransition] = useTransition();
 
   const dept = item.departmentId ? deptMeta[item.departmentId] : undefined;
+  const author = item.authorId ? people[item.authorId] : undefined;
   const actionable = item.noteType !== "info";
   const seenByMe = acks.some((a) => a.note_id === item.id && a.user_id === currentUserId && a.action === "seen");
   const claimedByMe = acks.some((a) => a.note_id === item.id && a.user_id === currentUserId && a.action === "claimed");
@@ -109,15 +119,26 @@ function FeedCard({
       {/* Not metni — uzunsa kesilir, devamı kartın içinde açılır. */}
       <ClampedText text={item.content} lines={3} className="text-[13px] leading-relaxed text-muted" />
 
-      {/* Meta: yazar · departman · teslim · muhatap — hepsi düz metin */}
-      <p className="text-[12px] leading-snug text-subtle">
-        <span className="font-medium text-muted">{item.authorName}</span>
-        {dept && <span> · {dept.name}</span>}
-        {item.taskDueDate && <span> · Teslim: {shortDate(item.taskDueDate)}</span>}
-        {item.notifiedNames.length > 0 && (
-          <span> · Muhatap: <span className="text-muted">{item.notifiedNames.join(", ")}</span></span>
-        )}
-      </p>
+      {/* Meta: YAZAR KİŞİ KARTI + ad · departman · teslim · muhatap.
+          Kart 24px, metin min-w-0 ile sarılır — dar sütunda taşma olmaz. */}
+      <div className="flex min-w-0 items-start gap-1.5">
+        <PersonAvatar
+          name={item.authorName}
+          photoUrl={author?.photoUrl ?? null}
+          colorHex={author?.colorHex ?? null}
+          size="xs"
+          title={item.authorName}
+          className="mt-px"
+        />
+        <p className="min-w-0 flex-1 text-[12px] leading-snug text-subtle">
+          <span className="font-medium text-muted">{item.authorName}</span>
+          {dept && <span> · {dept.name}</span>}
+          {item.taskDueDate && <span> · Teslim: {shortDate(item.taskDueDate)}</span>}
+          {item.notifiedNames.length > 0 && (
+            <span> · Muhatap: <span className="text-muted">{item.notifiedNames.join(", ")}</span></span>
+          )}
+        </p>
+      </div>
 
       {/* Actions — only on actionable note types */}
       {actionable && (
@@ -157,6 +178,7 @@ function FeedCard({
 
 export function WeeklyNoteFeed({
   items,
+  people = {},
   deptMeta,
   currentUserId,
   isViewer,
@@ -164,6 +186,8 @@ export function WeeklyNoteFeed({
   onMutated,
 }: {
   items: BoardNoteFeedItem[];
+  /** profiles.id → kişi kimliği (fotoğraf + kendi rengi). */
+  people?: Record<string, FeedPerson>;
   deptMeta: Record<string, DeptMeta>;
   currentUserId: string;
   isViewer: boolean;
@@ -194,6 +218,7 @@ export function WeeklyNoteFeed({
         <FeedCard
           key={item.id}
           item={item}
+          people={people}
           deptMeta={deptMeta}
           currentUserId={currentUserId}
           isViewer={isViewer}

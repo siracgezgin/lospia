@@ -11,7 +11,8 @@ import {
   TASK_PRIORITIES,
   CARD_STATUS_OPTIONS,
 } from "@/lib/utils/task-constants";
-import { Avatar } from "@/components/ui/Avatar";
+import { PersonAvatar } from "@/components/ui/PersonAvatar";
+import { assignPersonTones, personTone } from "@/lib/design/person-colors";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { cn } from "@/lib/utils/cn";
 import { Overlay } from "@/components/ui/Overlay";
@@ -24,14 +25,19 @@ import {
 } from "@/lib/utils/visibility";
 import type { TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceDepartment } from "@/types";
 
-type BoardMember = { memberId: string; userId: string; name: string; isAdmin?: boolean };
+type BoardMember = {
+  memberId: string; userId: string; name: string; isAdmin?: boolean;
+  /** Yöneticinin Ayarlar'dan seçtiği renk — verilirse kişi kartı onu taşır. */
+  colorKey?: string | null;
+};
 
 interface Props {
   onClose: () => void;
   workspaceId: string;
   defaultStatus?: TaskStatus;
   defaultDueDate?: string;
-  profiles: Pick<Profile, "id" | "full_name" | "email">[];
+  /** avatar_url: "Kim" çipleri fotoğrafı olanın FOTOĞRAFINI gösterir. */
+  profiles: (Pick<Profile, "id" | "full_name" | "email"> & { avatar_url?: string | null })[];
   contacts: WorkspaceContact[];
   departments?: WorkspaceDepartment[];
   members?: BoardMember[];
@@ -63,9 +69,10 @@ function friendlyError(msg: string): string {
   return msg;
 }
 
-/* Kişi seçme çipi: seçili = marka dolgusu + onay işareti. */
+/* Kişi seçme çipi: seçili = marka dolgusu + onay işareti.
+   min-h-10: kişi kartı 24px olunca çip parmakla basılabilir kalsın (≥40px). */
 const PICK_CHIP =
-  "inline-flex items-center gap-1.5 rounded-full border pl-1 pr-2.5 py-1 text-[12.5px] transition-colors duration-150 ease-standard active:scale-[0.98]";
+  "inline-flex min-h-10 items-center gap-1.5 rounded-full border pl-1 pr-2.5 py-1 text-[12.5px] transition-colors duration-150 ease-standard active:scale-[0.98]";
 const PICK_ON = "bg-brand-soft border-brand-ring text-brand-strong font-medium";
 const PICK_OFF = "bg-surface border-line text-muted hover:bg-surface-hover hover:border-line-strong";
 
@@ -74,6 +81,8 @@ export function CreateTaskModal({
   workspaceId,
   defaultStatus = "ready",
   defaultDueDate = "",
+  profiles = [],
+  contacts = [],
   departments = [],
   members = [],
   isAdmin = false,
@@ -126,6 +135,27 @@ export function CreateTaskModal({
     const adminsOnly = visibility === "admin_only" || lockResponsibleToAdmins;
     return adminsOnly ? members.filter((m) => m.isAdmin) : members;
   }, [members, visibility, lockResponsibleToAdmins]);
+
+  /* "Kim" çipleri artık YUVARLAK KİŞİ KARTI (Sıraç, 2026-08-30: "isimler her
+     yerde kart olmalı, harf olarak değil"). Fotoğraf `profiles.avatar_url`'den,
+     renk Pano ile AYNI kaynaktan: yönetici seçtiyse o renk, seçmediyse
+     id'den deterministik atama. Tohum kümesi de Pano'nunkiyle aynı (üyeler ∪
+     kişiler) — aynı insan iki ekranda iki türlü görünmesin. Yeni sorgu yok:
+     bu iki liste zaten bileşene geliyordu. */
+  const photoOf = useMemo(() => {
+    const map: Record<string, string | null> = {};
+    for (const p of profiles) map[p.id] = p.avatar_url ?? null;
+    return map;
+  }, [profiles]);
+
+  const personTones = useMemo(
+    () =>
+      assignPersonTones(
+        [...members.map((m) => m.userId), ...contacts.map((c) => c.id)],
+        Object.fromEntries(members.map((m) => [m.userId, { colorKey: m.colorKey ?? null }])),
+      ),
+    [members, contacts],
+  );
 
   // Switching to admin_only drops any already-picked non-admin responsibles.
   function handleVisibilityChange(value: TaskVisibility) {
@@ -244,7 +274,14 @@ export function CreateTaskModal({
                     aria-pressed={on}
                     className={cn(PICK_CHIP, on ? PICK_ON : PICK_OFF)}
                   >
-                    <Avatar name={m.name} size="xs" />
+                    {/* Renk bulunamazsa nötr griye düşmez; adından türeyen
+                        kalıcı palet rengi verilir — kimse renksiz kalmasın. */}
+                    <PersonAvatar
+                      name={m.name}
+                      photoUrl={photoOf[m.userId] ?? null}
+                      colorHex={personTones[m.userId]?.hex ?? personTone(m.name).hex}
+                      size="xs"
+                    />
                     {getPersonDisplayName(m.name)}
                     {on && <Check size={12} aria-hidden />}
                   </button>

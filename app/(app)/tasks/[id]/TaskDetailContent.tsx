@@ -98,7 +98,7 @@ export async function TaskDetailContent({
       // Workspace members (for the participant picker)
       supabase
         .from("workspace_members")
-        .select("id, user_id, role, profiles(id, full_name, email)")
+        .select("id, user_id, role, color_key, profiles(id, full_name, email)")
         .eq("workspace_id", task.workspace_id),
       // Current participant completions for this task
       supabase
@@ -165,7 +165,7 @@ export async function TaskDetailContent({
     : "medium";
 
   // Participant panel data
-  type MemberRow = { id: string; user_id: string; role: string; profiles: Pick<Profile, "id" | "full_name" | "email"> | Pick<Profile, "id" | "full_name" | "email">[] | null };
+  type MemberRow = { id: string; user_id: string; role: string; color_key: string | null; profiles: Pick<Profile, "id" | "full_name" | "email"> | Pick<Profile, "id" | "full_name" | "email">[] | null };
   const panelMembers: PanelMember[] = ((membersResult.data ?? []) as unknown as MemberRow[])
     .map((m) => {
       const prof = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
@@ -174,6 +174,14 @@ export async function TaskDetailContent({
         isAdmin: m.role === "owner" || m.role === "admin",
       };
     });
+  /* Yöneticinin Ayarlar'dan seçtiği kişi rengi. Pano bunu zaten okuyordu;
+     görev ekranı okumadığı için aynı insan iki ekranda iki renkte çıkıyordu.
+     Tohum kişinin profil kimliğidir (assignPersonTones'a verilen tohumla aynı). */
+  const personChoices: Record<string, { colorKey?: string | null }> = {};
+  for (const m of (membersResult.data ?? []) as unknown as MemberRow[]) {
+    if (m.color_key) personChoices[m.user_id] = { colorKey: m.color_key };
+  }
+
   const panelParticipants: PanelParticipant[] = ((completionsResult.data ?? []) as { member_id: string; completed_at: string | null }[])
     .map((c) => ({ memberId: c.member_id, completed: c.completed_at != null, completedAt: c.completed_at }));
 
@@ -271,6 +279,7 @@ export async function TaskDetailContent({
       backHref={backHref}
       backLabel={backLabel}
       responsiblePeople={responsiblePeople}
+      personChoices={personChoices}
       participantsSlot={
         <TaskParticipantsPanel
           taskId={task.id}
