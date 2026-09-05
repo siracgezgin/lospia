@@ -149,13 +149,54 @@ def load_env_local():
     return env
 
 
-def resolve_target(prod: bool):
+PROD_ENV_FILE = ".env.prod.local"
+
+
+def load_env_file(filename):
+    """Basit .env okuyucu — yalnız KEY=VALUE satırları."""
+    env = {}
+    p = os.path.join(os.getcwd(), filename)
+    if not os.path.exists(p):
+        return env
+    for line in open(p, encoding="utf8"):
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        env[k.strip()] = v.strip().strip("\"'")
+    return env
+
+
+def prod_credentials():
+    """Canlı kimlik bilgileri: önce ortam değişkeni, sonra .env.prod.local.
+
+    Sıraç (2026-09-06) üç kez üst üste kabuk değişkenlerine takıldı: komut
+    satırındaki yer tutucular aynen yapıştırıldı, `export` boş kaldı. Anahtarı
+    bir kez dosyaya yazmak bu sınıfı tamamen kapatıyor. Dosya .gitignore'da
+    (.env.* kalıbı) — depoya giremez.
+    """
     url = os.environ.get("IMPORT_SUPABASE_URL")
     key = os.environ.get("IMPORT_SUPABASE_SERVICE_ROLE_KEY")
+    if url and key:
+        return url, key
+    f = load_env_file(PROD_ENV_FILE)
+    return url or f.get("IMPORT_SUPABASE_URL"), key or f.get("IMPORT_SUPABASE_SERVICE_ROLE_KEY")
+
+
+def resolve_target(prod: bool):
+    url, key = prod_credentials()
     if prod or url or key:
         if not url or not key:
-            sys.exit("❌  --prod için IMPORT_SUPABASE_URL ve IMPORT_SUPABASE_SERVICE_ROLE_KEY gerekli.\n"
-                     "    Panel → Settings → API → Secret keys → default (sb_secret_…)")
+            sys.exit(
+                "\u274c  Canl\u0131 kimlik bilgileri bulunamad\u0131.\n"
+                "\n    EN KOLAY YOL \u2014 proje k\u00f6k\u00fcnde " + PROD_ENV_FILE + " dosyas\u0131 olu\u015fturun:\n"
+                "        IMPORT_SUPABASE_URL=https://<proje>.supabase.co\n"
+                "        IMPORT_SUPABASE_SERVICE_ROLE_KEY=sb_secret_...\n"
+                "\n    De\u011ferler: Panel \u2192 Settings \u2192 API \u2192 Project URL ve Secret keys \u2192 default\n"
+                "    (g\u00f6z simgesine bas\u0131p a\u00e7\u0131n, sonra kopyalay\u0131n).\n"
+                "\n    Bu dosya .gitignore'dad\u0131r, depoya giremez. Kabuk de\u011fi\u015fkeni de\n"
+                "    \u00e7al\u0131\u015f\u0131r ama her seferinde yeniden yazmak gerekir."
+            )
         if not url.startswith(("http://", "https://")):
             sys.exit(f'❌  IMPORT_SUPABASE_URL geçerli bir adres değil: "{url}"\n'
                      "    https://<proje>.supabase.co biçiminde olmalı.")
