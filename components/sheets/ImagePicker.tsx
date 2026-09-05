@@ -145,7 +145,10 @@ export function ImagePicker({ open, onClose, onPick }: Props) {
                           src={img.url}
                           alt={img.name}
                           loading="lazy"
-                          className="h-full w-full object-cover"
+                          /* contain, cover DEĞİL: seçerken görselin TAMAMI
+                             görünmeli — kırpılmış bir önizlemede iki benzer
+                             fotoğraf ayırt edilemiyor. */
+                          className="h-full w-full object-contain"
                         />
                       ) : (
                         <ImageOff size={18} className="text-subtle" aria-hidden />

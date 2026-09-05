@@ -1481,11 +1481,16 @@ export function DriveBrowser({
                2026-09-06: "hepsi eşit boyutta açılmıyor"). Çerçeve sabit,
                görsel içine object-contain ile oturur. */
             <div className="grid h-[60vh] place-items-center overflow-hidden rounded-control bg-surface-sunken">
+              {/* SINIR MUTLAK BİRİMDE. Önce `max-h-full` (yüzde) vardı ama grid
+                  hücresinde yüzde yükseklik çözülmeyip görsel doğal boyutunda
+                  çiziliyor, çerçeve de onu KIRPIYORDU (Sıraç, 2026-09-06:
+                  "görsel kırpık geliyor"). 60vh çerçevenin kendi yüksekliğiyle
+                  birebir aynı ve çözülmesi bir üst kutuya bağlı değil. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={preview.url}
                 alt={preview.name}
-                className="max-h-full max-w-full object-contain"
+                className="max-h-[60vh] max-w-full object-contain"
               />
             </div>
           ) : preview.url ? (
