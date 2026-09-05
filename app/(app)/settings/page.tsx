@@ -325,7 +325,7 @@ export default async function SettingsPage() {
                   yedekleme haftada bir." Tek bölüm, tek iş: yedeği indir. */}
               <SettingsSection
                 title="Yedekleme"
-                description="Haftada bir tam yedek alıp sistemin dışında saklayın."
+                description="Bütün kayıtlar ve yüklenen dosyalar tek bir .zip olarak iner."
               >
                 <BackupPanel last={lastBackup} />
               </SettingsSection>

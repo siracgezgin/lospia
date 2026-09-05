@@ -79,10 +79,11 @@ export function BackupPanel({ last }: { last: LastBackup | null }) {
           yalnız "tamamlandı" içindir); eskimişse sakin bir warning yüzeyi. */}
       <div
         className={cn(
-          "flex items-start gap-3 rounded-card px-4 py-3",
+          "flex flex-col gap-3 rounded-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between",
           stale ? "border border-warning/30 bg-warning/5" : "bg-surface-muted",
         )}
       >
+        <div className="flex items-start gap-3">
         {stale ? (
           <TriangleAlert size={17} className="mt-px shrink-0 text-warning" aria-hidden />
         ) : (
@@ -104,22 +105,32 @@ export function BackupPanel({ last }: { last: LastBackup | null }) {
               </p>
             </>
           ) : (
-            <>
-              <p className="font-medium text-ink">Henüz yedek alınmadı</p>
-              <p className="text-muted">
-                Haftada bir yedek alıp bilgisayarınızda saklayın.
-              </p>
-            </>
+            /* Bölüm açıklaması zaten "haftada bir alın" diyor; burada aynı
+               cümleyi tekrar etmek düğmeleri aşağı itiyor ve "buton yok"
+               hissi veriyordu (Sıraç, 2026-08-30). Boş durum tek satır. */
+            <p className="font-medium text-ink">Henüz yedek alınmadı.</p>
           )}
         </div>
-      </div>
+        </div>
 
-      {/* TEK primary: tam yedek. Yalnız kayıt indirmek sessiz istisna. */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <Button onClick={() => download(true)} loading={busy === "full"} disabled={busy !== null}>
+        {/* BİRİNCİL EYLEM durumun YANINDA: "en son ne zaman alındı" ile "şimdi
+            al" aynı bakışta. Aşağıda ayrı bir sırada dururken kullanıcı
+            "yedekleme al butonu yok" diyordu (Sıraç, 2026-08-30). */}
+        <Button
+          onClick={() => download(true)}
+          loading={busy === "full"}
+          disabled={busy !== null}
+          className="shrink-0 max-sm:w-full"
+        >
           {busy !== "full" && <HardDriveDownload size={15} aria-hidden />}
           Tam yedek indir
         </Button>
+      </div>
+
+      {/* TEK primary: tam yedek. Yalnız kayıt indirmek sessiz istisna.
+          Düğmeler durum satırının HEMEN altında ve tam genişlikte başlar:
+          "yedek al" eylemi aranacak bir şey olmamalı. */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <Button
           variant="ghost"
           onClick={() => download(false)}
