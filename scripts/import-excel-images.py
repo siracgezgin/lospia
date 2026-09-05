@@ -117,6 +117,15 @@ class Api:
     def post(self, path, body, headers=None):
         return self._req("POST", path, body, headers)
 
+    def delete_objects(self, paths):
+        return self._req("DELETE", f"/storage/v1/object/{BUCKET}",
+                         {"prefixes": paths})
+
+    def list_objects(self, prefix, limit=100, offset=0):
+        return self._req("POST", f"/storage/v1/object/list/{BUCKET}",
+                         {"prefix": prefix, "limit": limit, "offset": offset,
+                          "sortBy": {"column": "name", "order": "asc"}})
+
     def upload(self, path, data, content_type):
         return self._req(
             "POST", f"/storage/v1/object/{BUCKET}/{urllib.parse.quote(path)}",
@@ -215,6 +224,8 @@ def main():
     ap.add_argument("--prod", action="store_true")
     ap.add_argument("--dry-run", action="store_true", help="Hiçbir şey yazmaz")
     ap.add_argument("--root", default=ROOT_FOLDER_DEFAULT, help="Kök klasör adı")
+    ap.add_argument("--drop-legacy-thumbs", action="store_true",
+                    help="Eski 'thumbs/<ws>/…' yolundaki sahipsiz önizlemeleri siler")
     ap.add_argument("--shrink", type=int, default=0,
                     help="Orijinalin uzun kenarını bu piksele indir (0 = orijinali koru)")
     args = ap.parse_args()
@@ -298,6 +309,26 @@ def main():
                 "visibility": "all", "created_by": created_by}
         made = api.post("/rest/v1/document_folders", body, {"Prefer": "return=representation"})
         return made[0]["id"]
+
+    # ── Eski yoldaki sahipsiz önizlemeleri temizle ──────────────────────────
+    # İlk sürüm önizlemeyi "thumbs/<ws>/…" altına yazıyordu; depolama politikası
+    # o yolu okuyamadığı için hepsi kırıktı ve doğru yola yeniden yazıldı. Eski
+    # kopyalar kimsenin göremediği ama yer kaplayan dosyalar olarak kaldı.
+    if args.drop_legacy_thumbs:
+        print(f"🧹  Eski önizlemeler taranıyor: {LEGACY_THUMB_PREFIX}/{workspace_id}/")
+        removed = 0
+        while True:
+            batch = api.list_objects(f"{LEGACY_THUMB_PREFIX}/{workspace_id}", limit=100)
+            names = [o["name"] for o in (batch or []) if o.get("id")]
+            if not names:
+                break
+            paths = [f"{LEGACY_THUMB_PREFIX}/{workspace_id}/{n}" for n in names]
+            api.delete_objects(paths)
+            removed += len(paths)
+            print(f"    {removed} silindi…")
+        print(f"✅  Eski önizleme temizliği bitti — {removed} dosya silindi.\n")
+        if not args.file:
+            return
 
     root_id = ensure_folder(safe_name(args.root))
     print(f"📁  Kök klasör hazır: {safe_name(args.root)}")
