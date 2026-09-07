@@ -163,10 +163,18 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
     access: "all",
     group: "urun",
   },
+  /* CRM = AF'nin istediği FİHRİST. Aslı Hanım (2026-09-07): "Bizim bu operasyon
+     sistemimizde bir fihristimiz var mı?… Admin değil de şu Product and Office,
+     buraya bir tane fihrist koyabilirsin." Sıraç: "Aslında CRM'e eklemiştim
+     ben." AF: "ORAYA EKLEYEBİLİRİZ." — yani ikinci bir modül değil; eksik olan
+     CRM'in GİRİŞİYDİ ("Bu CRM'e böyle giremezsin"). Giriş artık kategori
+     kutucukları (Selebriti · Basın · VIP · Outsource · Toplantılar · Dış ekip ·
+     Üretim · Ekibimiz · Dernekler) — Sabri Bey, Meral Hanım ve Berna Hanım
+     oraya kaydedilir. Aynı rota iki adla listelenmez (KURAL 2). */
   {
     key: "crm",
     title: "CRM",
-    description: "Müşteri, tedarikçi ve influencer ilişkileri tek rehberde.",
+    description: "Fihrist — selebriti, basın, VIP, outsource ve dış ekip tek rehberde.",
     href: "/crm",
     icon: Contact,
     access: "all",

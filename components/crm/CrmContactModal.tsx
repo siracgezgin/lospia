@@ -20,6 +20,10 @@ interface Props {
   onSaved: () => void;
   members: Member[];
   contact?: WorkspaceContact | null;
+  /** Hangi kutunun içinde açıldıysa yeni kaydın varsayılan segmenti (2026-09-07:
+   *  "Şurada bir artı olursa Berna'yı hemen kaydederiz" — kayıt, içinde
+   *  bulunulan grubun altında doğsun, tekrar seçim istemesin). */
+  defaultSegment?: string | null;
 }
 
 /** Bölüm başlığı — on üç alan tek yığın halinde okunmuyordu. */
@@ -52,7 +56,7 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
  * İsim hatası alanın ALTINDA çıkar (Field error) — formun dibindeki genel kutu
  * yalnız sunucudan dönen hatalar içindir.
  */
-export function CrmContactModal({ onClose, onSaved, members, contact }: Props) {
+export function CrmContactModal({ onClose, onSaved, members, contact, defaultSegment = null }: Props) {
   const isEdit = !!contact;
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -70,7 +74,7 @@ export function CrmContactModal({ onClose, onSaved, members, contact }: Props) {
   const [form, setForm] = useState({
     name: contact?.name ?? "",
     organization: contact?.organization ?? "",
-    segment: contact?.segment ?? "",
+    segment: contact?.segment ?? defaultSegment ?? "",
     crm_status: contact?.crm_status ?? "",
     seeding_stage: contact?.seeding_stage ?? "",
     source_channel: contact?.source_channel ?? "",
