@@ -2,20 +2,19 @@
 
 import { useMemo, useState, useTransition } from "react";
 import {
-  Plus, Trash2, Send, CheckCircle2, AlertTriangle, Copy, XCircle, Mail, X, ListChecks,
+  Plus, Trash2, Send, CheckCircle2, AlertTriangle, Copy, XCircle, Mail, X, ListChecks, UserPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { useConfirm } from "@/components/ui/useConfirm";
 import { Overlay } from "@/components/ui/Overlay";
 import { Button, IconButton } from "@/components/ui/Button";
-import { Field, TextInput, TextArea, SelectInput } from "@/components/ui/Field";
+import { Field, TextInput, TextArea } from "@/components/ui/Field";
 import {
   createMeeting, updateMeeting, deleteMeeting, saveMeetingTopics, assignTopicAsTask,
   duplicateMeeting, setMeetingStatus, sendMeetingInvites, addExternalParticipant,
   type MeetingSnapshot,
 } from "@/lib/actions/planning";
 import { categoryMeta } from "@/lib/planning/categories";
-import { CRM_CATEGORIES } from "@/lib/crm/constants";
 import { WEEKDAY_LONG_TR } from "@/lib/planning/bands";
 import { normalizeSlot, istanbulLabel, HOME_LABEL, AWAY_LABEL } from "@/lib/planning/timezones";
 import { MemberMultiSelect, type Member } from "./MemberMultiSelect";
@@ -171,9 +170,12 @@ export function MeetingEditor({
      ekleniyor, sunucu o satırı kendisi yazıyor. */
   const [guestName, setGuestName] = useState("");
   const [guestRole, setGuestRole] = useState("");
-  const [guestSegment, setGuestSegment] = useState("toplanti");
+  /* KATEGORİ SORULMUYOR. Toplantıya adam çağırırken "bu kişi selebriti mi?"
+     diye sormak o anın işi değil — kayıt zaten "Toplantılar" kutusuna düşer
+     (sunucu varsayılanı) ve gerekirse CRM'de değiştirilir.
+     `guestRow` = hangi konunun "+" düğmesi açık; null = kapalı. */
+  const [guestRow, setGuestRow] = useState<number | null>(null);
   const [isAddingGuest, startAddGuest] = useTransition();
-  const [emailOpen, setEmailOpen] = useState(() => (meeting?.external_emails ?? []).length > 0);
 
   /* ÇOĞALTMA — "toplantının devamı" başka bir güne kopyalanır. */
   /* DAVET — dış katılımcılara mail. Mail geri alınamaz: kaydetmenin yan etkisi
@@ -402,13 +404,13 @@ export function MeetingEditor({
           email: value,
           name: guestName,
           roleLabel: guestRole,
-          segment: guestSegment,
         });
         if ("error" in res) { setError(res.error); return; }
         setExternalEmails((xs) => (xs.includes(value) ? xs : [...xs, value]));
         setEmailDraft("");
         setGuestName("");
         setGuestRole("");
+        setGuestRow(null);
         setInviteMsg(
           res.contactId
             ? `${guestName.trim() || value} toplantıya eklendi ve CRM'e kaydedildi.`
@@ -651,6 +653,21 @@ export function MeetingEditor({
                 <div className="w-[88px] shrink-0">
                   <MemberMultiSelect members={members} selected={t.participant_ids} onChange={(ids) => setTopic(i, { participant_ids: ids })} placeholder="Kim" compact personHex={personHex} />
                 </div>
+                {/* KİMİN YANINDAKİ ARTI. Aslı Hanım (2026-09-07): "Kim, yani
+                    KİŞİNİN YANINDA bir de artı butonu olsun mail girilmesi
+                    için, dışardaki kişilere de bildirim gitsin."
+                    "Kim" ekip içini seçtiriyor; ekip dışı kişi buradan girer —
+                    ikisi yan yana çünkü ikisi de aynı soruyu cevaplıyor:
+                    bu konuda kim var? */}
+                <IconButton
+                  size="sm"
+                  aria-label={`Konu ${i + 1} için dışarıdan katılımcı ekle`}
+                  title="Dışarıdan katılımcı ekle — ekip dışı bir kişiyi e-postasıyla çağır"
+                  onClick={() => setGuestRow(guestRow === i ? null : i)}
+                  className={cn(guestRow === i && "bg-brand-soft text-brand-strong")}
+                >
+                  <UserPlus size={14} />
+                </IconButton>
                 {/* Sabit genişlik: etiket her durumda "Bildir" ve düğme ölçüsü
                     değişmez — atama sonrası satır kaymaz. Atanmış durum
                     ikon + renkle anlatılır, başlıkta da yazar. */}
@@ -679,6 +696,50 @@ export function MeetingEditor({
                 >
                   <Trash2 size={14} />
                 </IconButton>
+
+                {/* Mini form satırın ALTINDA açılır — açılır pencere değil.
+                    İki alan: kim ve e-posta. Kategori sorulmaz. */}
+                {guestRow === i && (
+                  <div className="anim-fade-down flex basis-full flex-wrap items-center gap-1.5 rounded-control border border-brand-ring bg-brand-soft/30 p-2">
+                    <TextInput
+                      value={guestName}
+                      onChange={(e) => setGuestName(e.target.value)}
+                      placeholder="Ad soyad — Sabri Bey"
+                      aria-label="Dış katılımcının adı"
+                      className="min-w-0 flex-1 basis-[150px]"
+                      autoFocus
+                    />
+                    <TextInput
+                      value={guestRole}
+                      onChange={(e) => setGuestRole(e.target.value)}
+                      placeholder="Tanım — Üretici"
+                      aria-label="Dış katılımcının tanımı"
+                      className="min-w-0 flex-1 basis-[130px]"
+                    />
+                    <TextInput
+                      type="email"
+                      value={emailDraft}
+                      onChange={(e) => setEmailDraft(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addEmail(); } }}
+                      placeholder="sabri@uretim.com"
+                      aria-label="Dış katılımcının e-postası"
+                      className="min-w-0 flex-1 basis-[170px]"
+                    />
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={addEmail}
+                      loading={isAddingGuest}
+                      disabled={!emailDraft.trim() || busy || isAddingGuest}
+                    >
+                      {!isAddingGuest && <Plus size={13} aria-hidden />} Ekle
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setGuestRow(null)}>Vazgeç</Button>
+                    <p className="basis-full text-[12px] text-subtle">
+                      Kişi toplantıya davetli olur ve CRM’e kaydedilir.
+                    </p>
+                  </div>
+                )}
               </li>
             )))}
           </ol>
@@ -693,120 +754,61 @@ export function MeetingEditor({
                 <Plus size={13} aria-hidden /> Not ekle
               </Button>
             )}
-            {!emailOpen && (
-              <Button variant="ghost" size="sm" onClick={() => setEmailOpen(true)}>
-                <Plus size={13} aria-hidden /> Dışarıdan katılımcı
-              </Button>
-            )}
           </div>
         </section>
 
-        {/* DIŞARIDAN KATILIMCI — ekip üyesi olmayan e-postalar.
-            Aslı Hanım (2026-09-07): "Sabri Bey diye bizim dışımızda
-            üreticimiz var… Sabri Bey'i nasıl ekleyeceğim ben? Yani burada
-            EKİP İÇİ var." / "Şuraya bir artı koysan, bir e-mail hesabı
-            girdirsen artıyla."
-            Not: adres burada DURUR; e-postayı fiilen göndermek ayrı bir iş
-            (mail altyapısı bayrak arkasında) — pencere söz vermez. */}
-        {emailOpen && (
-          <Field label="Dışarıdan katılımcı" className="anim-fade-down">
+        {/* DAVETLİLER — yalnız EKLENMİŞ dış kişiler ve davet düğmesi.
+            Ekleme buradan değil, konu satırındaki "Kim"in yanındaki + ile
+            yapılır. Aslı Hanım (2026-09-07): "KİM, YANİ KİŞİNİN YANINDA bir
+            de artı butonu olsun mail girilmesi için."
+            Burada büyük bir form vardı ve içinde CRM kategorisi soruluyordu;
+            toplantıya adam çağırırken "bu kişi selebriti mi?" diye sormak o
+            anın işi değil — kayıt "Toplantılar" kutusuna düşer, gerekirse
+            CRM'de değiştirilir. */}
+        {externalEmails.length > 0 && (
+          <Field label="Dışarıdan katılanlar" className="anim-fade-down">
             <div className="space-y-2">
-              {externalEmails.length > 0 && (
-                <ul className="flex flex-wrap gap-1.5">
-                  {externalEmails.map((mail) => (
-                    <li
-                      key={mail}
-                      className="inline-flex items-center gap-1 rounded-control border border-line bg-surface-muted py-1 pl-2 pr-1 text-[12.5px] text-ink"
+              <ul className="flex flex-wrap gap-1.5">
+                {externalEmails.map((mail) => (
+                  <li
+                    key={mail}
+                    className="inline-flex items-center gap-1 rounded-control border border-line bg-surface-muted py-1 pl-2 pr-1 text-[12.5px] text-ink"
+                  >
+                    <Mail size={12} className="shrink-0 text-subtle" aria-hidden />
+                    <span className="min-w-0 break-all">{mail}</span>
+                    <button
+                      type="button"
+                      onClick={() => setExternalEmails((xs) => xs.filter((x) => x !== mail))}
+                      aria-label={`${mail} adresini kaldır`}
+                      title="Listeden kaldır"
+                      className="tap-target grid size-6 shrink-0 place-items-center rounded-control text-subtle transition-colors duration-150 hover:bg-surface hover:text-danger"
                     >
-                      <Mail size={12} className="shrink-0 text-subtle" aria-hidden />
-                      <span className="min-w-0 break-all">{mail}</span>
-                      <button
-                        type="button"
-                        onClick={() => setExternalEmails((xs) => xs.filter((x) => x !== mail))}
-                        aria-label={`${mail} adresini kaldır`}
-                        title="Kaldır"
-                        className="tap-target grid size-6 shrink-0 place-items-center rounded-control text-subtle transition-colors duration-150 hover:bg-surface hover:text-danger"
-                      >
-                        <X size={12} aria-hidden />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {/* FİHRİST FORMU — AF'nin saydığı alanlar: ad, tanım, kategori.
-                  "Ne toplantısı" sorulmaz; kişi bu toplantıdan eklendiği için
-                  sunucu o satırı kendi yazar. */}
-              <div className="grid gap-1.5 sm:grid-cols-2">
-                <TextInput
-                  value={guestName}
-                  onChange={(e) => setGuestName(e.target.value)}
-                  placeholder="Ad soyad — Sabri Bey"
-                  aria-label="Dış katılımcının adı"
-                />
-                <TextInput
-                  value={guestRole}
-                  onChange={(e) => setGuestRole(e.target.value)}
-                  placeholder="Tanım — Üretici, Kalıpçı…"
-                  aria-label="Dış katılımcının tanımı"
-                />
-              </div>
-              <div className="flex flex-wrap items-center gap-1.5">
-                <TextInput
-                  type="email"
-                  value={emailDraft}
-                  onChange={(e) => setEmailDraft(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addEmail(); } }}
-                  placeholder="sabri@uretim.com"
-                  aria-label="Dış katılımcının e-postası"
-                  className="min-w-0 flex-1"
-                />
-                <SelectInput
-                  value={guestSegment}
-                  onChange={(e) => setGuestSegment(e.target.value)}
-                  aria-label="CRM kategorisi"
-                  className="w-auto min-w-[130px]"
-                >
-                  {CRM_CATEGORIES.map((c) => (
-                    <option key={c.key} value={c.primary}>{c.label}</option>
-                  ))}
-                </SelectInput>
+                      <X size={12} aria-hidden />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+
+              {/* DAVET. "Çarşamba günkü Sabri Bey ile toplantının e-maili
+                  buradan giderse Nisa'nın işini kolaylaştıracaksın — bir daha
+                  adama 'mail' diye dürtmeyecek." Mail "görev atandı" demez;
+                  "Toplantıya davet edildiniz" der ve içinde son tarih değil
+                  TOPLANTI SAATİ vardır (Türkiye saati, parantezde NY). */}
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={addEmail}
-                  loading={isAddingGuest}
-                  disabled={!emailDraft.trim() || busy || isAddingGuest}
+                  onClick={handleInvite}
+                  loading={isInviting}
+                  disabled={busy || isInviting}
+                  title="Toplantı davetini bu adreslere e-posta ile gönder"
                 >
-                  {!isAddingGuest && <Plus size={13} aria-hidden />} Ekle
+                  {!isInviting && <Send size={13} aria-hidden />} Davet gönder
                 </Button>
+                <span className="text-[12px] text-subtle">
+                  Davette toplantının tarihi ve saati yazar; görev maili değildir.
+                </span>
               </div>
-              <p className="text-[12px] leading-relaxed text-subtle">
-                Eklenen kişi CRM’e de kaydedilir — hangi toplantıdan geldiği notuna yazılır.
-              </p>
-
-              {/* DAVET. Aslı Hanım (2026-09-07): "Çarşamba günkü Sabri Bey ile
-                  toplantının e-maili buradan giderse Nisa'nın işini
-                  kolaylaştıracaksın — bir daha adama 'mail' diye
-                  dürtmeyecek." Mail "Size yeni bir görev atandı" demez;
-                  "Toplantıya davet edildiniz" der ve içinde son tarih değil
-                  TOPLANTI SAATİ vardır (Türkiye saati, parantezde NY). */}
-              {externalEmails.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleInvite}
-                    loading={isInviting}
-                    disabled={busy || isInviting}
-                    title="Toplantı davetini bu adreslere e-posta ile gönder"
-                  >
-                    {!isInviting && <Send size={13} aria-hidden />} Davet gönder
-                  </Button>
-                  <span className="text-[12px] text-subtle">
-                    Davette toplantının tarihi ve saati yazar; görev maili değildir.
-                  </span>
-                </div>
-              )}
 
               {inviteMsg && (
                 <p role="status" className="anim-fade-down rounded-control border border-success/30 bg-success/10 px-3 py-2 text-[12.5px] font-medium text-ink">
