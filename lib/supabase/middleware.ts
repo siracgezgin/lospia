@@ -49,12 +49,19 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/api") ||
     pathname === "/favicon.ico";
 
+  /* ÜRETİCİ PANELİ oturumsuzdur (20240339). Sabri Bey'in hesabı yok; erişimi
+     adresteki gizli anahtar taşıyor ve veriyi SECURITY DEFINER fonksiyon
+     veriyor — geçersiz/iptal/süresi dolmuş bağlantı hiçbir satır döndürmez.
+     Burada /login'e yönlendirmek, üreticiyi hesabı olmayan bir kapıya
+     gönderirdi. (Aslı Hanım, 2026-09-07: "üreticiye de bir panel verebilirsin.") */
+  const isManufacturerPortal = pathname.startsWith("/uretici/");
+
   // Public Lospia marketing pages — NEVER on the AF Operasyon pilot host.
   // On operasyon.aslifilinta.com these paths stay auth-gated exactly as before.
   const isPublicMarketingPage =
     isMarketingPath(pathname) && isMarketingHost(request.headers.get("host"));
 
-  if (!isPublicAsset && !isAuthRoute && !isPublicMarketingPage && !user) {
+  if (!isPublicAsset && !isAuthRoute && !isPublicMarketingPage && !isManufacturerPortal && !user) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
