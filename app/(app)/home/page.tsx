@@ -613,7 +613,7 @@ function MeetingRow({ meeting, day }: { meeting: HomeMeeting; day?: string }) {
         {/* Yapılan toplantı yeşil ve üstü çizili — takvimdekiyle aynı dil. */}
         <span className={cn(
           "block truncate",
-          done ? "text-success/90 line-through decoration-success/40" : missed ? "text-danger" : "text-ink",
+          done ? "text-success/90" : missed ? "text-danger" : "text-ink",
         )}>
           {meeting.title?.trim() || meta.label}
         </span>

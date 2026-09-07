@@ -269,7 +269,7 @@ export function PlanningDayList({
                 <span className={cn(
                   "block font-semibold leading-snug tracking-tight",
                   z.title,
-                  outcome === "done" ? "text-success/90 line-through decoration-success/40" : meta.title,
+                  outcome === "done" ? "text-success/90" : meta.title,
                   outcome === "missed" && "text-danger",
                 )}>
                   {title || "—"}
@@ -333,7 +333,10 @@ export function PlanningDayList({
                         <span className="mt-px shrink-0 text-[12px] font-semibold tabular-nums text-subtle">
                           {i + 1}.
                         </span>
-                        <span className="min-w-0 flex-1 text-[13.5px] leading-snug text-ink/90">
+                        <span className={cn(
+                          "min-w-0 flex-1 text-[13.5px] leading-snug",
+                          t.done_at ? "text-success/90 line-through decoration-success/40" : "text-ink/90",
+                        )}>
                           {t.text}
                           {t.task_id && (
                             <CheckCircle2 size={12} className="ml-1 inline shrink-0 text-success" aria-label="Göreve atandı" />

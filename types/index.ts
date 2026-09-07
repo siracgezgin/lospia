@@ -511,6 +511,10 @@ export type PlanningTopic = {
   participant_ids: string[];       // konu bazlı "Kim" — SORUMLU üye id'leri
   collaborator_ids?: string[];     // "İş birliği" — yanında çalışan kişiler (20240304)
   due_date: string | null;         // konu teslim tarihi (deadline)
+  /** Konu tamamlandı damgası (20240342). NULL = duruyor. Sıraç: "tamamlanması
+   *  gereken KONU olması lazım, konu başlığı değil." */
+  done_at?: string | null;
+  done_by?: string | null;
   task_id: string | null;          // göreve dönüştürüldüyse ilgili görev
   created_by: string | null;
   created_at: string;

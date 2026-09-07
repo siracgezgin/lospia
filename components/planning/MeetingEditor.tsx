@@ -85,6 +85,14 @@ type TopicDraft = {
  */
 /** Seçilen tarihin gün adı + günü ("Pazartesi 27 Tem"). Tarih okunamazsa
  *  hücreden gelen sabit etiket kullanılır. */
+/** "2026-09-07" → "2026-09-08". Çoğaltmanın varsayılan hedefi. */
+function nextDayIso(iso: string): string {
+  const d = new Date(`${iso}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
 function weekdayLabelOf(iso: string, fallback: string): string {
   const d = new Date(`${iso}T12:00:00`);
   if (Number.isNaN(d.getTime())) return fallback;
@@ -504,8 +512,19 @@ export function MeetingEditor({
               duplicate edebiliyor muyum?… Aynı ekiple bunun çarşamba günü
               üretimini konuştuk." Taşımak geçmişi siliyordu; kopyalamak
               arşivi yerinde bırakır. */}
-          {!isNew && (
-            <Button variant="ghost" onClick={() => { setDupOpen((v) => !v); setDupDate((d) => d || dateIso); }} disabled={busy}>
+          {/* ÇOĞALT toplantı düzeyinde bir eylemdir: tek konu kipinde
+              gösterilince "o konuyu çoğaltıyorum" sanılıyordu (Sıraç,
+              2026-09-08: "çoğalt diyince o konuyu değil konu başlığı
+              altındakini çoğaltıyor"). Artık yalnız tüm gündem açıkken çıkar. */}
+          {!isNew && solo === null && (
+            <Button
+              variant="ghost"
+              /* Varsayılan ERTESİ GÜN: çoğaltmanın anlamı "devamını başka güne
+                 koymak". Aynı günü önerince kopya aynı hücreye düşüyor ve
+                 başlık ikili görünüyordu. */
+              onClick={() => { setDupOpen((v) => !v); setDupDate((d) => d || nextDayIso(dateIso)); }}
+              disabled={busy}
+            >
               <Copy size={15} aria-hidden /> Çoğalt
             </Button>
           )}
@@ -596,7 +615,13 @@ export function MeetingEditor({
           </p>
         )}
 
-        {/* 1 · Başlık. Solundaki nokta ŞERİDİ gösterir — bilgi, seçim değil. */}
+        {/* 1 · BAŞLIK — YALNIZ tüm gündem açıkken.
+            Sıraç (2026-09-08): "Kart pop-up tasarımında başlık kısmını
+            kaldıralım, sadece hangi konu seçildiyse o konu olsun."
+            Tek konu kipinde pencere zaten "Konu 2"yi açıyor; başlığı da
+            göstermek hem yer yiyor hem "hangisini düzenliyorum?" sorusunu
+            doğuruyordu. Başlık artık ızgarada yerinde düzenleniyor. */}
+        {solo === null && (
         <Field label="Başlık" htmlFor="meeting-title">
           <div className="flex items-center gap-2">
             <span
@@ -616,6 +641,7 @@ export function MeetingEditor({
             />
           </div>
         </Field>
+        )}
 
         {/* 2 · Konular — satır: sıra · metin · kim · Bildir · sil */}
         <section aria-labelledby="meeting-topics-h">

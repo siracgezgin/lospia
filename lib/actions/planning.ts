@@ -869,6 +869,48 @@ export async function setMeetingTitle(
 }
 
 /**
+ * KONUYU TAMAMLANDI İŞARETLER — Pano'daki "tamamlandı" ile aynı mantık.
+ *
+ * Sıraç (2026-09-08): "Tamamlanması gereken KONU olması lazım, konu başlığı
+ * değil. Ve bence üzerini çizip yeşil yapalım, tıpkı Pano mantığındaki
+ * tamamlandı gibi."
+ *
+ * Toplantının sonucu (status) ayrı durur: "toplantı yapıldı mı" başka soru,
+ * "bu konu bitti mi" başka. Bir toplantıda üç konu konuşulur, biri biter.
+ */
+export async function setTopicDone(
+  topicId: string,
+  done: boolean,
+): Promise<{ ok: true } | { error: string }> {
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+  if (!isAdminRole(ctx.role)) return { error: PLANNING_ADMIN_ONLY };
+
+  const { error, count } = await supabase
+    .from("planning_topics")
+    .update(
+      {
+        done_at: done ? new Date().toISOString() : null,
+        done_by: done ? ctx.userId : null,
+      },
+      { count: "exact" },
+    )
+    .eq("id", topicId)
+    .eq("workspace_id", ctx.workspaceId);
+  if (error) {
+    if (isMissingSchemaError(error)) {
+      return { error: "Konu tamamlama için veritabanı güncellemesi bekleniyor (20240342)." };
+    }
+    return { error: toActionErrorMessage(error) };
+  }
+  if (count === 0) return { error: "Konu bulunamadı." };
+  revalidatePath("/planning");
+  revalidatePath("/home");
+  return { ok: true };
+}
+
+/**
  * TEK KONUYU SİLER — ızgaradan, pencere açmadan.
  *
  * Aslı Hanım (2026-09-07): "Ben SİL deyince genelde komple o toplantı
@@ -1193,10 +1235,22 @@ export async function duplicateMeeting(
   if (!src) return { error: NOT_FOUND };
 
   const m = src as Record<string, unknown>;
+
+  /* AYNI HÜCREYE ÇOĞALTMA ENGELLİ. Sıraç (2026-09-08): "Kopyala yapıştır
+     yapınca ya da çoğaltınca BAŞLIK İKİLİ OLUYOR ve silip düzeltemiyorum."
+     Kopya kaynağın gün+saatine düşünce ızgara iki başlığı "Celebrity ·
+     Celebrity" diye birleştiriyor ve hücre artık tek bir toplantıya ait
+     olmadığı için yerinde düzenleme kapanıyor. Çoğaltmanın anlamı zaten
+     "toplantının devamını BAŞKA GÜNE koymak" (AF, 07.09). */
+  const targetSlot = parsed.data.time_slot ?? (m.time_slot as string);
+  if (parsed.data.meeting_date === m.meeting_date && targetSlot === m.time_slot) {
+    return { error: "Kopya aynı gün ve saate konamaz — başka bir gün seçin." };
+  }
+
   const row: Record<string, unknown> = {
     workspace_id: ctx.workspaceId,
     meeting_date: parsed.data.meeting_date,
-    time_slot: parsed.data.time_slot ?? (m.time_slot as string),
+    time_slot: targetSlot,
     category: m.category,
     title: m.title,
     content: m.content,

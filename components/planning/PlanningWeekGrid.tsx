@@ -8,13 +8,13 @@ import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   useDraggable, useDroppable, type DragEndEvent, type DragStartEvent,
 } from "@dnd-kit/core";
-import { CheckCircle2, Plus, Pencil, X, Loader2, XCircle, Copy, Maximize2 } from "lucide-react";
+import { CheckCircle2, Plus, Pencil, X, Loader2, XCircle, Copy, Maximize2, Check } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { categoryMeta } from "@/lib/planning/categories";
 import { WEEKDAY_SHORT_EN, WEEKDAY_LONG_TR, type RuntimeBand } from "@/lib/planning/bands";
 import { BandEditor } from "./BandEditor";
 import { istanbulLabel, AWAY_LABEL, HOME_LABEL, normalizeSlot } from "@/lib/planning/timezones";
-import { moveMeeting, moveTopic, duplicateMeeting, setMeetingTitle, deleteTopic } from "@/lib/actions/planning";
+import { moveMeeting, moveTopic, duplicateMeeting, setMeetingTitle, deleteTopic, setTopicDone } from "@/lib/actions/planning";
 import { KimBadges } from "./KimBadges";
 import type { PlanningMeetingWithTopics, PlanningTopic } from "@/types";
 
@@ -31,8 +31,10 @@ interface Props {
   personHex?: Record<string, string>;
   isAdmin: boolean;
   todayIso: string;
-  /** `_topicIndex` verildiğinde düzenleyici YALNIZ o konuyu açar (H1). */
-  onOpen: (_iso: string, _slot: string, _dayIndex: number, _topicIndex?: number) => void;
+  /** `_topicIndex` verildiğinde düzenleyici YALNIZ o konuyu açar (H1).
+   *  `_meetingId` hücrede BİRDEN FAZLA toplantı varken hangisinin açılacağını
+   *  söyler — yoksa hep ilki açılıyor ve ikincisi silinemiyordu. */
+  onOpen: (_iso: string, _slot: string, _dayIndex: number, _topicIndex?: number, _meetingId?: string) => void;
   /** Sol sütun — düzenlenebilir şeritler (20240326). */
   bands: RuntimeBand[];
 }
@@ -228,7 +230,7 @@ export function PlanningWeekGrid({
             draggable={mounted && isAdmin}
             memberNames={memberNames} memberPhotos={memberPhotos}
             personHex={personHex}
-            onOpen={() => onOpen(iso, slot, i)}
+            onOpen={(meetingId) => onOpen(iso, slot, i, undefined, meetingId)}
             onSaved={() => router.refresh()}
           />
         );
@@ -475,7 +477,7 @@ function TitleCell({
   memberNames: Record<string, string>;
   memberPhotos?: Record<string, string | null>;
   personHex: Record<string, string>;
-  onOpen: () => void;
+  onOpen: (_meetingId?: string) => void;
   onSaved: () => void;
 }) {
   const meeting = cell[0] ?? null;
@@ -549,6 +551,7 @@ function TitleCell({
           ? () => { if (canRename) { setDraft(title); setEditing(true); } else onOpen(); }
           : undefined
       }
+      data-multi={cell.length > 1 ? "true" : undefined}
       className={cn(
         // Başlıklar dikeyde ORTALANIR: bir gün iki satıra taşınca tek satırlık
         // komşuları yukarıda asılı kalmasın.
@@ -611,11 +614,41 @@ function TitleCell({
             placeholder="Başlık…"
             className="w-full rounded-[4px] border border-brand-ring bg-surface px-1 py-0.5 text-[12.5px] font-bold tracking-tight text-ink outline-none"
           />
+        ) : cell.length > 1 ? (
+          /* AYNI HÜCREDE İKİ TOPLANTI. Eskiden başlıklar "Celebrity ·
+             Celebrity" diye TEK satırda birleşiyordu; hangisinin hangisi
+             olduğu anlaşılmıyor, hücre tek toplantıya ait olmadığı için
+             yerinde düzenleme de kapanıyordu — Sıraç (2026-09-08): "başlık
+             ikili oluyor ve silip düzeltemiyorum."
+             Artık her toplantı KENDİ SATIRINDA ve kendi kartını açıyor;
+             fazlalık olan oradan silinebiliyor. */
+          <span className="block space-y-0.5">
+            {cell.map((mm) => (
+              <button
+                key={mm.id}
+                type="button"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); onOpen(mm.id); }}
+                title="Bu toplantıyı aç"
+                className={cn(
+                  "block w-full truncate text-left text-[12.5px] font-bold leading-[1.25] tracking-tight underline-offset-2 hover:underline",
+                  mm.status === "done" ? "text-success/90" : meta.title,
+                  mm.status === "missed" && "text-danger",
+                )}
+              >
+                {mm.title || "—"}
+              </button>
+            ))}
+          </span>
         ) : (
           <span
             className={cn(
               "block text-[12.5px] font-bold leading-[1.25] tracking-tight",
-              outcome === "done" ? "text-success/90 line-through decoration-success/40" : meta.title,
+              /* Başlığın üstü ÇİZİLMEZ (Sıraç, 2026-09-08: "tamamlanması
+                 gereken konu olması lazım, konu başlığı değil"). Toplantının
+                 yapıldığını yeşil zemin ve büyük tik söylüyor; çizgi
+                 konuların işareti. */
+              outcome === "done" ? "text-success/90" : meta.title,
               outcome === "missed" && "text-danger",
               saving && "opacity-50",
             )}
@@ -638,7 +671,7 @@ function TitleCell({
         <button
           type="button"
           onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => { e.stopPropagation(); onOpen(); }}
+          onClick={(e) => { e.stopPropagation(); onOpen(meeting?.id); }}
           title="Toplantıyı aç — kişiler, konular, not"
           aria-label="Toplantıyı aç"
           className="absolute right-0.5 top-0.5 z-10 grid size-5 place-items-center rounded-[4px] text-ink/35 opacity-0 transition-opacity duration-150 hover:bg-surface/70 hover:text-ink focus-visible:opacity-100 group-hover/cell:opacity-100"
@@ -687,6 +720,18 @@ function TopicCell({
      Silme artık konunun kendi hücresinde, kendi düğmesinde: toplantıyı silme
      yolu ayrı bir kapıda (pencerenin altında) ve ayrıca onaylı. */
   const [removing, setRemoving] = useState(false);
+  /* KONU TAMAMLANDI — Pano'nun biten iş diliyle birebir aynı: yeşil ve üstü
+     çizili (Sıraç, 2026-09-08). Tamamlanan şey KONUDUR; toplantı başlığının
+     üstünü çizmek "üç konudan biri bitti"yi anlatamıyordu. */
+  const topicDone = !!topic?.done_at;
+  const [toggling, setToggling] = useState(false);
+  async function toggleDone() {
+    if (!topic) return;
+    setToggling(true);
+    try { await setTopicDone(topic.id, !topicDone); onSaved(); }
+    finally { setToggling(false); }
+  }
+
   async function removeTopic() {
     if (!topic) return;
     setRemoving(true);
@@ -712,13 +757,16 @@ function TopicCell({
         // hangi sütunda olduğunu kaybetmesin. Zemin bilerek ÇOK açık:
         // hücrelerdeki metin ve kategori renkleri okunur kalmalı.
         isToday && "bg-brand-soft/40",
+        topicDone && "bg-success/10",
         isAdmin && HOVER_VEIL,
         canDrag && "active:cursor-grabbing",
         isOver && "ring-2 ring-inset ring-brand-ring",
         isDragging && "opacity-40",
       )}
     >
-      {topic?.text}
+      <span className={cn(topicDone && "text-success/90 line-through decoration-success/40")}>
+        {topic?.text}
+      </span>
       {topic?.task_id && (
         <CheckCircle2 size={12} className="ml-1 inline shrink-0 text-success" aria-label="Göreve atandı" />
       )}
@@ -745,17 +793,36 @@ function TopicCell({
           düğme değil; sürükleme dinleyicileri üstte olduğu için pointerdown
           durdurulur, yoksa silmeye giderken hücre sürüklenmeye başlıyor. */}
       {isAdmin && topic?.text && (
-        <button
-          type="button"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => { e.stopPropagation(); void removeTopic(); }}
-          disabled={removing}
-          title="Yalnız bu konuyu sil"
-          aria-label={`“${topic.text}” konusunu sil`}
-          className="absolute right-0.5 top-0.5 z-10 grid size-5 place-items-center rounded-[4px] text-ink/35 opacity-0 transition-opacity duration-150 hover:bg-surface/70 hover:text-danger focus-visible:opacity-100 group-hover/topic:opacity-100 disabled:opacity-40"
-        >
-          {removing ? <Loader2 size={11} className="animate-spin" aria-hidden /> : <X size={11} aria-hidden />}
-        </button>
+        <span className="absolute right-0.5 top-0.5 z-10 flex items-center gap-px">
+          {/* TAMAMLANDI — biten konu her zaman görünür kalır (yeşil tik),
+              bitmemiş konununki hover'da belirir; ekran sakin dursun. */}
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); void toggleDone(); }}
+            disabled={toggling}
+            title={topicDone ? "Tamamlandı işaretini kaldır" : "Konuyu tamamlandı işaretle"}
+            aria-label={topicDone ? `“${topic.text}” tamamlandı işaretini kaldır` : `“${topic.text}” konusunu tamamlandı işaretle`}
+            aria-pressed={topicDone}
+            className={cn(
+              "grid size-5 place-items-center rounded-[4px] transition-opacity duration-150 hover:bg-surface/70 focus-visible:opacity-100 group-hover/topic:opacity-100 disabled:opacity-40",
+              topicDone ? "text-success opacity-100" : "text-ink/35 opacity-0 hover:text-success",
+            )}
+          >
+            {toggling ? <Loader2 size={11} className="animate-spin" aria-hidden /> : <Check size={11} aria-hidden />}
+          </button>
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); void removeTopic(); }}
+            disabled={removing}
+            title="Yalnız bu konuyu sil"
+            aria-label={`“${topic.text}” konusunu sil`}
+            className="grid size-5 place-items-center rounded-[4px] text-ink/35 opacity-0 transition-opacity duration-150 hover:bg-surface/70 hover:text-danger focus-visible:opacity-100 group-hover/topic:opacity-100 disabled:opacity-40"
+          >
+            {removing ? <Loader2 size={11} className="animate-spin" aria-hidden /> : <X size={11} aria-hidden />}
+          </button>
+        </span>
       )}
     </div>
   );

@@ -418,6 +418,72 @@ function DueDate({ value, done }: { value: string | null; done: boolean }) {
   );
 }
 
+/**
+ * KİŞİ ŞERİDİ — isim listesi değil, KART.
+ *
+ * Sıraç (2026-09-08): "Sorumlu kısmındaki kişilerin ADLARI DEĞİL KARTLAR olsun
+ * ve bu her yerde bu mantıkta olmalı."
+ *
+ * "Nisa Demireğer, Selen Ergül, Kısmet Yalçın" satırı sütunu taşırıyor ve göz
+ * onu okumak zorunda kalıyordu. Kart tanıma dayanır: fotoğraf, yoksa kendi
+ * renginde baş harf — Pano, Takvim ve süzgeç baloncuklarıyla AYNI dil, aynı
+ * kaynak (people → photoUrl + colorKey).
+ *
+ * Dörtten fazlası "+N" olarak toplanır; tam liste `title` ipucunda durur.
+ */
+function PersonChips({
+  entries, photoOf, colorOf, max = 4,
+}: {
+  entries: { id: string; name: string }[];
+  photoOf: (_id: string) => string | null;
+  colorOf: (_id: string) => string | undefined;
+  max?: number;
+}) {
+  if (entries.length === 0) return <span className="text-[13px] text-subtle">—</span>;
+  const shown = entries.slice(0, max);
+  const rest = entries.length - shown.length;
+  const all = entries.map((e) => e.name).join(", ");
+  return (
+    <span className="flex items-center -space-x-1.5" title={all}>
+      {shown.map((e) => (
+        <PersonAvatar
+          key={e.id}
+          name={e.name}
+          photoUrl={photoOf(e.id)}
+          colorHex={colorOf(e.id)}
+          size="sm"
+          ring
+          title={e.name}
+        />
+      ))}
+      {rest > 0 && (
+        <span
+          className="grid size-7 shrink-0 place-items-center rounded-full bg-surface-sunken text-[11px] font-semibold tabular-nums text-muted ring-2 ring-surface"
+          aria-label={`ve ${rest} kişi daha`}
+        >
+          +{rest}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** Sorumlular KİMLİKLERİYLE — kart çizmek için ada değil id'ye ihtiyaç var. */
+function responsibleEntriesOf(
+  task: Task,
+  responsibleNames: Record<string, string>,
+  participantsByTask: Record<string, { userId: string; name: string }[]>,
+): { id: string; name: string }[] {
+  const parts = participantsByTask[task.id];
+  if (parts && parts.length > 0) return parts.map((p) => ({ id: p.userId, name: p.name }));
+  const fallbackId =
+    task.assignee_id ??
+    (task as { responsible_contact_id?: string | null }).responsible_contact_id ??
+    null;
+  const name = fallbackId ? responsibleNames[fallbackId] : undefined;
+  return name ? [{ id: fallbackId as string, name }] : [];
+}
+
 /* SORUMLU = KATILIMCILAR ∪ ATANAN — pano ve görev detayıyla aynı okuma.
    Liste yalnız `assignee_id` / `responsible_contact_id` çözüyordu: sorumluları
    sadece katılımcı satırlarıyla tanımlanmış bir görev listede "—" görünüyor,
@@ -542,6 +608,14 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
       ),
     [people],
   );
+  /* Sütunlardaki kartlar SÜZGEÇ BALONCUKLARIYLA aynı kaynaktan beslenir:
+     aynı insan aynı fotoğrafla, aynı renkle çıksın. */
+  const personPhoto = useMemo(
+    () => new Map(people.map((p) => [p.userId, p.photoUrl ?? null])),
+    [people],
+  );
+  const photoOf = useCallback((id: string) => personPhoto.get(id) ?? null, [personPhoto]);
+  const colorOf = useCallback((id: string) => personTones[id]?.hex, [personTones]);
 
   const [sorting, setSorting] = useState<SortingState>([{ id: "updated_at", desc: true }]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -852,7 +926,13 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
       {
         id: "responsible",
         header: FIELD_LABELS.assignee,
-        cell: (info) => <span className="text-[13.5px] text-muted whitespace-nowrap">{info.getValue() || "—"}</span>,
+        cell: (info) => (
+          <PersonChips
+            entries={responsibleEntriesOf(info.row.original, responsibleNames, participantsByTask)}
+            photoOf={photoOf}
+            colorOf={colorOf}
+          />
+        ),
         sortingFn: (a, b) => {
           const na = responsibleLabelOf(a.original, responsibleNames, participantsByTask);
           const nb = responsibleLabelOf(b.original, responsibleNames, participantsByTask);
@@ -883,10 +963,22 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
         id: "collaborators",
         header: "İş birliği",
         cell: (info) => {
-          const val = info.getValue();
-          return val
-            ? <span className="text-[13.5px] text-muted">{val}</span>
-            : <span className="text-[13px] text-subtle">—</span>;
+          /* İş birliği de KART — sorumluyla aynı dil. Kimlikler
+             custom_fields.collaborators içinde durur; ada çevrilemeyen kimlik
+             hiç çizilmez (ham uuid kullanıcıya gösterilmez). */
+          const cf = info.row.original.custom_fields;
+          let ids: string[] = [];
+          try {
+            if (cf && typeof cf === "object" && !Array.isArray(cf)) {
+              const c = (cf as Record<string, unknown>).collaborators;
+              ids = Array.isArray(c) ? c.filter((x): x is string => typeof x === "string")
+                : typeof c === "string" ? [c] : [];
+            }
+          } catch { ids = []; }
+          const entries = ids
+            .map((id) => ({ id, name: responsibleNames[id] }))
+            .filter((e): e is { id: string; name: string } => !!e.name);
+          return <PersonChips entries={entries} photoOf={photoOf} colorOf={colorOf} />;
         },
         enableSorting: false,
       }
@@ -918,7 +1010,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
         return da < db ? -1 : da > db ? 1 : 0;
       },
     }),
-  ], [responsibleNames, deptMeta, isAdmin, role, userId, participantsByTask]); // closure deps
+  ], [responsibleNames, deptMeta, isAdmin, role, userId, participantsByTask, photoOf, colorOf]); // closure deps
 
   const table = useReactTable({
     data: filteredTasks,

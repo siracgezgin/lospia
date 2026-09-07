@@ -7,7 +7,6 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Wordmark } from "@/components/ui/Wordmark";
 import { LOSPIA_BRAND, type AppBrand } from "@/lib/branding";
-import { getWeeklyQuote } from "@/lib/content/weekly-quotes";
 import { canViewDestructivePages, canManageSettings } from "@/lib/auth/permissions";
 import {
   NAV_DIRECTORY,
@@ -84,7 +83,6 @@ export function AppSidebar({
   const [override, setOverride] = useState<boolean | null>(null);
   const collapsed = override ?? stored;
   const wsName = workspace?.name ?? "Operasyon";
-  const weeklyQuote = getWeeklyQuote();
   const sections = navSectionsForRole(isAdmin);
   const activeHref = activeNavHref(pathname);
 
@@ -164,24 +162,13 @@ export function AppSidebar({
         </div>
       </nav>
 
-      {/* Haftanın Notu + marka imzası. Kısa ekranlarda tamamen gizlenir —
-          menü satırlarının önünü asla kesmez. */}
+      {/* Marka imzası. "Haftanın Notu" kartı KALDIRILDI (Sıraç, 2026-09-08:
+          "bu ne saçma mantıksız söz… çok kötü hepsi"). Menünün dibinde her
+          hafta değişen bir aforizma, kimsenin işine yaramayan bir süstü;
+          alıntı listesi lib/content/weekly-quotes.ts'te duruyor ama hiçbir
+          yerde çizilmiyor. */}
       {!collapsed && (
         <div className="hidden shrink-0 space-y-2.5 px-3 pb-3 pt-1 [@media(min-height:47.5rem)]:block">
-          {/* Haftanın Notu — düz yüzey, dekor yok. Not bir içerik, bir süs değil:
-              zemin bir ton koyu, sol kenarda ince marka çizgisi, o kadar. */}
-          <div className="rounded-card border border-line bg-surface-muted px-3.5 py-3">
-            <p className="select-none text-[12px] font-semibold uppercase tracking-[0.08em] text-brand-strong">
-              Haftanın Notu
-            </p>
-            <p
-              className="mt-1.5 line-clamp-3 text-[12.5px] leading-[1.6] text-muted"
-              title={weeklyQuote.quoteTr}
-            >
-              “{weeklyQuote.quoteTr}”
-            </p>
-          </div>
-
           <div className="flex justify-center border-t border-hairline pb-1 pt-4">
             <img
               src={brand.logo}

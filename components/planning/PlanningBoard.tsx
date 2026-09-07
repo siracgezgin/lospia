@@ -149,14 +149,18 @@ export function PlanningBoard({
    *  kalmıyor ve düğme sessizce var olan toplantıyı DÜZENLEMEYE açıyordu. */
   const openEditorAt = (
     iso: string, slot: string, i: number,
-    opts: { blank?: boolean; topicIndex?: number | null } = {},
+    opts: { blank?: boolean; topicIndex?: number | null; meetingId?: string } = {},
   ) => {
     if (!isAdmin) return;
     const cell = byCell.get(`${iso}|${slot}`) ?? [];
     // Toplantı, oturduğu ŞERİDİN kimliğini alır — renk seçtirilmiyor.
     const band = bands.find((b) => b.slot === slot);
+    /* Hücrede birden fazla toplantı varsa HANGİSİNE tıklandıysa o açılır.
+       Önce hep cell[0] açılıyordu; çoğaltma sonrası aynı hücreye düşen ikinci
+       toplantıya ulaşmanın yolu yoktu, dolayısıyla silinemiyordu. */
+    const picked = opts.meetingId ? cell.find((m) => m.id === opts.meetingId) : null;
     setEditor({
-      meeting: opts.blank ? null : (cell[0] ?? null),
+      meeting: opts.blank ? null : (picked ?? cell[0] ?? null),
       day: iso,
       slot,
       dayLabel: `${WEEKDAY_LONG_TR[i]} ${format(parseISO(iso), "d MMM", { locale: tr })}`,
@@ -173,8 +177,8 @@ export function PlanningBoard({
      Başlık hücresi onu vermez → bütün gündem açılır; "Konu 2" hücresi verir →
      pencere yalnız o konuyu açar (Aslı Hanım, 2026-09-07: "konuya tıklayınca
      hepsini açıyor, konuyu açmıyor ki"). */
-  const openEditor = (iso: string, slot: string, i: number, topicIndex?: number) =>
-    openEditorAt(iso, slot, i, { topicIndex: topicIndex ?? null });
+  const openEditor = (iso: string, slot: string, i: number, topicIndex?: number, meetingId?: string) =>
+    openEditorAt(iso, slot, i, { topicIndex: topicIndex ?? null, meetingId });
 
   return (
     /* TAM EKRAN. Aslı Hanım (2026-08-29): "Buradaki boşluğu kaldır ve calendar
