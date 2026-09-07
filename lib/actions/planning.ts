@@ -5,6 +5,9 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import type { AppRole } from "@/lib/auth/permissions";
 import { toActionErrorMessage, isMissingSchemaError } from "@/lib/utils/supabase-errors";
+import { sendEmail } from "@/lib/email/send-email";
+import { meetingInviteEmail } from "@/lib/email/templates/meeting-invite";
+import { normalizeSlot, toIstanbulTime } from "@/lib/planning/timezones";
 
 // Planlama — Haftalık Toplantı Takvimi. Toplantı (renkli kutu) + altında Konu'lar.
 // İzin modeli (2026-07-26): üyeler OKUR, yazma yalnız yönetici — hem burada
@@ -788,6 +791,360 @@ export async function moveMeeting(
   if (count === 0) return { error: NOT_FOUND };
   revalidatePath("/planning");
   return { ok: true };
+}
+
+/**
+ * BAŞLIĞI YERİNDE DEĞİŞTİRİR — ızgaradaki hücreye tıklayıp yazmak.
+ *
+ * Aslı Hanım (2026-09-07): "Toplantı başlıkları ve konular AYRI olsun. Yani
+ * BAŞLIK ÜZERİNE TIKLAYINCA DEĞİŞEBİLİR OLSUN, silip yazabiliriz."
+ *
+ * Başlığı değiştirmek için toplantı penceresini açıp gündemin tamamını
+ * görmek gerekiyordu; başlık ile konular aynı kapıdan giriliyordu. Artık
+ * başlığın kendi kapısı var.
+ *
+ * Hücrede toplantı yoksa yazılan başlıkla bir tane AÇILIR (boş hücreye
+ * yazmak da bir başlangıçtır). Başlık boşaltılırsa toplantı SİLİNMEZ —
+ * yalnız adı boşalır; silme ayrı ve onaylı bir eylemdir.
+ */
+export async function setMeetingTitle(
+  target: { meetingId: string } | { meeting_date: string; time_slot: string },
+  title: string,
+): Promise<{ ok: true; id: string } | { error: string }> {
+  const clean = (title ?? "").trim().slice(0, 300);
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+  if (!isAdminRole(ctx.role)) return { error: PLANNING_ADMIN_ONLY };
+
+  if ("meetingId" in target) {
+    const { error, count } = await supabase
+      .from("planning_meetings")
+      .update({ title: clean || null, updated_by: ctx.userId }, { count: "exact" })
+      .eq("id", target.meetingId)
+      .eq("workspace_id", ctx.workspaceId);
+    if (error) return { error: toActionErrorMessage(error) };
+    if (count === 0) return { error: NOT_FOUND };
+    revalidatePath("/planning");
+    return { ok: true, id: target.meetingId };
+  }
+
+  const parsed = z
+    .object({
+      meeting_date: z.string().regex(DATE_RE, "Geçersiz tarih"),
+      time_slot: z.string().min(1).max(10),
+    })
+    .safeParse(target);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  if (!clean) return { error: "Başlık boş olamaz." };
+
+  /* Kategori o saatteki komşudan miras alınır ki yeni hücre şeridin rengiyle
+     uyumlu çıksın (moveTopic'teki aynı kural). */
+  const { data: sibling } = await supabase
+    .from("planning_meetings")
+    .select("category")
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("time_slot", parsed.data.time_slot)
+    .limit(1)
+    .maybeSingle();
+
+  const { data: created, error: createErr } = await supabase
+    .from("planning_meetings")
+    .insert({
+      workspace_id: ctx.workspaceId,
+      meeting_date: parsed.data.meeting_date,
+      time_slot: parsed.data.time_slot,
+      category: (sibling as { category: string } | null)?.category ?? "other",
+      title: clean,
+      participant_ids: [],
+      collaborator_ids: [],
+      created_by: ctx.userId,
+      updated_by: ctx.userId,
+    })
+    .select("id")
+    .single();
+  if (createErr) return { error: toActionErrorMessage(createErr) };
+  revalidatePath("/planning");
+  return { ok: true, id: (created as { id: string }).id };
+}
+
+/**
+ * TEK KONUYU SİLER — ızgaradan, pencere açmadan.
+ *
+ * Aslı Hanım (2026-09-07): "Ben SİL deyince genelde komple o toplantı
+ * siliniyor, bunu istemiyorum. BİRER BİRER SİLİNEBİLSİN."
+ *
+ * Kalan konular 0..n-1 olarak yeniden numaralanır: boşluklu numara ızgarada
+ * "Konu 2 boş, Konu 3 dolu" gibi hayalet satır üretiyordu.
+ */
+export async function deleteTopic(
+  topicId: string,
+): Promise<{ ok: true } | { error: string }> {
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+  if (!isAdminRole(ctx.role)) return { error: PLANNING_ADMIN_ONLY };
+
+  const { data: topic } = await supabase
+    .from("planning_topics")
+    .select("id, meeting_id")
+    .eq("id", topicId)
+    .eq("workspace_id", ctx.workspaceId)
+    .maybeSingle();
+  if (!topic) return { error: "Konu bulunamadı." };
+  const meetingId = (topic as { meeting_id: string }).meeting_id;
+
+  const { error } = await supabase
+    .from("planning_topics")
+    .delete()
+    .eq("id", topicId)
+    .eq("workspace_id", ctx.workspaceId);
+  if (error) return { error: toActionErrorMessage(error) };
+
+  await renumberTopics(supabase, ctx.workspaceId, meetingId, null, 0);
+  revalidatePath("/planning");
+  return { ok: true };
+}
+
+/**
+ * DIŞ KATILIMCIYI EKLER — hem toplantıya, hem FİHRİSTE (CRM).
+ *
+ * Aslı Hanım (2026-09-07):
+ *   "Şuraya bir artı koysan, bir e-mail hesabı girdirsen artıyla."
+ *   "Mesela bak şimdi burada cumartesi günü Berna Hanım'la bir toplantı koydu
+ *    bana. ŞURADA BİR ARTI OLURSA BERNA'YI HEMEN KAYDEDERİZ."
+ *   "Fihristte… ADI, SOYADI, TANIMI, NE TOPLANTISI OLDUĞU bilgileri girer.
+ *    BÖYLECE ORADA DA BİR DATABASE'İMİZ OLUŞUR."
+ *   "Meral Hanım kalıpçımız, Sabri Bey üreticimiz — bunlar bizim dışarıdan
+ *    çalıştığımız insanlar."
+ *
+ * Yani "+" iki iş yapar: kişiyi toplantının davetlisi yapar VE CRM'e kalıcı
+ * bir kayıt olarak düşürür. Adres yalnız toplantıda kalsaydı ikinci kez
+ * çağırırken yeniden yazmak gerekirdi — AF'nin "database" dediği şey tam da
+ * bunun olmaması.
+ *
+ * AYNI E-POSTA İKİ KEZ KAYDEDİLMEZ: adres CRM'de varsa o kayıt GÜNCELLENİR
+ * (boş kalan tanım/kategori doldurulur), yenisi açılmaz.
+ */
+export async function addExternalParticipant(
+  meetingId: string,
+  input: {
+    email: string;
+    name?: string | null;
+    /** "Üretici", "Kalıpçı" — AF'nin "tanımı" dediği alan. */
+    roleLabel?: string | null;
+    /** CRM kutusu: outsource · toplanti · vip · basin … (lib/crm/constants). */
+    segment?: string | null;
+  },
+): Promise<{ ok: true; contactId: string | null } | { error: string }> {
+  const parsed = z
+    .object({
+      email: z.string().trim().email("Geçerli bir e-posta yazın.").max(200),
+      name: z.string().trim().max(200).optional().nullable(),
+      roleLabel: z.string().trim().max(100).optional().nullable(),
+      segment: z.string().trim().max(40).optional().nullable(),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+  if (!isAdminRole(ctx.role)) return { error: PLANNING_ADMIN_ONLY };
+
+  const v = parsed.data;
+  const email = v.email.toLowerCase();
+
+  const { data: meetingRow, error: mErr } = await supabase
+    .from("planning_meetings")
+    .select("id, title, meeting_date, external_emails")
+    .eq("id", meetingId)
+    .eq("workspace_id", ctx.workspaceId)
+    .maybeSingle();
+  if (mErr && isMissingSchemaError(mErr)) {
+    return { error: "Dış katılımcı alanı için veritabanı güncellemesi bekleniyor (20240338)." };
+  }
+  if (!meetingRow) return { error: NOT_FOUND };
+  const meeting = meetingRow as {
+    title: string | null; meeting_date: string; external_emails: string[] | null;
+  };
+
+  // 1) Toplantının davetli listesine ekle (yinelenmez).
+  const current = (meeting.external_emails ?? []).map((e) => e.trim().toLowerCase()).filter(Boolean);
+  if (!current.includes(email)) {
+    const { error } = await supabase
+      .from("planning_meetings")
+      .update({ external_emails: [...current, email], updated_by: ctx.userId })
+      .eq("id", meetingId)
+      .eq("workspace_id", ctx.workspaceId);
+    if (error) return { error: toActionErrorMessage(error) };
+  }
+
+  /* 2) FİHRİST kaydı. "Ne toplantısı olduğu" bilgisi nota düşer — AF bunu
+        ayrı bir alan olarak değil, kişinin hikâyesi olarak istedi ("cumartesi
+        günkü Berna"). Not BİRİKİR: aynı kişi başka bir toplantıya çağrılınca
+        önceki satır silinmez. */
+  const meetingLabel = `${nn(meeting.title) ?? "Toplantı"} · ${String(meeting.meeting_date).slice(0, 10)}`;
+
+  const { data: existing, error: findErr } = await supabase
+    .from("workspace_contacts")
+    .select("id, name, role_label, segment, notes")
+    .eq("workspace_id", ctx.workspaceId)
+    .ilike("email", email)
+    .limit(1)
+    .maybeSingle();
+  /* CRM kolonları migrate edilmemişse toplantı yine kurulmuş olur; fihrist
+     kaydı sessizce atlanır — davet akışı buna takılmamalı. */
+  if (findErr && isMissingSchemaError(findErr)) {
+    revalidatePath("/planning");
+    return { ok: true, contactId: null };
+  }
+
+  if (existing) {
+    const e = existing as { id: string; name: string; role_label: string | null; segment: string | null; notes: string | null };
+    const noteLine = `Toplantı: ${meetingLabel}`;
+    const notes = (e.notes ?? "").includes(noteLine)
+      ? e.notes
+      : [e.notes, noteLine].filter(Boolean).join("\n");
+    // Var olan kaydın DOLU alanları ezilmez; yalnız boşluklar tamamlanır.
+    const { error } = await supabase
+      .from("workspace_contacts")
+      .update({
+        name: e.name || nn(v.name) || email,
+        role_label: e.role_label || nn(v.roleLabel),
+        segment: e.segment || nn(v.segment) || "toplanti",
+        notes,
+      })
+      .eq("id", e.id)
+      .eq("workspace_id", ctx.workspaceId);
+    if (error) return { error: toActionErrorMessage(error) };
+    revalidatePath("/planning");
+    revalidatePath("/crm");
+    return { ok: true, contactId: e.id };
+  }
+
+  const { data: created, error: insErr } = await supabase
+    .from("workspace_contacts")
+    .insert({
+      workspace_id: ctx.workspaceId,
+      // CRM listesi YALNIZ dış ilişkileri gösterir (kind ayrımı, 2026-08-24).
+      kind: "external",
+      name: nn(v.name) || email,
+      email,
+      role_label: nn(v.roleLabel),
+      // Kutu seçilmediyse "Toplantılar": AF'nin saydığı kutulardan biri ve
+      // kişinin sisteme GİRİŞ sebebi tam olarak bu.
+      segment: nn(v.segment) || "toplanti",
+      notes: `Toplantı: ${meetingLabel}`,
+    })
+    .select("id")
+    .maybeSingle();
+  if (insErr) {
+    if (isMissingSchemaError(insErr)) {
+      revalidatePath("/planning");
+      return { ok: true, contactId: null };
+    }
+    return { error: toActionErrorMessage(insErr) };
+  }
+
+  revalidatePath("/planning");
+  revalidatePath("/crm");
+  return { ok: true, contactId: (created as { id: string } | null)?.id ?? null };
+}
+
+/**
+ * DIŞ KATILIMCILARA TOPLANTI DAVETİ GÖNDERİR.
+ *
+ * Aslı Hanım (2026-09-07):
+ *   "Toplantı mailini sen buraya, şuraya bir artı koysan, bir e-mail hesabı
+ *    girdirsen artıyla."
+ *   "Onlara 'Size yeni bir görev atandı' DEĞİL de 'TOPLANTIYA DAVET
+ *    EDİLDİNİZ' şeklinde olmalı."
+ *   "Artık SON TARİH diye bir şey yok — direkt toplantı tarihi, TÜRKİYE SAATİ
+ *    ve parantezde NY saati ile beraber gönderilsin."
+ *   "Çarşamba günkü Sabri Bey ile toplantının e-maili buradan giderse Nisa'nın
+ *    işini kolaylaştıracaksın. Bir daha adama 'mail' diye dürtmeyecek."
+ *
+ * Adres listesi toplantının `external_emails` alanıdır (20240338). Ekip
+ * üyelerine buradan mail gitmez: onların bildirimi zaten uygulama içindeki
+ * kanaldan (notifyTaskEvent) akıyor, ikinci bir kanal aynı kişiye iki kez
+ * haber verirdi.
+ *
+ * Mail GERİ ALINAMAZ, o yüzden bu eylem kendiliğinden çalışmaz — kaydetmenin
+ * yan etkisi değildir, yönetici açıkça "Davet gönder" der.
+ */
+export async function sendMeetingInvites(
+  meetingId: string,
+): Promise<{ ok: true; sent: string[]; failed: { to: string; reason: string }[] } | { error: string }> {
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+  if (!isAdminRole(ctx.role)) return { error: PLANNING_ADMIN_ONLY };
+
+  const { data: row, error: readErr } = await supabase
+    .from("planning_meetings")
+    .select("id, title, content, meeting_date, time_slot, external_emails, planning_topics(text, position)")
+    .eq("id", meetingId)
+    .eq("workspace_id", ctx.workspaceId)
+    .maybeSingle();
+  if (readErr) {
+    if (isMissingSchemaError(readErr)) {
+      return { error: "Dış katılımcı alanı için veritabanı güncellemesi bekleniyor (20240338)." };
+    }
+    return { error: toActionErrorMessage(readErr) };
+  }
+  if (!row) return { error: NOT_FOUND };
+
+  const m = row as {
+    title: string | null; content: string | null; meeting_date: string; time_slot: string;
+    external_emails: string[] | null;
+    planning_topics?: { text: string | null; position: number }[] | null;
+  };
+  const recipients = (m.external_emails ?? []).map((e) => e.trim()).filter(Boolean);
+  if (!recipients.length) return { error: "Bu toplantıda dış katılımcı yok. Önce e-posta ekleyin." };
+
+  const dateIso = String(m.meeting_date).slice(0, 10);
+  const slot = normalizeSlot(m.time_slot);
+  /* TÜRKİYE SAATİ ASIL, NY PARANTEZDE. Kayıtlı saat New York'tur; İstanbul
+     hesaplanır (bkz. lib/planning/timezones.ts) — davet edilen kişi Türkiye'de,
+     kendi saatini aramak zorunda kalmasın. */
+  const ist = toIstanbulTime(dateIso, slot);
+  const dateLabel = new Intl.DateTimeFormat("tr-TR", {
+    day: "numeric", month: "long", year: "numeric", weekday: "long",
+  }).format(new Date(`${dateIso}T12:00:00`));
+
+  const topics = [...(m.planning_topics ?? [])]
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+    .map((t) => (t.text ?? "").trim())
+    .filter(Boolean);
+
+  const { data: actor } = await supabase
+    .from("profiles").select("full_name, email").eq("id", ctx.userId).maybeSingle();
+  const actorName = (actor?.full_name as string | null) || (actor?.email as string | null) || null;
+
+  const sent: string[] = [];
+  const failed: { to: string; reason: string }[] = [];
+  for (const to of recipients) {
+    const res = await sendEmail(
+      meetingInviteEmail({
+        to,
+        meetingTitle: nn(m.title) ?? "Toplantı",
+        dateLabel,
+        /* Gün taşması olduğunda saatin yanında "+1" durur — 21:00 NY, İstanbul'da
+           ertesi gün 04:00'tür; bunu yazmazsak davet yanlış güne okunur. */
+        istanbulTime: ist ? (ist.dayShift === 0 ? ist.time : `${ist.time} (+1 gün)`) : null,
+        newYorkTime: slot || null,
+        topics,
+        actorName,
+        note: nn(m.content),
+      }),
+    );
+    if (res.status === "sent") sent.push(to);
+    else failed.push({ to, reason: res.status === "error" ? res.error : res.reason });
+  }
+
+  revalidatePath("/planning");
+  return { ok: true, sent, failed };
 }
 
 /**

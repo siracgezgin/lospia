@@ -8,13 +8,14 @@ import { cn } from "@/lib/utils/cn";
 import { useConfirm } from "@/components/ui/useConfirm";
 import { Overlay } from "@/components/ui/Overlay";
 import { Button, IconButton } from "@/components/ui/Button";
-import { Field, TextInput, TextArea } from "@/components/ui/Field";
+import { Field, TextInput, TextArea, SelectInput } from "@/components/ui/Field";
 import {
   createMeeting, updateMeeting, deleteMeeting, saveMeetingTopics, assignTopicAsTask,
-  duplicateMeeting, setMeetingStatus,
+  duplicateMeeting, setMeetingStatus, sendMeetingInvites, addExternalParticipant,
   type MeetingSnapshot,
 } from "@/lib/actions/planning";
 import { categoryMeta } from "@/lib/planning/categories";
+import { CRM_CATEGORIES } from "@/lib/crm/constants";
 import { WEEKDAY_LONG_TR } from "@/lib/planning/bands";
 import { normalizeSlot, istanbulLabel, HOME_LABEL, AWAY_LABEL } from "@/lib/planning/timezones";
 import { MemberMultiSelect, type Member } from "./MemberMultiSelect";
@@ -164,9 +165,22 @@ export function MeetingEditor({
     () => (meeting?.external_emails ?? []).filter(Boolean),
   );
   const [emailDraft, setEmailDraft] = useState("");
+  /* FİHRİST ALANLARI. Aslı Hanım (2026-09-07): "Adı, soyadı, TANIMI, ne
+     toplantısı olduğu bilgileri girer — böylece orada da bir database'imiz
+     oluşur." "Ne toplantısı" ayrı sorulmaz: kişi zaten BU toplantıdan
+     ekleniyor, sunucu o satırı kendisi yazıyor. */
+  const [guestName, setGuestName] = useState("");
+  const [guestRole, setGuestRole] = useState("");
+  const [guestSegment, setGuestSegment] = useState("toplanti");
+  const [isAddingGuest, startAddGuest] = useTransition();
   const [emailOpen, setEmailOpen] = useState(() => (meeting?.external_emails ?? []).length > 0);
 
   /* ÇOĞALTMA — "toplantının devamı" başka bir güne kopyalanır. */
+  /* DAVET — dış katılımcılara mail. Mail geri alınamaz: kaydetmenin yan etkisi
+     değil, ayrı ve açık bir eylemdir. */
+  const [inviteMsg, setInviteMsg] = useState<string | null>(null);
+  const [isInviting, startInvite] = useTransition();
+
   const [dupDate, setDupDate] = useState("");
   const [dupOpen, setDupOpen] = useState(false);
   const [isDuplicating, startDuplicate] = useTransition();
@@ -349,15 +363,61 @@ export function MeetingEditor({
     });
   }
 
-  /* DIŞ KATILIMCI e-postası — tek tek eklenir, çip olarak durur. */
+  /* DAVET GÖNDER — önce kaydeder (yeni eklenen adres de gitsin), sonra yollar. */
+  function handleInvite() {
+    setError(null);
+    setInviteMsg(null);
+    startInvite(async () => {
+      try {
+        const saved = await persist();
+        if ("error" in saved) { setError(saved.error); return; }
+        const res = await sendMeetingInvites(saved.meetingId);
+        if ("error" in res) { setError(res.error); return; }
+        const parts: string[] = [];
+        if (res.sent.length) parts.push(`${res.sent.join(", ")} adresine davet gönderildi.`);
+        if (res.failed.length) parts.push(`Gönderilemedi: ${res.failed.map((f) => f.to).join(", ")}.`);
+        setInviteMsg(parts.join(" ") || "Gönderilecek adres bulunamadı.");
+      } catch (e) {
+        setError(messageOf(e));
+      }
+    });
+  }
+
+  /* DIŞ KATILIMCI — toplantıya davetli olur VE fihriste (CRM) kaydedilir.
+     Aslı Hanım: "Şurada bir artı olursa Berna'yı hemen kaydederiz."
+     Toplantı henüz kaydedilmemişse önce o kaydedilir: kişi kaydı bir
+     toplantıya bağlıdır, havada duramaz. */
   function addEmail() {
     const value = emailDraft.trim().toLowerCase();
     if (!value) return;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) { setError("Geçerli bir e-posta yazın."); return; }
     if (externalEmails.includes(value)) { setEmailDraft(""); return; }
     setError(null);
-    setExternalEmails((xs) => [...xs, value]);
-    setEmailDraft("");
+    setInviteMsg(null);
+    startAddGuest(async () => {
+      try {
+        const saved = await persist();
+        if ("error" in saved) { setError(saved.error); return; }
+        const res = await addExternalParticipant(saved.meetingId, {
+          email: value,
+          name: guestName,
+          roleLabel: guestRole,
+          segment: guestSegment,
+        });
+        if ("error" in res) { setError(res.error); return; }
+        setExternalEmails((xs) => (xs.includes(value) ? xs : [...xs, value]));
+        setEmailDraft("");
+        setGuestName("");
+        setGuestRole("");
+        setInviteMsg(
+          res.contactId
+            ? `${guestName.trim() || value} toplantıya eklendi ve CRM'e kaydedildi.`
+            : `${value} toplantıya eklendi.`,
+        );
+      } catch (e) {
+        setError(messageOf(e));
+      }
+    });
   }
 
   async function handleDelete() {
@@ -673,7 +733,24 @@ export function MeetingEditor({
                   ))}
                 </ul>
               )}
-              <div className="flex items-center gap-1.5">
+              {/* FİHRİST FORMU — AF'nin saydığı alanlar: ad, tanım, kategori.
+                  "Ne toplantısı" sorulmaz; kişi bu toplantıdan eklendiği için
+                  sunucu o satırı kendi yazar. */}
+              <div className="grid gap-1.5 sm:grid-cols-2">
+                <TextInput
+                  value={guestName}
+                  onChange={(e) => setGuestName(e.target.value)}
+                  placeholder="Ad soyad — Sabri Bey"
+                  aria-label="Dış katılımcının adı"
+                />
+                <TextInput
+                  value={guestRole}
+                  onChange={(e) => setGuestRole(e.target.value)}
+                  placeholder="Tanım — Üretici, Kalıpçı…"
+                  aria-label="Dış katılımcının tanımı"
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
                 <TextInput
                   type="email"
                   value={emailDraft}
@@ -683,10 +760,59 @@ export function MeetingEditor({
                   aria-label="Dış katılımcının e-postası"
                   className="min-w-0 flex-1"
                 />
-                <Button variant="secondary" size="sm" onClick={addEmail} disabled={!emailDraft.trim()}>
-                  <Plus size={13} aria-hidden /> Ekle
+                <SelectInput
+                  value={guestSegment}
+                  onChange={(e) => setGuestSegment(e.target.value)}
+                  aria-label="CRM kategorisi"
+                  className="w-auto min-w-[130px]"
+                >
+                  {CRM_CATEGORIES.map((c) => (
+                    <option key={c.key} value={c.primary}>{c.label}</option>
+                  ))}
+                </SelectInput>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={addEmail}
+                  loading={isAddingGuest}
+                  disabled={!emailDraft.trim() || busy || isAddingGuest}
+                >
+                  {!isAddingGuest && <Plus size={13} aria-hidden />} Ekle
                 </Button>
               </div>
+              <p className="text-[12px] leading-relaxed text-subtle">
+                Eklenen kişi CRM’e de kaydedilir — hangi toplantıdan geldiği notuna yazılır.
+              </p>
+
+              {/* DAVET. Aslı Hanım (2026-09-07): "Çarşamba günkü Sabri Bey ile
+                  toplantının e-maili buradan giderse Nisa'nın işini
+                  kolaylaştıracaksın — bir daha adama 'mail' diye
+                  dürtmeyecek." Mail "Size yeni bir görev atandı" demez;
+                  "Toplantıya davet edildiniz" der ve içinde son tarih değil
+                  TOPLANTI SAATİ vardır (Türkiye saati, parantezde NY). */}
+              {externalEmails.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleInvite}
+                    loading={isInviting}
+                    disabled={busy || isInviting}
+                    title="Toplantı davetini bu adreslere e-posta ile gönder"
+                  >
+                    {!isInviting && <Send size={13} aria-hidden />} Davet gönder
+                  </Button>
+                  <span className="text-[12px] text-subtle">
+                    Davette toplantının tarihi ve saati yazar; görev maili değildir.
+                  </span>
+                </div>
+              )}
+
+              {inviteMsg && (
+                <p role="status" className="anim-fade-down rounded-control border border-success/30 bg-success/10 px-3 py-2 text-[12.5px] font-medium text-ink">
+                  {inviteMsg}
+                </p>
+              )}
             </div>
           </Field>
         )}
