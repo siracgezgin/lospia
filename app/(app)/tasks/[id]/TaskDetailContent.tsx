@@ -6,6 +6,7 @@ import type { Task, TaskActivity, TaskActivityLogWithActor, TimeEntry, CustomFie
 import { TaskNotesPanel, type NotePerson } from "@/components/task/TaskNotesPanel";
 import { TaskParticipantsPanel, type PanelMember, type PanelContact, type PanelParticipant } from "@/components/task/TaskParticipantsPanel";
 import { TaskEffortPanel } from "@/components/task/TaskEffortPanel";
+import { TaskReviewChain, type ReviewStep, type ReviewPerson } from "@/components/task/TaskReviewChain";
 import { POINTS_UI_ENABLED } from "@/lib/points/effort";
 import { isEffortSize } from "@/lib/points/effort";
 import { buildAssignablePeople } from "@/lib/people/assignable";
@@ -264,6 +265,34 @@ export async function TaskDetailContent({
     noteAcks = (ackRows ?? []) as { note_id: string; user_id: string; action: string }[];
   }
 
+  /* KONTROL ZİNCİRİ (20240341) — adımlar + çalışma alanının sabit kuyruğu.
+     Tablolar migrate edilmemişse sorgular hata verir ve panel hiç çizilmez;
+     görev detayı bundan etkilenmez. */
+  const [reviewStepsRes, reviewChainRes] = await Promise.all([
+    supabase
+      .from("task_review_steps")
+      .select("id, position, reviewer_id, approved_at, note")
+      .eq("task_id", id)
+      .order("position", { ascending: true }),
+    supabase
+      .from("workspace_review_chain")
+      .select("reviewer_id")
+      .eq("workspace_id", task.workspace_id)
+      .order("position", { ascending: true }),
+  ]);
+  const reviewSteps = (reviewStepsRes.error ? [] : (reviewStepsRes.data ?? [])) as ReviewStep[];
+  const reviewChainCount = reviewChainRes.error ? 0 : (reviewChainRes.data ?? []).length;
+  /* Kontrolcü adayları = sistem hesabı olan üyeler (dış kişi kontrol etmez). */
+  const reviewPeople: ReviewPerson[] = profiles.map((p) => ({
+    id: p.id,
+    name: p.full_name || p.email || "—",
+    avatarUrl: p.avatar_url ?? null,
+  }));
+  /* Kontrole gönderebilen: işin sahibi ya da sorumlusu — kendi işini bitiren
+     kişi. İzleyici gönderemez. */
+  const canSendToReview =
+    !isViewer && (task.assignee_id === user.id || (task.created_by ?? null) === user.id || canComplete);
+
   return (
     <TaskDetail
       task={task}
@@ -293,6 +322,17 @@ export async function TaskDetailContent({
           isViewer={isViewer}
           canManage={!isViewer && canManageParticipants}
           adminOnly={(task as unknown as { visibility?: string }).visibility === "admin_only"}
+        />
+      }
+      reviewSlot={
+        <TaskReviewChain
+          taskId={task.id}
+          status={task.status}
+          steps={reviewSteps}
+          people={reviewPeople}
+          currentUserId={user.id}
+          canSend={canSendToReview}
+          defaultChainCount={reviewChainCount}
         />
       }
       notesSlot={

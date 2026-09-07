@@ -8,13 +8,13 @@ import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   useDraggable, useDroppable, type DragEndEvent, type DragStartEvent,
 } from "@dnd-kit/core";
-import { CheckCircle2, Plus, Pencil, X, Loader2 } from "lucide-react";
+import { CheckCircle2, Plus, Pencil, X, Loader2, XCircle, Copy, Maximize2 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { categoryMeta } from "@/lib/planning/categories";
 import { WEEKDAY_SHORT_EN, WEEKDAY_LONG_TR, type RuntimeBand } from "@/lib/planning/bands";
 import { BandEditor } from "./BandEditor";
 import { istanbulLabel, AWAY_LABEL, HOME_LABEL, normalizeSlot } from "@/lib/planning/timezones";
-import { moveMeeting, moveTopic } from "@/lib/actions/planning";
+import { moveMeeting, moveTopic, duplicateMeeting, setMeetingTitle, deleteTopic } from "@/lib/actions/planning";
 import { KimBadges } from "./KimBadges";
 import type { PlanningMeetingWithTopics, PlanningTopic } from "@/types";
 
@@ -31,7 +31,8 @@ interface Props {
   personHex?: Record<string, string>;
   isAdmin: boolean;
   todayIso: string;
-  onOpen: (_iso: string, _slot: string, _dayIndex: number) => void;
+  /** `_topicIndex` verildiğinde düzenleyici YALNIZ o konuyu açar (H1). */
+  onOpen: (_iso: string, _slot: string, _dayIndex: number, _topicIndex?: number) => void;
   /** Sol sütun — düzenlenebilir şeritler (20240326). */
   bands: RuntimeBand[];
 }
@@ -105,7 +106,11 @@ export function PlanningWeekGrid({
      tutmadığını ancak sayfayı yenileyince anlıyordu. Artık hata yazılır,
      taşıma sürerken de kısa bir "Taşınıyor…" şeridi görünür. */
   const [moveError, setMoveError] = useState<string | null>(null);
+  /** Taşıma yerine KOPYALAMA yapıldığında kullanıcıya söylenen kısa not. */
+  const [moveNote, setMoveNote] = useState<string | null>(null);
   const [isMoving, startMove] = useTransition();
+  /** Sürükleme Option/Alt ile mi başladı — kopya kipinin göstergesi. */
+  const [copyMode, setCopyMode] = useState(false);
 
   const sensors = useSensors(
     // 5px eşiği: hücreye TIKLAMAK hâlâ düzenleyiciyi açar, sürükleme ayrı.
@@ -145,7 +150,9 @@ export function PlanningWeekGrid({
      ya da "topic:<id>". */
   function handleDragEnd(e: DragEndEvent) {
     setDragging(null);
+    setCopyMode(false);
     setMoveError(null);
+    setMoveNote(null);
     const activeId = String(e.active.id);
     const overId = e.over ? String(e.over.id) : "";
     const from = String(e.active.data.current?.cell ?? "");
@@ -155,6 +162,20 @@ export function PlanningWeekGrid({
     const [meeting_date, time_slot] = cellPart.split("|");
     if (!meeting_date || !time_slot) return;
 
+    /* TAKVİM BİR ARŞİVDİR. Aslı Hanım (2026-09-07), pazartesinin toplantısını
+       çarşambaya sürükleyip: "Bu pazartesiyi buraya ALDI. Hâlbuki ben bunun
+       alsın istemiyorum. Ben dönüp HANGİ TARİHTE HANGİ TOPLANTIYI yaptığımız
+       kalsın istiyorum." Sürüklemek geçmiş günü boşaltıyordu.
+       Artık:
+         • Option/Alt basılıysa → her zaman ÇOĞALT ("option'a basıp duplicate
+           gibi taşıyabiliyor muyum?"),
+         • geçmişteki bir toplantı sürüklendiyse → yine ÇOĞALT; kaynak kendi
+           gününde kalır ve neden kopyalandığı yazılır,
+         • bugün ya da ileri tarihli bir toplantı → eskisi gibi TAŞINIR. */
+    const sourceDay = from.split("|")[0] ?? "";
+    const isPastSource = !!sourceDay && sourceDay < todayIso;
+    const wantsCopy = copyMode || (!activeId.startsWith("topic:") && isPastSource);
+
     if (activeId.startsWith("topic:")) {
       const topicId = activeId.slice(6);
       /* Başlık hücresine bırakılan konu listenin SONUNA eklenir. 50 şemanın
@@ -163,6 +184,20 @@ export function PlanningWeekGrid({
       startMove(async () => {
         const res = await moveTopic(topicId, { meeting_date, time_slot, position });
         if ("error" in res) { setMoveError(`Konu taşınamadı: ${res.error}`); return; }
+        router.refresh();
+      });
+      return;
+    }
+
+    if (wantsCopy) {
+      startMove(async () => {
+        const res = await duplicateMeeting(activeId, { meeting_date, time_slot });
+        if ("error" in res) { setMoveError(`Toplantı çoğaltılamadı: ${res.error}`); return; }
+        setMoveNote(
+          copyMode
+            ? "Toplantının bir kopyası oluşturuldu."
+            : "Geçmiş toplantı yerinde kaldı; devamı yeni güne kopyalandı.",
+        );
         router.refresh();
       });
       return;
@@ -194,6 +229,7 @@ export function PlanningWeekGrid({
             memberNames={memberNames} memberPhotos={memberPhotos}
             personHex={personHex}
             onOpen={() => onOpen(iso, slot, i)}
+            onSaved={() => router.refresh()}
           />
         );
       })}
@@ -215,7 +251,8 @@ export function PlanningWeekGrid({
             draggable={mounted && isAdmin}
             memberNames={memberNames} memberPhotos={memberPhotos}
             personHex={personHex}
-            onOpen={() => onOpen(iso, slot, i)}
+            onOpen={() => onOpen(iso, slot, i, ti)}
+            onSaved={() => router.refresh()}
           />
         ))}
       </div>
@@ -343,17 +380,22 @@ export function PlanningWeekGrid({
   return (
     <DndContext
       sensors={sensors}
-      onDragStart={(e: DragStartEvent) =>
-        setDragging(String(e.active.data.current?.label ?? "") || null)
-      }
-      onDragCancel={() => setDragging(null)}
+      onDragStart={(e: DragStartEvent) => {
+        setDragging(String(e.active.data.current?.label ?? "") || null);
+        // Option/Alt sürüklemeyi BAŞLATIRKEN basılıysa kopya kipi açılır.
+        const src = e.activatorEvent as { altKey?: boolean } | undefined;
+        setCopyMode(Boolean(src?.altKey));
+      }}
+      onDragCancel={() => { setDragging(null); setCopyMode(false); }}
       onDragEnd={handleDragEnd}
     >
       {grid}
       <DragOverlay dropAnimation={null}>
         {dragging && (
-          <div className="rounded-control border border-brand-ring bg-surface px-2.5 py-1.5 text-[12.5px] font-semibold tracking-tight text-ink shadow-pop">
+          <div className="flex items-center gap-1.5 rounded-control border border-brand-ring bg-surface px-2.5 py-1.5 text-[12.5px] font-semibold tracking-tight text-ink shadow-pop">
+            {copyMode && <Copy size={13} className="shrink-0 text-brand" aria-hidden />}
             {dragging}
+            {copyMode && <span className="text-brand">kopya</span>}
           </div>
         )}
       </DragOverlay>
@@ -366,7 +408,7 @@ export function PlanningWeekGrid({
           aynı sayfada, aynı z katmanında bottom-4'te duruyor. İkisi aynı anda
           açıkken üst üste biniyor ve telefonda geri almanın TEK yolu olan
           düğme bu kutunun altında kalıyordu. */}
-      {(isMoving || moveError) && (
+      {(isMoving || moveError || moveNote) && (
         <div className="mb-bottom-nav pointer-events-none fixed inset-x-0 bottom-20 z-[110] flex justify-center px-4 md:mb-0">
           <div
             role={moveError ? "alert" : "status"}
@@ -388,10 +430,25 @@ export function PlanningWeekGrid({
                   <X size={15} aria-hidden />
                 </button>
               </>
-            ) : (
+            ) : isMoving ? (
               <span className="flex items-center gap-2 text-[13.5px] text-muted">
                 <Loader2 size={14} className="animate-spin" aria-hidden /> Taşınıyor…
               </span>
+            ) : (
+              <>
+                <span className="flex min-w-0 items-center gap-2 text-[13.5px] text-ink">
+                  <Copy size={14} className="shrink-0 text-brand" aria-hidden /> {moveNote}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setMoveNote(null)}
+                  aria-label="Bilgiyi kapat"
+                  title="Kapat"
+                  className="tap-target grid size-8 shrink-0 place-items-center rounded-control text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
+                >
+                  <X size={15} aria-hidden />
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -407,6 +464,7 @@ export function PlanningWeekGrid({
  */
 function TitleCell({
   cellId, cell, meta, hasBand, isAdmin, draggable, memberNames, memberPhotos = {}, personHex, onOpen,
+  onSaved,
 }: {
   cellId: string;
   cell: PlanningMeetingWithTopics[];
@@ -418,6 +476,7 @@ function TitleCell({
   memberPhotos?: Record<string, string | null>;
   personHex: Record<string, string>;
   onOpen: () => void;
+  onSaved: () => void;
 }) {
   const meeting = cell[0] ?? null;
   const title = cell.map((m) => m.title).filter(Boolean).join(" · ");
@@ -434,6 +493,46 @@ function TitleCell({
   const setRef = (node: HTMLDivElement | null) => { dropRef(node); dragRef(node); };
 
   const content = cell.map((m) => m.content).filter(Boolean).join(" · ");
+  /* SONUÇ — hücrenin başında büyük yeşil tik ya da kırmızı çarpı.
+     Aslı Hanım (2026-09-07): "Bu yeşili biraz daha büyük yapabilirsin. Hani
+     böyle BAŞARDIK gibi bir yeşil olsun." / "Bir aksama oldu — toplantı kırmızı
+     çarpı olsun." İşaret hücrenin İÇİNDE değil, metnin SOLUNDA duruyor: göz
+     haftaya baktığında hangi toplantının bittiğini okumadan görüyor.
+     Bu ekranda yalnız GÖSTERİLİR; işaretleme toplantı penceresinde yapılır —
+     hücre zaten sürükleniyor, üzerine ikinci bir tıklama hedefi koymak
+     sürüklemeyi yutuyordu. */
+  const outcome = cell.find((m) => m.status === "done" || m.status === "missed")?.status ?? null;
+
+  /* BAŞLIK YERİNDE DEĞİŞİR. Aslı Hanım (2026-09-07): "Toplantı başlıkları ve
+     konular AYRI olsun — başlık üzerine tıklayınca değişebilir olsun, silip
+     yazabiliriz." Önceden başlığı değiştirmenin tek yolu bütün gündemi açan
+     pencereydi. Artık tıklamak metni yazılabilir yapıyor; pencere ise
+     köşedeki düğmede (kişiler, not, Bildir orada yaşıyor).
+     Yalnız TEK toplantılı hücrede: aynı saatte iki başlık birleşmişse hangisini
+     yazdığımız belirsiz olur, orada pencere açılır. */
+  const single = cell.length === 1 ? cell[0] : null;
+  const canRename = isAdmin && (cell.length === 0 || !!single);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(title);
+  const [saving, setSaving] = useState(false);
+
+  async function commit() {
+    const next = draft.trim();
+    setEditing(false);
+    if (next === (title ?? "").trim()) return;
+    if (!next && !single) return;              // boş hücreye boş başlık: iş yok
+    setSaving(true);
+    try {
+      const [meeting_date, time_slot] = cellId.split("|");
+      await setMeetingTitle(
+        single ? { meetingId: single.id } : { meeting_date, time_slot },
+        next,
+      );
+      onSaved();
+    } finally {
+      setSaving(false);
+    }
+  }
   const keyOpen = keyboardOpen(isAdmin && !canDrag, onOpen);
   const ids = [...new Set(cell.flatMap((m) => m.participant_ids ?? []))];
   const kim = cell.map((m) => m.kim).filter(Boolean).join(", ");
@@ -445,7 +544,11 @@ function TitleCell({
       {...(canDrag ? listeners : {})}
       {...(canDrag ? attributes : {})}
       {...keyOpen}
-      onClick={isAdmin ? onOpen : undefined}
+      onClick={
+        isAdmin
+          ? () => { if (canRename) { setDraft(title); setEditing(true); } else onOpen(); }
+          : undefined
+      }
       className={cn(
         // Başlıklar dikeyde ORTALANIR: bir gün iki satıra taşınca tek satırlık
         // komşuları yukarıda asılı kalmasın.
@@ -464,10 +567,55 @@ function TitleCell({
           olmasına rağmen sayfa kopyalanınca her boş hücrede "başlık" kelimesi
           çıkıyordu ve ekranda da yanıp sönen bir gürültüydü. Hücrenin
           tıklanabilir olduğunu imleç zaten söylüyor. */}
-      <span className="min-w-0">
-        <span className={cn("block text-[12.5px] font-bold leading-[1.25] tracking-tight", meta.title)}>
-          {title}
-        </span>
+      {outcome === "done" && (
+        <CheckCircle2
+          size={22}
+          strokeWidth={2.5}
+          className="mr-1.5 shrink-0 text-success"
+          aria-label="Tamamlandı"
+        />
+      )}
+      {outcome === "missed" && (
+        <XCircle
+          size={22}
+          strokeWidth={2.5}
+          className="mr-1.5 shrink-0 text-danger"
+          aria-label="Aksadı — sonraki güne eklenmeli"
+        />
+      )}
+      <span className="min-w-0 flex-1">
+        {editing ? (
+          /* Sürükleme dinleyicileri ÜST düğümde: input'ta pointer olaylarını
+             durdurmazsak yazmaya çalışırken hücre sürüklenmeye başlıyor. */
+          <input
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+            onBlur={() => { void commit(); }}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === "Enter") { e.preventDefault(); void commit(); }
+              if (e.key === "Escape") { e.preventDefault(); setDraft(title); setEditing(false); }
+            }}
+            aria-label="Toplantı başlığı"
+            placeholder="Başlık…"
+            className="w-full rounded-[4px] border border-brand-ring bg-surface px-1 py-0.5 text-[12.5px] font-bold tracking-tight text-ink outline-none"
+          />
+        ) : (
+          <span
+            className={cn(
+              "block text-[12.5px] font-bold leading-[1.25] tracking-tight",
+              meta.title,
+              // Biten iş üstü çizili değil, SOLUK: çizgi başlığı okunmaz yapıyor.
+              outcome === "done" && "opacity-70",
+              saving && "opacity-50",
+            )}
+          >
+            {title}
+          </span>
+        )}
         <KimBadges ids={ids} kim={kim} collaboratorIds={collabIds} memberNames={memberNames} memberPhotos={memberPhotos} personHex={personHex} />
         {content && (
           <span className="mt-0.5 block whitespace-pre-line text-[12px] leading-snug text-ink/70">
@@ -475,6 +623,22 @@ function TitleCell({
           </span>
         )}
       </span>
+
+      {/* PENCERE KAPISI. Başlık artık hücrede düzenlendiği için toplantının
+          geri kalanı (kişiler, not, Bildir, sonuç, çoğaltma) bu düğmenin
+          arkasında. İç içe <button> değil KARDEŞ: hücre bir <div>, geçerli. */}
+      {isAdmin && !editing && (
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); onOpen(); }}
+          title="Toplantıyı aç — kişiler, konular, not"
+          aria-label="Toplantıyı aç"
+          className="absolute right-0.5 top-0.5 z-10 grid size-5 place-items-center rounded-[4px] text-ink/35 opacity-0 transition-opacity duration-150 hover:bg-surface/70 hover:text-ink focus-visible:opacity-100 group-hover/cell:opacity-100"
+        >
+          <Maximize2 size={11} aria-hidden />
+        </button>
+      )}
     </div>
   );
 }
@@ -488,6 +652,7 @@ function TitleCell({
  */
 function TopicCell({
   cellId, topic, isToday, isAdmin, draggable, memberNames, memberPhotos = {}, personHex, onOpen,
+  onSaved,
 }: {
   cellId: string;
   topic: PlanningTopic | null;
@@ -498,6 +663,7 @@ function TopicCell({
   memberPhotos?: Record<string, string | null>;
   personHex: Record<string, string>;
   onOpen: () => void;
+  onSaved: () => void;
 }) {
   const { setNodeRef: dropRef, isOver } = useDroppable({ id: cellId, disabled: !draggable });
   const canDrag = draggable && !!topic?.text;
@@ -509,6 +675,22 @@ function TopicCell({
   const setRef = (node: HTMLDivElement | null) => { dropRef(node); dragRef(node); };
   const keyOpen = keyboardOpen(isAdmin && !canDrag, onOpen);
 
+  /* TEK KONU SİLME. Aslı Hanım (2026-09-07): "Ben sil deyince genelde KOMPLE O
+     TOPLANTI siliniyor, bunu istemiyorum. BİRER BİRER SİLİNEBİLSİN."
+     Silme artık konunun kendi hücresinde, kendi düğmesinde: toplantıyı silme
+     yolu ayrı bir kapıda (pencerenin altında) ve ayrıca onaylı. */
+  const [removing, setRemoving] = useState(false);
+  async function removeTopic() {
+    if (!topic) return;
+    setRemoving(true);
+    try {
+      await deleteTopic(topic.id);
+      onSaved();
+    } finally {
+      setRemoving(false);
+    }
+  }
+
   return (
     <div
       ref={setRef}
@@ -518,7 +700,7 @@ function TopicCell({
       onClick={isAdmin ? onOpen : undefined}
       title={canDrag ? "Sürükleyip başka gün/saate ya da satıra taşıyabilirsiniz" : undefined}
       className={cn(
-        "relative min-h-[30px] border-r border-hairline px-2 py-1.5 text-[12px] leading-snug text-ink/90 last:border-r-0",
+        "group/topic relative min-h-[30px] border-r border-hairline px-2 py-1.5 text-[12px] leading-snug text-ink/90 last:border-r-0",
         // Bugünün sütunu gövdede de sürer — göz başlıktan aşağı inince
         // hangi sütunda olduğunu kaybetmesin. Zemin bilerek ÇOK açık:
         // hücrelerdeki metin ve kategori renkleri okunur kalmalı.
@@ -550,6 +732,23 @@ function TopicCell({
         <span className="ml-1 whitespace-nowrap text-[12px] tabular-nums text-subtle">
           {format(parseISO(topic.due_date), "d MMM", { locale: tr })}
         </span>
+      )}
+
+      {/* Yalnız BU konuyu siler — toplantıya dokunmaz. Kardeş düğüm, iç içe
+          düğme değil; sürükleme dinleyicileri üstte olduğu için pointerdown
+          durdurulur, yoksa silmeye giderken hücre sürüklenmeye başlıyor. */}
+      {isAdmin && topic?.text && (
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); void removeTopic(); }}
+          disabled={removing}
+          title="Yalnız bu konuyu sil"
+          aria-label={`“${topic.text}” konusunu sil`}
+          className="absolute right-0.5 top-0.5 z-10 grid size-5 place-items-center rounded-[4px] text-ink/35 opacity-0 transition-opacity duration-150 hover:bg-surface/70 hover:text-danger focus-visible:opacity-100 group-hover/topic:opacity-100 disabled:opacity-40"
+        >
+          {removing ? <Loader2 size={11} className="animate-spin" aria-hidden /> : <X size={11} aria-hidden />}
+        </button>
       )}
     </div>
   );

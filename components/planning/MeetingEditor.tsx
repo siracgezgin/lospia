@@ -1,21 +1,25 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Plus, Trash2, Send, CheckCircle2, AlertTriangle } from "lucide-react";
+import {
+  Plus, Trash2, Send, CheckCircle2, AlertTriangle, Copy, XCircle, Mail, X, ListChecks,
+} from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { useConfirm } from "@/components/ui/useConfirm";
 import { Overlay } from "@/components/ui/Overlay";
 import { Button, IconButton } from "@/components/ui/Button";
-import { Field, TextInput, TextArea } from "@/components/ui/Field";
+import { Field, TextInput, TextArea, SelectInput } from "@/components/ui/Field";
 import {
   createMeeting, updateMeeting, deleteMeeting, saveMeetingTopics, assignTopicAsTask,
+  duplicateMeeting, setMeetingStatus, sendMeetingInvites, addExternalParticipant,
   type MeetingSnapshot,
 } from "@/lib/actions/planning";
 import { categoryMeta } from "@/lib/planning/categories";
+import { CRM_CATEGORIES } from "@/lib/crm/constants";
 import { WEEKDAY_LONG_TR } from "@/lib/planning/bands";
 import { normalizeSlot, istanbulLabel, HOME_LABEL, AWAY_LABEL } from "@/lib/planning/timezones";
 import { MemberMultiSelect, type Member } from "./MemberMultiSelect";
-import type { PlanningCategory, PlanningMeetingWithTopics } from "@/types";
+import type { PlanningCategory, PlanningMeetingStatus, PlanningMeetingWithTopics } from "@/types";
 
 interface Props {
   meeting: PlanningMeetingWithTopics | null; // null → yeni
@@ -32,6 +36,10 @@ interface Props {
    *  toplantı yazılırken uyarmak için. Yalnız bilgi: kayıt engellenmez, çünkü
    *  aynı hücrede iki başlık meşru olabiliyor (ızgara ikisini de gösterir). */
   weekMeetings?: { id: string; date: string; slot: string; title: string }[];
+  /** TEK KONU MODU — ızgarada bir "Konu N" hücresine tıklanınca yalnız o konu
+   *  açılır (Aslı Hanım, 2026-09-07: "Ama konuya tıklayınca hepsini açıyor.
+   *  KONUYU AÇMIYOR Kİ."). null → bütün toplantı. */
+  focusTopicIndex?: number | null;
   onClose: () => void;
   onSaved: () => void;
   /** Silme sonrası GERİ ALMA için: silinen toplantının tam kopyası.
@@ -87,7 +95,7 @@ function weekdayLabelOf(iso: string, fallback: string): string {
 
 export function MeetingEditor({
   meeting, day, slot, dayLabel, bandCategory, bandLabel, members, personHex = {},
-  weekMeetings = [], onClose, onSaved, onDeleted,
+  weekMeetings = [], focusTopicIndex = null, onClose, onSaved, onDeleted,
 }: Props) {
   const { ask, dialog } = useConfirm();
   // Kaydedilmiş toplantının id'si — prop DEĞİL state, çünkü "Bildir" düğmesi
@@ -131,7 +139,10 @@ export function MeetingEditor({
     /* Varsayılan ÜÇ satır — ızgaradaki "Konu 1..3" ile birebir (Aslı Hanım,
        2026-08-29: "default olarak her başlığa 3 konu olsun"). Metni boş kalan
        satır kaydedilmez, ızgarada hayalet satır oluşturmaz. */
-    while (existing.length < 3) {
+    /* Tek konu modunda tıklanan satır listede YOK olabilir (boş "Konu 5"
+       hücresi): pencere boş açılmasın diye o satıra kadar doldurulur. */
+    const need = Math.max(3, typeof focusTopicIndex === "number" ? focusTopicIndex + 1 : 0);
+    while (existing.length < need) {
       existing.push({ text: "", participant_ids: [], collaborator_ids: [], due_date: "" });
     }
     return existing;
@@ -141,6 +152,47 @@ export function MeetingEditor({
   const [isDeleting, startDelete] = useTransition();
   const [assigningIdx, setAssigningIdx] = useState<number | null>(null);
   const [assignedMsg, setAssignedMsg] = useState<string | null>(null);
+
+  /* SONUÇ — büyük yeşil tik / kırmızı çarpı (20240338). Ekranda anında döner,
+     sunucu reddederse eski değere geri alınır. */
+  const [status, setStatus] = useState<PlanningMeetingStatus>(
+    (meeting?.status as PlanningMeetingStatus | undefined) ?? "planned",
+  );
+  const [statusBusy, setStatusBusy] = useState(false);
+
+  /* DIŞ KATILIMCILAR — ekipte olmayan e-postalar (Sabri Bey, Meral Hanım). */
+  const [externalEmails, setExternalEmails] = useState<string[]>(
+    () => (meeting?.external_emails ?? []).filter(Boolean),
+  );
+  const [emailDraft, setEmailDraft] = useState("");
+  /* FİHRİST ALANLARI. Aslı Hanım (2026-09-07): "Adı, soyadı, TANIMI, ne
+     toplantısı olduğu bilgileri girer — böylece orada da bir database'imiz
+     oluşur." "Ne toplantısı" ayrı sorulmaz: kişi zaten BU toplantıdan
+     ekleniyor, sunucu o satırı kendisi yazıyor. */
+  const [guestName, setGuestName] = useState("");
+  const [guestRole, setGuestRole] = useState("");
+  const [guestSegment, setGuestSegment] = useState("toplanti");
+  const [isAddingGuest, startAddGuest] = useTransition();
+  const [emailOpen, setEmailOpen] = useState(() => (meeting?.external_emails ?? []).length > 0);
+
+  /* ÇOĞALTMA — "toplantının devamı" başka bir güne kopyalanır. */
+  /* DAVET — dış katılımcılara mail. Mail geri alınamaz: kaydetmenin yan etkisi
+     değil, ayrı ve açık bir eylemdir. */
+  const [inviteMsg, setInviteMsg] = useState<string | null>(null);
+  const [isInviting, startInvite] = useTransition();
+
+  const [dupDate, setDupDate] = useState("");
+  const [dupOpen, setDupOpen] = useState(false);
+  const [isDuplicating, startDuplicate] = useTransition();
+
+  /* TEK KONU MODU. Izgarada "Konu 2"ye tıklandığında pencere bütün gündemi
+     açıyordu — Aslı Hanım (2026-09-07): "Ama konuya tıklayınca hepsini açıyor.
+     Konuyu açmıyor ki." Artık yalnız o satır çizilir; "Tüm konular" bağlantısı
+     istendiğinde gündemin tamamını geri getirir. Taslak durumu HER ZAMAN tam
+     listedir: kaydetmek görünmeyen konulara dokunmaz. */
+  const [solo, setSolo] = useState<number | null>(
+    typeof focusTopicIndex === "number" && focusTopicIndex >= 0 ? focusTopicIndex : null,
+  );
 
   const meta = categoryMeta(category);
   const ist = istanbulLabel(dateIso, time);
@@ -164,7 +216,27 @@ export function MeetingEditor({
     setTopics((ts) => ts.map((t, idx) => (idx === i ? { ...t, ...patch } : t)));
   const addTopic = () =>
     setTopics((ts) => [...ts, { text: "", participant_ids: [], collaborator_ids: [], due_date: "" }]);
-  const removeTopic = (i: number) => setTopics((ts) => ts.filter((_, idx) => idx !== i));
+  /* KONU SİLME ARTIK SORAR. Aslı Hanım (2026-09-07) tek konuyu kaldırmak
+     isterken gündemin tamamını kaybetti — Nisa: "Konuyu kaldırabilirsiniz Aslı
+     Hanım, siz direkt hepsini siliyorsunuz." Çöp kutusu sessiz ve geri
+     alınamazdı; artık hangi konunun gittiğini ADIYLA sorar. Metni boş bir
+     satırda soru sorulmaz: orada silinecek bir şey yok. */
+  const removeTopic = async (i: number) => {
+    const label = topics[i]?.text?.trim();
+    if (label) {
+      const ok = await ask({
+        title: "Bu konu silinsin mi?",
+        message: `“${label}” kaldırılacak. Toplantının diğer konuları yerinde kalır.`,
+        confirmLabel: "Konuyu sil",
+        tone: "danger",
+      });
+      if (!ok) return;
+    }
+    setTopics((ts) => ts.filter((_, idx) => idx !== i));
+    /* Tek konu modunda silinen satır ekrandaki TEK satırdı — pencere boş
+       kalmasın diye gündemin tamamına dönülür. */
+    setSolo(null);
+  };
 
   // Toplantı + konuları kaydeder; konu id'lerini geri yazar ("Bildir" için).
   async function persist(): Promise<{ meetingId: string; posToId: Record<number, string> } | { error: string }> {
@@ -173,6 +245,7 @@ export function MeetingEditor({
       meeting_date: dateIso || day, time_slot: normalizeSlot(time) || normalizeSlot(slot),
       category, title, content,
       participant_ids: participantIds, collaborator_ids: collaboratorIds,
+      external_emails: externalEmails,
     };
     let id = meetingId;
     if (!id) {
@@ -203,12 +276,28 @@ export function MeetingEditor({
     return { meetingId: id, posToId };
   }
 
+  /* SUNUCU EYLEMİ PATLARSA DÖNEN ÇARK DURMAZDI. Aslı Hanım (2026-09-07):
+     "BİLDİR DÖNÜYOR HÂLÂ. Bugün ve saatte bir konu görev tanımlandı, kaydet
+     dedim." `startSave` içindeki fonksiyon bir istisna fırlattığında
+     `setAssigningIdx(null)` satırına hiç ulaşılmıyor, düğme sonsuza kadar
+     yükleniyor görünüyordu — kullanıcı kaydın olup olmadığını bilemiyordu.
+     Artık her çıkış yolu `finally` üzerinden geçer ve beklenmeyen hata da
+     ekrana YAZILIR: sessiz başarısızlık yok. */
+  function messageOf(e: unknown): string {
+    if (e instanceof Error && e.message) return e.message;
+    return "Beklenmeyen bir hata oldu. İnternet bağlantınızı kontrol edip tekrar deneyin.";
+  }
+
   function handleSave() {
     setError(null);
     startSave(async () => {
-      const res = await persist();
-      if ("error" in res) { setError(res.error); return; }
-      onSaved();
+      try {
+        const res = await persist();
+        if ("error" in res) { setError(res.error); return; }
+        onSaved();
+      } catch (e) {
+        setError(messageOf(e));
+      }
     });
   }
 
@@ -218,27 +307,131 @@ export function MeetingEditor({
     if (topics[i].participant_ids.length === 0) { setError(`Konu ${i + 1} için önce kişi seçin.`); return; }
     setAssigningIdx(i);
     startSave(async () => {
-      const res = await persist();
-      if ("error" in res) { setAssigningIdx(null); setError(res.error); return; }
-      const topicId = res.posToId[i];
-      if (!topicId) { setAssigningIdx(null); setError("Konu kaydedilemedi."); return; }
-      /* Teslim tarihi = konunun kendi tarihi yoksa TOPLANTININ GÜNÜ.
-         Aslı Hanım (2026-08-29): "Bir de yanında tarih olması saçma; zaten ben
-         o tarihi seçip konu ekliyorum." Tarihi hücre söylüyor. */
-      const aRes = await assignTopicAsTask(topicId, { dueDate: topics[i].due_date || dateIso || day });
-      setAssigningIdx(null);
-      if ("error" in aRes) { setError(aRes.error); return; }
-      setTopics((ts) => ts.map((t, idx) => (idx === i ? { ...t, task_id: aRes.taskId } : t)));
-      setAssignedMsg(`Konu ${i + 1} göreve atandı, atananlara bildirim/mail gönderildi.`);
+      try {
+        const res = await persist();
+        if ("error" in res) { setError(res.error); return; }
+        const topicId = res.posToId[i];
+        if (!topicId) { setError("Konu kaydedilemedi."); return; }
+        /* Teslim tarihi = konunun kendi tarihi yoksa TOPLANTININ GÜNÜ.
+           Aslı Hanım (2026-08-29): "Bir de yanında tarih olması saçma; zaten ben
+           o tarihi seçip konu ekliyorum." Tarihi hücre söylüyor. */
+        const aRes = await assignTopicAsTask(topicId, { dueDate: topics[i].due_date || dateIso || day });
+        if ("error" in aRes) { setError(aRes.error); return; }
+        setTopics((ts) => ts.map((t, idx) => (idx === i ? { ...t, task_id: aRes.taskId } : t)));
+        setAssignedMsg(`Konu ${i + 1} göreve atandı, atananlara bildirim/mail gönderildi.`);
+      } catch (e) {
+        setError(messageOf(e));
+      } finally {
+        // Çark HER durumda durur — hata, iptal, beklenmeyen istisna fark etmez.
+        setAssigningIdx(null);
+      }
+    });
+  }
+
+  /* SONUÇ İŞARETİ — aynı işarete tekrar basmak onu kaldırır. */
+  async function toggleStatus(next: PlanningMeetingStatus) {
+    if (!meetingId || statusBusy) return;
+    const target = status === next ? "planned" : next;
+    const previous = status;
+    setError(null);
+    setStatus(target);               // iyimser: tik anında büyür
+    setStatusBusy(true);
+    try {
+      const res = await setMeetingStatus(meetingId, target);
+      if ("error" in res) { setStatus(previous); setError(res.error); }
+    } catch (e) {
+      setStatus(previous);
+      setError(messageOf(e));
+    } finally {
+      setStatusBusy(false);
+    }
+  }
+
+  /* ÇOĞALTMA — geçmiş kayıt yerinde kalır, DEVAMI yeni güne kopyalanır. */
+  function handleDuplicate() {
+    if (!meetingId) return;
+    const targetDate = dupDate || dateIso;
+    setError(null);
+    startDuplicate(async () => {
+      try {
+        const res = await duplicateMeeting(meetingId, { meeting_date: targetDate, time_slot: normalizeSlot(time) });
+        if ("error" in res) { setError(res.error); return; }
+        onSaved();
+      } catch (e) {
+        setError(messageOf(e));
+      }
+    });
+  }
+
+  /* DAVET GÖNDER — önce kaydeder (yeni eklenen adres de gitsin), sonra yollar. */
+  function handleInvite() {
+    setError(null);
+    setInviteMsg(null);
+    startInvite(async () => {
+      try {
+        const saved = await persist();
+        if ("error" in saved) { setError(saved.error); return; }
+        const res = await sendMeetingInvites(saved.meetingId);
+        if ("error" in res) { setError(res.error); return; }
+        const parts: string[] = [];
+        if (res.sent.length) parts.push(`${res.sent.join(", ")} adresine davet gönderildi.`);
+        if (res.failed.length) parts.push(`Gönderilemedi: ${res.failed.map((f) => f.to).join(", ")}.`);
+        setInviteMsg(parts.join(" ") || "Gönderilecek adres bulunamadı.");
+      } catch (e) {
+        setError(messageOf(e));
+      }
+    });
+  }
+
+  /* DIŞ KATILIMCI — toplantıya davetli olur VE fihriste (CRM) kaydedilir.
+     Aslı Hanım: "Şurada bir artı olursa Berna'yı hemen kaydederiz."
+     Toplantı henüz kaydedilmemişse önce o kaydedilir: kişi kaydı bir
+     toplantıya bağlıdır, havada duramaz. */
+  function addEmail() {
+    const value = emailDraft.trim().toLowerCase();
+    if (!value) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) { setError("Geçerli bir e-posta yazın."); return; }
+    if (externalEmails.includes(value)) { setEmailDraft(""); return; }
+    setError(null);
+    setInviteMsg(null);
+    startAddGuest(async () => {
+      try {
+        const saved = await persist();
+        if ("error" in saved) { setError(saved.error); return; }
+        const res = await addExternalParticipant(saved.meetingId, {
+          email: value,
+          name: guestName,
+          roleLabel: guestRole,
+          segment: guestSegment,
+        });
+        if ("error" in res) { setError(res.error); return; }
+        setExternalEmails((xs) => (xs.includes(value) ? xs : [...xs, value]));
+        setEmailDraft("");
+        setGuestName("");
+        setGuestRole("");
+        setInviteMsg(
+          res.contactId
+            ? `${guestName.trim() || value} toplantıya eklendi ve CRM'e kaydedildi.`
+            : `${value} toplantıya eklendi.`,
+        );
+      } catch (e) {
+        setError(messageOf(e));
+      }
     });
   }
 
   async function handleDelete() {
     if (!meetingId) return;
+    /* Aslı Hanım tek konuyu silmek isterken TOPLANTININ TAMAMINI sildi.
+       Uyarı artık kaç konunun gideceğini SAYIYLA söylüyor ve düğme "Sil"
+       değil "Toplantıyı sil" — hangi kapıda olduğunuz yazıyor. */
+    const filled = topics.filter((t) => t.text.trim()).length;
     if (!(await ask({
-      title: "Toplantı silinsin mi?",
-      message: "Toplantı ve altındaki bütün konular kalıcı olarak silinir.",
-      confirmLabel: "Sil",
+      title: "TOPLANTININ TAMAMI silinsin mi?",
+      message: filled
+        ? `Bu toplantı ve altındaki ${filled} konunun hepsi silinir. Tek bir konuyu kaldırmak için o konunun yanındaki çöp kutusunu kullanın.`
+        : "Bu toplantı silinir.",
+      confirmLabel: "Toplantıyı sil",
       tone: "danger",
     }))) return;
     setError(null);
@@ -252,7 +445,7 @@ export function MeetingEditor({
     });
   }
 
-  const busy = isSaving || isDeleting;
+  const busy = isSaving || isDeleting || isDuplicating;
 
   return (
     <Overlay
@@ -302,7 +495,16 @@ export function MeetingEditor({
               disabled={busy}
               className="mr-auto hover:bg-danger/10 hover:text-danger"
             >
-              {!isDeleting && <Trash2 size={15} aria-hidden />} Sil
+              {!isDeleting && <Trash2 size={15} aria-hidden />} Toplantıyı sil
+            </Button>
+          )}
+          {/* ÇOĞALT — "toplantının devamı". Aslı Hanım (2026-09-07): "Bunu
+              duplicate edebiliyor muyum?… Aynı ekiple bunun çarşamba günü
+              üretimini konuştuk." Taşımak geçmişi siliyordu; kopyalamak
+              arşivi yerinde bırakır. */}
+          {!isNew && (
+            <Button variant="ghost" onClick={() => { setDupOpen((v) => !v); setDupDate((d) => d || dateIso); }} disabled={busy}>
+              <Copy size={15} aria-hidden /> Çoğalt
             </Button>
           )}
           <Button variant="ghost" onClick={onClose} disabled={busy}>Vazgeç</Button>
@@ -317,6 +519,72 @@ export function MeetingEditor({
           <p role="alert" className="anim-fade-down rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[12.5px] font-medium text-danger">
             {error}
           </p>
+        )}
+
+        {/* SONUÇ — "başardık" yeşili ve "aksadı" kırmızısı.
+            Aslı Hanım (2026-09-07): "Tamamlandığında şu yanındaki yeşil şey
+            çıksın… Hani böyle BAŞARDIK gibi bir yeşil olsun." / "Bir aksama
+            oldu — toplantı kırmızı çarpı olsun, ki BİR SONRAKİ TOPLANTIYA
+            EKLENMESİ GEREKTİĞİNİ anlayalım."
+            Renk tek başına anlam taşımaz: her iki düğmede de yazı var. */}
+        {!isNew && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle">Sonuç</span>
+            <button
+              type="button"
+              onClick={() => toggleStatus("done")}
+              disabled={statusBusy}
+              aria-pressed={status === "done"}
+              title="Toplantı yapıldı ve bitti"
+              className={cn(
+                "tap-target inline-flex h-9 items-center gap-1.5 rounded-control border px-3 text-[13px] font-semibold transition-colors duration-150 disabled:opacity-60",
+                status === "done"
+                  ? "border-success/40 bg-success/15 text-success"
+                  : "border-line bg-surface text-muted hover:border-success/40 hover:text-success",
+              )}
+            >
+              <CheckCircle2 size={status === "done" ? 20 : 16} aria-hidden /> Tamamlandı
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleStatus("missed")}
+              disabled={statusBusy}
+              aria-pressed={status === "missed"}
+              title="Aksadı — bir sonraki toplantıya eklenmeli"
+              className={cn(
+                "tap-target inline-flex h-9 items-center gap-1.5 rounded-control border px-3 text-[13px] font-semibold transition-colors duration-150 disabled:opacity-60",
+                status === "missed"
+                  ? "border-danger/40 bg-danger/12 text-danger"
+                  : "border-line bg-surface text-muted hover:border-danger/40 hover:text-danger",
+              )}
+            >
+              <XCircle size={status === "missed" ? 20 : 16} aria-hidden /> Aksadı
+            </button>
+            {status === "missed" && (
+              <span className="text-[12.5px] text-muted">Bir sonraki güne taşıyın ya da çoğaltın.</span>
+            )}
+          </div>
+        )}
+
+        {/* ÇOĞALTMA — hedef gün sorulur; kaynak toplantı YERİNDE KALIR. */}
+        {dupOpen && !isNew && (
+          <div className="anim-fade-down flex flex-wrap items-end gap-2 rounded-control border border-line bg-surface-muted p-2.5">
+            <Field label="Devamı hangi güne?" className="min-w-[170px]">
+              <TextInput
+                type="date"
+                value={dupDate}
+                onChange={(e) => setDupDate(e.target.value)}
+                aria-label="Kopyanın günü"
+              />
+            </Field>
+            <Button onClick={handleDuplicate} loading={isDuplicating} disabled={busy || !dupDate}>
+              <Copy size={14} aria-hidden /> Kopyala
+            </Button>
+            <Button variant="ghost" onClick={() => setDupOpen(false)} disabled={busy}>Vazgeç</Button>
+            <p className="basis-full text-[12.5px] text-muted">
+              Başlık, konular ve kişiler kopyalanır. Bu toplantı kendi gününde kalır.
+            </p>
+          </div>
         )}
 
         {conflict && (
@@ -349,14 +617,26 @@ export function MeetingEditor({
 
         {/* 2 · Konular — satır: sıra · metin · kim · Bildir · sil */}
         <section aria-labelledby="meeting-topics-h">
-          <h3 id="meeting-topics-h" className="mb-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle">Konular</h3>
+          {/* TEK KONU MODU — tıklanan satır ne ise başlık onu söyler ve
+              gündemin geri kalanı çizilmez. "Tüm konular" tek tıkla geri
+              getirir; kaydetmek görünmeyen konulara dokunmaz. */}
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <h3 id="meeting-topics-h" className="text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle">
+              {solo === null ? "Konular" : `Konu ${solo + 1}`}
+            </h3>
+            {solo !== null && (
+              <Button variant="ghost" size="sm" onClick={() => setSolo(null)}>
+                <ListChecks size={13} aria-hidden /> Tüm konular
+              </Button>
+            )}
+          </div>
           {assignedMsg && (
             <p role="status" className="anim-fade-down mb-2 flex items-center gap-1.5 rounded-control border border-success/30 bg-success/10 px-3 py-1.5 text-[12.5px] font-medium text-success">
               <CheckCircle2 size={14} className="shrink-0" aria-hidden /> {assignedMsg}
             </p>
           )}
           <ol className="space-y-2">
-            {topics.map((t, i) => (
+            {topics.map((t, i) => (solo !== null && i !== solo ? null : (
               /* Satır dar ekranda kırılır (metin üstte, seçimler altta),
                  geniş ekranda tek satır kalır. */
               <li key={i} className="flex flex-wrap items-center gap-1.5 rounded-control border border-hairline p-1.5 sm:border-0 sm:p-0">
@@ -390,23 +670,152 @@ export function MeetingEditor({
                   {assigningIdx !== i && (t.task_id ? <CheckCircle2 size={13} aria-hidden /> : <Send size={13} aria-hidden />)}
                   Bildir
                 </Button>
-                <IconButton size="sm" aria-label={`Konu ${i + 1} satırını sil`} title="Sil" onClick={() => removeTopic(i)} className="hover:text-danger">
+                <IconButton
+                  size="sm"
+                  aria-label={`Konu ${i + 1} satırını sil`}
+                  title="Yalnız bu konuyu sil"
+                  onClick={() => { void removeTopic(i); }}
+                  className="hover:text-danger"
+                >
                   <Trash2 size={14} />
                 </IconButton>
               </li>
-            ))}
+            )))}
           </ol>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={addTopic} className="text-brand hover:text-brand-strong">
-              <Plus size={13} aria-hidden /> Konu ekle
-            </Button>
+            {solo === null && (
+              <Button variant="ghost" size="sm" onClick={addTopic} className="text-brand hover:text-brand-strong">
+                <Plus size={13} aria-hidden /> Konu ekle
+              </Button>
+            )}
             {!noteOpen && (
               <Button variant="ghost" size="sm" onClick={() => setNoteOpen(true)}>
                 <Plus size={13} aria-hidden /> Not ekle
               </Button>
             )}
+            {!emailOpen && (
+              <Button variant="ghost" size="sm" onClick={() => setEmailOpen(true)}>
+                <Plus size={13} aria-hidden /> Dışarıdan katılımcı
+              </Button>
+            )}
           </div>
         </section>
+
+        {/* DIŞARIDAN KATILIMCI — ekip üyesi olmayan e-postalar.
+            Aslı Hanım (2026-09-07): "Sabri Bey diye bizim dışımızda
+            üreticimiz var… Sabri Bey'i nasıl ekleyeceğim ben? Yani burada
+            EKİP İÇİ var." / "Şuraya bir artı koysan, bir e-mail hesabı
+            girdirsen artıyla."
+            Not: adres burada DURUR; e-postayı fiilen göndermek ayrı bir iş
+            (mail altyapısı bayrak arkasında) — pencere söz vermez. */}
+        {emailOpen && (
+          <Field label="Dışarıdan katılımcı" className="anim-fade-down">
+            <div className="space-y-2">
+              {externalEmails.length > 0 && (
+                <ul className="flex flex-wrap gap-1.5">
+                  {externalEmails.map((mail) => (
+                    <li
+                      key={mail}
+                      className="inline-flex items-center gap-1 rounded-control border border-line bg-surface-muted py-1 pl-2 pr-1 text-[12.5px] text-ink"
+                    >
+                      <Mail size={12} className="shrink-0 text-subtle" aria-hidden />
+                      <span className="min-w-0 break-all">{mail}</span>
+                      <button
+                        type="button"
+                        onClick={() => setExternalEmails((xs) => xs.filter((x) => x !== mail))}
+                        aria-label={`${mail} adresini kaldır`}
+                        title="Kaldır"
+                        className="tap-target grid size-6 shrink-0 place-items-center rounded-control text-subtle transition-colors duration-150 hover:bg-surface hover:text-danger"
+                      >
+                        <X size={12} aria-hidden />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {/* FİHRİST FORMU — AF'nin saydığı alanlar: ad, tanım, kategori.
+                  "Ne toplantısı" sorulmaz; kişi bu toplantıdan eklendiği için
+                  sunucu o satırı kendi yazar. */}
+              <div className="grid gap-1.5 sm:grid-cols-2">
+                <TextInput
+                  value={guestName}
+                  onChange={(e) => setGuestName(e.target.value)}
+                  placeholder="Ad soyad — Sabri Bey"
+                  aria-label="Dış katılımcının adı"
+                />
+                <TextInput
+                  value={guestRole}
+                  onChange={(e) => setGuestRole(e.target.value)}
+                  placeholder="Tanım — Üretici, Kalıpçı…"
+                  aria-label="Dış katılımcının tanımı"
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <TextInput
+                  type="email"
+                  value={emailDraft}
+                  onChange={(e) => setEmailDraft(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addEmail(); } }}
+                  placeholder="sabri@uretim.com"
+                  aria-label="Dış katılımcının e-postası"
+                  className="min-w-0 flex-1"
+                />
+                <SelectInput
+                  value={guestSegment}
+                  onChange={(e) => setGuestSegment(e.target.value)}
+                  aria-label="CRM kategorisi"
+                  className="w-auto min-w-[130px]"
+                >
+                  {CRM_CATEGORIES.map((c) => (
+                    <option key={c.key} value={c.primary}>{c.label}</option>
+                  ))}
+                </SelectInput>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={addEmail}
+                  loading={isAddingGuest}
+                  disabled={!emailDraft.trim() || busy || isAddingGuest}
+                >
+                  {!isAddingGuest && <Plus size={13} aria-hidden />} Ekle
+                </Button>
+              </div>
+              <p className="text-[12px] leading-relaxed text-subtle">
+                Eklenen kişi CRM’e de kaydedilir — hangi toplantıdan geldiği notuna yazılır.
+              </p>
+
+              {/* DAVET. Aslı Hanım (2026-09-07): "Çarşamba günkü Sabri Bey ile
+                  toplantının e-maili buradan giderse Nisa'nın işini
+                  kolaylaştıracaksın — bir daha adama 'mail' diye
+                  dürtmeyecek." Mail "Size yeni bir görev atandı" demez;
+                  "Toplantıya davet edildiniz" der ve içinde son tarih değil
+                  TOPLANTI SAATİ vardır (Türkiye saati, parantezde NY). */}
+              {externalEmails.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleInvite}
+                    loading={isInviting}
+                    disabled={busy || isInviting}
+                    title="Toplantı davetini bu adreslere e-posta ile gönder"
+                  >
+                    {!isInviting && <Send size={13} aria-hidden />} Davet gönder
+                  </Button>
+                  <span className="text-[12px] text-subtle">
+                    Davette toplantının tarihi ve saati yazar; görev maili değildir.
+                  </span>
+                </div>
+              )}
+
+              {inviteMsg && (
+                <p role="status" className="anim-fade-down rounded-control border border-success/30 bg-success/10 px-3 py-2 text-[12.5px] font-medium text-ink">
+                  {inviteMsg}
+                </p>
+              )}
+            </div>
+          </Field>
+        )}
 
         {/* 3 · Not — çoğu toplantıda boş kalıyordu; artık istenince açılır. */}
         {noteOpen && (

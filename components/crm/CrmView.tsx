@@ -11,10 +11,11 @@ import {
   createColumnHelper,
   type SortingState,
 } from "@tanstack/react-table";
-import { Plus, Search, Users, Pencil, Trash2, ExternalLink, Eye, UserPlus, AlertCircle } from "lucide-react";
+import { Plus, Search, Users, Pencil, Trash2, ExternalLink, Eye, UserPlus, AlertCircle, ChevronLeft } from "lucide-react";
 import { deleteCrmContact } from "@/lib/actions/crm";
 import {
   CRM_SEGMENTS,
+  crmCategory,
   segmentLabel,
   statusLabel,
   SEGMENT_TONE,
@@ -51,6 +52,9 @@ interface Props {
   taskCounts: Record<string, number>;
   isAdmin: boolean;
   initialSegment: string;
+  /** Hangi KUTUnun içindeyiz (Selebriti, Basın, Outsource…). Boşsa liste tüm
+   *  kayıtları gösterir — kutucuk girişi ayrı bir ekranda (CrmCategoryGrid). */
+  categoryKey?: string | null;
   /** True when the additive CRM columns are not yet migrated on this DB. */
   setupRequired?: boolean;
   setupMessage?: string | null;
@@ -109,6 +113,7 @@ export function CrmView({
   taskCounts,
   isAdmin,
   initialSegment,
+  categoryKey = null,
   setupRequired = false,
   setupMessage,
   setupTechnicalDetail,
@@ -141,9 +146,28 @@ export function CrmView({
      baş harf. Sistem hesabına bağlıysa o kişinin fotoğrafı kullanılır. */
   const photoOf = (c: WorkspaceContact) => (c.user_id ? memberPhoto.get(c.user_id) ?? null : null);
 
+  /* Açık kutu — başlık, geri bağlantısı ve segment süzgecinin kapsamı bundan
+     türer. Tanınmayan anahtar geldiğinde kutu yokmuş gibi davranılır. */
+  const category = useMemo(() => crmCategory(categoryKey), [categoryKey]);
+  const scopeSegments = useMemo(
+    () => (category ? new Set(category.segments) : null),
+    [category],
+  );
+  /* Kutu içindeyken açılır kutuda YALNIZ o kutunun anahtarları listelenir:
+     "Selebriti"nin içinde "Toptan" seçeneği sunmak kullanıcıyı boş bir listeye
+     götürüyordu. Tek anahtarlı kutuda süzgeç hiç çizilmez — seçecek bir şey
+     yok (süzgeç kuralı: başlık · tür · departman, fazlası satırın içinde). */
+  const segmentOptions = useMemo(
+    () => (category ? CRM_SEGMENTS.filter((sg) => category.segments.includes(sg.key)) : [...CRM_SEGMENTS]),
+    [category],
+  );
+
   const filtered = useMemo(() => {
     const q = norm(query.trim());
     return contacts.filter((c) => {
+      /* Kutunun kapsamı: kayıtta segment yoksa "Diğer" kutusuna düşer —
+         hiçbir kayıt görünmez olmaz. */
+      if (scopeSegments && !scopeSegments.has(c.segment ?? "diger")) return false;
       if (segment && c.segment !== segment) return false;
       if (!q) return true;
       const hay = norm(
@@ -153,7 +177,7 @@ export function CrmView({
       );
       return hay.includes(q);
     });
-  }, [contacts, query, segment]);
+  }, [contacts, query, segment, scopeSegments]);
 
   function openNew() {
     setEditing(null);
@@ -321,8 +345,18 @@ export function CrmView({
 
   return (
     <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
+      {/* GERİ — kutucuk girişine dönüş. Aslı Hanım'ın istediği akış "önce
+          kutular, sonra içerik"; içeriden çıkış yolu görünür olmalı. */}
+      {category && (
+        <Link
+          href="/crm"
+          className="anim-fade-down -ml-1 mb-1 inline-flex items-center gap-1 text-[13px] font-medium text-muted transition-colors duration-150 hover:text-ink"
+        >
+          <ChevronLeft size={15} aria-hidden /> Tüm gruplar
+        </Link>
+      )}
       <ModulePageHeader
-        title="CRM"
+        title={category ? `CRM · ${category.label}` : "CRM"}
         rightSlot={
           isAdmin ? (
             <Button
@@ -368,17 +402,19 @@ export function CrmView({
             className="pl-9"
           />
         </div>
-        <SelectInput
-          value={segment}
-          onChange={(e) => setSegment(e.target.value)}
-          aria-label="Segment süzgeci"
-          className="w-auto min-w-[168px] text-muted"
-        >
-          <option value="">Tüm segmentler</option>
-          {CRM_SEGMENTS.map((s) => (
-            <option key={s.key} value={s.key}>{s.label}</option>
-          ))}
-        </SelectInput>
+        {segmentOptions.length > 1 && (
+          <SelectInput
+            value={segment}
+            onChange={(e) => setSegment(e.target.value)}
+            aria-label="Segment süzgeci"
+            className="w-auto min-w-[168px] text-muted"
+          >
+            <option value="">{category ? `Tüm ${category.label.toLocaleLowerCase("tr")}` : "Tüm segmentler"}</option>
+            {segmentOptions.map((s) => (
+              <option key={s.key} value={s.key}>{s.label}</option>
+            ))}
+          </SelectInput>
+        )}
         {/* Süzgeç kuralı gereği araç çubuğunda üçüncü bir SELECT yok: eşleştirme
             ayrı bir eylemdir, açılıp kapanan bir panel olarak yaşar. */}
         {isAdmin && !setupRequired && (
@@ -540,6 +576,7 @@ export function CrmView({
         <CrmContactModal
           members={members}
           contact={editing}
+          defaultSegment={category?.primary ?? null}
           onClose={() => setModalOpen(false)}
           onSaved={() => {
             setModalOpen(false);

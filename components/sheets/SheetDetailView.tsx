@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Pencil, Info, Loader2, Check, AlertCircle, RotateCw, Download, Copy, Trash2, CloudOff,
+  Pencil, Info, Loader2, Check, AlertCircle, RotateCw, Download, Copy, Trash2, CloudOff, FolderOpen,
 } from "lucide-react";
 import {
   saveSpreadsheetSnapshot,
@@ -27,6 +27,10 @@ interface Props {
   contacts: { id: string; name: string }[];
   currentUserId: string;
   isAdmin: boolean;
+  /** "AF Teamwork › Föyler" — tablonun NEREYE kaydedildiği. Aslı Hanım
+   *  (2026-09-07): "Nereye kaydetti?" Otomatik kayıt sessizce çalışıyordu ama
+   *  hedefini söylemiyordu. */
+  savedTo?: string | null;
 }
 
 /** Kaydetme durumu — kullanıcıya TEK bir cümleyle söylenir. */
@@ -56,7 +60,7 @@ function downloadNameOf(disposition: string | null, fallbackTitle: string): stri
 }
 
 export function SheetDetailView({
-  sheet, departments, tasks, contacts, currentUserId, isAdmin,
+  sheet, departments, tasks, contacts, currentUserId, isAdmin, savedTo = null,
 }: Props) {
   const router = useRouter();
   const { ask, dialog } = useConfirm();
@@ -483,6 +487,16 @@ export function SheetDetailView({
           onRetry={() => { void runSaveRef.current(); }}
         />
       </div>
+
+      {/* KONUM — "kaydedildi" tek başına yetmiyordu: Aslı Hanım tabloyu
+          kapatırken "Nereye kaydetti?" diye sordu. Klasör adı başlığın hemen
+          altında, sakin bir satır olarak durur. */}
+      {savedTo && (
+        <p className="mb-2 flex items-center gap-1.5 px-2 text-[12.5px] text-subtle">
+          <FolderOpen size={13} className="shrink-0" aria-hidden />
+          <span className="min-w-0 truncate">{savedTo}</span>
+        </p>
+      )}
 
       {notice && (
         <div

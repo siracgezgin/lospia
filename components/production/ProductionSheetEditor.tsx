@@ -19,6 +19,7 @@ import { Button, IconButton } from "@/components/ui/Button";
 import { TextInput, TextArea as UiTextArea, SelectInput } from "@/components/ui/Field";
 import { Badge } from "@/components/ui/Badge";
 import { SendToManufacturer } from "./SendToManufacturer";
+import { ManufacturerAccess, type PortalLinkRow } from "./ManufacturerAccess";
 import { BackLink } from "@/components/modules/BackLink";
 import { ImageUploader } from "./ImageUploader";
 import { SheetReadiness } from "./SheetReadiness";
@@ -67,6 +68,10 @@ interface Props {
   /** Düzenlenebilir kategori ağacı (workspace_product_categories). Verilmezse
    *  kod varsayılanları — Koleksiyon ile AYNI liste görünsün diye geçilir. */
   categories?: CategoryNode[];
+  /** ÜRETİCİ PANELİ bağlantıları (20240339). Tablo migrate edilmemişse boş. */
+  portalLinks?: PortalLinkRow[];
+  /** Üreticinin panelden ilettiği detaylar — föyü değiştirmez, ekip okur. */
+  portalNotes?: { id: string; body: string; author_name: string | null; created_at: string }[];
 }
 
 /**
@@ -353,7 +358,7 @@ function Section({ title, children, className, checkKey }: {
   );
 }
 
-export function ProductionSheetEditor({ sheet, initialCategory = null, initialSubcategory = null, memberNames, manufacturers = [], seasons = [], materials = [], bom = [], siblings = [], isAdmin, currentUserId, categories }: Props) {
+export function ProductionSheetEditor({ sheet, initialCategory = null, initialSubcategory = null, memberNames, manufacturers = [], seasons = [], materials = [], bom = [], siblings = [], isAdmin, currentUserId, categories, portalLinks = [], portalNotes = [] }: Props) {
   const tree = categories && categories.length > 0 ? categories : COLLECTION_TAXONOMY;
   const { ask, dialog } = useConfirm();
   const router = useRouter();
@@ -712,6 +717,21 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               confirmed={!!sheet.confirmed_at}
             />
           )}
+          {/* ÜRETİCİ PANELİ — mailin YANINDAKİ ikinci yol. Aslı Hanım
+              (2026-09-07): "Üreticiye de bir panel verebilirsin. Çünkü ürünün
+              detaylarını girip buradan alabilir VEYA direkt mail gidebilir." */}
+          {!isNew && sheet && (
+            <ManufacturerAccess
+              sheetId={sheet.id}
+              links={portalLinks}
+              defaultName={
+                manufacturers.find((m) => m.id === sheet.manufacturer_id)?.name ?? sheet.producer ?? null
+              }
+              defaultEmail={manufacturers.find((m) => m.id === sheet.manufacturer_id)?.email ?? null}
+              confirmed={!!sheet.confirmed_at}
+              isAdmin={isAdmin}
+            />
+          )}
           {!isNew && sheet && (
             <DownloadLink
               href={`/production/${sheet.id}/export`}
@@ -755,6 +775,30 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
         confirmedByName={sheet?.confirmed_by ? nameOf(sheet.confirmed_by) : null}
         dirty={dirty}
       />
+
+      {/* ── ÜRETİCİDEN GELEN NOTLAR ────────────────────────────────────────
+          Aslı Hanım (2026-09-07): üreticinin "ürünün detaylarını girip
+          buradan alabilir" demesinin karşılığı. Not FÖYE YAZILMAZ — dışarıdan
+          gelen bir sayı sessizce üretim föyüne geçmemeli; ekip okur, doğruysa
+          kendi eliyle işler. */}
+      {portalNotes.length > 0 && (
+        <section className="mb-3 rounded-card border border-brand-ring bg-brand-soft/40 p-4">
+          <h2 className="mb-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-brand-strong">
+            Üreticiden gelen notlar
+          </h2>
+          <ul className="space-y-2.5">
+            {portalNotes.map((n) => (
+              <li key={n.id} className="border-b border-hairline pb-2.5 last:border-0 last:pb-0">
+                <p className="whitespace-pre-line text-[13.5px] leading-relaxed text-ink">{n.body}</p>
+                <p className="mt-0.5 text-[12px] text-subtle">
+                  {n.author_name ? `${n.author_name} · ` : ""}
+                  {new Date(n.created_at).toLocaleString("tr-TR", { dateStyle: "medium", timeStyle: "short" })}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* ── Föy belgesi ── */}
       <div className="stagger-children space-y-3 rounded-card border border-line bg-surface p-4 shadow-card sm:p-6">

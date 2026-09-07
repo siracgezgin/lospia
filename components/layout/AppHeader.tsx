@@ -35,6 +35,7 @@ const PAGE_TITLES: { match: (p: string) => boolean; title: string }[] = [
   { match: (p) => p.startsWith("/board"), title: "Board" },
   { match: (p) => p.startsWith("/planning"), title: "Calendar" },
   { match: (p) => p.startsWith("/list"), title: "List" },
+  { match: (p) => p.startsWith("/goals"), title: "Goals" },
   /* Raporlar List yüzeyinin son SEKMESİDİR ama kendi adı vardır: dizinde
      (MODULE_DIRECTORY) ve sayfanın metadata.title'ında "Reports" yazıyor.
      Başlık "List" derken kart "Reports" diyordu — kullanıcı "Reports"a

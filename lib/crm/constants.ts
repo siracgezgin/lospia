@@ -17,6 +17,17 @@ export const CRM_SEGMENTS = [
   { key: "celebrity", label: "Celebrity" },
   { key: "isbirligi", label: "İşbirliği" },
   { key: "tedarikci", label: "Tedarikçi" },
+  /* 2026-09-07 — Aslı Hanım CRM'e girince doğrudan dosya listesi çıkmasına
+     itiraz etti ve içeriği kendi ağzıyla saydı: "Bunu CRM'e girdiğinde bu
+     selebriti, bu basın, bu VIP, bu OUTSOURCE, işte TOPLANTILAR, DIŞ EKİP,
+     ÜRETİMLER, EKİBİMİZ… ondan sonra burası atıyorum MODA TASARIMCILAR
+     DERNEĞİ." Eksik olan altı anahtar aşağıda; eskiler geri uyum için durur. */
+  { key: "outsource", label: "Outsource" },
+  { key: "toplanti", label: "Toplantılar" },
+  { key: "dis_ekip", label: "Dış ekip" },
+  { key: "uretim", label: "Üretim" },
+  { key: "ekibimiz", label: "Ekibimiz" },
+  { key: "dernek", label: "Dernekler" },
   { key: "diger", label: "Diğer" },
 ] as const;
 
@@ -59,6 +70,12 @@ export function sourceLabel(key: string | null | undefined): string | null {
 
 // Soft badge tone per segment (reuses the muted palette used across the app).
 export const SEGMENT_TONE: Record<string, string> = {
+  outsource: "bg-[#eaf2ec] text-[#2f6142]",
+  toplanti: "bg-[#e9eefb] text-[#28448f]",
+  dis_ekip: "bg-[#f2eef7] text-[#5b3d84]",
+  uretim: "bg-[#f7efe4] text-[#82551a]",
+  ekibimiz: "bg-[#e6f4f1] text-[#15665b]",
+  dernek: "bg-[#f0f1f4] text-[#4a5262]",
   vip: "bg-[#fbf2e2] text-[#8a5e14]",
   wholesale: "bg-[#e8f1fd] text-[#1a4889]",
   konsinye: "bg-[#e6f6f7] text-[#11707a]",
@@ -78,3 +95,59 @@ export const STATUS_TONE: Record<string, string> = {
   beklemede: "bg-[#f6ecd4] text-[#8a6516]",
   pasif: "bg-[#eef0f2] text-[#7a828b]",
 };
+
+
+/* ─────────────────────────────────────────────────────────────────────────
+   CRM GİRİŞİ — ÖNCE KUTULAR, SONRA İÇERİK.
+
+   Aslı Hanım (2026-09-07), CRM'i açıp doğrudan tablo görünce:
+     "BU CRM'E BÖYLE GİREMEZSİN. Bak HER GİRDİĞİN DOSYA BÖYLE BAŞLAMALI."
+     "Yani şimdi burada girersen böyle DİREKT SEN DOSYAYA GİRİYORSUN."
+     "Ben de diyorum ki BÜTÜN TASARIMI BÖYLE YAP." (referans: Collection ve
+     AF Teamwork'ün kutucuk ızgarası)
+
+   Kutular AF'nin kendi saydığı sırayla. Her kutu bir ya da birkaç `segment`
+   anahtarını toplar: eski kayıtlar (pr, stylist, influencer, tedarikçi…)
+   silinmeden doğru kutunun altında görünsün diye. `primary`, o kutunun içinde
+   AÇILAN YENİ kaydın varsayılan segmentidir.
+
+   `Dernekler` gibi tek anahtarlı kutular da aynı biçimde tanımlıdır: liste
+   büyüyünce kutu değil, kutunun içindeki anahtar listesi genişler.
+   ───────────────────────────────────────────────────────────────────────── */
+export interface CrmCategory {
+  key: string;
+  label: string;
+  /** Bu kutunun kapsadığı `segment` anahtarları (eski değerler dahil). */
+  segments: string[];
+  /** Kutu içinde açılan yeni kaydın varsayılan segmenti. */
+  primary: string;
+  /** Kutunun tek satırlık tarifi — kart altında yazar. */
+  hint: string;
+}
+
+export const CRM_CATEGORIES: CrmCategory[] = [
+  { key: "celebrity", label: "Selebriti", segments: ["celebrity", "influencer", "stylist"], primary: "celebrity", hint: "Oyuncu, influencer, stylist" },
+  { key: "basin", label: "Basın", segments: ["basin", "pr"], primary: "basin", hint: "Dergi, gazete, PR ajansı" },
+  { key: "vip", label: "VIP", segments: ["vip"], primary: "vip", hint: "Özel müşteriler" },
+  { key: "outsource", label: "Outsource", segments: ["outsource", "tedarikci"], primary: "outsource", hint: "Kalıpçı, üretici, tedarikçi" },
+  { key: "toplanti", label: "Toplantılar", segments: ["toplanti"], primary: "toplanti", hint: "Dışarıdan toplantı yaptığımız kişiler" },
+  { key: "dis_ekip", label: "Dış ekip", segments: ["dis_ekip", "isbirligi"], primary: "dis_ekip", hint: "Proje bazlı birlikte çalıştıklarımız" },
+  { key: "uretim", label: "Üretim", segments: ["uretim", "wholesale", "konsinye"], primary: "uretim", hint: "Atölye, toptan, konsinye" },
+  { key: "ekibimiz", label: "Ekibimiz", segments: ["ekibimiz"], primary: "ekibimiz", hint: "İç ekip kayıtları" },
+  { key: "dernek", label: "Dernekler", segments: ["dernek"], primary: "dernek", hint: "Moda Tasarımcılar Derneği gibi kurumlar" },
+  { key: "diger", label: "Diğer", segments: ["diger"], primary: "diger", hint: "Henüz yerleşmemiş kayıtlar" },
+];
+
+const CATEGORY_BY_KEY = new Map(CRM_CATEGORIES.map((c) => [c.key, c]));
+const CATEGORY_OF_SEGMENT = new Map<string, CrmCategory>();
+for (const c of CRM_CATEGORIES) for (const seg of c.segments) CATEGORY_OF_SEGMENT.set(seg, c);
+
+export function crmCategory(key: string | null | undefined): CrmCategory | null {
+  if (!key) return null;
+  return CATEGORY_BY_KEY.get(key) ?? null;
+}
+
+/** Bir kaydın hangi kutuya düştüğü. Tanınmayan/boş segment → "Diğer". */
+export function crmCategoryOfSegment(segment: string | null | undefined): CrmCategory {
+  return (segment && CATEGORY_OF_SEGMENT.get(segment)) || CATEGORY_BY_KEY.get("diger")!;
+}

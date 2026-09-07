@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { tr } from "date-fns/locale";
-import { CalendarOff, CheckCircle2, Clock, Pencil, Plus } from "lucide-react";
+import { CalendarOff, CheckCircle2, Clock, Pencil, Plus, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { IconButton } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -12,6 +13,7 @@ import { WEEKDAY_LONG_TR, WEEKDAY_SHORT_TR, type RuntimeBand } from "@/lib/plann
 import { BandEditor } from "./BandEditor";
 import { istanbulLabel, AWAY_LABEL, HOME_LABEL } from "@/lib/planning/timezones";
 import { KimBadges } from "./KimBadges";
+import { setMeetingStatus } from "@/lib/actions/planning";
 import type { PlanningMeetingWithTopics, PlanningTopic } from "@/types";
 
 interface Props {
@@ -26,7 +28,8 @@ interface Props {
   personHex?: Record<string, string>;
   isAdmin: boolean;
   todayIso: string;
-  onOpen: (_iso: string, _slot: string, _dayIndex: number) => void;
+  /** `_topicIndex` verilirse düzenleyici YALNIZ o konuyu açar (H1). */
+  onOpen: (_iso: string, _slot: string, _dayIndex: number, _topicIndex?: number) => void;
   /** Sol sütun — masaüstündeki ızgarayla AYNI kaynak (20240326). */
   bands: RuntimeBand[];
   /** GÜN ÖLÇEĞİ: tek gün çizilir — hafta seçici gizlenir ve liste masaüstünde
@@ -47,6 +50,29 @@ export function PlanningDayList({
   weekDays, byCell, topicRows, extraSlots, memberNames, memberPhotos = {}, personHex = {}, isAdmin, todayIso,
   onOpen, bands, singleDay = false,
 }: Props) {
+  const router = useRouter();
+  /* SONUÇ TEK TIKLA — Aslı Hanım toplantıyı bu ekrandan yönetiyor ve sonucu
+     "üzerinden" işaretlemek istedi: "Bu toplantının yapılıp bittiğini üzerinden
+     şey yapabiliyor muyuz?" Pencereyi açmak zorunda kalmasın diye tik ve çarpı
+     kartın altında duruyor; aynı işarete tekrar basmak onu kaldırır. */
+  const [statusBusy, setStatusBusy] = useState<string | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const [, startStatus] = useTransition();
+  const markStatus = (meetingId: string, current: string | null, next: "done" | "missed") => {
+    setStatusError(null);
+    setStatusBusy(meetingId);
+    startStatus(async () => {
+      try {
+        const res = await setMeetingStatus(meetingId, current === next ? "planned" : next);
+        if ("error" in res) { setStatusError(res.error); return; }
+        router.refresh();
+      } catch {
+        setStatusError("İşaretlenemedi. Tekrar deneyin.");
+      } finally {
+        setStatusBusy(null);
+      }
+    });
+  };
   const todayIdx = weekDays.indexOf(todayIso);
   const [dayIdx, setDayIdx] = useState(todayIdx >= 0 ? todayIdx : 0);
   const iso = weekDays[dayIdx] ?? weekDays[0];
@@ -157,6 +183,11 @@ export function PlanningDayList({
         {WEEKDAY_LONG_TR[(parseISO(iso).getDay() + 6) % 7]} · {format(parseISO(iso), "d MMMM yyyy", { locale: tr })}
       </p>
 
+      {statusError && (
+        <p role="alert" className="anim-fade-down mb-2 rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[12.5px] font-medium text-danger">
+          {statusError}
+        </p>
+      )}
       <div className={z.gap}>
         {/* BOŞ GÜN ARTIK KONUŞUR. Üye görünümünde toplantısı olmayan gün
             bomboş bir beyazlıktı: ekranın yüklenmediği mi, o gün gerçekten
@@ -178,6 +209,11 @@ export function PlanningDayList({
           const title = cell.map((m) => m.title).filter(Boolean).join(" · ");
           const content = cell.map((m) => m.content).filter(Boolean).join(" · ");
           const ids = [...new Set(cell.flatMap((m) => m.participant_ids ?? []))];
+          /* SONUÇ — masaüstü ızgarasıyla aynı işaret (20240338). */
+          const outcome = cell.find((m) => m.status === "done" || m.status === "missed")?.status ?? null;
+          /* Sonuç HÜCRENİN İLK toplantısına yazılır: aynı saatte iki başlık
+             birleşmiş olsa bile işaret tek ve öngörülebilir kalsın. */
+          const outcomeMeeting = cell[0] ?? null;
           const kim = cell.map((m) => m.kim).filter(Boolean).join(", ");
           const collabIds = [...new Set(cell.flatMap((m) => m.collaborator_ids ?? []))];
           const topics = (topicRows.get(`${iso}|${slot}`) ?? []).filter(Boolean) as PlanningTopic[];
@@ -218,6 +254,12 @@ export function PlanningDayList({
                   </span>
                 )}
               </span>
+              {outcome === "done" && (
+                <CheckCircle2 size={22} strokeWidth={2.5} className="mt-px shrink-0 text-success" aria-label="Tamamlandı" />
+              )}
+              {outcome === "missed" && (
+                <XCircle size={22} strokeWidth={2.5} className="mt-px shrink-0 text-danger" aria-label="Aksadı — sonraki güne eklenmeli" />
+              )}
               <span className="min-w-0 flex-1">
                 <span className={cn("block font-semibold uppercase tracking-[0.08em] opacity-70", z.band, meta.title)}>
                   {band?.label ?? meta.label}
@@ -270,26 +312,48 @@ export function PlanningDayList({
 
               {topics.length > 0 ? (
                 <ol className="divide-y divide-hairline">
-                  {topics.map((t, i) => (
-                    <li key={t.id} className="flex items-start gap-2 px-3 py-2">
-                      <span className="mt-px shrink-0 text-[12px] font-semibold tabular-nums text-subtle">
-                        {i + 1}.
-                      </span>
-                      <span className="min-w-0 flex-1 text-[13.5px] leading-snug text-ink/90">
-                        {t.text}
-                        {t.task_id && (
-                          <CheckCircle2 size={12} className="ml-1 inline shrink-0 text-success" aria-label="Göreve atandı" />
+                  {topics.map((t, i) => {
+                    /* KONU SATIRI KENDİ KONUSUNU AÇAR. Aslı Hanım (2026-09-07):
+                       "Ama konuya tıklayınca hepsini açıyor. Konuyu açmıyor
+                       ki." Masaüstü ızgarasıyla aynı davranış — telefonda da
+                       tek konu tek konudur. */
+                    const body = (
+                      <>
+                        <span className="mt-px shrink-0 text-[12px] font-semibold tabular-nums text-subtle">
+                          {i + 1}.
+                        </span>
+                        <span className="min-w-0 flex-1 text-[13.5px] leading-snug text-ink/90">
+                          {t.text}
+                          {t.task_id && (
+                            <CheckCircle2 size={12} className="ml-1 inline shrink-0 text-success" aria-label="Göreve atandı" />
+                          )}
+                          <KimBadges ids={t.participant_ids} kim={t.kim} collaboratorIds={t.collaborator_ids} memberNames={memberNames} memberPhotos={memberPhotos} personHex={personHex} />
+                          {/* Yalnız o günden FARKLI teslim tarihi yazılır. */}
+                          {t.due_date && t.due_date.slice(0, 10) !== iso && (
+                            <span className="ml-1 whitespace-nowrap text-[12px] tabular-nums text-subtle">
+                              {format(parseISO(t.due_date), "d MMM", { locale: tr })}
+                            </span>
+                          )}
+                        </span>
+                      </>
+                    );
+                    return (
+                      <li key={t.id}>
+                        {isAdmin ? (
+                          <button
+                            type="button"
+                            onClick={() => onOpen(iso, slot, dayIdx, t.position ?? i)}
+                            title="Yalnız bu konuyu aç"
+                            className="flex w-full items-start gap-2 px-3 py-2 text-left transition-colors duration-150 hover:bg-surface-muted active:bg-ink/[0.04]"
+                          >
+                            {body}
+                          </button>
+                        ) : (
+                          <div className="flex items-start gap-2 px-3 py-2">{body}</div>
                         )}
-                        <KimBadges ids={t.participant_ids} kim={t.kim} collaboratorIds={t.collaborator_ids} memberNames={memberNames} memberPhotos={memberPhotos} personHex={personHex} />
-                        {/* Yalnız o günden FARKLI teslim tarihi yazılır. */}
-                        {t.due_date && t.due_date.slice(0, 10) !== iso && (
-                          <span className="ml-1 whitespace-nowrap text-[12px] tabular-nums text-subtle">
-                            {format(parseISO(t.due_date), "d MMM", { locale: tr })}
-                          </span>
-                        )}
-                      </span>
-                    </li>
-                  ))}
+                      </li>
+                    );
+                  })}
                 </ol>
               ) : (
                 isAdmin && (
@@ -301,6 +365,45 @@ export function PlanningDayList({
                     <Plus size={13} aria-hidden /> Konu ekle
                   </button>
                 )
+              )}
+
+              {/* SONUÇ ŞERİDİ — "başardık" yeşili ve "aksadı" kırmızısı. */}
+              {isAdmin && outcomeMeeting && (
+                <div className="flex flex-wrap items-center gap-1.5 border-t border-hairline px-3 py-2">
+                  <button
+                    type="button"
+                    disabled={statusBusy === outcomeMeeting.id}
+                    aria-pressed={outcome === "done"}
+                    onClick={() => markStatus(outcomeMeeting.id, outcome, "done")}
+                    title="Toplantı yapıldı ve bitti"
+                    className={cn(
+                      "tap-target inline-flex h-8 items-center gap-1.5 rounded-control border px-2.5 text-[12.5px] font-semibold transition-colors duration-150 disabled:opacity-60",
+                      outcome === "done"
+                        ? "border-success/40 bg-success/15 text-success"
+                        : "border-line bg-surface text-muted hover:border-success/40 hover:text-success",
+                    )}
+                  >
+                    <CheckCircle2 size={outcome === "done" ? 18 : 14} aria-hidden /> Tamamlandı
+                  </button>
+                  <button
+                    type="button"
+                    disabled={statusBusy === outcomeMeeting.id}
+                    aria-pressed={outcome === "missed"}
+                    onClick={() => markStatus(outcomeMeeting.id, outcome, "missed")}
+                    title="Aksadı — bir sonraki toplantıya eklenmeli"
+                    className={cn(
+                      "tap-target inline-flex h-8 items-center gap-1.5 rounded-control border px-2.5 text-[12.5px] font-semibold transition-colors duration-150 disabled:opacity-60",
+                      outcome === "missed"
+                        ? "border-danger/40 bg-danger/12 text-danger"
+                        : "border-line bg-surface text-muted hover:border-danger/40 hover:text-danger",
+                    )}
+                  >
+                    <XCircle size={outcome === "missed" ? 18 : 14} aria-hidden /> Aksadı
+                  </button>
+                  {outcome === "missed" && (
+                    <span className="text-[12px] text-muted">Sonraki güne taşıyın ya da çoğaltın.</span>
+                  )}
+                </div>
               )}
             </section>
           );

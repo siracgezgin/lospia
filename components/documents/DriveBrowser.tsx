@@ -127,6 +127,48 @@ type DriveItem = {
   folder?: DocFolder;
 };
 
+/* ── TÜR KUTULARI ─────────────────────────────────────────────────────────
+   "Excel yazılı kutu olsun, içine girince excel dosyaları olsun… resimler için
+   de ayrı bir bölüm. Her şey kendi yerinde olsun." (Aslı Hanım, 2026-09-07)
+
+   `image` ayrı bir ItemType DEĞİL, yüklenen dosyanın bir türüdür; bu yüzden
+   kutu üyeliği ItemType'a değil aşağıdaki `match` fonksiyonuna bakar. */
+export type BucketKey = "sheet" | "doc" | "image" | "file" | "link";
+
+const BUCKETS: {
+  key: BucketKey;
+  label: string;
+  hint: string;
+  match: (_i: DriveItem) => boolean;
+}[] = [
+  { key: "sheet", label: "Excel", hint: "Tablolar", match: (i) => i.type === "sheet" },
+  { key: "doc", label: "Word", hint: "Yazılar", match: (i) => i.type === "doc" },
+  {
+    key: "image", label: "Görseller", hint: "Fotoğraf ve çizimler",
+    // Görsel tespiti ikonun geldiği yerle AYNI kaynaktan: iki yerde iki
+    // farklı kural olursa kutu ile listedeki simge ayrışır.
+    match: (i) => i.type === "file" && i.kind.label === "Görsel",
+  },
+  {
+    key: "file", label: "Dosyalar", hint: "PDF, sunum, diğer yüklemeler",
+    match: (i) => i.type === "file" && i.kind.label !== "Görsel",
+  },
+  { key: "link", label: "Bağlantılar", hint: "Drive, Canva, Figma…", match: (i) => i.type === "link" },
+];
+
+const BUCKET_BY_KEY = new Map(BUCKETS.map((b) => [b.key, b]));
+
+/* Kutu kimliği (ikon + renk) LİSTEDEKİ SİMGELERLE AYNI KAYNAKTAN gelir
+   (lib/office/file-kind.ts). Kutuya elle renk yazsaydık "Excel" kutusu yeşil,
+   içindeki tablo simgesi başka bir yeşil olurdu. */
+const BUCKET_IDENTITY: Record<BucketKey, { icon: LucideIcon; hex: string }> = {
+  sheet: { icon: KIND_SHEET.icon, hex: KIND_SHEET.hex },
+  doc: { icon: KIND_DOC.icon, hex: KIND_DOC.hex },
+  image: { icon: fileKindOf("image/png", "a.png").icon, hex: fileKindOf("image/png", "a.png").hex },
+  file: { icon: fileKindOf(null, "a.bin").icon, hex: fileKindOf(null, "a.bin").hex },
+  link: { icon: linkKindOf(null).icon, hex: linkKindOf(null).hex },
+};
+
 /** ⋯ menüsünün bir satırı. */
 type MenuAction = {
   label: string;
@@ -345,6 +387,15 @@ export function DriveBrowser({
   /** Arama kutusu — boş değilse TÜM ağaçta arar (Drive gibi). */
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | ItemType>("all");
+  /* TÜR KUTULARI — AF Teamwork'ün girişi.
+     Aslı Hanım (2026-09-07): "Her tasarım aynı ve KART şeklinde olmalı. Mesela
+     AF Teamwork'e girdim, orada EXCEL YAZILI KUTU OLSUN, içine girince excel
+     dosyaları olsun; bunlar klasörleşmiş de olabilir kendi içinde. Ek olarak
+     RESİMLER İÇİN DE AYRI BİR BÖLÜM, onlar da kendi içinde klasörleşmiş
+     olabilir. HER ŞEY KENDİ YERİNDE OLSUN."
+     null = giriş (kutular). Bir kutu seçilince yalnız o türün klasörleri ve
+     dosyaları görünür; klasör gezinmesi kutunun içinde sürer. */
+  const [bucket, setBucket] = useState<BucketKey | null>(null);
   const [upload, setUpload] = useState<UploadState | null>(null);
   const [preview, setPreview] = useState<PreviewState | null>(null);
   /** "Taşı" penceresinde duran öğe. */
@@ -525,6 +576,47 @@ export function DriveBrowser({
     let folderOut = folderItems;
     let fileOut = [...docItems, ...sheetItems, ...linkItems, ...fileItems];
 
+    /* KUTU SÜZGECİ. Seçili kutunun dışındaki öğeler düşer; klasörlerden ise
+       yalnız o kutuda İÇERİĞİ OLANLAR kalır. Aksi hâlde "Görseller"e girip
+       içinde tek görsel olmayan klasörlere tıklamak gerekirdi — "her şey
+       kendi yerinde" tam tersi olurdu.
+       Alt klasörler de sayılır: içerik iki kat aşağıdaysa üstteki klasör yine
+       görünmeli, yoksa oraya ulaşmanın yolu kalmaz. */
+    if (bucket) {
+      const def = BUCKET_BY_KEY.get(bucket);
+      if (def) {
+        const all = [...docItems, ...sheetItems, ...linkItems, ...fileItems];
+        /* Klasör üyeliği HAM satırlardan hesaplanır: yukarıdaki listeler
+           `inScope` ile içinde bulunulan klasöre daraltıldığı için, kutuya ait
+           bir öğe başka klasördeyse orada görünmez ve klasör yanlışlıkla boş
+           sayılırdı. */
+        const direct = new Set<string>();
+        const noteFolder = (folderId: string | null) => { if (folderId) direct.add(folderId); };
+        if (bucket === "doc") docs.forEach((d) => noteFolder(d.folder_id));
+        if (bucket === "sheet") sheets.forEach((x) => noteFolder(x.folder_id));
+        if (bucket === "link") links.forEach((l) => noteFolder(l.folder_id));
+        if (bucket === "image" || bucket === "file") {
+          files.forEach((f) => {
+            const isImage = fileKindOf(f.file_mime, f.file_name ?? f.title).label === "Görsel";
+            if ((bucket === "image") === isImage) noteFolder(f.folder_id);
+          });
+        }
+        const keep = new Set<string>();
+        const parentOf = new Map(folders.map((f) => [f.id, f.parent_id]));
+        for (const fid of direct) {
+          let cur: string | null = fid;
+          const guard = new Set<string>();
+          while (cur && !guard.has(cur)) {
+            guard.add(cur);
+            keep.add(cur);
+            cur = parentOf.get(cur) ?? null;
+          }
+        }
+        folderOut = folderOut.filter((f) => keep.has(f.id));
+        fileOut = all.filter((i) => def.match(i));
+      }
+    }
+
     if (typeFilter !== "all") {
       folderOut = typeFilter === "folder" ? folderOut : [];
       fileOut = fileOut.filter((i) => i.type === typeFilter);
@@ -543,7 +635,7 @@ export function DriveBrowser({
     const byNewest = (a: DriveItem, b: DriveItem) => (b.date ?? "").localeCompare(a.date ?? "");
     return { folders: folderOut.sort(byName), files: fileOut.sort(byNewest) };
   }, [
-    folders, docs, sheets, links, files, cwd, searching, needle, typeFilter,
+    folders, docs, sheets, links, files, cwd, searching, needle, typeFilter, bucket,
     childCount, pathOf, download, openPreview, onEditLink,
   ]);
 
@@ -578,6 +670,21 @@ export function DriveBrowser({
 
   const resultCount = items.folders.length + items.files.length;
   const filtering = searching || typeFilter !== "all";
+
+  /* GİRİŞ KARTLARININ ALT SATIRI — "24 dosya". Bu sayı bir kişiyi ya da işi
+     PUANLAMAZ, listeyi TARİF eder; sadelik kuralının serbest bıraktığı taraf
+     (CLAUDE.md: "kategori ağacındaki ürün adedi → serbest"). */
+  const bucketCounts = useMemo(() => {
+    const out: Record<BucketKey, number> = { sheet: 0, doc: 0, image: 0, file: 0, link: 0 };
+    out.doc = docs.length;
+    out.sheet = sheets.length;
+    out.link = links.length;
+    for (const f of files) {
+      const isImage = fileKindOf(f.file_mime, f.file_name ?? f.title).label === "Görsel";
+      if (isImage) out.image++; else out.file++;
+    }
+    return out;
+  }, [docs, sheets, links, files]);
   /** Ağaçta hiç içerik yoksa arama satırı gereksiz gürültüdür. */
   const hasAnything = folders.length + docs.length + sheets.length + links.length + files.length > 0;
 
@@ -1020,8 +1127,43 @@ export function DriveBrowser({
         </div>
       )}
 
+      {/* ── GİRİŞ: TÜR KUTULARI ──────────────────────────────────────────
+          Aslı Hanım (2026-09-07): "AF Teamwork'e girdim, orada EXCEL YAZILI
+          KUTU olsun; içine girince excel dosyaları olsun, bunlar klasörleşmiş
+          de olabilir kendi içinde. Ek olarak RESİMLER İÇİN DE AYRI BİR BÖLÜM…
+          HER ŞEY KENDİ YERİNDE OLSUN."
+          Kartlar Collection/CRM ile AYNI `Tile` primitifi — modülden modüle
+          aynı hareket. Arama açıkken kutular gizlenir: arama bütün ağaçta
+          gezer, kutuya girmeyi beklemez. */}
+      {bucket === null && !searching && (
+        <div className="anim-fade">
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold tracking-tight text-ink sm:text-xl">Ne arıyorsunuz?</h2>
+            <p className="mt-0.5 text-[13px] text-muted">
+              Bir kutuya girin — içeride o türün klasörleri ve dosyaları var.
+            </p>
+          </div>
+          <TileGrid>
+            {BUCKETS.map((b) => {
+              const n = bucketCounts[b.key] ?? 0;
+              const id = BUCKET_IDENTITY[b.key];
+              return (
+                <Tile
+                  key={b.key}
+                  onClick={() => { setBucket(b.key); setCwd(null); setQuery(""); setTypeFilter("all"); }}
+                  title={b.label}
+                  meta={n > 0 ? `${n} dosya` : b.hint}
+                  icon={id.icon}
+                  colorHex={id.hex}
+                />
+              );
+            })}
+          </TileGrid>
+        </div>
+      )}
+
       {/* Kırıntı yolu + üretim düğmeleri */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className={cn("flex flex-wrap items-center justify-between gap-2", bucket === null && !searching && "mt-5")}>
         {/* TEK SATIR: Geri · kırıntı yolu · üretim. Kökteyken kırıntı yolu hiç
             çizilmez — nerede olduğunu uygulama çubuğu zaten söylüyor.
             `overflow-x-auto`: derin klasörde yol uzayınca gövde YATAY
@@ -1031,6 +1173,31 @@ export function DriveBrowser({
           className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto text-[13.5px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {leading}
+          {/* KUTU ADI kırıntı yolunun ilk halkası: "AF Teamwork › Excel ›
+              Föyler". Tıklamak kutulara döner. */}
+          {bucket && (
+            <span className="inline-flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                onClick={() => { setBucket(null); setCwd(null); setQuery(""); }}
+                className="tap-target inline-flex h-8 shrink-0 items-center rounded-control px-1.5 text-muted transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
+              >
+                {rootLabel}
+              </button>
+              <ChevronRight size={12} className="text-subtle" aria-hidden />
+              <button
+                type="button"
+                onClick={() => setCwd(null)}
+                aria-current={trail.length === 0 ? "location" : undefined}
+                className={cn(
+                  "inline-flex h-8 items-center rounded-control px-1.5 transition-colors duration-150",
+                  trail.length === 0 ? "font-semibold text-ink" : "text-muted hover:text-ink",
+                )}
+              >
+                {BUCKET_BY_KEY.get(bucket)?.label ?? ""}
+              </button>
+            </span>
+          )}
           {trail.length > 0 && (
             <>
               <button
@@ -1080,6 +1247,11 @@ export function DriveBrowser({
                açılınca yeni klasör listeye hiç düşmüyordu. */
             onPick={() => { setQuery(""); setTypeFilter("all"); setRenaming(null); setNaming(true); }}
           />
+          {/* ÜRETİM DÜĞMELERİ KUTUYA GÖRE. Excel kutusundayken "Word"e
+              basmak, açıldığı anda görünmeyen bir yazı üretiyordu — "her şey
+              kendi yerinde" tam olarak bunun olmaması demek. Kutu seçilmemişse
+              (giriş) hepsi açık kalır. */}
+          {(bucket === null || bucket === "doc") && (
           <CreateButton
             icon={FileText}
             label="Word"
@@ -1095,6 +1267,8 @@ export function DriveBrowser({
               })
             }
           />
+          )}
+          {(bucket === null || bucket === "sheet") && (
           <CreateButton
             icon={Table2}
             label="Excel"
@@ -1110,7 +1284,8 @@ export function DriveBrowser({
               })
             }
           />
-          {onNewLink && (
+          )}
+          {onNewLink && (bucket === null || bucket === "link") && (
             <CreateButton
               icon={LinkIcon}
               label="Bağlantı"
@@ -1121,14 +1296,18 @@ export function DriveBrowser({
               onPick={() => onNewLink(cwd)}
             />
           )}
-          <CreateButton
-            icon={Upload}
-            label="Yükle"
-            title="Dosya yükle — birden fazla seçebilir ya da sürükleyip bırakabilirsiniz"
-            hex={UPLOAD_HEX}
-            busy={uploading}
-            onPick={openFilePicker}
-          />
+          {/* Yükleme yalnız dosya kutularında: Word/Excel kutusuna dosya
+              yüklemek onu o kutuda görünmez kılardı. */}
+          {(bucket === null || bucket === "image" || bucket === "file") && (
+            <CreateButton
+              icon={Upload}
+              label="Yükle"
+              title="Dosya yükle — birden fazla seçebilir ya da sürükleyip bırakabilirsiniz"
+              hex={UPLOAD_HEX}
+              busy={uploading}
+              onPick={openFilePicker}
+            />
+          )}
           {/* `multiple`: on dosya seçilip biri yükleniyordu. */}
           <input ref={fileRef} type="file" multiple className="hidden" onChange={onPick} />
         </div>

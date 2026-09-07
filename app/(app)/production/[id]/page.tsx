@@ -6,6 +6,7 @@ import { ProductionSheetEditor } from "@/components/production/ProductionSheetEd
 import { getCategoryTree } from "@/lib/collection/category-tree";
 import type { ProductionSheet, Manufacturer, SheetMaterialWithMaterial } from "@/types";
 import type { PickableMaterial } from "@/components/production/SheetBom";
+import type { PortalLinkRow } from "@/components/production/ManufacturerAccess";
 
 export const dynamic = "force-dynamic";
 
@@ -125,9 +126,34 @@ export default async function ProductionSheetPage({
     .order("position");
   const bom = (bomResult.data ?? []) as unknown as SheetMaterialWithMaterial[];
 
+  /* ÜRETİCİ PANELİ bağlantıları + üreticinin girdiği notlar (20240339).
+     Migration prod'a elle uygulandığı için tablo yoksa sorgu hata verir ve
+     föy ekranı bundan ETKİLENMEZ: boş listeye düşülür. */
+  const [linksRes, portalNotesRes] = await Promise.all([
+    supabase
+      .from("production_portal_links")
+      .select("id, token, manufacturer_name, email, can_write, expires_at, revoked_at, last_seen_at")
+      .eq("workspace_id", workspaceId)
+      .eq("sheet_id", id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("production_portal_notes")
+      .select("id, body, author_name, created_at")
+      .eq("workspace_id", workspaceId)
+      .eq("sheet_id", id)
+      .order("created_at", { ascending: false })
+      .limit(50),
+  ]);
+  const portalLinks = (linksRes.error ? [] : (linksRes.data ?? [])) as PortalLinkRow[];
+  const portalNotes = (portalNotesRes.error ? [] : (portalNotesRes.data ?? [])) as {
+    id: string; body: string; author_name: string | null; created_at: string;
+  }[];
+
   return (
     <ProductionSheetEditor
       sheet={data as unknown as ProductionSheet}
+      portalLinks={portalLinks}
+      portalNotes={portalNotes}
       memberNames={memberNames}
       manufacturers={manufacturers}
       seasons={seasons}

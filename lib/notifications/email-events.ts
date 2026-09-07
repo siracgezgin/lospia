@@ -18,6 +18,9 @@
 
 import { sendEmail } from "@/lib/email/send-email";
 import { taskAssignedEmail } from "@/lib/email/templates/task-assigned";
+import { meetingTimeLabel } from "@/lib/email/templates/meeting-invite";
+import { createClient } from "@/lib/supabase/server";
+import { normalizeSlot, toIstanbulTime } from "@/lib/planning/timezones";
 import { taskResponsibilityAddedEmail } from "@/lib/email/templates/task-responsibility-added";
 import { PRIORITY_LABELS } from "@/lib/utils/task-constants";
 import {
@@ -56,11 +59,12 @@ export async function dispatchTaskEmails(params: {
   taskTitle: string | null;
   /** Optional meta — enriches the mail when the caller has it at hand. */
   actorName?: string | null;
+  /** ARTIK MAİLE GİRMEZ (2026-09-07: "son tarih diye bir şey yok"). Çağıranlar
+   *  hâlâ geçiyor; imza korunuyor ki her çağrı yeri değişmek zorunda kalmasın. */
   dueDate?: string | null;
   priority?: string | null;
 }): Promise<void> {
-  const { event, workspaceId, recipientUserIds, taskId, taskTitle, actorName, dueDate, priority } =
-    params;
+  const { event, workspaceId, recipientUserIds, taskId, taskTitle, actorName, priority } = params;
 
   // Cheap short-circuits before touching the DB.
   if (process.env.EMAIL_NOTIFICATIONS_ENABLED !== "true") return;
@@ -74,10 +78,17 @@ export async function dispatchTaskEmails(params: {
   const baseUrl = process.env.EMAIL_TASK_BASE_URL ?? DEFAULT_TASK_BASE_URL;
   const title = taskTitle ?? "Görev";
   const build = TEMPLATE[event];
-  const dueDateLabel = formatTrDueDate(dueDate);
   const priorityLabel = priority
     ? ((PRIORITY_LABELS as Record<string, string>)[priority] ?? null)
     : null;
+
+  /* TOPLANTI ZAMANI — "son tarih"in yerini alan satır.
+     Aslı Hanım (2026-09-07): "Artık son tarih diye bir şey yok — direkt
+     toplantı tarihi, Türkiye saati ve parantezde NY saati."
+     Görev bir toplantı konusundan doğduysa (planning_topics.task_id) o
+     toplantının gün ve saati okunur. Doğmadıysa satır hiç yazılmaz; `dueDate`
+     artık maile GİRMEZ. */
+  const meeting = await resolveMeetingTime(taskId);
 
   // One mail per recipient — never reveal other recipients in To.
   for (const r of recipients) {
@@ -91,7 +102,8 @@ export async function dispatchTaskEmails(params: {
           baseUrl,
           recipientName: r.fullName,
           actorName: actorName ?? null,
-          dueDateLabel,
+          meetingDateLabel: meeting?.dateLabel ?? null,
+          meetingTimeLabel: meeting?.timeLabel ?? null,
           priorityLabel,
         }),
       );
@@ -103,8 +115,47 @@ export async function dispatchTaskEmails(params: {
   }
 }
 
+/**
+ * Görevin doğduğu toplantının gün ve saati.
+ *
+ * `planning_topics.task_id` konuyu göreve bağlar; toplantı da konunun
+ * üstündedir. Bağ yoksa (elle açılmış görev) null döner ve mailde zaman satırı
+ * hiç çizilmez.
+ *
+ * Saat kaydı NEW YORK'tur; Türkiye saati hesaplanır ve ÖNE yazılır — maili
+ * okuyan kişi İstanbul'dadır.
+ */
+async function resolveMeetingTime(
+  taskId: string,
+): Promise<{ dateLabel: string; timeLabel: string | null } | null> {
+  try {
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from("planning_topics")
+      .select("planning_meetings(meeting_date, time_slot)")
+      .eq("task_id", taskId)
+      .limit(1)
+      .maybeSingle();
+    const raw = (data as { planning_meetings?: { meeting_date: string; time_slot: string } | { meeting_date: string; time_slot: string }[] | null } | null)?.planning_meetings;
+    const m = Array.isArray(raw) ? raw[0] : raw;
+    if (!m?.meeting_date) return null;
+
+    const dateIso = String(m.meeting_date).slice(0, 10);
+    const dateLabel = formatTrDate(dateIso);
+    if (!dateLabel) return null;
+
+    const slot = normalizeSlot(m.time_slot ?? "");
+    const ist = toIstanbulTime(dateIso, slot);
+    const istLabel = ist ? (ist.dayShift === 0 ? ist.time : `${ist.time} (+1 gün)`) : null;
+    return { dateLabel, timeLabel: meetingTimeLabel(istLabel, slot || null) };
+  } catch {
+    // Mail yan iştir: çözümlenemezse zaman satırsız gider, akış durmaz.
+    return null;
+  }
+}
+
 /** "2026-07-28" → "28 Temmuz 2026 Salı". Time parts are dropped; invalid → null. */
-function formatTrDueDate(iso: string | null | undefined): string | null {
+function formatTrDate(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const date = new Date(`${iso.slice(0, 10)}T00:00:00`);
   if (Number.isNaN(date.getTime())) return null;

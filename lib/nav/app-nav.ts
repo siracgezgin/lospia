@@ -62,6 +62,9 @@ export const NAV_SECTIONS: NavSection[] = [
          sekmedir (bkz. components/shared/SurfaceTabs) — kendi rotasında
          yaşamaya devam eder, menüde ikinci bir başlık açmaz. */
       link("list"),
+      /* Goals — günün ritmine ait: "bu ay neyi bitirmem gerekiyor". Board ve
+         List "şu an ne var"ı, Goals "bu ay nereye" sorusunu cevaplar. */
+      link("goals"),
     ],
   },
   {

@@ -8,7 +8,7 @@ import {
   AlignLeft, AlignCenter, AlignRight, AlignJustify,
   Link2, Link2Off, Undo2, Redo2, Loader2, Check, FileDown, Printer, Eraser,
   Palette, ImagePlus, Highlighter, Minus, Table as TableIcon,
-  SlidersHorizontal, Rows3, Columns3, Trash2, type LucideIcon,
+  SlidersHorizontal, Rows3, Columns3, Trash2, FolderOpen, type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Button, IconButton } from "@/components/ui/Button";
@@ -27,6 +27,9 @@ interface Props {
   docId: string;
   initialTitle: string;
   initialBody: string;
+  /** "AF Teamwork › Föyler" — NEREYE kaydedildiği. Aslı Hanım (2026-09-07):
+   *  "Nereye kaydetti?" Otomatik kayıt sessizdi ve hedefi söylemiyordu. */
+  savedTo?: string | null;
   readOnly?: boolean;
 }
 
@@ -56,7 +59,7 @@ interface Props {
  * sayfadan ayrılırken. Kaydedilmemiş değişiklik varken sekme kapanmaz.
  */
 export function DocEditor({
-  docId, initialTitle, initialBody, readOnly = false, backSlot,
+  docId, initialTitle, initialBody, savedTo = null, readOnly = false, backSlot,
 }: Props) {
   const router = useRouter();
   const { ask, dialog } = useConfirm();
@@ -945,17 +948,30 @@ export function DocEditor({
         {/* Durum çubuğu — Word'ün alt şeridi: belgeyi TARİF eder. */}
         <div className="no-print flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-hairline bg-surface-muted px-3 py-2 text-[12px] text-subtle">
           <span className="tabular-nums">{counts.words} kelime · {counts.chars} karakter</span>
-          <span className="ml-auto inline-flex items-center gap-1.5" aria-live="polite">
-            {saving ? (
-              <><Loader2 size={13} className="animate-spin" aria-hidden /> kaydediliyor</>
-            ) : saved ? (
-              <><Check size={13} className="text-success" aria-hidden /> kaydedildi</>
-            ) : dirty ? (
-              "kaydedilmedi"
-            ) : readOnly ? (
-              "salt okunur"
-            ) : (
-              "tüm değişiklikler kayıtlı"
+          {/* NEREYE kaydedildiği "kaydedildi"nin YANINDA durur.
+              Aslı Hanım (2026-09-07): "Nereye kaydetti?" — otomatik kayıt
+              çalışıyordu ama hedefi söylemediği için ekip dosyayı kaybettiğini
+              sanıyordu. Klasör adı her durumda görünür; kaydetme durumu
+              değiştiğinde de yerinde kalır. */}
+          <span className="ml-auto inline-flex flex-wrap items-center justify-end gap-x-2 gap-y-0.5" aria-live="polite">
+            <span className="inline-flex items-center gap-1.5">
+              {saving ? (
+                <><Loader2 size={13} className="animate-spin" aria-hidden /> kaydediliyor</>
+              ) : saved ? (
+                <><Check size={13} className="text-success" aria-hidden /> kaydedildi</>
+              ) : dirty ? (
+                "kaydedilmedi"
+              ) : readOnly ? (
+                "salt okunur"
+              ) : (
+                "tüm değişiklikler kayıtlı"
+              )}
+            </span>
+            {savedTo && (
+              <span className="inline-flex min-w-0 items-center gap-1" title={`Konum: ${savedTo}`}>
+                <FolderOpen size={13} className="shrink-0" aria-hidden />
+                <span className="truncate">{savedTo}</span>
+              </span>
             )}
           </span>
           {!readOnly && (

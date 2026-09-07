@@ -47,6 +47,23 @@ export default async function TeamworkDocPage({
      yönetici her yazıyı, ekleyen kendi yazısını — durumdan bağımsız. */
   const canEdit = isAdmin || row.created_by === user.id;
 
+  /* NEREYE KAYDEDİLDİĞİ YAZAR. Aslı Hanım (2026-09-07), yazıyı kapatırken:
+     "NEREYE KAYDETTİ?" · "Ama kaydettiğinde kapanması gerekmiyor mu?"
+     Editör "kaydedildi" diyordu ama HANGİ klasöre olduğunu söylemiyordu; ekip
+     dosyayı bir daha bulamamaktan çekiniyordu. Klasör adı artık durum
+     çubuğunda, "kaydedildi" ile aynı satırda. */
+  let folderName: string | null = null;
+  if (row.folder_id) {
+    const { data: folder } = await supabase
+      .from("document_folders")
+      .select("name")
+      .eq("id", row.folder_id)
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+    folderName = (folder as { name: string } | null)?.name ?? null;
+  }
+  const savedTo = folderName ? `AF Teamwork › ${folderName}` : "AF Teamwork";
+
   return (
     <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
       {/* Başlık uygulama çubuğunda; "Geri" editörün başlık satırında. */}
@@ -58,6 +75,7 @@ export default async function TeamworkDocPage({
         docId={row.id}
         initialTitle={row.title}
         initialBody={row.body ?? ""}
+        savedTo={savedTo}
         readOnly={!canEdit}
       />
     </div>

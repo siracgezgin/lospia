@@ -3,6 +3,10 @@ import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { requireModuleMember } from "@/lib/modules/context";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { CrmView } from "@/components/crm/CrmView";
+import { CrmCategoryGrid } from "@/components/crm/CrmCategoryGrid";
+import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
+import { crmCategoryOfSegment } from "@/lib/crm/constants";
+import { Contact } from "lucide-react";
 import { contactDescriptor, taskMatchesPerson, type PersonMatchTask } from "@/lib/utils/task-person-match";
 import { maybeDatabaseSetupRequired } from "@/lib/utils/supabase-errors";
 import type { WorkspaceContact, Profile } from "@/types";
@@ -14,10 +18,21 @@ export const metadata = { title: "CRM" };
 export default async function CrmPage({
   searchParams,
 }: {
-  searchParams: Promise<{ segment?: string }>;
+  searchParams: Promise<{ segment?: string; k?: string }>;
 }) {
   const params = await searchParams;
   const initialSegment = typeof params.segment === "string" ? params.segment : "";
+  /* `?k=` AÇIK KUTUdur. Yokken CRM kutucuk ızgarasıyla açılır — Aslı Hanım
+     (2026-09-07): "Bu CRM'e böyle giremezsin. Bak her girdiğin dosya böyle
+     başlamalı… yani şimdi burada girersen böyle direkt sen dosyaya giriyorsun."
+     Eski `?segment=` bağlantıları KIRILMAZ: segment hangi kutuya düşüyorsa o
+     kutu açılır ve liste doğrudan gelir. */
+  const categoryKey =
+    typeof params.k === "string" && params.k
+      ? params.k
+      : initialSegment
+        ? crmCategoryOfSegment(initialSegment).key
+        : null;
 
   // Herkes görür, yönetici düzenler — CrmView isAdmin=false iken tüm yazma
   // aksiyonlarını gizler; RLS zaten üye okumasına izin veriyor.
@@ -92,6 +107,17 @@ export default async function CrmPage({
     if (n > 0) taskCounts[id] = n;
   }
 
+  /* GİRİŞ = KUTULAR. Kutu seçilmemişse tablo hiç çizilmez; kurulum uyarısı
+     gerekiyorsa o da burada, kutuların üstünde durur. */
+  if (!categoryKey) {
+    return (
+      <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
+        <ModulePageHeader title="CRM" icon={Contact} />
+        <CrmCategoryGrid contacts={contacts} />
+      </div>
+    );
+  }
+
   return (
     <CrmView
       contacts={contacts}
@@ -99,6 +125,7 @@ export default async function CrmPage({
       taskCounts={taskCounts}
       isAdmin={isAdmin}
       initialSegment={initialSegment}
+      categoryKey={categoryKey}
       setupRequired={setup.setupRequired}
       setupMessage={setup.message}
       setupTechnicalDetail={setup.technicalDetail}

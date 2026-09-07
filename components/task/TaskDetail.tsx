@@ -130,6 +130,8 @@ interface Props {
   // Page-composed panels, positioned by this layout in a single column:
   // Görev bilgileri → Sorumlu kişiler → Notlar → Puan & Motivasyon → Aktivite.
   participantsSlot?: React.ReactNode;
+  /** Kademeli kontrol zinciri (20240341) — sorumlulardan sonra, notlardan önce. */
+  reviewSlot?: React.ReactNode;
   notesSlot?: React.ReactNode;
   effortSlot?: React.ReactNode;
 }
@@ -183,13 +185,15 @@ const BAR_BLEED = "-mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8";
 
 function TaskEditor({
   task, departments, canEdit, canComplete, isAdmin, backHref,
-  responsiblePeople, participantsSlot, notesSlot, effortSlot, activitySlot,
+  responsiblePeople, participantsSlot, reviewSlot, notesSlot, effortSlot, activitySlot,
   justSaved, onSaved,
 }: {
   task: Task; departments: WorkspaceDepartment[]; canEdit: boolean; canComplete: boolean;
   isAdmin: boolean; backHref: string; backLabel: string;
   responsiblePeople: string[];
   participantsSlot?: React.ReactNode;
+  /** Kademeli kontrol zinciri (20240341) — sorumlulardan sonra, notlardan önce. */
+  reviewSlot?: React.ReactNode;
   notesSlot?: React.ReactNode;
   effortSlot?: React.ReactNode;
   activitySlot: React.ReactNode;
@@ -616,6 +620,11 @@ function TaskEditor({
         {/* Sorumlu kişiler — active assignment management, right under the
             task details (never a passive side card). */}
         {participantsSlot}
+
+        {/* Kontrol zinciri — Aslı Hanım (2026-09-07): "İkinizin yaptığını Nisa
+            kontrol etsin, ONDAN SONRA bana gelsin." Sorumlulardan hemen sonra
+            durur: "kim yapıyor"un ardından gelen soru "kim kontrol etti". */}
+        {reviewSlot}
 
         {/* Notlar — the main working area. */}
         {notesSlot}

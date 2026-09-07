@@ -38,6 +38,7 @@ import {
   Settings,
   ShieldCheck,
   Table2,
+  Target,
   Trash2,
   Wallet,
 } from "lucide-react";
@@ -140,6 +141,23 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
     group: "urun",
   },
 
+  /* GOALS — kişi × ay hedefleri (20240340).
+     Aslı Hanım (2026-09-07, sesli mesaj): "Her insanın o bir ay içindeki
+     hedefi, ikinci aydaki hedefi, üçüncü aydaki hedefi… Oraya onu ben
+     yazdığım zaman her gün herkesin saati de çıkacak, sorumluluğu da çıkacak.
+     BEN ARAYA İŞ SOKMAYACAĞIM."
+     Takvim'in altına sekme olarak girmedi: Calendar "hangi gün hangi
+     toplantı"yı, burası "hangi kişi hangi ay ne hedefliyor"u söyler. */
+  {
+    key: "goals",
+    title: "Goals",
+    description: "Kişi başına aylık hedefler — bu ay, gelecek ay, sonraki ay.",
+    href: "/goals",
+    icon: Target,
+    access: "all",
+    group: "calisma",
+  },
+
   // ── AF Teamwork — ekibin ortak çalışma alanı ──────────────────────────────
   // Aslı Hanım (2026-08-28): "Sen onun adını AF Teamwork diye çevir. Bizim
   // teamwork bütün çalışmalarımız burada olsun." Sheets ve Library sol bardan
@@ -163,10 +181,18 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
     access: "all",
     group: "urun",
   },
+  /* CRM = AF'nin istediği FİHRİST. Aslı Hanım (2026-09-07): "Bizim bu operasyon
+     sistemimizde bir fihristimiz var mı?… Admin değil de şu Product and Office,
+     buraya bir tane fihrist koyabilirsin." Sıraç: "Aslında CRM'e eklemiştim
+     ben." AF: "ORAYA EKLEYEBİLİRİZ." — yani ikinci bir modül değil; eksik olan
+     CRM'in GİRİŞİYDİ ("Bu CRM'e böyle giremezsin"). Giriş artık kategori
+     kutucukları (Selebriti · Basın · VIP · Outsource · Toplantılar · Dış ekip ·
+     Üretim · Ekibimiz · Dernekler) — Sabri Bey, Meral Hanım ve Berna Hanım
+     oraya kaydedilir. Aynı rota iki adla listelenmez (KURAL 2). */
   {
     key: "crm",
     title: "CRM",
-    description: "Müşteri, tedarikçi ve influencer ilişkileri tek rehberde.",
+    description: "Fihrist — selebriti, basın, VIP, outsource ve dış ekip tek rehberde.",
     href: "/crm",
     icon: Contact,
     access: "all",

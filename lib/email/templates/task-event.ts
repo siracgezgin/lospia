@@ -29,8 +29,17 @@ export interface TaskEventEmailParams {
   recipientName?: string | null;
   /** Who triggered the event — makes the lead sentence personal when known. */
   actorName?: string | null;
-  /** Pre-formatted Turkish due date ("28 Temmuz 2026 Salı"). */
-  dueDateLabel?: string | null;
+  /**
+   * Görevin doğduğu TOPLANTININ tarihi ("10 Eylül 2026 Çarşamba").
+   *
+   * Aslı Hanım (2026-09-07): "Artık SON TARİH diye bir şey yok — direkt
+   * TOPLANTI TARİHİ, Türkiye saati ve parantezde NY saati ile beraber
+   * gönderilsin." Mailde bir zaman satırı varsa o, işin ne zaman KONUŞULACAĞI
+   * bilgisidir; soyut bir teslim tarihi değil.
+   */
+  meetingDateLabel?: string | null;
+  /** "16:00 (New York 09:00)" — Türkiye saati asıl, NY parantezde. */
+  meetingTimeLabel?: string | null;
   /** Turkish priority label ("Yüksek"). */
   priorityLabel?: string | null;
 }
@@ -50,15 +59,20 @@ export function buildTaskEventEmail(
   params: TaskEventEmailParams,
   copy: TaskEventCopy,
 ): EmailMessage {
-  const { to, taskTitle, taskId, baseUrl, recipientName, actorName, dueDateLabel, priorityLabel } =
-    params;
+  const { to, taskTitle, taskId, baseUrl, recipientName, actorName,
+    meetingDateLabel, meetingTimeLabel, priorityLabel } = params;
   const url = `${baseUrl.replace(/\/+$/, "")}/tasks/${taskId}`;
 
   const greeting = recipientName?.trim() ? `Sayın ${recipientName.trim()},` : "Merhaba,";
   const lead = actorName?.trim() ? copy.leadWithActor(actorName.trim()) : copy.leadFallback;
 
+  /* "SON TARİH" SATIRI KALKTI (2026-09-07). Yerine, görev bir toplantıdan
+     doğduysa o toplantının tarihi ve saati yazar. Toplantıdan doğmayan bir
+     görevde zaman satırı HİÇ olmaz — uydurulmuş bir tarih yazmaktansa
+     yazmamak doğru. */
   const detailPairs: Array<[string, string]> = [["Görev", taskTitle]];
-  if (dueDateLabel?.trim()) detailPairs.push(["Son tarih", dueDateLabel.trim()]);
+  if (meetingDateLabel?.trim()) detailPairs.push(["Tarih", meetingDateLabel.trim()]);
+  if (meetingTimeLabel?.trim()) detailPairs.push(["Saat", meetingTimeLabel.trim()]);
   if (priorityLabel?.trim()) detailPairs.push(["Öncelik", priorityLabel.trim()]);
 
   const text = [
