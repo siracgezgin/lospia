@@ -76,9 +76,22 @@ export default async function SheetDetailPage({
       .order("name"),
   ]);
 
+  /* NEREYE KAYDEDİLDİĞİ — klasör adı ekranda yazsın (2026-09-07). */
+  let folderName: string | null = null;
+  if (sheet.folder_id) {
+    const { data: folder } = await supabase
+      .from("document_folders")
+      .select("name")
+      .eq("id", sheet.folder_id)
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+    folderName = (folder as { name: string } | null)?.name ?? null;
+  }
+
   return (
     <SheetDetailView
       sheet={sheet}
+      savedTo={folderName ? `AF Teamwork › ${folderName}` : "AF Teamwork"}
       departments={(deptsResult.data ?? []) as WorkspaceDepartment[]}
       tasks={(tasksResult.data ?? []) as { id: string; title: string }[]}
       contacts={(contactsResult.data ?? []) as { id: string; name: string }[]}
