@@ -26,7 +26,7 @@ interface Props {
   /** Başka bir güne geç — hafta dışına çıkarsa çağıran rotayı günceller. */
   onDayChange: (_iso: string) => void;
   /** Bir saate tıklandı → toplantı penceresi. */
-  onOpenSlot: (_iso: string, _slot: string) => void;
+  onOpenSlot: (_iso: string, _slot: string, _topicIndex?: number) => void;
   /** "Toplantı ekle" — o saatte kayıt olsa bile BOŞ pencere açar. */
   onAddMeeting?: (_iso: string, _slot: string) => void;
   onClose: () => void;
@@ -122,7 +122,7 @@ export function PlanningDayView({
         personHex={personHex}
         isAdmin={isAdmin}
         todayIso={todayIso}
-        onOpen={(iso, slot) => onOpenSlot(iso, slot)}
+        onOpen={(iso, slot, _dayIndex, topicIndex) => onOpenSlot(iso, slot, topicIndex)}
         bands={bands}
       />
     </Overlay>

@@ -467,6 +467,10 @@ export type ProductionPricing = {
 export type PlanningCategory =
   | "uretim" | "ai" | "sales" | "marketing" | "finance" | "external" | "system" | "tasarim" | "other";
 
+/** Toplantının SONUCU (Aslı Hanım, 2026-09-07). Takvim bir arşivdir: yapıldı
+ *  mı, aksadı mı geriye dönük okunabilmeli. */
+export type PlanningMeetingStatus = "planned" | "done" | "missed";
+
 /** Izgaradaki renkli "toplantı kutusu" (gün + saat). */
 export type PlanningMeeting = {
   id: string;
@@ -480,6 +484,15 @@ export type PlanningMeeting = {
   participant_ids: string[];   // ileride yapısal katılımcı
   collaborator_ids?: string[]; // iş birliği yapan kişiler (20240304)
   position: number;
+  /** Toplantı sonucu (20240338) — 'done' büyük yeşil tik, 'missed' kırmızı
+   *  çarpı ("bir sonraki toplantıya eklenmesi gerektiğini anlayalım").
+   *  Kolon migrate edilmemiş kurulumlarda alan gelmez; okuyan taraf
+   *  'planned' varsayar. */
+  status?: PlanningMeetingStatus | null;
+  status_at?: string | null;
+  status_by?: string | null;
+  /** Ekip DIŞI katılımcıların e-postaları — Sabri Bey, Meral Hanım (20240338). */
+  external_emails?: string[] | null;
   template_id?: string | null; // şablondan kurulduysa kaynağı (20240222)
   created_by: string | null;
   updated_by: string | null;

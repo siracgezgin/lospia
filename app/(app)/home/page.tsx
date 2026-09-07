@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { redirectToSignIn } from "@/lib/auth/session-redirect";
-import { ArrowRight, ShieldAlert } from "lucide-react";
+import { ArrowRight, CheckCircle2, ShieldAlert, XCircle } from "lucide-react";
 import { startOfWeek, addDays, format } from "date-fns";
 import { requireModuleMember } from "@/lib/modules/context";
 import { getProfile } from "@/lib/supabase/server";
@@ -9,6 +9,7 @@ import { AccessDenied } from "@/components/modules/AccessDenied";
 import { PhotoNudge } from "@/components/home/PhotoNudge";
 import { categoryMeta } from "@/lib/planning/categories";
 import { cn } from "@/lib/utils/cn";
+import { isMissingSchemaError } from "@/lib/utils/supabase-errors";
 import type { TaskPriority, TaskStatus } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -63,6 +64,10 @@ type HomeMeeting = {
   time_slot: string;
   category: string | null;
   title: string | null;
+  /** Toplantı sonucu (20240338) — kolon migrate edilmemişse gelmez. */
+  status?: string | null;
+  /** TOPLANTI ÖNCESİ GÖRÜNSÜN diye gündem satırları (2026-09-07). */
+  planning_topics?: { text: string | null; position: number }[] | null;
 };
 
 /**
@@ -140,11 +145,18 @@ export default async function HomePage() {
         .limit(1)
     : Promise.resolve({ data: [] as { created_at: string }[] });
 
-  const [participantTaskIds, meetingsRes, profile, lastBackupRes] = await Promise.all([
+  const meetingSelect =
+    "id, meeting_date, time_slot, category, title, status, planning_topics(text, position)";
+  const [participantTaskIds, meetingsRes0, profile, lastBackupRes] = await Promise.all([
     participantTaskIdsPromise,
     supabase
       .from("planning_meetings")
-      .select("id, meeting_date, time_slot, category, title")
+      /* Gündem BAŞLIKLA BİRLİKTE gelir. Aslı Hanım (2026-09-07): "Biz böylece
+         toplantılarda, TOPLANTI ÖNCESİ burada konularımızı göreceğiz… Burada
+         bugünkü toplantının konusu neyse burada yazsın görelim. İki konu mu
+         var — biri sweatshirt, biri one of a kind mı?" Gömülü ilişki ek tur
+         açmaz; başlık zaten çekiliyordu. */
+      .select(meetingSelect)
       .eq("workspace_id", workspaceId)
       .gte("meeting_date", todayIso)
       .lte("meeting_date", weekEnd)
@@ -156,6 +168,23 @@ export default async function HomePage() {
     getProfile(user.id),
     lastBackupQuery,
   ]);
+
+  /* `status` kolonu 20240338 ile geldi ve prod'a migration'ı kullanıcı ELLE
+     uyguluyor. Kolon yoksa PostgREST bütün sorguyu reddeder — o durumda ana
+     sayfa toplantısız açılırdı. Bir kez kolonsuz denenir; takvim her hâlükârda
+     görünür. */
+  let meetingsRes: { data: unknown; error: { code?: string | null; message?: string | null } | null } = meetingsRes0;
+  if (meetingsRes.error && isMissingSchemaError(meetingsRes.error)) {
+    meetingsRes = await supabase
+      .from("planning_meetings")
+      .select("id, meeting_date, time_slot, category, title, planning_topics(text, position)")
+      .eq("workspace_id", workspaceId)
+      .gte("meeting_date", todayIso)
+      .lte("meeting_date", weekEnd)
+      .order("meeting_date", { ascending: true })
+      .order("time_slot", { ascending: true })
+      .order("position", { ascending: true });
+  }
 
   /* Kaç gün önce yedek alındı? Tablo henüz canlıya taşınmadıysa sorgu hata
      döner ve `data` boş gelir — hatırlatma o durumda da doğru davranır
@@ -545,23 +574,52 @@ function MoreLink({ href }: { href: string }) {
 /** Tek toplantı satırı — saat · renk · başlık. "İsim, iş, tarih."
  *  Satırın tamamı o GÜNÜN takvim kartına gider: Ana Sayfa'da bir toplantı
  *  görüp "detayı nerede?" diye aramak gerekmesin. */
+/**
+ * Ana sayfadaki toplantı satırı — SAAT · BAŞLIK · GÜNDEM.
+ *
+ * Aslı Hanım (2026-09-07): "Biz böylece toplantılarda, TOPLANTI ÖNCESİ burada
+ * konularımızı göreceğiz… Burada bugünkü toplantının konusu neyse burada
+ * yazsın görelim. İki konu mu var — biri sweatshirt, biri one of a kind mı?"
+ *
+ * Konular başlığın ALTINDA tek satırda, "·" ile ayrık durur: sayı değil METİN
+ * (sadelik kuralı — "3 konu" bir puandır, konuların adı bir tariftir).
+ */
 function MeetingRow({ meeting, day }: { meeting: HomeMeeting; day?: string }) {
   const meta = categoryMeta(meeting.category);
   const iso = String(meeting.meeting_date).slice(0, 10);
+  const agenda = [...(meeting.planning_topics ?? [])]
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+    .map((t) => t.text?.trim())
+    .filter((t): t is string => !!t);
+  const done = meeting.status === "done";
+  const missed = meeting.status === "missed";
   return (
     <li>
       <Link
         href={`/planning?v=gun&d=${iso}`}
-        className="-mx-2 flex min-h-9 items-baseline gap-2.5 rounded-lg px-2 py-1.5 text-[13.5px] transition-colors duration-150 hover:bg-surface-hover pointer-coarse:min-h-11"
+        className="-mx-2 flex min-h-9 gap-2.5 rounded-lg px-2 py-1.5 text-[13.5px] transition-colors duration-150 hover:bg-surface-hover pointer-coarse:min-h-11"
       >
-      <span className="w-11 shrink-0 font-semibold tabular-nums text-ink">
+      <span className="w-11 shrink-0 pt-px font-semibold tabular-nums text-ink">
         {meeting.time_slot.slice(0, 5)}
       </span>
-      <span aria-hidden className={cn("size-2 shrink-0 translate-y-[-1px] rounded-full", meta.dot)} />
-      <span className="min-w-0 flex-1 truncate text-ink">
-        {meeting.title?.trim() || meta.label}
+      {done ? (
+        <CheckCircle2 size={18} strokeWidth={2.5} className="mt-px shrink-0 text-success" aria-label="Tamamlandı" />
+      ) : missed ? (
+        <XCircle size={18} strokeWidth={2.5} className="mt-px shrink-0 text-danger" aria-label="Aksadı" />
+      ) : (
+        <span aria-hidden className={cn("mt-1.5 size-2 shrink-0 rounded-full", meta.dot)} />
+      )}
+      <span className="min-w-0 flex-1">
+        <span className={cn("block truncate text-ink", done && "opacity-70")}>
+          {meeting.title?.trim() || meta.label}
+        </span>
+        {agenda.length > 0 && (
+          <span className="mt-0.5 block truncate text-[12.5px] text-muted" title={agenda.join(" · ")}>
+            {agenda.join(" · ")}
+          </span>
+        )}
       </span>
-      {day && <span className="shrink-0 text-[12px] text-subtle">{day}</span>}
+      {day && <span className="shrink-0 pt-px text-[12px] text-subtle">{day}</span>}
       </Link>
     </li>
   );

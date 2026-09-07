@@ -59,6 +59,8 @@ export function PlanningBoard({
     {
       meeting: PlanningMeetingWithTopics | null; day: string; slot: string; dayLabel: string;
       bandCategory?: RuntimeBand["category"]; bandLabel?: string;
+      /** Tek konu modu — ızgarada "Konu N" hücresine tıklanmışsa o satır. */
+      topicIndex?: number | null;
     } | null
   >(null);
 
@@ -145,20 +147,34 @@ export function PlanningBoard({
   /** `blank` → hücrede toplantı olsa bile YENİ toplantı açılır. Gün kartındaki
    *  "Toplantı ekle" bunu ister: iskelet her şeridi doldurduğu için boş saat
    *  kalmıyor ve düğme sessizce var olan toplantıyı DÜZENLEMEYE açıyordu. */
-  const openEditor = (iso: string, slot: string, i: number, blank = false) => {
+  const openEditorAt = (
+    iso: string, slot: string, i: number,
+    opts: { blank?: boolean; topicIndex?: number | null } = {},
+  ) => {
     if (!isAdmin) return;
     const cell = byCell.get(`${iso}|${slot}`) ?? [];
     // Toplantı, oturduğu ŞERİDİN kimliğini alır — renk seçtirilmiyor.
     const band = bands.find((b) => b.slot === slot);
     setEditor({
-      meeting: blank ? null : (cell[0] ?? null),
+      meeting: opts.blank ? null : (cell[0] ?? null),
       day: iso,
       slot,
       dayLabel: `${WEEKDAY_LONG_TR[i]} ${format(parseISO(iso), "d MMM", { locale: tr })}`,
       bandCategory: band?.category,
       bandLabel: band?.label,
+      /* Tek konu modu YALNIZ var olan bir toplantıda anlamlı. Boş bir hücrenin
+         "Konu 3"üne tıklanınca pencere yeni toplantıyı tek satırla açıyordu ve
+         başlık girecek yer görünmüyordu; orada gündemin tamamı açılır. */
+      topicIndex: opts.blank || !cell[0] ? null : (opts.topicIndex ?? null),
     });
   };
+
+  /* Izgaranın çağırdığı imza: dördüncü argüman TIKLANAN KONU SATIRIDIR.
+     Başlık hücresi onu vermez → bütün gündem açılır; "Konu 2" hücresi verir →
+     pencere yalnız o konuyu açar (Aslı Hanım, 2026-09-07: "konuya tıklayınca
+     hepsini açıyor, konuyu açmıyor ki"). */
+  const openEditor = (iso: string, slot: string, i: number, topicIndex?: number) =>
+    openEditorAt(iso, slot, i, { topicIndex: topicIndex ?? null });
 
   return (
     /* TAM EKRAN. Aslı Hanım (2026-08-29): "Buradaki boşluğu kaldır ve calendar
@@ -255,6 +271,7 @@ export function PlanningBoard({
           dayLabel={editor.dayLabel}
           bandCategory={editor.bandCategory}
           bandLabel={editor.bandLabel}
+          focusTopicIndex={editor.topicIndex ?? null}
           members={members}
           personHex={personHex}
           weekMeetings={weekMeetings}
@@ -277,8 +294,10 @@ export function PlanningBoard({
           bands={bands}
           todayIso={todayIso}
           onDayChange={openDayCard}
-          onOpenSlot={(iso, slot) => openEditor(iso, slot, Math.max(0, weekDays.indexOf(iso)))}
-          onAddMeeting={(iso, slot) => openEditor(iso, slot, Math.max(0, weekDays.indexOf(iso)), true)}
+          onOpenSlot={(iso, slot, topicIndex) =>
+            openEditorAt(iso, slot, Math.max(0, weekDays.indexOf(iso)), { topicIndex })}
+          onAddMeeting={(iso, slot) =>
+            openEditorAt(iso, slot, Math.max(0, weekDays.indexOf(iso)), { blank: true })}
           onClose={closeDayCard}
         />
       )}

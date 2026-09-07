@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import type { AppRole } from "@/lib/auth/permissions";
-import { toActionErrorMessage } from "@/lib/utils/supabase-errors";
+import { toActionErrorMessage, isMissingSchemaError } from "@/lib/utils/supabase-errors";
 
 // Planlama — Haftalık Toplantı Takvimi. Toplantı (renkli kutu) + altında Konu'lar.
 // İzin modeli (2026-07-26): üyeler OKUR, yazma yalnız yönetici — hem burada
@@ -27,6 +27,14 @@ const MeetingSchema = z.object({
   participant_ids: memberIds,
   // "İş birliği" — sorumlunun yanında çalışan kişiler (Aslı Hanım, 2026-08-19).
   collaborator_ids: memberIds,
+  /* EKİP DIŞI KATILIMCILAR (2026-09-07). Sabri Bey üreticimiz, Meral Hanım
+     kalıpçımız — ikisi de sistemde kullanıcı değil:
+       "Sabri Bey'i nasıl ekleyeceğim ben? Yani burada ekip içi var."
+       "Şuraya bir artı koysan, bir e-mail hesabı girdirsen artıyla." */
+  external_emails: z
+    .array(z.string().trim().email("Geçersiz e-posta").max(200))
+    .max(20)
+    .default([]),
 });
 export type MeetingInput = z.infer<typeof MeetingSchema>;
 
@@ -79,11 +87,36 @@ export async function createMeeting(
       content: nn(v.content),
       participant_ids: v.participant_ids,
       collaborator_ids: v.collaborator_ids,
+      external_emails: v.external_emails,
       created_by: ctx.userId,
       updated_by: ctx.userId,
     })
     .select("id")
     .single();
+  /* `external_emails` kolonu 20240338 ile geldi. Prod'a migration elle
+     uygulandığı için, henüz uygulanmamış bir kurulumda toplantı oluşturmak
+     TAMAMEN kırılmasın: kolonsuz bir kez daha denenir. */
+  if (error && isMissingSchemaError(error)) {
+    const retry = await supabase
+      .from("planning_meetings")
+      .insert({
+        workspace_id: ctx.workspaceId,
+        meeting_date: v.meeting_date,
+        time_slot: v.time_slot,
+        category: v.category,
+        title: nn(v.title),
+        content: nn(v.content),
+        participant_ids: v.participant_ids,
+        collaborator_ids: v.collaborator_ids,
+        created_by: ctx.userId,
+        updated_by: ctx.userId,
+      })
+      .select("id")
+      .single();
+    if (retry.error) return { error: toActionErrorMessage(retry.error) };
+    revalidatePath("/planning");
+    return { id: (retry.data as { id: string }).id };
+  }
   if (error) return { error: toActionErrorMessage(error) };
   revalidatePath("/planning");
   return { id: (data as { id: string }).id };
@@ -101,20 +134,31 @@ export async function updateMeeting(
   if (!isAdminRole(ctx.role)) return { error: PLANNING_ADMIN_ONLY };
 
   const v = parsed.data;
+  const base = {
+    meeting_date: v.meeting_date,
+    time_slot: v.time_slot,
+    category: v.category,
+    title: nn(v.title),
+    content: nn(v.content),
+    participant_ids: v.participant_ids,
+    collaborator_ids: v.collaborator_ids,
+    updated_by: ctx.userId,
+  };
   const { error } = await supabase
     .from("planning_meetings")
-    .update({
-      meeting_date: v.meeting_date,
-      time_slot: v.time_slot,
-      category: v.category,
-      title: nn(v.title),
-      content: nn(v.content),
-      participant_ids: v.participant_ids,
-      collaborator_ids: v.collaborator_ids,
-      updated_by: ctx.userId,
-    })
+    .update({ ...base, external_emails: v.external_emails })
     .eq("id", meetingId)
     .eq("workspace_id", ctx.workspaceId);
+  if (error && isMissingSchemaError(error)) {
+    const retry = await supabase
+      .from("planning_meetings")
+      .update(base)
+      .eq("id", meetingId)
+      .eq("workspace_id", ctx.workspaceId);
+    if (retry.error) return { error: toActionErrorMessage(retry.error) };
+    revalidatePath("/planning");
+    return { ok: true };
+  }
   if (error) return { error: toActionErrorMessage(error) };
   revalidatePath("/planning");
   return { ok: true };
@@ -744,6 +788,157 @@ export async function moveMeeting(
   if (count === 0) return { error: NOT_FOUND };
   revalidatePath("/planning");
   return { ok: true };
+}
+
+/**
+ * TOPLANTIYI ÇOĞALTIR — "toplantının devamı".
+ *
+ * Aslı Hanım (2026-09-07):
+ *   "Peki şöyle bir şey yapabiliyor muyum? Bunu DUPLICATE edebiliyor muyum?…
+ *    Şimdi bu elbisenin fittingini yaptık, aynı ekiple bunun çarşamba günü
+ *    üretimini konuştuk… Şöyle option'a basıp duplicate gibi taşıyabiliyor
+ *    muyum? Yani toplantının DEVAMINI oraya koyacağım."
+ *
+ * Neden taşımak yetmiyor: sürükleyip bırakmak kaydı YERİNDEN EDİYORDU ve
+ * geçmiş gün boşalıyordu —
+ *   "Bu pazartesiyi buraya aldı. Hâlbuki ben bunu alsın istemiyorum. Ben dönüp
+ *    HANGİ TARİHTE HANGİ TOPLANTIYI yaptığımız kalsın istiyorum."
+ * Takvim bir arşivdir: geçmiş kayıt yerinde kalır, devamı yeni güne KOPYALANIR.
+ *
+ * Kopyalanan: başlık, not, kategori, kişiler, dış e-postalar ve KONULAR.
+ * Kopyalanmayan: sonuç işareti (yeni toplantı 'planned' başlar) ve konuların
+ * `task_id`'si — kopya, kaynağın görevini sahiplenmez, kendi "Bildir"ini bekler.
+ */
+export async function duplicateMeeting(
+  meetingId: string,
+  target: { meeting_date: string; time_slot?: string },
+): Promise<{ id: string } | { error: string }> {
+  const parsed = z
+    .object({
+      meeting_date: z.string().regex(DATE_RE, "Geçersiz tarih"),
+      time_slot: z.string().min(1).max(10).optional(),
+    })
+    .safeParse(target);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+  if (!isAdminRole(ctx.role)) return { error: PLANNING_ADMIN_ONLY };
+
+  const { data: src, error: srcErr } = await supabase
+    .from("planning_meetings")
+    .select("*")
+    .eq("id", meetingId)
+    .eq("workspace_id", ctx.workspaceId)
+    .maybeSingle();
+  if (srcErr) return { error: toActionErrorMessage(srcErr) };
+  if (!src) return { error: NOT_FOUND };
+
+  const m = src as Record<string, unknown>;
+  const row: Record<string, unknown> = {
+    workspace_id: ctx.workspaceId,
+    meeting_date: parsed.data.meeting_date,
+    time_slot: parsed.data.time_slot ?? (m.time_slot as string),
+    category: m.category,
+    title: m.title,
+    content: m.content,
+    participant_ids: (m.participant_ids as string[]) ?? [],
+    collaborator_ids: (m.collaborator_ids as string[]) ?? [],
+    position: (m.position as number) ?? 0,
+    created_by: ctx.userId,
+    updated_by: ctx.userId,
+  };
+  if (Array.isArray(m.external_emails)) row.external_emails = m.external_emails;
+
+  let created = await supabase.from("planning_meetings").insert(row).select("id").single();
+  if (created.error && isMissingSchemaError(created.error)) {
+    delete row.external_emails;
+    created = await supabase.from("planning_meetings").insert(row).select("id").single();
+  }
+  if (created.error) return { error: toActionErrorMessage(created.error) };
+  const newId = (created.data as { id: string }).id;
+
+  /* KONULAR da gelir — "toplantının devamı" boş bir kutu değil, aynı gündemin
+     ikinci oturumudur. Teslim tarihi yeni güne kayar; görev bağı kopar. */
+  const { data: topics } = await supabase
+    .from("planning_topics")
+    .select("position, text, participant_ids, collaborator_ids")
+    .eq("meeting_id", meetingId)
+    .eq("workspace_id", ctx.workspaceId)
+    .order("position", { ascending: true });
+  const topicRows = (topics ?? []) as {
+    position: number; text: string | null;
+    participant_ids: string[] | null; collaborator_ids: string[] | null;
+  }[];
+  if (topicRows.length) {
+    await supabase.from("planning_topics").insert(
+      topicRows.map((t) => ({
+        meeting_id: newId,
+        workspace_id: ctx.workspaceId,
+        position: t.position,
+        text: t.text,
+        participant_ids: t.participant_ids ?? [],
+        collaborator_ids: t.collaborator_ids ?? [],
+        due_date: parsed.data.meeting_date,
+        created_by: ctx.userId,
+      })),
+    );
+  }
+
+  revalidatePath("/planning");
+  revalidatePath("/home");
+  return { id: newId };
+}
+
+/**
+ * TOPLANTININ SONUCU — büyük yeşil tik ya da kırmızı çarpı.
+ *
+ * Aslı Hanım (2026-09-07):
+ *   "Tamamlandığında şu yanındaki yeşil şey çıksın… Bu yeşili biraz daha büyük
+ *    yapabilirsin. Hani böyle BAŞARDIK gibi bir yeşil olsun."
+ *   "Eğer bu yeşil olmazsa, diyelim ki bir aksama oldu — toplantı kırmızı çarpı
+ *    olsun, ki BİR SONRAKİ TOPLANTIYA EKLENMESİ GEREKTİĞİNİ anlayalım."
+ *
+ * Aynı işareti tekrar seçmek onu kaldırır (üçüncü durum: 'planned').
+ */
+export async function setMeetingStatus(
+  meetingId: string,
+  status: "planned" | "done" | "missed",
+): Promise<{ ok: true; status: string } | { error: string }> {
+  const parsed = z.enum(["planned", "done", "missed"]).safeParse(status);
+  if (!parsed.success) return { error: "Geçersiz durum." };
+
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+  if (!isAdminRole(ctx.role)) return { error: PLANNING_ADMIN_ONLY };
+
+  const { error, count } = await supabase
+    .from("planning_meetings")
+    .update(
+      {
+        status: parsed.data,
+        status_at: parsed.data === "planned" ? null : new Date().toISOString(),
+        status_by: parsed.data === "planned" ? null : ctx.userId,
+        updated_by: ctx.userId,
+      },
+      { count: "exact" },
+    )
+    .eq("id", meetingId)
+    .eq("workspace_id", ctx.workspaceId);
+  if (error) {
+    /* Kolon henüz migrate edilmediyse kullanıcıya "yapamazsın" değil, NEDEN
+       yapamadığı söylenir — prod'a migration'ı kullanıcı elle uyguluyor. */
+    if (isMissingSchemaError(error)) {
+      return { error: "Toplantı durumu için veritabanı güncellemesi bekleniyor (20240338)." };
+    }
+    return { error: toActionErrorMessage(error) };
+  }
+  if (count === 0) return { error: NOT_FOUND };
+  revalidatePath("/planning");
+  revalidatePath("/home");
+  return { ok: true, status: parsed.data };
 }
 
 /**
