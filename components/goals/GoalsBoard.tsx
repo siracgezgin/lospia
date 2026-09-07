@@ -93,11 +93,12 @@ export function GoalsBoard({
 
   return (
     <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
+      {/* Geri BOARD'a döner: kişi ızgarası artık orada, tek yerde. */}
       <Link
-        href="/goals"
+        href="/board"
         className="-ml-1 mb-1 inline-flex items-center gap-1 text-[13px] font-medium text-muted transition-colors duration-150 hover:text-ink"
       >
-        <ChevronLeft size={15} aria-hidden /> Tüm kişiler
+        <ChevronLeft size={15} aria-hidden /> Kişiler
       </Link>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -107,6 +108,19 @@ export function GoalsBoard({
             <h1 className="truncate text-lg font-semibold tracking-tight text-ink">{person.name}</h1>
             {person.jobTitle && <p className="truncate text-[13px] text-muted">{person.jobTitle}</p>}
           </div>
+          {/* İŞLER | HEDEFLER — Board'un kişi başlığındaki sekmenin aynısı;
+              iki ekran arasında gidip gelmek tek tık. */}
+          <span className="ml-1 inline-flex shrink-0 items-stretch overflow-hidden rounded-control border border-line bg-surface">
+            <Link
+              href="/board"
+              className="inline-flex h-8 items-center px-3 text-[13px] font-medium text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
+            >
+              İşler
+            </Link>
+            <span className="inline-flex h-8 items-center border-l border-line bg-surface-muted px-3 text-[13px] font-semibold text-ink">
+              Hedefler
+            </span>
+          </span>
         </div>
 
         {/* Pencere kaydırma — geçmiş aylar da okunabilsin. */}

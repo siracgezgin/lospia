@@ -2430,6 +2430,27 @@ export function KanbanBoard({
                   bazlı… sadece bir sayfada kendisiyle ilgili detayları okusun."
                   Yalnız sistem kullanıcısı olan kişide anlamlı (CRM kişisinin
                   görevi/toplantısı olmaz). */}
+              {/* İŞLER | HEDEFLER — kişinin içindeki iki sekme.
+                  Sıraç (2026-09-08): "Goals'ı Board ile birleştirip seçenek
+                  koyalım; aynı sayfa duplicate edilmiş gibi çok kötü olmuş."
+                  Haklıydı: iki modül de kişi kutucuklarıyla açılıyordu. Kişi
+                  ızgarası artık TEK — Board'unki; hedefler o kişinin ikinci
+                  sekmesi. Hedef yalnız sistem kullanıcısında anlamlı (CRM
+                  kişisinin aylık hedefi olmaz). */}
+              {selectedPerson.filterKey.startsWith("member:") && (
+                <span className="ml-1 inline-flex shrink-0 items-stretch overflow-hidden rounded-control border border-line bg-surface">
+                  <span className="inline-flex h-8 items-center bg-surface-muted px-3 text-[13px] font-semibold text-ink">
+                    İşler
+                  </span>
+                  <Link
+                    href={`/goals?p=${selectedPerson.id}`}
+                    className="inline-flex h-8 items-center border-l border-line px-3 text-[13px] font-medium text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
+                    title="Bu kişinin aylık hedefleri"
+                  >
+                    Hedefler
+                  </Link>
+                </span>
+              )}
               {selectedPerson.filterKey.startsWith("member:") && (
                 <Link
                   href={`/reports/${selectedPerson.id}`}

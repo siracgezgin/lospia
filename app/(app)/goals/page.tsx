@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { Target } from "lucide-react";
 import { addMonths, format, parseISO, isValid, startOfMonth } from "date-fns";
@@ -7,9 +8,7 @@ import { AccessDenied } from "@/components/modules/AccessDenied";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { SetupRequiredNotice } from "@/components/modules/SetupRequiredNotice";
 import { maybeDatabaseSetupRequired } from "@/lib/utils/supabase-errors";
-import { Tile, TileGrid } from "@/components/ui/TileGrid";
 import { assignPersonTones } from "@/lib/design/person-colors";
-import { getPersonInitials } from "@/lib/utils/person-display";
 import { GoalsBoard, type GoalRow } from "@/components/goals/GoalsBoard";
 import type { Profile } from "@/types";
 
@@ -114,39 +113,12 @@ export default async function GoalsPage({
 
   const selected = sp.p ? people.find((p) => p.id === sp.p) ?? null : null;
 
-  // ── Kişi seçilmediyse: KUTUCUKLAR ─────────────────────────────────────────
-  if (!selected) {
-    const thisMonth = months[0];
-    return (
-      <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
-        {header}
-        <TileGrid>
-          {people.map((p) => {
-            /* Kart altı: SAYI DEĞİL, bu ayki ilk açık hedefin METNİ. Sayı
-               kişiyi puanlar (sadelik kuralı); metin listeyi tarif eder. */
-            const mine = goals
-              .filter((g) => g.member_id === p.id && g.period_month === thisMonth)
-              .sort((a, b) => a.position - b.position);
-            const open = mine.find((g) => g.status === "open") ?? mine[0];
-            return (
-              <Tile
-                key={p.id}
-                href={`/goals?p=${p.id}${sp.m ? `&m=${sp.m}` : ""}`}
-                title={p.name}
-                meta={open ? open.title : "Bu ay için hedef yazılmadı"}
-                photoUrl={p.avatarUrl}
-                initials={getPersonInitials(p.name)}
-                colorHex={tones[p.id]?.hex}
-              />
-            );
-          })}
-        </TileGrid>
-        {people.length === 0 && (
-          <p className="mt-6 text-center text-[13.5px] text-muted">Çalışma alanında kişi yok.</p>
-        )}
-      </div>
-    );
-  }
+  /* KİŞİ IZGARASI ARTIK BURADA DEĞİL. Sıraç (2026-09-08): "Goals'ı Board ile
+     birleştirip seçenek koyalım; AYNI SAYFA DUPLICATE EDİLMİŞ GİBİ çok kötü
+     olmuş." Board ve Goals ikisi de kişi kutucuklarıyla açılıyordu — aynı
+     ızgara iki modülde. Tek giriş Board'da kaldı; burası o kişinin "Hedefler"
+     sekmesidir ve kişisiz açılırsa Board'a döner. */
+  if (!selected) redirect("/board");
 
   // ── Kişi seçildi: ÜÇ AY ───────────────────────────────────────────────────
   return (

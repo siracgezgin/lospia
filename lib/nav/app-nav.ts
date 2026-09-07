@@ -62,9 +62,11 @@ export const NAV_SECTIONS: NavSection[] = [
          sekmedir (bkz. components/shared/SurfaceTabs) — kendi rotasında
          yaşamaya devam eder, menüde ikinci bir başlık açmaz. */
       link("list"),
-      /* Goals — günün ritmine ait: "bu ay neyi bitirmem gerekiyor". Board ve
-         List "şu an ne var"ı, Goals "bu ay nereye" sorusunu cevaplar. */
-      link("goals"),
+      /* GOALS SOL MENÜDE YOK. Sıraç (2026-09-08): "Goals'ı Board ile
+         birleştirip seçenek koyalım; aynı sayfa duplicate edilmiş gibi."
+         İki modül de kişi kutucuklarıyla açılınca menüde iki kapı aynı
+         ızgarayı gösteriyordu. Hedefler artık Board'da kişinin ikinci
+         sekmesi; /modules dizininde kaydı duruyor (çalışan bir ekran). */
     ],
   },
   {
