@@ -610,7 +610,11 @@ function MeetingRow({ meeting, day }: { meeting: HomeMeeting; day?: string }) {
         <span aria-hidden className={cn("mt-1.5 size-2 shrink-0 rounded-full", meta.dot)} />
       )}
       <span className="min-w-0 flex-1">
-        <span className={cn("block truncate text-ink", done && "opacity-70")}>
+        {/* Yapılan toplantı yeşil ve üstü çizili — takvimdekiyle aynı dil. */}
+        <span className={cn(
+          "block truncate",
+          done ? "text-success/90 line-through decoration-success/40" : missed ? "text-danger" : "text-ink",
+        )}>
           {meeting.title?.trim() || meta.label}
         </span>
         {agenda.length > 0 && (

@@ -264,7 +264,14 @@ export function PlanningDayList({
                 <span className={cn("block font-semibold uppercase tracking-[0.08em] opacity-70", z.band, meta.title)}>
                   {band?.label ?? meta.label}
                 </span>
-                <span className={cn("block font-semibold leading-snug tracking-tight", z.title, meta.title)}>
+                {/* Tamamlanan toplantı YEŞİL + ÜSTÜ ÇİZİLİ — masaüstü
+                    ızgarasıyla aynı dil (Sıraç, 2026-09-08). */}
+                <span className={cn(
+                  "block font-semibold leading-snug tracking-tight",
+                  z.title,
+                  outcome === "done" ? "text-success/90 line-through decoration-success/40" : meta.title,
+                  outcome === "missed" && "text-danger",
+                )}>
                   {title || "—"}
                 </span>
                 <KimBadges ids={ids} kim={kim} collaboratorIds={collabIds} memberNames={memberNames} memberPhotos={memberPhotos} className="ml-0 mt-1" personHex={personHex} />
@@ -276,7 +283,11 @@ export function PlanningDayList({
               </span>
             </>
           );
-          const headCls = cn("flex w-full items-start gap-2 text-left", z.pad, meta.cell, isAdmin && band && "pr-12");
+          const headCls = cn(
+            "flex w-full items-start gap-2 text-left", z.pad,
+            outcome === "done" ? "bg-success/12" : outcome === "missed" ? "bg-danger/8" : meta.cell,
+            isAdmin && band && "pr-12",
+          );
 
           return (
             <section

@@ -554,6 +554,14 @@ function TitleCell({
         // komşuları yukarıda asılı kalmasın.
         "group/cell relative flex min-h-[38px] items-center border-r border-hairline px-2 py-1.5 last:border-r-0",
         cell.length || hasBand ? meta.cell : "bg-surface",
+        /* TAMAMLANAN TOPLANTI YEŞİL VE ÜSTÜ ÇİZİLİ (Sıraç, 2026-09-08:
+           "o günkü toplantı yapıldıysa yeşil olsun, üstü çizili olsun").
+           Önce yalnız soluklaştırıyordum — üstü çizili yazı okunmaz olur diye.
+           İstek açık geldi: haftaya bakınca biten toplantı bir bakışta
+           ayrılsın. Zemin de yeşile döndüğü için çizgi tek başına taşımıyor,
+           renk ve tik ile birlikte üç sinyal aynı şeyi söylüyor. */
+        outcome === "done" && "bg-success/12",
+        outcome === "missed" && "bg-danger/8",
         // Hover: filtre (brightness) yerine ince bir mürekkep perdesi — kategori
         // rengi bozulmaz, sürükleme halkasıyla (ring) çakışmaz.
         isAdmin && HOVER_VEIL,
@@ -607,9 +615,8 @@ function TitleCell({
           <span
             className={cn(
               "block text-[12.5px] font-bold leading-[1.25] tracking-tight",
-              meta.title,
-              // Biten iş üstü çizili değil, SOLUK: çizgi başlığı okunmaz yapıyor.
-              outcome === "done" && "opacity-70",
+              outcome === "done" ? "text-success/90 line-through decoration-success/40" : meta.title,
+              outcome === "missed" && "text-danger",
               saving && "opacity-50",
             )}
           >
