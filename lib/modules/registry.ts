@@ -38,6 +38,7 @@ import {
   Settings,
   ShieldCheck,
   Table2,
+  Target,
   Trash2,
   Wallet,
 } from "lucide-react";
@@ -138,6 +139,23 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
     icon: HandCoins,
     access: "all",
     group: "urun",
+  },
+
+  /* GOALS — kişi × ay hedefleri (20240340).
+     Aslı Hanım (2026-09-07, sesli mesaj): "Her insanın o bir ay içindeki
+     hedefi, ikinci aydaki hedefi, üçüncü aydaki hedefi… Oraya onu ben
+     yazdığım zaman her gün herkesin saati de çıkacak, sorumluluğu da çıkacak.
+     BEN ARAYA İŞ SOKMAYACAĞIM."
+     Takvim'in altına sekme olarak girmedi: Calendar "hangi gün hangi
+     toplantı"yı, burası "hangi kişi hangi ay ne hedefliyor"u söyler. */
+  {
+    key: "goals",
+    title: "Goals",
+    description: "Kişi başına aylık hedefler — bu ay, gelecek ay, sonraki ay.",
+    href: "/goals",
+    icon: Target,
+    access: "all",
+    group: "calisma",
   },
 
   // ── AF Teamwork — ekibin ortak çalışma alanı ──────────────────────────────
