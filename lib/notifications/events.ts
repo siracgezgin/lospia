@@ -20,6 +20,8 @@ export type NotificationType = Database["public"]["Enums"]["notification_type"];
 export type TaskNotificationEvent =
   | "task_assigned"
   | "task_review_requested"
+  | "task_review_your_turn"
+  | "task_review_returned"
   | "task_completed"
   | "task_reopened"
   | "task_responsibility_added"
@@ -37,6 +39,12 @@ export const NOTIFICATION_EVENTS: Record<
 > = {
   task_assigned:              { dbType: "task_assigned",        title: "Yeni görev atandı" },
   task_review_requested:      { dbType: "task_status_changed",  title: "Görev onay bekliyor" },
+  /* Kademeli kontrol zinciri (20240341). Yeni bir notification_type enum'u
+     GEREKMEZ: kova aynı, kullanıcının gördüğü başlık farklı — dedupe da
+     başlığa bakar. Aslı Hanım: "ondan sonra bana gelsin" — sıra kimdeyse
+     yalnız ONA haber gider, zincirin tamamına değil. */
+  task_review_your_turn:      { dbType: "task_status_changed",  title: "Kontrol sırası sizde" },
+  task_review_returned:       { dbType: "task_status_changed",  title: "Görev kontrolden geri döndü" },
   task_completed:             { dbType: "task_status_changed",  title: "Görev tamamlandı" },
   task_reopened:              { dbType: "task_status_changed",  title: "Görev yeniden açıldı" },
   task_responsibility_added:  { dbType: "task_assigned",        title: "Göreve dahil edildiniz" },
