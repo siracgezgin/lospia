@@ -605,6 +605,7 @@ export type Database = {
           section: string
           status: string
           tags: string[]
+          thumb_path: string | null
           title: string
           updated_at: string
           url: string | null
@@ -633,6 +634,7 @@ export type Database = {
           section?: string
           status?: string
           tags?: string[]
+          thumb_path?: string | null
           title: string
           updated_at?: string
           url?: string | null
@@ -661,6 +663,7 @@ export type Database = {
           section?: string
           status?: string
           tags?: string[]
+          thumb_path?: string | null
           title?: string
           updated_at?: string
           url?: string | null
@@ -943,11 +946,15 @@ export type Database = {
           content: string | null
           created_at: string
           created_by: string | null
+          external_emails: string[]
           id: string
           kim: string | null
           meeting_date: string
           participant_ids: string[]
           position: number
+          status: string
+          status_at: string | null
+          status_by: string | null
           template_id: string | null
           time_slot: string
           title: string | null
@@ -961,11 +968,15 @@ export type Database = {
           content?: string | null
           created_at?: string
           created_by?: string | null
+          external_emails?: string[]
           id?: string
           kim?: string | null
           meeting_date: string
           participant_ids?: string[]
           position?: number
+          status?: string
+          status_at?: string | null
+          status_by?: string | null
           template_id?: string | null
           time_slot?: string
           title?: string | null
@@ -979,11 +990,15 @@ export type Database = {
           content?: string | null
           created_at?: string
           created_by?: string | null
+          external_emails?: string[]
           id?: string
           kim?: string | null
           meeting_date?: string
           participant_ids?: string[]
           position?: number
+          status?: string
+          status_at?: string | null
+          status_by?: string | null
           template_id?: string | null
           time_slot?: string
           title?: string | null
@@ -1459,6 +1474,124 @@ export type Database = {
           },
           {
             foreignKeyName: "points_ledger_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      production_portal_links: {
+        Row: {
+          can_write: boolean
+          created_at: string
+          created_by: string | null
+          email: string | null
+          expires_at: string | null
+          id: string
+          last_seen_at: string | null
+          manufacturer_name: string | null
+          opened_at: string | null
+          revoked_at: string | null
+          sheet_id: string
+          token: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          can_write?: boolean
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          expires_at?: string | null
+          id?: string
+          last_seen_at?: string | null
+          manufacturer_name?: string | null
+          opened_at?: string | null
+          revoked_at?: string | null
+          sheet_id: string
+          token: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          can_write?: boolean
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          expires_at?: string | null
+          id?: string
+          last_seen_at?: string | null
+          manufacturer_name?: string | null
+          opened_at?: string | null
+          revoked_at?: string | null
+          sheet_id?: string
+          token?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_portal_links_sheet_id_fkey"
+            columns: ["sheet_id"]
+            isOneToOne: false
+            referencedRelation: "production_sheets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_portal_links_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      production_portal_notes: {
+        Row: {
+          author_name: string | null
+          body: string
+          created_at: string
+          id: string
+          link_id: string
+          sheet_id: string
+          workspace_id: string
+        }
+        Insert: {
+          author_name?: string | null
+          body: string
+          created_at?: string
+          id?: string
+          link_id: string
+          sheet_id: string
+          workspace_id: string
+        }
+        Update: {
+          author_name?: string | null
+          body?: string
+          created_at?: string
+          id?: string
+          link_id?: string
+          sheet_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_portal_notes_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "production_portal_links"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_portal_notes_sheet_id_fkey"
+            columns: ["sheet_id"]
+            isOneToOne: false
+            referencedRelation: "production_sheets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_portal_notes_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -3432,6 +3565,11 @@ export type Database = {
       link_duplicate_contacts: { Args: never; Returns: string }
       migrate_creative_to_documents: { Args: never; Returns: string }
       planning_open_items_to_tasks: { Args: { p_ws?: string }; Returns: string }
+      production_portal_add_note: {
+        Args: { p_author?: string; p_body: string; p_token: string }
+        Returns: Json
+      }
+      production_portal_open: { Args: { p_token: string }; Returns: Json }
       provision_af_departments: {
         Args: { p_workspace_id: string }
         Returns: undefined

@@ -50,6 +50,8 @@ const WORKSPACE_TABLES = [
   "planning_topics",
   "planning_week_matrix",
   "points_ledger",
+  "production_portal_links",
+  "production_portal_notes",
   "production_sheet_materials",
   "production_sheets",
   "saved_views",
