@@ -12,7 +12,7 @@ import { Button, IconButton } from "@/components/ui/Button";
 import { Field, TextInput, TextArea } from "@/components/ui/Field";
 import {
   createMeeting, updateMeeting, deleteMeeting, saveMeetingTopics, assignTopicAsTask,
-  duplicateMeeting, duplicateTopic, setMeetingStatus, sendMeetingInvites, addExternalParticipant,
+  duplicateMeeting, duplicateTopic, setTopicDone, setMeetingStatus, sendMeetingInvites, addExternalParticipant,
   type MeetingSnapshot,
 } from "@/lib/actions/planning";
 import { categoryMeta } from "@/lib/planning/categories";
@@ -54,6 +54,8 @@ type TopicDraft = {
   collaborator_ids: string[];  // İŞ BİRLİĞİ (Aslı Hanım, 2026-08-19)
   due_date: string;      // "yyyy-MM-dd" | ""
   task_id?: string | null;
+  /** Konu tamamlandı damgası (20240342). Tamamlanan ŞEY konudur. */
+  done_at?: string | null;
 };
 
 /**
@@ -142,7 +144,7 @@ export function MeetingEditor({
     const existing: TopicDraft[] = (meeting?.topics ?? []).map((t) => ({
       id: t.id, text: t.text ?? "", participant_ids: t.participant_ids ?? [],
       collaborator_ids: t.collaborator_ids ?? [],
-      due_date: t.due_date ?? "", task_id: t.task_id,
+      due_date: t.due_date ?? "", task_id: t.task_id, done_at: t.done_at ?? null,
     }));
     /* Varsayılan ÜÇ satır — ızgaradaki "Konu 1..3" ile birebir (Aslı Hanım,
        2026-08-29: "default olarak her başlığa 3 konu olsun"). Metni boş kalan
@@ -195,6 +197,9 @@ export function MeetingEditor({
   /* KONU ÇOĞALTMA — tek konu kipinde "Çoğalt" TOPLANTIYI değil KONUYU
      kopyalar (Sıraç, 2026-09-08 / 2026-09-10). Hedef gün boş bırakılırsa kopya
      aynı toplantının sonuna eklenir. */
+  const [topicBusy, setTopicBusy] = useState<number | null>(null);
+  const [, startTopicDone] = useTransition();
+
   const [topicDupOpen, setTopicDupOpen] = useState(false);
   const [topicDupDate, setTopicDupDate] = useState("");
   const [isDupTopic, startDupTopic] = useTransition();
@@ -400,6 +405,42 @@ export function MeetingEditor({
         setInviteMsg(parts.join(" ") || "Gönderilecek adres bulunamadı.");
       } catch (e) {
         setError(messageOf(e));
+      }
+    });
+  }
+
+  /**
+   * KONUYU TAMAMLANDI İŞARETLE — elle, ama KONUNUN kendi satırından.
+   *
+   * Sıraç (2026-09-10): "Elle işaretlensin ama konu başlığı değil KONU
+   * tamamlandı olmalı. Mesela 2 konu var, ben 1. konuda tamamlandı diyorum,
+   * direkt toplantı başlığı tamamlandı oluyor."
+   *
+   * Sebebi şuydu: pencerenin başındaki "SONUÇ · Tamamlandı" TOPLANTIYI
+   * işaretliyordu ve tek konu kipinde de görünüyordu, dolayısıyla açık olan
+   * konuyu işaretlediği sanılıyordu. O düğme kalktı; işaret artık konunun
+   * kendi satırında.
+   *
+   * Önce kaydedilir: yeni yazılmış bir konunun henüz id'si yoktur.
+   */
+  function handleTopicDone(i: number) {
+    setError(null);
+    const next = !topics[i].done_at;
+    setTopicBusy(i);
+    startTopicDone(async () => {
+      try {
+        const saved = await persist();
+        if ("error" in saved) { setError(saved.error); return; }
+        const id = saved.posToId[i];
+        if (!id) { setError(`Konu ${i + 1} için önce bir metin yazın.`); return; }
+        const res = await setTopicDone(id, next);
+        if ("error" in res) { setError(res.error); return; }
+        setTopics((ts) => ts.map((t, idx) =>
+          idx === i ? { ...t, done_at: next ? new Date().toISOString() : null } : t));
+      } catch (e) {
+        setError(messageOf(e));
+      } finally {
+        setTopicBusy(null);
       }
     });
   }
@@ -810,8 +851,27 @@ export function MeetingEditor({
                  geniş ekranda tek satır kalır. */
               <li key={i} className="flex flex-wrap items-center gap-1.5 rounded-control border border-hairline p-1.5 sm:border-0 sm:p-0">
                 <span className="w-4 shrink-0 text-center text-[12px] font-medium tabular-nums text-subtle" aria-hidden>{i + 1}</span>
+                {/* TAMAMLANDI — konunun kendi satırında, metnin solunda.
+                    Tamamlanan şey konudur; toplantı başlığı bütün konular
+                    bitince kendiliğinden yeşile döner. */}
+                <IconButton
+                  size="sm"
+                  aria-label={t.done_at ? `Konu ${i + 1} tamamlandı işaretini kaldır` : `Konu ${i + 1} tamamlandı`}
+                  aria-pressed={!!t.done_at}
+                  title={t.done_at ? "Tamamlandı işaretini kaldır" : "Bu konuyu tamamlandı işaretle"}
+                  onClick={() => handleTopicDone(i)}
+                  disabled={busy || topicBusy === i}
+                  className={cn(t.done_at ? "text-success" : "hover:text-success")}
+                >
+                  {topicBusy === i
+                    ? <Loader2 size={14} className="animate-spin" />
+                    : <CheckCircle2 size={14} />}
+                </IconButton>
                 <TextInput
-                  className="min-w-0 flex-1 basis-full sm:basis-0"
+                  className={cn(
+                    "min-w-0 flex-1 basis-full sm:basis-0",
+                    t.done_at && "text-success/90 line-through decoration-success/40",
+                  )}
                   value={t.text}
                   onChange={(e) => setTopic(i, { text: e.target.value })}
                   placeholder={`Konu ${i + 1}`}
