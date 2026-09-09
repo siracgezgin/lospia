@@ -67,7 +67,7 @@ type HomeMeeting = {
   /** Toplantı sonucu (20240338) — kolon migrate edilmemişse gelmez. */
   status?: string | null;
   /** TOPLANTI ÖNCESİ GÖRÜNSÜN diye gündem satırları (2026-09-07). */
-  planning_topics?: { text: string | null; position: number }[] | null;
+  planning_topics?: { text: string | null; position: number; done_at?: string | null }[] | null;
 };
 
 /**
@@ -146,7 +146,7 @@ export default async function HomePage() {
     : Promise.resolve({ data: [] as { created_at: string }[] });
 
   const meetingSelect =
-    "id, meeting_date, time_slot, category, title, status, planning_topics(text, position)";
+    "id, meeting_date, time_slot, category, title, status, planning_topics(text, position, done_at)";
   const [participantTaskIds, meetingsRes0, profile, lastBackupRes] = await Promise.all([
     participantTaskIdsPromise,
     supabase
@@ -177,7 +177,7 @@ export default async function HomePage() {
   if (meetingsRes.error && isMissingSchemaError(meetingsRes.error)) {
     meetingsRes = await supabase
       .from("planning_meetings")
-      .select("id, meeting_date, time_slot, category, title, planning_topics(text, position)")
+      .select("id, meeting_date, time_slot, category, title, planning_topics(text, position, done_at)")
       .eq("workspace_id", workspaceId)
       .gte("meeting_date", todayIso)
       .lte("meeting_date", weekEnd)
@@ -591,7 +591,10 @@ function MeetingRow({ meeting, day }: { meeting: HomeMeeting; day?: string }) {
     .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
     .map((t) => t.text?.trim())
     .filter((t): t is string => !!t);
-  const done = meeting.status === "done";
+  /* Yeşil TÜRETİLİR — toplantının bütün konuları bitmişse (Sıraç, 2026-09-10:
+     "tamamlanan şey başlık değil konular olmalı"). Kırmızı elle işaretlenir. */
+  const filled = (meeting.planning_topics ?? []).filter((t) => (t.text ?? "").trim());
+  const done = filled.length > 0 && filled.every((t) => !!t.done_at);
   const missed = meeting.status === "missed";
   return (
     <li>

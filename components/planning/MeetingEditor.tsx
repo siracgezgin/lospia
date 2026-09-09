@@ -662,22 +662,14 @@ export function MeetingEditor({
             Renk tek başına anlam taşımaz: her iki düğmede de yazı var. */}
         {!isNew && (
           <div className="flex flex-wrap items-center gap-2">
+            {/* "TAMAMLANDI" DÜĞMESİ YOK. Sıraç (2026-09-10): "Tamamlanan şey
+                başlık değil konular olmalı." Toplantının yeşili artık
+                TÜRETİLİR: bütün konuları bitince ızgarada kendiliğinden yeşile
+                döner. Elle işaretlemek, üç konudan biri bitmişken toplantıyı
+                bitmiş göstermeye izin veriyordu.
+                "Aksadı" kalır — toplantının hiç yapılmamış olması konuların
+                değil toplantının kendi olgusudur. */}
             <span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle">Sonuç</span>
-            <button
-              type="button"
-              onClick={() => toggleStatus("done")}
-              disabled={statusBusy}
-              aria-pressed={status === "done"}
-              title="Toplantı yapıldı ve bitti"
-              className={cn(
-                "tap-target inline-flex h-9 items-center gap-1.5 rounded-control border px-3 text-[13px] font-semibold transition-colors duration-150 disabled:opacity-60",
-                status === "done"
-                  ? "border-success/40 bg-success/15 text-success"
-                  : "border-line bg-surface text-muted hover:border-success/40 hover:text-success",
-              )}
-            >
-              <CheckCircle2 size={status === "done" ? 20 : 16} aria-hidden /> Tamamlandı
-            </button>
             <button
               type="button"
               onClick={() => toggleStatus("missed")}

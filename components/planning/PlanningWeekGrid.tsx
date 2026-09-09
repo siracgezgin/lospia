@@ -260,6 +260,46 @@ export function PlanningWeekGrid({
       </div>
     ));
 
+  /**
+   * "+ KONU EKLE" SATIRI — dolu konuların hemen altında, her gün için ayrı.
+   *
+   * Sıraç (2026-09-10): "Tabloda 3 konu varsa hemen altına + Konu ekle kısmı
+   * da çıksın ve işte 4. konu olsun; sonra tekrar + Konu ekle çıksın, 5. konu
+   * şeklinde — tamamında öyle olmalı."
+   *
+   * Izgara üç satırı sabit çiziyordu; dördüncü konuyu eklemenin tek yolu
+   * pencereyi açıp "Konu ekle" demekti. Artık tablo kendi kendine büyüyor:
+   * satır eklenince bir alta yeni bir "+ Konu ekle" doğar.
+   *
+   * Tıklama YENİ satırın kendi penceresini açar (tek konu kipi) — konuya
+   * tıklamakla aynı hareket, aynı sonuç.
+   *
+   * Sessiz durur: her hücrede yalnız soluk bir "+" vardır, "Konu ekle" yazısı
+   * imleç üstüne gelince çıkar. Yedi hücrede yedi kez "+ Konu ekle" yazsaydı
+   * ızgara okunmaz olurdu (sadelik kuralı).
+   */
+  const addTopicRow = (slot: string) => {
+    if (!isAdmin) return null;
+    const next = rowCountOfSlot.get(slot) ?? 0;
+    return (
+      <div className="grid border-b border-hairline" style={{ gridTemplateColumns: cols }}>
+        <RowLabel>Konu {next + 1}</RowLabel>
+        {weekDays.map((iso, i) => (
+          <button
+            key={iso}
+            type="button"
+            onClick={() => onOpen(iso, slot, i, next)}
+            title={`${WEEKDAY_LONG_TR[i]} — yeni konu ekle`}
+            className="group/add flex min-h-[30px] items-center gap-1 border-r border-hairline px-2 py-1.5 text-left text-[12px] text-subtle transition-colors duration-150 last:border-r-0 hover:bg-surface-muted hover:text-brand"
+          >
+            <Plus size={12} className="shrink-0 opacity-50 transition-opacity duration-150 group-hover/add:opacity-100" aria-hidden />
+            <span className="opacity-0 transition-opacity duration-150 group-hover/add:opacity-100">Konu ekle</span>
+          </button>
+        ))}
+      </div>
+    );
+  };
+
   const grid = (
     /* h-full: sayfa artık tam ekran (bkz. PlanningBoard) — sabit bir
        max-height yerine kalan yüksekliğin tamamı. */
@@ -347,6 +387,7 @@ export function PlanningWeekGrid({
               )}
               {titleRow(slot, band?.category)}
               {topicGrid(slot)}
+              {addTopicRow(slot)}
             </div>
           );
         })}
@@ -495,15 +536,26 @@ function TitleCell({
   const setRef = (node: HTMLDivElement | null) => { dropRef(node); dragRef(node); };
 
   const content = cell.map((m) => m.content).filter(Boolean).join(" · ");
-  /* SONUÇ — hücrenin başında büyük yeşil tik ya da kırmızı çarpı.
-     Aslı Hanım (2026-09-07): "Bu yeşili biraz daha büyük yapabilirsin. Hani
-     böyle BAŞARDIK gibi bir yeşil olsun." / "Bir aksama oldu — toplantı kırmızı
-     çarpı olsun." İşaret hücrenin İÇİNDE değil, metnin SOLUNDA duruyor: göz
-     haftaya baktığında hangi toplantının bittiğini okumadan görüyor.
-     Bu ekranda yalnız GÖSTERİLİR; işaretleme toplantı penceresinde yapılır —
+  /* TAMAMLANMA BAŞLIĞIN DEĞİL KONULARIN İŞİ (Sıraç, 2026-09-10: "Tamamlanan
+     şey başlık değil konular olmalı, her konu ayrı ayrı kendi içinde").
+     Toplantıyı elle "tamamlandı" işaretlemek yanıltıcıydı: üç konudan biri
+     bitmişken başlık yemyeşil görünüyordu.
+     Yeşil artık TÜRETİLİR — bir toplantının bütün konuları bitmişse başlık
+     yeşile döner. Böylece AF'nin istediği "başardık" işareti de duruyor
+     (07.09: "hani böyle başardık gibi bir yeşil olsun") ama kendiliğinden,
+     gerçekten bitince çıkıyor. Konusu olmayan toplantı yeşile dönmez —
+     bitecek bir şey yoksa "bitti" denemez.
+     KIRMIZI ÇARPI elle kalır: "toplantı aksadı" konuların değil toplantının
+     kendi olgusudur ve AF onu sonraki güne taşımak için kullanıyor.
+
+     İşaret hücrenin İÇİNDE değil metnin SOLUNDA durur: göz haftaya baktığında
+     hangi toplantının bittiğini okumadan görür. Bu ekranda yalnız GÖSTERİLİR;
      hücre zaten sürükleniyor, üzerine ikinci bir tıklama hedefi koymak
      sürüklemeyi yutuyordu. */
-  const outcome = cell.find((m) => m.status === "done" || m.status === "missed")?.status ?? null;
+  const allTopics = cell.flatMap((m) => m.topics ?? []).filter((t) => (t.text ?? "").trim());
+  const derivedDone = allTopics.length > 0 && allTopics.every((t) => !!t.done_at);
+  const missed = cell.some((m) => m.status === "missed");
+  const outcome: "done" | "missed" | null = missed ? "missed" : derivedDone ? "done" : null;
 
   /* BAŞLIK YERİNDE DEĞİŞİR. Aslı Hanım (2026-09-07): "Toplantı başlıkları ve
      konular AYRI olsun — başlık üzerine tıklayınca değişebilir olsun, silip
@@ -632,7 +684,9 @@ function TitleCell({
                 title="Bu toplantıyı aç"
                 className={cn(
                   "block w-full truncate text-left text-[12.5px] font-bold leading-[1.25] tracking-tight underline-offset-2 hover:underline",
-                  mm.status === "done" ? "text-success/90" : meta.title,
+                  (mm.topics ?? []).some((t) => (t.text ?? "").trim())
+                  && (mm.topics ?? []).filter((t) => (t.text ?? "").trim()).every((t) => !!t.done_at)
+                    ? "text-success/90" : meta.title,
                   mm.status === "missed" && "text-danger",
                 )}
               >

@@ -210,7 +210,12 @@ export function PlanningDayList({
           const content = cell.map((m) => m.content).filter(Boolean).join(" · ");
           const ids = [...new Set(cell.flatMap((m) => m.participant_ids ?? []))];
           /* SONUÇ — masaüstü ızgarasıyla aynı işaret (20240338). */
-          const outcome = cell.find((m) => m.status === "done" || m.status === "missed")?.status ?? null;
+          /* Yeşil TÜRETİLİR: bütün konular bitmişse (bkz. PlanningWeekGrid). */
+          const allTop = cell.flatMap((m) => m.topics ?? []).filter((t) => (t.text ?? "").trim());
+          const outcome: "done" | "missed" | null =
+            cell.some((m) => m.status === "missed") ? "missed"
+            : allTop.length > 0 && allTop.every((t) => !!t.done_at) ? "done"
+            : null;
           /* Sonuç HÜCRENİN İLK toplantısına yazılır: aynı saatte iki başlık
              birleşmiş olsa bile işaret tek ve öngörülebilir kalsın. */
           const outcomeMeeting = cell[0] ?? null;
@@ -381,24 +386,12 @@ export function PlanningDayList({
                 )
               )}
 
-              {/* SONUÇ ŞERİDİ — "başardık" yeşili ve "aksadı" kırmızısı. */}
+              {/* AKSADI ŞERİDİ. "Tamamlandı" düğmesi kalktı: yeşil artık
+                  konulardan TÜRETİLİYOR (Sıraç, 2026-09-10). Geriye toplantının
+                  kendi olgusu kalıyor — hiç yapılmadıysa kırmızı çarpı ve
+                  sonraki güne taşıma. */}
               {isAdmin && outcomeMeeting && (
                 <div className="flex flex-wrap items-center gap-1.5 border-t border-hairline px-3 py-2">
-                  <button
-                    type="button"
-                    disabled={statusBusy === outcomeMeeting.id}
-                    aria-pressed={outcome === "done"}
-                    onClick={() => markStatus(outcomeMeeting.id, outcome, "done")}
-                    title="Toplantı yapıldı ve bitti"
-                    className={cn(
-                      "tap-target inline-flex h-8 items-center gap-1.5 rounded-control border px-2.5 text-[12.5px] font-semibold transition-colors duration-150 disabled:opacity-60",
-                      outcome === "done"
-                        ? "border-success/40 bg-success/15 text-success"
-                        : "border-line bg-surface text-muted hover:border-success/40 hover:text-success",
-                    )}
-                  >
-                    <CheckCircle2 size={outcome === "done" ? 18 : 14} aria-hidden /> Tamamlandı
-                  </button>
                   <button
                     type="button"
                     disabled={statusBusy === outcomeMeeting.id}
