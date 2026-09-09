@@ -55,6 +55,10 @@ interface Props {
   members?: { memberId: string; userId: string; name: string }[];
   /** Süzgeç şeridindeki kişi baloncukları — ekip üyeleri, kimlikleriyle. */
   people?: { userId: string; name: string; photoUrl: string | null; colorKey: string | null }[];
+  /** Sayfa hâlâ gönderiyor ama BU EKRAN OKUMUYOR: departman-üye eşlemesinin
+   *  tek tüketicisi "Görev oluştur" penceresindeki Departman alanıydı, o da
+   *  kalktı (Sıraç, 2026-09-10: "artık departman kısmı yok burada"). Prop
+   *  imzada kalıyor ki çağıran sayfalar kırılmasın. */
   deptMembers?: { department_id: string; member_id: string }[];
   /* Katılımcılar (task_member_completions) — SORUMLULUK panoyla aynı okunur:
      katılımcılar ∪ atanan. Hem "Sorumlu" sütununu hem de durum değiştirme
@@ -582,7 +586,7 @@ function MobileTaskCard({
 
 // ---- Main component ----
 
-export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles, contacts, departments = [], members = [], people = [], deptMembers = [], participantsByTask = {}, role = "member", isAdmin = false, initialPerson = "", initialView = "" }: Props) {
+export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles, contacts, departments = [], members = [], people = [], participantsByTask = {}, role = "member", isAdmin = false, initialPerson = "", initialView = "" }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const deptMeta = useMemo(() => buildDeptMeta(departments), [departments]);
@@ -1406,9 +1410,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
           workspaceId={workspaceId}
           profiles={profiles}
           contacts={contacts}
-          departments={departments}
           members={members}
-          deptMembers={deptMembers}
           isAdmin={isAdmin}
         />
       )}

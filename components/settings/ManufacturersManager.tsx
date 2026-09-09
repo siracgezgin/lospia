@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, Pencil } from "lucide-react";
+import { Plus, Trash2, Pencil, Search } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import {
   createManufacturer, updateManufacturer, deleteManufacturer,
@@ -28,6 +28,15 @@ interface Props {
   /** Föy sayısı — usta başına, "kaç ürün orada dikiliyor" bilgisi. */
   sheetCounts: Record<string, number>;
   canManage: boolean;
+}
+
+/** Türkçe duyarsız arama normalizasyonu — uygulamadaki her arama kutusuyla
+ *  AYNI kural (ğüşıöç → gusioc); "cihan" yazan "Cihan"ı da bulur. */
+function norm(s: string): string {
+  return (s ?? "")
+    .toLowerCase()
+    .replace(/ğ/g, "g").replace(/ü/g, "u").replace(/ş/g, "s")
+    .replace(/ı/g, "i").replace(/ö/g, "o").replace(/ç/g, "c").replace(/İ/g, "i");
 }
 
 function emptyDraft(): ManufacturerInput {
@@ -78,7 +87,21 @@ export function ManufacturersManager({ manufacturers, sheetCounts, canManage }: 
   const [draft, setDraft] = useState<ManufacturerInput>(emptyDraft());
   const [error, setError] = useState<string | null>(null);
   const [busy, startWork] = useTransition();
+  /* ARAMA İSTEMCİDE: usta listesi sunucudan tamamı yüklü geliyor. Ad dışında
+     şehir ve ilgili kişi de aranır — "İstanbul'daki ustalar" diye bakılıyor. */
+  const [query, setQuery] = useState("");
 
+  /* Düzenlenen satır aramadan MUAF: form açıkken kutuya yazınca satır elenip
+     yarım doldurulmuş form gözden kayboluyordu. */
+  const visible = useMemo(() => {
+    const q = norm(query.trim());
+    if (!q) return manufacturers;
+    return manufacturers.filter((m) => m.id === editingId ||
+      norm([m.name, m.city, m.country, m.contact_name, m.phone].filter(Boolean).join(" ")).includes(q));
+  }, [manufacturers, query, editingId]);
+
+  /* Renk atamaları TÜM listeden türetilir: aramada bir usta düşünce geri
+     kalanların rengi değişmesin (kişi rengi kimliğin parçası). */
   const tones = assignPersonTones(manufacturers.map((m) => m.id));
 
   function run(fn: () => Promise<{ error?: string } | unknown>, after?: () => void) {
@@ -174,15 +197,34 @@ export function ManufacturersManager({ manufacturers, sheetCounts, canManage }: 
 
       {adding && form}
 
+      {/* Tek kutu, yeni açılır liste yok — ad · şehir · ilgili kişi hepsi
+          aynı kutudan aranır. */}
+      {manufacturers.length > 0 && (
+        <div className="relative max-w-xs">
+          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-subtle" aria-hidden />
+          <TextInput
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Usta ara…"
+            aria-label="Usta ara"
+            className="pl-9"
+          />
+        </div>
+      )}
+
       {manufacturers.length === 0 && !adding ? (
         <EmptyState
           title="Henüz usta yok"
           description="Föylerdeki üretici adları kayda dönüşünce burada görünür."
           compact
         />
+      ) : query.trim() && visible.length === 0 ? (
+        /* Kayıt var ama arama tutmadı. Koşulda `query` ŞART: form açıkken
+           boş liste bu dala düşmemeli. */
+        <EmptyState icon={Search} title="Eşleşen usta yok" description="Aramayı değiştirin." compact />
       ) : (
         <ul className="divide-y divide-hairline border-t border-hairline">
-          {manufacturers.map((m) => {
+          {visible.map((m) => {
             const tone = tones[m.id]!;
             const count = sheetCounts[m.id] ?? 0;
             if (editingId === m.id) return <li key={m.id} className="py-3">{form}</li>;

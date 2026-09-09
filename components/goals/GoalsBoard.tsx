@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  Check, ChevronLeft, ChevronRight, CornerDownRight, Loader2, Plus, Trash2, Undo2,
+  CalendarPlus, Check, ChevronLeft, ChevronRight, CornerDownRight, Loader2, Plus, Trash2, Undo2,
 } from "lucide-react";
 import { addMonths, format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils/cn";
@@ -12,7 +12,7 @@ import { Button, IconButton } from "@/components/ui/Button";
 import { TextInput } from "@/components/ui/Field";
 import { PersonAvatar } from "@/components/ui/PersonAvatar";
 import { useConfirm } from "@/components/ui/useConfirm";
-import { createGoal, updateGoal, deleteGoal } from "@/lib/actions/goals";
+import { createGoal, updateGoal, deleteGoal, addGoalToCalendar } from "@/lib/actions/goals";
 
 export type GoalRow = {
   id: string;
@@ -52,6 +52,11 @@ export function GoalsBoard({
   const { ask, dialog } = useConfirm();
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
+  /* HEDEFİ TAKVİME AL — Sıraç (2026-09-10): "Hepsi aynı mantık; sadece toplantı
+     konusuna dahil etmek için gün vs girilecek." Açık olan hedefin id'si. */
+  const [calFor, setCalFor] = useState<string | null>(null);
+  const [calDate, setCalDate] = useState("");
+  const [calTime, setCalTime] = useState("09:00");
   const [error, setError] = useState<string | null>(null);
   const [isPending, start] = useTransition();
 
@@ -185,7 +190,9 @@ export function GoalsBoard({
                     <li
                       key={g.id}
                       className={cn(
-                        "group/goal flex items-start gap-1.5 rounded-control border border-hairline px-2 py-1.5",
+                        /* flex-wrap: takvim formu satırın ALTINA insin (basis-full),
+                           yoksa dört alan aynı satıra sıkışıyor. */
+                        "group/goal flex flex-wrap items-start gap-1.5 rounded-control border border-hairline px-2 py-1.5",
                         done && "bg-success/8",
                         dropped && "opacity-55",
                       )}
@@ -211,6 +218,21 @@ export function GoalsBoard({
                           {/* SONRAKİ AYA TAŞI — son sütunda hedef pencereden
                               çıkacağı için gizlenmez, taşınır ve oklarla
                               bulunur; "kayboldu" hissi olmasın diye ipucu var. */}
+                          {/* TAKVİME EKLE — hedef, o günün toplantısında
+                              konuşulacak bir konuya dönüşür. Hedefin kendisi
+                              burada kalır; kopyalanmaz. */}
+                          <IconButton
+                            size="sm"
+                            aria-label="Hedefi takvime ekle"
+                            title="Takvime ekle — o günün toplantısına konu olarak düşer"
+                            onClick={() => {
+                              setCalFor(calFor === g.id ? null : g.id);
+                              setCalDate((d) => d || month);
+                            }}
+                            className={cn(calFor === g.id && "bg-brand-soft text-brand-strong")}
+                          >
+                            <CalendarPlus size={13} />
+                          </IconButton>
                           <IconButton
                             size="sm"
                             aria-label="Sonraki aya taşı"
@@ -231,6 +253,39 @@ export function GoalsBoard({
                           >
                             <Trash2 size={13} />
                           </IconButton>
+                        </span>
+                      )}
+                      {calFor === g.id && (
+                        <span className="mt-1.5 flex basis-full flex-wrap items-center gap-1.5 rounded-control border border-brand-ring bg-brand-soft/30 p-1.5">
+                          <TextInput
+                            type="date"
+                            value={calDate}
+                            onChange={(e) => setCalDate(e.target.value)}
+                            aria-label="Toplantı günü"
+                            className="h-8 w-auto px-2 text-[12.5px]"
+                          />
+                          <TextInput
+                            type="time"
+                            value={calTime}
+                            onChange={(e) => setCalTime(e.target.value)}
+                            aria-label="Toplantı saati (New York)"
+                            className="h-8 w-auto px-2 text-[12.5px]"
+                          />
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={!calDate}
+                            onClick={() => run(`cal:${g.id}`, async () => {
+                              const res = await addGoalToCalendar(g.id, {
+                                meeting_date: calDate, time_slot: calTime,
+                              });
+                              if (!("error" in res)) setCalFor(null);
+                              return res;
+                            })}
+                          >
+                            <CalendarPlus size={13} aria-hidden /> Ekle
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => setCalFor(null)}>Vazgeç</Button>
                         </span>
                       )}
                     </li>

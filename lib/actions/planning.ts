@@ -8,6 +8,7 @@ import { toActionErrorMessage, isMissingSchemaError } from "@/lib/utils/supabase
 import { sendEmail } from "@/lib/email/send-email";
 import { meetingInviteEmail } from "@/lib/email/templates/meeting-invite";
 import { normalizeSlot, toIstanbulTime } from "@/lib/planning/timezones";
+import { findOrCreateMeeting } from "@/lib/planning/meeting-slot";
 
 // Planlama — Haftalık Toplantı Takvimi. Toplantı (renkli kutu) + altında Konu'lar.
 // İzin modeli (2026-07-26): üyeler OKUR, yazma yalnız yönetici — hem burada
@@ -928,42 +929,9 @@ export async function duplicateTopic(
       slot = (srcMeeting as { time_slot: string } | null)?.time_slot ?? "09:00";
     }
 
-    const { data: found } = await supabase
-      .from("planning_meetings")
-      .select("id")
-      .eq("workspace_id", ctx.workspaceId)
-      .eq("meeting_date", parsed.data.meeting_date)
-      .eq("time_slot", slot)
-      .order("position", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-    meetingId = (found as { id: string } | null)?.id ?? "";
-    if (!meetingId) {
-      const { data: sibling } = await supabase
-        .from("planning_meetings")
-        .select("category")
-        .eq("workspace_id", ctx.workspaceId)
-        .eq("time_slot", slot)
-        .limit(1)
-        .maybeSingle();
-      const { data: created, error: createErr } = await supabase
-        .from("planning_meetings")
-        .insert({
-          workspace_id: ctx.workspaceId,
-          meeting_date: parsed.data.meeting_date,
-          time_slot: slot,
-          category: (sibling as { category: string } | null)?.category ?? "other",
-          participant_ids: [],
-          collaborator_ids: [],
-          created_by: ctx.userId,
-          updated_by: ctx.userId,
-        })
-        .select("id")
-        .single();
-      if (createErr) return { error: toActionErrorMessage(createErr) };
-      meetingId = (created as { id: string }).id;
-    }
+    const slotRes = await findOrCreateMeeting(supabase, ctx, parsed.data.meeting_date, slot);
+    if ("error" in slotRes) return { error: slotRes.error };
+    meetingId = slotRes.id;
     dueDate = parsed.data.meeting_date;
   }
 
@@ -1532,45 +1500,13 @@ export async function moveTopic(
   if (!topicRow) return { error: "Konu bulunamadı." };
   const sourceMeetingId = (topicRow as { meeting_id: string }).meeting_id;
 
-  // Hedef hücrenin toplantısı — yoksa aç.
-  const { data: found } = await supabase
-    .from("planning_meetings")
-    .select("id")
-    .eq("workspace_id", ctx.workspaceId)
-    .eq("meeting_date", parsed.data.meeting_date)
-    .eq("time_slot", parsed.data.time_slot)
-    .order("position", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  let targetMeetingId = (found as { id: string } | null)?.id ?? null;
-  if (!targetMeetingId) {
-    // Kategori o saatteki başka bir günden miras alınır ki hücre şeridin
-    // rengiyle uyumlu çıksın.
-    const { data: sibling } = await supabase
-      .from("planning_meetings")
-      .select("category")
-      .eq("workspace_id", ctx.workspaceId)
-      .eq("time_slot", parsed.data.time_slot)
-      .limit(1)
-      .maybeSingle();
-    const { data: created, error: createErr } = await supabase
-      .from("planning_meetings")
-      .insert({
-        workspace_id: ctx.workspaceId,
-        meeting_date: parsed.data.meeting_date,
-        time_slot: parsed.data.time_slot,
-        category: (sibling as { category: string } | null)?.category ?? "other",
-        participant_ids: [],
-        collaborator_ids: [],
-        created_by: ctx.userId,
-        updated_by: ctx.userId,
-      })
-      .select("id")
-      .single();
-    if (createErr) return { error: toActionErrorMessage(createErr) };
-    targetMeetingId = (created as { id: string }).id;
-  }
+  /* Hedef hücrenin toplantısı — yoksa aç (ortak kural, bkz.
+     lib/planning/meeting-slot). */
+  const slotRes = await findOrCreateMeeting(
+    supabase, ctx, parsed.data.meeting_date, parsed.data.time_slot,
+  );
+  if ("error" in slotRes) return { error: slotRes.error };
+  const targetMeetingId = slotRes.id;
 
   const { error: moveErr } = await supabase
     .from("planning_topics")
@@ -1586,6 +1522,129 @@ export async function moveTopic(
 
   revalidatePath("/planning");
   return { ok: true };
+}
+
+/**
+ * GÖREVİ TAKVİME İLİŞTİRİR — "Görev oluştur" kartındaki SAAT'in karşılığı.
+ *
+ * Sıraç (2026-09-10): "Bu görev oluşturma da artık calendar'daki mantığa göre
+ * olacak… artık departman kısmı yok burada, görev oluşturma kartında da işte
+ * gündeki gibi ama bu sefer işte SAATİ de girecek, KONU girecek. Mantık bu
+ * şekilde, artık her şey aynı sistem üzerinden yürüyecek."
+ *
+ * Departman "bu iş hangi kutuya ait?" sorusuydu; takvimde o soru yok — bir işin
+ * yeri GÜN + SAAT'tir. Saati girilen görev, o hücredeki toplantının altına bir
+ * KONU olarak düşer ve konu göreve bağlanır (`task_id`): Pano'daki iş ile
+ * takvimdeki satır aynı kaydın iki yüzü olur, iki ayrı yere iki kez yazılmaz.
+ *
+ * Hücrede toplantı yoksa AÇILIR — moveTopic/setMeetingTitle'daki birebir aynı
+ * kural, kategori o saatteki komşu şeritten miras alınır ki yeni hücre şeridin
+ * rengiyle uyumlu çıksın. Kullanıcı "önce toplantı oluştur" duvarına çarpmaz.
+ *
+ * Saat girilmediyse bu fonksiyon hiç çağrılmaz (çağıran ekranın işi) — takvimde
+ * saatsiz satır diye bir şey yok.
+ */
+export async function attachTaskToCalendar(
+  taskId: string,
+  input: { meeting_date: string; time_slot: string; text?: string | null },
+): Promise<{ ok: true; topicId: string; meetingId: string } | { error: string }> {
+  const parsed = z
+    .object({
+      meeting_date: z.string().regex(DATE_RE, "Geçersiz tarih"),
+      // Tarayıcının <input type="time"> çıktısı "HH:MM"; normalizeSlot ızgarayla
+      // aynı biçime ("09:00") çeker ki hücre eşleşmesi metin karşılaştırmasıyla
+      // tutsun ("9:00" ile "09:00" iki ayrı hücre sayılmasın).
+      time_slot: z.string().regex(/^\d{1,2}:\d{2}$/, "Geçersiz saat"),
+      text: z.string().max(2000).optional().nullable(),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  if (!taskId) return { error: "Görev bulunamadı." };
+
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+  if (!isAdminRole(ctx.role)) return { error: PLANNING_ADMIN_ONLY };
+
+  const slot = normalizeSlot(parsed.data.time_slot);
+  const day = parsed.data.meeting_date;
+
+  // Görev gerçekten bu çalışma alanının mı? Başlık da buradan gelir: çağıran
+  // metni göndermezse konu adsız kalmasın.
+  const { data: task } = await supabase
+    .from("tasks")
+    .select("id, title")
+    .eq("id", taskId)
+    .eq("workspace_id", ctx.workspaceId)
+    .maybeSingle();
+  if (!task) return { error: "Görev bulunamadı." };
+  const text = nn(parsed.data.text) ?? nn((task as { title: string | null }).title) ?? "Görev";
+
+  // Hedef hücrenin toplantısı — yoksa aç (ortak kural, lib/planning/meeting-slot).
+  const slotRes = await findOrCreateMeeting(supabase, ctx, day, slot);
+  if ("error" in slotRes) return { error: slotRes.error };
+  const meetingId = slotRes.id;
+
+  /* Aynı görev iki kez iliştirilmesin: bağlı konu zaten varsa TAŞINIR.
+     (Bugün çağıran tek yer yeni oluşturulmuş bir görev gönderiyor, ama bu
+     eylem ileride "saatini değiştir" için de kullanılacak.) */
+  const { data: existing } = await supabase
+    .from("planning_topics")
+    .select("id, meeting_id, position")
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("task_id", taskId)
+    .limit(1)
+    .maybeSingle();
+  const prev = existing as { id: string; meeting_id: string; position: number } | null;
+
+  // Konu hedef toplantının SONUNA eklenir. Konu ZATEN o toplantıdaysa yerinde
+  // kalır — kendi kendinin arkasına eklenip sırada boşluk (hayalet satır)
+  // bırakmasın.
+  const { data: last } = await supabase
+    .from("planning_topics")
+    .select("position")
+    .eq("meeting_id", meetingId)
+    .eq("workspace_id", ctx.workspaceId)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const position =
+    prev && prev.meeting_id === meetingId
+      ? prev.position
+      : Math.min(50, ((last as { position: number } | null)?.position ?? -1) + 1);
+
+  let topicId = prev?.id ?? "";
+  if (topicId) {
+    const { error: updErr } = await supabase
+      .from("planning_topics")
+      .update({ meeting_id: meetingId, position, text, due_date: day })
+      .eq("id", topicId)
+      .eq("workspace_id", ctx.workspaceId);
+    if (updErr) return { error: toActionErrorMessage(updErr) };
+  } else {
+    const { data: ins, error: insErr } = await supabase
+      .from("planning_topics")
+      .insert({
+        meeting_id: meetingId,
+        workspace_id: ctx.workspaceId,
+        position,
+        text,
+        task_id: taskId,
+        participant_ids: [],
+        collaborator_ids: [],
+        due_date: day,
+        created_by: ctx.userId,
+      })
+      .select("id")
+      .single();
+    if (insErr) return { error: toActionErrorMessage(insErr) };
+    topicId = (ins as { id: string }).id;
+  }
+
+  revalidatePath("/planning");
+  revalidatePath("/home");
+  revalidatePath("/calendar");
+  return { ok: true, topicId, meetingId };
 }
 
 /** Bir toplantının konularını 0..n-1 yapar; `pinnedId` verilirse o konu

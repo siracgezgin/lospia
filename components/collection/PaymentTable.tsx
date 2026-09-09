@@ -4,7 +4,7 @@ import { useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   Wallet, ClipboardList, Check, Loader2, HandCoins, ChevronLeft, Scissors, Boxes,
-  MapPin, Clock3, Package,
+  MapPin, Clock3, Package, Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { updateProductionSheetPricing } from "@/lib/actions/production";
@@ -40,6 +40,14 @@ interface Props {
 
 /** Üreticisi girilmemiş föylerin toplandığı kova. */
 const UNKNOWN = "Usta atanmadı";
+
+/** Türkçe duyarsız arama normalizasyonu — Maliyet tablosuyla AYNI kural. */
+function norm(s: string): string {
+  return (s ?? "")
+    .toLowerCase()
+    .replace(/ğ/g, "g").replace(/ü/g, "u").replace(/ş/g, "s")
+    .replace(/ı/g, "i").replace(/ö/g, "o").replace(/ç/g, "c").replace(/İ/g, "i");
+}
 
 /** Sunucuya giden fiyat gövdesi — kaydetme ve "değişti mi?" karşılaştırması
  *  AYNI şekli (aynı alan sırasını) kullansın diye tek yerde kurulur. Şekil
@@ -90,6 +98,12 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
     return m;
   });
   const [openUsta, setOpenUsta] = useState<string | null>(null);
+  /* ARAMA İSTEMCİDE. Ekran iki katmanlı: usta kartları ve o ustanın ürünleri.
+     Kutu HANGİ KATMANDAYSAK onu süzer — kart ızgarasında ustayı, ustanın
+     sayfasında ürünü. Katman değişince temizlenir; yoksa "Cihan" araması
+     ustanın içindeki tüm ürünleri eleyip ekranı boş bırakıyordu. */
+  const [query, setQuery] = useState("");
+  const openUstaPage = (key: string | null) => { setOpenUsta(key); setQuery(""); };
   const [savingId, setSavingId] = useState<string | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
   /* KAYDETME HATASI GÖRÜNÜR. Hata sessizce yutuluyordu: yazdığınız tutar
@@ -193,11 +207,47 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
 
   const active = openUsta ? ustalar.find((u) => u.key === openUsta) ?? null : null;
 
+  /* Süzme ucuz (dizi taraması) — useMemo yerine düz hesap; `active` her
+     karede yeniden bulunduğu için bağımlılık listesi zaten tutmuyordu. */
+  const q = norm(query.trim());
+  const visibleUstalar = q
+    ? ustalar.filter((u) => norm([u.name, u.rec?.city, u.rec?.country].filter(Boolean).join(" ")).includes(q))
+    : ustalar;
+  const activeRows = active
+    ? (q
+        ? active.rows.filter((r) =>
+            norm([r.title, r.product_kind, r.category, r.subcategory].filter(Boolean).join(" ")).includes(q))
+        : active.rows)
+    : [];
+  /* Toplamlar EKRANDAKİNİ toplar: arama açıkken görünmeyen satırın parası
+     toplamda durursa tablo kendi kendisiyle çelişir (Maliyet tablosundaki
+     "Aramadaki toplam" ile aynı kural). */
+  const activeQty = activeRows.reduce((a, r) => a + qtyOf(r), 0);
+  const activeTotal = activeRows.reduce((a, r) => a + lineTotal(r), 0);
+  const visibleGrandTotal = q ? visibleUstalar.reduce((a, u) => a + u.total, 0) : grandTotal;
+
+  /* ARAMA KUTUSU — sekme satırının sağında, Maliyet ekranıyla aynı yerde. */
+  const searchBox = rows.length > 0 ? (
+    <div className="relative min-w-[180px] flex-1 sm:max-w-[240px] sm:flex-none">
+      <Search size={15} className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-subtle" aria-hidden />
+      <TextInput
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder={active ? "Ürün ara…" : "Usta ara…"}
+        aria-label={active ? "Ustanın ürünlerinde ara" : "Usta ara"}
+        className="pl-9"
+      />
+    </div>
+  ) : null;
+
   return (
     <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
       {/* Başlık uygulama çubuğunda; aksiyonlar sekme satırının SAĞINDA. */}
       <h1 className="sr-only">Payment Table</h1>
-      <CollectionTabs active="odeme" actions={<SeasonSwitch seasons={seasons} />} />
+      <CollectionTabs
+        active="odeme"
+        actions={<>{searchBox}<SeasonSwitch seasons={seasons} /></>}
+      />
 
       {saveError && (
         <p role="alert" className="anim-fade-down mb-3 rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[13.5px] font-medium text-danger">
@@ -211,7 +261,7 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
         /* ── Bir ustanın sayfası — diktiği ürünler ─────────────────────── */
         <section className="anim-fade">
           <div className="mb-3 flex flex-wrap items-center gap-2">
-            <Button variant="secondary" size="sm" onClick={() => setOpenUsta(null)} className="shrink-0">
+            <Button variant="secondary" size="sm" onClick={() => openUstaPage(null)} className="shrink-0">
               <ChevronLeft size={14} /> Ustalar
             </Button>
             <span className="flex min-w-0 items-center gap-2">
@@ -241,10 +291,18 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
               </span>
             </span>
             <span className="ml-auto text-[13px] tabular-nums text-muted">
-              {active.qty} adet · <b className="font-semibold text-ink">{formatMoney(active.total)}</b>
+              {activeQty} adet · <b className="font-semibold text-ink">{formatMoney(activeTotal)}</b>
             </span>
           </div>
 
+          {activeRows.length === 0 ? (
+            <EmptyState
+              icon={Search}
+              className="anim-fade-up"
+              title="Eşleşen ürün yok."
+              description="Aramayı değiştirin."
+            />
+          ) : (
           <div className="overflow-hidden rounded-card border border-line bg-surface shadow-card">
             <div className="max-h-[70vh] overflow-auto">
               <table className="w-full min-w-[820px] border-separate border-spacing-0 text-sm">
@@ -264,7 +322,7 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
                   </tr>
                 </thead>
                 <tbody className="[&>tr:last-child>td]:border-b-0 [&>tr>td]:border-b [&>tr>td]:border-b-hairline">
-                  {active.rows.map((r) => (
+                  {activeRows.map((r) => (
                     <tr key={r.id} className="group/row transition-colors duration-150 hover:bg-surface-hover">
                       <td className="sticky left-0 z-[1] border-r border-hairline bg-surface px-3 py-1.5 transition-colors duration-150 group-hover/row:bg-surface-hover">
                         <Link href={`/production/${r.id}`} className="font-medium text-ink transition-colors duration-150 hover:text-brand-strong">
@@ -323,13 +381,15 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
                 </tbody>
                 <tfoot>
                   <tr className="text-[13px] font-semibold">
-                    <td className={cn(tfSticky, "sticky left-0 z-20 border-r border-hairline px-3 text-ink")}>Toplam</td>
-                    <td className={cn(tfSticky, "px-2 text-right tabular-nums text-ink")}>{active.qty}</td>
+                    <td className={cn(tfSticky, "sticky left-0 z-20 border-r border-hairline px-3 text-ink")}>
+                      {q ? "Aramadaki toplam" : "Toplam"}
+                    </td>
+                    <td className={cn(tfSticky, "px-2 text-right tabular-nums text-ink")}>{activeQty}</td>
                     <td className={tfSticky} />
-                    <td className={cn(tfSticky, "px-3 text-right tabular-nums text-ink")}>{formatMoney(active.total)}</td>
+                    <td className={cn(tfSticky, "px-3 text-right tabular-nums text-ink")}>{formatMoney(activeTotal)}</td>
                     <td className={cn(tfSticky, groupSep)} />
                     <td className={cn(tfSticky, "px-2 text-right tabular-nums text-ink")}>
-                      {invoiceTotal(active.rows) ? formatMoney(invoiceTotal(active.rows)) : "—"}
+                      {invoiceTotal(activeRows) ? formatMoney(invoiceTotal(activeRows)) : "—"}
                     </td>
                     <td className={tfSticky} />
                   </tr>
@@ -337,6 +397,7 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
               </table>
             </div>
           </div>
+          )}
         </section>
       ) : (
         /* ── Usta kartları — giriş ekranı ──────────────────────────────── */
@@ -349,7 +410,8 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
               </p>
             </div>
             <span className="text-[13px] tabular-nums text-muted">
-              Genel toplam: <b className="font-semibold text-ink">{formatMoney(grandTotal)}</b>
+              {q ? "Aramadaki toplam" : "Genel toplam"}:{" "}
+              <b className="font-semibold text-ink">{formatMoney(visibleGrandTotal)}</b>
             </span>
           </div>
 
@@ -358,14 +420,22 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
               devam ettirmen gerekiyor"). Kartta yalnız ad + toplam ödeme +
               kaç ürün; şehir/teslim süresi/minimum adet ustanın sayfasında,
               başlığın altında durur. */}
+          {visibleUstalar.length === 0 ? (
+            <EmptyState
+              icon={Search}
+              className="anim-fade-up"
+              title="Eşleşen usta yok."
+              description="Aramayı değiştirin."
+            />
+          ) : (
           <TileGrid>
-            {ustalar.map((u) => {
+            {visibleUstalar.map((u) => {
               const tone = tones[u.key]!;
               const unknown = u.name === UNKNOWN;
               return (
                 <Tile
                   key={u.key}
-                  onClick={() => setOpenUsta(u.key)}
+                  onClick={() => openUstaPage(u.key)}
                   title={u.name}
                   photoUrl={u.rec?.photo_url ?? null}
                   initials={unknown ? undefined : getPersonInitials(u.name)}
@@ -383,6 +453,7 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
               );
             })}
           </TileGrid>
+          )}
         </section>
       )}
     </div>

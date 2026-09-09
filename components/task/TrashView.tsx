@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useTransition, useOptimistic } from "react";
+import { useMemo, useState, useTransition, useOptimistic } from "react";
 import Link from "next/link";
-import { Trash2, RotateCcw, X } from "lucide-react";
+import { Trash2, RotateCcw, Search, X } from "lucide-react";
 import { restoreTask, permanentDeleteTask } from "@/lib/actions/tasks";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Button } from "@/components/ui/Button";
+import { TextInput } from "@/components/ui/Field";
 import { useConfirm } from "@/components/ui/useConfirm";
 import { formatDateTR } from "@/lib/utils/format-date";
 import type { Task } from "@/types";
@@ -13,6 +14,15 @@ import type { Task } from "@/types";
 interface Props {
   tasks: Task[];
   workspaceId: string;
+}
+
+/** Türkçe duyarsız arama normalizasyonu — uygulamadaki her arama kutusuyla
+ *  AYNI kural (ğüşıöç → gusioc). */
+function norm(s: string): string {
+  return (s ?? "")
+    .toLowerCase()
+    .replace(/ğ/g, "g").replace(/ü/g, "u").replace(/ş/g, "s")
+    .replace(/ı/g, "i").replace(/ö/g, "o").replace(/ç/g, "c").replace(/İ/g, "i");
 }
 
 function formatDate(iso: string | null) {
@@ -117,6 +127,16 @@ export function TrashView({ tasks: initialTasks }: Props) {
     state.filter((t) => t.id !== id),
   );
   const [_p, startTransition] = useTransition();
+  /* ARAMA İSTEMCİDE: çöp kutusu tek turda tamamen yüklü geliyor, süzmek için
+     sunucuya dönmek gereksiz. "Yanlışlıkla sildiğim iş neydi?" sorusunun
+     cevabı çok satırlı bir listede gözle bulunmuyordu. */
+  const [query, setQuery] = useState("");
+
+  const q = norm(query.trim());
+  const visible = useMemo(
+    () => (q ? tasks.filter((t) => norm(t.title).includes(q)) : tasks),
+    [tasks, q],
+  );
 
   function handleRemove(id: string) {
     startTransition(() => { setTasks(id); });
@@ -124,23 +144,44 @@ export function TrashView({ tasks: initialTasks }: Props) {
 
   return (
     <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
-      {tasks.length > 0 ? (
-        <section className="anim-fade-up">
-          <h2 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle mb-2 tabular-nums">
-            Silinen görevler · {tasks.length}
-          </h2>
-          <div className="bg-surface border border-line rounded-card shadow-card divide-y divide-hairline overflow-hidden">
-            {tasks.map((task) => (
-              <TrashRow key={task.id} task={task} onRemove={handleRemove} />
-            ))}
-          </div>
-        </section>
-      ) : (
+      {/* Tek kutu — çöp kutusunda süzülecek tür/departman yok, iş ADI var. */}
+      {tasks.length > 0 && (
+        <div className="relative mb-3 max-w-sm">
+          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-subtle" aria-hidden />
+          <TextInput
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Çöp kutusunda ara…"
+            aria-label="Çöp kutusunda görev ara"
+            className="pl-9"
+          />
+        </div>
+      )}
+
+      {tasks.length === 0 ? (
         <EmptyState
           icon={Trash2}
           title="Çöp kutusu boş"
           description="Silinen görevler burada tutulur; geri yükleyebilir ya da kalıcı olarak silebilirsiniz."
         />
+      ) : visible.length === 0 ? (
+        /* Kutu dolu ama arama tutmadı — "çöp kutusu boş" demek yanıltıcı. */
+        <EmptyState
+          icon={Search}
+          title="Eşleşen görev yok"
+          description="Aramayı değiştirin."
+        />
+      ) : (
+        <section className="anim-fade-up">
+          <h2 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle mb-2 tabular-nums">
+            Silinen görevler · {visible.length}
+          </h2>
+          <div className="bg-surface border border-line rounded-card shadow-card divide-y divide-hairline overflow-hidden">
+            {visible.map((task) => (
+              <TrashRow key={task.id} task={task} onRemove={handleRemove} />
+            ))}
+          </div>
+        </section>
       )}
     </div>
   );

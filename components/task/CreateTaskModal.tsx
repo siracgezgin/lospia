@@ -4,6 +4,8 @@ import { useState, useTransition, useMemo, useId } from "react";
 import { useRouter } from "next/navigation";
 import { Check, ChevronDown, Lock } from "lucide-react";
 import { createTask } from "@/lib/actions/tasks";
+import { attachTaskToCalendar } from "@/lib/actions/planning";
+import { istanbulLabel, HOME_LABEL, AWAY_LABEL } from "@/lib/planning/timezones";
 import {
   STATUS_LABELS,
   PRIORITY_LABELS,
@@ -23,7 +25,7 @@ import {
   TASK_VISIBILITIES, VISIBILITY_LABELS, VISIBILITY_DESCRIPTIONS,
   DEFAULT_VISIBILITY, type TaskVisibility,
 } from "@/lib/utils/visibility";
-import type { TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceDepartment } from "@/types";
+import type { TaskStatus, TaskPriority, Profile, WorkspaceContact } from "@/types";
 
 type BoardMember = {
   memberId: string; userId: string; name: string; isAdmin?: boolean;
@@ -39,9 +41,7 @@ interface Props {
   /** avatar_url: "Kim" çipleri fotoğrafı olanın FOTOĞRAFINI gösterir. */
   profiles: (Pick<Profile, "id" | "full_name" | "email"> & { avatar_url?: string | null })[];
   contacts: WorkspaceContact[];
-  departments?: WorkspaceDepartment[];
   members?: BoardMember[];
-  deptMembers?: { department_id: string; member_id: string }[];
   // Effort is an admin-only lever; members never see or set it.
   isAdmin?: boolean;
   // Pre-select a visibility (e.g. the Yönetici Pano tab decides this).
@@ -69,6 +69,15 @@ function friendlyError(msg: string): string {
   return msg;
 }
 
+/* Takvim adımı ayrı bir yazma: görev zaten oluştu, yalnız konu satırı
+   yazılamadı. Bunu "Görev oluşturulamadı" diye göstermek YALAN olur —
+   kullanıcı aynı işi ikinci kez yaratır. Ham metin yine konsola düşer. */
+function calendarWarningText(msg: string): string {
+  if (msg) console.error("[attachTaskToCalendar]", msg);
+  const detail = (!msg || TECHNICAL_ERROR.test(msg) ? "takvim kaydı yapılamadı" : msg).replace(/\.$/, "");
+  return `Görev oluşturuldu ama takvime eklenemedi: ${detail}. Saati takvimden elle girebilirsiniz.`;
+}
+
 /* Kişi seçme çipi: seçili = marka dolgusu + onay işareti.
    min-h-10: kişi kartı 24px olunca çip parmakla basılabilir kalsın (≥40px). */
 const PICK_CHIP =
@@ -83,7 +92,6 @@ export function CreateTaskModal({
   defaultDueDate = "",
   profiles = [],
   contacts = [],
-  departments = [],
   members = [],
   isAdmin = false,
   defaultVisibility = DEFAULT_VISIBILITY,
@@ -94,14 +102,22 @@ export function CreateTaskModal({
   const formId = useId();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  /* Görev yazıldı ama takvim satırı yazılamadı: pencere KAPANMAZ, uyarıyı
+     gösterip tek düğmeye ("Kapat") iner — kullanıcı aynı işi ikinci kez
+     oluşturmasın diye "Görev oluştur" düğmesi kalkar. */
+  const [calendarWarning, setCalendarWarning] = useState<string | null>(null);
 
   // Primary fields
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [departmentId, setDepartmentId] = useState("");
   const [responsibleIds, setResponsibleIds] = useState<string[]>(defaultResponsibleIds);
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [dueDate, setDueDate] = useState(defaultDueDate);
+  /* SAAT — takvimle aynı dil. Kayıtlı saat NEW YORK duvar saatidir
+     (lib/planning/timezones.ts); İstanbul karşılığı hesaplanıp yanında yazar,
+     tıpkı hafta ızgarasındaki saat sütunu gibi. Boş bırakılabilir: saatsiz
+     görev takvime düşmez, yalnız Pano'da/listede durur. */
+  const [timeSlot, setTimeSlot] = useState("");
   const [status, setStatus] = useState<TaskStatus>(defaultStatus);
   const [priority, setPriority] = useState<TaskPriority>("medium");
   // Efor alanı çizilmiyor (Puan & Motivasyon kapalı) ama sözleşme korunuyor.
@@ -116,17 +132,12 @@ export function CreateTaskModal({
      başlangıç, teslim, durum, öncelik, efor, görünürlük) ve altısı zorunlu
      görünüyordu. Aslı Hanım (2026-08-24): "İsmi, işi, tarihi bu kadar…
      Bize ne kadar fazla bilgi verirsen o kadar yavaşlarız."
-     Görünen üç alan artık tam olarak bu üçü: İŞ · KİM · NE ZAMAN. Gerisi
-     "Daha fazla"nın arkasında ve hepsi isteğe bağlı — başlangıç tarihi zaten
-     bugüne dolu geliyor, kimse elle girmek zorunda değil. */
+     Görünen alanlar artık tam olarak bunlar: İŞ · KİM · NE ZAMAN (+ SAAT).
+     Gerisi "Daha fazla"nın arkasında ve hepsi isteğe bağlı — başlangıç tarihi
+     zaten bugüne dolu geliyor, kimse elle girmek zorunda değil.
+     DEPARTMAN artık hiç yok (Sıraç, 2026-09-10): takvimde de yok, bir işin
+     yeri departman değil GÜN + SAAT. */
   const [showMore, setShowMore] = useState(false);
-
-  const topDepts = useMemo(() => departments.filter((d) => d.parent_id === null), [departments]);
-  const childDepts = useMemo(() => {
-    const m: Record<string, WorkspaceDepartment[]> = {};
-    for (const d of departments) if (d.parent_id) (m[d.parent_id] ??= []).push(d);
-    return m;
-  }, [departments]);
 
   // Everyone in the workspace can be responsible for any task — department
   // membership is organisational info only, never an assignment constraint.
@@ -172,21 +183,49 @@ export function CreateTaskModal({
     );
   }
 
-  // Department is informational — changing it never drops selected people.
-  function handleDepartmentChange(value: string) {
-    setDepartmentId(value);
-  }
-
   const workspaceIdMissing = !workspaceId || workspaceId.length < 10;
+
+  /* Takvime YAZMA yöneticiye açık (CLAUDE.md: planlama yazımı admin-only, üye
+     salt-okur; sunucuda da isAdminRole guard'ı var). Üyeye saat alanı hiç
+     gösterilmez — her denemede "yalnız yöneticiler düzenleyebilir" duvarına
+     çarpan bir alan koymak, alanı hiç koymamaktan kötüdür. */
+  const canSchedule = isAdmin;
+
+  /* Hafta ızgarasındaki saat sütunuyla BİREBİR aynı düzen: üstte kayıtlı NEW
+     YORK saati (etiket + alanın kendisi), altında İSTANBUL karşılığı — orada
+     "NY 09:00 / IST 16:00" nasıl yazıyorsa burada da öyle. Saat boşken satır,
+     alanın ne işe yaradığını söyler. */
+  const istLabel = dueDate && timeSlot ? istanbulLabel(dueDate, timeSlot) : null;
+  const timeHint = timeSlot
+    ? istLabel
+      ? `${AWAY_LABEL} ${istLabel}`
+      : undefined
+    : "Saat girersen iş, o saatteki toplantının altına konu olarak düşer.";
 
   // Teslim tarihi zorunlu; başlangıç tarihi bugüne dolu gelir (elle girilmez).
   const datesMissing = !dueDate;
   const dateOrderInvalid = !!startDate && !!dueDate && startDate > dueDate;
-  const canSubmit = !isPending && !!title.trim() && !workspaceIdMissing && !datesMissing && !dateOrderInvalid;
+  const canSubmit =
+    !isPending && !calendarWarning && !!title.trim() && !workspaceIdMissing && !datesMissing && !dateOrderInvalid;
+
+  /* Gün alanı iki düzende de aynı: saat varsa yanına, yoksa tek başına.
+     İki kez yazılmasın diye bir kez kurulup yerleştiriliyor. */
+  const whenField = (
+    <Field label="Ne zaman" required error={dateOrderInvalid ? "Başlangıç tarihi teslim tarihinden sonra olamaz." : undefined}>
+      <TextInput
+        type="date"
+        value={dueDate}
+        min={startDate || undefined}
+        required
+        onChange={(e) => setDueDate(e.target.value)}
+        className="tabular-nums"
+      />
+    </Field>
+  );
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!title.trim() || workspaceIdMissing) return;
+    if (!title.trim() || workspaceIdMissing || calendarWarning) return;
     setError(null);
 
     if (!dueDate) { setError("Teslim tarihi zorunludur."); return; }
@@ -201,7 +240,10 @@ export function CreateTaskModal({
         priority,
         assignee_id: null,
         responsible_contact_id: null,
-        department_id: departmentId || null,
+        // Departman kalktı (Sıraç, 2026-09-10: "artık departman kısmı yok
+        // burada"). Kolon duruyor — eski kayıtlar bozulmasın — ama bu karttan
+        // artık HİÇBİR ZAMAN doldurulmaz; işin yeri gün + saattir.
+        department_id: null,
         due_date: dueDate || null,
         start_date: startDate || null,
         effort_size: isAdmin ? effort : undefined,
@@ -219,6 +261,25 @@ export function CreateTaskModal({
         setError(friendlyError(result.error));
         return;
       }
+
+      /* İKİNCİ ADIM — takvim. Saat girildiyse iş, o gün+saatteki toplantının
+         altına konu olarak yazılır ve konu göreve bağlanır. Burada patlarsa
+         görev YİNE OLUŞMUŞTUR: pencereyi sessizce kapatmak kullanıcıya "hiçbir
+         şey olmadı" dedirtir, o da işi ikinci kez yaratır. Onun yerine dürüst
+         uyarı gösterilir. */
+      if (canSchedule && timeSlot && dueDate) {
+        const attached = await attachTaskToCalendar(result.id, {
+          meeting_date: dueDate,
+          time_slot: timeSlot,
+          text: title.trim(),
+        });
+        if ("error" in attached) {
+          router.refresh(); // görev var — arkadaki liste onu göstersin
+          setCalendarWarning(calendarWarningText(attached.error));
+          return;
+        }
+      }
+
       router.refresh(); // pull the newly created task into the board immediately
       onClose();
     });
@@ -234,12 +295,18 @@ export function CreateTaskModal({
       // Eylemler Overlay'in sabit alt çubuğunda: uzun formda "Oluştur" ekranın
       // altına düşmez. Düğme <form> dışında olduğu için `form` özniteliğiyle bağlı.
       footer={
-        <>
-          <Button type="button" variant="ghost" onClick={onClose}>Vazgeç</Button>
-          <Button type="submit" form={formId} loading={isPending} disabled={!canSubmit}>
-            Görev oluştur
-          </Button>
-        </>
+        calendarWarning ? (
+          // Görev yazıldı: tek çıkış "Kapat". "Görev oluştur" burada dursaydı
+          // kullanıcı uyarıyı okuyup yeniden basar, aynı iş iki kez oluşurdu.
+          <Button type="button" onClick={onClose}>Kapat</Button>
+        ) : (
+          <>
+            <Button type="button" variant="ghost" onClick={onClose}>Vazgeç</Button>
+            <Button type="submit" form={formId} loading={isPending} disabled={!canSubmit}>
+              Görev oluştur
+            </Button>
+          </>
+        )
       }
     >
       <form id={formId} onSubmit={handleSubmit} className="space-y-4">
@@ -255,7 +322,8 @@ export function CreateTaskModal({
           />
         </Field>
 
-        {/* ── 2. KİM — sorumlu kişiler. Departman ASLA daraltmaz. ───────── */}
+        {/* ── 2. KİM — sorumlu kişiler. Çalışma alanındaki HERKES seçilebilir;
+               daraltan tek şey "yalnız yönetici" görünürlüğü. ───────────── */}
         <div>
           <p className="mb-1 block text-[12.5px] font-medium text-muted">Kim</p>
           {eligibleMembers.length === 0 ? (
@@ -291,17 +359,26 @@ export function CreateTaskModal({
           )}
         </div>
 
-        {/* ── 3. NE ZAMAN — teslim tarihi. Tek zorunlu tarih. ───────────── */}
-        <Field label="Ne zaman" required error={dateOrderInvalid ? "Başlangıç tarihi teslim tarihinden sonra olamaz." : undefined}>
-          <TextInput
-            type="date"
-            value={dueDate}
-            min={startDate || undefined}
-            required
-            onChange={(e) => setDueDate(e.target.value)}
-            className="tabular-nums"
-          />
-        </Field>
+        {/* ── 3. NE ZAMAN — gün + (isteğe bağlı) saat. Takvimle aynı dil:
+               orada da bir iş GÜN ve SAAT hücresinde durur. Saat yalnız
+               takvime yazabilen kişiye gösterilir; üyede alan tek başına
+               kalır, eski düzen aynen sürer. ────────────────────────────── */}
+        {canSchedule ? (
+          <FieldGrid>
+            {whenField}
+            <Field label={`Saat (${HOME_LABEL})`} hint={timeHint}>
+              <TextInput
+                type="time"
+                value={timeSlot}
+                onChange={(e) => setTimeSlot(e.target.value)}
+                className="tabular-nums"
+                aria-label="Görev saati (New York)"
+              />
+            </Field>
+          </FieldGrid>
+        ) : (
+          whenField
+        )}
 
         {/* ── Daha fazla — hepsi isteğe bağlı ───────────────────────────── */}
         <button
@@ -324,20 +401,6 @@ export function CreateTaskModal({
                 placeholder="Gerekiyorsa birkaç satır…"
                 className="resize-none"
               />
-            </Field>
-
-            <Field label="Departman">
-              <SelectInput value={departmentId} onChange={(e) => handleDepartmentChange(e.target.value)}>
-                <option value="">— Departman seçin</option>
-                {topDepts.map((d) => (
-                  <optgroup key={d.id} label={d.name}>
-                    <option value={d.id}>{d.name} (genel)</option>
-                    {(childDepts[d.id] ?? []).map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </optgroup>
-                ))}
-              </SelectInput>
             </Field>
 
             <FieldGrid>
@@ -416,6 +479,13 @@ export function CreateTaskModal({
 
         {error && (
           <p role="alert" className="anim-fade-down text-[12.5px] text-danger bg-danger/10 border border-danger/20 rounded-control px-3 py-2">{error}</p>
+        )}
+
+        {/* Kırmızı DEĞİL sarı: iş kayboldu değil, yarım kaldı. */}
+        {calendarWarning && (
+          <p role="alert" className="anim-fade-down text-[12.5px] text-warning bg-warning/10 border border-warning/30 rounded-control px-3 py-2">
+            {calendarWarning}
+          </p>
         )}
       </form>
     </Overlay>

@@ -4,7 +4,7 @@ import {
   useState, useOptimistic, useTransition, useRef, useEffect,
 } from "react";
 import {
-  Plus, Pencil, Trash2, X, CheckCircle2, Circle, BookOpen, ChevronDown, ChevronUp,
+  Plus, Pencil, Trash2, X, CheckCircle2, Circle, BookOpen, ChevronDown, ChevronUp, Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { canManageRules } from "@/lib/auth/permissions";
@@ -18,6 +18,15 @@ import type { WorkspaceRule, WorkspaceRole } from "@/types";
 
 // Rules are department-based. "Tüm çalışma alanı" = applies to everyone.
 const ALL_WORKSPACE = "Tüm çalışma alanı";
+
+/** Türkçe duyarsız arama normalizasyonu — uygulamadaki her arama kutusuyla
+ *  AYNI kural (ğüşıöç → gusioc). */
+function norm(s: string): string {
+  return (s ?? "")
+    .toLowerCase()
+    .replace(/ğ/g, "g").replace(/ü/g, "u").replace(/ş/g, "s")
+    .replace(/ı/g, "i").replace(/ö/g, "o").replace(/ç/g, "c").replace(/İ/g, "i");
+}
 
 // ── Rule card ──────────────────────────────────────────────────────────────────
 
@@ -243,6 +252,10 @@ export function RulesView({
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<WorkspaceRule | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  /* ARAMA İSTEMCİDE: kurallar tek turda yüklü geliyor. Departman grupları
+     katlanabilir olsa da kural sayısı arttıkça "şu konudaki kural neydi"
+     sorusu ancak metinde aranarak cevaplanıyor. Açıklama da taranır. */
+  const [query, setQuery] = useState("");
 
   const [optimisticRules, applyOptimistic] = useOptimistic(
     initialRules,
@@ -324,7 +337,12 @@ export function RulesView({
   }
 
   // Group rules by category
-  const grouped = optimisticRules.reduce<Record<string, WorkspaceRule[]>>((acc, rule) => {
+  const q = norm(query.trim());
+  const visibleRules = q
+    ? optimisticRules.filter((r) =>
+        norm([r.title, r.body, r.category ?? ALL_WORKSPACE].filter(Boolean).join(" ")).includes(q))
+    : optimisticRules;
+  const grouped = visibleRules.reduce<Record<string, WorkspaceRule[]>>((acc, rule) => {
     const cat = rule.category ?? ALL_WORKSPACE;
     if (!acc[cat]) acc[cat] = [];
     acc[cat].push(rule);
@@ -333,23 +351,40 @@ export function RulesView({
 
   const formOpen = adding || !!editing;
 
+  /* Üst çubuğun sağı: ARAMA + (yöneticide) "Kural ekle". İkisi de yoksa
+     ModulePageHeader'a hiç düğüm verilmez — boş bir satır kalmasın. */
+  const hasRules = optimisticRules.length > 0;
+  const rightSlot = hasRules || isManager ? (
+    <>
+      {hasRules && (
+        <div className="relative min-w-[180px] flex-1 sm:max-w-[240px] sm:flex-none">
+          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-subtle" aria-hidden />
+          <TextInput
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Kural ara…"
+            aria-label="Kural ara"
+            className="pl-9"
+          />
+        </div>
+      )}
+      {isManager && (
+        /* Form açıkken ekranın ana eylemi "Kaydet"tir; ikinci bir primary
+           durmasın diye bu düğme o sırada kapalı. */
+        <Button
+          onClick={() => { setAdding(true); setEditing(null); setActionError(null); }}
+          disabled={formOpen}
+          className="shrink-0"
+        >
+          <Plus size={15} aria-hidden /> Kural ekle
+        </Button>
+      )}
+    </>
+  ) : undefined;
+
   return (
     <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
-      <ModulePageHeader
-        title="Rules"
-        rightSlot={
-          isManager ? (
-            /* Form açıkken ekranın ana eylemi "Kaydet"tir; ikinci bir primary
-               durmasın diye bu düğme o sırada kapalı. */
-            <Button
-              onClick={() => { setAdding(true); setEditing(null); setActionError(null); }}
-              disabled={formOpen}
-            >
-              <Plus size={15} aria-hidden /> Kural ekle
-            </Button>
-          ) : undefined
-        }
-      />
+      <ModulePageHeader title="Rules" rightSlot={rightSlot} />
 
       <div className="flex flex-col gap-4">
         {actionError && (
@@ -388,6 +423,11 @@ export function RulesView({
               title="Henüz kural yok."
               description={isManager ? "Ekip standartlarını “Kural ekle” ile yazın." : undefined}
             />
+          </div>
+        ) : q && visibleRules.length === 0 ? (
+          /* Kural var ama arama tutmadı — "henüz kural yok" demek yanıltıcı. */
+          <div className="anim-fade-up rounded-card border border-line bg-surface shadow-card">
+            <EmptyState icon={Search} title="Eşleşen kural yok." description="Aramayı değiştirin." />
           </div>
         ) : (
           Object.entries(grouped).map(([cat, catRules]) => (

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, Pencil, CalendarClock } from "lucide-react";
+import { Plus, Trash2, Pencil, CalendarClock, Search } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { createSeason, updateSeason, deleteSeason, type SeasonInput } from "@/lib/actions/seasons";
 import { Button, IconButton } from "@/components/ui/Button";
@@ -19,6 +19,15 @@ interface Props {
   /** Sezon başına föy sayısı. */
   sheetCounts: Record<string, number>;
   canManage: boolean;
+}
+
+/** Türkçe duyarsız arama normalizasyonu — uygulamadaki her arama kutusuyla
+ *  AYNI kural (ğüşıöç → gusioc). */
+function norm(s: string): string {
+  return (s ?? "")
+    .toLowerCase()
+    .replace(/ğ/g, "g").replace(/ü/g, "u").replace(/ş/g, "s")
+    .replace(/ı/g, "i").replace(/ö/g, "o").replace(/ç/g, "c").replace(/İ/g, "i");
 }
 
 const emptyDraft = (): SeasonInput => ({ name: "", starts_on: "", ends_on: "", is_current: false });
@@ -50,6 +59,17 @@ export function SeasonsManager({ seasons, sheetCounts, canManage }: Props) {
   const [draft, setDraft] = useState<SeasonInput>(emptyDraft());
   const [error, setError] = useState<string | null>(null);
   const [busy, startWork] = useTransition();
+  /* ARAMA İSTEMCİDE: liste sunucudan tamamı yüklü geliyor, süzmek için tur
+     atmaya gerek yok. Sezonlar yıllar geçtikçe birikiyor. */
+  const [query, setQuery] = useState("");
+
+  /* Düzenlenen satır aramadan MUAF: kullanıcı formu açıkken kutuya yazınca
+     satır elenip yarım doldurulmuş form gözden kayboluyordu. */
+  const visible = useMemo(() => {
+    const q = norm(query.trim());
+    if (!q) return seasons;
+    return seasons.filter((s) => s.id === editingId || norm(s.name).includes(q));
+  }, [seasons, query, editingId]);
 
   function run(fn: () => Promise<{ error?: string } | unknown>, after?: () => void) {
     setError(null);
@@ -118,15 +138,33 @@ export function SeasonsManager({ seasons, sheetCounts, canManage }: Props) {
 
       {adding && form}
 
+      {/* Tek kutu, yeni açılır liste yok — süzülecek olan sezonun ADI. */}
+      {seasons.length > 0 && (
+        <div className="relative max-w-xs">
+          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-subtle" aria-hidden />
+          <TextInput
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Sezon ara…"
+            aria-label="Sezon ara"
+            className="pl-9"
+          />
+        </div>
+      )}
+
       {seasons.length === 0 && !adding ? (
         <EmptyState
           title="Henüz sezon yok"
           description="Föylerdeki sezon adları kayda dönüşünce burada görünür."
           compact
         />
+      ) : query.trim() && visible.length === 0 ? (
+        /* Kayıt var ama arama tutmadı — "henüz sezon yok" demek yanıltıcı.
+           Koşulda `query` ŞART: form açıkken boş liste bu dala düşmemeli. */
+        <EmptyState icon={Search} title="Eşleşen sezon yok" description="Aramayı değiştirin." compact />
       ) : (
         <ul className="divide-y divide-hairline border-t border-hairline">
-          {seasons.map((s) => {
+          {visible.map((s) => {
             const count = sheetCounts[s.id] ?? 0;
             if (editingId === s.id) return <li key={s.id} className="py-3">{form}</li>;
             return (

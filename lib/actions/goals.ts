@@ -5,6 +5,8 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import type { AppRole } from "@/lib/auth/permissions";
 import { toActionErrorMessage, isMissingSchemaError } from "@/lib/utils/supabase-errors";
+import { findOrCreateMeeting } from "@/lib/planning/meeting-slot";
+import { normalizeSlot } from "@/lib/planning/timezones";
 
 /**
  * AYLIK KİŞİ HEDEFLERİ (20240340).
@@ -171,6 +173,87 @@ export async function deleteGoal(goalId: string): Promise<{ ok: true } | { error
     .eq("id", goalId)
     .eq("workspace_id", ctx.workspaceId);
   if (error) return { error: toActionErrorMessage(error) };
+  revalidatePath("/goals");
+  return { ok: true };
+}
+
+
+/**
+ * HEDEFİ TAKVİME BAĞLAR — hedef de bir toplantı konusu olur.
+ *
+ * Sıraç (2026-09-10): "Kişilerin hedefleri olacak ya, onlar da aslında hepsi
+ * AYNI MANTIK; sadece toplantı konusuna dahil etmek için gün vs girilecek…
+ * artık her şey aynı sistem üzerinden yürüyecek."
+ *
+ * Hedef bir AY hedefidir (kişi × ay); takvim ise gün ve saat konuşur. İkisini
+ * birleştiren şey konu satırıdır: hedefe bir gün+saat verildiğinde o günün
+ * toplantısının altına konu olarak düşer ve toplantıda konuşulacak şey hâline
+ * gelir. Hedefin kendisi Goals'ta kalır — kopyalanmaz, taşınmaz.
+ *
+ * Toplantı yoksa açılır (findOrCreateMeeting; görev akışıyla AYNI yardımcı).
+ */
+export async function addGoalToCalendar(
+  goalId: string,
+  input: { meeting_date: string; time_slot: string },
+): Promise<{ ok: true } | { error: string }> {
+  const parsed = z
+    .object({
+      meeting_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Geçersiz tarih"),
+      time_slot: z.string().regex(/^\d{1,2}:\d{2}$/, "Geçersiz saat"),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+
+  const { data: row } = await supabase
+    .from("workspace_goals")
+    .select("member_id, title")
+    .eq("id", goalId)
+    .eq("workspace_id", ctx.workspaceId)
+    .maybeSingle();
+  if (!row) return { error: NOT_FOUND };
+  const goal = row as { member_id: string; title: string };
+  if (!mayWriteFor(ctx, goal.member_id)) return { error: NOT_ALLOWED };
+
+  /* Takvime YAZMAK yönetici işidir (planlama admin-only, RLS de öyle). Üye
+     kendi hedefini yazabilir ama takvime koyamaz — duvara çarpmak yerine
+     nedenini söylüyoruz. */
+  if (!isAdminRole(ctx.role)) {
+    return { error: "Hedefi takvime yalnız yöneticiler ekleyebilir." };
+  }
+
+  const slot = normalizeSlot(parsed.data.time_slot);
+  const meeting = await findOrCreateMeeting(supabase, ctx, parsed.data.meeting_date, slot);
+  if ("error" in meeting) return { error: meeting.error };
+
+  // Konu toplantının SONUNA eklenir.
+  const { data: last } = await supabase
+    .from("planning_topics")
+    .select("position")
+    .eq("meeting_id", meeting.id)
+    .eq("workspace_id", ctx.workspaceId)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const position = Math.min(50, ((last as { position: number } | null)?.position ?? -1) + 1);
+
+  const { error } = await supabase.from("planning_topics").insert({
+    meeting_id: meeting.id,
+    workspace_id: ctx.workspaceId,
+    position,
+    text: goal.title,
+    // Hedefin sahibi konunun da sorumlusudur.
+    participant_ids: [goal.member_id],
+    collaborator_ids: [],
+    due_date: parsed.data.meeting_date,
+    created_by: ctx.userId,
+  });
+  if (error) return { error: toActionErrorMessage(error) };
+
+  revalidatePath("/planning");
   revalidatePath("/goals");
   return { ok: true };
 }

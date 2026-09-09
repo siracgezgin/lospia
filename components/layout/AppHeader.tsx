@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
 import { ChevronDown, LogOut, Mail, Shield, Settings, UserRound, Bell } from "lucide-react";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { GlobalSearch } from "@/components/search/GlobalSearch";
 import { PersonAvatar } from "@/components/ui/PersonAvatar";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
 import { ROLE_LABELS, personTitle } from "@/lib/utils/roles";
@@ -259,6 +260,9 @@ export function AppHeader({
       {/* shrink-0: uzun sayfa başlığı çan/profil alanını sıkıştırmasın —
           telefonda başlık uzayınca çan düğmesi eziliyordu. */}
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+        {/* Genel arama çanın SOLUNDA: soldan sağa "ara → haber al → kimliğim"
+            sırası okunur; telefonda da ikon kalır, gizlenmez. */}
+        <GlobalSearch />
         <NotificationBell unreadCount={unreadCount} userId={userId} notifications={notifications} deadTaskIds={deadTaskIds} />
         <div className="hidden md:block">
           <ProfileMenu

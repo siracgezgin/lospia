@@ -614,6 +614,10 @@ interface Props {
   departments?: WorkspaceDepartment[];
   participantsByTask?: Record<string, TaskParticipant[]>;
   members?: BoardMember[];
+  /** Sayfa hâlâ gönderiyor ama BU EKRAN OKUMUYOR: departman-üye eşlemesinin
+   *  tek tüketicisi "Görev oluştur" penceresindeki Departman alanıydı, o da
+   *  kalktı (Sıraç, 2026-09-10: "artık departman kısmı yok burada"). Prop
+   *  imzada kalıyor ki çağıran sayfalar kırılmasın. */
   deptMembers?: { department_id: string; member_id: string }[];
   userRole?: WorkspaceRole;
   // When set, the board runs as the Yönetici Pano (manager mode).
@@ -1588,7 +1592,6 @@ export function KanbanBoard({
   departments = [],
   participantsByTask = {},
   members = [],
-  deptMembers = [],
   userRole = "member",
   adminBoard,
   noteFeed = [],
@@ -2782,9 +2785,7 @@ export function KanbanBoard({
           defaultStatus={modalDefaultStatus}
           profiles={profiles}
           contacts={pickerContacts}
-          departments={departments}
           members={members}
-          deptMembers={deptMembers}
           isAdmin={canComplete}
           defaultVisibility={isAdminBoard ? adminVisibility : undefined}
           lockResponsibleToAdmins={isAdminBoard}

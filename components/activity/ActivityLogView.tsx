@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  Plus, RefreshCw, CheckCircle2, RotateCcw, StickyNote, Users, Eye, Flag, CalendarClock, Archive, Trash2, Award, Pencil, Activity as ActivityIcon, Download,
+  Plus, RefreshCw, CheckCircle2, RotateCcw, StickyNote, Users, Eye, Flag, CalendarClock, Archive, Trash2, Award, Pencil, Activity as ActivityIcon, Download, Search,
 } from "lucide-react";
 import { formatDateTimeTR, formatDateTR } from "@/lib/utils/format-date";
 import { getPersonDisplayName } from "@/lib/utils/person-display";
@@ -13,6 +13,7 @@ import { VISIBILITY_LABELS } from "@/lib/utils/visibility";
 import { cn } from "@/lib/utils/cn";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Button } from "@/components/ui/Button";
+import { TextInput } from "@/components/ui/Field";
 import { loadMoreActivity } from "@/app/(app)/activity/actions";
 import type { TaskStatus, TaskPriority } from "@/types";
 
@@ -108,6 +109,15 @@ function metaFor(row: { action: string; task_id: string | null }): ActionMeta {
   return ACTION_META[row.action] ?? (row.task_id === null ? FALLBACK_WORKSPACE_META : FALLBACK_META);
 }
 
+/** Türkçe duyarsız arama normalizasyonu — uygulamadaki her arama kutusuyla
+ *  AYNI kural (ğüşıöç → gusioc). */
+function norm(s: string): string {
+  return (s ?? "")
+    .toLowerCase()
+    .replace(/ğ/g, "g").replace(/ü/g, "u").replace(/ş/g, "s")
+    .replace(/ı/g, "i").replace(/ö/g, "o").replace(/ç/g, "c").replace(/İ/g, "i");
+}
+
 // ── Filters (user-facing groups → action sets) ────────────────────────────────
 type FilterKey = "all" | "created" | "status" | "completed" | "assignment" | "date" | "download" | "deleted";
 
@@ -194,6 +204,11 @@ export function ActivityLogView({
   initialCursor?: string | null;
 }) {
   const [filter, setFilter] = useState<FilterKey>("all");
+  /* ARAMA. Süzgeç şeridi olayın TÜRÜNÜ daraltır ("Silme"); denetim yaparken
+     sorulan asıl soru ise "Ayşe ne yaptı" ya da "şu föye ne oldu" — ikisi de
+     tür değil İÇERİK. Yüklü satırlar zaten istemcide olduğu için süzme
+     sunucuya gitmez; kutu ile şerit birlikte çalışır. */
+  const [query, setQuery] = useState("");
 
   /* SAYFALAMA. Akış 200 satırda kesiliyor ve orada BİTİYORDU — daha eskisine
      ulaşmanın hiçbir yolu yoktu. Süzgeç seçimi istemcide durduğu için tam
@@ -221,23 +236,32 @@ export function ActivityLogView({
       .finally(() => setLoading(false));
   }
 
+  /* Önce ARAMA, sonra süzgeç. Sıra önemli: şeritteki sayılar aranan sonucu
+     TARİF etsin ("Ayşe" yazınca Silme 2), yoksa rakamlar aramayla çelişir. */
+  const searched = useMemo(() => {
+    const q = norm(query.trim());
+    if (!q) return rows;
+    return rows.filter((r) =>
+      norm([r.actor_name, r.task_title, metaFor(r).verb].filter(Boolean).join(" ")).includes(q));
+  }, [rows, query]);
+
   const counts = useMemo(() => {
     const c: Record<FilterKey, number> = {
-      all: rows.length, created: 0, status: 0, completed: 0, assignment: 0, date: 0,
+      all: searched.length, created: 0, status: 0, completed: 0, assignment: 0, date: 0,
       download: 0, deleted: 0,
     };
     for (const f of FILTERS) {
       if (f.key === "all") continue;
-      c[f.key] = rows.filter((r) => f.actions.includes(r.action)).length;
+      c[f.key] = searched.filter((r) => f.actions.includes(r.action)).length;
     }
     return c;
-  }, [rows]);
+  }, [searched]);
 
   const visible = useMemo(() => {
     const active = FILTERS.find((f) => f.key === filter);
-    if (!active || active.actions.length === 0) return rows;
-    return rows.filter((r) => active.actions.includes(r.action));
-  }, [rows, filter]);
+    if (!active || active.actions.length === 0) return searched;
+    return searched.filter((r) => active.actions.includes(r.action));
+  }, [searched, filter]);
 
   // Collapse the visual repetition: consecutive changes by the SAME person on the
   // SAME task within a short window read as one editing session. We group them so
@@ -264,6 +288,18 @@ export function ActivityLogView({
   return (
     <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
       <h1 className="sr-only">Activity Log</h1>
+
+      {/* ── Arama — kişi · iş · yapılan işlem, tek kutu ─────────────────────── */}
+      <div className="relative mb-3 max-w-sm">
+        <Search size={15} className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-subtle" aria-hidden />
+        <TextInput
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Kişi, iş ya da işlem ara…"
+          aria-label="Hareket kaydında ara"
+          className="pl-9"
+        />
+      </div>
 
       {/* ── Süzgeç şeridi — segment düğmeleri; sayı listeyi tarif eder ──────── */}
       <div
@@ -301,14 +337,25 @@ export function ActivityLogView({
       {/* ── Akış ─────────────────────────────────────────────────────────────── */}
       <div key={filter} className="anim-fade divide-y divide-hairline overflow-hidden rounded-card border border-line bg-surface shadow-card">
         {groups.length === 0 ? (
+          /* Üç ayrı sebep, üç ayrı cümle: hiç kayıt yok / arama tutmadı /
+             süzgeç tuttu ama tür eşleşmedi. Hepsine "kayıt yok" demek
+             kullanıcıya ne yapacağını söylemiyordu. */
           <EmptyState
             compact
-            icon={ActivityIcon}
-            title={rows.length === 0 ? "Henüz kayıt yok." : "Bu süzgeçle eşleşen kayıt yok."}
+            icon={rows.length === 0 ? ActivityIcon : Search}
+            title={
+              rows.length === 0
+                ? "Henüz kayıt yok."
+                : query.trim()
+                  ? "Eşleşen kayıt yok."
+                  : "Bu süzgeçle eşleşen kayıt yok."
+            }
             description={
               rows.length === 0
                 ? "Görev oluşturma, durum değişikliği, indirme ve silme işlemleri burada birikir."
-                : "Başka bir süzgeç deneyin ya da daha eski kayıtları yükleyin."
+                : query.trim()
+                  ? "Aramayı değiştirin ya da daha eski kayıtları yükleyin."
+                  : "Başka bir süzgeç deneyin ya da daha eski kayıtları yükleyin."
             }
           />
         ) : (

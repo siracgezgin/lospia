@@ -52,6 +52,10 @@ interface Props {
   contacts: WorkspaceContact[];
   departments?: WorkspaceDepartment[];
   members?: { memberId: string; userId: string; name: string }[];
+  /** Sayfa hâlâ gönderiyor ama BU EKRAN OKUMUYOR: departman-üye eşlemesinin
+   *  tek tüketicisi "Görev oluştur" penceresindeki Departman alanıydı, o da
+   *  kalktı (Sıraç, 2026-09-10: "artık departman kısmı yok burada"). Prop
+   *  imzada kalıyor ki çağıran sayfalar kırılmasın. */
   deptMembers?: { department_id: string; member_id: string }[];
   isAdmin?: boolean;
   /** Calendar'ın "Ay" sekmesi olarak gömülü çalışır: kendi başlığını ve
@@ -211,7 +215,7 @@ function ToolbarShell({
   return <div className="flex shrink-0 flex-wrap items-center gap-3">{children}</div>;
 }
 
-export function CalendarView({ tasks, workspaceId, profiles, contacts, departments = [], members = [], deptMembers = [], isAdmin = false, embedded = false, initialDate = null, viewSwitch }: Props) {
+export function CalendarView({ tasks, workspaceId, profiles, contacts, departments = [], members = [], isAdmin = false, embedded = false, initialDate = null, viewSwitch }: Props) {
   const deptMeta = buildDeptMeta(departments);
   const dotFor = (t: CalTask) => {
     if (t.status === "done") return "bg-success";
@@ -584,9 +588,7 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
           workspaceId={workspaceId}
           profiles={profiles}
           contacts={contacts}
-          departments={departments}
           members={members}
-          deptMembers={deptMembers}
           defaultDueDate={createModalDate}
           isAdmin={isAdmin}
         />

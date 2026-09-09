@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, Pencil, Package } from "lucide-react";
+import { Plus, Trash2, Pencil, Package, Search } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { saveMaterial, deleteMaterial, type MaterialInput } from "@/lib/actions/materials";
 import { formatMoney } from "@/lib/collection/cost";
@@ -39,6 +39,15 @@ const CATEGORIES: { key: MaterialCategory; label: string }[] = [
 const CAT_LABEL = Object.fromEntries(CATEGORIES.map((c) => [c.key, c.label]));
 const UNITS = ["m", "adet", "kg", "takım", "paket"] as const;
 
+/** Türkçe duyarsız arama normalizasyonu — uygulamadaki her arama kutusuyla
+ *  AYNI kural (ğüşıöç → gusioc). */
+function norm(s: string): string {
+  return (s ?? "")
+    .toLowerCase()
+    .replace(/ğ/g, "g").replace(/ü/g, "u").replace(/ş/g, "s")
+    .replace(/ı/g, "i").replace(/ö/g, "o").replace(/ç/g, "c").replace(/İ/g, "i");
+}
+
 const emptyDraft = (): MaterialInput => ({
   code: "", name: "", category: "kumas", supplier_id: null, composition: "",
   width_cm: "", unit: "m", unit_price: "", currency: "TL", photo_url: "", notes: "", is_active: true,
@@ -71,6 +80,20 @@ export function MaterialsManager({ materials, suppliers, usageCounts, canManage 
   const [draft, setDraft] = useState<MaterialInput>(emptyDraft());
   const [error, setError] = useState<string | null>(null);
   const [busy, startWork] = useTransition();
+  /* ARAMA İSTEMCİDE: hammadde kütüphanesi tamamı yüklü geliyor. Kod ve
+     kompozisyon da aranır — kumaş çoğu zaman adıyla değil koduyla ("7685")
+     ya da içeriğiyle ("pamuk") hatırlanıyor. Kategori adı da eşleşir ki
+     araç çubuğuna ikinci bir açılır kutu koymaya gerek kalmasın. */
+  const [query, setQuery] = useState("");
+
+  /* Düzenlenen satır aramadan MUAF: form açıkken kutuya yazınca satır elenip
+     yarım doldurulmuş form gözden kayboluyordu. */
+  const visible = useMemo(() => {
+    const q = norm(query.trim());
+    if (!q) return materials;
+    return materials.filter((m) => m.id === editingId ||
+      norm([m.name, m.code, m.composition, CAT_LABEL[m.category]].filter(Boolean).join(" ")).includes(q));
+  }, [materials, query, editingId]);
 
   function run(fn: () => Promise<{ error?: string } | unknown>, after?: () => void) {
     setError(null);
@@ -160,15 +183,33 @@ export function MaterialsManager({ materials, suppliers, usageCounts, canManage 
 
       {adding && form}
 
+      {/* Tek kutu — ad · kod · kompozisyon · kategori hepsi buradan aranır. */}
+      {materials.length > 0 && (
+        <div className="relative max-w-xs">
+          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-subtle" aria-hidden />
+          <TextInput
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Malzeme ara…"
+            aria-label="Malzeme ara"
+            className="pl-9"
+          />
+        </div>
+      )}
+
       {materials.length === 0 && !adding ? (
         <EmptyState
           title="Henüz malzeme yok"
           description="Kumaş ve aksesuarları burada bir kez tanımlayın; föy reçetelerinde seçilir, maliyet kendiliğinden hesaplanır."
           compact
         />
+      ) : query.trim() && visible.length === 0 ? (
+        /* Kayıt var ama arama tutmadı. Koşulda `query` ŞART: form açıkken
+           boş liste bu dala düşmemeli. */
+        <EmptyState icon={Search} title="Eşleşen malzeme yok" description="Aramayı değiştirin." compact />
       ) : (
         <ul className="divide-y divide-hairline border-t border-hairline">
-          {materials.map((m) => {
+          {visible.map((m) => {
             const used = usageCounts[m.id] ?? 0;
             if (editingId === m.id) return <li key={m.id} className="py-3">{form}</li>;
             return (

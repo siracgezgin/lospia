@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { X, UserMinus, Pencil, UserPlus, Check } from "lucide-react";
+import { X, UserMinus, Pencil, UserPlus, Check, Search } from "lucide-react";
 import {
   revokeTeamAccess,
   changeWorkspaceMemberRole,
@@ -20,6 +20,8 @@ import { roleLabel } from "@/lib/utils/roles";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { TextInput } from "@/components/ui/Field";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { buildDeptMeta } from "@/lib/utils/departments";
 import { cn } from "@/lib/utils/cn";
 import { PersonAvatar } from "@/components/ui/PersonAvatar";
@@ -29,6 +31,15 @@ import { MemberEditPanel } from "@/components/settings/MemberEditPanel";
 
 interface MemberRow extends WorkspaceMember {
   profiles?: Partial<Profile> | null;
+}
+
+/** Türkçe duyarsız arama normalizasyonu — uygulamadaki her arama kutusuyla
+ *  AYNI kural: "sirac" yazan "Sıraç"ı da bulur. */
+function norm(s: string): string {
+  return (s ?? "")
+    .toLowerCase()
+    .replace(/ğ/g, "g").replace(/ü/g, "u").replace(/ş/g, "s")
+    .replace(/ı/g, "i").replace(/ö/g, "o").replace(/ç/g, "c").replace(/İ/g, "i");
 }
 
 interface Props {
@@ -67,6 +78,8 @@ export function MembersManager({
   /* "Kaydedildi" geri bildirimi. Panel kapanınca ekranda hiçbir iz kalmıyordu;
      kullanıcı kaydın gidip gitmediğini anlamıyordu. */
   const [notice, setNotice] = useState<string | null>(null);
+  /** Ekip listesi araması — istemcide süzer (bkz. visibleMembers). */
+  const [query, setQuery] = useState("");
 
   /* KİMLİK (renk + fotoğraf) — ayrı bölüm değil, üyenin kendi satırında.
      Önce iki ayrı kart aynı sekiz kişiyi iki kez listeliyordu. */
@@ -188,6 +201,30 @@ export function MembersManager({
     deptsByMember.set(dm.member_id, [...(deptsByMember.get(dm.member_id) ?? []), meta.name]);
   }
 
+  /* ARAMA İSTEMCİDE: ekip listesi zaten tamamı yüklü geliyor. Ad dışında
+     kullanıcı adı, e-posta, ünvan ve departman da eşleşir — yönetici çoğu
+     zaman "muhasebedeki kim" ya da "@ayse" diye arıyor. Süzgeç yığını YOK,
+     tek kutu; departmanı da bu kutu bulur. */
+  const memberQ = norm(query.trim());
+  const visibleMembers = memberQ
+    ? members.filter((m) => {
+        /* Düzenleme paneli AÇIK olan üye aramadan muaf — yarım doldurulmuş
+           panel kutuya yazarken gözden kaybolmasın. */
+        if (m.id === editingMemberId) return true;
+        const ident = identityOf.get(m.id) ?? null;
+        return norm([
+          m.profiles?.full_name, m.profiles?.username, m.profiles?.email,
+          getDisplayNotificationEmail(m).email, ident?.jobTitle, roleLabel(m.role),
+          ...(deptsByMember.get(m.id) ?? []),
+        ].filter(Boolean).join(" ")).includes(memberQ);
+      })
+    : members;
+  /* Bekleyen eski erişimler de aynı kutudan süzülür — aksi hâlde arama
+     açıkken alttaki liste ilgisiz kayıtlarla duruyordu. */
+  const visibleGrants = memberQ
+    ? grants.filter((g) => norm([g.email, g.username, roleLabel(g.role)].filter(Boolean).join(" ")).includes(memberQ))
+    : grants;
+
   function runConfirmedDelete() {
     if (!confirm) return;
     const target = confirm;
@@ -281,10 +318,31 @@ export function MembersManager({
         </p>
       )}
 
+      {/* ARAMA — tek kutu; ad, kullanıcı adı, e-posta, ünvan ve departman. */}
+      {members.length > 0 && (
+        <div className="relative max-w-xs">
+          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-subtle" aria-hidden />
+          <TextInput
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Kişi ara…"
+            aria-label="Ekipte kişi ara"
+            className="pl-9"
+          />
+        </div>
+      )}
+
+      {/* Liste dolu ama arama tutmadıysa sessiz boş liste bırakılmaz. */}
+      {members.length > 0 && visibleMembers.length === 0 && visibleGrants.length === 0 && (
+        <EmptyState icon={Search} title="Eşleşen kişi yok" description="Aramayı değiştirin." compact />
+      )}
+
       {/* Üye listesi — kart değil, ince çizgiyle ayrılmış satırlar (bölüm
           yüzeyi zaten kart; kart içinde kart yok). */}
-      <ul className="divide-y divide-hairline border-t border-hairline">
-        {members.map((m) => {
+      {/* `empty:hidden`: arama hiçbir kişiyi tutmadığında geriye tek başına
+          duran bir üst çizgi kalmasın. */}
+      <ul className="divide-y divide-hairline border-t border-hairline empty:hidden">
+        {visibleMembers.map((m) => {
           const isSelf = m.user_id === currentUserId;
           const isOwnerRow = m.role === "owner";
           const canManage = isOwner && !isSelf && !isOwnerRow;
@@ -404,14 +462,14 @@ export function MembersManager({
       {/* Legacy team-access grants. Self-signup is DISABLED — new people are added
           via "Kişi ekle" above. Any leftover pending grants from the old flow
           are shown here so an owner can revoke them; no new ones can be added. */}
-      {isOwner && grants.length > 0 && (
+      {isOwner && visibleGrants.length > 0 && (
         <div className="pt-2">
           <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle">Bekleyen eski erişimler</p>
           <p className="mt-1 text-[12.5px] leading-relaxed text-muted">
             Bu kayıtlar artık kullanılmıyor; kaldırabilirsiniz.
           </p>
           <ul className="mt-2 divide-y divide-hairline border-t border-hairline">
-            {grants.map((g) => (
+            {visibleGrants.map((g) => (
               <li key={g.id} className="flex items-center justify-between gap-3 py-2.5">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[13.5px] font-medium text-ink">
