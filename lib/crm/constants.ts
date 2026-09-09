@@ -100,6 +100,11 @@ export const STATUS_TONE: Record<string, string> = {
 /* ─────────────────────────────────────────────────────────────────────────
    CRM GİRİŞİ — ÖNCE KUTULAR, SONRA İÇERİK.
 
+   NOT (2026-09-10): AF alıntıda "selebriti" diyor (Türkçe okunuşu) ama kutunun
+   ADI "Celebrity" — hem sayfa/etiket adları İngilizce kuralı gereği hem de
+   CRM_SEGMENTS'teki rozet zaten "Celebrity" yazdığı için: aynı şey iki ayrı
+   adla görünüyordu.
+
    Aslı Hanım (2026-09-07), CRM'i açıp doğrudan tablo görünce:
      "BU CRM'E BÖYLE GİREMEZSİN. Bak HER GİRDİĞİN DOSYA BÖYLE BAŞLAMALI."
      "Yani şimdi burada girersen böyle DİREKT SEN DOSYAYA GİRİYORSUN."
@@ -126,7 +131,7 @@ export interface CrmCategory {
 }
 
 export const CRM_CATEGORIES: CrmCategory[] = [
-  { key: "celebrity", label: "Selebriti", segments: ["celebrity", "influencer", "stylist"], primary: "celebrity", hint: "Oyuncu, influencer, stylist" },
+  { key: "celebrity", label: "Celebrity", segments: ["celebrity", "influencer", "stylist"], primary: "celebrity", hint: "Oyuncu, influencer, stylist" },
   { key: "basin", label: "Basın", segments: ["basin", "pr"], primary: "basin", hint: "Dergi, gazete, PR ajansı" },
   { key: "vip", label: "VIP", segments: ["vip"], primary: "vip", hint: "Özel müşteriler" },
   { key: "outsource", label: "Outsource", segments: ["outsource", "tedarikci"], primary: "outsource", hint: "Kalıpçı, üretici, tedarikçi" },

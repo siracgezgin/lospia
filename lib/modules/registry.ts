@@ -186,7 +186,7 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
      buraya bir tane fihrist koyabilirsin." Sıraç: "Aslında CRM'e eklemiştim
      ben." AF: "ORAYA EKLEYEBİLİRİZ." — yani ikinci bir modül değil; eksik olan
      CRM'in GİRİŞİYDİ ("Bu CRM'e böyle giremezsin"). Giriş artık kategori
-     kutucukları (Selebriti · Basın · VIP · Outsource · Toplantılar · Dış ekip ·
+     kutucukları (Celebrity · Basın · VIP · Outsource · Toplantılar · Dış ekip ·
      Üretim · Ekibimiz · Dernekler) — Sabri Bey, Meral Hanım ve Berna Hanım
      oraya kaydedilir. Aynı rota iki adla listelenmez (KURAL 2). */
   {

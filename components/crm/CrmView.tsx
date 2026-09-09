@@ -52,7 +52,7 @@ interface Props {
   taskCounts: Record<string, number>;
   isAdmin: boolean;
   initialSegment: string;
-  /** Hangi KUTUnun içindeyiz (Selebriti, Basın, Outsource…). Boşsa liste tüm
+  /** Hangi KUTUnun içindeyiz (Celebrity, Basın, Outsource…). Boşsa liste tüm
    *  kayıtları gösterir — kutucuk girişi ayrı bir ekranda (CrmCategoryGrid). */
   categoryKey?: string | null;
   /** True when the additive CRM columns are not yet migrated on this DB. */
@@ -154,7 +154,7 @@ export function CrmView({
     [category],
   );
   /* Kutu içindeyken açılır kutuda YALNIZ o kutunun anahtarları listelenir:
-     "Selebriti"nin içinde "Toptan" seçeneği sunmak kullanıcıyı boş bir listeye
+     "Celebrity"nin içinde "Toptan" seçeneği sunmak kullanıcıyı boş bir listeye
      götürüyordu. Tek anahtarlı kutuda süzgeç hiç çizilmez — seçecek bir şey
      yok (süzgeç kuralı: başlık · tür · departman, fazlası satırın içinde). */
   const segmentOptions = useMemo(
