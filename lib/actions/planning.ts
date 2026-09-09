@@ -869,6 +869,137 @@ export async function setMeetingTitle(
 }
 
 /**
+ * KONUYU ÇOĞALTIR — toplantıyı değil, KONUYU.
+ *
+ * Sıraç (2026-09-08): "Çoğalt deyince O KONUYU değil, konu başlığı altındakini
+ * çoğaltıyor." Bir önceki turda bunu "çoğalt toplantı düzeyinde bir eylem"
+ * diye okuyup düğmeyi tek konu kipinden KALDIRMIŞTIM — yanlış okumaymış:
+ * istenen şey konunun kendisinin kopyalanmasıydı (2026-09-10: "hani o konuyu
+ * çoğaltma nerde?").
+ *
+ * Hedef gün verilmezse kopya AYNI toplantının sonuna eklenir. Verilirse o
+ * gün/saatteki toplantıya taşınır; toplantı yoksa açılır (moveTopic'teki aynı
+ * kural) — "bu konuyu çarşambaya da koy" akışı.
+ *
+ * Kopyalanmayan: `task_id` (kopya kaynağın görevini sahiplenmez, kendi
+ * "Bildir"ini bekler) ve `done_at` (yeni konu bitmiş sayılmaz).
+ */
+export async function duplicateTopic(
+  topicId: string,
+  target?: { meeting_date?: string; time_slot?: string },
+): Promise<{ id: string } | { error: string }> {
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+  if (!isAdminRole(ctx.role)) return { error: PLANNING_ADMIN_ONLY };
+
+  const { data: src } = await supabase
+    .from("planning_topics")
+    .select("id, meeting_id, text, participant_ids, collaborator_ids, due_date")
+    .eq("id", topicId)
+    .eq("workspace_id", ctx.workspaceId)
+    .maybeSingle();
+  if (!src) return { error: "Konu bulunamadı." };
+  const t = src as {
+    meeting_id: string; text: string | null;
+    participant_ids: string[] | null; collaborator_ids: string[] | null;
+    due_date: string | null;
+  };
+
+  let meetingId = t.meeting_id;
+  let dueDate = t.due_date;
+
+  const wantsMove = !!target?.meeting_date;
+  if (wantsMove) {
+    const parsed = z
+      .object({
+        meeting_date: z.string().regex(DATE_RE, "Geçersiz tarih"),
+        time_slot: z.string().min(1).max(10).optional(),
+      })
+      .safeParse(target);
+    if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+    /* Hedef saat verilmediyse KAYNAK TOPLANTININ saati kullanılır: kopya
+       rastgele bir şeride düşmesin. */
+    let slot = parsed.data.time_slot ?? null;
+    if (!slot) {
+      const { data: srcMeeting } = await supabase
+        .from("planning_meetings").select("time_slot").eq("id", t.meeting_id).maybeSingle();
+      slot = (srcMeeting as { time_slot: string } | null)?.time_slot ?? "09:00";
+    }
+
+    const { data: found } = await supabase
+      .from("planning_meetings")
+      .select("id")
+      .eq("workspace_id", ctx.workspaceId)
+      .eq("meeting_date", parsed.data.meeting_date)
+      .eq("time_slot", slot)
+      .order("position", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    meetingId = (found as { id: string } | null)?.id ?? "";
+    if (!meetingId) {
+      const { data: sibling } = await supabase
+        .from("planning_meetings")
+        .select("category")
+        .eq("workspace_id", ctx.workspaceId)
+        .eq("time_slot", slot)
+        .limit(1)
+        .maybeSingle();
+      const { data: created, error: createErr } = await supabase
+        .from("planning_meetings")
+        .insert({
+          workspace_id: ctx.workspaceId,
+          meeting_date: parsed.data.meeting_date,
+          time_slot: slot,
+          category: (sibling as { category: string } | null)?.category ?? "other",
+          participant_ids: [],
+          collaborator_ids: [],
+          created_by: ctx.userId,
+          updated_by: ctx.userId,
+        })
+        .select("id")
+        .single();
+      if (createErr) return { error: toActionErrorMessage(createErr) };
+      meetingId = (created as { id: string }).id;
+    }
+    dueDate = parsed.data.meeting_date;
+  }
+
+  // Kopya hedef toplantının SONUNA eklenir.
+  const { data: last } = await supabase
+    .from("planning_topics")
+    .select("position")
+    .eq("meeting_id", meetingId)
+    .eq("workspace_id", ctx.workspaceId)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const position = Math.min(50, ((last as { position: number } | null)?.position ?? -1) + 1);
+
+  const { data: ins, error } = await supabase
+    .from("planning_topics")
+    .insert({
+      meeting_id: meetingId,
+      workspace_id: ctx.workspaceId,
+      position,
+      text: t.text,
+      participant_ids: t.participant_ids ?? [],
+      collaborator_ids: t.collaborator_ids ?? [],
+      due_date: dueDate,
+      created_by: ctx.userId,
+    })
+    .select("id")
+    .single();
+  if (error) return { error: toActionErrorMessage(error) };
+
+  revalidatePath("/planning");
+  revalidatePath("/home");
+  return { id: (ins as { id: string }).id };
+}
+
+/**
  * KONUYU TAMAMLANDI İŞARETLER — Pano'daki "tamamlandı" ile aynı mantık.
  *
  * Sıraç (2026-09-08): "Tamamlanması gereken KONU olması lazım, konu başlığı

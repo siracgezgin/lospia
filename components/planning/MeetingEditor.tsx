@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   Plus, Trash2, Send, CheckCircle2, AlertTriangle, Copy, XCircle, Mail, X, ListChecks, UserPlus,
+  Loader2, Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { useConfirm } from "@/components/ui/useConfirm";
@@ -11,7 +12,7 @@ import { Button, IconButton } from "@/components/ui/Button";
 import { Field, TextInput, TextArea } from "@/components/ui/Field";
 import {
   createMeeting, updateMeeting, deleteMeeting, saveMeetingTopics, assignTopicAsTask,
-  duplicateMeeting, setMeetingStatus, sendMeetingInvites, addExternalParticipant,
+  duplicateMeeting, duplicateTopic, setMeetingStatus, sendMeetingInvites, addExternalParticipant,
   type MeetingSnapshot,
 } from "@/lib/actions/planning";
 import { categoryMeta } from "@/lib/planning/categories";
@@ -190,6 +191,13 @@ export function MeetingEditor({
      değil, ayrı ve açık bir eylemdir. */
   const [inviteMsg, setInviteMsg] = useState<string | null>(null);
   const [isInviting, startInvite] = useTransition();
+
+  /* KONU ÇOĞALTMA — tek konu kipinde "Çoğalt" TOPLANTIYI değil KONUYU
+     kopyalar (Sıraç, 2026-09-08 / 2026-09-10). Hedef gün boş bırakılırsa kopya
+     aynı toplantının sonuna eklenir. */
+  const [topicDupOpen, setTopicDupOpen] = useState(false);
+  const [topicDupDate, setTopicDupDate] = useState("");
+  const [isDupTopic, startDupTopic] = useTransition();
 
   const [dupDate, setDupDate] = useState("");
   const [dupOpen, setDupOpen] = useState(false);
@@ -396,6 +404,27 @@ export function MeetingEditor({
     });
   }
 
+  /* Konuyu çoğalt: önce kaydedilir (yeni yazılmış konunun id'si oluşsun),
+     sonra kopyalanır. */
+  function handleDuplicateTopic() {
+    if (solo === null) return;
+    setError(null);
+    setInviteMsg(null);
+    startDupTopic(async () => {
+      try {
+        const saved = await persist();
+        if ("error" in saved) { setError(saved.error); return; }
+        const id = saved.posToId[solo];
+        if (!id) { setError("Önce konuya bir metin yazın."); return; }
+        const res = await duplicateTopic(id, topicDupDate ? { meeting_date: topicDupDate } : undefined);
+        if ("error" in res) { setError(res.error); return; }
+        onSaved();
+      } catch (e) {
+        setError(messageOf(e));
+      }
+    });
+  }
+
   /* DIŞ KATILIMCI — toplantıya davetli olur VE fihriste (CRM) kaydedilir.
      Aslı Hanım: "Şurada bir artı olursa Berna'yı hemen kaydederiz."
      Toplantı henüz kaydedilmemişse önce o kaydedilir: kişi kaydı bir
@@ -460,6 +489,62 @@ export function MeetingEditor({
 
   const busy = isSaving || isDeleting || isDuplicating;
 
+  /* ── OTOMATİK KAYIT ────────────────────────────────────────────────────
+     Sıraç (2026-09-10): "Calendar'a toplantı konuları girilirken otomatik
+     kaydedilsin, bazen kaydedilme unutuluyor."
+
+     Yalnız KAYDEDİLMİŞ toplantıda çalışır (meetingId var). Yeni toplantıda
+     çalışsaydı pencereyi açıp bir harf yazan herkes takvime boş bir toplantı
+     bırakırdı ve "Vazgeç" o kaydı geri almazdı; ilk kayıt bilerek elle.
+
+     Anlık görüntü ID'LERİ İÇERMEZ: persist() konu id'lerini state'e geri
+     yazıyor, id'ler de anlık görüntüye girseydi her kayıt kendi kendini
+     tetikleyip sonsuz döngü kurardı.
+
+     AF Teamwork'teki desenle aynı: yazma durunca 1.2 sn sonra kaydeder,
+     durumu tek cümleyle söyler. */
+  const snapshot = useMemo(
+    () =>
+      JSON.stringify({
+        dateIso, time, title, content, externalEmails,
+        topics: topics.map((t) => ({
+          text: t.text, p: t.participant_ids, c: t.collaborator_ids, d: t.due_date,
+        })),
+      }),
+    [dateIso, time, title, content, externalEmails, topics],
+  );
+  const savedSnapshot = useRef(snapshot);
+  const [autoState, setAutoState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const autoBusyRef = useRef(false);
+
+  const runAutoSave = useCallback(async () => {
+    if (autoBusyRef.current) return;
+    autoBusyRef.current = true;
+    const attempted = snapshot;
+    setAutoState("saving");
+    try {
+      const res = await persist();
+      if ("error" in res) { setAutoState("error"); setError(res.error); return; }
+      savedSnapshot.current = attempted;
+      setAutoState("saved");
+    } catch {
+      setAutoState("error");
+    } finally {
+      autoBusyRef.current = false;
+    }
+    // persist referansı her çizimde değişiyor; bağımlılığa alınırsa etki
+    // her tuşta yeniden kurulur. Anlık görüntü yeterli tetikleyici.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snapshot]);
+
+  useEffect(() => {
+    if (isNew) return;                       // ilk kayıt elle
+    if (busy) return;                        // elle kayıt/silme/çoğaltma sürüyor
+    if (snapshot === savedSnapshot.current) return;
+    const id = window.setTimeout(() => { void runAutoSave(); }, 1200);
+    return () => window.clearTimeout(id);
+  }, [snapshot, isNew, busy, runAutoSave]);
+
   return (
     <Overlay
       open
@@ -515,10 +600,18 @@ export function MeetingEditor({
               duplicate edebiliyor muyum?… Aynı ekiple bunun çarşamba günü
               üretimini konuştuk." Taşımak geçmişi siliyordu; kopyalamak
               arşivi yerinde bırakır. */}
-          {/* ÇOĞALT toplantı düzeyinde bir eylemdir: tek konu kipinde
-              gösterilince "o konuyu çoğaltıyorum" sanılıyordu (Sıraç,
-              2026-09-08: "çoğalt diyince o konuyu değil konu başlığı
-              altındakini çoğaltıyor"). Artık yalnız tüm gündem açıkken çıkar. */}
+          {/* ÇOĞALT NEYİ ÇOĞALTIR: açık olan şeyi. Tek konu kipinde KONUYU,
+              tüm gündemdeyken TOPLANTIYI. Sıraç (2026-09-08): "Çoğalt deyince
+              o konuyu değil konu başlığı altındakini çoğaltıyor." */}
+          {!isNew && solo !== null && (
+            <Button
+              variant="ghost"
+              onClick={() => setTopicDupOpen((v) => !v)}
+              disabled={busy || isDupTopic}
+            >
+              <Copy size={15} aria-hidden /> Konuyu çoğalt
+            </Button>
+          )}
           {!isNew && solo === null && (
             <Button
               variant="ghost"
@@ -531,9 +624,25 @@ export function MeetingEditor({
               <Copy size={15} aria-hidden /> Çoğalt
             </Button>
           )}
+          {/* OTOMATİK KAYIT SESSİZ OLMAZ. AF Teamwork'te sessiz kayıt "Nereye
+              kaydetti?" sorusunu doğurmuştu; burada da durum yazıyor.
+              Yeni toplantıda ilk kayıt elle olduğu için ipucu farklı. */}
+          <span className="mr-1 hidden items-center gap-1.5 text-[12.5px] text-subtle sm:inline-flex" aria-live="polite">
+            {isNew ? (
+              "Kaydedince otomatik kayıt başlar"
+            ) : autoState === "saving" ? (
+              <><Loader2 size={12} className="animate-spin" aria-hidden /> kaydediliyor</>
+            ) : autoState === "saved" ? (
+              <><Check size={12} className="text-success" aria-hidden /> kaydedildi</>
+            ) : autoState === "error" ? (
+              <span className="text-danger">kaydedilemedi</span>
+            ) : (
+              "otomatik kaydediliyor"
+            )}
+          </span>
           <Button variant="ghost" onClick={onClose} disabled={busy}>Vazgeç</Button>
           <Button onClick={handleSave} loading={isSaving && assigningIdx === null} disabled={busy}>
-            Kaydet
+            {isNew ? "Kaydet" : "Kapat ve kaydet"}
           </Button>
         </>
       }
@@ -604,7 +713,30 @@ export function MeetingEditor({
           </div>
         )}
 
-        {/* ÇOĞALTMA — hedef gün sorulur; kaynak toplantı YERİNDE KALIR. */}
+        {/* KONU ÇOĞALTMA — hedef gün İSTEĞE BAĞLI. Boş bırakılırsa kopya aynı
+            toplantının sonuna eklenir ("bu konuyu bir daha konuşacağız"); gün
+            verilirse o güne taşınır ("bunu çarşambaya da koy"). */}
+        {topicDupOpen && solo !== null && (
+          <div className="anim-fade-down flex flex-wrap items-end gap-2 rounded-control border border-line bg-surface-muted p-2.5">
+            <Field label="Hangi güne? (boş = aynı toplantı)" className="min-w-[190px]">
+              <TextInput
+                type="date"
+                value={topicDupDate}
+                onChange={(e) => setTopicDupDate(e.target.value)}
+                aria-label="Konu kopyasının günü"
+              />
+            </Field>
+            <Button onClick={handleDuplicateTopic} loading={isDupTopic} disabled={busy}>
+              <Copy size={14} aria-hidden /> Kopyala
+            </Button>
+            <Button variant="ghost" onClick={() => setTopicDupOpen(false)} disabled={busy}>Vazgeç</Button>
+            <p className="basis-full text-[12.5px] text-muted">
+              Metin ve kişiler kopyalanır. Görev bağı ve “tamamlandı” işareti kopyaya geçmez.
+            </p>
+          </div>
+        )}
+
+        {/* TOPLANTI ÇOĞALTMA — hedef gün sorulur; kaynak toplantı YERİNDE KALIR. */}
         {dupOpen && !isNew && (
           <div className="anim-fade-down flex flex-wrap items-end gap-2 rounded-control border border-line bg-surface-muted p-2.5">
             <Field label="Devamı hangi güne?" className="min-w-[170px]">
