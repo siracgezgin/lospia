@@ -237,8 +237,21 @@ export function CalendarView({ tasks, workspaceId, profiles, contacts, departmen
      ekranın dışında güncelleniyor ve "hiçbir şey olmadı" hissi veriyordu.
      Dar ekranda seçim yapılınca panel görüş alanına getirilir. */
   const agendaRef = useRef<HTMLElement>(null);
+  /* GÜN KARTI HER YERDE AYNI KAPIDAN AÇILIR. Sıraç (2026-09-09): "Aynı pop-up
+     ay kısmına tıklayınca, oradaki bir güne tıklayınca da çıksın — her yerde
+     yani aynı mantıkta olacak."
+     Ay görünümünde bir güne tıklamak yalnız yandaki listeyi değiştiriyordu;
+     hafta ızgarasında ve yıl görünümünde ise gün kartı açılıyordu. Aynı hareket
+     iki farklı sonuç veriyordu.
+     Takvim modülünün İÇİNDE (embedded) tıklama artık gün kartını açar; ayrı
+     /calendar ekranında eski davranış (yan panel) sürer — orada gün kartı
+     yoktur, gidecek bir yer olmadan gezinme kırılırdı. */
   function selectDay(day: Date) {
     setSelectedDay(day);
+    if (embedded) {
+      router.push(`/planning?v=gun&d=${format(day, "yyyy-MM-dd")}`);
+      return;
+    }
     if (typeof window !== "undefined" && !window.matchMedia("(min-width: 1024px)").matches) {
       agendaRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }

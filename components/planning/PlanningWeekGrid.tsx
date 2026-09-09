@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from "react";
+import { useMemo, useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { tr } from "date-fns/locale";
@@ -14,7 +14,7 @@ import { categoryMeta } from "@/lib/planning/categories";
 import { WEEKDAY_SHORT_EN, WEEKDAY_LONG_TR, type RuntimeBand } from "@/lib/planning/bands";
 import { BandEditor } from "./BandEditor";
 import { istanbulLabel, AWAY_LABEL, HOME_LABEL, normalizeSlot } from "@/lib/planning/timezones";
-import { moveMeeting, moveTopic, duplicateMeeting, setMeetingTitle, deleteTopic, setTopicDone, setTopicText } from "@/lib/actions/planning";
+import { moveMeeting, moveTopic, duplicateMeeting, setMeetingTitle, deleteTopic, setTopicDone } from "@/lib/actions/planning";
 import { KimBadges } from "./KimBadges";
 import type { PlanningMeetingWithTopics, PlanningTopic } from "@/types";
 
@@ -113,8 +113,6 @@ export function PlanningWeekGrid({
   const [isMoving, startMove] = useTransition();
   /** Sürükleme Option/Alt ile mi başladı — kopya kipinin göstergesi. */
   const [copyMode, setCopyMode] = useState(false);
-  /** Enter ile geçilecek bir sonraki konu hücresi ("gün|saat#satır"). */
-  const [autoEditCell, setAutoEditCell] = useState<string | null>(null);
 
   const sensors = useSensors(
     // 5px eşiği: hücreye TIKLAMAK hâlâ düzenleyiciyi açar, sürükleme ayrı.
@@ -257,13 +255,6 @@ export function PlanningWeekGrid({
             personHex={personHex}
             onOpen={() => onOpen(iso, slot, i, ti)}
             onSaved={() => router.refresh()}
-            autoEdit={autoEditCell === `${iso}|${slot}#${ti}`}
-            /* Enter → AYNI GÜNÜN bir alttaki konusu. Excel'de imleç aşağı
-               iner; burada da öyle. Son satırdaysa zincir biter. */
-            onEditNext={() => {
-              const last = (rowCountOfSlot.get(slot) ?? 1) - 1;
-              setAutoEditCell(ti < last ? `${iso}|${slot}#${ti + 1}` : null);
-            }}
           />
         ))}
       </div>
@@ -701,7 +692,7 @@ function TitleCell({
  */
 function TopicCell({
   cellId, topic, isToday, isAdmin, draggable, memberNames, memberPhotos = {}, personHex, onOpen,
-  onSaved, onEditNext, autoEdit = false,
+  onSaved,
 }: {
   cellId: string;
   topic: PlanningTopic | null;
@@ -713,10 +704,6 @@ function TopicCell({
   personHex: Record<string, string>;
   onOpen: () => void;
   onSaved: () => void;
-  /** Enter'a basınca ALT satırdaki konuya geç (Excel hareketi). */
-  onEditNext?: () => void;
-  /** Dışarıdan "bu hücreyi düzenlemeye aç" isteği — Enter zinciri için. */
-  autoEdit?: boolean;
 }) {
   const { setNodeRef: dropRef, isOver } = useDroppable({ id: cellId, disabled: !draggable });
   const canDrag = draggable && !!topic?.text;
@@ -732,50 +719,6 @@ function TopicCell({
      TOPLANTI siliniyor, bunu istemiyorum. BİRER BİRER SİLİNEBİLSİN."
      Silme artık konunun kendi hücresinde, kendi düğmesinde: toplantıyı silme
      yolu ayrı bir kapıda (pencerenin altında) ve ayrıca onaylı. */
-  /* KONU YERİNDE YAZILIR — Aslı Hanım (2026-08-29): "Bu calendar kısmı biraz
-     EXCEL TARZINDA olmalı." Başlık zaten hücrede düzenleniyordu; konu için
-     pencere açmak gerekiyordu ve toplantı sırasında en çok yazılan şey konu.
-     Enter KAYDEDİP ALT SATIRA geçer (Excel'in kendi hareketi), Escape vazgeçer.
-     Kişi seçimi ve "Bildir" pencerede kalır — hücreye sığmaz; oraya köşedeki
-     büyütme düğmesi götürür (başlık hücresindeki desenin aynısı). */
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(topic?.text ?? "");
-  const [saving, setSaving] = useState(false);
-
-  async function commitText(then?: "next") {
-    const next = draft.trim();
-    setEditing(false);
-    if (next === (topic?.text ?? "").trim()) { if (then === "next") onEditNext?.(); return; }
-    if (!next && !topic) { if (then === "next") onEditNext?.(); return; }
-    setSaving(true);
-    try {
-      const [meeting_date, rest] = cellId.split("|");
-      const [time_slot, rowPart] = (rest ?? "").split("#");
-      await setTopicText(
-        topic ? { topicId: topic.id } : { meeting_date, time_slot, position: Number(rowPart) || 0 },
-        next,
-      );
-      onSaved();
-    } finally {
-      setSaving(false);
-      if (then === "next") onEditNext?.();
-    }
-  }
-
-  /* Üstteki hücrede Enter'a basıldıysa sıra bu hücreye geçer — TEK SEFERLİK.
-     Bayrak açık kaldığı sürece her veri tazelemesinde efekt yeniden koşuyor ve
-     kullanıcı Escape'e bassa bile hücre kendini tekrar açıyordu. Ref, bayrağın
-     her AÇILIŞINDA bir kez tüketilmesini sağlar. */
-  const autoEditUsed = useRef(false);
-  useEffect(() => {
-    if (autoEdit && isAdmin && !autoEditUsed.current) {
-      autoEditUsed.current = true;
-      setDraft(topic?.text ?? "");
-      setEditing(true);
-    }
-    if (!autoEdit) autoEditUsed.current = false;
-  }, [autoEdit, isAdmin, topic?.text]);
-
   const [removing, setRemoving] = useState(false);
   /* KONU TAMAMLANDI — Pano'nun biten iş diliyle birebir aynı: yeşil ve üstü
      çizili (Sıraç, 2026-09-08). Tamamlanan şey KONUDUR; toplantı başlığının
@@ -806,8 +749,8 @@ function TopicCell({
       {...(canDrag ? listeners : {})}
       {...(canDrag ? attributes : {})}
       {...keyOpen}
-      onClick={isAdmin ? () => { setDraft(topic?.text ?? ""); setEditing(true); } : undefined}
-      title={canDrag ? "Yazmak için tıklayın · sürükleyip başka gün/saate taşıyabilirsiniz" : undefined}
+      onClick={isAdmin ? onOpen : undefined}
+      title={canDrag ? "Açmak için tıklayın · sürükleyip başka gün/saate taşıyabilirsiniz" : undefined}
       className={cn(
         "group/topic relative min-h-[30px] border-r border-hairline px-2 py-1.5 text-[12px] leading-snug text-ink/90 last:border-r-0",
         // Bugünün sütunu gövdede de sürer — göz başlıktan aşağı inince
@@ -821,34 +764,9 @@ function TopicCell({
         isDragging && "opacity-40",
       )}
     >
-      {editing ? (
-        /* Sürükleme dinleyicileri ÜST düğümde: pointer olaylarını durdurmazsak
-           yazmaya çalışırken hücre sürüklenmeye başlıyor (başlık hücresinde de
-           aynı tuzak vardı). */
-        <input
-          autoFocus
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => e.stopPropagation()}
-          onBlur={() => { void commitText(); }}
-          onKeyDown={(e) => {
-            e.stopPropagation();
-            if (e.key === "Enter") { e.preventDefault(); void commitText("next"); }
-            if (e.key === "Escape") { e.preventDefault(); setDraft(topic?.text ?? ""); setEditing(false); }
-          }}
-          aria-label="Konu"
-          placeholder="Konu yazın…"
-          className="w-full rounded-[4px] border border-brand-ring bg-surface px-1 py-0.5 text-[12px] leading-snug text-ink outline-none"
-        />
-      ) : (
-        <span className={cn(
-          topicDone && "text-success/90 line-through decoration-success/40",
-          saving && "opacity-50",
-        )}>
-          {topic?.text}
-        </span>
-      )}
+      <span className={cn(topicDone && "text-success/90 line-through decoration-success/40")}>
+        {topic?.text}
+      </span>
       {topic?.task_id && (
         <CheckCircle2 size={12} className="ml-1 inline shrink-0 text-success" aria-label="Göreve atandı" />
       )}
@@ -892,18 +810,6 @@ function TopicCell({
             )}
           >
             {toggling ? <Loader2 size={11} className="animate-spin" aria-hidden /> : <Check size={11} aria-hidden />}
-          </button>
-          {/* PENCERE KAPISI — kişi seçimi ve "Bildir" hücreye sığmaz.
-              Başlık hücresindeki desenin aynısı. */}
-          <button
-            type="button"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => { e.stopPropagation(); onOpen(); }}
-            title="Konuyu aç — kişi seç, göreve dönüştür"
-            aria-label="Konuyu pencerede aç"
-            className="grid size-5 place-items-center rounded-[4px] text-ink/35 opacity-0 transition-opacity duration-150 hover:bg-surface/70 hover:text-ink focus-visible:opacity-100 group-hover/topic:opacity-100"
-          >
-            <Maximize2 size={10} aria-hidden />
           </button>
           <button
             type="button"

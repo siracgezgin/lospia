@@ -612,7 +612,16 @@ export function DriveBrowser({
             cur = parentOf.get(cur) ?? null;
           }
         }
-        folderOut = folderOut.filter((f) => keep.has(f.id));
+        /* BOŞ KLASÖR HER KUTUDA GÖRÜNÜR. Süzgeç yalnız "içeriği var ama bu
+           türden değil" klasörleri eler; yeni açılmış boş bir klasör aksi hâlde
+           doğduğu anda kaybolur ve içine dosya konamazdı. */
+        const hasAnyChild = new Set<string>();
+        for (const d of docs) if (d.folder_id) hasAnyChild.add(d.folder_id);
+        for (const x of sheets) if (x.folder_id) hasAnyChild.add(x.folder_id);
+        for (const l of links) if (l.folder_id) hasAnyChild.add(l.folder_id);
+        for (const f2 of files) if (f2.folder_id) hasAnyChild.add(f2.folder_id);
+        for (const f2 of folders) if (f2.parent_id) hasAnyChild.add(f2.parent_id);
+        folderOut = folderOut.filter((f) => keep.has(f.id) || !hasAnyChild.has(f.id));
         fileOut = all.filter((i) => def.match(i));
       }
     }
@@ -1127,43 +1136,9 @@ export function DriveBrowser({
         </div>
       )}
 
-      {/* ── GİRİŞ: TÜR KUTULARI ──────────────────────────────────────────
-          Aslı Hanım (2026-09-07): "AF Teamwork'e girdim, orada EXCEL YAZILI
-          KUTU olsun; içine girince excel dosyaları olsun, bunlar klasörleşmiş
-          de olabilir kendi içinde. Ek olarak RESİMLER İÇİN DE AYRI BİR BÖLÜM…
-          HER ŞEY KENDİ YERİNDE OLSUN."
-          Kartlar Collection/CRM ile AYNI `Tile` primitifi — modülden modüle
-          aynı hareket. Arama açıkken kutular gizlenir: arama bütün ağaçta
-          gezer, kutuya girmeyi beklemez. */}
-      {bucket === null && !searching && (
-        <div className="anim-fade">
-          <div className="mb-4">
-            <h2 className="text-lg font-semibold tracking-tight text-ink sm:text-xl">Ne arıyorsunuz?</h2>
-            <p className="mt-0.5 text-[13px] text-muted">
-              Bir kutuya girin — içeride o türün klasörleri ve dosyaları var.
-            </p>
-          </div>
-          <TileGrid>
-            {BUCKETS.map((b) => {
-              const n = bucketCounts[b.key] ?? 0;
-              const id = BUCKET_IDENTITY[b.key];
-              return (
-                <Tile
-                  key={b.key}
-                  onClick={() => { setBucket(b.key); setCwd(null); setQuery(""); setTypeFilter("all"); }}
-                  title={b.label}
-                  meta={n > 0 ? `${n} dosya` : b.hint}
-                  icon={id.icon}
-                  colorHex={id.hex}
-                />
-              );
-            })}
-          </TileGrid>
-        </div>
-      )}
 
       {/* Kırıntı yolu + üretim düğmeleri */}
-      <div className={cn("flex flex-wrap items-center justify-between gap-2", bucket === null && !searching && "mt-5")}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
         {/* TEK SATIR: Geri · kırıntı yolu · üretim. Kökteyken kırıntı yolu hiç
             çizilmez — nerede olduğunu uygulama çubuğu zaten söylüyor.
             `overflow-x-auto`: derin klasörde yol uzayınca gövde YATAY
@@ -1241,8 +1216,12 @@ export function DriveBrowser({
           <CreateButton
             icon={FolderPlus}
             label="Klasör"
-            title="Yeni klasör"
             hex={KIND_FOLDER.hex}
+            /* KÖKTE KAPALI. Kutu seçilmeden açılan klasör boş olur ve boş
+               klasör hiçbir kutuya ait olmadığı için hiçbir yerde görünmezdi —
+               kullanıcı "oluşturdum ama yok" durumunda kalırdı. Önce kutu. */
+            disabled={bucket === null}
+            title={bucket === null ? "Önce bir kutu seçin — klasör o türün içinde açılır" : "Yeni klasör"}
             /* Süzgeç de sıfırlanır: "Yüklenen dosya" süzgeci açıkken klasör
                açılınca yeni klasör listeye hiç düşmüyordu. */
             onPick={() => { setQuery(""); setTypeFilter("all"); setRenaming(null); setNaming(true); }}
@@ -1397,6 +1376,40 @@ export function DriveBrowser({
           </div>
         </div>
       )}
+      {/* ── GİRİŞ: TÜR KUTULARI ──────────────────────────────────────────
+          Aslı Hanım (2026-09-07): "AF Teamwork'e girdim, orada EXCEL YAZILI
+          KUTU olsun; içine girince excel dosyaları olsun, bunlar klasörleşmiş
+          de olabilir kendi içinde. Ek olarak RESİMLER İÇİN DE AYRI BİR BÖLÜM…
+          HER ŞEY KENDİ YERİNDE OLSUN."
+          Kartlar Collection/CRM ile AYNI `Tile` primitifi — modülden modüle
+          aynı hareket. Arama açıkken kutular gizlenir: arama bütün ağaçta
+          gezer, kutuya girmeyi beklemez. */}
+      {bucket === null && !searching && (
+        <div className="anim-fade mt-1">
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold tracking-tight text-ink sm:text-xl">Ne arıyorsunuz?</h2>
+            <p className="mt-0.5 text-[13px] text-muted">
+              Bir kutuya girin — içeride o türün klasörleri ve dosyaları var.
+            </p>
+          </div>
+          <TileGrid>
+            {BUCKETS.map((b) => {
+              const n = bucketCounts[b.key] ?? 0;
+              const id = BUCKET_IDENTITY[b.key];
+              return (
+                <Tile
+                  key={b.key}
+                  onClick={() => { setBucket(b.key); setCwd(null); setQuery(""); setTypeFilter("all"); }}
+                  title={b.label}
+                  meta={n > 0 ? `${n} dosya` : b.hint}
+                  icon={id.icon}
+                  colorHex={id.hex}
+                />
+              );
+            })}
+          </TileGrid>
+        </div>
+      )}
 
       {/* YÜKLEME DURUMU — kaçıncı dosya, hangi dosya, iptal ve hatalar. */}
       {upload && (
@@ -1458,6 +1471,15 @@ export function DriveBrowser({
         </p>
       )}
 
+      {/* GİRİŞTE DOSYA LİSTESİ YOK. Sıraç (2026-09-09): "AF Teamwork
+          kısmındaki alttaki olan kısım kalksın."
+          Kutucukların altında ayrıca kök klasörler ve dosyalar diziliyordu —
+          "her şey kendi yerinde" derken kurulan ayrımı ilk ekranda bozuyordu:
+          kullanıcı hem kutuları hem karışık listeyi aynı anda görüyordu.
+          Giriş artık YALNIZ kutular; içerik kutunun içinde. Arama açıkken liste
+          yine çizilir — arama bütün ağaçta gezer, kutuya girmeyi beklemez. */}
+      {(bucket !== null || searching || naming) && (
+      <>
       {resultCount === 0 && !naming ? (
         filtering ? (
           <EmptyState
@@ -1535,6 +1557,8 @@ export function DriveBrowser({
             </Section>
           )}
         </div>
+      )}
+      </>
       )}
 
       {/* YENİDEN ADLANDIR — kart görünümü dışında ve tabloda. Kart
@@ -1787,14 +1811,14 @@ function ItemMenu({ label, actions, busy }: { label: string; actions: MenuAction
  * ortak çerçevede kalır.
  */
 function CreateButton({
-  icon: Icon, label, title, hex, busy, onPick,
-}: { icon: LucideIcon; label: string; title?: string; hex: string; busy?: boolean; onPick: () => void }) {
+  icon: Icon, label, title, hex, busy, disabled, onPick,
+}: { icon: LucideIcon; label: string; title?: string; hex: string; busy?: boolean; disabled?: boolean; onPick: () => void }) {
   const name = title ?? `Yeni ${label.toLocaleLowerCase("tr")}`;
   return (
     <button
       type="button"
       onClick={onPick}
-      disabled={busy}
+      disabled={busy || disabled}
       aria-busy={busy || undefined}
       title={name}
       aria-label={name}
