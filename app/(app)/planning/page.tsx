@@ -1,7 +1,10 @@
 import { redirect } from "next/navigation";
 import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { CalendarRange } from "lucide-react";
-import { startOfWeek, addDays, format, parseISO, isValid, startOfYear, endOfYear } from "date-fns";
+import {
+  startOfWeek, endOfWeek, addDays, format, parseISO, isValid,
+  startOfYear, endOfYear, startOfMonth, endOfMonth,
+} from "date-fns";
 import { requireModuleMember } from "@/lib/modules/context";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
@@ -10,15 +13,14 @@ import { maybeDatabaseSetupRequired } from "@/lib/utils/supabase-errors";
 import { ensureWeekScaffold } from "@/lib/planning/scaffold";
 import { defaultRuntimeBands, type RuntimeBand } from "@/lib/planning/bands";
 import { PlanningBoard } from "@/components/planning/PlanningBoard";
-import { PlanningDayView } from "@/components/planning/PlanningDayView";
 import { CalendarViewSwitch } from "@/components/planning/CalendarViewSwitch";
 import { asCalendarScale } from "@/lib/planning/calendar-scale";
 import { assignPersonTones } from "@/lib/design/person-colors";
 import { CalendarYearView, type YearDayLoad } from "@/components/planning/CalendarYearView";
-import { CalendarView } from "@/components/calendar/CalendarView";
+import { PlanningMonthView } from "@/components/planning/PlanningMonthView";
 import type {
   PlanningMeeting, PlanningTopic, PlanningMeetingWithTopics,
-  Task, Profile, WorkspaceContact, WorkspaceDepartment,
+  Task, Profile,
 } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -111,8 +113,74 @@ export default async function CalendarPage({
     />
   );
 
-  // ── Ay ve Yıl: görev verisi ────────────────────────────────────────────────
   if (scale === "ay" || scale === "yil") {
+    if (scale === "ay") {
+      /* AY = TOPLANTI TAKVİMİ (Sıraç, 2026-09-10: "Ay ızgarası toplantıları
+         göstersin"). Eskiden burada eski "Görev Takvimi"nden miras GÖREV
+         ızgarası (CalendarView) çiziliyordu; Calendar modülünün ay ölçeği
+         artık kendi konusunu gösteriyor. Görevlerin ay dökümü Pano ve List'te
+         teslim tarihiyle yaşamaya devam ediyor. */
+      const anchor = sp.d && isValid(parseISO(sp.d)) ? parseISO(sp.d) : new Date();
+      const gridFrom = format(startOfWeek(startOfMonth(anchor), { weekStartsOn: 1 }), "yyyy-MM-dd");
+      const gridTo = format(endOfWeek(endOfMonth(anchor), { weekStartsOn: 1 }), "yyyy-MM-dd");
+
+      const [monthRes, monthBandsRes] = await Promise.all([
+        supabase
+          .from("planning_meetings")
+          .select("*, planning_topics(*)")
+          .eq("workspace_id", workspaceId)
+          .gte("meeting_date", gridFrom)
+          .lte("meeting_date", gridTo)
+          .order("time_slot", { ascending: true })
+          .order("position", { ascending: true }),
+        supabase
+          .from("planning_bands")
+          .select("id, slot, category, label, topic_rows, columns")
+          .eq("workspace_id", workspaceId)
+          .order("position"),
+      ]);
+
+      type MonthRow = PlanningMeeting & { planning_topics?: PlanningTopic[] | null };
+      const monthMeetings: PlanningMeetingWithTopics[] =
+        ((monthRes.error ? [] : (monthRes.data ?? [])) as unknown as MonthRow[])
+          .map(({ planning_topics, ...m }) => ({
+            ...(m as PlanningMeeting),
+            topics: [...(planning_topics ?? [])].sort((a, b) => (a.position ?? 0) - (b.position ?? 0)),
+          }));
+
+      type MBand = { id: string; slot: string; category: string; label: string; topic_rows: number; columns: unknown };
+      const mBandRows = (monthBandsRes.error ? [] : (monthBandsRes.data ?? [])) as unknown as MBand[];
+      const monthBands: RuntimeBand[] = mBandRows.length
+        ? mBandRows.map((b) => ({
+            id: b.id, slot: b.slot, category: b.category as RuntimeBand["category"],
+            label: b.label, topicRows: b.topic_rows ?? 3,
+            columns: Array.isArray(b.columns) ? (b.columns as string[]) : [],
+          }))
+        : defaultRuntimeBands();
+
+      return (
+        <div className="flex h-full min-h-0 w-full flex-col">
+          <h1 className="sr-only">Calendar</h1>
+          <PlanningMonthView
+            monthIso={format(startOfMonth(anchor), "yyyy-MM-01")}
+            meetings={monthMeetings}
+            bands={monthBands}
+            members={members}
+            memberNames={memberNames}
+            memberPhotos={memberPhotos}
+            personHex={personHex}
+            isAdmin={isAdmin}
+            todayIso={format(new Date(), "yyyy-MM-dd")}
+            viewSwitch={<CalendarViewSwitch scale={scale} />}
+          />
+        </div>
+      );
+    }
+
+    /* YIL — gün yoğunluğu haritası (görev + toplantı).
+       Görev sorgusu ARTIK YALNIZ BURADA: ay ölçeği toplantı takvimine
+       dönünce contacts/departments/department_members sorguları hiçbir yerde
+       kullanılmıyordu ve her ay açılışında boşuna dört tur atıyorlardı. */
     const tasksQuery = supabase
       .from("tasks")
       .select("id, title, status, priority, due_date, start_date, department_id, visibility")
@@ -121,53 +189,11 @@ export default async function CalendarPage({
       .is("archived_at", null)
       .is("deleted_at", null);
     if (!isAdmin) tasksQuery.eq("visibility", "workspace");
-
-    const [tasksResult, contactsResult, deptsResult, deptMembersResult] = await Promise.all([
-      tasksQuery.or("due_date.not.is.null,start_date.not.is.null"),
-      supabase.from("workspace_contacts").select("*").eq("workspace_id", workspaceId).order("created_at"),
-      supabase.from("workspace_departments").select("id, parent_id, name, color_key").eq("workspace_id", workspaceId).order("position"),
-      supabase.from("department_members").select("department_id, member_id").eq("workspace_id", workspaceId),
-    ]);
-
+    const tasksResult = await tasksQuery.or("due_date.not.is.null,start_date.not.is.null");
     const tasks = (tasksResult.data ?? []) as Pick<
       Task, "id" | "title" | "status" | "priority" | "due_date" | "start_date" | "department_id" | "visibility"
     >[];
-    const profiles: ProfileLite[] = memberRowsData.flatMap((m) =>
-      Array.isArray(m.profiles) ? m.profiles : m.profiles ? [m.profiles] : []);
-    const calMembers = memberRowsData.map((m) => {
-      const prof = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
-      return { memberId: m.id, userId: m.user_id, name: prof?.full_name ?? prof?.email ?? "—" };
-    });
-    const contacts = (contactsResult.data ?? []) as WorkspaceContact[];
-    const departments = (deptsResult.data ?? []) as WorkspaceDepartment[];
-    const deptMembers = (deptMembersResult.data ?? []) as { department_id: string; member_id: string }[];
 
-    if (scale === "ay") {
-      return (
-        /* HAFTA İLE AYNI KABUK: tam yükseklik, sayfa dolgusu yok — araç
-           çubuğu her ölçekte ekranın aynı yerinde başlar. Dolgu artık
-           görünümün GÖVDESİNDE (bkz. CalendarView embedded). */
-        <div className="flex h-full min-h-0 w-full flex-col">
-          <h1 className="sr-only">Calendar</h1>
-          <CalendarView
-            viewSwitch={<CalendarViewSwitch scale={scale} />}
-            embedded
-            initialDate={sp.d ?? null}
-            tasks={tasks}
-            workspaceId={workspaceId}
-            profiles={profiles}
-            contacts={contacts}
-            departments={departments}
-            members={calMembers}
-            deptMembers={deptMembers}
-            isAdmin={isAdmin}
-          />
-        </div>
-      );
-    }
-
-    // Yıl — gün yoğunluğu haritası (görev + toplantı). Toplantı tablosu henüz
-    // migrate edilmediyse yalnız görevler sayılır; sayfa çalışmaya devam eder.
     const focusYear = sp.d && isValid(parseISO(sp.d)) ? parseISO(sp.d).getFullYear() : new Date().getFullYear();
     const yearStart = format(startOfYear(new Date(focusYear, 0, 1)), "yyyy-MM-dd");
     const yearEnd = format(endOfYear(new Date(focusYear, 0, 1)), "yyyy-MM-dd");
