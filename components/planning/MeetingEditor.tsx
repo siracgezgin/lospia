@@ -358,9 +358,12 @@ export function MeetingEditor({
   }
 
   /* ÇOĞALTMA — geçmiş kayıt yerinde kalır, DEVAMI yeni güne kopyalanır. */
-  function handleDuplicate() {
+  /* Hedef gün AÇIKÇA geçilebilir. `setDupDate(...)` sonra `handleDuplicate()`
+     çağırmak işe yaramaz: React durumu asenkron günceller, fonksiyon eski
+     değeri okur ve sunucu "aynı güne kopyalanamaz" der. */
+  function handleDuplicate(dateOverride?: string) {
     if (!meetingId) return;
-    const targetDate = dupDate || dateIso;
+    const targetDate = dateOverride || dupDate || dateIso;
     setError(null);
     startDuplicate(async () => {
       try {
@@ -581,8 +584,22 @@ export function MeetingEditor({
             >
               <XCircle size={status === "missed" ? 20 : 16} aria-hidden /> Aksadı
             </button>
+            {/* AKSAYAN TOPLANTI TEK TIKLA SONRAKİ GÜNE. Aslı Hanım (07.09):
+                "Toplantı kırmızı çarpı olsun, Kİ BİR SONRAKİ TOPLANTIYA
+                EKLENMESİ GEREKTİĞİNİ ANLAYALIM." İşaret vardı ama devamını
+                kullanıcı elle kurmak zorundaydı; cümlenin ikinci yarısı buydu.
+                TAŞIMAZ, KOPYALAR: aksayan gün de takvimde kalmalı (arşiv). */}
             {status === "missed" && (
-              <span className="text-[12.5px] text-muted">Bir sonraki güne taşıyın ya da çoğaltın.</span>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => handleDuplicate(nextDayIso(dateIso))}
+                loading={isDuplicating}
+                disabled={busy}
+                title="Bu toplantının bir kopyasını ertesi güne koy — aksayan gün yerinde kalır"
+              >
+                {!isDuplicating && <Copy size={13} aria-hidden />} Sonraki güne ekle
+              </Button>
             )}
           </div>
         )}
@@ -598,7 +615,7 @@ export function MeetingEditor({
                 aria-label="Kopyanın günü"
               />
             </Field>
-            <Button onClick={handleDuplicate} loading={isDuplicating} disabled={busy || !dupDate}>
+            <Button onClick={() => handleDuplicate()} loading={isDuplicating} disabled={busy || !dupDate}>
               <Copy size={14} aria-hidden /> Kopyala
             </Button>
             <Button variant="ghost" onClick={() => setDupOpen(false)} disabled={busy}>Vazgeç</Button>
