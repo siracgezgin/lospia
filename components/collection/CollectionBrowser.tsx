@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Boxes, Plus, Search, ChevronLeft, FileDown, Printer, Shirt, Scissors,
-  Footprints, Handbag, FileSpreadsheet, ClipboardList, ShieldCheck, AlertTriangle,
+  Footprints, Handbag, FileSpreadsheet, ClipboardList, ShieldCheck,
   Pencil, FolderPlus, SwatchBook, Trash2, Image as ImageIcon, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
@@ -133,7 +133,6 @@ function coverImage(s: CollectionItem): string | null {
 export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }: Props) {
   const tree = categories && categories.length > 0 ? categories : COLLECTION_TAXONOMY;
   // Sezona bağlanmamış föyler — taşımada sezon metni boş olanlar.
-  const seasonlessCount = sheets.filter((s) => !s.season_id && s.status !== "archived").length;
   const [query, setQuery] = useState("");
   /* Kategori penceresi: `null` kapalı, `"new"` yeni kategori, düğüm ise
      düzenleme. Tek pencere üç işi de yapar (bkz. CategoryManagerDialog). */
@@ -339,20 +338,12 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
         />
       )}
 
-      {/* Sezonsuz föy uyarısı. Bunlar gizlenmiyor (her sezon bağlamında
-          görünürler) ama sezona atanmadan "bu sezon ne ürettik" sorusu doğru
-          cevaplanamaz — o yüzden sessizce geçilmiyor. */}
-      {seasons.length > 0 && seasonlessCount > 0 && (
-        <p className="mb-3 flex items-start gap-2 rounded-control border border-warning/30 bg-warning/10 px-3 py-2 text-[12.5px] text-ink">
-          <AlertTriangle size={14} className="mt-px shrink-0 text-warning" />
-          <span>
-            <b className="font-semibold">{seasonlessCount} föyün sezonu yok.</b>{" "}
-            Şimdilik her sezonda görünüyorlar; föyü açıp sezonunu seçerseniz
-            sezon bazlı maliyet ve karşılaştırma doğru çalışır.
-          </span>
-        </p>
-      )}
-
+      {/* SEZONSUZ FÖY UYARISI KALDIRILDI (Sıraç, 2026-09-10: "bu da kalksın,
+          gereksiz uyarı şimdilik olmasın"). Sezonsuz föyler zaten her sezon
+          bağlamında görünüyor, yani hiçbir şey kaybolmuyordu; şerit yalnızca
+          ekranın başında sarı bir kutu olarak duruyor ve kullanıcıyı şimdi
+          yapması gerekmeyen bir işe çağırıyordu. Sezon föyün kendi ekranından
+          her zaman atanabilir. */}
       {showTiles ? (
         /* ── GİRİŞ: kategoriler ────────────────────────────────────────────── */
         <div className="anim-fade">
