@@ -7,6 +7,9 @@ import { SettingsSection, CountChip } from "@/components/settings/SettingsSectio
 import { ManufacturersManager, type ManagerManufacturer } from "@/components/settings/ManufacturersManager";
 import { SeasonsManager, type ManagerSeason } from "@/components/settings/SeasonsManager";
 import { MaterialsManager, type ManagerMaterial } from "@/components/settings/MaterialsManager";
+import { ProductDataTiles } from "@/components/collection/ProductDataTiles";
+import Link from "next/link";
+import { ChevronLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Product Data" };
@@ -29,7 +32,15 @@ export const metadata = { title: "Product Data" };
  *
  * Yazma yetkisi ayarlardaki gibi YÖNETİCİDE; üye görür, düzenleyemez.
  */
-export default async function CollectionDataPage() {
+export default async function CollectionDataPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ k?: string }>;
+}) {
+  /* `?k=` AÇIK KUTU. Yokken ekran kutucuklarla açılır — üç yöneticiyi alt alta
+     dizmek uygulamanın tek tasarım dilinin dışında kalan son giriş ekranıydı
+     (Aslı Hanım: "aşağıdan böyle muhasebeci gibi şey seçtirip girdirmeyelim"). */
+  const box = (await searchParams).k ?? null;
   const { supabase, user, workspaceId, isAdmin, gate } = await requireModuleMember();
   if (gate === "login") redirectToSignIn();
   if (gate !== "ok" || !workspaceId || !user) return <AccessDenied />;
@@ -113,8 +124,28 @@ export default async function CollectionDataPage() {
       <h1 className="sr-only">Product Data</h1>
       <CollectionTabs active="veri" />
 
-      <div className="grid items-start gap-5 xl:grid-cols-2">
-        {seasonsAvailable && (
+      {/* GİRİŞ = KUTULAR */}
+      {!box && (
+        <ProductDataTiles
+          counts={{
+            sezon: seasonsAvailable ? seasons.length : 0,
+            usta: manufacturersAvailable ? manufacturers.length : 0,
+            hammadde: materialsAvailable ? materials.length : 0,
+          }}
+        />
+      )}
+
+      {box && (
+        <Link
+          href="/collection/veri"
+          className="-ml-1 mb-2 inline-flex items-center gap-1 text-[13px] font-medium text-muted transition-colors duration-150 hover:text-ink"
+        >
+          <ChevronLeft size={15} aria-hidden /> Ürün verisi
+        </Link>
+      )}
+
+      <div className="grid items-start gap-5">
+        {box === "sezon" && seasonsAvailable && (
           <SettingsSection
             title="Sezonlar"
             description="Koleksiyon, Maliyet ve Ödeme Tablosu seçili sezona göre süzülür. Aktif sezon üst çubukta ilk gelen ve yeni föyün varsayılanıdır."
@@ -124,7 +155,7 @@ export default async function CollectionDataPage() {
           </SettingsSection>
         )}
 
-        {manufacturersAvailable && (
+        {box === "usta" && manufacturersAvailable && (
           <SettingsSection
             title="Üreticiler (Ustalar)"
             description="Föydeki “Üretici” alanı ve Ödeme Tablosu buradan beslenir. Teslim süresi ve minimum adet sipariş verirken lazım olur."
@@ -138,8 +169,8 @@ export default async function CollectionDataPage() {
           </SettingsSection>
         )}
 
-        {materialsAvailable && (
-          <div className="xl:col-span-2">
+        {box === "hammadde" && materialsAvailable && (
+          <div>
             <SettingsSection
               title="Hammadde"
               description="Kumaş ve aksesuarlar burada bir kez tanımlanır. Föyün reçetesine eklenince maliyet hesaplanır; fiyat burada değişince tüm föyler güncellenir."
