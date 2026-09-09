@@ -1339,7 +1339,12 @@ export function DriveBrowser({
           </SelectInput>
 
           {/* Görünüm — Drive'daki gibi kart / liste. Aramada sonuç zaten tek
-              liste olduğu için düğmeler pasif kalır. */}
+              liste olduğu için düğmeler pasif kalır.
+              GİRİŞTE ÇİZİLMEZ (Sıraç, 2026-09-10: "/documents ana sayfasında
+              kart ve liste görünümü seçeneği olmasın; Excel'e filan girince
+              olabilir tabi"). Girişte zaten liste yok — seçecek bir görünüm
+              olmadan duran bir kontrol, çalışmıyor sanılıyordu. */}
+          {(bucket !== null || searching) && (
           <div
             role="group"
             aria-label="Görünüm"
@@ -1374,6 +1379,7 @@ export function DriveBrowser({
               <ListIcon size={15} />
             </button>
           </div>
+          )}
         </div>
       )}
       {/* ── GİRİŞ: TÜR KUTULARI ──────────────────────────────────────────

@@ -26,6 +26,9 @@ type ReportMeeting = {
 };
 
 interface Props {
+  /** "Geri" nereye dönsün — geldiğiniz yüzey. Sabit /dashboard olduğu için
+   *  Pano'dan gelen kullanıcı yerini kaybediyordu (Sıraç, 2026-09-10). */
+  backHref?: string;
   person: { id: string; name: string; avatarUrl: string | null };
   tasks: ReportTask[];
   meetings: ReportMeeting[];
@@ -62,6 +65,7 @@ const trTarih = (iso: string) => {
  */
 export function PersonReport({
   person, tasks, meetings, departments, today, teamIdentity, error,
+  backHref = "/dashboard",
 }: Props) {
   /* Renk EKİP GENELİ atamadan gelir. Tek kişi için hesaplamak, panoda çakışma
      yüzünden kayan tonu ve yöneticinin Ayarlar'daki seçimini görmez; kişinin
@@ -97,7 +101,7 @@ export function PersonReport({
       <div className="no-print mb-4 flex flex-wrap items-center justify-between gap-3">
         {/* Bu sayfaya artık Reports'un kişi kartından geliniyor; sabit
             "Board'a dön" yanlış yere götürüyordu. Hedefi geçmiş belirler. */}
-        <BackLink href="/dashboard" />
+        <BackLink href={backHref} />
         <Button variant="secondary" onClick={() => window.print()}>
           <Printer size={14} aria-hidden /> Yazdır / PDF
         </Button>

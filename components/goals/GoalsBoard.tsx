@@ -111,8 +111,10 @@ export function GoalsBoard({
           {/* İŞLER | HEDEFLER — Board'un kişi başlığındaki sekmenin aynısı;
               iki ekran arasında gidip gelmek tek tık. */}
           <span className="ml-1 inline-flex shrink-0 items-stretch overflow-hidden rounded-control border border-line bg-surface">
+            {/* KİŞİYİ TAŞIR. Düz /board kişi ızgarasını açıyor ve seçili kişi
+                kayboluyordu (Sıraç, 2026-09-10). */}
             <Link
-              href="/board"
+              href={`/board?person=member:${person.id}`}
               className="inline-flex h-8 items-center px-3 text-[13px] font-medium text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
             >
               İşler

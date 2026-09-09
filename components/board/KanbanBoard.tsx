@@ -600,6 +600,8 @@ interface Props {
   savedViews: SavedView[];
   viewSlug: string | null;
   weekIso?: string | null;
+  /** Adresten gelen kişi ("member:<uuid>"). Doluysa kişi ızgarası atlanır. */
+  initialPerson?: string;
   workspaceId: string;
   userId: string;
   // avatar_url optional: kişi ızgarasındaki ekip fotoğrafı. Yoksa kişiye özel
@@ -1575,6 +1577,7 @@ export function KanbanBoard({
   savedViews,
   viewSlug,
   weekIso,
+  initialPerson = "",
   workspaceId,
   userId,
   profiles,
@@ -1663,7 +1666,7 @@ export function KanbanBoard({
   const [mobileSeg, setMobileSeg] = useState<MobileSegId>("yapilacak");
 
   // Client-side filters (not URL-persisted; reset on refresh)
-  const [personFilter, setPersonFilter] = useState("");
+  const [personFilter, setPersonFilter] = useState(initialPerson);
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [search, setSearch] = useState("");
 
@@ -1671,7 +1674,8 @@ export function KanbanBoard({
   // olsun. Kişi seçelim… ortada, büyük büyük"). Bir kişi seçilince ya da
   // "Tüm işler" denince kolonlara geçilir; "← Kişiler" ile geri dönülür.
   // Yönetici Pano bu kapıyı kullanmaz (kendi yönetici filtresi var).
-  const [peopleEntry, setPeopleEntry] = useState(!isAdminBoard);
+  /* Adreste kişi varsa ızgara ATLANIR — doğrudan o kişinin panosu açılır. */
+  const [peopleEntry, setPeopleEntry] = useState(!isAdminBoard && !initialPerson);
 
   // Manager-mode state (visibility tab + manager person filter). URL-synced so a
   // Yönetici Pano view is shareable; defaults come from the server-parsed params.
@@ -2453,7 +2457,7 @@ export function KanbanBoard({
               )}
               {selectedPerson.filterKey.startsWith("member:") && (
                 <Link
-                  href={`/reports/${selectedPerson.id}`}
+                  href={`/reports/${selectedPerson.id}?from=board`}
                   className="ml-1 inline-flex h-8 shrink-0 items-center gap-1.5 rounded-control border border-line bg-surface px-3 text-[13px] font-medium text-muted shadow-xs transition-[background-color,border-color,color] duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink"
                   title="Bu kişinin tek sayfalık özeti — yazdırılabilir"
                 >

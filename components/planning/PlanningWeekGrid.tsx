@@ -8,13 +8,13 @@ import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   useDraggable, useDroppable, type DragEndEvent, type DragStartEvent,
 } from "@dnd-kit/core";
-import { CheckCircle2, Plus, Pencil, X, Loader2, XCircle, Copy, Maximize2, Check } from "lucide-react";
+import { CheckCircle2, Plus, Pencil, X, Loader2, XCircle, Copy, Maximize2 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { categoryMeta } from "@/lib/planning/categories";
 import { WEEKDAY_SHORT_EN, WEEKDAY_LONG_TR, type RuntimeBand } from "@/lib/planning/bands";
 import { BandEditor } from "./BandEditor";
 import { istanbulLabel, AWAY_LABEL, HOME_LABEL, normalizeSlot } from "@/lib/planning/timezones";
-import { moveMeeting, moveTopic, duplicateMeeting, setMeetingTitle, deleteTopic, setTopicDone } from "@/lib/actions/planning";
+import { moveMeeting, moveTopic, duplicateMeeting, setMeetingTitle } from "@/lib/actions/planning";
 import { KimBadges } from "./KimBadges";
 import type { PlanningMeetingWithTopics, PlanningTopic } from "@/types";
 
@@ -746,7 +746,6 @@ function TitleCell({
  */
 function TopicCell({
   cellId, topic, isToday, isAdmin, draggable, memberNames, memberPhotos = {}, personHex, onOpen,
-  onSaved,
 }: {
   cellId: string;
   topic: PlanningTopic | null;
@@ -769,33 +768,13 @@ function TopicCell({
   const setRef = (node: HTMLDivElement | null) => { dropRef(node); dragRef(node); };
   const keyOpen = keyboardOpen(isAdmin && !canDrag, onOpen);
 
-  /* TEK KONU SİLME. Aslı Hanım (2026-09-07): "Ben sil deyince genelde KOMPLE O
-     TOPLANTI siliniyor, bunu istemiyorum. BİRER BİRER SİLİNEBİLSİN."
-     Silme artık konunun kendi hücresinde, kendi düğmesinde: toplantıyı silme
-     yolu ayrı bir kapıda (pencerenin altında) ve ayrıca onaylı. */
-  const [removing, setRemoving] = useState(false);
-  /* KONU TAMAMLANDI — Pano'nun biten iş diliyle birebir aynı: yeşil ve üstü
-     çizili (Sıraç, 2026-09-08). Tamamlanan şey KONUDUR; toplantı başlığının
-     üstünü çizmek "üç konudan biri bitti"yi anlatamıyordu. */
+  /* HÜCREDE DÜĞME YOK. Sıraç (2026-09-10): "İkonlar orda olmamış, konu
+     pop-up'a ekleyelim." 30 piksellik bir hücreye üç düğme sığdırınca ikonlar
+     metnin üstüne biniyordu (ekran görüntüsü). Hücre artık yalnız DURUMU
+     GÖSTERİR — işaretleme (tamamlandı/aksadı) ve silme konunun kendi
+     penceresinde; oraya hücreye tıklayarak gidilir. */
   const topicDone = !!topic?.done_at;
-  const [toggling, setToggling] = useState(false);
-  async function toggleDone() {
-    if (!topic) return;
-    setToggling(true);
-    try { await setTopicDone(topic.id, !topicDone); onSaved(); }
-    finally { setToggling(false); }
-  }
-
-  async function removeTopic() {
-    if (!topic) return;
-    setRemoving(true);
-    try {
-      await deleteTopic(topic.id);
-      onSaved();
-    } finally {
-      setRemoving(false);
-    }
-  }
+  const topicMissed = !!topic?.missed_at;
 
   return (
     <div
@@ -812,18 +791,19 @@ function TopicCell({
         // hücrelerdeki metin ve kategori renkleri okunur kalmalı.
         isToday && "bg-brand-soft/40",
         topicDone && "bg-success/10",
+        topicMissed && "bg-danger/8",
         isAdmin && HOVER_VEIL,
         canDrag && "active:cursor-grabbing",
         isOver && "ring-2 ring-inset ring-brand-ring",
         isDragging && "opacity-40",
       )}
     >
-      <span className={cn(topicDone && "text-success/90 line-through decoration-success/40")}>
+      <span className={cn(
+        topicDone && "text-success/90 line-through decoration-success/40",
+        topicMissed && "text-danger",
+      )}>
         {topic?.text}
       </span>
-      {topic?.task_id && (
-        <CheckCircle2 size={12} className="ml-1 inline shrink-0 text-success" aria-label="Göreve atandı" />
-      )}
       {topic && (
         <KimBadges
           ids={topic.participant_ids}
@@ -843,41 +823,6 @@ function TopicCell({
         </span>
       )}
 
-      {/* Yalnız BU konuyu siler — toplantıya dokunmaz. Kardeş düğüm, iç içe
-          düğme değil; sürükleme dinleyicileri üstte olduğu için pointerdown
-          durdurulur, yoksa silmeye giderken hücre sürüklenmeye başlıyor. */}
-      {isAdmin && topic?.text && (
-        <span className="absolute right-0.5 top-0.5 z-10 flex items-center gap-px">
-          {/* TAMAMLANDI — biten konu her zaman görünür kalır (yeşil tik),
-              bitmemiş konununki hover'da belirir; ekran sakin dursun. */}
-          <button
-            type="button"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => { e.stopPropagation(); void toggleDone(); }}
-            disabled={toggling}
-            title={topicDone ? "Tamamlandı işaretini kaldır" : "Konuyu tamamlandı işaretle"}
-            aria-label={topicDone ? `“${topic.text}” tamamlandı işaretini kaldır` : `“${topic.text}” konusunu tamamlandı işaretle`}
-            aria-pressed={topicDone}
-            className={cn(
-              "grid size-5 place-items-center rounded-[4px] transition-opacity duration-150 hover:bg-surface/70 focus-visible:opacity-100 group-hover/topic:opacity-100 disabled:opacity-40",
-              topicDone ? "text-success opacity-100" : "text-ink/35 opacity-0 hover:text-success",
-            )}
-          >
-            {toggling ? <Loader2 size={11} className="animate-spin" aria-hidden /> : <Check size={11} aria-hidden />}
-          </button>
-          <button
-            type="button"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => { e.stopPropagation(); void removeTopic(); }}
-            disabled={removing}
-            title="Yalnız bu konuyu sil"
-            aria-label={`“${topic.text}” konusunu sil`}
-            className="grid size-5 place-items-center rounded-[4px] text-ink/35 opacity-0 transition-opacity duration-150 hover:bg-surface/70 hover:text-danger focus-visible:opacity-100 group-hover/topic:opacity-100 disabled:opacity-40"
-          >
-            {removing ? <Loader2 size={11} className="animate-spin" aria-hidden /> : <X size={11} aria-hidden />}
-          </button>
-        </span>
-      )}
     </div>
   );
 }

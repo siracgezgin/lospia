@@ -515,6 +515,9 @@ export type PlanningTopic = {
    *  gereken KONU olması lazım, konu başlığı değil." */
   done_at?: string | null;
   done_by?: string | null;
+  /** Konu aksadı damgası (20240343). done_at ile aynı anda dolu olamaz. */
+  missed_at?: string | null;
+  missed_by?: string | null;
   task_id: string | null;          // göreve dönüştürüldüyse ilgili görev
   created_by: string | null;
   created_at: string;

@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { format, parseISO } from "date-fns";
 import { tr } from "date-fns/locale";
 import { CalendarOff, CheckCircle2, Clock, Pencil, Plus, XCircle } from "lucide-react";
@@ -13,7 +12,6 @@ import { WEEKDAY_LONG_TR, WEEKDAY_SHORT_TR, type RuntimeBand } from "@/lib/plann
 import { BandEditor } from "./BandEditor";
 import { istanbulLabel, AWAY_LABEL, HOME_LABEL } from "@/lib/planning/timezones";
 import { KimBadges } from "./KimBadges";
-import { setMeetingStatus } from "@/lib/actions/planning";
 import type { PlanningMeetingWithTopics, PlanningTopic } from "@/types";
 
 interface Props {
@@ -50,29 +48,6 @@ export function PlanningDayList({
   weekDays, byCell, topicRows, extraSlots, memberNames, memberPhotos = {}, personHex = {}, isAdmin, todayIso,
   onOpen, bands, singleDay = false,
 }: Props) {
-  const router = useRouter();
-  /* SONUÇ TEK TIKLA — Aslı Hanım toplantıyı bu ekrandan yönetiyor ve sonucu
-     "üzerinden" işaretlemek istedi: "Bu toplantının yapılıp bittiğini üzerinden
-     şey yapabiliyor muyuz?" Pencereyi açmak zorunda kalmasın diye tik ve çarpı
-     kartın altında duruyor; aynı işarete tekrar basmak onu kaldırır. */
-  const [statusBusy, setStatusBusy] = useState<string | null>(null);
-  const [statusError, setStatusError] = useState<string | null>(null);
-  const [, startStatus] = useTransition();
-  const markStatus = (meetingId: string, current: string | null, next: "done" | "missed") => {
-    setStatusError(null);
-    setStatusBusy(meetingId);
-    startStatus(async () => {
-      try {
-        const res = await setMeetingStatus(meetingId, current === next ? "planned" : next);
-        if ("error" in res) { setStatusError(res.error); return; }
-        router.refresh();
-      } catch {
-        setStatusError("İşaretlenemedi. Tekrar deneyin.");
-      } finally {
-        setStatusBusy(null);
-      }
-    });
-  };
   const todayIdx = weekDays.indexOf(todayIso);
   const [dayIdx, setDayIdx] = useState(todayIdx >= 0 ? todayIdx : 0);
   const iso = weekDays[dayIdx] ?? weekDays[0];
@@ -183,11 +158,6 @@ export function PlanningDayList({
         {WEEKDAY_LONG_TR[(parseISO(iso).getDay() + 6) % 7]} · {format(parseISO(iso), "d MMMM yyyy", { locale: tr })}
       </p>
 
-      {statusError && (
-        <p role="alert" className="anim-fade-down mb-2 rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[12.5px] font-medium text-danger">
-          {statusError}
-        </p>
-      )}
       <div className={z.gap}>
         {/* BOŞ GÜN ARTIK KONUŞUR. Üye görünümünde toplantısı olmayan gün
             bomboş bir beyazlıktı: ekranın yüklenmediği mi, o gün gerçekten
@@ -210,15 +180,9 @@ export function PlanningDayList({
           const content = cell.map((m) => m.content).filter(Boolean).join(" · ");
           const ids = [...new Set(cell.flatMap((m) => m.participant_ids ?? []))];
           /* SONUÇ — masaüstü ızgarasıyla aynı işaret (20240338). */
-          /* Yeşil TÜRETİLİR: bütün konular bitmişse (bkz. PlanningWeekGrid). */
-          const allTop = cell.flatMap((m) => m.topics ?? []).filter((t) => (t.text ?? "").trim());
-          const outcome: "done" | "missed" | null =
-            cell.some((m) => m.status === "missed") ? "missed"
-            : allTop.length > 0 && allTop.every((t) => !!t.done_at) ? "done"
-            : null;
-          /* Sonuç HÜCRENİN İLK toplantısına yazılır: aynı saatte iki başlık
-             birleşmiş olsa bile işaret tek ve öngörülebilir kalsın. */
-          const outcomeMeeting = cell[0] ?? null;
+          /* BAŞLIK NÖTR. Sıraç (2026-09-10): "Aksayan da tamamlanan da konu
+             başlığı değil KONULAR olmalı." Sonuç konu satırlarında okunur. */
+          const outcome: "done" | "missed" | null = null;
           const kim = cell.map((m) => m.kim).filter(Boolean).join(", ");
           const collabIds = [...new Set(cell.flatMap((m) => m.collaborator_ids ?? []))];
           const topics = (topicRows.get(`${iso}|${slot}`) ?? []).filter(Boolean) as PlanningTopic[];
@@ -340,7 +304,9 @@ export function PlanningDayList({
                         </span>
                         <span className={cn(
                           "min-w-0 flex-1 text-[13.5px] leading-snug",
-                          t.done_at ? "text-success/90 line-through decoration-success/40" : "text-ink/90",
+                          t.done_at ? "text-success/90 line-through decoration-success/40"
+                          : t.missed_at ? "text-danger"
+                          : "text-ink/90",
                         )}>
                           {t.text}
                           {t.task_id && (
@@ -386,32 +352,6 @@ export function PlanningDayList({
                 )
               )}
 
-              {/* AKSADI ŞERİDİ. "Tamamlandı" düğmesi kalktı: yeşil artık
-                  konulardan TÜRETİLİYOR (Sıraç, 2026-09-10). Geriye toplantının
-                  kendi olgusu kalıyor — hiç yapılmadıysa kırmızı çarpı ve
-                  sonraki güne taşıma. */}
-              {isAdmin && outcomeMeeting && (
-                <div className="flex flex-wrap items-center gap-1.5 border-t border-hairline px-3 py-2">
-                  <button
-                    type="button"
-                    disabled={statusBusy === outcomeMeeting.id}
-                    aria-pressed={outcome === "missed"}
-                    onClick={() => markStatus(outcomeMeeting.id, outcome, "missed")}
-                    title="Aksadı — bir sonraki toplantıya eklenmeli"
-                    className={cn(
-                      "tap-target inline-flex h-8 items-center gap-1.5 rounded-control border px-2.5 text-[12.5px] font-semibold transition-colors duration-150 disabled:opacity-60",
-                      outcome === "missed"
-                        ? "border-danger/40 bg-danger/12 text-danger"
-                        : "border-line bg-surface text-muted hover:border-danger/40 hover:text-danger",
-                    )}
-                  >
-                    <XCircle size={outcome === "missed" ? 18 : 14} aria-hidden /> Aksadı
-                  </button>
-                  {outcome === "missed" && (
-                    <span className="text-[12px] text-muted">Sonraki güne taşıyın ya da çoğaltın.</span>
-                  )}
-                </div>
-              )}
             </section>
           );
         })}

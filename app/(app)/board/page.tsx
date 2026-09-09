@@ -28,7 +28,7 @@ export const metadata = { title: "Board" };
 export default async function BoardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; week?: string }>;
+  searchParams: Promise<{ view?: string; week?: string; person?: string }>;
 }) {
   const supabase = await createClient();
   const user = await getAuthUser();
@@ -268,6 +268,10 @@ export default async function BoardPage({
 
   return (
     <KanbanBoard
+      /* KİŞİ ADRESTEN GELİR. Goals'ın "İşler" sekmesi buraya bağlanıyor;
+         parametresiz /board kişi ızgarasını açıyordu ve kullanıcı seçtiği
+         kişiyi kaybediyordu (Sıraç, 2026-09-10). */
+      initialPerson={params.person ?? ""}
       tasks={tasks}
       savedViews={savedViews}
       viewSlug={viewSlug}

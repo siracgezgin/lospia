@@ -12,14 +12,14 @@ import { Button, IconButton } from "@/components/ui/Button";
 import { Field, TextInput, TextArea } from "@/components/ui/Field";
 import {
   createMeeting, updateMeeting, deleteMeeting, saveMeetingTopics, assignTopicAsTask,
-  duplicateMeeting, duplicateTopic, setTopicDone, setMeetingStatus, sendMeetingInvites, addExternalParticipant,
+  duplicateMeeting, duplicateTopic, setTopicOutcome, sendMeetingInvites, addExternalParticipant,
   type MeetingSnapshot,
 } from "@/lib/actions/planning";
 import { categoryMeta } from "@/lib/planning/categories";
 import { WEEKDAY_LONG_TR } from "@/lib/planning/bands";
 import { normalizeSlot, istanbulLabel, HOME_LABEL, AWAY_LABEL } from "@/lib/planning/timezones";
 import { MemberMultiSelect, type Member } from "./MemberMultiSelect";
-import type { PlanningCategory, PlanningMeetingStatus, PlanningMeetingWithTopics } from "@/types";
+import type { PlanningCategory, PlanningMeetingWithTopics } from "@/types";
 
 interface Props {
   meeting: PlanningMeetingWithTopics | null; // null → yeni
@@ -54,8 +54,9 @@ type TopicDraft = {
   collaborator_ids: string[];  // İŞ BİRLİĞİ (Aslı Hanım, 2026-08-19)
   due_date: string;      // "yyyy-MM-dd" | ""
   task_id?: string | null;
-  /** Konu tamamlandı damgası (20240342). Tamamlanan ŞEY konudur. */
+  /** Konunun sonucu (20240342/20240343). Tamamlanan ve AKSAYAN şey konudur. */
   done_at?: string | null;
+  missed_at?: string | null;
 };
 
 /**
@@ -144,7 +145,8 @@ export function MeetingEditor({
     const existing: TopicDraft[] = (meeting?.topics ?? []).map((t) => ({
       id: t.id, text: t.text ?? "", participant_ids: t.participant_ids ?? [],
       collaborator_ids: t.collaborator_ids ?? [],
-      due_date: t.due_date ?? "", task_id: t.task_id, done_at: t.done_at ?? null,
+      due_date: t.due_date ?? "", task_id: t.task_id,
+      done_at: t.done_at ?? null, missed_at: t.missed_at ?? null,
     }));
     /* Varsayılan ÜÇ satır — ızgaradaki "Konu 1..3" ile birebir (Aslı Hanım,
        2026-08-29: "default olarak her başlığa 3 konu olsun"). Metni boş kalan
@@ -162,13 +164,6 @@ export function MeetingEditor({
   const [isDeleting, startDelete] = useTransition();
   const [assigningIdx, setAssigningIdx] = useState<number | null>(null);
   const [assignedMsg, setAssignedMsg] = useState<string | null>(null);
-
-  /* SONUÇ — büyük yeşil tik / kırmızı çarpı (20240338). Ekranda anında döner,
-     sunucu reddederse eski değere geri alınır. */
-  const [status, setStatus] = useState<PlanningMeetingStatus>(
-    (meeting?.status as PlanningMeetingStatus | undefined) ?? "planned",
-  );
-  const [statusBusy, setStatusBusy] = useState(false);
 
   /* DIŞ KATILIMCILAR — ekipte olmayan e-postalar (Sabri Bey, Meral Hanım). */
   const [externalEmails, setExternalEmails] = useState<string[]>(
@@ -351,24 +346,10 @@ export function MeetingEditor({
     });
   }
 
-  /* SONUÇ İŞARETİ — aynı işarete tekrar basmak onu kaldırır. */
-  async function toggleStatus(next: PlanningMeetingStatus) {
-    if (!meetingId || statusBusy) return;
-    const target = status === next ? "planned" : next;
-    const previous = status;
-    setError(null);
-    setStatus(target);               // iyimser: tik anında büyür
-    setStatusBusy(true);
-    try {
-      const res = await setMeetingStatus(meetingId, target);
-      if ("error" in res) { setStatus(previous); setError(res.error); }
-    } catch (e) {
-      setStatus(previous);
-      setError(messageOf(e));
-    } finally {
-      setStatusBusy(false);
-    }
-  }
+  /* TOPLANTI DÜZEYİNDE SONUÇ YOK (Sıraç, 2026-09-10: "aksayan da tamamlanan
+     da konu başlığı değil KONULAR olmalı"). Tek damga, üç konudan birinin
+     bittiğini/aksadığını anlatamıyordu. planning_meetings.status kolonu veri
+     kaybı olmasın diye duruyor ama arayüzde kullanılmıyor. */
 
   /* ÇOĞALTMA — geçmiş kayıt yerinde kalır, DEVAMI yeni güne kopyalanır. */
   /* Hedef gün AÇIKÇA geçilebilir. `setDupDate(...)` sonra `handleDuplicate()`
@@ -423,9 +404,12 @@ export function MeetingEditor({
    *
    * Önce kaydedilir: yeni yazılmış bir konunun henüz id'si yoktur.
    */
-  function handleTopicDone(i: number) {
+  function handleTopicOutcome(i: number, want: "done" | "missed") {
     setError(null);
-    const next = !topics[i].done_at;
+    const t = topics[i];
+    const current = t.done_at ? "done" : t.missed_at ? "missed" : "open";
+    // Aynı işarete tekrar basmak onu kaldırır.
+    const next: "open" | "done" | "missed" = current === want ? "open" : want;
     setTopicBusy(i);
     startTopicDone(async () => {
       try {
@@ -433,10 +417,14 @@ export function MeetingEditor({
         if ("error" in saved) { setError(saved.error); return; }
         const id = saved.posToId[i];
         if (!id) { setError(`Konu ${i + 1} için önce bir metin yazın.`); return; }
-        const res = await setTopicDone(id, next);
+        const res = await setTopicOutcome(id, next);
         if ("error" in res) { setError(res.error); return; }
-        setTopics((ts) => ts.map((t, idx) =>
-          idx === i ? { ...t, done_at: next ? new Date().toISOString() : null } : t));
+        const now = new Date().toISOString();
+        setTopics((ts) => ts.map((x, idx) => idx === i ? {
+          ...x,
+          done_at: next === "done" ? now : null,
+          missed_at: next === "missed" ? now : null,
+        } : x));
       } catch (e) {
         setError(messageOf(e));
       } finally {
@@ -695,57 +683,6 @@ export function MeetingEditor({
           </p>
         )}
 
-        {/* SONUÇ — "başardık" yeşili ve "aksadı" kırmızısı.
-            Aslı Hanım (2026-09-07): "Tamamlandığında şu yanındaki yeşil şey
-            çıksın… Hani böyle BAŞARDIK gibi bir yeşil olsun." / "Bir aksama
-            oldu — toplantı kırmızı çarpı olsun, ki BİR SONRAKİ TOPLANTIYA
-            EKLENMESİ GEREKTİĞİNİ anlayalım."
-            Renk tek başına anlam taşımaz: her iki düğmede de yazı var. */}
-        {!isNew && (
-          <div className="flex flex-wrap items-center gap-2">
-            {/* "TAMAMLANDI" DÜĞMESİ YOK. Sıraç (2026-09-10): "Tamamlanan şey
-                başlık değil konular olmalı." Toplantının yeşili artık
-                TÜRETİLİR: bütün konuları bitince ızgarada kendiliğinden yeşile
-                döner. Elle işaretlemek, üç konudan biri bitmişken toplantıyı
-                bitmiş göstermeye izin veriyordu.
-                "Aksadı" kalır — toplantının hiç yapılmamış olması konuların
-                değil toplantının kendi olgusudur. */}
-            <span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle">Sonuç</span>
-            <button
-              type="button"
-              onClick={() => toggleStatus("missed")}
-              disabled={statusBusy}
-              aria-pressed={status === "missed"}
-              title="Aksadı — bir sonraki toplantıya eklenmeli"
-              className={cn(
-                "tap-target inline-flex h-9 items-center gap-1.5 rounded-control border px-3 text-[13px] font-semibold transition-colors duration-150 disabled:opacity-60",
-                status === "missed"
-                  ? "border-danger/40 bg-danger/12 text-danger"
-                  : "border-line bg-surface text-muted hover:border-danger/40 hover:text-danger",
-              )}
-            >
-              <XCircle size={status === "missed" ? 20 : 16} aria-hidden /> Aksadı
-            </button>
-            {/* AKSAYAN TOPLANTI TEK TIKLA SONRAKİ GÜNE. Aslı Hanım (07.09):
-                "Toplantı kırmızı çarpı olsun, Kİ BİR SONRAKİ TOPLANTIYA
-                EKLENMESİ GEREKTİĞİNİ ANLAYALIM." İşaret vardı ama devamını
-                kullanıcı elle kurmak zorundaydı; cümlenin ikinci yarısı buydu.
-                TAŞIMAZ, KOPYALAR: aksayan gün de takvimde kalmalı (arşiv). */}
-            {status === "missed" && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => handleDuplicate(nextDayIso(dateIso))}
-                loading={isDuplicating}
-                disabled={busy}
-                title="Bu toplantının bir kopyasını ertesi güne koy — aksayan gün yerinde kalır"
-              >
-                {!isDuplicating && <Copy size={13} aria-hidden />} Sonraki güne ekle
-              </Button>
-            )}
-          </div>
-        )}
-
         {/* KONU ÇOĞALTMA — hedef gün İSTEĞE BAĞLI. Boş bırakılırsa kopya aynı
             toplantının sonuna eklenir ("bu konuyu bir daha konuşacağız"); gün
             verilirse o güne taşınır ("bunu çarşambaya da koy"). */}
@@ -854,23 +791,39 @@ export function MeetingEditor({
                 {/* TAMAMLANDI — konunun kendi satırında, metnin solunda.
                     Tamamlanan şey konudur; toplantı başlığı bütün konular
                     bitince kendiliğinden yeşile döner. */}
-                <IconButton
-                  size="sm"
-                  aria-label={t.done_at ? `Konu ${i + 1} tamamlandı işaretini kaldır` : `Konu ${i + 1} tamamlandı`}
-                  aria-pressed={!!t.done_at}
-                  title={t.done_at ? "Tamamlandı işaretini kaldır" : "Bu konuyu tamamlandı işaretle"}
-                  onClick={() => handleTopicDone(i)}
-                  disabled={busy || topicBusy === i}
-                  className={cn(t.done_at ? "text-success" : "hover:text-success")}
-                >
-                  {topicBusy === i
-                    ? <Loader2 size={14} className="animate-spin" />
-                    : <CheckCircle2 size={14} />}
-                </IconButton>
+                {/* SONUÇ KONUNUN KENDİSİNE AİT: tamamlandı ya da aksadı.
+                    Aynı işarete tekrar basmak onu kaldırır. */}
+                <span className="flex shrink-0 items-center">
+                  <IconButton
+                    size="sm"
+                    aria-label={`Konu ${i + 1} tamamlandı`}
+                    aria-pressed={!!t.done_at}
+                    title={t.done_at ? "Tamamlandı işaretini kaldır" : "Tamamlandı"}
+                    onClick={() => handleTopicOutcome(i, "done")}
+                    disabled={busy || topicBusy === i}
+                    className={cn(t.done_at ? "text-success" : "hover:text-success")}
+                  >
+                    {topicBusy === i
+                      ? <Loader2 size={14} className="animate-spin" />
+                      : <CheckCircle2 size={14} />}
+                  </IconButton>
+                  <IconButton
+                    size="sm"
+                    aria-label={`Konu ${i + 1} aksadı`}
+                    aria-pressed={!!t.missed_at}
+                    title={t.missed_at ? "Aksadı işaretini kaldır" : "Aksadı — sonraki güne taşınmalı"}
+                    onClick={() => handleTopicOutcome(i, "missed")}
+                    disabled={busy || topicBusy === i}
+                    className={cn(t.missed_at ? "text-danger" : "hover:text-danger")}
+                  >
+                    <XCircle size={14} />
+                  </IconButton>
+                </span>
                 <TextInput
                   className={cn(
                     "min-w-0 flex-1 basis-full sm:basis-0",
                     t.done_at && "text-success/90 line-through decoration-success/40",
+                    t.missed_at && "text-danger",
                   )}
                   value={t.text}
                   onChange={(e) => setTopic(i, { text: e.target.value })}

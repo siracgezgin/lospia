@@ -25,11 +25,13 @@ export const metadata = { title: "Person Report" };
  * kadar"). Yazdırılabilir: A4 tek sayfa (bkz. globals.css @media print).
  */
 export default async function PersonReportPage({
-  params,
+  params, searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ from?: string }>;
 }) {
   const { id } = await params;
+  const { from } = await searchParams;
   const { supabase, user, workspaceId, isAdmin, gate } = await requireModuleMember();
   if (gate === "login") redirectToSignIn();
   if (gate !== "ok" || !workspaceId || !user) return <AccessDenied />;
@@ -157,6 +159,9 @@ export default async function PersonReportPage({
     <PersonReport
       teamIdentity={((membersRes.data ?? []) as { user_id: string; color_key: string | null; icon_key: string | null }[])
         .map((m) => ({ id: m.user_id, colorKey: m.color_key, iconKey: m.icon_key }))}
+      /* GERİ, GELDİĞİN YERE. Pano'daki "Tek sayfa özet" `?from=board` taşır;
+         o zaman geri o kişinin panosuna döner, Raporlar'a değil. */
+      backHref={from === "board" ? `/board?person=member:${profile.id}` : "/dashboard"}
       person={{
         id: profile.id,
         name: profile.full_name ?? profile.email ?? "—",

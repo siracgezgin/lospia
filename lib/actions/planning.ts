@@ -1000,30 +1000,37 @@ export async function duplicateTopic(
 }
 
 /**
- * KONUYU TAMAMLANDI İŞARETLER — Pano'daki "tamamlandı" ile aynı mantık.
+ * KONUNUN SONUCU — tamamlandı · aksadı · duruyor.
  *
  * Sıraç (2026-09-08): "Tamamlanması gereken KONU olması lazım, konu başlığı
- * değil. Ve bence üzerini çizip yeşil yapalım, tıpkı Pano mantığındaki
- * tamamlandı gibi."
+ * değil — üzerini çizip yeşil yapalım, tıpkı Pano mantığındaki tamamlandı
+ * gibi." Ve (2026-09-10): "AKSAYAN DA tamamlanan da konu başlığı değil konular
+ * olmalı."
  *
- * Toplantının sonucu (status) ayrı durur: "toplantı yapıldı mı" başka soru,
- * "bu konu bitti mi" başka. Bir toplantıda üç konu konuşulur, biri biter.
+ * Toplantı düzeyindeki `status` kolonu duruyor (veri kaybı olmasın) ama artık
+ * arayüzde kullanılmıyor: bir toplantıda üç konu konuşulur, biri biter biri
+ * aksar — tek bir "toplantı bitti" damgası bunu anlatamıyordu.
  */
-export async function setTopicDone(
+export async function setTopicOutcome(
   topicId: string,
-  done: boolean,
+  outcome: "open" | "done" | "missed",
 ): Promise<{ ok: true } | { error: string }> {
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
   if (!isAdminRole(ctx.role)) return { error: PLANNING_ADMIN_ONLY };
 
+  /* ÜÇ DURUM, İKİ KOLON. done_at ve missed_at aynı anda dolamaz (veritabanı
+     kısıtı da bunu zorlar); bir duruma geçmek diğerini boşaltır. */
+  const now = new Date().toISOString();
   const { error, count } = await supabase
     .from("planning_topics")
     .update(
       {
-        done_at: done ? new Date().toISOString() : null,
-        done_by: done ? ctx.userId : null,
+        done_at: outcome === "done" ? now : null,
+        done_by: outcome === "done" ? ctx.userId : null,
+        missed_at: outcome === "missed" ? now : null,
+        missed_by: outcome === "missed" ? ctx.userId : null,
       },
       { count: "exact" },
     )
@@ -1031,7 +1038,7 @@ export async function setTopicDone(
     .eq("workspace_id", ctx.workspaceId);
   if (error) {
     if (isMissingSchemaError(error)) {
-      return { error: "Konu tamamlama için veritabanı güncellemesi bekleniyor (20240342)." };
+      return { error: "Konu durumu için veritabanı güncellemesi bekleniyor (20240343)." };
     }
     return { error: toActionErrorMessage(error) };
   }
