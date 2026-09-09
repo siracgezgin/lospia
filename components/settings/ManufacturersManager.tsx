@@ -109,7 +109,7 @@ export function ManufacturersManager({ manufacturers, sheetCounts, canManage }: 
     <div className="space-y-4 rounded-card bg-surface-sunken/60 p-4">
       <FieldGrid>
         <Field label="Usta adı" required className="sm:col-span-2">
-          <TextInput value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Hakan Günaydın" autoFocus />
+          <TextInput value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Usta ya da atölye adı" autoFocus />
         </Field>
         <Field label="Fotoğraf bağlantısı" className="sm:col-span-2">
           <TextInput value={draft.photo_url ?? ""} onChange={(e) => setDraft({ ...draft, photo_url: e.target.value })} placeholder="https://…" />

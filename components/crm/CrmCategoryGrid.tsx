@@ -112,7 +112,7 @@ export function CrmCategoryGrid({ contacts }: { contacts: WorkspaceContact[] }) 
           <TextInput
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Ada göre ara — Sabri, Berna, Meral…"
+            placeholder="Ada göre ara…"
             aria-label="Kişi ara"
             className="pl-9"
           />

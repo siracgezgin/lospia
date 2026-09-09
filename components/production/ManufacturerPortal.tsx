@@ -205,7 +205,7 @@ export function ManufacturerPortal({ token, data }: { token: string; data: Porta
                 <TextInput
                   value={author}
                   onChange={(e) => setAuthor(e.target.value)}
-                  placeholder="Sabri Bey"
+                  placeholder="Adınız"
                   autoComplete="name"
                 />
               </Field>

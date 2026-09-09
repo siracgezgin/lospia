@@ -101,7 +101,7 @@ export function SendToManufacturer({ sheetId, defaultEmail, manufacturerName, co
                 type="email"
                 value={to}
                 onChange={(e) => setTo(e.target.value)}
-                placeholder="usta@atolye.com"
+                placeholder="eposta@sirket.com"
                 autoFocus
                 autoComplete="email"
               />

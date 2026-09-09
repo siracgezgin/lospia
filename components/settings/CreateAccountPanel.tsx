@@ -96,7 +96,7 @@ export function CreateAccountPanel({ workspaceId, departments = [], takenColors 
           <TextInput
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
-            placeholder="Ör. Sıraç Gezgin"
+            placeholder="Ad soyad"
             required
             disabled={isPending}
           />
@@ -105,7 +105,7 @@ export function CreateAccountPanel({ workspaceId, departments = [], takenColors 
           <TextInput
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            placeholder="ör. sirac.gezgin"
+            placeholder="ad.soyad"
             autoComplete="off"
             required
             disabled={isPending}

@@ -71,7 +71,7 @@ export function ProfileForm({
       onSubmit={(e) => { e.preventDefault(); if (dirty && !isPending) save(); }}
     >
       <Field label="Ad soyad" required>
-        <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="Aslı Filinta" autoComplete="name" />
+        <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="Ad soyad" autoComplete="name" />
       </Field>
       <Field label="Ünvan" hint="Kartlarda adınızın altında yazar. Boş bırakırsanız rolünüz yazar.">
         <TextInput value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Tasarımcı" />
@@ -86,7 +86,7 @@ export function ProfileForm({
             type="email"
             value={mail}
             onChange={(e) => setMail(e.target.value)}
-            placeholder="ad@aslifilinta.com"
+            placeholder="ornek@aslifilinta.com"
             autoComplete="email"
           />
         </Field>

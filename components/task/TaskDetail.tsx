@@ -565,7 +565,7 @@ function TaskEditor({
                 value={draft.tags}
                 onChange={(e) => set("tags", e.target.value)}
                 disabled={fieldsDisabled}
-                placeholder="ör. lookbook, acil"
+                placeholder="lookbook, acil"
               />
             </Field>
 

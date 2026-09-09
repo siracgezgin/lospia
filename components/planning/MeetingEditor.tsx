@@ -879,7 +879,7 @@ export function MeetingEditor({
                     <TextInput
                       value={guestName}
                       onChange={(e) => setGuestName(e.target.value)}
-                      placeholder="Ad soyad — Sabri Bey"
+                      placeholder="Ad soyad"
                       aria-label="Dış katılımcının adı"
                       className="min-w-0 flex-1 basis-[150px]"
                       autoFocus
@@ -887,7 +887,7 @@ export function MeetingEditor({
                     <TextInput
                       value={guestRole}
                       onChange={(e) => setGuestRole(e.target.value)}
-                      placeholder="Tanım — Üretici"
+                      placeholder="Tanım — üretici, kalıpçı…"
                       aria-label="Dış katılımcının tanımı"
                       className="min-w-0 flex-1 basis-[130px]"
                     />
@@ -896,7 +896,7 @@ export function MeetingEditor({
                       value={emailDraft}
                       onChange={(e) => setEmailDraft(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addEmail(); } }}
-                      placeholder="sabri@uretim.com"
+                      placeholder="eposta@sirket.com"
                       aria-label="Dış katılımcının e-postası"
                       className="min-w-0 flex-1 basis-[170px]"
                     />

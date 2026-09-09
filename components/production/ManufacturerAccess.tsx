@@ -156,10 +156,10 @@ export function ManufacturerAccess({
             </p>
 
             <Field label="Kime">
-              <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="Sabri Bey" />
+              <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="Ad soyad" />
             </Field>
             <Field label="E-posta" hint="Kayıt için — bağlantı buradan otomatik gönderilmez.">
-              <TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="sabri@atolye.com" />
+              <TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="eposta@sirket.com" />
             </Field>
             <div className="flex flex-wrap gap-3">
               <Field label="Geçerlilik" className="min-w-[150px]">
