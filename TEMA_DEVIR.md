@@ -103,8 +103,9 @@ kendi hex'ini girse de doğru cevabı bulur. Kullanıldığı yerler: `PersonAva
   grafiği (`ready` marka petrolü, `in_progress` moru koyulaştı), sand ailesi kartı
   (chip `#efe4be` ile border `#eee2bc` yakın tonda).
 
-## 6. Bu turla ilgisiz, hâlâ bekleyen
+## 6. Bu turla ilgisiz
 
-- `supabase db push` — `20240343000000_planning_topic_missed.sql` prod'da YOK.
+- ~~`20240343000000_planning_topic_missed.sql` prod'da yok~~ → **10.09.2026'da uygulandı**;
+  local ve prod eşit. Konu bazlı "aksadı" işareti artık canlıda çalışıyor.
 - Repo kökündeki `'` adlı 182 KB'lık kazara dosya (arama sonucu HTML'i). Takip edilmiyor;
   silmek için onay gerekiyor.
