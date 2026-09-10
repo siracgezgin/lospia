@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { getWeeklyQuote } from "@/lib/content/weekly-quotes";
 import { Wordmark } from "@/components/ui/Wordmark";
 import { LOSPIA_BRAND, type AppBrand } from "@/lib/branding";
 import { canViewDestructivePages, canManageSettings } from "@/lib/auth/permissions";
@@ -76,6 +77,9 @@ export function AppSidebar({
 }: Props) {
   const isAdmin = canViewDestructivePages(userRole) || canManageSettings(userRole);
   const pathname = usePathname();
+  /* Haftanın sözü DETERMİNİSTİK: hafta numarasından türer, rastgele değil.
+     Aynı hafta boyunca herkes aynı sözü görür — ekip aynı cümleyi konuşsun. */
+  const weeklyQuote = getWeeklyQuote();
   /* Kayıtlı tercih + bu oturumdaki seçim. Kullanıcı düğmeye bastığında
      `override` kazanır; başka bir sekmede değiştirilirse storage olayı
      üzerinden kayıtlı değer güncellenir. */
@@ -162,13 +166,37 @@ export function AppSidebar({
         </div>
       </nav>
 
-      {/* Marka imzası. "Haftanın Notu" kartı KALDIRILDI (Sıraç, 2026-09-08:
-          "bu ne saçma mantıksız söz… çok kötü hepsi"). Menünün dibinde her
-          hafta değişen bir aforizma, kimsenin işine yaramayan bir süstü;
-          alıntı listesi lib/content/weekly-quotes.ts'te duruyor ama hiçbir
-          yerde çizilmiyor. */}
+      {/* HAFTANIN SÖZÜ + marka imzası. Kısa ekranlarda tamamen gizlenir —
+          menü satırlarının önünü asla kesmez.
+
+          Kart 08.09'da KALDIRILMIŞTI (Sıraç: "bu ne saçma mantıksız söz… çok
+          kötü hepsi") ve 10.09'da GERİ İSTENDİ: "Haftanın sözü geri gelsin,
+          profesyonelce, Aslı Hanım'ın tarzında olmalı — anlamlı, moda tasarım."
+          Kaldırılan şey kartın kendisi değil İÇERİĞİYDİ: onaylı havuzun büyük
+          bölümü uydurma atölye aforizmasıydı ("Sökmek ayıp değil; geç sökmek
+          pahalı"). O 47 not UI dışına alındı; havuz artık yalnızca gerçek moda
+          tasarımcılarının, atfı birincil kaynaktan doğrulanmış sözlerinden
+          kuruluyor (bkz. lib/content/weekly-quotes.ts).
+
+          YAZAR DA YAZAR: atıfsız bir söz fal kağıdı gibi okunuyordu. Sözü
+          anlamlı kılan, kimin söylediği. */}
       {!collapsed && (
         <div className="hidden shrink-0 space-y-2.5 px-3 pb-3 pt-1 [@media(min-height:47.5rem)]:block">
+          <div className="rounded-card border border-line bg-surface-muted px-3.5 py-3">
+            <p className="select-none text-[12px] font-semibold uppercase tracking-[0.08em] text-brand-strong">
+              Haftanın Sözü
+            </p>
+            <p
+              className="mt-1.5 line-clamp-3 text-[12.5px] italic leading-[1.6] text-ink/80"
+              title={`${weeklyQuote.quoteTr} — ${weeklyQuote.author}`}
+            >
+              “{weeklyQuote.quoteTr}”
+            </p>
+            <p className="mt-1.5 truncate text-[11.5px] font-medium text-muted">
+              {weeklyQuote.author}
+            </p>
+          </div>
+
           <div className="flex justify-center border-t border-hairline pb-1 pt-4">
             <img
               src={brand.logo}
