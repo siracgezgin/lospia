@@ -1,84 +1,90 @@
-# Tema kaydı — Fildişi Kâğıt + Encre
+# Tema kaydı — İznik: temiz zemin, canlı renk
 
-**10.09.2026** · Aslı Filinta Operasyon paneli tema değişimi. **Tamamlandı.**
-
-Talep (Sıraç): *"Temamız sofistike ve daha canlı renkler olsun, hoverlar filan daha
-profesyonel, kurumsal, vizyonlu — fashion designer markasına, Aslı Filinta markasına
-uygun olsun. İyileştirme ve geliştirme yap tamamında."*
+**10.09.2026** · Aslı Filinta Operasyon paneli. **İKİNCİ TUR** (birincisi reddedildi).
 
 ---
 
-## 1. Neden bu yön
+## 0. Birinci tur neden reddedildi
 
-`aslıfilinta` wordmarkı **saf siyah, kalın-ince geçişli bir didone**. Moda evi dili budur:
-kâğıt, mürekkep, keskin tipografi, tek kararlı aksan. Eski palet soğuk teal-griydi; o zemin
-üstünde siyah wordmark sayfaya *yapıştırılmış* duruyordu. Artık kanvas fildişi kâğıt, metin
-sıcak espresso mürekkebi — wordmark sayfanın *içinde*.
+İlk denemede "daha canlı renkler" isteğine **fildişi/bej** bir palet verildi.
+Cevap net oldu: *"tema rengi çok kötü, canlı değil, hiç beğenmedim."*
 
-**"Daha canlı" aksana değil EKRANA yazıldı.** Asıl işi kanvas yapıyor: kroma C* 1.2 → 6.1.
-Ekranın en büyük yüzeyi artık "seçilmemiş bir gri" değil, boyanmış kâğıt. Nötrlerin
-hiçbirinde R=G=B yok.
+Hata ölçüdeydi. Kanvasın kroması teknik olarak artmıştı (C* 1.2 → 6.1) ve bunu
+"daha canlı" diye savundum — ama **bej bir zemin üstündeki her renk söner**.
+Sayıya bakıp gözü ihmal ettim.
 
-**Yöntem:** 5 bağımsız palet önerisi → 3 jüri (marka · erişilebilirlik · uygulanabilirlik) →
-sentez. Marka jürisiyle erişim jürisi ters düştü (editoryal monokrom 8/6, couture mücevher
-5/9); sentez monokrom yapıyı temel alıp mücevher durum renklerini ve kontrast disiplinini
-aşıladı.
+Doğrusu tersi: **zemin temiz ve açık olur, renk yüzeylerin üstünde parlar.**
 
-**Marka hue'su neden petrol (`#00617e`):** kimlik paleti (12 kişi tonu + 11 departman ailesi)
-yüksek kromalı hue'ların çoğunu zaten tutuyor. Kırmızı birincil↔yıkıcı testinde çöker; yeşil
-"tamamlandı"ya ayrılmış; kehribar warning+hold; mor approval; royal mavi `FAMILY.blue`
-("Satış & Ticaret") ile dE 3 — birincil düğme bir DEPARTMANIN kimlik rengine düşerdi.
-Mürekkep siyahı da olmaz: `text-brand` satır içi bağlantı olarak da kullanılıyor, siyah
-olursa gövde metninden ayrılmaz (WCAG 1.4.1). Kalan tek serbest koridorun en derin noktası.
+## 1. Yeni yön
+
+Kanvas artık kroması 2.9 olan çok açık bir soğuk nötr (`#e8eef2`). Renk kanvasta
+değil, markada ve durum çiplerinde yaşıyor.
+
+Marka rengi **İznik çinisinin turkuaz-mavisi** (`#0077a5`). İki kez ölçülerek seçildi:
+beyaz metin taşıyabilen (≥4.5) renkler arasında turkuaz koridorunun **en kromatik**
+noktası; ve markanın kendi hikâyesi — Anadolu el işçiliğini çağdaş lükse taşımak —
+çininin rengiyle konuşuyor.
+
+| marka kroması C* | değer |
+|---|---|
+| eski teal `#2a6b7a` | 21.3 |
+| fildişi petrol `#00617e` (reddedilen) | 26.4 |
+| **İznik `#0077a5`** | **34.1** |
+
+Eskiye göre **+%60 doygunluk**. "Canlı" artık ölçülmüş bir iddia.
+
+Metin nötr-soğuk bir siyaha yakın (`#10171c`) — logo saf siyah bir didone, mürekkep
+de ona yakın durmalı ki wordmark sayfaya yabancı düşmesin. Gölgeler aynı aileden.
+
+Kimlik pastelleri (`semantics.ts`, `person-colors.ts`) fildişi için sıcaklığa
+kaydırılmıştı; kanvas soğuğa döndüğü için **soğuk sürüme geri alındı**.
 
 ## 2. Token değişimi
 
-| Token | Eski | Yeni |
+| Token | Eski (teal) | Yeni (İznik) |
 |---|---|---|
-| `--app-bg` | `#f3f6f7` soğuk teal-gri | `#efe9de` fildişi kâğıt |
-| `--surface-muted` / `-hover` / `-sunken` | `#f7fafa` / `#f0f5f6` / `#edf2f3` | `#f8f4ed` / `#f3eee5` / `#eae3d6` |
-| `--hairline` / `--border` / `--border-strong` | `#e7edee` / `#d5dee0` / `#b6c3c7` | `#e6ded0` / `#d7cfc0` / `#9e9383` |
-| `--text` / `-muted` / `-subtle` | `#121a1e` / `#44525a` / `#66767f` | `#1a1612` / `#5a514a` / `#6e645b` |
-| `--brand` / `-strong` / `-soft` / `-ring` | `#2a6b7a` / `#1f5462` / `#e3f1f3` / `#78b1bd` | `#00617e` / `#00374b` / `#dfeff9` / `#05779a` |
-| `--danger` / `-strong` | `#c94a35` / `#ae3a27` | `#bf223d` / `#99002c` |
-| `--warning` / `--hold` | `#c07a22` / `#b07d12` | `#a65500` / `#704b00` |
-| `--approval` / `--success` | `#7050bb` / `#21875d` | `#6b2f8a` / `#027538` |
-| `--info` / `--overdue` / `--urgent` | `#2d72b0` / `#a83a2c` / `#dc2626` | `#1a71c7` / `#8f002a` / `#d92233` |
-| Gölge | `rgba(14,38,44,x)` mavi-siyah | `rgba(44,34,24,x)` sıcak mürekkep |
+| `--app-bg` | `#f3f6f7` | `#e8eef2` |
+| `--surface-muted` / `-hover` / `-sunken` | `#f7fafa` / `#f0f5f6` / `#edf2f3` | `#f7fafc` / `#f1f6f9` / `#dde6ec` |
+| `--hairline` / `--border` / `--border-strong` | `#e7edee` / `#d5dee0` / `#b6c3c7` | `#d9e3e9` / `#c6d3db` / `#86949e` |
+| `--text` / `-muted` / `-subtle` | `#121a1e` / `#44525a` / `#66767f` | `#10171c` / `#46545f` / `#5b6872` |
+| `--brand` / `-strong` / `-soft` / `-ring` | `#2a6b7a` / `#1f5462` / `#e3f1f3` / `#78b1bd` | `#0077a5` / `#00537a` / `#d8eff9` / `#0b84ae` |
+| `--danger` / `-strong` | `#c94a35` / `#ae3a27` | `#c81e3c` / `#9d0028` |
+| `--warning` / `--hold` | `#c07a22` / `#b07d12` | `#b05300` / `#7a4a00` |
+| `--approval` / `--success` | `#7050bb` / `#21875d` | `#6d2c96` / `#00783a` |
+| `--info` / `--overdue` / `--urgent` | `#2d72b0` / `#a83a2c` / `#dc2626` | `#0b6fd0` / `#93002b` / `#e01e37` |
+| Gölge | `rgba(14,38,44,x)` | `rgba(16,23,28,x)` |
 
-Durum renklerinin ayrımı **hue'ya değil AÇIKLIĞA** yazıldı: dikromat benzetiminde kırmızı,
-kehribar ve yeşil tek bir sarı-kahveye düşüyor; ayakta kalan tek eksen açıklık. Merdiven anlam
-sırasını izler: `urgent` L*47 > `warning` 45 > `danger` 42 > `hold` 35 > `overdue` 29.
+## 3. Kapanan erişilebilirlik arızaları
 
-## 3. Bu turda KAPANAN erişilebilirlik arızaları
+Hepsi bağımsız hesapla doğrulandı (WCAG göreli parlaklık, sRGB→lineer D65).
+Eski teal temada duran arızalar:
 
-Hepsi bağımsız hesapla doğrulandı (`scratchpad/check.py`, WCAG göreli parlaklık, sRGB→lineer D65).
+| | eski | yeni |
+|---|---|---|
+| `border-strong` / beyaz | 1.81 ✗ | **3.11** — her girdi kenarlığı WCAG 1.4.11 ihlaliydi |
+| odak halkası / beyaz · kanvas | 2.38 · 2.19 ✗ | **4.26 · 3.64** |
+| `warning` çip metni | 3.47 ✗ | **5.14** |
+| `hold` çip metni | 3.63 ✗ | **7.48** |
+| `success` çip metni | 4.48 ✗ | **5.60** |
+| "yaklaşan" çipi | 4.43 ✗ | **5.68** |
+| "düşük öncelik" çipi | 3.41 ✗ | **4.74** |
+| kimlik rozeti (Altın) | 2.85 ✗ | **6.32** (`inkOnSolid`) |
 
-1. **`border-strong` 1.81 → 3.02** — her girdi kenarlığı WCAG 1.4.11'i ihlal ediyordu.
-2. **Odak halkası 2.38 / 2.19 → 5.11 / 4.23** — hem beyazda hem kanvasta başarısızdı.
-3. **`warning` 3.47 → 5.36 · `hold` 3.63 → 7.79 · `success` 4.48 → 5.83** — çip metni AA altındaydı.
-4. **`surface-hover` kanvasın ALTINDAYDI** (−0.49 ΔL*), `surface-muted` üstünde (+1.36).
-   48 `hover:bg-surface-hover` ile 61 `hover:bg-surface-muted` aynı zeminde birbirinin TERSİ
-   yöne gidiyordu. Artık ikisi de üstte (+1.72 / +3.78).
-5. **`text-subtle` sunken üstünde 4.17 → 4.53** — 12px meta metin en zor zeminde AA altındaydı.
-6. **Kimlik rozetleri** — dört kişi tonu beyaz baş harfle AA'yı geçmiyordu (Turuncu 3.18,
-   Altın 2.85, Zeytin 3.48, Turkuaz 3.54) ve baş harfler 8.5–13px, "büyük metin"
-   istisnasına girmiyorlar. `inkOnSolid()` çözdü — aşağıya bak.
-
-Ayrıca **beyaz kart ↔ kanvas ayrımı 3.3 → 7.5 ΔL***. "Kartlar zeminde eriyor"un gerçek
-çözümü kart kenarlığı değil, kanvasın kendisiymiş.
-
-Nihai doğrulama: `semantics.ts` + `person-colors.ts`'teki **her renk çifti AA'yı geçiyor**,
-uygulamada beyaz metinli hiçbir dolu zemin 4.5'in altında değil.
+Ayrıca `surface-hover` eski temada kanvasın **altındaydı** (−0.49 ΔL*) ama
+`surface-muted` üstünde (+1.36): 48 `hover:bg-surface-hover` ile 61
+`hover:bg-surface-muted` aynı zeminde birbirinin **tersi** yöne gidiyordu.
+Şimdi ikisi de üstte (+2.84 / +4.34). Kart ↔ kanvas ayrımı 3.3 → **6.2 ΔL***.
 
 ### `inkOnSolid()` — ölçülen mürekkep
 
-`lib/design/person-colors.ts`. Bir kişinin hex'i dolu zemin olduğunda üstündeki metin rengi
-**sabit değil, ölçülerek** seçilir: beyaz mı mürekkep mi, hangisi daha okunursa. Sekiz ton
-beyaz alır, dördü koyu mürekkep. **Kimliğe dokunmaz** — hex aynı kalır (şerit, sol kenar,
-nokta, kart zemini hep ondan türer). Sabit listeyle değil ölçümle çalıştığı için kullanıcı
-kendi hex'ini girse de doğru cevabı bulur. Kullanıldığı yerler: `PersonAvatar`, `Avatar`,
-`TileGrid` kişi kutucuğu, `MemberEditPanel` / `CreateAccountPanel` seçim tiki.
+`lib/design/person-colors.ts`. Bir kişinin hex'i dolu zemin olduğunda üstündeki
+metin rengi **sabit değil, ölçülerek** seçilir: beyaz mı mürekkep mi, hangisi daha
+okunursa. Sekiz ton beyaz alır, dördü koyu mürekkep (Turuncu 3.18, Altın 2.85,
+Zeytin 3.48, Turkuaz 3.54 — dördü de beyaz baş harfle AA altındaydı ve baş harfler
+8.5–13px, "büyük metin" istisnasına girmiyorlar). **Kimliğe dokunmaz** — hex aynı
+kalır. Sabit liste değil ölçüm olduğu için kullanıcının kendi hex'i de doğru
+cevabı alır. Kullanıldığı yerler: `PersonAvatar`, `Avatar`, `TileGrid` kişi
+kutucuğu, `MemberEditPanel` / `CreateAccountPanel` seçim tiki.
 
 ## 4. Hover sözleşmesi
 
@@ -93,17 +99,42 @@ kendi hex'ini girse de doğru cevabı bulur. Kullanıldığı yerler: `PersonAva
 | 9 | **Sekme** | Zemin HİÇ boyanmaz — hover aktifliği taklit etmez. Aktif: 2px brand alt çizgi. |
 | 10 | **Odak** | `globals.css`'te tek kural; `outline:none` asla (odak yönetimi için `tabIndex=-1` taşıyan kapsayıcılar hariç). |
 
-## 5. Doğrulama
+## 5. Haftanın Sözü — ikinci tur
 
-- `npm run typecheck` ✓ · `npm run lint` ✓ (82 uyarı, 0 hata — değişiklik öncesiyle aynı) · `npm run build` ✓
-- Üretim CSS'i denetlendi: yeni palet var, **eski paletten tek iz yok**.
-- Dev sunucuda 11 rota çağrıldı: hepsi cevap verdi, çalışma zamanı hatası yok.
-- **Gözle doğrulanmadı** — oturum açmadan iç ekranlar görülemiyor. Canlıda bir kez bakılmalı,
-  özellikle: Pano kişi kartları (kurşuni aile kanvasa en yakın, dE 4.6), Raporlar durum
-  grafiği (`ready` marka petrolü, `in_progress` moru koyulaştı), sand ailesi kartı
-  (chip `#efe4be` ile border `#eee2bc` yakın tonda).
+Birinci tur burada da reddedildi: *"haftanın sözleri rezalet ve alakasız, motive
+edici değil"* + ekran görüntüsüyle *"çok uzun olmasın, bak yarıda kesilmiş."*
 
-## 6. Bu turla ilgisiz
+İki ayrı hata vardı:
+
+1. **Yanlış ton.** Kodda "nasihat/motivasyon cümlesi KÖTÜ" diye bir kural vardı ve
+   küratöre "aşınmış klişeleri ele" dedim. Küratör de insanların tam sevdiği sözleri
+   attı — YSL'in "moda geçer, stil kalır"ı, McQueen'in "kuralı yıkmak"ı — yerine
+   atölye gözlemleri kaldı. Doğrulanmışlardı ama ilham vermiyorlardı.
+   **Düzeltme:** o ünlü sözler geri alındı; kaynağı belgeli bir Chanel sözü eklendi
+   (Haedrich, *Coco Chanel: Secrète*, 1971 — moda alıntılarının çoğunun aksine
+   gerçek bir kaydı var).
+
+2. **Kart kırpıyordu.** Sınır 108 karakterdi ama kart üç satır çiziyor ve 97
+   karakterlik söz yarıda kesildi — **kendi kuralımız kırpılmaya izin veriyordu.**
+   **Düzeltme:** sınır **72**'ye indi ve 30 çevirinin Türkçesi kısaltıldı (özgün
+   metin ve kaynak değişmedi, yalnız kartta okunan cümle sadeleşti).
+   Havuz: **41 söz, en uzunu 67 karakter** — kırpılma artık imkânsız.
+
+Kısalık yalnız bir kırpma önlemi değil, editoryal ölçüt oldu: akılda kalan söz kısa
+olandır.
+
+## 6. Doğrulama
+
+- `npm run typecheck` ✓ · `npm run lint` ✓ (0 hata) · `npm run build` ✓
+- Palet bağımsız hesapla doğrulandı: zorunlu kontrastlar, `text-subtle` beş yüzeyde,
+  dokuz durum rengi, yüzey merdiveni, hover yönü — **hepsi geçti**.
+- `semantics.ts` + `person-colors.ts`'teki **her çip çifti AA'yı geçiyor**. Soğuk
+  sürüme dönerken iki eski kusur da kapandı: "yaklaşan" çipi 4.43 → 5.68, "düşük
+  öncelik" çipi 3.41 → 4.74.
+- Üretim CSS'i denetlendi: yeni palet var, **iki eski paletten de tek iz yok**.
+- **Gözle doğrulanmadı** — oturum açmadan iç ekranlar görülemiyor.
+
+## 7. Bu turla ilgisiz
 
 - ~~`20240343000000_planning_topic_missed.sql` prod'da yok~~ → **10.09.2026'da uygulandı**;
   local ve prod eşit. Konu bazlı "aksadı" işareti artık canlıda çalışıyor.

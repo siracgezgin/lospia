@@ -177,8 +177,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 10,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "high",
-    // YSL "moda geçer stil kalır" — havuzun en aşınmış klişesi; küratör de aynı sözü eledi.
-    approvedForUi: false,
+    approvedForUi: true,
   },
   {
     id: "quote_008",
@@ -200,7 +199,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_009",
     weekIndex: 9,
-    quoteTr: "Kuralları yıkmak için önce onlara hâkim olmalısınız. Buradayım; kuralları yıkmak ama geleneği korumak için.",
+    quoteTr: "Kuralı yıkmak için önce onu bilmen gerekir.",
     quoteOriginal: "You've got to know the rules to break them. That's what I'm here for, to demolish the rules but to keep the tradition.",
     author: "Alexander McQueen",
     authorRole: "Moda tasarımcısı",
@@ -212,8 +211,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 10,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "high",
-    // McQueen "kuralları yıkmak" — yıpranmış aforizma; yerine aynı yazarın atölye sözleri geldi.
-    approvedForUi: false,
+    approvedForUi: true,
   },
   {
     id: "quote_010",
@@ -541,7 +539,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_029",
     weekIndex: 29,
-    quoteTr: "En sürdürülebilir tasarım, insanların atmak istemeyeceği kalıcı parçalar üretmektir.",
+    quoteTr: "En sürdürülebilir tasarım, atılmak istenmeyendir.",
     quoteOriginal: "One of the most sustainable things you can do as a designer is to create pieces that people want and won't want to throw away.",
     author: "Stella McCartney",
     authorRole: "Moda tasarımcısı",
@@ -1790,7 +1788,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_101",
     weekIndex: 101,
-    quoteTr: "Yıllardır düz bir etek yapmaya çalışıyorum. Doğru bir düz etek dünyanın en zor işi.",
+    quoteTr: "Doğru bir düz etek dünyanın en zor işi.",
     quoteOriginal: "For years I've been trying to make a straight skirt: making a straight skirt that's right now is the hardest thing in the world.",
     author: "Azzedine Alaïa",
     authorRole: "Couturier",
@@ -1807,7 +1805,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_102",
     weekIndex: 102,
-    quoteTr: "Atölyede yapılacak işi ben hazırlarım; herkesin masasına paketini bırakırım.",
+    quoteTr: "İşi ben hazırlarım; herkesin masasına paketini bırakırım.",
     quoteOriginal: "I prepare what needs to be done in the workshop; I leave parcels on everyone's tables…",
     author: "Azzedine Alaïa",
     authorRole: "Couturier",
@@ -1824,7 +1822,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_103",
     weekIndex: 103,
-    quoteTr: "Bir elbiseye bir yıl başlarım, on yıl sonra bitirdiğimi hissederim.",
+    quoteTr: "Bir elbiseye bir yıl başlarım, on yıl sonra bitiririm.",
     quoteOriginal: "I can start a dress one year and have the feeling of finishing it ten years later.",
     author: "Azzedine Alaïa",
     authorRole: "Couturier",
@@ -1875,7 +1873,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_106",
     weekIndex: 106,
-    quoteTr: "Sanayinin yöntemini geçmişin mirasıyla, el zanaatıyla karıştırmak isterim.",
+    quoteTr: "Sanayinin yöntemini el zanaatıyla karıştırmak isterim.",
     quoteOriginal: "I want always to mix the industrial way of doing things with the patrimonio of the past, with the artisanal tradition.",
     author: "Miuccia Prada",
     authorRole: "Moda tasarımcısı",
@@ -1909,7 +1907,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_108",
     weekIndex: 108,
-    quoteTr: "Bir imza kurup onu güncellemek: renk ya da kumaş değişsin, yeter.",
+    quoteTr: "Bir imza kur, güncelle: renk ya da kumaş değişsin, yeter.",
     quoteOriginal: "What I love is this idea of a wardrobe, the idea that we're establishing certain signatures and updating them, that a change in colour or fabric is enough.",
     author: "Phoebe Philo",
     authorRole: "Moda tasarımcısı",
@@ -1926,7 +1924,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_109",
     weekIndex: 109,
-    quoteTr: "Hindistan'da üç bine yakın kişi bütün işlerimizi elle işliyor.",
+    quoteTr: "Üç bine yakın kişi bütün işlerimizi elle işliyor.",
     quoteOriginal: "We have nearly three thousand people in India who embroider all our things by hand.",
     author: "Dries Van Noten",
     authorRole: "Moda tasarımcısı",
@@ -1943,7 +1941,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_110",
     weekIndex: 110,
-    quoteTr: "Geçmişten hiç kullanılmamış canlı bir şey alırım; üstüne kendi fikrimi koyunca özgün olur.",
+    quoteTr: "Geçmişten bir şey alırım; üstüne kendi fikrimi koyarım.",
     quoteOriginal: "I take something from the past that has a sort of vitality that has never been exploited - like the crinoline - and get very intense. In the end, you do something original because you overlay your own ideas.",
     author: "Vivienne Westwood",
     authorRole: "Moda tasarımcısı",
@@ -1960,7 +1958,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_111",
     weekIndex: 111,
-    quoteTr: "Ceketi en sade haline indirdim: vatkayı ve astarı çıkardım, hafif kumaşa geçtim.",
+    quoteTr: "Vatkayı ve astarı çıkardım; ceket en sade haline indi.",
     quoteOriginal: "I stripped the garment right back, taking out padding and linings, and employing the new, lighter-weight fabrics that had been developed.",
     author: "Giorgio Armani",
     authorRole: "Moda tasarımcısı",
@@ -1994,7 +1992,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_113",
     weekIndex: 113,
-    quoteTr: "Ustaca kesilmiş bir pamuklu pantolon, göz alıcı bir ipek elbiseden güzeldir.",
+    quoteTr: "İyi kesilmiş bir pamuklu, göz alıcı bir ipekten güzeldir.",
     quoteOriginal: "A pair of brilliantly cut cotton trousers can be more beautiful than a gorgeous silk gown.",
     author: "Yohji Yamamoto",
     authorRole: "Moda tasarımcısı",
@@ -2011,7 +2009,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_114",
     weekIndex: 114,
-    quoteTr: "Giysilerim en az on yıl giyilsin diye kumaşçıdan çok sağlam bir apre istedim.",
+    quoteTr: "Giysilerim en az on yıl giyilsin istedim.",
     quoteOriginal: "I wanted people to keep on wearing my clothes for at least 10 years or more, so I requested the fabric maker to make a very strong, tough finish.",
     author: "Yohji Yamamoto",
     authorRole: "Moda tasarımcısı",
@@ -2028,7 +2026,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_115",
     weekIndex: 115,
-    quoteTr: "Bu küçük, geleneksel Japon tekniklerini korumak benim derdim.",
+    quoteTr: "Derdim, o küçük geleneksel teknikleri korumak.",
     quoteOriginal: "It's my desire to protect these small, traditional Japanese techniques.",
     author: "Yohji Yamamoto",
     authorRole: "Moda tasarımcısı",
@@ -2045,7 +2043,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_116",
     weekIndex: 116,
-    quoteTr: "Onlar yırtık değil; kumaşa başka bir boyut veren açıklıklar. Bir tür dantel sayılır.",
+    quoteTr: "Onlar yırtık değil; kumaşa boyut veren açıklıklar.",
     quoteOriginal: "To me they're not tears. Those are openings that give the fabric another dimension. The cutout might be considered another form of lace.",
     author: "Rei Kawakubo",
     authorRole: "Comme des Garçons kurucusu",
@@ -2062,7 +2060,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_117",
     weekIndex: 117,
-    quoteTr: "Çocuksu, saf fırça darbelerini en resmi gece elbisesinin üstüne koymak istedim.",
+    quoteTr: "Çocuksu fırça darbelerini en resmi elbiseye koymak istedim.",
     quoteOriginal: "I wanted to juxtapose the very naïve, almost childlike brushstrokes with the very formal evening dress.",
     author: "Rei Kawakubo",
     authorRole: "Comme des Garçons kurucusu",
@@ -2079,7 +2077,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_118",
     weekIndex: 118,
-    quoteTr: "Modern, çalışan kadınlar için; hatlarıyla değil aklıyla çeken kadınlar için.",
+    quoteTr: "Hatlarıyla değil, aklıyla çeken kadınlar için.",
     quoteOriginal: "They are for modern, working women. Women who do not need to assure their happiness by looking sexy to men, by emphasising their figures, but who attract them with their minds.",
     author: "Rei Kawakubo",
     authorRole: "Comme des Garçons kurucusu",
@@ -2096,7 +2094,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_119",
     weekIndex: 119,
-    quoteTr: "Bütün parçalarda biçime, kumaşı elde evirip çevirerek varmaya çalışıyoruz.",
+    quoteTr: "Biçime, kumaşı elde evirip çevirerek varıyoruz.",
     quoteOriginal: "For all of the garments, we try to reach the form by manipulating fabric.",
     author: "Junya Watanabe",
     authorRole: "Moda tasarımcısı",
@@ -2113,7 +2111,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_120",
     weekIndex: 120,
-    quoteTr: "Artık kalıbı kendim çıkarmıyorum ama kesimcilere verdiğim tarif kalıp bilgimden geliyor.",
+    quoteTr: "Kalıbı artık kendim çıkarmıyorum ama tarif kalıp bilgimden geliyor.",
     quoteOriginal: "While I no longer make patterns myself, the instructions I give to our cutters are based on my knowledge of pattern-making.",
     author: "Junya Watanabe",
     authorRole: "Moda tasarımcısı, kalıpçı",
@@ -2181,7 +2179,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_124",
     weekIndex: 124,
-    quoteTr: "Benim formülüm şu: elbise yalnızca iyi kesildiği için güzeldir.",
+    quoteTr: "Elbise yalnızca iyi kesildiği için güzeldir.",
     quoteOriginal: "Ma formule personnelle est celle de la robe qui est belle parce que seulement bien coupée.",
     author: "Madeleine Vionnet",
     authorRole: "Couturier",
@@ -2198,7 +2196,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_125",
     weekIndex: 125,
-    quoteTr: "Korsesiz bir bedene serbestçe dökülen kumaşın en uyumlu görüntü olduğunu kanıtladım.",
+    quoteTr: "Serbestçe dökülen kumaş, en uyumlu görüntüdür.",
     quoteOriginal: "J'ai prouvé qu'un tissu qui tombait librement sur un corps sans cuirasse était le spectacle harmonieux par excellence.",
     author: "Madeleine Vionnet",
     authorRole: "Couturier",
@@ -2249,7 +2247,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_128",
     weekIndex: 128,
-    quoteTr: "İki küçük metal şişi tıkırdatıp bir şey üretmek bana hep sır kaldı.",
+    quoteTr: "İki şişi tıkırdatıp bir şey üretmek bana hep sır kaldı.",
     quoteOriginal: "The art of holding and clicking those two little metal needles and making them produce something has always been a mystery to me, and indeed remains so.",
     author: "Elsa Schiaparelli",
     authorRole: "Couturier",
@@ -2283,7 +2281,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_130",
     weekIndex: 130,
-    quoteTr: "Heykeltıraş olmak istemiştim. Kumaşı işlemekle taşı işlemek benim için aynı şey.",
+    quoteTr: "Kumaşı işlemekle taşı işlemek benim için aynı şey.",
     quoteOriginal: "I wanted to be a sculptor. For me, working with fabric or stone is the same thing.",
     author: "Madame Grès",
     authorRole: "Couturier",
@@ -2300,7 +2298,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_131",
     weekIndex: 131,
-    quoteTr: "Malzemeyi elime alıp doğrudan onunla çalıştım; bildiğim tek şey heykeldi.",
+    quoteTr: "Malzemeyi elime aldım; bildiğim tek şey heykeldi.",
     quoteOriginal: "C'est pour cette raison que j'ai pris le matériau et travaillé directement avec. J'ai utilisé les connaissances que j'avais, celles de la sculpture.",
     author: "Madame Grès",
     authorRole: "Couturier",
@@ -2334,7 +2332,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_133",
     weekIndex: 133,
-    quoteTr: "Kalıp, dilde dilbilgisi gibidir; iyi tasarım tek bir cümledir, tek bir şey söyler.",
+    quoteTr: "Kalıp, dilde dilbilgisi gibidir: tek cümle, tek fikir.",
     quoteOriginal: "Cut in dressmaking is like grammar in a language. A good design should be like a well made sentence, and it should only express one idea at a time.",
     author: "Charles James",
     authorRole: "Couturier",
@@ -2351,7 +2349,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_134",
     weekIndex: 134,
-    quoteTr: "Tek bir dikişe on iki saat verdiğim oldu; o dikiş kendi yerini bulana kadar.",
+    quoteTr: "Tek bir dikişe on iki saat verdiğim oldu.",
     quoteOriginal: "I have sometimes spent twelve hours working on one seam; utterly entranced and not hungry or tired till finally it had as if of its own will found the precise place where it should be placed.",
     author: "Charles James",
     authorRole: "Couturier",
@@ -2385,7 +2383,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_136",
     weekIndex: 136,
-    quoteTr: "Terzi; plan için mimar, biçim için heykeltıraş, renk için ressam olmalı.",
+    quoteTr: "Terzi; mimar, heykeltıraş ve ressam olmalı.",
     quoteOriginal: "Un modisto debe ser arquitecto de la forma, pintor para el color, músico para la armonía y filósofo para la medida. (Müzenin İngilizce karşılığı: \"a couturier must be an architect for plans, a sculptor for shapes, an artist for colour, a musician for harmony and a philosopher for the sense of proportion.\")",
     author: "Cristóbal Balenciaga",
     authorRole: "Couturier",
@@ -2402,7 +2400,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_137",
     weekIndex: 137,
-    quoteTr: "Kâğıtta zarif duran bir yaka baştan geçmeyebilir; zarif bir pantolon insanı sıkabilir.",
+    quoteTr: "Kâğıtta zarif duran bir yaka baştan geçmeyebilir.",
     quoteOriginal: "A collar that looks elegant on the drawing board might be difficult to pull over the head. And pants that appear elegant can be constricting.",
     author: "Sonia Rykiel",
     authorRole: "Moda tasarımcısı",
@@ -2419,7 +2417,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_138",
     weekIndex: 138,
-    quoteTr: "Desenlerim düz asılı kalmayacaktı; kesilip yeniden bir araya getirilecekti.",
+    quoteTr: "Desenlerim düz asılı kalmayacak, kesilip yeniden kurulacaktı.",
     quoteOriginal: "In learning to design for dress fabrics, I was involved in a special adventure, that of patterns which would not hang flat but would be cut and put together again in many different ways.",
     author: "Zandra Rhodes",
     authorRole: "Tekstil tasarımcısı",
@@ -2470,7 +2468,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_141",
     weekIndex: 141,
-    quoteTr: "Ülkemde zanaat kuşaklar boyu anneden kıza geçerdi; zamanla o bilginin çoğu kayboldu.",
+    quoteTr: "Zanaat anneden kıza geçerdi; o bilginin çoğu kayboldu.",
     quoteOriginal: "In my country, many craft practices were passed down through generations, often from mothers to daughters. Over time, a lot of that knowledge disappeared.",
     author: "Maria Grazia Chiuri",
     authorRole: "Moda tasarımcısı",
@@ -2487,7 +2485,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_142",
     weekIndex: 142,
-    quoteTr: "İşlemeye kimsenin ihtiyacı yok; ama işleme kalıcı iş yaratıyor.",
+    quoteTr: "İşlemeye kimsenin ihtiyacı yok; ama işleme iş yaratıyor.",
     quoteOriginal: "Nobody needs embroideries, but it creates sustainable employment.",
     author: "Rahul Mishra",
     authorRole: "Couturier",
@@ -2504,7 +2502,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_143",
     weekIndex: 143,
-    quoteTr: "İç yapıyı balen ve krinolin iskeletle kurduk; üstünü drape, pli, kat ve işlemeyle sardık.",
+    quoteTr: "İç yapıyı iskeletle kurduk, üstünü drape ve işlemeyle sardık.",
     quoteOriginal: "We sought to deliver the most perfect engineering for each garment, focusing on the understructure using stay and crinoline frames and enveloping it using various techniques like draping, pleating, layering and embroidery.",
     author: "Ayşe Ege",
     authorRole: "Moda tasarımcısı, Dice Kayek",
@@ -2518,16 +2516,40 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     sourceConfidence: "high",
     approvedForUi: true,
   },
+  {
+    id: "quote_144",
+    weekIndex: 144,
+    quoteTr: "Vazgeçilmez olmak için hep farklı kalacaksın.",
+    quoteOriginal: "Pour être irremplaçable, il faut rester différente.",
+    author: "Coco Chanel",
+    authorRole: "Couturier",
+    category: "fashion_design",
+    theme: "kimlik",
+    sourceType: "translated_quote",
+    /* Kaynak zinciri belgeli: Marcel Haedrich, "Coco Chanel: Secrète" (1971),
+       "Elle disait" bölümü. Quote Investigator zinciri buraya kadar sürüyor —
+       moda alıntılarının çoğunun aksine bu sözün gerçek bir kaydı var. */
+    sourceUrl: "https://quoteinvestigator.com/2019/06/11/irreplaceable/",
+    usageRecommendation: "use_as_translation",
+    brandFitScore: 9,
+    uiDisplaySuggestion: "Tasarımcıdan Not",
+    sourceConfidence: "high",
+    approvedForUi: true,
+  },
 ];
 
 /**
- * Sol menüdeki "Haftanın Notu" kartı ÜÇ satır çizer (line-clamp-3, ~264px
- * sütun). Bundan uzun bir söz ekranda yarıda kesiliyor ve kart bozuk
- * görünüyordu — tasarımcı için "en ufak çizgi bile fark ettirir"
- * (bkz. feedback-control-equality). Uzunluk artık editoryal bir ölçüt:
- * karta sığmayan söz UI'ya çıkmaz.
+ * KART ÜÇ SATIR ÇİZER ve fazlasını KIRPAR (line-clamp-3, ~264px sütun).
+ *
+ * Sıraç (2026-09-10, ekran görüntüsüyle): "Bir de çok uzun olmasın haftanın
+ * sözleri. Bak mesela yarıda kesilmiş, bu olmamalı."
+ * Kırpılan söz 97 karakterdi ve sınır 108'di — yani sınır kartın gerçek
+ * kapasitesinden GENİŞTİ, kendi kuralımız kırpılmaya izin veriyordu.
+ *
+ * 72'ye indirildi. Bu yalnız bir kırpma önlemi değil, EDİTORYAL bir ölçüt:
+ * akılda kalan söz kısa olandır. Karta sığmayan söz UI'ya çıkmaz.
  */
-const CARD_MAX_CHARS = 108;
+const CARD_MAX_CHARS = 72;
 
 const APPROVED_RAW: WeeklyQuote[] = WEEKLY_QUOTES.filter(
   (q) => q.approvedForUi && q.quoteTr.length <= CARD_MAX_CHARS,

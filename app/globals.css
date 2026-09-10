@@ -8,88 +8,70 @@
 
 :root {
   /* ──────────────────────────────────────────────────────────────────────
-     FİLDİŞİ KÂĞIT + ENCRE  (Sıraç, 2026-09-10)
-     "Temamız sofistike ve daha canlı renkler olsun, hoverlar daha profesyonel,
-      kurumsal, vizyonlu — Aslı Filinta markasına uygun."
+     İZNİK — TEMİZ ZEMİN, CANLI RENK  (Sıraç, 2026-09-10, ikinci tur)
 
-     Marka kendi kimliğini zaten söylüyor: aslıfilinta wordmarkı SAF SİYAH,
-     kalın-ince geçişli bir didone. Moda evi dili budur — kâğıt, mürekkep,
-     keskin tipografi, tek kararlı aksan. Eski palet soğuk teal-griydi; o zemin
-     üstünde siyah wordmark sayfaya YAPIŞTIRILMIŞ gibi duruyordu. Artık kanvas
-     fildişi kâğıt, metin sıcak espresso mürekkebi: wordmark sayfanın İÇİNDE.
+     BİRİNCİ TUR REDDEDİLDİ. "Daha canlı renkler" istendi, fildişi/bej bir
+     palet verildi ("tema rengi çok kötü, canlı değil, hiç beğenmedim").
+     Hata ölçüdeydi: kanvasın kroması teknik olarak artmıştı (1.2 → 6.1) ama
+     BEJ BİR ZEMİN ÜSTÜNDEKİ HER RENK SÖNER. Sayı doğruydu, göz yanlıştı.
 
-     "Daha canlı"yı aksana değil EKRANA yazdık. Asıl işi kanvas yapıyor:
-     kroma C* 1.2 → 6.1. Ekranın en büyük yüzeyi artık "seçilmemiş bir gri"
-     değil, boyanmış bir kâğıt. Nötrlerin hiçbirinde R=G=B yok.
+     Doğrusu tersi: zemin TEMİZ ve açık olur, renk yüzeylerin üstünde parlar.
+     Kanvas artık kroması 2.9 olan çok açık bir soğuk nötr; renk kanvasta
+     değil, markada ve durum çiplerinde yaşıyor.
+
+     Marka rengi İznik çinisinin turkuaz-mavisi. Keyfî değil iki kez ölçüldü:
+     (1) beyaz metin taşıyabilen (≥4.5) renkler arasında turkuaz koridorunun
+     EN KROMATİK noktası; (2) markanın kendi hikâyesi — Anadolu el işçiliğini
+     çağdaş lükse taşımak — çininin rengiyle konuşuyor.
+       marka kroması C*:  eski teal 21.3  →  fildişi petrol 26.4  →  ŞİMDİ 34.1
+     Yani eskiye göre +%60 doygunluk. "Canlı" artık ölçülmüş bir iddia.
      ────────────────────────────────────────────────────────────────────── */
 
-  /* YÜZEYLER — merdiven ANLAM sırasını izler ve dördü de birbirinden ayrılır.
-     ÖNEMLİ DÜZELTME: eski sette `surface-hover` kanvasın ALTINDAYDI (−0.49 ΔL*)
-     ama `surface-muted` ÜSTÜNDE (+1.36). Yani 48 `hover:bg-surface-hover` ile
-     61 `hover:bg-surface-muted` aynı zeminde birbirinin TERSİ yöne gidiyordu:
-     kimi hover aydınlanıyor, kimi kararıyordu. Şimdi ikisi de kanvasın üstünde
-     (+3.78 / +1.72) — 109 çağrı, hiçbir bileşene dokunmadan aynı dili konuşuyor.
-
-     Beyaz kart ↔ kanvas ayrımı 3.3 → 7.5 ΔL*: "kartlar zeminde eriyor"
-     sorununun gerçek çözümü kart kenarlığı değil, kanvasın kendisiydi. */
-  --app-bg:        #efe9de;   /* sayfa zemini — fildişi kâğıt, L* 92.5 */
+  /* YÜZEYLER — merdiven sakin ama dördü de ayrılır. İki kural korunuyor:
+     `surface-muted` ve `surface-hover` İKİSİ DE kanvasın ÜSTÜNDE (+4.34 /
+     +2.84 ΔL*). Bir önceki temada hover kanvasın ALTINDAYDI ve 48 hover ile
+     61 hover aynı zeminde birbirinin tersine gidiyordu. */
+  --app-bg:        #e8eef2;   /* sayfa zemini — temiz, açık, çok hafif çini soğuğu */
   --surface:       #ffffff;   /* kartlar, paneller */
-  --surface-muted: #f8f4ed;   /* yumuşak dolgu, satır hover */
-  --surface-sunken:#eae3d6;   /* kuyular, dinlenen alanlar */
-  --surface-hover: #f3eee5;   /* tıklanabilir satır hover */
+  --surface-muted: #f7fafc;   /* yumuşak dolgu, satır hover */
+  --surface-sunken:#dde6ec;   /* kuyular, dinlenen alanlar */
+  --surface-hover: #f1f6f9;   /* tıklanabilir satır hover */
 
-  /* ÇİZGİLER — hairline iç ayırıcı, line panel kenarı.
-     border-strong artık 3.02:1 (eskisi 1.81): HER girdi kenarlığı bugüne kadar
-     WCAG 1.4.11'i ihlal ediyordu, kontrol sınırı gözle zor seçiliyordu. */
-  --hairline:      #e6ded0;
-  --border:        #d7cfc0;
-  --border-strong: #9e9383;
+  /* ÇİZGİLER — border-strong 3.11:1, WCAG 1.4.11 girdi kenarlığı eşiğinin
+     üstünde (bu temadan önce 1.81 ile ihlaldeydi). */
+  --hairline:      #d9e3e9;
+  --border:        #c6d3db;
+  --border-strong: #86949e;
 
-  /* METİN — sıcak espresso mürekkebi (h≈70°), saf siyaha en yakın aile.
-     Hiyerarşi korunur (primary > muted > subtle) ve ÜÇÜ DE beş yüzeyin
-     hepsinde okunur: text-subtle en zor zeminde (sunken) 4.53 — eskiden
-     orada 4.17 ile AA'nın altındaydı, yani 12px meta metin düşüyordu. */
-  --text:          #1a1612;   /* birincil — beyazda 17.99:1 */
-  --text-muted:    #5a514a;   /* ikincil — 7.75:1 */
-  --text-subtle:   #6e645b;   /* üçüncül / yer tutucu — 5.77:1 */
+  /* METİN — logo saf siyah bir didone; mürekkep de nötr-soğuk bir siyaha
+     yakın durur ki wordmark sayfaya yabancı düşmesin. Üçü de BEŞ yüzeyin
+     hepsinde okunur: text-subtle en zor zeminde (sunken) 4.53. */
+  --text:          #10171c;   /* birincil — beyazda 18.08:1 */
+  --text-muted:    #46545f;   /* ikincil — 7.80:1 */
+  --text-subtle:   #5b6872;   /* üçüncül / yer tutucu — 5.73:1 */
 
-  /* MARKA — derin petrol mürekkebi.
-     Hue keyfî değil: kimlik paleti (12 kişi tonu + 11 departman ailesi)
-     yüksek kromalı hue'ların çoğunu zaten tutuyor. Kırmızı birincil↔yıkıcı
-     testinde çöker, yeşil "tamamlandı"ya ayrılmış, kehribar warning+hold,
-     mor approval, royal mavi FAMILY.blue ("Satış & Ticaret") ile dE 3 —
-     birincil düğme bir DEPARTMANIN kimlik rengine düşerdi. Mürekkep siyahı da
-     olmaz: `text-brand` satır içi bağlantı olarak da kullanılıyor, siyah
-     yapılırsa gövde metninden ayrılmaz (WCAG 1.4.1).
-     Geriye kalan tek serbest koridorun en derin noktası: #00617e.
-     En yakın kimlik tonuna dE 13.8 (eski marka 14.5 — aynı güvenlik sınıfı).
+  /* MARKA — İznik turkuazı. Hover ekseni brand → brand-strong: beyaz metnin
+     kontrastı 5.02'den 8.34'e ÇIKAR, yani düğme basılmaya yaklaştıkça hem
+     koyulaşır hem daha okunur olur. */
+  --brand:         #0077a5;
+  --brand-strong:  #00537a;
+  --brand-soft:    #d8eff9;
+  --brand-ring:    #0b84ae;   /* odak halkası: beyazda 4.26, kanvasta 3.64 —
+                                 iki zeminde de 1.4.11'i geçer */
 
-     HOVER EKSENİ: brand → brand-strong ΔL* 17.0 ve beyaz metnin kontrastı
-     6.97'den 12.74'e ÇIKAR. Birincil düğme hover'da hem koyulaşır hem daha
-     okunur olur — tersi değil. */
-  --brand:         #00617e;
-  --brand-strong:  #00374b;
-  --brand-soft:    #dfeff9;
-  --brand-ring:    #05779a;   /* odak halkası: beyazda 5.11, kanvasta 4.23 —
-                                 eskisi 2.38/2.19 ile İKİ zeminde de başarısızdı */
-
-  /* DURUM RENKLERİ — mücevher ailesi.
-     Ayrım HUE'ya değil AÇIKLIĞA yazıldı: dikromat benzetiminde kırmızı,
-     kehribar ve yeşil tek bir sarı-kahveye düşüyor; ayakta kalan tek eksen
-     açıklık. Merdiven anlam sırasını izler:
-       urgent L*47 > warning 45 > danger 42 > hold 35 > overdue 29
-     hold'un kroması bilerek düşük (59.6 → 45.1): bekleyen iş renksizleşir.
-     Dokuzu da beyazda ve muted'de ≥4.5, kanvasta ≥4.0. Eskiden warning (3.47),
-     hold (3.63) ve success (4.48) beyazda AA'yı geçmiyordu. */
-  --danger:        #bf223d;
-  --danger-strong: #99002c;   /* yıkıcı eylem hover */
-  --warning:       #a65500;
-  --hold:          #704b00;
-  --approval:      #6b2f8a;
-  --success:       #027538;
-  --info:          #1a71c7;   /* sakin mavi — devam eden / bilgi */
-  --overdue:       #8f002a;   /* "Gecikti" çipinin metin tonu */
-  --urgent:        #d92233;   /* Acil — tek doygun kırmızı */
+  /* DURUM RENKLERİ — mücevher ailesi, temiz zemin üstünde daha da parlar.
+     Ayrım HUE'ya değil AÇIKLIĞA yazılı: dikromat görüşte kırmızı, kehribar ve
+     yeşil tek bir sarı-kahveye düşüyor; ayakta kalan tek eksen açıklık.
+     Dokuzu da beyazda ve muted'de ≥4.5, kanvasta ≥4.0. */
+  --danger:        #c81e3c;
+  --danger-strong: #9d0028;   /* yıkıcı eylem hover */
+  --warning:       #b05300;
+  --hold:          #7a4a00;
+  --approval:      #6d2c96;
+  --success:       #00783a;
+  --info:          #0b6fd0;   /* sakin mavi — devam eden / bilgi */
+  --overdue:       #93002b;   /* "Gecikti" çipinin metin tonu */
+  --urgent:        #e01e37;   /* Acil — tek doygun kırmızı */
 
   --radius:        0.625rem;  /* 10px — default card radius */
 
@@ -152,13 +134,13 @@
   --radius-modal:   1rem;     /* dialogs, sheets (== rounded-2xl today) */
 
   /* Soft, premium elevation — never harsh */
-  /* Gölge rengi MÜREKKEPTEN türer (mavi-siyah değil): kâğıt 88.6°, mürekkep
-     71.1°, gölge 70.9° — üçü aynı sıcak ailede. Kenarlar
+  /* Gölge rengi MÜREKKEPTEN türer: zemin, metin ve gölge aynı soğuk-nötr
+     ailede. Kenarlar
      kirlenmiş gri yerine yumuşak bir ışık kaybı gibi okunur. */
-  --shadow-card: 0 1px 2px rgba(44, 34, 24, 0.045), 0 1px 3px rgba(44, 34, 24, 0.035);
-  --shadow-card-hover: 0 3px 8px rgba(44, 34, 24, 0.075), 0 1px 3px rgba(44, 34, 24, 0.05);
-  --shadow-pop: 0 6px 20px rgba(44, 34, 24, 0.11), 0 1px 4px rgba(44, 34, 24, 0.06);
-  --shadow-drawer: 0 16px 48px rgba(44, 34, 24, 0.17), 0 3px 10px rgba(44, 34, 24, 0.08);
+  --shadow-card: 0 1px 2px rgba(16, 23, 28, 0.045), 0 1px 3px rgba(16, 23, 28, 0.035);
+  --shadow-card-hover: 0 3px 8px rgba(16, 23, 28, 0.075), 0 1px 3px rgba(16, 23, 28, 0.05);
+  --shadow-pop: 0 6px 20px rgba(16, 23, 28, 0.11), 0 1px 4px rgba(16, 23, 28, 0.06);
+  --shadow-drawer: 0 16px 48px rgba(16, 23, 28, 0.17), 0 3px 10px rgba(16, 23, 28, 0.08);
 
   /* Motion easings — ease-standard for most UI, ease-emphasized for
      enter/exit of larger surfaces (drawers, sheets). */
@@ -275,7 +257,7 @@ body {
     appearance: none;
     -moz-appearance: none;
     -webkit-appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236e645b' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235b6872' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 0.6rem center;
     background-size: 14px 14px;
