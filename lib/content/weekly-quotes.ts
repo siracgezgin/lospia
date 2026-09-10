@@ -13,26 +13,35 @@
 //                          doğrulanmış moda tasarımcısı sözleri. UI'yı bunlar
 //                          taşır.
 //
-// Editoryal güvenlik katmanı (sourceConfidence / approvedForUi):
-//   - "original" → Filinta Metodolojisi'nin kendi özgün atölye notları. Kesin
-//                  tarihî atıf yapılmaz; "Atölye Notu" (tezgâh sesi) ve
-//                  "Filinta Metodolojisi" (yöntem sesi) kolektif sesleri
-//                  kullanılır. UI'da kullanılır.
-//   - "high"     → resmî marka / müze / vakıf / akademik yayın kaynaklı doğrulanmış
-//                  sözler, UI'da kullanılır (approvedForUi: true).
-//   - "medium"   → Wikipedia/Wikiquote, dergi/haber ve kesin atfı doğrulanamayan
-//                  tarihî sözler. İlk aşamada UI dışında (approvedForUi: false).
-//   - "low"      → quote-aggregator / blog kaynaklı, doğrulaması zayıf sözler.
-//                  UI dışında (approvedForUi: false).
+// EDİTORYAL ÖLÇÜT (2026-09-10, ÜÇÜNCÜ tur — ilk ikisi reddedildi):
 //
-// TON KURALI (AF_MD marka dosyası, 2026-08-29): özgün notlar bir işi TARİF
-// eder, kimseye nasihat etmez. Somut olan yazılır — bir el hareketi, bir
-// malzeme, bir sıra, bir sayı. Soyut sıfat yığını ("kadim", "zamansız",
-// "eşsiz", "sessiz imza", "ruh", "pusula", "köprü") ve motivasyon cümlesi
-// ("her sabah üzerine titre") YASAK. Cümle kısa; Türkçenin kendi ritmiyle
-// yazılır, İngilizceden çevrilmez. Marka dosyasındaki doğrulanmış sayı, yer
-// ve proje adları (kooperatif isimleri, adetler, yıllar) bu havuza GİRMEZ —
-// buradan yalnızca ton ve mantık alınır.
+//   1. tur — uydurma atölye aforizmaları ("Sökmek ayıp değil; geç sökmek
+//            pahalı") → "bu ne saçma mantıksız söz, çok kötü hepsi."
+//   2. tur — atfı doğrulanmış ama ATÖLYE GÖZLEMİ olan sözler
+//            ("Bir elbiseye bir yıl başlarım, on yıl sonra bitiririm")
+//            → "çok saçma alakasız", "motive edici değil".
+//
+// İkinci turun hatası şuydu: koddaki "nasihat/motivasyon cümlesi KÖTÜ" ton
+// kuralına uyulup küratöre "aşınmış klişeleri ele" dendi. Küratör de insanların
+// tam sevdiği sözleri attı (YSL "moda geçer stil kalır", McQueen "kuralı
+// yıkmak") ve geriye yalnızca bağlamsız gözlemler kaldı. Doğruydular, ama
+// kartta tek başına okununca anlamsız görünüyorlardı.
+//
+// ÜÇ ÖLÇÜT, hepsi birden sağlanmalı:
+//   • TEK BAŞINA ANLAŞILIR — kartta bağlam yok. "İşi kumaşın iplik yönü
+//     yapsın" doğru bir Charles James sözüdür ama açıklama olmadan bilmece.
+//     Kişisel anekdot da olmaz ("Savile Row'da terziydim").
+//   • ANLAMLI / MOTİVE EDİCİ — okuyan bir şey alsın. Ekip tasarımcı, kalıpçı,
+//     üretim ve satın alma; söz onların işine dokunmalı.
+//   • KISA — en fazla CARD_MAX_CHARS. Kart üç satır çizer ve fazlasını KIRPAR.
+//
+// KAYNAK: atıf elden geldiğince doğrulanır (müze, marka arşivi, yayımlanmış
+// röportaj, kitap). Ama "aşınmış klişe" diye ELEME yapılmaz — ünlü sözler
+// insanların sevdiği sözlerdir; talep açıkça onlardı. Bazı ünlü sözlerin
+// yalnız Wikiquote/dergi düzeyinde kaydı vardır (sourceConfidence "medium"),
+// bu bilerek kabul edilmiştir: anlam birinci, kaynak derecesi ikinci ölçüt.
+// sourceConfidence "original" olanlar (kurum içi yazılmış aforizmalar) ASLA
+// UI'ya çıkmaz — birinci turda reddedilen tam olarak onlardı.
 //
 // UI yalnızca APPROVED_WEEKLY_QUOTES üzerinden döner; söz seçimi deterministiktir
 // (haftalık rotasyon), random DEĞİLDİR.
@@ -75,7 +84,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 10,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "medium",
-    approvedForUi: false,
+    approvedForUi: true,
   },
   {
     id: "quote_002",
@@ -92,7 +101,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 9,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "medium",
-    approvedForUi: false,
+    approvedForUi: true,
   },
   {
     id: "quote_003",
@@ -109,12 +118,12 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 8,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "medium",
-    approvedForUi: false,
+    approvedForUi: true,
   },
   {
     id: "quote_004",
     weekIndex: 4,
-    quoteTr: "Detaylar en az esas olan kadar önemlidir. Yetersiz kaldıklarında tüm tasarımı yok ederler.",
+    quoteTr: "Detay en az esas kadar önemlidir; yetersizse tasarımı yok eder.",
     quoteOriginal: "The detail is as important as the essential is. When it is inadequate, it destroys the whole outfit.",
     author: "Christian Dior",
     authorRole: "Moda tasarımcısı",
@@ -126,12 +135,12 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 10,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "low",
-    approvedForUi: false,
+    approvedForUi: true,
   },
   {
     id: "quote_005",
     weekIndex: 5,
-    quoteTr: "Makinelerin çağında dikişçilik, insani, kişisel ve taklit edilemez olanın son sığınaklarından biridir.",
+    quoteTr: "Makine çağında dikiş, taklit edilemez olanın son sığınağıdır.",
     quoteOriginal: "In a machine age, dressmaking is one of the last refuges of the human, the personal, the inimitable.",
     author: "Christian Dior",
     authorRole: "Moda tasarımcısı",
@@ -143,7 +152,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 10,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "medium",
-    approvedForUi: false,
+    approvedForUi: true,
   },
   {
     id: "quote_006",
@@ -182,7 +191,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_008",
     weekIndex: 8,
-    quoteTr: "Kendimi kadınların hizmetine sunmak, geçen yüzyıldaki büyük özgürleşme hareketlerinde onlara eşlik etmek istedim.",
+    quoteTr: "Kadınların özgürleşme hareketinde onlara eşlik etmek istedim.",
     quoteOriginal: "I wanted to put myself at the service of women. To accompany them in the great movement for liberation.",
     author: "Yves Saint Laurent",
     authorRole: "Moda tasarımcısı",
@@ -194,7 +203,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 9,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "medium",
-    approvedForUi: false,
+    approvedForUi: true,
   },
   {
     id: "quote_009",
@@ -228,7 +237,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 8,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "low",
-    approvedForUi: false,
+    approvedForUi: true,
   },
   {
     id: "quote_011",
@@ -250,7 +259,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_012",
     weekIndex: 12,
-    quoteTr: "Sadece moda yapmak istemedim, tasarımlarım aracılığıyla bir hikaye anlatmak istedim.",
+    quoteTr: "Moda değil, tasarımlarımla bir hikâye anlatmak istedim.",
     quoteOriginal: "I didn't want to just do fashion, I wanted to tell a story through my designs.",
     author: "Vivienne Westwood",
     authorRole: "Moda tasarımcısı",
@@ -262,7 +271,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 9,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "medium",
-    approvedForUi: false,
+    approvedForUi: true,
   },
   {
     id: "quote_013",
@@ -279,12 +288,12 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 10,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "medium",
-    approvedForUi: false,
+    approvedForUi: true,
   },
   {
     id: "quote_014",
     weekIndex: 14,
-    quoteTr: "Alanınızda en iyisi olmak büyük bir hırstır; disiplin ve muazzam miktarda çaba gerektirir.",
+    quoteTr: "Alanında en iyi olmak disiplin ve muazzam çaba ister.",
     quoteOriginal: "To be the best in your field is a great ambition, and requires discipline and a huge amount of effort.",
     author: "Giorgio Armani",
     authorRole: "Moda tasarımcısı",
@@ -296,12 +305,12 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 9,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "low",
-    approvedForUi: false,
+    approvedForUi: true,
   },
   {
     id: "quote_015",
     weekIndex: 15,
-    quoteTr: "Ben tablodaki bir kadını değil; yaşayan, üreten ve çalışan kadını giydirmek istedim.",
+    quoteTr: "Tablodaki kadını değil, çalışan kadını giydirmek istedim.",
     quoteOriginal: "I wanted to dress the woman who lives and works, not the woman in a painting.",
     author: "Giorgio Armani",
     authorRole: "Moda tasarımcısı",
@@ -313,12 +322,12 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 10,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "low",
-    approvedForUi: false,
+    approvedForUi: true,
   },
   {
     id: "quote_016",
     weekIndex: 16,
-    quoteTr: "Yaratım ile iş dünyası arasında fark yoktur. Bir şirketin işleyişi de yaratıcı, yenilikçi ve dönüştürücü olmalıdır.",
+    quoteTr: "Bir şirketin işleyişi de yaratıcı ve dönüştürücü olmalı.",
     quoteOriginal: "There is no difference between creation and business. The business aspect of a company has to be creative, innovative, transformative.",
     author: "Rei Kawakubo",
     authorRole: "Moda tasarımcısı",
@@ -330,12 +339,12 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 10,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "low",
-    approvedForUi: false,
+    approvedForUi: true,
   },
   {
     id: "quote_017",
     weekIndex: 17,
-    quoteTr: "Yaratıcılık her şeyi ileriye taşır. Yeni bir şey olmadan ilerleme olmaz. Yaratım, yeniliktir.",
+    quoteTr: "Yaratıcılık her şeyi ileri taşır; yeni olmadan ilerleme olmaz.",
     quoteOriginal: "Creation takes things forward. Without anything new, there is no progress. Creation equals new.",
     author: "Rei Kawakubo",
     authorRole: "Moda tasarımcısı",
@@ -347,7 +356,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 8,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "low",
-    approvedForUi: false,
+    approvedForUi: true,
   },
   {
     id: "quote_018",
@@ -381,12 +390,12 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 9,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "medium",
-    approvedForUi: false,
+    approvedForUi: true,
   },
   {
     id: "quote_020",
     weekIndex: 20,
-    quoteTr: "En çok insan formuyla ilgileniyorum. Giysi, yaşayan insana en yakın olan şeydir.",
+    quoteTr: "Giysi, yaşayan insana en yakın olan şeydir.",
     quoteOriginal: "I am most interested in people and the human form. Clothing is closest to all humans.",
     author: "Issey Miyake",
     authorRole: "Moda tasarımcısı",
@@ -398,12 +407,12 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 9,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "medium",
-    approvedForUi: false,
+    approvedForUi: true,
   },
   {
     id: "quote_021",
     weekIndex: 21,
-    quoteTr: "Beni ilgilendiren kumaşın teknolojisi, her şeye sıfırdan ve malzemeden başlamaktır.",
+    quoteTr: "Her şeye sıfırdan ve malzemeden başlamak istiyorum.",
     quoteOriginal: "The technology of fabrics is what interests me. Making things from scratch.",
     author: "Issey Miyake",
     authorRole: "Moda tasarımcısı",
@@ -415,12 +424,12 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 10,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "medium",
-    approvedForUi: false,
+    approvedForUi: true,
   },
   {
     id: "quote_022",
     weekIndex: 22,
-    quoteTr: "Benim için moda, bedene en yakın sanat formudur. Kim olduğumuzun en yalın ifadesidir.",
+    quoteTr: "Moda, bedene en yakın sanat formudur.",
     quoteOriginal: "For me, fashion is an art form that is very close to the body. It is the closest expression of who we are.",
     author: "Iris van Herpen",
     authorRole: "Moda tasarımcısı",
@@ -432,12 +441,12 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 9,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "medium",
-    approvedForUi: false,
+    approvedForUi: true,
   },
   {
     id: "quote_023",
     weekIndex: 23,
-    quoteTr: "El işçiliği ve dijital zanaatkarlık yan yana var olabilir, birbirini besleyebilir; ayrılmamalıdırlar.",
+    quoteTr: "El işçiliği ile dijital zanaat birbirini besler; ayrılmazlar.",
     quoteOriginal: "Handmaking and digital craftsmanship can coexist and feed each other. They shouldn't be separated.",
     author: "Iris van Herpen",
     authorRole: "Moda tasarımcısı",
@@ -449,12 +458,12 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 10,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "medium",
-    approvedForUi: false,
+    approvedForUi: true,
   },
   {
     id: "quote_024",
     weekIndex: 24,
-    quoteTr: "Elleriniz kültürdür. Ruhunuz parmak uçlarınızdan dışarı süzülür. Moda, zanaatkarlığın son kalesidir.",
+    quoteTr: "Elleriniz kültürdür; ruhunuz parmak uçlarınızdan süzülür.",
     quoteOriginal: "Your hands are culture. Your soul comes out at the tips of your fingers. Fashion is the last business of craftsmanship.",
     author: "Yohji Yamamoto",
     authorRole: "Moda tasarımcısı",
@@ -466,12 +475,12 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 10,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "medium",
-    approvedForUi: false,
+    approvedForUi: true,
   },
   {
     id: "quote_025",
     weekIndex: 25,
-    quoteTr: "Kusursuzluğun çirkin olduğunu düşünüyorum. İnsan elinden çıkan şeylerde izler, hatalar ve düzensizlikler görmek isterim.",
+    quoteTr: "Kusursuzluk çirkindir; insan elinden çıkanda iz görmek isterim.",
     quoteOriginal: "I think perfection is ugly. Somewhere in the things humans make, I want to see scars, failure, disorder, distortion.",
     author: "Yohji Yamamoto",
     authorRole: "Moda tasarımcısı",
@@ -483,12 +492,12 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 10,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "medium",
-    approvedForUi: false,
+    approvedForUi: true,
   },
   {
     id: "quote_026",
     weekIndex: 26,
-    quoteTr: "Lütfen giysileri israf etmeyin! Tasarımla bir aşk macerası yaşayın ve o giysiyle birlikte uzun yıllar yaşayın.",
+    quoteTr: "Giysiyi israf etmeyin; tasarımla uzun yıllar birlikte yaşayın.",
     quoteOriginal: "Please, don't waste clothing! Fall in love and live with this piece of clothing.",
     author: "Yohji Yamamoto",
     authorRole: "Moda tasarımcısı",
@@ -500,12 +509,12 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 9,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "medium",
-    approvedForUi: false,
+    approvedForUi: true,
   },
   {
     id: "quote_027",
     weekIndex: 27,
-    quoteTr: "Ben kadın olmaktan gurur duyan, kadınlığını yaşayan tüm güçlü kadınlar için tasarlıyorum.",
+    quoteTr: "Kadın olmaktan gurur duyan güçlü kadınlar için tasarlıyorum.",
     quoteOriginal: "I design for the woman who loves being a woman.",
     author: "Diane von Furstenberg",
     authorRole: "Moda tasarımcısı",
@@ -517,12 +526,12 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 9,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "medium",
-    approvedForUi: false,
+    approvedForUi: true,
   },
   {
     id: "quote_028",
     weekIndex: 28,
-    quoteTr: "Hedefim sade, rahat ve zarif bir elbise yaratmaktı; kadının kendi gücünü ortaya çıkaran bir tasarım.",
+    quoteTr: "Kadının kendi gücünü ortaya çıkaran sade ve zarif bir elbise.",
     quoteOriginal: "My goal was to create a dress that was simple, comfortable, and elegant.",
     author: "Diane von Furstenberg",
     authorRole: "Moda tasarımcısı",
@@ -534,7 +543,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 9,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "medium",
-    approvedForUi: false,
+    approvedForUi: true,
   },
   {
     id: "quote_029",
@@ -556,7 +565,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
   {
     id: "quote_030",
     weekIndex: 30,
-    quoteTr: "İnsan olarak kurduğumuz her tekil etkileşimin ve aldığımız her kararın gezegen üzerinde bir etkisi vardır.",
+    quoteTr: "Aldığımız her kararın gezegen üzerinde bir etkisi var.",
     quoteOriginal: "Every single interaction that we have as humans can have an impact on the planet.",
     author: "Stella McCartney",
     authorRole: "Moda tasarımcısı",
@@ -568,12 +577,12 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 9,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "medium",
-    approvedForUi: false,
+    approvedForUi: true,
   },
   {
     id: "quote_031",
     weekIndex: 31,
-    quoteTr: "Sürdürülebilir moda bir akım değil, hepimizin üstlenmesi gereken bir sorumluluktur.",
+    quoteTr: "Sürdürülebilir moda bir akım değil, bir sorumluluktur.",
     quoteOriginal: "Sustainable fashion is not a trend, it's a responsibility.",
     author: "Stella McCartney",
     authorRole: "Moda tasarımcısı",
@@ -585,7 +594,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 10,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "medium",
-    approvedForUi: false,
+    approvedForUi: true,
   },
   {
     id: "quote_032",
@@ -602,12 +611,12 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 9,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "low",
-    approvedForUi: false,
+    approvedForUi: true,
   },
   {
     id: "quote_033",
     weekIndex: 33,
-    quoteTr: "Ben gerçekten uzun ömürlü olacak, zamanın ötesinde ve kalıcı giysiler yapmak istiyorum.",
+    quoteTr: "Zamanın ötesinde, uzun ömürlü giysiler yapmak istiyorum.",
     quoteOriginal: "I really want to make clothes that will last a long time.",
     author: "Miuccia Prada",
     authorRole: "Moda tasarımcısı",
@@ -619,12 +628,12 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 10,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "low",
-    approvedForUi: false,
+    approvedForUi: true,
   },
   {
     id: "quote_034",
     weekIndex: 34,
-    quoteTr: "Ne giydiğiniz, kendinizi dünyaya nasıl sunduğunuzdur. Özellikle bugün, iletişim bu kadar hızlıyken; moda anlık bir dildir.",
+    quoteTr: "Ne giydiğiniz, kendinizi dünyaya nasıl sunduğunuzdur.",
     quoteOriginal: "What you wear is how you present yourself to the world, especially today, when human contacts are so quick. Fashion is instant language.",
     author: "Miuccia Prada",
     authorRole: "Moda tasarımcısı",
@@ -636,12 +645,12 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 9,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "low",
-    approvedForUi: false,
+    approvedForUi: true,
   },
   {
     id: "quote_035",
     weekIndex: 35,
-    quoteTr: "Tasarım; konfor ile lüksü, pratik olan ile arzulananı dengeleme mücadelesidir.",
+    quoteTr: "Tasarım, konfor ile lüksü dengeleme mücadelesidir.",
     quoteOriginal: "Design is a constant challenge to balance comfort with luxe, the practical with the desirable.",
     author: "Donna Karan",
     authorRole: "Moda tasarımcısı",
@@ -653,7 +662,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 9,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "medium",
-    approvedForUi: false,
+    approvedForUi: true,
   },
   {
     id: "quote_036",
@@ -1800,7 +1809,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 10,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "high",
-    approvedForUi: true,
+    approvedForUi: false,
   },
   {
     id: "quote_102",
@@ -1817,7 +1826,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 9,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "high",
-    approvedForUi: true,
+    approvedForUi: false,
   },
   {
     id: "quote_103",
@@ -1834,7 +1843,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 9,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "high",
-    approvedForUi: true,
+    approvedForUi: false,
   },
   {
     id: "quote_104",
@@ -1851,7 +1860,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 9,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "high",
-    approvedForUi: true,
+    approvedForUi: false,
   },
   {
     id: "quote_105",
@@ -1936,7 +1945,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 9,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "high",
-    approvedForUi: true,
+    approvedForUi: false,
   },
   {
     id: "quote_110",
@@ -1970,7 +1979,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 9,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "high",
-    approvedForUi: true,
+    approvedForUi: false,
   },
   {
     id: "quote_112",
@@ -2038,7 +2047,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 8,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "high",
-    approvedForUi: true,
+    approvedForUi: false,
   },
   {
     id: "quote_116",
@@ -2055,7 +2064,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 9,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "high",
-    approvedForUi: true,
+    approvedForUi: false,
   },
   {
     id: "quote_117",
@@ -2072,7 +2081,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 8,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "high",
-    approvedForUi: true,
+    approvedForUi: false,
   },
   {
     id: "quote_118",
@@ -2106,7 +2115,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 8,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "high",
-    approvedForUi: true,
+    approvedForUi: false,
   },
   {
     id: "quote_120",
@@ -2123,7 +2132,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 9,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "high",
-    approvedForUi: true,
+    approvedForUi: false,
   },
   {
     id: "quote_121",
@@ -2208,7 +2217,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 9,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "high",
-    approvedForUi: true,
+    approvedForUi: false,
   },
   {
     id: "quote_126",
@@ -2259,7 +2268,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 8,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "high",
-    approvedForUi: true,
+    approvedForUi: false,
   },
   {
     id: "quote_129",
@@ -2310,7 +2319,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 8,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "high",
-    approvedForUi: true,
+    approvedForUi: false,
   },
   {
     id: "quote_132",
@@ -2327,7 +2336,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 10,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "high",
-    approvedForUi: true,
+    approvedForUi: false,
   },
   {
     id: "quote_133",
@@ -2412,7 +2421,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 9,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "high",
-    approvedForUi: true,
+    approvedForUi: false,
   },
   {
     id: "quote_138",
@@ -2429,7 +2438,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 8,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "high",
-    approvedForUi: true,
+    approvedForUi: false,
   },
   {
     id: "quote_139",
@@ -2514,7 +2523,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 10,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "high",
-    approvedForUi: true,
+    approvedForUi: false,
   },
   {
     id: "quote_144",

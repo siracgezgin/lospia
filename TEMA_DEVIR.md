@@ -99,29 +99,43 @@ kutucuğu, `MemberEditPanel` / `CreateAccountPanel` seçim tiki.
 | 9 | **Sekme** | Zemin HİÇ boyanmaz — hover aktifliği taklit etmez. Aktif: 2px brand alt çizgi. |
 | 10 | **Odak** | `globals.css`'te tek kural; `outline:none` asla (odak yönetimi için `tabIndex=-1` taşıyan kapsayıcılar hariç). |
 
-## 5. Haftanın Sözü — ikinci tur
+## 5. Haftanın Sözü — üç tur
 
-Birinci tur burada da reddedildi: *"haftanın sözleri rezalet ve alakasız, motive
-edici değil"* + ekran görüntüsüyle *"çok uzun olmasın, bak yarıda kesilmiş."*
+| tur | ne kondu | cevap |
+|---|---|---|
+| 1 | Kurum içi yazılmış atölye aforizmaları | *"bu ne saçma mantıksız söz, çok kötü hepsi"* |
+| 2 | Atfı doğrulanmış ama bağlamsız atölye gözlemleri | *"rezalet ve alakasız, motive edici değil"* · *"çok saçma alakasız"* |
+| 3 | Tek başına anlaşılır + motive edici + kısa | — |
 
-İki ayrı hata vardı:
+**İkinci turun kök hatası:** kodda "nasihat/motivasyon cümlesi KÖTÜ" diye bir ton
+kuralı vardı; ona uyup küratöre *"aşınmış klişeleri ele"* dedim. Küratör de
+insanların tam sevdiği sözleri attı (YSL'in "moda geçer stil kalır"ı, McQueen'in
+"kuralı yıkmak"ı) ve geriye yalnızca bağlamsız gözlemler kaldı — *"Bir elbiseye
+bir yıl başlarım, on yıl sonra bitiririm"* gibi. Doğru sözlerdi ama kartta tek
+başına okununca anlamsız görünüyorlardı.
 
-1. **Yanlış ton.** Kodda "nasihat/motivasyon cümlesi KÖTÜ" diye bir kural vardı ve
-   küratöre "aşınmış klişeleri ele" dedim. Küratör de insanların tam sevdiği sözleri
-   attı — YSL'in "moda geçer, stil kalır"ı, McQueen'in "kuralı yıkmak"ı — yerine
-   atölye gözlemleri kaldı. Doğrulanmışlardı ama ilham vermiyorlardı.
-   **Düzeltme:** o ünlü sözler geri alındı; kaynağı belgeli bir Chanel sözü eklendi
-   (Haedrich, *Coco Chanel: Secrète*, 1971 — moda alıntılarının çoğunun aksine
-   gerçek bir kaydı var).
+**Ders: kullanıcının o anki isteği, kodda yazılı eski bir ton kuralını ezer.**
 
-2. **Kart kırpıyordu.** Sınır 108 karakterdi ama kart üç satır çiziyor ve 97
-   karakterlik söz yarıda kesildi — **kendi kuralımız kırpılmaya izin veriyordu.**
-   **Düzeltme:** sınır **72**'ye indi ve 30 çevirinin Türkçesi kısaltıldı (özgün
-   metin ve kaynak değişmedi, yalnız kartta okunan cümle sadeleşti).
-   Havuz: **41 söz, en uzunu 67 karakter** — kırpılma artık imkânsız.
+### Üç ölçüt (hepsi birden)
 
-Kısalık yalnız bir kırpma önlemi değil, editoryal ölçüt oldu: akılda kalan söz kısa
-olandır.
+1. **Tek başına anlaşılır** — kartta bağlam yok. *"İşi kumaşın iplik yönü yapsın"*
+   doğru bir Charles James sözüdür ama açıklamasız bilmece. Kişisel anekdot da
+   olmaz (*"Savile Row'da terziydim"*).
+2. **Anlamlı / motive edici** — okuyan bir şey alsın. Ekip tasarımcı, kalıpçı,
+   üretim ve satın alma; söz onların işine dokunmalı.
+3. **Kısa** — `CARD_MAX_CHARS = 72`. Kart üç satır çizer ve fazlasını KIRPAR.
+   (Eskiden 108'di ve 97 karakterlik söz yarıda kesiliyordu — kendi kuralımız
+   kırpılmaya izin veriyordu.)
+
+18 söz UI dışına alındı, 29'u geri açıldı ve kısaltıldı.
+**Havuz: 52 söz, 22 tasarımcı, en uzunu 66 karakter** — tam bir yıllık rotasyon,
+`spreadByAuthor()` sayesinde iki komşu hafta aynı isim çıkmıyor.
+
+**Kaynak politikası değişti:** atıf elden geldiğince doğrulanır ama "klişe" diye
+eleme yapılmaz — ünlü sözler insanların sevdiği sözlerdir. Bazılarının yalnız
+Wikiquote/dergi düzeyinde kaydı var; bu bilerek kabul edildi: **anlam birinci,
+kaynak derecesi ikinci ölçüt.** Kurum içi yazılmış aforizmalar
+(`sourceConfidence: "original"`) asla UI'ya çıkmaz.
 
 ## 6. Doğrulama
 
