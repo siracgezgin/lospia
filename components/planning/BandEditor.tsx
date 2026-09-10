@@ -126,7 +126,9 @@ export function BandEditor({
             aria-label={c.label}
             aria-checked={category === c.key}
             className={cn(
-              "tap-target h-4 w-4 rounded-full ring-1 ring-inset ring-black/10 transition-transform duration-150",
+              /* Geçiş DEĞİŞEN iki özelliği de sayar: seçilince büyür, pasifken
+                 imleçle netleşir — opacity geçişsiz kalınca sıçrıyordu. */
+              "tap-target h-4 w-4 rounded-full ring-1 ring-inset ring-ink/10 transition-[transform,opacity] duration-150",
               c.dot,
               category === c.key ? "scale-125 ring-2 ring-ink/40" : "opacity-60 hover:opacity-100",
             )}

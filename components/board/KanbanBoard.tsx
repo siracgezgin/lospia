@@ -268,7 +268,7 @@ function CardStatusChip({ task }: { task: Task }) {
         disabled={pending}
         className={cn(
           chipCls,
-          "tap-target inline-flex items-center gap-0.5 hover:brightness-95 active:brightness-90 transition duration-150",
+          "tap-target inline-flex items-center gap-0.5 hover:brightness-95 active:brightness-90 transition-[filter] duration-150 ease-standard",
           // Kaydedilirken çip söner ve tıklanamaz: aynı görevi iki kez göndermek yok.
           pending && "cursor-wait opacity-60",
         )}
@@ -1221,7 +1221,7 @@ function StaticTaskCard({
   // border (all sides) then border-l accent last so it wins. No cn() — tailwind-merge strips border-l-*.
   const personColor = useTaskPersonColor(task);
   const em = urgentCardStyle(task, getTaskCardStyleByPerson(task.status, personColor));
-  const cardCls = `rounded-card border ${em.widthCls} p-3 ${em.shadow} hover:shadow-card-hover transition-shadow duration-200 ease-standard cursor-pointer ${em.surface} ${em.border} ${em.accent} ${em.ring}`;
+  const cardCls = `rounded-card border ${em.widthCls} p-3 ${em.shadow} hover:shadow-card-hover transition-shadow duration-[180ms] ease-standard cursor-pointer ${em.surface} ${em.border} ${em.accent} ${em.ring}`;
   return (
     <div className={cardCls} style={em.style}>
       <div className="flex items-start gap-1.5">
@@ -1278,7 +1278,7 @@ function TaskCard({
     // renginde kalır ve dnd-kit'in satır içi transform'uyla çakışma olmaz.
     isDragOverlay
       ? "shadow-drawer rotate-1"
-      : "hover:shadow-card-hover transition-shadow duration-200 ease-standard",
+      : "hover:shadow-card-hover transition-shadow duration-[180ms] ease-standard",
     // Keyboard focus (the card receives tabIndex from dnd-kit attributes) — a
     // calm brand ring so drag/enter targets are visible without a mouse.
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring/60 focus-visible:ring-offset-1",
@@ -1402,8 +1402,11 @@ function MobileTaskCard({
   }
   return (
     <div
-      /* İç boşluk masaüstü kartıyla AYNI (p-3): aynı kart iki ölçüde durmaz. */
-      className={`rounded-card border ${em.widthCls} p-3 ${em.shadow} cursor-pointer ${colorCls} transition-transform duration-[var(--duration-fast)] ease-standard active:scale-[0.99]`}
+      /* İç boşluk masaüstü kartıyla AYNI (p-3): aynı kart iki ölçüde durmaz.
+         Tepki de aynı: kart YALNIZ gölge değiştirir. Basmadaki ölçek kaldırıldı
+         — kartın transform'u sürüklemeye ayrılmıştır (masaüstü ikizinde dnd-kit
+         onu kullanıyor) ve aynı kart iki ekranda iki dil konuşmasın. */
+      className={`rounded-card border ${em.widthCls} p-3 ${em.shadow} cursor-pointer ${colorCls} transition-shadow duration-[180ms] ease-standard hover:shadow-card-hover`}
       style={em.style}
       onClick={openDetail}
     >
@@ -1485,7 +1488,7 @@ function KanbanColumn({
             size="sm"
             aria-label={`${colDef.label} sütununa görev ekle`}
             onClick={() => onAddTask(colDef.id)}
-            className="size-7 text-subtle hover:bg-brand-soft hover:text-brand"
+            className="size-7 text-subtle"
           >
             <Plus size={15} />
           </IconButton>
@@ -2269,7 +2272,7 @@ export function KanbanBoard({
                     // Dokunmatikte parmağa göre (mobil denetimde 32px ölçüldü);
                     // farede yoğunluk korunur.
                     "inline-flex min-h-8 items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors duration-150 pointer-coarse:min-h-10",
-                    on ? "bg-surface text-ink shadow-xs" : "text-muted hover:text-ink",
+                    on ? "bg-surface text-ink shadow-card" : "text-muted hover:text-ink",
                   )}
                 >
                   {v === "admin_only" && <Lock size={12} />}
@@ -2386,7 +2389,7 @@ export function KanbanBoard({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="ml-1 text-brand hover:bg-brand-soft hover:text-brand-strong"
+                    className="ml-1 text-brand hover:bg-surface-muted hover:text-brand-strong"
                     onClick={() => {
                       const monday = getMondayOf(new Date());
                       setWeekStart(monday);
@@ -2461,7 +2464,7 @@ export function KanbanBoard({
               {selectedPerson.filterKey.startsWith("member:") && (
                 <Link
                   href={`/reports/${selectedPerson.id}?from=board`}
-                  className="ml-1 inline-flex h-8 shrink-0 items-center gap-1.5 rounded-control border border-line bg-surface px-3 text-[13px] font-medium text-muted shadow-xs transition-[background-color,border-color,color] duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink"
+                  className="ml-1 inline-flex h-8 shrink-0 items-center gap-1.5 rounded-control border border-line bg-surface px-3 text-[13px] font-medium text-muted shadow-card transition-[background-color,border-color,color] duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink"
                   title="Bu kişinin tek sayfalık özeti — yazdırılabilir"
                 >
                   <FileText size={13} /> Tek sayfa özet
@@ -2668,7 +2671,7 @@ export function KanbanBoard({
                 className={cn(
                   "flex min-h-9 items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-medium whitespace-nowrap border transition-colors duration-150 shrink-0",
                   active
-                    ? "bg-brand text-white border-brand shadow-xs"
+                    ? "bg-brand text-white border-brand shadow-card"
                     : "bg-surface text-muted border-line active:bg-surface-muted",
                 )}
                 aria-pressed={active}

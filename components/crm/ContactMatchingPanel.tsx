@@ -80,7 +80,7 @@ function MatchRow({ contact, members }: { contact: WorkspaceContact; members: Cr
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2.5 transition-colors duration-150 hover:bg-surface-hover">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2.5 transition-colors duration-150 ease-standard hover:bg-surface-hover">
       {/* Contact identity */}
       <div className="min-w-[160px] flex-1">
         <div className="truncate text-[13.5px] font-medium text-ink">{contact.name}</div>

@@ -100,7 +100,7 @@ export function ModuleDirectory({ isAdmin }: { isAdmin: boolean }) {
               aria-label="Aramayı temizle"
               title="Aramayı temizle"
               /* Parmak hedefi alanın tam yüksekliği kadar (40px). */
-              className="absolute right-0 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-control text-subtle transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
+              className="absolute right-0 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-control text-subtle transition-colors duration-150 ease-standard hover:bg-surface-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
             >
               <X size={15} aria-hidden />
             </button>
@@ -120,7 +120,7 @@ export function ModuleDirectory({ isAdmin }: { isAdmin: boolean }) {
           <button
             type="button"
             onClick={() => setQuery("")}
-            className="mt-4 inline-flex h-9 pointer-coarse:h-11 items-center rounded-control border border-line px-3.5 text-[13.5px] font-medium text-muted transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
+            className="mt-4 inline-flex h-9 pointer-coarse:h-11 items-center rounded-control border border-line px-3.5 text-[13.5px] font-medium text-muted transition-[background-color,border-color,color] duration-150 ease-standard hover:border-line-strong hover:bg-surface-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
           >
             Tüm modülleri göster
           </button>

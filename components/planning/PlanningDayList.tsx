@@ -14,6 +14,12 @@ import { istanbulLabel, AWAY_LABEL, HOME_LABEL } from "@/lib/planning/timezones"
 import { KimBadges } from "./KimBadges";
 import type { PlanningMeetingWithTopics, PlanningTopic } from "@/types";
 
+/** Şerit başlığının hover/basılı hâli: kategori rengini EZMEYEN ince mürekkep
+ *  perdesi (`after:`). Zemini `hover:bg-*` ile boyamak meta.cell rengini
+ *  siliyordu — masaüstü ızgarası da (PlanningWeekGrid) aynı perdeyi kullanır. */
+const HEAD_VEIL =
+  "relative after:pointer-events-none after:absolute after:inset-0 after:bg-ink/[0.04] after:opacity-0 after:transition-opacity after:duration-150 hover:after:opacity-100 active:after:opacity-100";
+
 interface Props {
   weekDays: string[];
   byCell: Map<string, PlanningMeetingWithTopics[]>;
@@ -130,7 +136,7 @@ export function PlanningDayList({
                 active
                   ? "border-brand bg-brand text-white"
                   : isToday
-                    ? "border-brand-ring bg-brand-soft/60 text-brand-strong hover:border-brand"
+                    ? "border-brand-ring bg-brand-soft/60 text-brand-strong hover:bg-brand-soft"
                     : "border-line bg-surface text-muted hover:border-line-strong hover:text-ink",
               )}
             >
@@ -267,7 +273,7 @@ export function PlanningDayList({
                 <button
                   type="button"
                   onClick={() => onOpen(iso, slot, dayIdx)}
-                  className={cn(headCls, "transition-colors duration-150 active:bg-ink/[0.04]")}
+                  className={cn(headCls, HEAD_VEIL)}
                 >
                   {head}
                 </button>
@@ -329,7 +335,7 @@ export function PlanningDayList({
                             type="button"
                             onClick={() => onOpen(iso, slot, dayIdx, t.position ?? i)}
                             title="Yalnız bu konuyu aç"
-                            className="flex w-full items-start gap-2 px-3 py-2 text-left transition-colors duration-150 hover:bg-surface-muted active:bg-ink/[0.04]"
+                            className="flex w-full items-start gap-2 px-3 py-2 text-left transition-colors duration-150 hover:bg-surface-hover active:bg-ink/[0.04]"
                           >
                             {body}
                           </button>
@@ -345,7 +351,7 @@ export function PlanningDayList({
                   <button
                     type="button"
                     onClick={() => onOpen(iso, slot, dayIdx)}
-                    className="flex min-h-[40px] w-full items-center justify-center gap-1 border-t border-hairline py-2 text-[12.5px] font-medium text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-brand"
+                    className="flex min-h-[40px] w-full items-center justify-center gap-1 border-t border-hairline py-2 text-[12.5px] font-medium text-subtle transition-colors duration-150 hover:bg-surface-hover hover:text-brand"
                   >
                     <Plus size={13} aria-hidden /> Konu ekle
                   </button>
@@ -373,7 +379,10 @@ export function PlanningDayList({
             <button
               type="button"
               onClick={() => setEditingBand("new")}
-              className="flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-card border border-dashed border-line bg-surface/60 py-2.5 text-[13px] font-medium text-subtle transition-colors duration-150 hover:border-brand-ring hover:bg-brand-soft/30 hover:text-brand"
+              /* Çerçeveli (ikincil) düğme: hover'da marka rengine geçmez —
+                 brand-soft seçili öğenin dili, burada "seçildi" yanılsaması
+                 yaratıyordu. Kenar bir kademe koyulaşır, zemin yumuşar. */
+              className="flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-card border border-dashed border-line bg-surface/60 py-2.5 text-[13px] font-medium text-subtle transition-colors duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink"
             >
               <Clock size={14} aria-hidden /> Saat ekle
             </button>

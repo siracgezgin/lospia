@@ -40,7 +40,7 @@ const ALL_COLORS: NoteColor[] = ["yellow", "blue", "green", "purple"];
 /** Renk seçici noktaları — düzenleme ve ekleme formunda aynı. */
 function ColorDots({ value, onChange }: { value: NoteColor; onChange: (_c: NoteColor) => void }) {
   return (
-    <div className="mb-0.5 flex items-center gap-1.5" role="radiogroup" aria-label="Not rengi">
+    <div className="mb-0.5 flex items-center gap-0.5" role="radiogroup" aria-label="Not rengi">
       {ALL_COLORS.map((c) => (
         <button
           key={c}
@@ -48,13 +48,22 @@ function ColorDots({ value, onChange }: { value: NoteColor; onChange: (_c: NoteC
           role="radio"
           aria-checked={value === c}
           onClick={() => onChange(c)}
-          className={cn(
-            "tap-target h-3.5 w-3.5 rounded-full transition-[box-shadow,opacity] duration-150 ease-standard",
-            NOTE_COLORS[c].dot,
-            value === c ? "ring-2 ring-ink/40 ring-offset-1" : "opacity-60 hover:opacity-100",
-          )}
+          /* Hayalet düğme: hover TEK kanaldan, yalnız zeminden gelir. Eskiden
+             seçilmemiş nokta soluktu ve hover onu parlatıyordu — "seçili" ile
+             "üzerindeyim" aynı kanalı paylaşınca hangisi olduğu kayboluyordu.
+             Renkler artık hep tam, seçimi yalnız halka söylüyor. */
+          className="tap-target grid size-6 place-items-center rounded-md transition-colors duration-150 ease-standard hover:bg-surface-muted"
           aria-label={NOTE_COLORS[c].label}
-        />
+        >
+          <span
+            className={cn(
+              "h-3.5 w-3.5 rounded-full transition-shadow duration-150 ease-standard",
+              NOTE_COLORS[c].dot,
+              value === c && "ring-2 ring-ink/40 ring-offset-1",
+            )}
+            aria-hidden
+          />
+        </button>
       ))}
     </div>
   );
@@ -184,7 +193,7 @@ function NoteCardContent({
       ref={containerRef}
       style={containerStyle}
       className={cn(
-        "rounded-card border p-3 shadow-card group transition-shadow duration-150 ease-standard hover:shadow-card-hover",
+        "rounded-card border p-3 shadow-card group transition-shadow duration-[180ms] ease-standard hover:shadow-card-hover",
         colors.bg, colors.border,
         isDragging && "opacity-40 shadow-pop",
       )}
@@ -217,7 +226,7 @@ function NoteCardContent({
             <div className="flex shrink-0 items-center gap-0.5">
               <IconButton
                 size="sm"
-                className="size-6 rounded-md text-subtle hover:text-brand"
+                className="size-6 rounded-md text-subtle"
                 onClick={() => onConvertToTask(note.id, note.title, note.body ?? "")}
                 aria-label="Göreve dönüştür"
                 title="Göreve dönüştür"
@@ -718,7 +727,7 @@ export function NotesColumn({
         {!readOnly && (
           <IconButton
             size="sm"
-            className="size-7 text-subtle hover:bg-brand-soft hover:text-brand"
+            className="size-7 text-subtle"
             onClick={() => setAdding(true)}
             aria-label="Pano notu ekle"
             title="Pano notu ekle"

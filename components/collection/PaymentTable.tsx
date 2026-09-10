@@ -509,7 +509,7 @@ export function CollectionTabs({
                 <span
                   aria-current="page"
                   title={t.label}
-                  className="inline-flex h-8 pointer-coarse:h-10 shrink-0 items-center gap-1.5 rounded-md bg-surface px-3 text-[13px] font-semibold text-ink shadow-xs ring-1 ring-line/70"
+                  className="inline-flex h-8 pointer-coarse:h-10 shrink-0 items-center gap-1.5 rounded-md bg-surface px-3 text-[13px] font-semibold text-ink shadow-card ring-1 ring-line/70"
                 >
                   <t.icon size={15} aria-hidden /> <span>{t.label}</span>
                 </span>
@@ -518,7 +518,10 @@ export function CollectionTabs({
                   href={t.href}
                   title={t.label}
                   aria-label={t.label}
-                  className="inline-flex h-8 pointer-coarse:h-10 shrink-0 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium text-muted transition-colors duration-150 hover:bg-surface hover:text-ink"
+                  /* Hover zemini AKTİF sekmenin beyazı DEĞİL: ikisi aynı
+                     rengi alınca "hangisindeyim" sorusu fare gezdikçe
+                     kayboluyordu. Bir ton koyu kâğıt yeter. */
+                  className="inline-flex h-8 pointer-coarse:h-10 shrink-0 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium text-muted transition-colors duration-150 hover:bg-surface-hover hover:text-ink"
                 >
                   <t.icon size={15} aria-hidden /> <span className="hidden sm:inline">{t.label}</span>
                 </Link>

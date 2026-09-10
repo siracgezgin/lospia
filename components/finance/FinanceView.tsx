@@ -441,7 +441,7 @@ export function FinanceView({ payments }: Props) {
               </tr>
             )}
             {visible.map((p) => (
-              <tr key={p.id} className="transition-colors duration-150 hover:bg-surface-hover">
+              <tr key={p.id} className="transition-colors duration-150 ease-standard hover:bg-surface-hover">
                 <td className="px-4 py-2.5 align-top">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                     <span className="text-[13.5px] font-medium text-ink">{p.title}</span>

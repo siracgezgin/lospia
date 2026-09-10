@@ -213,9 +213,9 @@ function MenuLink({
     <Link
       href={href}
       onClick={onGo}
-      className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
+      className="group flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
     >
-      <Icon size={15} className="shrink-0 text-subtle" />
+      <Icon size={15} className="shrink-0 text-subtle transition-colors duration-150 group-hover:text-brand" />
       {label}
     </Link>
   );

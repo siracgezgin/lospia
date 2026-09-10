@@ -492,7 +492,7 @@ function AddRow({ onAdd, busy }: { onAdd: (_text: string) => void; busy: boolean
       <button
         onClick={submit}
         disabled={busy}
-        className="tap-target rounded p-1 text-brand transition-colors hover:bg-brand-soft disabled:opacity-60"
+        className="tap-target rounded p-1 text-brand transition-colors hover:bg-surface-muted hover:text-brand-strong disabled:opacity-60"
         title="Ekle"
         aria-label="Ekle"
       >

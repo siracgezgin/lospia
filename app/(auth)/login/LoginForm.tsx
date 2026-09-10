@@ -146,7 +146,7 @@ export function LoginForm({ initialEmail = "" }: { initialEmail?: string }) {
               aria-pressed={showPassword}
               title={showPassword ? "Şifreyi gizle" : "Şifreyi göster"}
               /* Parmak hedefi 40px: alanın tam yüksekliği kadar. */
-              className="absolute right-0 top-0 grid h-10 w-10 place-items-center rounded-control text-subtle transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
+              className="absolute right-0 top-0 grid h-10 w-10 place-items-center rounded-control text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
             >
               {showPassword ? (
                 <EyeOff size={16} aria-hidden />

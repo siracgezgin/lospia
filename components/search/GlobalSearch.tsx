@@ -274,12 +274,21 @@ export function GlobalSearch() {
                   data-active={active ? "true" : undefined}
                   onMouseEnter={() => setActiveIndex(i)}
                   onClick={() => go(hit)}
+                  /* MENÜ SATIRI sözleşmesi: imleç (fare ya da ok tuşu) satırı
+                     yalnız `surface-muted` ile işaretler. `brand-soft` bilerek
+                     KULLANILMAZ — o zemin uygulamanın "seçili/aktif" rengidir;
+                     buradaki imleç kalıcı bir seçim değil, gezindiğin yerdir.
+                     İkon imleçle brand'e döner: satırın tek vurgu noktası o. */
                   className={cn(
-                    "flex cursor-pointer items-center gap-3 px-4 py-2.5 transition-colors duration-100",
+                    "flex cursor-pointer items-center gap-3 px-4 py-2.5 transition-colors duration-150",
                     active ? "bg-surface-muted" : "bg-transparent",
                   )}
                 >
-                  <Icon size={15} className="shrink-0 text-subtle" aria-hidden />
+                  <Icon
+                    size={15}
+                    className={cn("shrink-0 transition-colors duration-150", active ? "text-brand" : "text-subtle")}
+                    aria-hidden
+                  />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[13.5px] text-ink">{hit.title}</span>
                     {hit.subtitle && (
@@ -307,7 +316,9 @@ export function GlobalSearch() {
         title={`Ara (${shortcutLabel})`}
         aria-haspopup="dialog"
         aria-expanded={open}
-        className="grid h-10 w-10 place-items-center rounded-control text-muted transition-[background-color,color,transform] duration-150 ease-standard hover:bg-surface-muted hover:text-ink active:scale-95 md:h-9 md:w-9"
+        /* Hayalet düğme: tek kanal, yalnız zemin + metin. Ölçek değişimi
+           kaldırıldı — transform yalnız kutucuklara (TileGrid) ayrıldı. */
+        className="grid h-10 w-10 place-items-center rounded-control text-muted transition-[background-color,color] duration-150 hover:bg-surface-muted hover:text-ink md:h-9 md:w-9"
       >
         <Search size={18} aria-hidden />
       </button>

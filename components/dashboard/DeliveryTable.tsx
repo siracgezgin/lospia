@@ -168,12 +168,16 @@ export function DeliveryTable({
                 const who = t.assignee_id ? nameOf[t.assignee_id] : null;
                 const late = !!t.due_date && t.due_date < todayIso;
                 return (
-                  <tr key={t.id} className="group border-b border-hairline last:border-b-0 transition-colors duration-150 hover:bg-surface-hover">
+                  /* TABLO SATIRI: tek kanal, yalnız zemin. Satır beyaz kartın
+                     İÇİNDE durduğu için gölge/kayma eklenmez; başlığın brand
+                     rengi de artık satırın değil, doğrudan bağlantının kendi
+                     hover'ıdır (imleç yazının üstündeyken). */
+                  <tr key={t.id} className="border-b border-hairline last:border-b-0 transition-colors duration-150 hover:bg-surface-hover">
                     <td className="px-3 py-2">
                       <Link
                         prefetch={false}
                         href={`/tasks/${t.id}`}
-                        className="text-[13.5px] font-medium text-ink transition-colors duration-150 group-hover:text-brand"
+                        className="text-[13.5px] font-medium text-ink transition-colors duration-150 hover:text-brand"
                       >
                         {t.title}
                       </Link>

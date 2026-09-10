@@ -27,7 +27,7 @@ export function ShortcutCard({ entry }: { entry: ModuleEntry }) {
     <Link
       href={entry.href}
       title={entry.description}
-      className="group inline-flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2 shadow-xs transition-[box-shadow,border-color,color] duration-150 ease-standard hover:border-line-strong hover:bg-surface-muted"
+      className="group inline-flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2 shadow-card transition-[box-shadow,border-color,color] duration-150 ease-standard hover:border-line-strong hover:bg-surface-muted"
     >
       <Icon size={14} className="shrink-0 text-muted transition-colors duration-150 group-hover:text-brand" />
       <span className="truncate text-[13px] font-medium text-ink">{entry.title}</span>

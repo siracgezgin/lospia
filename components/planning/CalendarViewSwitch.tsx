@@ -93,8 +93,14 @@ export function CalendarViewSwitch({ scale }: { scale: CalendarScale }) {
               // Telefonda yalnız ikon kalır: w-10 parmak hedefi, ad aria-label'da.
               "inline-flex min-w-10 items-center justify-center gap-1.5 border-line px-2.5 text-[13px] font-medium transition-colors duration-150 sm:px-3",
               i > 0 && "border-l",
+              /* SEÇİLİ ÖLÇEK brand-soft'tur — uygulamanın her yerinde "seçili"
+                 bunu giyer. Dolu marka zemin çubuğun tek birincil eylemine
+                 ("Bu haftaya dön") ait; ikisi aynı anda dolu marka olunca
+                 hangisinin durum hangisinin eylem olduğu kayboluyordu.
+                 Pasif sekmenin hover'ı ASLA brand-soft olmaz: o zaman "seçili"
+                 ile "üzerinde duruyorum" aynı zemine düşer. */
               active
-                ? "bg-brand text-white"
+                ? "bg-brand-soft text-brand-strong"
                 : "text-muted hover:bg-surface-muted hover:text-ink",
             )}
           >

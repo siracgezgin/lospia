@@ -488,7 +488,7 @@ export function CrmView({
               </tr>
             ) : (
               table.getRowModel().rows.map((row) => (
-                <tr key={row.id} className="transition-colors duration-150 hover:bg-surface-hover">
+                <tr key={row.id} className="transition-colors duration-150 ease-standard hover:bg-surface-hover">
                   {row.getVisibleCells().map((cell) => (
                     <td key={cell.id} className="px-3 py-2.5 align-middle">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}

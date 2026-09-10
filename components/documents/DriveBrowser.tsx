@@ -1606,7 +1606,7 @@ export function DriveBrowser({
                     onClick={() => applyMove(moving, t.id)}
                     disabled={here}
                     className={cn(
-                      "flex w-full items-center gap-2 rounded-control px-2 py-2 text-left text-[13.5px] transition-colors duration-150",
+                      "flex w-full items-center gap-2 rounded-control px-2 py-2 text-left text-[13.5px] transition-colors duration-150 ease-standard",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring",
                       here
                         ? "cursor-not-allowed bg-surface-sunken text-subtle"
@@ -1790,7 +1790,7 @@ function ItemMenu({ label, actions, busy }: { label: string; actions: MenuAction
               role="menuitem"
               onClick={() => { setOpen(false); a.onSelect(); }}
               className={cn(
-                "flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13.5px] font-medium transition-colors duration-150",
+                "flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13.5px] font-medium transition-colors duration-150 ease-standard",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-ring",
                 a.danger ? "text-danger hover:bg-danger/10" : "text-ink hover:bg-surface-muted",
               )}
@@ -1972,7 +1972,7 @@ function DriveList({
           <li
             key={it.key}
             onContextMenu={openMenuOnContext}
-            className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 transition-colors duration-150 hover:bg-surface-hover sm:grid-cols-[minmax(0,1fr)_120px_140px_100px_44px]"
+            className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 transition-colors duration-150 ease-standard hover:bg-surface-hover sm:grid-cols-[minmax(0,1fr)_120px_140px_100px_44px]"
           >
             <ItemName item={it} />
             <span className="hidden min-w-0 truncate text-[12.5px] text-muted sm:block">{it.kind.label}</span>
@@ -2196,7 +2196,7 @@ function FolderNameTile({
         title="Kaydet"
         onClick={commit}
         disabled={busy || !name.trim()}
-        className="text-brand hover:bg-brand-soft hover:text-brand-strong"
+        className="text-brand hover:text-brand-strong"
       >
         {busy ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Check size={15} aria-hidden />}
       </IconButton>

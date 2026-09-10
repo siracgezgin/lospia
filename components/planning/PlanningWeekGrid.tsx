@@ -290,7 +290,7 @@ export function PlanningWeekGrid({
             type="button"
             onClick={() => onOpen(iso, slot, i, next)}
             title={`${WEEKDAY_LONG_TR[i]} — yeni konu ekle`}
-            className="group/add flex min-h-[30px] items-center gap-1 border-r border-hairline px-2 py-1.5 text-left text-[12px] text-subtle transition-colors duration-150 last:border-r-0 hover:bg-surface-muted hover:text-brand"
+            className="group/add flex min-h-[30px] items-center gap-1 border-r border-hairline px-2 py-1.5 text-left text-[12px] text-subtle transition-colors duration-150 last:border-r-0 hover:bg-surface-hover hover:text-brand"
           >
             <Plus size={12} className="shrink-0 opacity-50 transition-opacity duration-150 group-hover/add:opacity-100" aria-hidden />
             <span className="opacity-0 transition-opacity duration-150 group-hover/add:opacity-100">Konu ekle</span>
@@ -370,7 +370,11 @@ export function PlanningWeekGrid({
                         type="button"
                         onClick={() => setEditingBand(key)}
                         title="Şeridi düzenle — ad, saat, renk"
-                        className="sticky left-0 inline-flex min-h-[28px] items-center gap-1.5 px-3 py-1 text-[12px] font-semibold uppercase tracking-[0.1em] transition-opacity duration-150 hover:opacity-80"
+                        /* Şerit kendi kategori rengini taşır: hover'da zemini
+                           boyamak o rengi siler, opacity ile soldurmak da
+                           yazıyı okunmaz yapıyordu. Izgaranın her yerinde
+                           kullanılan ince mürekkep perdesi burada da geçerli. */
+                        className="sticky left-0 inline-flex min-h-[28px] items-center gap-1.5 px-3 py-1 text-[12px] font-semibold uppercase tracking-[0.1em] transition-colors duration-150 hover:bg-ink/[0.04]"
                       >
                         {band.label || "—"}
                         {/* Kalem HER ZAMAN görünür (soluk) — hover'a saklı işlev
@@ -664,7 +668,10 @@ function TitleCell({
             }}
             aria-label="Toplantı başlığı"
             placeholder="Başlık…"
-            className="w-full rounded-[4px] border border-brand-ring bg-surface px-1 py-0.5 text-[12.5px] font-bold tracking-tight text-ink outline-none"
+            /* `outline-none` YOK: odak halkası globals.css'teki tek kuraldan
+               gelir, burada susturulunca klavyeyle gelen kullanıcı imlecin
+               hangi hücrede olduğunu göremiyordu. */
+            className="w-full rounded-[4px] border border-brand-ring bg-surface px-1 py-0.5 text-[12.5px] font-bold tracking-tight text-ink"
           />
         ) : cell.length > 1 ? (
           /* AYNI HÜCREDE İKİ TOPLANTI. Eskiden başlıklar "Celebrity ·
@@ -728,7 +735,7 @@ function TitleCell({
           onClick={(e) => { e.stopPropagation(); onOpen(meeting?.id); }}
           title="Toplantıyı aç — kişiler, konular, not"
           aria-label="Toplantıyı aç"
-          className="absolute right-0.5 top-0.5 z-10 grid size-5 place-items-center rounded-[4px] text-ink/35 opacity-0 transition-opacity duration-150 hover:bg-surface/70 hover:text-ink focus-visible:opacity-100 group-hover/cell:opacity-100"
+          className="absolute right-0.5 top-0.5 z-10 grid size-5 place-items-center rounded-[4px] text-ink/35 opacity-0 transition-[opacity,background-color,color] duration-150 hover:bg-surface/70 hover:text-ink focus-visible:opacity-100 group-hover/cell:opacity-100"
         >
           <Maximize2 size={11} aria-hidden />
         </button>

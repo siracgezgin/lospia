@@ -389,7 +389,7 @@ function PeoplePicker({
             return (
               <label
                 key={p.id}
-                className="flex min-h-10 items-center gap-2 px-3 py-1.5 text-[13.5px] cursor-pointer hover:bg-surface-hover transition-colors duration-150"
+                className="flex min-h-10 items-center gap-2 px-3 py-1.5 text-[13.5px] cursor-pointer hover:bg-surface-muted transition-colors duration-150"
               >
                 <input
                   type="checkbox"

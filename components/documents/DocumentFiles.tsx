@@ -175,7 +175,7 @@ export function DocumentFiles({
           <button
             onClick={() => setCwd(null)}
             className={cn(
-              "inline-flex items-center gap-1 rounded-md px-1.5 py-1 transition-colors",
+              "inline-flex items-center gap-1 rounded-md px-1.5 py-1 transition-colors duration-150 ease-standard",
               cwd === null ? "font-semibold text-ink" : "text-muted hover:text-ink",
             )}
           >
@@ -187,7 +187,7 @@ export function DocumentFiles({
               <button
                 onClick={() => setCwd(f.id)}
                 className={cn(
-                  "rounded-md px-1.5 py-1 transition-colors",
+                  "rounded-md px-1.5 py-1 transition-colors duration-150 ease-standard",
                   i === trail.length - 1 ? "font-semibold text-ink" : "text-muted hover:text-ink",
                 )}
               >
@@ -201,7 +201,7 @@ export function DocumentFiles({
           {isAdmin && (
             <button
               onClick={() => { setNaming(true); setRenaming(null); setFolderName(""); }}
-              className="inline-flex h-9 items-center gap-1.5 rounded-control border border-line bg-surface px-3 text-[13px] font-medium text-muted transition-[background-color,border-color,color,transform] duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
+              className="inline-flex h-9 items-center gap-1.5 rounded-control border border-line bg-surface px-3 text-[13px] font-medium text-muted transition-[background-color,border-color,color,transform] duration-150 ease-standard hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
             >
               <FolderPlus size={14} /> Klasör
             </button>
@@ -219,7 +219,7 @@ export function DocumentFiles({
               })
             }
             disabled={busy === "newdoc"}
-            className="inline-flex h-9 items-center gap-1.5 rounded-control border border-line bg-surface px-3 text-[13px] font-medium text-muted transition-[background-color,border-color,color,transform] duration-150 hover:border-brand hover:text-brand active:scale-[0.98] disabled:opacity-60"
+            className="inline-flex h-9 items-center gap-1.5 rounded-control border border-line bg-surface px-3 text-[13px] font-medium text-muted transition-[background-color,border-color,color,transform] duration-150 ease-standard hover:border-line-strong hover:bg-surface-muted hover:text-ink active:scale-[0.98] disabled:opacity-60"
           >
             {busy === "newdoc" ? <Loader2 size={14} className="animate-spin" /> : <FilePlus2 size={14} />}
             Yeni yazı
@@ -227,7 +227,7 @@ export function DocumentFiles({
           <button
             onClick={() => fileRef.current?.click()}
             disabled={busy === "upload"}
-            className="inline-flex h-9 items-center gap-1.5 rounded-control bg-brand px-3 text-[13px] font-medium text-white transition-colors hover:bg-brand-strong disabled:opacity-60"
+            className="inline-flex h-9 items-center gap-1.5 rounded-control bg-brand px-3 text-[13px] font-medium text-white transition-colors duration-150 ease-standard hover:bg-brand-strong disabled:opacity-60"
           >
             {busy === "upload" ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
             Dosya yükle
@@ -266,13 +266,13 @@ export function DocumentFiles({
               )
             }
             disabled={!folderName.trim() || busy === "folder"}
-            className="inline-flex h-9 items-center gap-1.5 rounded-control bg-brand px-3 text-[13px] font-medium text-white hover:bg-brand-strong disabled:opacity-60"
+            className="inline-flex h-9 items-center gap-1.5 rounded-control bg-brand px-3 text-[13px] font-medium text-white transition-colors duration-150 ease-standard hover:bg-brand-strong disabled:opacity-60"
           >
             {busy === "folder" ? <Loader2 size={14} className="animate-spin" /> : null} Kaydet
           </button>
           <button
             onClick={() => { setNaming(false); setRenaming(null); setFolderName(""); }}
-            className="h-9 rounded-control px-2 text-[13px] font-medium text-muted hover:text-ink"
+            className="h-9 rounded-control px-2 text-[13px] font-medium text-muted transition-colors duration-150 ease-standard hover:bg-surface-muted hover:text-ink"
           >
             İptal
           </button>
@@ -307,7 +307,7 @@ export function DocumentFiles({
                   <span className="absolute right-2 top-2 z-[3] flex items-center gap-0.5 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/tile:opacity-100">
                     <button
                       onClick={() => { setRenaming(f); setNaming(false); setFolderName(f.name); }}
-                      className="tap-target rounded-control bg-surface p-1.5 text-subtle shadow-card transition-colors hover:text-ink"
+                      className="tap-target rounded-control bg-surface p-1.5 text-subtle shadow-card transition-colors duration-150 ease-standard hover:text-ink"
                       title="Yeniden adlandır"
                       aria-label="Yeniden adlandır"
                     >
@@ -324,7 +324,7 @@ export function DocumentFiles({
                           }),
                         )
                       }
-                      className="tap-target rounded-control bg-surface p-1.5 text-subtle shadow-card transition-colors hover:text-ink"
+                      className="tap-target rounded-control bg-surface p-1.5 text-subtle shadow-card transition-colors duration-150 ease-standard hover:text-ink"
                       title={f.visibility === "admin" ? "Tüm ekibe aç" : "Yalnız yöneticiye kapat"}
                       aria-label={f.visibility === "admin" ? "Tüm ekibe aç" : "Yalnız yöneticiye kapat"}
                     >
@@ -336,7 +336,7 @@ export function DocumentFiles({
                         run(`d-${f.id}`, () => deleteFolder(f.id));
                       }}
                       disabled={busy === `d-${f.id}`}
-                      className="tap-target rounded-control bg-surface p-1.5 text-subtle shadow-card transition-colors hover:text-danger disabled:opacity-50"
+                      className="tap-target rounded-control bg-surface p-1.5 text-subtle shadow-card transition-colors duration-150 ease-standard hover:text-danger disabled:opacity-50"
                       title="Sil (yalnız boş klasör)"
                       aria-label="Sil (yalnız boş klasör)"
                     >
@@ -373,7 +373,7 @@ export function DocumentFiles({
                       run(`doc-${d.id}`, () => deleteOperationDocument(d.id));
                     }}
                     disabled={busy === `doc-${d.id}`}
-                    className="tap-target rounded-control bg-surface p-1.5 text-subtle shadow-card transition-colors hover:text-danger disabled:opacity-50"
+                    className="tap-target rounded-control bg-surface p-1.5 text-subtle shadow-card transition-colors duration-150 ease-standard hover:text-danger disabled:opacity-50"
                     title="Sil"
                       aria-label="Sil"
                   >
@@ -401,7 +401,7 @@ export function DocumentFiles({
                 <button
                   onClick={() => download(d.id)}
                   disabled={busy === `dl-${d.id}`}
-                  className="tap-target rounded-control bg-surface p-1.5 text-subtle shadow-card transition-colors hover:text-ink disabled:opacity-50"
+                  className="tap-target rounded-control bg-surface p-1.5 text-subtle shadow-card transition-colors duration-150 ease-standard hover:text-ink disabled:opacity-50"
                   title="İndir"
                       aria-label="İndir"
                 >
@@ -413,7 +413,7 @@ export function DocumentFiles({
                     run(`x-${d.id}`, () => deleteDocumentFile(d.id));
                   }}
                   disabled={busy === `x-${d.id}`}
-                  className="tap-target rounded-control bg-surface p-1.5 text-subtle shadow-card transition-colors hover:text-danger disabled:opacity-50"
+                  className="tap-target rounded-control bg-surface p-1.5 text-subtle shadow-card transition-colors duration-150 ease-standard hover:text-danger disabled:opacity-50"
                   title="Sil"
                 >
                   {busy === `x-${d.id}` ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}

@@ -220,7 +220,7 @@ function fromSheet(s: ProductionSheet): ProductionSheetInput {
 /** DownloadLink kendi <button>'ını çizer; Button'ın `secondary` görünümü
  *  sınıf olarak buraya taşınır ki üst çubuktaki düğmeler aynı boyda dursun. */
 const secondaryBtnCls =
-  "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-control border border-line bg-surface px-3.5 text-[13.5px] font-medium text-ink shadow-xs " +
+  "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-control border border-line bg-surface px-3.5 text-[13.5px] font-medium text-ink shadow-card " +
   "transition-[background-color,border-color,transform] duration-150 ease-standard hover:border-line-strong hover:bg-surface-muted active:scale-[0.98]";
 
 /** Bölüm eyebrow'u ve alan etiketi — föy boyunca TEK etiket dili. */
@@ -668,7 +668,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                seçeneklerin karşılığı yazıyor. Ok GLOBAL select kuralından
                gelir — burada ayrıca çizilmez. */
             <label
-              className="inline-flex h-9 shrink-0 items-center gap-2 rounded-control border border-line bg-surface pl-2.5 shadow-xs transition-[border-color,box-shadow] duration-150 focus-within:border-brand-ring focus-within:ring-2 focus-within:ring-brand-ring/40 hover:border-line-strong"
+              className="inline-flex h-9 shrink-0 items-center gap-2 rounded-control border border-line bg-surface pl-2.5 shadow-card transition-[border-color,box-shadow] duration-150 focus-within:border-brand-ring focus-within:ring-2 focus-within:ring-brand-ring/40 hover:border-line-strong"
               title="Föyün künye durumu — içeriğini değiştirmez"
             >
               <span className={cn(LABEL_CLS, "text-subtle")}>Durum</span>
@@ -840,7 +840,9 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                   "inline-flex h-10 items-center gap-1.5 border-b-2 px-3 text-[13.5px] transition-colors duration-150",
                   on
                     ? "border-brand font-semibold text-ink"
-                    : "border-transparent font-medium text-muted hover:border-line-strong hover:text-ink",
+                    /* Pasif sekmenin hover çizgisi HAİRLİNE: koyu çizgi
+                       aktif sekmenin brand çizgisini taklit ediyordu. */
+                    : "border-transparent font-medium text-muted hover:border-line hover:text-ink",
                 )}
               >
                 <t.icon size={14} aria-hidden />
@@ -1068,7 +1070,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               </tbody>
             </table>
           </div>
-          <Button variant="ghost" size="sm" onClick={addMeasurement} className="mt-2 -ml-2 text-brand hover:bg-brand-soft hover:text-brand-strong">
+          <Button variant="ghost" size="sm" onClick={addMeasurement} className="mt-2 -ml-2 text-brand hover:bg-surface-muted hover:text-brand-strong">
             <Plus size={13} aria-hidden /> Satır ekle
           </Button>
         </Section>
@@ -1153,7 +1155,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               </tbody>
             </table>
           </div>
-          <Button variant="ghost" size="sm" onClick={addDistRow} className="mt-2 -ml-2 text-brand hover:bg-brand-soft hover:text-brand-strong">
+          <Button variant="ghost" size="sm" onClick={addDistRow} className="mt-2 -ml-2 text-brand hover:bg-surface-muted hover:text-brand-strong">
             <Plus size={13} aria-hidden /> Satır ekle
           </Button>
         </Section>
@@ -1198,7 +1200,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               </tbody>
             </table>
           </div>
-          <Button variant="ghost" size="sm" onClick={addDelivered} className="mt-2 -ml-2 text-brand hover:bg-brand-soft hover:text-brand-strong">
+          <Button variant="ghost" size="sm" onClick={addDelivered} className="mt-2 -ml-2 text-brand hover:bg-surface-muted hover:text-brand-strong">
             <Plus size={13} aria-hidden /> Satır ekle
           </Button>
         </Section>

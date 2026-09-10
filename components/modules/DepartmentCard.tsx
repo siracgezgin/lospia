@@ -23,7 +23,10 @@ export function DepartmentCard({ department, activeCount, overdueCount, isAdmin 
   const links = department.links.filter((l) => !l.adminOnly || isAdmin);
 
   return (
-    <div className="relative flex flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-card transition-[box-shadow,transform,border-color] duration-200 ease-standard hover:-translate-y-px hover:border-line-strong hover:shadow-card-hover">
+    /* KART: hover'da yalnız gölge. Kart yükseliyor ve kenarlığı da
+       koyulaşıyordu; yükselti kutucuğa (TileGrid) ait bir harekettir, kart
+       yerinde durur. */
+    <div className="relative flex flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-card transition-shadow duration-[180ms] ease-standard hover:shadow-card-hover">
       {/* Left department colour strip (dot bg applied directly — no cn merge). */}
       <span className={`absolute left-0 top-0 h-full w-1.5 ${style.dot}`} aria-hidden />
 
@@ -40,7 +43,9 @@ export function DepartmentCard({ department, activeCount, overdueCount, isAdmin 
             {activeCount} aktif iş
           </span>
           {overdueCount > 0 && (
-            <span className="inline-flex items-center gap-1 rounded-md bg-[#fbe6e2] px-2 py-0.5 text-[11px] font-medium tabular-nums text-[#a83a2c]">
+            /* Renk token'dan: elle yazılmış iki hex fildişi temada sıcaklığını
+               kaybediyordu. */
+            <span className="inline-flex items-center gap-1 rounded-md bg-danger/10 px-2 py-0.5 text-[11px] font-medium tabular-nums text-danger">
               <Clock size={11} />
               {overdueCount} geciken
             </span>
@@ -53,7 +58,7 @@ export function DepartmentCard({ department, activeCount, overdueCount, isAdmin 
             <li key={`${department.key}-${link.label}`}>
               <Link
                 href={link.href}
-                className="group flex items-center justify-between rounded-lg px-2 py-1.5 -mx-1 text-[13px] text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
+                className="group flex items-center justify-between rounded-lg px-2 py-1.5 -mx-1 text-[13px] text-muted transition-colors duration-150 ease-standard hover:bg-surface-muted hover:text-ink"
               >
                 <span className="flex items-center gap-2 truncate">
                   <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", style.dot)} />

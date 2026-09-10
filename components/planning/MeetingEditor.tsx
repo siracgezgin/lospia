@@ -747,7 +747,7 @@ export function MeetingEditor({
               title={`Şerit: ${bandLabel || meta.label}`}
               className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-control bg-surface-muted px-2 text-[12.5px] font-medium text-muted"
             >
-              <span className={cn("h-2.5 w-2.5 rounded-full ring-1 ring-inset ring-black/10", meta.dot)} aria-hidden />
+              <span className={cn("h-2.5 w-2.5 rounded-full ring-1 ring-inset ring-ink/10", meta.dot)} aria-hidden />
               <span className="hidden sm:inline">{bandLabel || meta.label}</span>
             </span>
             <TextInput
@@ -961,7 +961,9 @@ export function MeetingEditor({
                       onClick={() => setExternalEmails((xs) => xs.filter((x) => x !== mail))}
                       aria-label={`${mail} adresini kaldır`}
                       title="Listeden kaldır"
-                      className="tap-target grid size-6 shrink-0 place-items-center rounded-control text-subtle transition-colors duration-150 hover:bg-surface hover:text-danger"
+                      /* Yıkıcı ikon düğmenin uygulamadaki dili: soluk kırmızı
+                         dolgu + kırmızı ikon (bkz. "Toplantıyı sil"). */
+                      className="tap-target grid size-6 shrink-0 place-items-center rounded-control text-subtle transition-colors duration-150 hover:bg-danger/10 hover:text-danger"
                     >
                       <X size={12} aria-hidden />
                     </button>

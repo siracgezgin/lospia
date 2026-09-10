@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils/cn";
-import { personStyles } from "@/lib/design/person-colors";
+import { inkOnSolid, personStyles } from "@/lib/design/person-colors";
 
 /**
  * KUTUCUK IZGARASI — uygulamanın TEK giriş deseni.
@@ -74,6 +74,10 @@ export function Tile({
   badge, iconBadge, active, compact, layout = "column", actions,
 }: TileProps) {
   const row = layout === "row";
+  /* Kutucuk gerçekten bir yere götürüyor mu? Hover dili yalnız o zaman açılır
+     (bkz. aşağıdaki TIKLANMAZ kart dalı): kalkan ama hiçbir şey yapmayan bir
+     kutucuk düğme sözü verip karşılığını vermez. */
+  const interactive = Boolean(href || onClick);
   const st = colorHex ? personStyles(colorHex) : null;
 
   const inner = (
@@ -117,7 +121,7 @@ export function Tile({
         style={
           st
             ? initials && !photoUrl
-              ? { backgroundColor: st.hex, color: "#fff", ["--tile-ring" as string]: st.hex + "59" }
+              ? { backgroundColor: st.hex, color: inkOnSolid(st.hex), ["--tile-ring" as string]: st.hex + "59" }
               : { backgroundColor: st.hex + "1A", color: st.hex, ["--tile-ring" as string]: st.hex + "59" }
             : undefined
         }
@@ -149,6 +153,9 @@ export function Tile({
           className={cn(
             "block truncate font-semibold tracking-tight text-ink",
             row ? "text-[13.5px]" : compact ? "text-[12px] leading-tight" : "text-[16px] sm:text-[18px]",
+            /* Hover'ın tek RENKLİ işareti başlıktır. Geçiş başlığın KENDİSİNE
+               yazılır: ebeveynin geçişi çocuğun renk değişimini taşımaz. */
+            interactive && "transition-colors duration-[180ms] ease-standard group-hover:text-brand",
           )}
           title={title}
         >
@@ -174,7 +181,7 @@ export function Tile({
     // w-full ŞART: <button>/<a> ızgara hücresini kendiliğinden doldurmuyor.
     // Kart içeriği kadar dar kalıyor, sarmalayıcıya göre konumlanan aksiyon
     // düğmeleri de karttan KOPUK duruyordu (2026-08-29 ekran görüntüsü).
-    "group relative flex w-full overflow-hidden border bg-surface shadow-card transition-[box-shadow,border-color] duration-150 ease-standard",
+    "group relative flex w-full overflow-hidden border bg-surface shadow-card",
     row
       ? "items-center gap-2.5 rounded-card px-3 py-2.5 text-left"
       : cn(
@@ -182,8 +189,16 @@ export function Tile({
           compact ? "rounded-card" : "rounded-card",
           compact ? "gap-1 px-1 pb-2 pt-2.5" : "gap-2.5 px-3 pb-5 pt-6 sm:gap-3 sm:px-4 sm:pb-6 sm:pt-8",
         ),
-    "hover:shadow-card-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring focus-visible:ring-offset-2",
-    !st && "border-line hover:border-line-strong",
+    /* Kutucuk, hareket etmesine izin verilen TEK yüzeydir (kart ve tablo satırı
+       yerinde durur). Lüks his RENKTEN değil IŞIKTAN gelir: zemin boyanmaz,
+       kutucuk kâğıttan bir piksel kalkar ve gölgesi büyür; basılınca yere geri
+       oturur, yani dokunuşun görünür bir karşılığı olur. */
+    interactive &&
+      "transition-[transform,box-shadow,border-color,color] duration-[180ms] ease-standard hover:-translate-y-px hover:shadow-card-hover active:translate-y-0 active:shadow-card",
+    "focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring focus-visible:ring-offset-2",
+    // Kimlik rengi taşıyan kutucukta kenarın rengi bilgidir; hover onu değiştirmez.
+    !st && "border-line",
+    !st && interactive && "hover:border-line-strong",
     active && "ring-2 ring-brand-ring",
   );
   const style = st ? { ...st.border, ...st.soft } : undefined;

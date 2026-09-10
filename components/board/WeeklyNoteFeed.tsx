@@ -93,7 +93,7 @@ function FeedCard({
 
   return (
     // Hover'da yalnız gölge; kart yerinden oynamaz (translate yok).
-    <div className="space-y-1.5 rounded-card border border-line bg-surface p-3 shadow-card transition-shadow duration-150 ease-standard hover:shadow-card-hover">
+    <div className="space-y-1.5 rounded-card border border-line bg-surface p-3 shadow-card transition-shadow duration-[180ms] ease-standard hover:shadow-card-hover">
       {/* Tek rozet: not türü */}
       <Badge size="xs" className={NOTE_TYPE_TONE[item.noteType]}>
         {NOTE_TYPE_LABELS[item.noteType]}

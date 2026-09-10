@@ -8,7 +8,7 @@ import { ASSIGNABLE_ROLE_OPTIONS } from "@/lib/utils/roles";
 import { Button } from "@/components/ui/Button";
 import { Field, FieldGrid, TextInput, SelectInput } from "@/components/ui/Field";
 import { cn } from "@/lib/utils/cn";
-import { PERSON_TONES } from "@/lib/design/person-colors";
+import { PERSON_TONES, inkOnSolid } from "@/lib/design/person-colors";
 import type { WorkspaceDepartment } from "@/types";
 
 interface Props {
@@ -190,7 +190,7 @@ export function CreateAccountPanel({ workspaceId, departments = [], takenColors 
                 )}
                 style={{ backgroundColor: t.hex }}
               >
-                {selected && <Check size={14} className="text-white" strokeWidth={3} aria-hidden />}
+                {selected && <Check size={14} strokeWidth={3} style={{ color: inkOnSolid(t.hex) }} aria-hidden />}
               </button>
             );
           })}

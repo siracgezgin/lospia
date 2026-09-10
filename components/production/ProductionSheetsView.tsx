@@ -117,7 +117,7 @@ export function ProductionSheetsView({ sheets, isAdmin }: Props) {
                 href="/production/export-all"
                 what="Tüm föyler"
                 title="Tüm föyleri tek Excel dosyası olarak indir (her föy ayrı sekme)"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-muted transition-colors hover:bg-surface-muted hover:text-ink"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-muted transition-colors duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink"
               >
                 <FileSpreadsheet size={15} />
                 Tümünü indir
@@ -182,7 +182,10 @@ export function ProductionSheetsView({ sheets, isAdmin }: Props) {
           {filtered.map((s) => {
             const cover = coverImage(s);
             return (
-              <div key={s.id} className="group relative flex flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-card transition-shadow hover:shadow-pop">
+              /* KART: tek kanal, yalnız gölge. Yarıçap Koleksiyon'daki föy
+                 kartıyla aynı — aynı nesne iki ekranda iki köşe yarıçapıyla
+                 duruyordu. */
+              <div key={s.id} className="group relative flex flex-col overflow-hidden rounded-card border border-line bg-surface shadow-card transition-shadow duration-[180ms] ease-standard hover:shadow-card-hover">
                 <Link href={`/production/${s.id}`} className="flex min-w-0 flex-1 flex-col">
                   <div className="relative aspect-[3/4] w-full overflow-hidden bg-surface-muted">
                     {cover ? (
@@ -190,7 +193,10 @@ export function ProductionSheetsView({ sheets, isAdmin }: Props) {
                       <img
                         src={cover}
                         alt=""
-                        className="h-full w-full object-cover transition-transform duration-300 ease-standard group-hover:scale-[1.03]"
+                        /* Fotoğraf hover'da BÜYÜMEZ: kart zaten gölgeyle
+                           yanıt veriyor, ikinci hareket kırpma sınırında
+                           titreme yapıyordu. */
+                        className="h-full w-full object-cover"
                       />
                     ) : (
                       <div className="grid h-full w-full place-items-center text-subtle">
@@ -218,7 +224,7 @@ export function ProductionSheetsView({ sheets, isAdmin }: Props) {
                 </Link>
 
                 {/* İndir / arşivle — fotoğrafın üstünde, yalnız fare gelince */}
-                <div className="absolute right-2 top-2 flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+                <div className="absolute right-2 top-2 flex items-center gap-1 transition-opacity duration-150 pointer-fine:opacity-0 pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100">
                   <DownloadLink
                     href={`/production/${s.id}/export`}
                     what={`“${s.title}” föyünün Excel dosyası`}

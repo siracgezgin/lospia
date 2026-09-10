@@ -105,7 +105,7 @@ export default async function PersonReportPage({
           </p>
           <Link
             href="/dashboard"
-            className="mt-4 inline-flex h-9 items-center rounded-control border border-line bg-surface px-3.5 text-[13.5px] font-medium text-ink transition-colors duration-150 hover:bg-surface-hover pointer-coarse:h-11"
+            className="mt-4 inline-flex h-9 items-center rounded-control border border-line bg-surface px-3.5 text-[13.5px] font-medium text-ink transition-colors duration-150 hover:border-line-strong hover:bg-surface-muted pointer-coarse:h-11"
           >
             Reports&apos;a dön
           </Link>

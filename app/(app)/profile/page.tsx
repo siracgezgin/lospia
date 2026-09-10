@@ -213,9 +213,11 @@ function Shortcut({ href, icon: Icon, label }: { href: string; icon: LucideIcon;
   return (
     <Link
       href={href}
-      className="flex items-center gap-2.5 px-5 py-2.5 text-[13.5px] text-muted transition-colors duration-150 hover:bg-surface-hover hover:text-ink"
+      /* Bu bir gezinme listesi, veri satırı değil: menü satırı diliyle
+         durur. Zemin brand-soft OLMAZ — o renk seçili öğenin. */
+      className="group flex items-center gap-2.5 px-5 py-2.5 text-[13.5px] text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
     >
-      <Icon size={15} className="shrink-0 text-subtle" aria-hidden />
+      <Icon size={15} className="shrink-0 text-subtle transition-colors duration-150 group-hover:text-brand" aria-hidden />
       {label}
     </Link>
   );

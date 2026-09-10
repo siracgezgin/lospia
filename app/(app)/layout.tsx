@@ -207,7 +207,7 @@ export default async function AppLayout({
                 <form action="/api/auth/signout" method="post" className="mt-5">
                   <button
                     type="submit"
-                    className="inline-flex h-9 items-center rounded-control border border-line bg-surface px-3.5 text-[13.5px] font-medium text-ink shadow-xs transition-colors duration-150 hover:bg-surface-muted"
+                    className="inline-flex h-9 items-center rounded-control border border-line bg-surface px-3.5 text-[13.5px] font-medium text-ink shadow-card transition-colors duration-150 hover:border-line-strong hover:bg-surface-muted"
                   >
                     Çıkış yap
                   </button>

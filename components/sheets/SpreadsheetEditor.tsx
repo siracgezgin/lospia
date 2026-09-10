@@ -969,7 +969,9 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                 onContextMenu={(e) => { e.preventDefault(); setSel({ r1: 0, c1: c, r2: sheet.rows - 1, c2: c }); setMenu({ x: e.clientX, y: e.clientY, kind: "col", r: 0, c }); }}
                 className={cn(
                   "relative shrink-0 cursor-pointer select-none border-b border-r border-line-strong text-center text-[12px] font-semibold tabular-nums text-muted",
-                  c >= selN.c1 && c <= selN.c2 ? "bg-brand-soft text-brand-strong" : "bg-surface-muted",
+                  c >= selN.c1 && c <= selN.c2
+                    ? "bg-brand-soft text-brand-strong"
+                    : "bg-surface-muted transition-colors duration-150 ease-standard hover:bg-surface-sunken hover:text-ink",
                 )}
                 style={{ width: colWidth(sheet, c), height: HEAD_H, lineHeight: `${HEAD_H}px` }}
                 title={`${colName(c)} sütunu — sağ tık: ekle / sil`}
@@ -995,7 +997,9 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                   onContextMenu={(e) => { e.preventDefault(); setSel({ r1: r, c1: 0, r2: r, c2: sheet.cols - 1 }); setMenu({ x: e.clientX, y: e.clientY, kind: "row", r, c: 0 }); }}
                   className={cn(
                     "sticky left-0 z-10 shrink-0 cursor-pointer select-none border-b border-r border-line text-center text-[12px] tabular-nums",
-                    r >= selN.r1 && r <= selN.r2 ? "bg-brand-soft font-semibold text-brand-strong" : "bg-surface-muted text-subtle",
+                    r >= selN.r1 && r <= selN.r2
+                      ? "bg-brand-soft font-semibold text-brand-strong"
+                      : "bg-surface-muted text-subtle transition-colors duration-150 ease-standard hover:bg-surface-sunken hover:text-muted",
                   )}
                   style={{ width: GUTTER_W, height: rh, lineHeight: `${rh - 1}px` }}
                   title="Sağ tık: satır ekle / sil"
@@ -1239,7 +1243,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
               key={s.id}
               className={cn(
                 "group inline-flex h-7 shrink-0 items-center gap-1 rounded-control pl-2.5 pr-1 text-[12.5px] transition-colors duration-150",
-                on ? "bg-surface font-semibold text-ink shadow-xs ring-1 ring-line" : "text-muted hover:bg-surface/70 hover:text-ink",
+                on ? "bg-surface font-semibold text-ink shadow-card ring-1 ring-line" : "text-muted hover:bg-surface/70 hover:text-ink",
               )}
             >
               <button type="button" aria-current={on ? "true" : undefined} onClick={() => selectSheet(i)} onDoubleClick={() => !readOnly && setRenaming({ index: i, draft: s.name })} className="max-w-40 truncate">

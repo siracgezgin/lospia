@@ -48,7 +48,7 @@ export default async function SettingsPage() {
           <p className="text-[13.5px] font-medium text-ink">Bu sayfayı yalnız yöneticiler düzenleyebilir.</p>
           <p className="mt-1 text-[13px] leading-relaxed text-muted">
             Adınızı, ünvanınızı ve fotoğrafınızı{" "}
-            <Link href="/profile" className="font-medium text-brand hover:text-brand-strong">Profil</Link>
+            <Link href="/profile" className="font-medium text-brand transition-colors duration-150 hover:text-brand-strong">Profil</Link>
             {" "}sayfasından değiştirebilirsiniz.
           </p>
         </div>

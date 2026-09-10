@@ -272,7 +272,7 @@ export function SheetFormModal({
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-control border border-dashed border-line-strong bg-surface-muted px-3 text-[13px] text-muted transition-colors duration-150 hover:border-brand hover:bg-brand-soft hover:text-brand active:scale-[0.99]"
+                className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-control border border-dashed border-line-strong bg-surface-muted px-3 text-[13px] text-muted transition-colors duration-150 hover:border-line-strong hover:bg-surface-sunken hover:text-ink"
               >
                 <FileUp size={14} aria-hidden />
                 CSV dosyası seç — Excel&apos;deki düzen tabloya aktarılır

@@ -128,10 +128,12 @@ export function PlanningMonthView({
           </button>
         </div>
         {!isCurrentMonth && (
+          /* Hafta çubuğundaki "Bu haftaya dön" ile AYNI düğme: birincil dolu
+             marka, hover tek kanal (bir kademe koyu). */
           <button
             type="button"
             onClick={() => router.push(`/planning?v=ay&d=${todayIso.slice(0, 8)}01`)}
-            className="anim-fade-down tap-target inline-flex h-9 shrink-0 items-center gap-1.5 rounded-control border border-brand-ring bg-brand-soft px-3 text-[13px] font-medium text-brand-strong transition-colors duration-150 hover:bg-brand hover:text-white"
+            className="anim-fade-down tap-target inline-flex h-9 shrink-0 items-center gap-1.5 rounded-control border border-brand bg-brand px-3 text-[13px] font-medium text-white transition-colors duration-150 hover:border-brand-strong hover:bg-brand-strong"
           >
             <CalendarCheck size={14} aria-hidden /> Bu aya dön
           </button>
@@ -160,7 +162,9 @@ export function PlanningMonthView({
                   onClick={() => setOpenDay(iso)}
                   title={`${format(parseISO(iso), "d MMMM EEEE", { locale: tr })} — günü aç`}
                   className={cn(
-                    "flex min-h-[92px] flex-col items-stretch gap-0.5 border-b border-r border-hairline p-1.5 text-left transition-colors duration-150 hover:bg-surface-muted",
+                    /* Beyaz kartın İÇİNDEKİ tablo hücresi: hover tek kanal ve
+                       tablo satırının zemini (surface-hover). */
+                    "flex min-h-[92px] flex-col items-stretch gap-0.5 border-b border-r border-hairline p-1.5 text-left transition-colors duration-150 hover:bg-surface-hover",
                     !inMonth && "bg-surface-sunken/40 opacity-55",
                   )}
                 >

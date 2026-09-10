@@ -376,7 +376,10 @@ function ColumnMenu({ table }: { table: ReactTableInstance<Task> }) {
           {toggleable.map((col) => (
             <label
               key={col.id}
-              className="flex items-center gap-2 px-3 py-1.5 text-[13.5px] cursor-pointer hover:bg-surface-hover transition-colors duration-150"
+              /* Menü satırı: zemin `surface-muted` (tablo satırının
+                 `surface-hover`u değil) — açılır listeler uygulamanın her
+                 yerinde aynı tonla vurgulanır. */
+              className="flex items-center gap-2 px-3 py-1.5 text-[13.5px] cursor-pointer text-ink transition-colors duration-150 hover:bg-surface-muted"
             >
               <input
                 type="checkbox"
@@ -542,7 +545,10 @@ function MobileTaskCard({
     <Link
       prefetch={false}
       href={`/tasks/${task.id}`}
-      className="block rounded-card border border-line bg-surface p-3.5 shadow-card active:bg-surface-hover transition-colors duration-150"
+      /* KART kuralı: yükselti yalnız GÖLGE ile anlatılır; zemin ve kenarlık
+         sabit kalır. Dokunmatikte hover yok, o yüzden basılı hâli ayrıca
+         zeminle geri bildirim verir. */
+      className="block rounded-card border border-line bg-surface p-3.5 shadow-card transition-[box-shadow,background-color] duration-[180ms] hover:shadow-card-hover active:bg-surface-hover"
     >
       <div className="flex items-start justify-between gap-2">
         <p className={cn(
@@ -1169,7 +1175,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
                   aria-label={on ? `${p.name} süzgecini kaldır` : `${p.name} kişisinin işleri`}
                   title={p.name}
                   className={cn(
-                    "tap-target grid size-9 shrink-0 place-items-center rounded-full transition-[background-color,box-shadow] duration-150 ease-standard",
+                    "tap-target grid size-9 shrink-0 place-items-center rounded-full transition-[background-color,box-shadow,opacity] duration-150 ease-standard",
                     on ? "ring-2 ring-brand ring-offset-1 ring-offset-surface" : "hover:bg-surface-muted",
                     /* Seçili olmayan yüzler bir tık geride durur: satırın ana
                        işi süzmek, yüzler bir gösterge panosu değil. */
@@ -1275,7 +1281,9 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
           <span className="text-[13px] text-brand-strong">
             <span className="font-semibold">{personDisplayName ?? "Seçili kişi"}</span> ile ilişkili görevler
           </span>
-          <Button variant="ghost" size="sm" onClick={() => handlePersonChange("")} className="text-brand hover:text-brand-strong">
+          {/* Hayalet düğme hover'ı tek kanaldır (zemin + metin) — brand tonu
+              yalnız DİNLENİRKEN, şeridin yazısıyla aynı renkte durur. */}
+          <Button variant="ghost" size="sm" onClick={() => handlePersonChange("")} className="text-brand-strong">
             Filtreyi temizle
           </Button>
         </div>

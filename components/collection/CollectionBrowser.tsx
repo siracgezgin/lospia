@@ -80,7 +80,7 @@ function FALLBACK_IDENTITY(key: string): { hex: string; icon: typeof Shirt } {
  *  görünümü buraya sınıf olarak taşınır ki araç çubuğundaki düğmeler aynı
  *  boyda ve aynı çerçevede dursun. */
 const secondaryBtnCls =
-  "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-control border border-line bg-surface px-3.5 text-[13.5px] font-medium text-ink shadow-xs " +
+  "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-control border border-line bg-surface px-3.5 text-[13.5px] font-medium text-ink shadow-card " +
   "transition-[background-color,border-color,color,transform] duration-150 ease-standard hover:border-line-strong hover:bg-surface-muted active:scale-[0.98]";
 
 function norm(s: string): string {
@@ -309,7 +309,7 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
             {selCat && selCat !== UNCAT && (
               <Link
                 href={`/production/new?kategori=${selCat}${selSub ? `&alt=${selSub}` : ""}`}
-                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-control bg-brand px-3.5 text-[13.5px] font-medium text-white shadow-xs transition-[background-color,transform] duration-150 ease-standard hover:bg-brand-strong active:scale-[0.98]"
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-control bg-brand px-3.5 text-[13.5px] font-medium text-white shadow-card transition-[background-color,transform] duration-150 ease-standard hover:bg-brand-strong active:scale-[0.98]"
               >
                 {/* Sadece "Yeni föy". Kategori adı zaten başlıkta yazıyor;
                     düğmeye de eklemek ("One-of-a-Kind'a Yeni föy") satırı
@@ -408,13 +408,16 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
               <button
                 onClick={() => setCatEditor("new")}
                 /* Yarıçap komşu Tile ile AYNI (rounded-card) — ızgarada iki
-                   farklı köşe yan yana durmasın. Hover'da yer değiştirme yok. */
-                className="group flex w-full flex-col items-center justify-center gap-2.5 rounded-card border-2 border-dashed border-line px-3 pb-5 pt-6 text-center sm:gap-3 sm:px-4 sm:pb-6 sm:pt-8 transition-[border-color,background-color] duration-150 ease-standard hover:border-brand-ring hover:bg-brand-soft/30"
+                   farklı köşe yan yana durmasın. Hareket de komşu kutucukla
+                   aynı: kutu bir piksel yükselir, kenarı koyulaşır. ZEMİN
+                   boyanmaz — brand-soft SEÇİLİ öğenin rengidir; hover onu
+                   taklit ederse "hangisi seçili" sorusu kayboluyor. */
+                className="group flex w-full flex-col items-center justify-center gap-2.5 rounded-card border-2 border-dashed border-line px-3 pb-5 pt-6 text-center sm:gap-3 sm:px-4 sm:pb-6 sm:pt-8 transition-[transform,box-shadow,border-color,color] duration-[180ms] ease-standard hover:-translate-y-px hover:border-line-strong hover:shadow-card-hover active:translate-y-0 active:shadow-none"
               >
-                <span className="grid size-16 shrink-0 place-items-center rounded-full bg-surface-sunken text-subtle transition-colors duration-150 group-hover:bg-brand-soft group-hover:text-brand sm:size-24">
+                <span className="grid size-16 shrink-0 place-items-center rounded-full bg-surface-sunken text-subtle transition-colors duration-150 group-hover:text-brand sm:size-24">
                   <FolderPlus size={30} strokeWidth={1.6} className="sm:size-[34px]" />
                 </span>
-                <span className="block text-[16px] font-semibold tracking-tight text-muted transition-colors duration-150 group-hover:text-brand-strong sm:text-[19px]">
+                <span className="block text-[16px] font-semibold tracking-tight text-muted transition-colors duration-150 group-hover:text-brand sm:text-[19px]">
                   Kategori ekle
                 </span>
               </button>
@@ -512,7 +515,10 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
                 // sayfayı istemcide yeniden çizdiriyordu (donma şikâyeti).
                 <div
                   key={s.id}
-                  className="group relative flex flex-col overflow-hidden rounded-card border border-line bg-surface shadow-card transition-[box-shadow,border-color] duration-150 ease-standard hover:border-line-strong hover:shadow-card-hover"
+                  /* KART: hover'da YALNIZ gölge derinleşir. Kenarlık da
+                     değişince kutu iki kanaldan birden oynuyor, ızgara fare
+                     gezdikçe titriyordu. */
+                  className="group relative flex flex-col overflow-hidden rounded-card border border-line bg-surface shadow-card transition-shadow duration-[180ms] ease-standard hover:shadow-card-hover"
                 >
                   <Link
                     href={`/production/${s.id}`}

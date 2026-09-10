@@ -5,8 +5,11 @@ import { cn } from "@/lib/utils/cn";
  *
  * Kart yalnız gerçek bir NESNE / seçim / bağımsız bilgi grubu için; sayfa
  * bölümleri kart değildir (zemin → yüzey → ince çizgi → içerik). Kart içine
- * kart koyma. `hoverable` tıklanabilir kartta gölge + kenarlık değişimi verir;
- * hareket yok — hover sırasında yer değiştiren yüzey gözü yorar.
+ * kart koyma. `hoverable` tıklanabilir kartta YALNIZ gölgeyi büyütür: kart
+ * kâğıttan bir kademe yükselir. Kenarlık değişmez — kimlik rengi taşıyan
+ * kartlarda (kişi, departman, durum) kenarın rengi BİLGİDİR, hover onu
+ * yutmamalı. Hareket de yok: yer değiştiren yüzey hem gözü yorar hem dnd-kit'in
+ * satır içi transform'unu ezer. Yükselen tek yüzey kutucuktur (ui/TileGrid).
  */
 export function Card({
   hoverable = false,
@@ -18,8 +21,7 @@ export function Card({
     <div
       className={cn(
         "rounded-card border border-line bg-surface shadow-card",
-        hoverable &&
-          "transition-[box-shadow,border-color] duration-150 ease-standard hover:border-line-strong hover:shadow-card-hover",
+        hoverable && "transition-shadow duration-[180ms] ease-standard hover:shadow-card-hover",
         className,
       )}
       {...rest}

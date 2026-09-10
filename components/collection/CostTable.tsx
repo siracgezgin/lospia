@@ -126,7 +126,7 @@ export function CostTable({ rows }: Props) {
       <div className="mb-4 flex items-center gap-1 border-b border-line">
         <Link
           href="/collection"
-          className="flex items-center gap-1.5 border-b-2 border-transparent px-3 py-2 text-[13px] font-medium text-muted transition-colors duration-150 hover:border-line-strong hover:text-ink"
+          className="flex items-center gap-1.5 border-b-2 border-transparent px-3 py-2 text-[13px] font-medium text-muted transition-colors duration-150 hover:border-line hover:text-ink"
         >
           <ClipboardList size={15} /> Üretim Föyleri
         </Link>

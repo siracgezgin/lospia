@@ -20,6 +20,7 @@
 
 import Image from "next/image";
 import { cn } from "@/lib/utils/cn";
+import { inkOnSolid } from "@/lib/design/person-colors";
 import { getPersonInitials } from "@/lib/utils/person-display";
 
 /** "2xs" yalnız KİMLİK İŞARETİ içindir: kartın köşesinde "bunu kim yaptı"
@@ -81,11 +82,23 @@ export function PersonAvatar({
       title={title ?? name}
       aria-hidden
       className={cn(
-        "grid select-none place-items-center font-semibold tracking-tight text-white",
+        "grid select-none place-items-center font-semibold tracking-tight",
         shared,
-        !colorHex && "bg-[#7b8494]",
+        /* Baş harflerin rengi SABİT DEĞİL, zemine göre ölçülür: palette beyaz
+           metin için fazla açık dört ton var (Turuncu 3.18, Altın 2.85,
+           Zeytin 3.48, Turkuaz 3.54) ve baş harfler 8.5–13px, yani "büyük
+           metin" istisnasına girmiyorlar. inkOnSolid() kimliğe dokunmadan
+           yalnız üstteki mürekkebi seçer.
+
+           Rengi olmayan kişi: sert kodlanmış #7b8494 SOĞUK bir arduvazdı ve
+           fildişi kâğıt üzerinde tek yabancı nötr olarak duruyordu. Token'a
+           çevrildi — `bg-subtle` mürekkep ailesinden gelir ve beyaz baş harf
+           üstünde okunur kalır (5.3:1). */
+        !colorHex && "bg-subtle text-white",
       )}
-      style={colorHex ? { backgroundColor: colorHex } : undefined}
+      style={
+        colorHex ? { backgroundColor: colorHex, color: inkOnSolid(colorHex) } : undefined
+      }
     >
       {getPersonInitials(name)}
     </span>

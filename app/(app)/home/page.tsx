@@ -382,13 +382,13 @@ export default async function HomePage() {
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
             <Link
               href="/board"
-              className="inline-flex h-9 items-center rounded-control border border-line bg-surface px-3.5 text-[13.5px] font-medium text-ink transition-colors duration-150 hover:bg-surface-hover pointer-coarse:h-11"
+              className="inline-flex h-9 items-center rounded-control border border-line bg-surface px-3.5 text-[13.5px] font-medium text-ink transition-colors duration-150 hover:border-line-strong hover:bg-surface-muted pointer-coarse:h-11"
             >
               Pano&apos;ya git
             </Link>
             <Link
               href="/planning"
-              className="inline-flex h-9 items-center rounded-control border border-line bg-surface px-3.5 text-[13.5px] font-medium text-ink transition-colors duration-150 hover:bg-surface-hover pointer-coarse:h-11"
+              className="inline-flex h-9 items-center rounded-control border border-line bg-surface px-3.5 text-[13.5px] font-medium text-ink transition-colors duration-150 hover:border-line-strong hover:bg-surface-muted pointer-coarse:h-11"
             >
               Calendar&apos;ı aç
             </Link>
@@ -520,9 +520,12 @@ function TaskRow({ task, overdue = false }: { task: MyTask; overdue?: boolean })
     <li>
       <Link
         href={`/tasks/${task.id}`}
-        className="group -mx-2 flex items-center gap-3 rounded-lg px-2 py-2 transition-colors duration-150 hover:bg-surface-hover"
+        /* Kart İÇİNDEKİ satır tek kanaldan konuşur: yalnız zemin. Başlık da
+           renk değiştirince aynı şey iki kez söyleniyor ve satır üstünde
+           duruldukça "tıklanmış" gibi okunuyordu. */
+        className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2 transition-colors duration-150 hover:bg-surface-hover"
       >
-        <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-ink transition-colors duration-150 group-hover:text-brand-strong">
+        <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-ink">
           {task.title}
         </span>
         {/* Acil bir DURUM değil, bir uyarı — tek rozet kuralı. */}
@@ -564,7 +567,7 @@ function MoreLink({ href }: { href: string }) {
   return (
     <Link
       href={href}
-      className="mt-1 flex min-h-9 items-center justify-center rounded-lg py-1.5 text-center text-[12.5px] font-medium text-brand transition-colors duration-150 hover:bg-surface-hover hover:text-brand-strong pointer-coarse:min-h-11"
+      className="mt-1 flex min-h-9 items-center justify-center rounded-lg py-1.5 text-center text-[12.5px] font-medium text-brand transition-colors duration-150 hover:bg-surface-hover pointer-coarse:min-h-11"
     >
       Kalanları listede gör
     </Link>

@@ -224,7 +224,7 @@ export function CollectionViewer({ isAdmin }: Props) {
                   </tr>
                 ) : (
                   shownRows.map((row, ri) => (
-                    <tr key={ri} className="hover:bg-surface-hover">
+                    <tr key={ri} className="transition-colors duration-150 hover:bg-surface-hover">
                       {row.map((cell, ci) => (
                         <td
                           key={ci}

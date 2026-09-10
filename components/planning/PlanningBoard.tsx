@@ -182,10 +182,16 @@ export function PlanningBoard({
         </div>
 
         {!isCurrentWeek && (
+          /* ÇUBUĞUN TEK BİRİNCİL EYLEMİ. Düğme brand-soft zeminde duruyordu:
+             brand-soft SEÇİLİ öğenin dilidir (ölçek anahtarı onu kullanıyor),
+             burada "seçili bir şey" gibi okunuyordu. Üstelik hover'da zemin ve
+             metin birlikte dönüyor (soft → dolu marka, koyu yazı → beyaz), yani
+             tek bir hareket iki kanalı birden çeviriyordu. Artık birincil
+             düğmenin kuralı: dolu marka, hover yalnız bir kademe koyulaşır. */
           <button
             type="button"
             onClick={() => gotoWeek(format(new Date(), "yyyy-MM-dd"))}
-            className="anim-fade-down tap-target inline-flex h-9 shrink-0 items-center gap-1.5 rounded-control border border-brand-ring bg-brand-soft px-3 text-[13px] font-medium text-brand-strong transition-colors duration-150 hover:bg-brand hover:text-white"
+            className="anim-fade-down tap-target inline-flex h-9 shrink-0 items-center gap-1.5 rounded-control border border-brand bg-brand px-3 text-[13px] font-medium text-white transition-colors duration-150 hover:border-brand-strong hover:bg-brand-strong"
           >
             <CalendarCheck size={14} aria-hidden />
             Bu haftaya dön

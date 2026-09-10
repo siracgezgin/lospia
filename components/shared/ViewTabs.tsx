@@ -81,7 +81,7 @@ interface Props {
 const BASE_TAB =
   "inline-flex items-center gap-1.5 rounded-control px-3 py-1.5 min-h-10 md:min-h-0 md:h-8 text-[13.5px] font-medium whitespace-nowrap border " +
   "transition-[background-color,border-color,color,box-shadow,transform] duration-150 ease-standard active:scale-[0.98]";
-const ACTIVE_TAB = "bg-brand-soft text-brand-strong border-brand-ring shadow-xs";
+const ACTIVE_TAB = "bg-brand-soft text-brand-strong border-brand-ring shadow-card";
 const INACTIVE_TAB =
   "text-muted border-transparent hover:bg-surface-hover hover:text-ink";
 

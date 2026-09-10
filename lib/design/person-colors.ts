@@ -67,37 +67,43 @@ export type PersonTone = {
  * On iki ton. İlk DOKUZU birbirine hiç benzemez (kırmızı, turuncu, altın,
  * zeytin, turkuaz, mavi, mor, magenta, kurşuni) ve otomatik atama önce onları
  * tüketir; son üçü dokuzu aşan ekipler için yedektir.
+ *
+ * FİLDİŞİ KALİBRASYONU (2026-09-10): soft/border/text/ring tonları beyaza göre
+ * değil kanvasa (#efe9de) göre kuruldu, yani hepsinde kâğıdın sıcaklığı var —
+ * soğuk pastel sıcak kâğıt üstünde plastik okunuyordu. hex/solid/bar/accent
+ * KİMLİĞİN KENDİSİ olduğu için dokunulmadı. Ayırt edilebilirlik düşmedi, arttı:
+ * ilk dokuzun en yakın iki zemini dE 2.73 → 4.33.
  */
 export const PERSON_TONES: PersonTone[] = [
   { key: "crimson", label: "Kırmızı",  hex: "#d23320",
-    soft: "bg-[#fdeae7]", solid: "bg-[#d23320]", border: "border-[#f1c3bb]", text: "text-[#971f12]", bar: "bg-[#d23320]", ring: "ring-[#f1c3bb]", accent: "border-l-[#d23320]" },
+    soft: "bg-[#fee7dd]", solid: "bg-[#d23320]", border: "border-[#f1c4bc]", text: "text-[#8f2415]", bar: "bg-[#d23320]", ring: "ring-[#f1c4bc]", accent: "border-l-[#d23320]" },
   { key: "orange",  label: "Turuncu",  hex: "#df7314",
-    soft: "bg-[#fdf0e3]", solid: "bg-[#df7314]", border: "border-[#f6d3b2]", text: "text-[#964b0c]", bar: "bg-[#df7314]", ring: "ring-[#f6d3b2]", accent: "border-l-[#df7314]" },
+    soft: "bg-[#feebd9]", solid: "bg-[#df7314]", border: "border-[#f8d1b2]", text: "text-[#8c4a0c]", bar: "bg-[#df7314]", ring: "ring-[#f8d1b2]", accent: "border-l-[#df7314]" },
   { key: "gold",    label: "Altın",    hex: "#c98e20",
-    soft: "bg-[#fbf2e2]", solid: "bg-[#c98e20]", border: "border-[#eedfc0]", text: "text-[#8a5e14]", bar: "bg-[#c98e20]", ring: "ring-[#eedfc0]", accent: "border-l-[#c98e20]" },
+    soft: "bg-[#fef2dc]", solid: "bg-[#c98e20]", border: "border-[#f3dfbd]", text: "text-[#7d5a12]", bar: "bg-[#c98e20]", ring: "ring-[#f3dfbd]", accent: "border-l-[#c98e20]" },
   { key: "olive",   label: "Zeytin",   hex: "#998a2e",
-    soft: "bg-[#f4f1e2]", solid: "bg-[#998a2e]", border: "border-[#ded5b1]", text: "text-[#675c16]", bar: "bg-[#998a2e]", ring: "ring-[#ded5b1]", accent: "border-l-[#998a2e]" },
+    soft: "bg-[#f3f1d3]", solid: "bg-[#998a2e]", border: "border-[#d8d8b1]", text: "text-[#575014]", bar: "bg-[#998a2e]", ring: "ring-[#d8d8b1]", accent: "border-l-[#998a2e]" },
   { key: "teal",    label: "Turkuaz",  hex: "#1796a4",
-    soft: "bg-[#e6f6f7]", solid: "bg-[#1796a4]", border: "border-[#c2e6ea]", text: "text-[#11707a]", bar: "bg-[#1796a4]", ring: "ring-[#c2e6ea]", accent: "border-l-[#1796a4]" },
+    soft: "bg-[#e5f6f5]", solid: "bg-[#1796a4]", border: "border-[#c3e5ea]", text: "text-[#0d6570]", bar: "bg-[#1796a4]", ring: "ring-[#c3e5ea]", accent: "border-l-[#1796a4]" },
   { key: "blue",    label: "Mavi",     hex: "#2563c9",
-    soft: "bg-[#e8f1fd]", solid: "bg-[#2563c9]", border: "border-[#c4daf6]", text: "text-[#1a4889]", bar: "bg-[#2563c9]", ring: "ring-[#c4daf6]", accent: "border-l-[#2563c9]" },
+    soft: "bg-[#ebf1f8]", solid: "bg-[#2563c9]", border: "border-[#c8d9ef]", text: "text-[#1a4889]", bar: "bg-[#2563c9]", ring: "ring-[#c8d9ef]", accent: "border-l-[#2563c9]" },
   { key: "violet",  label: "Mor",      hex: "#7c3aed",
-    soft: "bg-[#f1ecfc]", solid: "bg-[#7c3aed]", border: "border-[#d7c8f3]", text: "text-[#5325a3]", bar: "bg-[#7c3aed]", ring: "ring-[#d7c8f3]", accent: "border-l-[#7c3aed]" },
+    soft: "bg-[#f7edf6]", solid: "bg-[#7c3aed]", border: "border-[#d8cbe7]", text: "text-[#5325a3]", bar: "bg-[#7c3aed]", ring: "ring-[#d8cbe7]", accent: "border-l-[#7c3aed]" },
   { key: "magenta", label: "Magenta",  hex: "#cc2e93",
-    soft: "bg-[#fce9f3]", solid: "bg-[#cc2e93]", border: "border-[#f3c4e0]", text: "text-[#9a216c]", bar: "bg-[#cc2e93]", ring: "ring-[#f3c4e0]", accent: "border-l-[#cc2e93]" },
+    soft: "bg-[#fee6ed]", solid: "bg-[#cc2e93]", border: "border-[#eec7dd]", text: "text-[#9a216c]", bar: "bg-[#cc2e93]", ring: "ring-[#eec7dd]", accent: "border-l-[#cc2e93]" },
   { key: "slate",   label: "Kurşuni",  hex: "#5b6e8a",
-    soft: "bg-[#eff2f6]", solid: "bg-[#5b6e8a]", border: "border-[#dee4ec]", text: "text-[#43526b]", bar: "bg-[#5b6e8a]", ring: "ring-[#dee4ec]", accent: "border-l-[#5b6e8a]" },
+    soft: "bg-[#eeeeec]", solid: "bg-[#5b6e8a]", border: "border-[#dee2e7]", text: "text-[#43526b]", bar: "bg-[#5b6e8a]", ring: "ring-[#dee2e7]", accent: "border-l-[#5b6e8a]" },
   /* Aşağıdaki üçü, ekip dokuz kişiyi aştığında devreye girer. Aynı hue ailesinde
      bir "güçlü" tonla eşleşirler ama AÇIKLIK farkı yeterince büyük: lacivert
      maviden belirgin koyu, erik magentadan koyu, gül kırmızıdan pembe.
      Yan yana ayırt edilirler; yine de ilk dokuz kadar güçlü değiller, o yüzden
      sıranın SONUNDALAR — otomatik atama önce güçlü tonları tüketir. */
   { key: "navy",    label: "Lacivert", hex: "#1e3a8a",
-    soft: "bg-[#e7ecf8]", solid: "bg-[#1e3a8a]", border: "border-[#c3cfeb]", text: "text-[#152a63]", bar: "bg-[#1e3a8a]", ring: "ring-[#c3cfeb]", accent: "border-l-[#1e3a8a]" },
+    soft: "bg-[#ebecf4]", solid: "bg-[#1e3a8a]", border: "border-[#c7cfe7]", text: "text-[#152a63]", bar: "bg-[#1e3a8a]", ring: "ring-[#c7cfe7]", accent: "border-l-[#1e3a8a]" },
   { key: "plum",    label: "Erik",     hex: "#86198f",
-    soft: "bg-[#f7e8f8]", solid: "bg-[#86198f]", border: "border-[#e5c2e8]", text: "text-[#5e1265]", bar: "bg-[#86198f]", ring: "ring-[#e5c2e8]", accent: "border-l-[#86198f]" },
+    soft: "bg-[#f9e9f1]", solid: "bg-[#86198f]", border: "border-[#e0c6e1]", text: "text-[#5e1265]", bar: "bg-[#86198f]", ring: "ring-[#e0c6e1]", accent: "border-l-[#86198f]" },
   { key: "rose",    label: "Gül",      hex: "#e11d48",
-    soft: "bg-[#fde8ec]", solid: "bg-[#e11d48]", border: "border-[#f5c2ce]", text: "text-[#9f1239]", bar: "bg-[#e11d48]", ring: "ring-[#f5c2ce]", accent: "border-l-[#e11d48]" },
+    soft: "bg-[#fee5e4]", solid: "bg-[#e11d48]", border: "border-[#f0c4cf]", text: "text-[#9f1239]", bar: "bg-[#e11d48]", ring: "ring-[#f0c4cf]", accent: "border-l-[#e11d48]" },
 ];
 
 /**
@@ -133,13 +139,66 @@ function rgbOf(hex: string): [number, number, number] {
   ];
 }
 
-/** hex'i beyaza (t>0) ya da siyaha (t<0) doğru karıştırır. t ∈ [-1, 1]. */
+/**
+ * hex'i AÇARKEN saf beyaza değil FİLDİŞİ KÂĞIT beyazına, koyultururken siyaha
+ * karıştırır. t ∈ [-1, 1].
+ *
+ * Beyaza açmak serbest renkleri kanvastan (#efe9de) soğuk tarafta bırakıyordu:
+ * aynı hex'in hazır palet karşılığı sıcak, serbest karşılığı buz gibi çıkıyordu.
+ * Açık uç kâğıdın beyazı olunca iki yol yeniden aynı yüzeyi konuşuyor.
+ */
+const PAPER_WHITE: [number, number, number] = [253, 248, 240];
+
 function mix(hex: string, t: number): string {
   const [r, g, b] = rgbOf(hex);
-  const to = t > 0 ? 255 : 0;
   const k = Math.abs(t);
-  const c = (v: number) => Math.round(v + (to - v) * k);
-  return `rgb(${c(r)}, ${c(g)}, ${c(b)})`;
+  const c = (v: number, i: number) =>
+    Math.round(v + ((t > 0 ? PAPER_WHITE[i]! : 0) - v) * k);
+  return `rgb(${c(r, 0)}, ${c(g, 1)}, ${c(b, 2)})`;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   DOLU ZEMİN ÜSTÜNDEKİ METİN — beyaz mi mürekkep mi, ÖLÇÜLEREK seçilir.
+
+   Kimlik rozeti (PersonAvatar) kişinin hex'ini zemin yapıp baş harfleri BEYAZ
+   yazıyordu. Palet 12 tonluk ve dördü beyaz metin için fazla açık:
+     Turuncu #df7314 → 3.18   Altın #c98e20 → 2.85
+     Zeytin  #998a2e → 3.48   Turkuaz #1796a4 → 3.54
+   Dördü de WCAG AA'nın (4.5) altında; baş harfler 8.5–13px, yani "büyük
+   metin" istisnasına da girmiyorlar. Yıllardır okunmuyorlardı.
+
+   ÇÖZÜM KİMLİĞE DOKUNMAZ: hex aynı kalır (şerit, sol kenar, nokta ve kart
+   zemini hep o hex'ten türer — kişinin rengi kişinin rengidir). Değişen tek
+   şey ÜSTÜNE yazılan mürekkep. Sekiz ton beyaz alır, dördü koyu mürekkep.
+   Kural sabit listeyle değil ÖLÇÜMLE işler; yarın palete yeni bir ton ya da
+   kullanıcı kendi hex'ini girse de doğru cevabı kendi bulur.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/** Mürekkep — globals.css `--text` ile aynı ton. */
+const INK = "#1a1612";
+
+function relLuminance(hex: string): number {
+  const ch = (v: number) => {
+    const s = v / 255;
+    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  const [r, g, b] = rgbOf(hex);
+  return 0.2126 * ch(r) + 0.7152 * ch(g) + 0.0722 * ch(b);
+}
+
+function contrast(a: string, b: string): number {
+  const la = relLuminance(a);
+  const lb = relLuminance(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+/**
+ * `hex` dolu bir zemin olarak kullanıldığında üstüne hangi metin rengi gelmeli.
+ * İkisinden HANGİSİ DAHA OKUNURSA o seçilir — böylece hiçbir ton, listeye
+ * eklenmeyi beklemeden doğru cevabı alır.
+ */
+export function inkOnSolid(hex: string): string {
+  return contrast(hex, "#ffffff") >= contrast(hex, INK) ? "#ffffff" : INK;
 }
 
 /**
@@ -163,7 +222,7 @@ export type PersonStyles = {
 export function personStyles(hex: string): PersonStyles {
   return {
     hex,
-    solid: { backgroundColor: hex, color: "#fff" },
+    solid: { backgroundColor: hex, color: inkOnSolid(hex) },
     soft: { backgroundColor: mix(hex, 0.9) },
     border: { borderColor: mix(hex, 0.62) },
     accent: { borderLeftColor: hex },

@@ -64,7 +64,7 @@ export function ModuleShellView({ shell }: { shell: ModuleShell }) {
             <Link
               key={l.href}
               href={l.href}
-              className="group flex items-center justify-between rounded-card border border-line bg-surface px-3 py-2.5 text-[13.5px] font-medium text-muted shadow-card transition-[color,border-color,box-shadow] duration-200 ease-standard hover:border-line-strong hover:text-ink hover:shadow-card-hover"
+              className="group flex items-center justify-between rounded-card border border-line bg-surface px-3 py-2.5 text-[13.5px] font-medium text-muted shadow-card transition-[color,box-shadow] duration-[180ms] ease-standard hover:text-ink hover:shadow-card-hover"
             >
               {l.label}
               <ArrowUpRight size={14} className="shrink-0 text-subtle opacity-0 -translate-x-0.5 translate-y-0.5 transition-[opacity,transform] duration-150 ease-standard group-hover:opacity-100 group-hover:translate-x-0 group-hover:translate-y-0" />

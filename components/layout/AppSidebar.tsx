@@ -182,7 +182,7 @@ export function AppSidebar({
           anlamlı kılan, kimin söylediği. */}
       {!collapsed && (
         <div className="hidden shrink-0 space-y-2.5 px-3 pb-3 pt-1 [@media(min-height:47.5rem)]:block">
-          <div className="rounded-card border border-line bg-surface-muted px-3.5 py-3">
+          <div className="rounded-card border border-hairline bg-surface-sunken px-3.5 py-3">
             <p className="select-none text-[12px] font-semibold uppercase tracking-[0.08em] text-brand-strong">
               Haftanın Sözü
             </p>
@@ -215,7 +215,7 @@ export function AppSidebar({
           menünün sağ kenarına sabitli. */}
       <button
         onClick={toggle}
-        className="absolute -right-3 top-1/2 z-20 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full border border-line bg-surface text-subtle opacity-60 shadow-card transition-all duration-150 ease-standard hover:border-line-strong hover:text-muted hover:opacity-100 hover:shadow-card-hover focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-brand-ring active:scale-95"
+        className="absolute -right-3 top-1/2 z-20 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full border border-line bg-surface text-subtle opacity-60 shadow-card transition-[border-color,color,opacity,box-shadow,scale] duration-150 ease-standard hover:border-line-strong hover:text-muted hover:opacity-100 hover:shadow-card-hover focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-brand-ring active:scale-95"
         aria-label={collapsed ? "Kenar çubuğunu genişlet" : "Kenar çubuğunu daralt"}
         title={collapsed ? "Genişlet" : "Daralt"}
       >
@@ -271,7 +271,7 @@ function SidebarLink({
         strokeWidth={active ? 2.2 : 1.9}
         className={cn(
           "shrink-0 transition-colors duration-150",
-          active ? "text-brand" : "text-subtle group-hover:text-muted",
+          active ? "text-brand" : "text-subtle group-hover:text-brand",
         )}
       />
       {!collapsed && <span className="truncate">{label}</span>}

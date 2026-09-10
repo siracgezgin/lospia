@@ -7,7 +7,7 @@ import { Field, FieldGrid, TextInput, SelectInput } from "@/components/ui/Field"
 import { Button } from "@/components/ui/Button";
 import { resetMemberPassword } from "@/lib/actions/account";
 import { ASSIGNABLE_ROLE_OPTIONS } from "@/lib/utils/roles";
-import { PERSON_TONES, isHexColor } from "@/lib/design/person-colors";
+import { PERSON_TONES, isHexColor, inkOnSolid } from "@/lib/design/person-colors";
 import type { IdentityMember } from "@/components/settings/PersonIdentityManager";
 import { AvatarUploader } from "@/components/settings/AvatarUploader";
 
@@ -260,7 +260,7 @@ export function MemberEditPanel({
                     )}
                     style={{ backgroundColor: t.hex }}
                   >
-                    {selected && <Check size={14} className="text-white" strokeWidth={3} aria-hidden />}
+                    {selected && <Check size={14} strokeWidth={3} style={{ color: inkOnSolid(t.hex) }} aria-hidden />}
                   </button>
                 );
               })}
@@ -270,7 +270,7 @@ export function MemberEditPanel({
                 value={isHexColor(d.colorKey) ? d.colorKey : "#2563c9"}
                 disabled={busy}
                 onChange={(e) => set("colorKey", e.target.value)}
-                className="tap-target size-8 cursor-pointer rounded-full border border-line bg-surface p-0"
+                className="tap-target size-8 cursor-pointer rounded-full border border-line bg-surface p-0 transition-colors duration-150 ease-standard hover:border-line-strong"
                 title="Serbest renk"
                 aria-label="Serbest renk"
               />

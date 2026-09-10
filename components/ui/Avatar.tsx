@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils/cn";
 import { getPersonInitials } from "@/lib/utils/person-display";
-import { PERSON_TONES } from "@/lib/design/person-colors";
+import { PERSON_TONES, inkOnSolid } from "@/lib/design/person-colors";
 
 // Initials follow the shared person-display rule (first + last word, Turkish-aware).
 const getInitials = (name: string): string => getPersonInitials(name);
@@ -48,12 +48,17 @@ export function Avatar({
     : size === "sm" ? "w-5 h-5 text-[9px]"
     : size === "lg" ? "w-14 h-14 text-lg"
     : "w-7 h-7 text-xs";
+  const solidStyle = (bg: string) => ({ backgroundColor: bg, color: inkOnSolid(bg) });
   const toneClass =
     tone === "neutral"
       ? "bg-surface border border-line-strong text-muted"
       : tone === "done"
         ? "bg-success text-white"
-        : "text-white";
+        /* "color" tonunda metin rengi SABİT DEĞİL, zemine göre ÖLÇÜLÜR
+           (aşağıda inkOnSolid): palette beyaz metin için fazla açık dört ton
+           var (Turuncu 3.18, Altın 2.85, Zeytin 3.48, Turkuaz 3.54) ve baş
+           harfler 8–18px, "büyük metin" istisnasına girmiyorlar. */
+        : "";
   return (
     <span
       className={cn(
@@ -62,7 +67,7 @@ export function Avatar({
         toneClass,
         className
       )}
-      style={tone === "color" ? { backgroundColor: colorHex ?? hexFor(name) } : undefined}
+      style={tone === "color" ? solidStyle(colorHex ?? hexFor(name)) : undefined}
       title={title ?? name}
     >
       {getInitials(name)}

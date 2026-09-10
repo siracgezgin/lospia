@@ -143,7 +143,7 @@ export function ImageUploader({
                   </IconButton>
                 </div>
               ))}
-              <Button variant="ghost" size="sm" onClick={pick} loading={busy} className="-ml-2 text-brand hover:bg-brand-soft hover:text-brand-strong">
+              <Button variant="ghost" size="sm" onClick={pick} loading={busy} className="-ml-2 text-brand hover:bg-surface-muted hover:text-brand-strong">
                 {busy ? "Yükleniyor…" : <><ImagePlus size={13} aria-hidden /> Başka görsel ekle</>}
               </Button>
             </div>
@@ -154,9 +154,12 @@ export function ImageUploader({
               disabled={busy}
               className={cn(
                 "flex min-h-[220px] w-full flex-col items-center justify-center gap-2 rounded-card border-2 border-dashed transition-[border-color,background-color,color] duration-150 ease-standard disabled:pointer-events-none",
+                /* Brand rengi YALNIZ dosya sürüklenirken. Hover da brand
+                   soluğunu alınca "bırakabilirsin" hâli fare gezdirmekten
+                   ayırt edilemiyordu; hover nötr kâğıtta kalır. */
                 dragOver
                   ? "border-brand bg-brand-soft/70 text-brand-strong"
-                  : "border-line bg-surface-muted/40 text-subtle hover:border-brand-ring hover:bg-brand-soft/30 hover:text-muted",
+                  : "border-line bg-surface-muted/40 text-subtle hover:border-line-strong hover:bg-surface-hover hover:text-muted",
                 /* Yüklenirken düz kuyu zemin + spinner; gradient/shimmer yok. */
                 busy && "border-solid border-line bg-surface-sunken",
               )}
@@ -203,7 +206,7 @@ export function ImageUploader({
               "flex size-24 flex-col items-center justify-center gap-1 rounded-card border-2 border-dashed transition-[border-color,background-color,color] duration-150 ease-standard disabled:pointer-events-none",
               dragOver
                 ? "border-brand bg-brand-soft/70 text-brand-strong"
-                : "border-line text-subtle hover:border-brand-ring hover:bg-brand-soft/40 hover:text-muted",
+                : "border-line text-subtle hover:border-line-strong hover:bg-surface-hover hover:text-muted",
               busy && "border-solid border-line bg-surface-sunken",
             )}
             title="Görsel ekle"

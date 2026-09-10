@@ -168,7 +168,7 @@ export function CsvImportModal({ onClose }: Props) {
                 type="button"
                 onClick={() => fileRef.current?.click()}
                 disabled={pending}
-                className="w-full flex items-center justify-center gap-2 rounded-card border-2 border-dashed border-line-strong px-4 py-6 text-[13.5px] font-medium text-muted hover:border-brand-ring hover:text-brand-strong hover:bg-brand-soft/40 active:scale-[0.99] transition-colors duration-150 disabled:pointer-events-none disabled:text-subtle"
+                className="w-full flex items-center justify-center gap-2 rounded-card border-2 border-dashed border-line-strong px-4 py-6 text-[13.5px] font-medium text-muted hover:bg-surface-muted hover:text-ink active:scale-[0.99] transition-[background-color,border-color,color,transform] duration-150 ease-standard disabled:pointer-events-none disabled:text-subtle"
               >
                 {pending && !preview ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <FileText size={16} aria-hidden />}
                 {fileName ? `${fileName} — başka dosya seç` : "CSV dosyası seç"}

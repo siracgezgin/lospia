@@ -231,7 +231,7 @@ export function MemberInitials({
         />
       ))}
       {extra.map((name) => (
-        <span key={name} title={`${name} — sistemde kullanıcı değil`} className="rounded bg-black/5 px-1 text-[12px] font-medium text-ink/60">
+        <span key={name} title={`${name} — sistemde kullanıcı değil`} className="rounded bg-ink/5 px-1 text-[12px] font-medium text-ink/60">
           {name}
         </span>
       ))}

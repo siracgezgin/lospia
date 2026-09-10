@@ -20,11 +20,18 @@ import { cn } from "@/lib/utils/cn";
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "destructive";
 export type ButtonSize = "sm" | "md";
 
+/* Gölge SABİT — hover yalnız zemini değiştirir; yükselen bir düğme tıklamayı
+   davet etmez, dikkati dağıtır. `shadow-xs` Tailwind'in fabrika gölgesiydi ve
+   saf siyahtan türüyordu; fildişi kâğıt üzerinde siyah bir kenar kirli okunur.
+   `shadow-card` gölgesini mürekkepten alır (globals.css: rgba(44,34,24,…)),
+   böylece düğmenin kenarı da kartlarla aynı ışık kaybını çizer.
+   İkincil düğmeye marka rengi HİÇBİR durumda girmez; hayalet düğmede kenarlık
+   ASLA belirmez — yoksa ikisi birbirinden ayırt edilemez. */
 const VARIANT: Record<ButtonVariant, string> = {
-  primary:     "bg-brand text-white shadow-xs hover:bg-brand-strong",
-  secondary:   "bg-surface text-ink border border-line shadow-xs hover:bg-surface-muted hover:border-line-strong",
+  primary:     "bg-brand text-white shadow-card hover:bg-brand-strong",
+  secondary:   "bg-surface text-ink border border-line shadow-card hover:bg-surface-muted hover:border-line-strong",
   ghost:       "text-muted hover:bg-surface-muted hover:text-ink",
-  destructive: "bg-danger text-white shadow-xs hover:bg-danger-strong",
+  destructive: "bg-danger text-white shadow-card hover:bg-danger-strong",
 };
 
 /* Metin ≥13px: birincil arayüz metni 13.5px altına düşmez; `sm` kompakt araç

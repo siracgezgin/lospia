@@ -337,7 +337,7 @@ export function CostBreakdownTable({ rows, seasons = [], bomBySheet = {} }: Prop
                 href={exportHref}
                 what="Maliyet tablosu"
                 title="Maliyet tablosunu Excel olarak indir"
-                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-control border border-line bg-surface px-3.5 text-[13.5px] font-medium text-ink shadow-xs transition-[background-color,border-color,transform] duration-150 ease-standard hover:border-line-strong hover:bg-surface-muted active:scale-[0.98]"
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-control border border-line bg-surface px-3.5 text-[13.5px] font-medium text-ink shadow-card transition-[background-color,border-color,transform] duration-150 ease-standard hover:border-line-strong hover:bg-surface-muted active:scale-[0.98]"
               >
                 <FileSpreadsheet size={15} /> Excel indir
               </DownloadLink>

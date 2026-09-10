@@ -75,5 +75,8 @@ export function DownloadLink({
 /** Yardımcı: yalnız ikon taşıyan köşe düğmelerinin ortak biçimi. */
 export const downloadIconCls = cn(
   "tap-target rounded-md bg-surface p-1.5 text-subtle shadow-card",
-  "transition-[color,transform] duration-150 hover:text-ink active:scale-95",
+  /* Hayalet düğme sözleşmesi: hover zemin + metinden konuşur, kenarlık belirmez
+     ve düğme yükselmez. `background-color` geçiş listesinde ŞART — yoksa zemin
+     metinle aynı anda değil, bir anda sıçrar. */
+  "transition-[background-color,color,transform] duration-150 hover:bg-surface-muted hover:text-ink active:scale-95",
 );

@@ -337,7 +337,10 @@ function MenuRow({
         "group relative flex items-center gap-2.5 rounded-lg px-2.5 py-[10px] text-[13.5px] transition-colors duration-150",
         active
           ? "bg-brand-soft font-semibold text-brand-strong"
-          : cn("font-medium active:bg-surface-muted", muted ? "text-subtle" : "text-muted"),
+          : cn(
+              "font-medium hover:bg-surface-muted hover:text-ink active:bg-surface-muted",
+              muted ? "text-subtle" : "text-muted",
+            ),
       )}
     >
       {active && (
@@ -346,7 +349,10 @@ function MenuRow({
       <Icon
         size={17}
         strokeWidth={active ? 2.2 : 1.9}
-        className={cn("shrink-0", active ? "text-brand" : "text-subtle")}
+        className={cn(
+          "shrink-0 transition-colors duration-150",
+          active ? "text-brand" : "text-subtle group-hover:text-brand",
+        )}
       />
       <span className="truncate">{label}</span>
     </Link>

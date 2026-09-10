@@ -58,7 +58,7 @@ export default async function BoardPage({
           action={
             <a
               href="/board"
-              className="inline-flex h-8 items-center rounded-control border border-line bg-surface px-3 text-[13px] font-medium text-ink shadow-xs transition-[background-color,border-color] duration-150 hover:border-line-strong hover:bg-surface-muted"
+              className="inline-flex h-8 items-center rounded-control border border-line bg-surface px-3 text-[13px] font-medium text-ink shadow-card transition-[background-color,border-color] duration-150 hover:border-line-strong hover:bg-surface-muted"
             >
               Yenile
             </a>

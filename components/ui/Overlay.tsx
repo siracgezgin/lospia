@@ -265,12 +265,15 @@ export function Overlay({
           className,
         )}
       >
+        {/* Geçiş hem zemini hem basmayı kapsar: yalnız `transition-transform`
+            yazılıyken hover'daki zemin değişimi kare kare değil BİR ANDA
+            oluyordu — aynı düğmenin iki kanalı iki ayrı hızda konuşuyordu. */}
         {!title && !titleNode && floatingClose && (
           <button
             data-overlay-close
             onClick={onClose}
             aria-label="Kapat"
-            className="absolute right-3 top-3 z-10 grid size-9 place-items-center rounded-full bg-surface text-ink shadow-pop transition-transform duration-150 hover:bg-surface-muted active:scale-95"
+            className="absolute right-3 top-3 z-10 grid size-9 place-items-center rounded-full bg-surface text-ink shadow-pop transition-[background-color,transform] duration-150 hover:bg-surface-muted active:scale-95"
           >
             <X size={17} strokeWidth={2} />
           </button>
