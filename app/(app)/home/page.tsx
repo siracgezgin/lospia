@@ -66,8 +66,16 @@ type HomeMeeting = {
   title: string | null;
   /** Toplantı sonucu (20240338) — kolon migrate edilmemişse gelmez. */
   status?: string | null;
-  /** TOPLANTI ÖNCESİ GÖRÜNSÜN diye gündem satırları (2026-09-07). */
-  planning_topics?: { text: string | null; position: number; done_at?: string | null }[] | null;
+  /** TOPLANTI ÖNCESİ GÖRÜNSÜN diye gündem satırları (2026-09-07).
+   *  `participant_ids`/`collaborator_ids` KİMİN konusu olduğunu söyler —
+   *  Ana Sayfa önce bakan kişinin kendi konularını yazar. */
+  planning_topics?: {
+    text: string | null;
+    position: number;
+    done_at?: string | null;
+    participant_ids?: string[] | null;
+    collaborator_ids?: string[] | null;
+  }[] | null;
 };
 
 /**
@@ -146,7 +154,8 @@ export default async function HomePage() {
     : Promise.resolve({ data: [] as { created_at: string }[] });
 
   const meetingSelect =
-    "id, meeting_date, time_slot, category, title, status, planning_topics(text, position, done_at)";
+    "id, meeting_date, time_slot, category, title, status, " +
+    "planning_topics(text, position, done_at, participant_ids, collaborator_ids)";
   const [participantTaskIds, meetingsRes0, profile, lastBackupRes] = await Promise.all([
     participantTaskIdsPromise,
     supabase
@@ -177,7 +186,10 @@ export default async function HomePage() {
   if (meetingsRes.error && isMissingSchemaError(meetingsRes.error)) {
     meetingsRes = await supabase
       .from("planning_meetings")
-      .select("id, meeting_date, time_slot, category, title, planning_topics(text, position, done_at)")
+      .select(
+        "id, meeting_date, time_slot, category, title, " +
+          "planning_topics(text, position, done_at, participant_ids, collaborator_ids)",
+      )
       .eq("workspace_id", workspaceId)
       .gte("meeting_date", todayIso)
       .lte("meeting_date", weekEnd)
@@ -298,7 +310,7 @@ export default async function HomePage() {
         <Panel title="Haftanın kalanı" href={`/planning?week=${todayIso}`}>
           <ul className="space-y-2 pt-1">
             {laterMeetings.slice(0, 8).map((m) => (
-              <MeetingRow key={m.id} meeting={m} day={weekdayTr(m.meeting_date)} />
+              <MeetingRow key={m.id} meeting={m} day={weekdayTr(m.meeting_date)} viewerId={user.id} />
             ))}
           </ul>
         </Panel>
@@ -419,7 +431,7 @@ export default async function HomePage() {
                 ) : (
                   <ul className="space-y-2">
                     {todayMeetings.map((m) => (
-                      <MeetingRow key={m.id} meeting={m} />
+                      <MeetingRow key={m.id} meeting={m} viewerId={user.id} />
                     ))}
                   </ul>
                 )}
@@ -587,13 +599,30 @@ function MoreLink({ href }: { href: string }) {
  * Konular başlığın ALTINDA tek satırda, "·" ile ayrık durur: sayı değil METİN
  * (sadelik kuralı — "3 konu" bir puandır, konuların adı bir tariftir).
  */
-function MeetingRow({ meeting, day }: { meeting: HomeMeeting; day?: string }) {
+function MeetingRow({ meeting, day, viewerId }: { meeting: HomeMeeting; day?: string; viewerId: string }) {
   const meta = categoryMeta(meeting.category);
   const iso = String(meeting.meeting_date).slice(0, 10);
-  const agenda = [...(meeting.planning_topics ?? [])]
+  /* GÜNDEM ÖNCE KİŞİSELDİR.
+     Sıraç (2026-09-12): "Toplantı konusu varsa ve kişi dahil edilmişse onda
+     görünsün; diğer türlü bir anlamlı kalmıyor."
+
+     Ana Sayfa "bugün ne yapacağım?" diye soruyor. Burada toplantının BÜTÜN
+     gündemi yazıyordu: on kişilik bir toplantının dokuz konusu, bakan kişiyi
+     ilgilendirmeyen dokuz satırdı ve kendi konusu onların arasında kayboluyordu.
+
+     Kural: bakan kişi konulardan birine katılımcı ya da destekçi olarak
+     EKLENMİŞSE yalnız KENDİ konuları yazılır. Hiçbirinde yoksa gündemin
+     tamamı yazılır — Aslı Hanım'ın (2026-09-07) "toplantı öncesi konularımızı
+     göreceğiz" isteği o durumda da karşılansın; bilgi hiç kaybolmuyor. */
+  const rows = [...(meeting.planning_topics ?? [])]
     .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
-    .map((t) => t.text?.trim())
-    .filter((t): t is string => !!t);
+    .filter((t) => !!t.text?.trim());
+  const isMine = (t: (typeof rows)[number]) =>
+    (t.participant_ids ?? []).includes(viewerId) ||
+    (t.collaborator_ids ?? []).includes(viewerId);
+  const mine = rows.filter(isMine);
+  const personal = mine.length > 0;
+  const agenda = (personal ? mine : rows).map((t) => t.text!.trim());
   /* Yeşil TÜRETİLİR — toplantının bütün konuları bitmişse (Sıraç, 2026-09-10:
      "tamamlanan şey başlık değil konular olmalı"). Kırmızı elle işaretlenir. */
   const filled = (meeting.planning_topics ?? []).filter((t) => (t.text ?? "").trim());
@@ -624,7 +653,16 @@ function MeetingRow({ meeting, day }: { meeting: HomeMeeting; day?: string }) {
           {meeting.title?.trim() || meta.label}
         </span>
         {agenda.length > 0 && (
-          <span className="mt-0.5 block truncate text-[12.5px] text-muted" title={agenda.join(" · ")}>
+          /* Kendi konun KOYU yazılır, başkalarının gündemi sönük. Rozet ya da
+             "sana ait" etiketi eklenmedi: ton farkı yeterli ve sadelik kuralı
+             kart başına fazladan bir işaret istemiyor. */
+          <span
+            className={cn(
+              "mt-0.5 block truncate text-[12.5px]",
+              personal ? "font-medium text-ink" : "text-muted",
+            )}
+            title={agenda.join(" · ")}
+          >
             {agenda.join(" · ")}
           </span>
         )}

@@ -132,8 +132,10 @@ export async function createOperationDocument(
   if (!ctx) return { error: AUTH_REQUIRED };
 
   const data = normalize(parsed.data);
-  // Members always start at draft — only owner/admin publishes directly.
-  if (!isAdmin(ctx)) data.status = "draft";
+  /* DURUM ARTIK ERİŞİM KAPISI DEĞİL (20240344). Burada üyenin kaydı zorla
+     'draft' işaretleniyordu ve RLS taslakları sahibinden başkasına
+     göstermiyordu; yani üyenin eklediği bağlantı/yazı, görünürlüğü 'all' olsa
+     bile kimseye görünmüyordu. Kimin göreceğini yalnız `visibility` söyler. */
 
   const { data: row, error } = await supabase
     .from("operation_documents")
@@ -167,10 +169,10 @@ export async function updateOperationDocument(
   if ("error" in editable) return editable;
 
   const data = normalize(parsed.data);
-  // A member may move own draft ↔ in_review but never approve/archive.
-  if (!isAdmin(ctx) && data.status !== "draft" && data.status !== "in_review") {
-    data.status = editable.status as DocumentInput["status"];
-  }
+  /* Üye KENDİ kaydının durumunu serbestçe değiştirir. Eskiden 'approved' ya da
+     'archived' seçimi sessizce eski değere geri alınıyordu; bu kısıt kaydı
+     GİZLEMEK için vardı (bkz. 20240344) ve o iş artık `visibility`nin. Kendi
+     kaydını silebilen birinin durumunu değiştirememesi zaten tutarsızdı. */
 
   const { error } = await supabase
     .from("operation_documents")
@@ -356,7 +358,8 @@ export async function createTeamworkDoc(
       owner_id: ctx.userId,
       title: parsed.data.title.trim(),
       document_type: "doc",
-      status: isAdmin(ctx) ? "approved" : "draft",
+      /* Eklenen her şey açık başlar — üye/yönetici farkı yok (20240344). */
+      status: "approved",
       folder_id: folderId,
       section: parsed.data.section,
       body: "",

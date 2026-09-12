@@ -333,7 +333,9 @@ export async function duplicateOperationSpreadsheet(
       title: `${row.title} (kopya)`.slice(0, 300),
       description: row.description,
       sheet_type: row.sheet_type,
-      status: isAdmin(ctx) ? "active" : "draft",
+      /* Eklenen her şey açık başlar (20240344) — taslak bir GİZLEME
+         aracıydı, artık kimin göreceğini yalnız `visibility` söyler. */
+      status: "active",
       department_id: row.department_id,
       related_task_id: row.related_task_id,
       related_contact_id: row.related_contact_id,
@@ -495,7 +497,9 @@ export async function createSheetInFolder(
       owner_id: ctx.userId,
       title: (parsed.data.title || "Adsız tablo").trim(),
       sheet_type: "freeform",
-      status: isAdmin(ctx) ? "active" : "draft",
+      /* Eklenen her şey açık başlar (20240344) — taslak bir GİZLEME
+         aracıydı, artık kimin göreceğini yalnız `visibility` söyler. */
+      status: "active",
       folder_id: (parsed.data.folder_id ?? "") || null,
       section: parsed.data.section,
       snapshot: {},

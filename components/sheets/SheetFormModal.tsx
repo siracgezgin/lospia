@@ -28,7 +28,6 @@ interface Props {
   tasks: { id: string; title: string }[];
   contacts: { id: string; name: string }[];
   sheet?: SheetMeta | null;
-  isAdmin: boolean;
   readOnly?: boolean;
 }
 
@@ -41,7 +40,7 @@ interface Props {
  * çözülür — dosya sunucuya gitmez.
  */
 export function SheetFormModal({
-  onClose, onSaved, departments, tasks, contacts, sheet, isAdmin, readOnly = false,
+  onClose, onSaved, departments, tasks, contacts, sheet, readOnly = false,
 }: Props) {
   const isEdit = !!sheet;
   const router = useRouter();
@@ -56,7 +55,7 @@ export function SheetFormModal({
     title: sheet?.title ?? "",
     description: sheet?.description ?? "",
     sheet_type: (sheet?.sheet_type ?? "freeform") as SpreadsheetType,
-    status: sheet?.status ?? "draft",
+    status: sheet?.status ?? "active",
     department_id: sheet?.department_id ?? "",
     related_task_id: sheet?.related_task_id ?? "",
     related_contact_id: sheet?.related_contact_id ?? "",
@@ -65,11 +64,8 @@ export function SheetFormModal({
 
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
-  // Members work in draft/active; locking & archiving are admin levers. The
-  // server enforces the same rule — this keeps the form honest.
-  const statusOptions = isAdmin
-    ? SHEET_STATUSES
-    : SHEET_STATUSES.filter((s) => s.key === "draft" || s.key === "active");
+  /* DURUM HERKESE AÇIK (20240344) — bkz. DocumentFormModal'daki aynı not. */
+  const statusOptions = SHEET_STATUSES;
 
   /* Başlık hatası ALANIN ALTINDA yazar, genel uyarı kutusunda değil. Eşleşme
      "başlar mı" diye bakar: aynı hata iki yerden gelebiliyor ve metinleri bir
@@ -179,19 +175,15 @@ export function SheetFormModal({
               ))}
             </SelectInput>
           </Field>
-          {/* DURUM. Sunucu yeni tabloyu üye açtığında her hâlükârda "Taslak"
-              olarak kaydediyor (createOperationSpreadsheet). Seçilebilir bir
-              kutu göstermek yalan olurdu: kullanıcı "Aktif" seçiyor, kayıt
-              taslak dönüyordu. Yönetici değilken oluşturmada alan kilitli ve
-              sebebi tek satırla yazıyor. */}
-          <Field
-            label="Durum"
-            hint={!isAdmin && !isEdit ? "Yeni tablolar taslak olarak başlar." : undefined}
-          >
+          {/* DURUM artık KİLİTLİ DEĞİL. Sunucu üyenin tablosunu zorla "Taslak"
+              kaydediyordu ve taslaklar sahibinden başkasına görünmüyordu; alan
+              da bu yüzden kilitliydi. 20240344 ile durum bir iş etiketi oldu,
+              erişimi yalnız görünürlük belirliyor — kutu herkese açık. */}
+          <Field label="Durum">
             <SelectInput
-              value={!isAdmin && !isEdit ? "draft" : form.status}
+              value={form.status}
               onChange={(e) => set("status", e.target.value)}
-              disabled={readOnly || (!isAdmin && !isEdit)}
+              disabled={readOnly}
             >
               {statusOptions.map((s) => (
                 <option key={s.key} value={s.key}>{s.label}</option>

@@ -566,7 +566,6 @@ export function SheetDetailView({
             related_contact_id: sheet.related_contact_id,
             tags: sheet.tags,
           }}
-          isAdmin={isAdmin}
           readOnly={!canEditMeta}
           onClose={() => setMetaOpen(false)}
           onSaved={() => { setMetaOpen(false); router.refresh(); }}

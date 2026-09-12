@@ -18,7 +18,6 @@ interface Props {
   document?: OperationDocument | null;
   /** Yeni bağlantının açılacağı klasör (AF Teamwork kırıntı yolundaki yer). */
   folderId?: string | null;
-  isAdmin: boolean;
   /** True when the caller may only view this record (approved, not owner). */
   readOnly?: boolean;
 }
@@ -49,7 +48,7 @@ function guessType(url: string): LinkDocumentType {
  */
 export function DocumentFormModal({
   onClose, onSaved, departments, tasks, contacts, document: doc, folderId = null,
-  isAdmin, readOnly = false,
+  readOnly = false,
 }: Props) {
   const isEdit = !!doc;
   const [isPending, startTransition] = useTransition();
@@ -66,7 +65,7 @@ export function DocumentFormModal({
     description: doc?.description ?? "",
     document_type: (doc?.document_type ?? "other") as LinkDocumentType,
     url: doc?.url ?? "",
-    status: doc?.status ?? "draft",
+    status: doc?.status ?? "approved",
     department_id: doc?.department_id ?? "",
     related_task_id: doc?.related_task_id ?? "",
     related_contact_id: doc?.related_contact_id ?? "",
@@ -85,11 +84,10 @@ export function DocumentFormModal({
     }));
   }
 
-  // Members create drafts; only admins may set other statuses. The server
-  // enforces the same rule — this just keeps the form honest.
-  const statusOptions = isAdmin
-    ? OFFICE_STATUSES
-    : OFFICE_STATUSES.filter((s) => s.key === "draft" || s.key === "in_review");
+  /* DURUM HERKESE AÇIK (20240344). Eskiden üyeye yalnız taslak/incelemede
+     gösteriliyordu çünkü taslak aynı zamanda GİZLEME aracıydı; artık kimin
+     göreceğini yalnız görünürlük söylüyor ve durum bir iş etiketi. */
+  const statusOptions = OFFICE_STATUSES;
 
   const titleMissing = errorField === "title";
 

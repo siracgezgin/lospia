@@ -137,7 +137,6 @@ export function DocumentsView({
           contacts={contacts}
           document={editing}
           folderId={linkFolder}
-          isAdmin={isAdmin}
           readOnly={editing ? !canMutate(editing) : false}
           onClose={() => setModalOpen(false)}
           onSaved={() => { setModalOpen(false); router.refresh(); }}
