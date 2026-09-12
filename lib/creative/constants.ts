@@ -32,17 +32,17 @@ export function creativeStatusLabel(key: string | null | undefined): string {
 }
 
 export const PROVIDER_TONE: Record<string, string> = {
-  canva: "bg-[#e8f1fd] text-[#1a4889]",
-  google_drive: "bg-[#dcf0e6] text-[#1f6e4d]",
-  dropbox: "bg-[#e6f6f7] text-[#11707a]",
-  figma: "bg-[#f1ecfc] text-[#5325a3]",
-  website: "bg-[#eef0f2] text-[#5c636b]",
-  other: "bg-[#eef0f2] text-[#5c636b]",
+  canva: "bg-[#eef0ff] text-[#1a4d9f]",
+  google_drive: "bg-[#dcf0e0] text-[#1e713d]",
+  dropbox: "bg-[#dcf5f9] text-[#185860]",
+  figma: "bg-[#f6eefe] text-[#5b1cd8]",
+  website: "bg-[#e8f0f6] text-[#535b60]",
+  other: "bg-[#e8f0f6] text-[#535b60]",
 };
 
 export const CREATIVE_STATUS_TONE: Record<string, string> = {
-  draft: "bg-[#eef0f2] text-[#5c636b]",
-  in_review: "bg-[#f6ecd4] text-[#8a6516]",
-  approved: "bg-[#dcf0e6] text-[#1f6e4d]",
-  archived: "bg-[#eef0f2] text-[#7a828b]",
+  draft: "bg-[#e8f0f6] text-[#535b60]",
+  in_review: "bg-[#f5dac0] text-[#70470f]",
+  approved: "bg-[#dcf0e0] text-[#1e713d]",
+  archived: "bg-[#e8f0f6] text-[#596268]",
 };

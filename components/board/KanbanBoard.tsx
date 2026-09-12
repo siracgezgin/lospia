@@ -319,7 +319,7 @@ function CardStatusChip({ task }: { task: Task }) {
  * sorumlu da katılımcı da bu bileşenden çizilir.
  *
  * Tamamlandı sinyali: yeşil halka TEK BAŞINA yetmiyor — tamamlanmış kartın
- * zemini de yeşil (DONE_STYLE #d6f0e1), yeşil halka o zeminde eriyip
+ * zemini de yeşil (DONE_STYLE #cfeed6), yeşil halka o zeminde eriyip
  * kayboluyordu. Halkanın altına beyaz bir ayraç (ring-offset) konur ve köşeye
  * onay işareti gelir; ikisi de hem beyaz hem yeşil zeminde okunur. Yeni bir
  * rozet değil — katılımcı rozetinin zaten kullandığı işaret, artık her yerde.

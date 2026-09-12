@@ -55,7 +55,10 @@
      koyulaşır hem daha okunur olur. */
   --brand:         #0077a5;
   --brand-strong:  #00537a;
-  --brand-soft:    #d8eff9;
+  /* Seçili kutucuğun/çipin zemini. C* 9.2 idi; bu açıklıkta tavan 14.9,
+     yani rengin üçte biri kullanılmıyordu ve seçim beyazdan zor ayrılıyordu.
+     13.0'a çıktı — mürekkep 15.22, marka metni 7.02, ikisi de rahat. */
+  --brand-soft:    #cff1ff;
   --brand-ring:    #0b84ae;   /* odak halkası: beyazda 4.26, kanvasta 3.64 —
                                  iki zeminde de 1.4.11'i geçer */
 

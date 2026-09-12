@@ -50,24 +50,24 @@ export function officeStatusLabel(key: string | null | undefined): string {
 }
 
 export const DOCUMENT_TYPE_TONE: Record<string, string> = {
-  drive_link: "bg-[#dcf0e6] text-[#1f6e4d]",
-  google_doc: "bg-[#e8f1fd] text-[#1a4889]",
-  google_sheet: "bg-[#dcf0e6] text-[#1f6e4d]",
-  canva: "bg-[#e8f1fd] text-[#1a4889]",
-  figma: "bg-[#f1ecfc] text-[#5325a3]",
-  pdf_link: "bg-[#fdeae7] text-[#971f12]",
-  word_link: "bg-[#e8f1fd] text-[#1a4889]",
-  excel_link: "bg-[#dcf0e6] text-[#1f6e4d]",
-  website: "bg-[#eef0f2] text-[#5c636b]",
-  internal_note: "bg-[#f6ecd4] text-[#8a6516]",
-  other: "bg-[#eef0f2] text-[#5c636b]",
+  drive_link: "bg-[#dcf0e0] text-[#1e713d]",
+  google_doc: "bg-[#eef0ff] text-[#1a4d9f]",
+  google_sheet: "bg-[#dcf0e0] text-[#1e713d]",
+  canva: "bg-[#eef0ff] text-[#1a4d9f]",
+  figma: "bg-[#f6eefe] text-[#5b1cd8]",
+  pdf_link: "bg-[#ffede8] text-[#9d1c0f]",
+  word_link: "bg-[#eef0ff] text-[#1a4d9f]",
+  excel_link: "bg-[#dcf0e0] text-[#1e713d]",
+  website: "bg-[#e8f0f6] text-[#535b60]",
+  internal_note: "bg-[#f5dac0] text-[#70470f]",
+  other: "bg-[#e8f0f6] text-[#535b60]",
 };
 
 export const OFFICE_STATUS_TONE: Record<string, string> = {
-  draft: "bg-[#eef0f2] text-[#5c636b]",
-  in_review: "bg-[#f6ecd4] text-[#8a6516]",
-  approved: "bg-[#dcf0e6] text-[#1f6e4d]",
-  archived: "bg-[#eef0f2] text-[#7a828b]",
+  draft: "bg-[#e8f0f6] text-[#535b60]",
+  in_review: "bg-[#f5dac0] text-[#70470f]",
+  approved: "bg-[#dcf0e0] text-[#1e713d]",
+  archived: "bg-[#e8f0f6] text-[#596268]",
 };
 
 // ── Şablon Kütüphanesi ───────────────────────────────────────────────────────
@@ -107,12 +107,12 @@ export function templateChannelLabel(key: string | null | undefined): string {
 }
 
 export const TEMPLATE_CHANNEL_TONE: Record<string, string> = {
-  general: "bg-[#eef0f2] text-[#5c636b]",
-  email: "bg-[#e8f1fd] text-[#1a4889]",
-  whatsapp: "bg-[#dcf0e6] text-[#1f6e4d]",
-  document: "bg-[#f1ecfc] text-[#5325a3]",
-  internal: "bg-[#f6ecd4] text-[#8a6516]",
-  other: "bg-[#eef0f2] text-[#5c636b]",
+  general: "bg-[#e8f0f6] text-[#535b60]",
+  email: "bg-[#eef0ff] text-[#1a4d9f]",
+  whatsapp: "bg-[#dcf0e0] text-[#1e713d]",
+  document: "bg-[#f6eefe] text-[#5b1cd8]",
+  internal: "bg-[#f5dac0] text-[#70470f]",
+  other: "bg-[#e8f0f6] text-[#535b60]",
 };
 
 /** Standart şablon değişkenleri — form ekranında hızlı ekleme için. */
@@ -158,10 +158,10 @@ export function sheetStatusLabel(key: string | null | undefined): string {
 }
 
 export const SHEET_STATUS_TONE: Record<string, string> = {
-  draft: "bg-[#eef0f2] text-[#5c636b]",
-  active: "bg-[#dcf0e6] text-[#1f6e4d]",
-  locked: "bg-[#f6ecd4] text-[#8a6516]",
-  archived: "bg-[#eef0f2] text-[#7a828b]",
+  draft: "bg-[#e8f0f6] text-[#535b60]",
+  active: "bg-[#dcf0e0] text-[#1e713d]",
+  locked: "bg-[#f5dac0] text-[#70470f]",
+  archived: "bg-[#e8f0f6] text-[#596268]",
 };
 
 // ── Yazı Editörü (Word karşılığı) ────────────────────────────────────────────

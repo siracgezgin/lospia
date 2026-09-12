@@ -21,15 +21,15 @@ import { Tile, TileGrid } from "@/components/ui/TileGrid";
 
 const BOXES = [
   {
-    key: "sezon", label: "Sezonlar", icon: CalendarRange, hex: "#1f6e4d", unit: "sezon",
+    key: "sezon", label: "Sezonlar", icon: CalendarRange, hex: "#1e713d", unit: "sezon",
     hint: "Koleksiyonun zaman bağlamı",
   },
   {
-    key: "usta", label: "Üreticiler", icon: Hammer, hex: "#82551a", unit: "usta",
+    key: "usta", label: "Üreticiler", icon: Hammer, hex: "#465610", unit: "usta",
     hint: "Föydeki üretici ve ödeme tablosu",
   },
   {
-    key: "hammadde", label: "Hammadde", icon: Boxes, hex: "#2563c9", unit: "malzeme",
+    key: "hammadde", label: "Hammadde", icon: Boxes, hex: "#1f63cb", unit: "malzeme",
     hint: "Reçete ve maliyetin kaynağı",
   },
 ] as const;

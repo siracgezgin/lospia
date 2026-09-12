@@ -1152,15 +1152,15 @@ function matchFont(computed: string): string {
  *  dilinde kalsın. Serbest renk seçici bilerek yok: on renk yeter. */
 const DOC_COLORS: { hex: string; label: string }[] = [
   { hex: "#111827", label: "Siyah" },
-  { hex: "#5b6e8a", label: "Kurşuni" },
-  { hex: "#d23320", label: "Kırmızı" },
-  { hex: "#df7314", label: "Turuncu" },
-  { hex: "#c98e20", label: "Altın" },
-  { hex: "#1f6e4d", label: "Yeşil" },
-  { hex: "#1796a4", label: "Turkuaz" },
-  { hex: "#2563c9", label: "Mavi" },
-  { hex: "#7c3aed", label: "Mor" },
-  { hex: "#cc2e93", label: "Magenta" },
+  { hex: "#5a6e8b", label: "Kurşuni" },
+  { hex: "#d82717", label: "Kırmızı" },
+  { hex: "#dc751f", label: "Turuncu" },
+  { hex: "#c08921", label: "Altın" },
+  { hex: "#1e713d", label: "Yeşil" },
+  { hex: "#2b95a2", label: "Turkuaz" },
+  { hex: "#1f63cb", label: "Mavi" },
+  { hex: "#7a3bed", label: "Mor" },
+  { hex: "#ce2a93", label: "Magenta" },
 ];
 
 /** Araç çubuğu düğmesi — eşit kare, seçiliyken marka zemini. */

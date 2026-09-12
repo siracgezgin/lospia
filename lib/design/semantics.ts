@@ -41,33 +41,33 @@ export interface CardStyle {
 const FAMILY: Record<string, CardStyle> = {
   // Crimson — the critical Marka Yönetimi / CEO Katmanı family. Distinct from the
   // solid urgent-priority red and from the "rose" pastel.
-  red:      { surface: "bg-[#fdeae7]", border: "border-[#f1c3bb]", accent: "border-l-[#d23320]", chip: "bg-[#f8d2cb] text-[#971f12]", dot: "bg-[#d23320]" },
+  red:      { surface: "bg-[#ffede8]", border: "border-[#fac7bb]", accent: "border-l-[#d82717]", chip: "bg-[#ffd5ca] text-[#9d1c0f]", dot: "bg-[#d82717]" },
   // Violet — Tasarım & Yaratıcı Yön.
-  lavender: { surface: "bg-[#f1ecfc]", border: "border-[#d7c8f3]", accent: "border-l-[#7c3aed]", chip: "bg-[#e6daf9] text-[#5325a3]", dot: "bg-[#7c3aed]" },
+  lavender: { surface: "bg-[#f6eefe]", border: "border-[#deccf2]", accent: "border-l-[#7a3bed]", chip: "bg-[#e7d8f7] text-[#5b1cd8]", dot: "bg-[#7a3bed]" },
   // Royal blue — Satış & Ticaret.
-  blue:     { surface: "bg-[#e8f1fd]", border: "border-[#c4daf6]", accent: "border-l-[#2563c9]", chip: "bg-[#d7e6fb] text-[#1a4889]", dot: "bg-[#2563c9]" },
-  teal:     { surface: "bg-[#e6f6f7]", border: "border-[#c2e6ea]", accent: "border-l-[#1796a4]", chip: "bg-[#d4eff2] text-[#11707a]", dot: "bg-[#1796a4]" }, // cyan-teal, NOT green
+  blue:     { surface: "bg-[#eef0ff]", border: "border-[#cbd1f9]", accent: "border-l-[#1f63cb]", chip: "bg-[#d8dcfd] text-[#1a4d9f]", dot: "bg-[#1f63cb]" },
+  teal:     { surface: "bg-[#dcf5f9]", border: "border-[#9edee7]", accent: "border-l-[#2b95a2]", chip: "bg-[#b4e7ef] text-[#185860]", dot: "bg-[#2b95a2]" }, // cyan-teal, NOT green
   // Olive — Finans & Operasyon (warm neutral; never the reserved completed-green).
-  brown:    { surface: "bg-[#f4f1e2]", border: "border-[#ded5b1]", accent: "border-l-[#998a2e]", chip: "bg-[#eae2c2] text-[#675c16]", dot: "bg-[#998a2e]" },
+  brown:    { surface: "bg-[#f6f1df]", border: "border-[#ded3ac]", accent: "border-l-[#766b16]", chip: "bg-[#e7debe] text-[#595110]", dot: "bg-[#766b16]" },
   // Burnt orange — Üretim & Tedarik Zinciri.
-  orange:   { surface: "bg-[#fdf0e3]", border: "border-[#f6d3b2]", accent: "border-l-[#df7314]", chip: "bg-[#fbdfc4] text-[#964b0c]", dot: "bg-[#df7314]" },
-  sand:     { surface: "bg-[#faf6e4]", border: "border-[#ede3c1]", accent: "border-l-[#cca73c]", chip: "bg-[#f5ecc6] text-[#7d6010]", dot: "bg-[#bf9a2e]" },
-  amber:    { surface: "bg-[#fbf2e2]", border: "border-[#eedfc0]", accent: "border-l-[#d29a3e]", chip: "bg-[#f7ead0] text-[#8a5e14]", dot: "bg-[#c98e20]" },
-  slate:    { surface: "bg-[#eff2f6]", border: "border-[#dee4ec]", accent: "border-l-[#7184a0]", chip: "bg-[#e6ebf2] text-[#43526b]", dot: "bg-[#5b6e8a]" },
-  rose:     { surface: "bg-[#f9eef1]", border: "border-[#eed9e0]", accent: "border-l-[#cd7c91]", chip: "bg-[#f6e5ec] text-[#9c3a55]", dot: "bg-[#c0566f]" },
+  orange:   { surface: "bg-[#ffede2]", border: "border-[#f3cbb1]", accent: "border-l-[#dc751f]", chip: "bg-[#f9d8c3] text-[#7c400e]", dot: "bg-[#dc751f]" },
+  sand:     { surface: "bg-[#f9f0df]", border: "border-[#e4d1ac]", accent: "border-l-[#997b1c]", chip: "bg-[#ecddbe] text-[#614e10]", dot: "bg-[#997b1c]" },
+  amber:    { surface: "bg-[#fcefe0]", border: "border-[#eacfad]", accent: "border-l-[#c08921]", chip: "bg-[#f2dbbf] text-[#6a4a0f]", dot: "bg-[#c08921]" },
+  slate:    { surface: "bg-[#edf1f8]", border: "border-[#cad4e3]", accent: "border-l-[#5a6e8b]", chip: "bg-[#d7dfec] text-[#415167]", dot: "bg-[#5a6e8b]" },
+  rose:     { surface: "bg-[#ffecef]", border: "border-[#f4c8cf]", accent: "border-l-[#cc4469]", chip: "bg-[#fad5db] text-[#8e2c47]", dot: "bg-[#cc4469]" },
   // Fuchsia / magenta — Pazarlama & İletişim. Clearly warmer/pinker than violet.
-  pink:     { surface: "bg-[#fce9f3]", border: "border-[#f3c4e0]", accent: "border-l-[#cc2e93]", chip: "bg-[#f8d4ea] text-[#9a216c]", dot: "bg-[#cc2e93]" },
+  pink:     { surface: "bg-[#ffebf5]", border: "border-[#f5c6de]", accent: "border-l-[#ce2a93]", chip: "bg-[#fad4e7] text-[#921d68]", dot: "bg-[#ce2a93]" },
 };
 
 // The ONLY strong green treatment in the system — reserved for completed tasks.
 // A clearly filled green surface + dark accent so a done card reads "finished"
 // at a glance and is never mistaken for the pale review card next to it.
 export const DONE_STYLE: CardStyle = {
-  surface: "bg-[#d6f0e1]",
-  border: "border-[#a7dcc0]",
-  accent: "border-l-[#15803d]",
-  chip: "bg-[#bbe8cd] text-[#15603d]",
-  dot: "bg-[#15803d]",
+  surface: "bg-[#cfeed6]",
+  border: "border-[#a3dbad]",
+  accent: "border-l-[#18773e]",
+  chip: "bg-[#b4dfbc] text-[#12512a]",
+  dot: "bg-[#18773e]",
 };
 
 // Kontrol / Onay (review) — an ALMOST-WHITE card with only a soft mint border +
@@ -75,20 +75,20 @@ export const DONE_STYLE: CardStyle = {
 // so it never reads as completed. The clear gap from DONE_STYLE (filled green) is
 // intentional. This is the only other green-family card treatment.
 export const REVIEW_STYLE: CardStyle = {
-  surface: "bg-[#f7fef9]",
-  border: "border-[#bbf7d0]",
-  accent: "border-l-[#86efac]",
-  chip: "bg-[#ecfdf3] text-[#15803d]",
-  dot: "bg-[#86efac]",
+  surface: "bg-[#f2fbf3]",
+  border: "border-[#bfe8c6]",
+  accent: "border-l-[#41af66]",
+  chip: "bg-[#dcf0e0] text-[#1e713d]",
+  dot: "bg-[#41af66]",
 };
 
 // Uncategorized → neutral white card (no faked identity).
 const CATEGORY_NONE: CardStyle = {
   surface: "bg-white",
-  border: "border-[#e9ecf1]",
-  accent: "border-l-[#e3e6ea]",
-  chip: "bg-[#eef0f2] text-[#5c636b]",
-  dot: "bg-[#aab1ba]",
+  border: "border-[#e0e6eb]",
+  accent: "border-l-[#dae0e5]",
+  chip: "bg-[#e8f0f6] text-[#535b60]",
+  dot: "bg-[#a3adb3]",
 };
 
 // Stable name → family (covers clean names, legacy A/B prefixes, and CAPS imports).
@@ -188,9 +188,11 @@ const PERSON_TONE_STYLE: Record<string, CardStyle> = {
   magenta: FAMILY.pink,
   slate:   FAMILY.slate,
   // Dokuzu aşan ekipler için yedek tonlar (person-colors.ts ile aynı hex'ler).
-  navy:    { surface: "bg-[#e7ecf8]", border: "border-[#c3cfeb]", accent: "border-l-[#1e3a8a]", chip: "bg-[#d7e0f4] text-[#152a63]", dot: "bg-[#1e3a8a]" },
-  plum:    { surface: "bg-[#f7e8f8]", border: "border-[#e5c2e8]", accent: "border-l-[#86198f]", chip: "bg-[#efd6f1] text-[#5e1265]", dot: "bg-[#86198f]" },
-  rose:    { surface: "bg-[#fde8ec]", border: "border-[#f5c2ce]", accent: "border-l-[#e11d48]", chip: "bg-[#fad4dd] text-[#9f1239]", dot: "bg-[#e11d48]" },
+  navy:    { surface: "bg-[#f0efff]", border: "border-[#d1cff7]", accent: "border-l-[#143990]", chip: "bg-[#dddbfc] text-[#1d48af]", dot: "bg-[#143990]" },
+  plum:    { surface: "bg-[#fbecfb]", border: "border-[#eac9ea]", accent: "border-l-[#851a90]", chip: "bg-[#f1d6f1] text-[#861e90]", dot: "bg-[#851a90]" },
+  /* "Gül" İKİ AYRI RENKTİ: kişi tonu #e11d48, Tasarım kategorisi #cd7c91 —
+     aynı adın iki rengi olamaz. İkisi tek aileye indi. */
+  rose:    FAMILY.rose,
 };
 
 /** Kişi rengi anahtarından kart stili. Kişi yoksa nötr — sahte kimlik yok. */
@@ -290,13 +292,19 @@ export const STATE_LABEL: Record<CardState, string | null> = {
   normal: null,
 };
 
+/* DURUM ÇİPLERİ JETONDAN TÜRER — kendi hex'leri YOKTUR.
+   Önceki hâlinde "Gecikti" çipi #a83a2c, `--overdue` jetonu ise #93002b idi:
+   aynı anlam, iki ayrı kırmızı. Dokuz durumun tamamı böyleydi, yani tema
+   değiştiğinde çipler eski temada kalıyordu. Artık zemin ve metin jetonun
+   HUE'sundan, ailelerle aynı merdivenle üretiliyor (zemin L*88.5/C*17,
+   metin L*34) — çip kontrastı 5.95–6.03, hepsi AA. */
 export const STATE_BADGE: Record<CardState, string> = {
-  overdue:  "bg-[#fbe6e2] text-[#a83a2c]",
-  blocked:  "bg-[#f6ecd4] text-[#8a6516]",
-  approval: "bg-[#ece4fa] text-[#5e44a0]",
-  due_soon: "bg-[#fbeede] text-[#8a5014]",
-  done:     "bg-[#dcf0e6] text-[#1f6e4d]",
-  normal:   "bg-[#eef0f2] text-[#5c636b]",
+  overdue:  "bg-[#ffd4d4] text-[#9b1c34]",   // --overdue
+  blocked:  "bg-[#f5dac0] text-[#70470f]",   // --hold
+  approval: "bg-[#ebd7f5] text-[#781eb0]",   // --approval
+  due_soon: "bg-[#fad7c3] text-[#7e3f0e]",   // --warning
+  done:     "bg-[#dcf0e0] text-[#1e713d]",   // --success
+  normal:   "bg-[#e8f0f6] text-[#535b60]",   // kanvas hue'su — ölü gri değil
 };
 
 export interface TaskStateMarkers {
@@ -326,12 +334,13 @@ export function getTaskStateMarkers(t: CardSignals): TaskStateMarkers {
 // ── Priority (escalation chip — only Orta/Yüksek/Acil) ────────────────────────
 
 export const PRIORITY_CHIP: Record<TaskPriority, string> = {
-  low:    "bg-[#eef0f2] text-[#616b77]",
-  medium: "bg-[#fbeede] text-[#8a5014]",
-  high:   "bg-[#fbe6e2] text-[#a83a2c] ring-1 ring-[#f0c5bd]",
-  // Acil — solid red-600 with a darker red-800 ring: the strongest chip on the
-  // card, clearly dominant over the crimson Marka Yönetimi department chip.
-  urgent: "bg-[#dc2626] text-white font-semibold ring-1 ring-[#991b1b]",
+  low:    "bg-[#e8f0f6] text-[#596268]",
+  medium: "bg-[#fad7c3] text-[#7e3f0e]",                       // --warning
+  high:   "bg-[#ffd4d2] text-[#9b1c2f] ring-1 ring-[#fbbdbb]", // --danger
+  /* Acil — karttaki EN GÜÇLÜ çip. Eskiden Tailwind'in red-600/800'üydü
+     (#dc2626/#991b1b), yani temanın dışındaydı; şimdi `--urgent` jetonunun
+     hue'sunda ve beyaz metni 4.50 ile taşıyan en doygun noktada. */
+  urgent: "bg-[#e72039] text-white font-semibold ring-1 ring-[#a81427]",
 };
 
 export const PRIORITY_SHOW_ON_BOARD: Record<TaskPriority, boolean> = {
@@ -349,24 +358,27 @@ export const PRIORITY_SHOW_ON_BOARD: Record<TaskPriority, boolean> = {
 // The two greens are deliberately one tone apart — clearly related, never
 // confused. No other status uses green.
 export const STATUS_CHIP_TONE: Record<TaskStatus, string> = {
-  backlog:     "bg-[#eef0f2] text-[#5c636b]",
-  ready:       "bg-[#eef0f2] text-[#5c636b]",
-  in_progress: "bg-[#e3effb] text-[#1f5fa8]",
-  blocked:     "bg-[#f6ecd4] text-[#8a6516]",
-  review:      "bg-[#ecfdf3] text-[#15803d]", // pale mint — awaiting sign-off
-  done:        "bg-[#bbe8cd] text-[#15603d]", // strong reserved green
-  archived:    "bg-[#eef0f2] text-[#616b77]",
+  backlog:     "bg-[#e8f0f6] text-[#535b60]",
+  ready:       "bg-[#e8f0f6] text-[#535b60]",
+  in_progress: "bg-[#cbe0fe] text-[#185382]", // temiz mavi — markadan da onay
+                                              // morundan da ayrı (hue 268)
+  blocked:     "bg-[#f5dac0] text-[#70470f]", // --hold
+  review:      "bg-[#dcf0e0] text-[#1e713d]", // açık yeşil — onay bekliyor
+  done:        "bg-[#b4dfbc] text-[#12512a]", // ayrılmış güçlü yeşil
+  archived:    "bg-[#e8f0f6] text-[#596268]",
 };
 
 // Header / label text tone per status (for column titles, legends).
 export const STATUS_TEXT_TONE: Record<TaskStatus, string> = {
-  backlog:     "text-[#5c636b]",
-  ready:       "text-[#5c636b]",
-  in_progress: "text-[#1f5fa8]",
-  blocked:     "text-[#8a6516]",
-  review:      "text-[#3fae73]", // soft mint-green (lighter than done)
-  done:        "text-[#15703f]", // strong green
-  archived:    "text-[#616b77]",
+  backlog:     "text-[#535b60]",
+  ready:       "text-[#535b60]",
+  in_progress: "text-[#215d8e]",
+  blocked:     "text-[#7d5012]",
+  /* Kontrol/Onay tonu beyazda 2.80 idi — AA'nın (4.5) çok altında, sütun
+     başlığı okunmuyordu. Tamamlandı'dan açık kalan EN AÇIK yeşile çekildi. */
+  review:      "text-[#2b854b]", // 4.61
+  done:        "text-[#1a6736]", // 6.91
+  archived:    "text-[#596268]",
 };
 
 // Board column header tone, keyed by BoardColId. Single source of truth so the
@@ -375,20 +387,20 @@ export const STATUS_TEXT_TONE: Record<TaskStatus, string> = {
 export const BOARD_COL_HEADER_TONE: Record<string, string> = {
   yapilacak:    "text-muted",
   devam_ediyor: "text-muted",
-  kontrol_onay: "text-[#3fae73]", // mint — pre-completion
-  tamamlandi:   "text-[#15703f]", // strong green — finished
+  kontrol_onay: "text-[#2b854b]", // açık yeşil — onay öncesi (beyazda 4.61)
+  tamamlandi:   "text-[#1a6736]", // güçlü yeşil — bitti (6.91)
 };
 
 // Recharts fills for the status-distribution chart. Review is the soft light
 // green; done is the strong green (mirrors STATUS_CHIP_TONE above).
 export const STATUS_CHART_FILL: Record<TaskStatus, string> = {
-  backlog:     "#98a0a8",
-  ready:       "#3b7bb5",
-  in_progress: "#7c5cbf",
-  blocked:     "#b8851f",
-  review:      "#86efac", // soft light green
-  done:        "#15803d", // strong green
-  archived:    "#cdd2d8",
+  backlog:     "#8c989f",
+  ready:       "#2a93a0",
+  in_progress: "#1f7cc0",
+  blocked:     "#ac6f1a",
+  review:      "#41af66", // açık yeşil
+  done:        "#18773e", // güçlü yeşil
+  archived:    "#c0c8cd",
 };
 
 // ── Department badge (members list, table chips) ──────────────────────────────
@@ -397,10 +409,10 @@ export const STATUS_CHART_FILL: Record<TaskStatus, string> = {
 // Reuses the same FAMILY palette as cards so a department reads identically
 // everywhere. Neutral grey when the department has no colour.
 const DEPT_BADGE_RING: Record<string, string> = {
-  red: "ring-[#e6b8af]", lavender: "ring-[#cdbcf0]", blue: "ring-[#bcd4f3]",
-  teal: "ring-[#b6e0e5]", brown: "ring-[#d6cba8]", orange: "ring-[#f0c79f]",
-  sand: "ring-[#e6d9ad]", amber: "ring-[#e9d4ab]", slate: "ring-[#d4dbe6]",
-  rose: "ring-[#e6cdd6]", pink: "ring-[#eeb9d8]",
+  red: "ring-[#fac0b2]", lavender: "ring-[#dac5f0]", blue: "ring-[#c4cbf8]",
+  teal: "ring-[#8fd9e4]", brown: "ring-[#d9cda1]", orange: "ring-[#f2c4a7]",
+  sand: "ring-[#e0cba1]", amber: "ring-[#e7c9a2]", slate: "ring-[#c4cee0]",
+  rose: "ring-[#f3c1c8]", pink: "ring-[#f4beda]",
 };
 
 export interface DeptBadge {
@@ -412,21 +424,21 @@ export interface DeptBadge {
 /** Soft, ringed department badge from a colour key. Neutral when absent. */
 export function getDepartmentBadge(colorKey?: string | null): DeptBadge {
   if (!colorKey) {
-    return { chip: CATEGORY_NONE.chip, ring: "ring-[#e4e7ec]", dot: CATEGORY_NONE.dot };
+    return { chip: CATEGORY_NONE.chip, ring: "ring-[#e1e8ec]", dot: CATEGORY_NONE.dot };
   }
   const fam = DEPT_COLOR_TO_FAMILY[colorKey] ?? FALLBACK[hashIndex(colorKey, FALLBACK.length)];
   const style = FAMILY[fam];
-  return { chip: style.chip, ring: DEPT_BADGE_RING[fam] ?? "ring-[#e4e7ec]", dot: style.dot };
+  return { chip: style.chip, ring: DEPT_BADGE_RING[fam] ?? "ring-[#e1e8ec]", dot: style.dot };
 }
 
 // ── Status dot (lists / minimal contexts) ─────────────────────────────────────
 
 export const STATUS_DOT: Record<TaskStatus, string> = {
-  backlog:     "bg-[#98a0a8]",
-  ready:       "bg-[#3b7bb5]",
-  in_progress: "bg-[#7c5cbf]",
-  blocked:     "bg-[#b8851f]",
-  review:      "bg-[#86efac]", // soft mint (matches REVIEW_STYLE)
-  done:        "bg-[#15803d]",
-  archived:    "bg-[#cdd2d8]",
+  backlog:     "bg-[#8c989f]",
+  ready:       "bg-[#2a93a0]",
+  in_progress: "bg-[#1f7cc0]",
+  blocked:     "bg-[#ac6f1a]",
+  review:      "bg-[#41af66]", // REVIEW_STYLE ile aynı
+  done:        "bg-[#18773e]",
+  archived:    "bg-[#c0c8cd]",
 };

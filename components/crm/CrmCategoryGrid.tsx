@@ -49,15 +49,15 @@ const CATEGORY_ICON: Record<string, LucideIcon> = {
  *  yaklaşım: renk kimliktir, dekor değil). */
 const CATEGORY_HEX: Record<string, string> = {
   celebrity: "#b03a2e",
-  basin: "#43526b",
-  vip: "#8a5e14",
-  outsource: "#2f6142",
-  toplanti: "#28448f",
-  dis_ekip: "#5b3d84",
-  uretim: "#82551a",
-  ekibimiz: "#15665b",
-  dernek: "#4a5262",
-  diger: "#5c636b",
+  basin: "#415167",
+  vip: "#6a4a0f",
+  outsource: "#165c31",
+  toplanti: "#175575",
+  dis_ekip: "#273dca",
+  uretim: "#465610",
+  ekibimiz: "#165a50",
+  dernek: "#505a6d",
+  diger: "#535b60",
 };
 
 function norm(s: string): string {
@@ -129,7 +129,7 @@ export function CrmCategoryGrid({ contacts }: { contacts: WorkspaceContact[] }) 
               title={cat.label}
               meta={n > 0 ? `${n} kişi` : cat.hint}
               icon={CATEGORY_ICON[cat.key] ?? FolderOpen}
-              colorHex={CATEGORY_HEX[cat.key] ?? "#5c636b"}
+              colorHex={CATEGORY_HEX[cat.key] ?? "#535b60"}
             />
           );
         })}

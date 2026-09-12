@@ -77,10 +77,10 @@ const WIDE_SELECTION = 20_000;
  *  paletiyle AYNI aile. Önce genel bir Tailwind paletiydi; tablodaki kırmızı
  *  ile yazıdaki kırmızı birbirini tutmuyordu. İlk göz "yok" demektir. */
 const FILL_COLORS = [
-  "", "#fbe6e2", "#fdebd9", "#f6ecd4", "#dcf0e6", "#dbe7f8", "#ece4fb", "#fbe2f0", "#eef0f2", "#111827",
+  "", "#ffd4d4", "#fdebd9", "#f5dac0", "#dcf0e0", "#dbe7f8", "#ece4fb", "#fbe2f0", "#e8f0f6", "#111827",
 ];
 const TEXT_COLORS = [
-  "", "#d23320", "#df7314", "#c98e20", "#1f6e4d", "#2563c9", "#7c3aed", "#cc2e93", "#5b6e8a", "#ffffff",
+  "", "#d82717", "#dc751f", "#c08921", "#1e713d", "#1f63cb", "#7a3bed", "#ce2a93", "#5a6e8b", "#ffffff",
 ];
 
 export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, onDirty }: Props) {

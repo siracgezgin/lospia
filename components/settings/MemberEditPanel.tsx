@@ -267,7 +267,7 @@ export function MemberEditPanel({
               {/* Serbest renk — hazır palet dışında istenen her ton. */}
               <input
                 type="color"
-                value={isHexColor(d.colorKey) ? d.colorKey : "#2563c9"}
+                value={isHexColor(d.colorKey) ? d.colorKey : "#1f63cb"}
                 disabled={busy}
                 onChange={(e) => set("colorKey", e.target.value)}
                 className="tap-target size-8 cursor-pointer rounded-full border border-line bg-surface p-0 transition-colors duration-150 ease-standard hover:border-line-strong"
@@ -277,7 +277,7 @@ export function MemberEditPanel({
               <TextInput
                 value={d.colorKey}
                 onChange={(e) => set("colorKey", e.target.value.trim())}
-                placeholder="#2563c9"
+                placeholder="#1f63cb"
                 spellCheck={false}
                 disabled={busy}
                 aria-label="Renk kodu (hex)"

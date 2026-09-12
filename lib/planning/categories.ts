@@ -11,16 +11,30 @@ export type CategoryMeta = {
   dot: string;    // küçük renk noktası
 };
 
+/* TAKVİM ARTIK UYGULAMANIN PALETİNİ KONUŞUYOR (2026-09-12).
+   Bu dosya Tailwind'in HAZIR renkleriyle yazılmıştı (amber-50, rose-200,
+   emerald-800…) — yani panelin geri kalanıyla hiçbir akrabalığı yoktu. Takvim
+   her hafta açılan ekran olduğu için fark en çok burada göze batıyordu:
+   "Üretim" hücresi Tailwind sarısı, aynı işin Pano'daki kartı İznik turuncusu.
+
+   Her kategori artık bir DEPARTMAN AİLESİNE bağlı (lib/design/semantics.ts) ve
+   aynı merdivenden geçiyor: hücre L*95/C*9, kenarlık L*84.5/C*21, başlık L*34,
+   çip L*88.5/C*17, nokta L*48. Dokuz kategorinin de başlık kontrastı 7.09–7.14,
+   çip kontrastı 5.97–6.02.
+
+   "Sistem" MARKA hue'sunu (252°) aldı: eskiden emerald'dı, yani ayrılmış
+   "tamamlandı" yeşiliyle aynı aileydi. "Diğer" tek nötr olarak kalır — kimliği
+   olmayan toplantı renk taşımasın. */
 export const PLANNING_CATEGORIES: CategoryMeta[] = [
-  { key: "uretim",    label: "Üretim",    cell: "bg-amber-50 border-amber-200",     title: "text-amber-900",   chip: "bg-amber-100 text-amber-900",     dot: "bg-amber-400" },
-  { key: "ai",        label: "AI",        cell: "bg-rose-50 border-rose-200",       title: "text-rose-800",    chip: "bg-rose-100 text-rose-800",       dot: "bg-rose-400" },
-  { key: "marketing", label: "Marketing", cell: "bg-sky-50 border-sky-200",         title: "text-sky-800",     chip: "bg-sky-100 text-sky-800",         dot: "bg-sky-400" },
-  { key: "sales",     label: "Sales",     cell: "bg-violet-50 border-violet-200",   title: "text-violet-800",  chip: "bg-violet-100 text-violet-800",   dot: "bg-violet-400" },
-  { key: "finance",   label: "Finans",    cell: "bg-orange-50 border-orange-200",   title: "text-orange-800",  chip: "bg-orange-100 text-orange-800",   dot: "bg-orange-400" },
-  { key: "system",    label: "Sistem",    cell: "bg-emerald-50 border-emerald-200", title: "text-emerald-800", chip: "bg-emerald-100 text-emerald-800", dot: "bg-emerald-400" },
-  { key: "tasarim",   label: "Tasarım",   cell: "bg-indigo-50 border-indigo-200",   title: "text-indigo-800",  chip: "bg-indigo-100 text-indigo-800",   dot: "bg-indigo-400" },
-  { key: "external",  label: "Dış / Diğer", cell: "bg-pink-50 border-pink-200",     title: "text-pink-700",    chip: "bg-pink-100 text-pink-700",       dot: "bg-pink-400" },
-  { key: "other",     label: "Diğer",     cell: "bg-slate-50 border-slate-200",     title: "text-slate-700",   chip: "bg-slate-100 text-slate-700",     dot: "bg-slate-400" },
+  { key: "uretim",    label: "Üretim",    cell: "bg-[#ffede2] border-[#f3cbb1]", title: "text-[#7c400e]", chip: "bg-[#f9d8c3] text-[#7c400e]", dot: "bg-[#af5c16]" },
+  { key: "ai",        label: "AI",        cell: "bg-[#dcf5f9] border-[#9edee7]", title: "text-[#185860]", chip: "bg-[#b4e7ef] text-[#185860]", dot: "bg-[#237d88]" },
+  { key: "marketing", label: "Marketing", cell: "bg-[#ffebf5] border-[#f5c6de]", title: "text-[#921d68]", chip: "bg-[#fad4e7] text-[#921d68]", dot: "bg-[#ce2a93]" },
+  { key: "sales",     label: "Sales",     cell: "bg-[#eef0ff] border-[#cbd1f9]", title: "text-[#1a4d9f]", chip: "bg-[#d8dcfd] text-[#1a4d9f]", dot: "bg-[#286ede]" },
+  { key: "finance",   label: "Finans",    cell: "bg-[#f6f1df] border-[#ded3ac]", title: "text-[#595110]", chip: "bg-[#e7debe] text-[#595110]", dot: "bg-[#7e7318]" },
+  { key: "system",    label: "Sistem",    cell: "bg-[#e3f3ff] border-[#aed8f8]", title: "text-[#175575]", chip: "bg-[#c2e2fc] text-[#175575]", dot: "bg-[#2479a4]" },
+  { key: "tasarim",   label: "Tasarım",   cell: "bg-[#f6eefe] border-[#deccf2]", title: "text-[#5b1cd8]", chip: "bg-[#e7d8f7] text-[#5b1cd8]", dot: "bg-[#894def]" },
+  { key: "external",  label: "Dış / Diğer", cell: "bg-[#ffecef] border-[#f4c8cf]", title: "text-[#8b2f47]", chip: "bg-[#fad5db] text-[#8b2f47]", dot: "bg-[#d62963]" },
+  { key: "other",     label: "Diğer",     cell: "bg-[#edf1f5] border-[#c9d5dc]", title: "text-[#3f535e]", chip: "bg-[#d6e0e6] text-[#3f535e]", dot: "bg-[#5b7686]" },
 ];
 
 const BY_KEY = new Map(PLANNING_CATEGORIES.map((c) => [c.key, c]));

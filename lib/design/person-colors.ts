@@ -26,6 +26,20 @@
  *
  * YEŞİL BİLEREK YOK — yeşil yalnızca "tamamlandı" içindir (proje kuralı).
  * Bir kişinin rengi asla "bitti" gibi okunmamalı.
+ *
+ * RENK KÖRLÜĞÜ — DÜRÜST NOT (2026-09-12 ölçümü):
+ *   Sıcak bant (kırmızı 39° · turuncu 60° · altın 78° · zeytin 97°) kırmızı-yeşil
+ *   körlüğünde TEK bir sarı-kahve eksenine düşer. Ölçüldü: bu paletle en yakın
+ *   çift döteranopide ΔE 4.4, protanopide 2.5 — "ayırt edilir" eşiği ~12.
+ *   Önceki palette 1.9 / 5.0 idi; yani iyileşme var ama SORUN ÇÖZÜLMÜŞ DEĞİL.
+ *   Dört sıcak tonu yirmi L* genişliğinde bir aralığa sığdırmanın başka yolu yok:
+ *   ayrımı artırmak için altını bronza, zeytini neredeyse siyaha çekmek gerekir
+ *   ki o da rengin kendisini öldürür — denendi, ΔE 4.3'te tavan yaptı.
+ *
+ *   KİMLİĞİ TAŞIYAN ŞEY RENK DEĞİL: her kişinin ayrıca bir İKONU ve baş harfleri
+ *   var (aşağıdaki PERSON_ICONS). Renk hızlı tarama içindir; kim olduğu sorusunu
+ *   ikon ve ad cevaplar. Yeni bir yüzey eklerken rengi TEK ayırt edici olarak
+ *   kullanma — yanına ikonu ya da adı koy.
  */
 
 import type { LucideIcon } from "lucide-react";
@@ -69,35 +83,35 @@ export type PersonTone = {
  * tüketir; son üçü dokuzu aşan ekipler için yedektir.
  */
 export const PERSON_TONES: PersonTone[] = [
-  { key: "crimson", label: "Kırmızı",  hex: "#d23320",
-    soft: "bg-[#fdeae7]", solid: "bg-[#d23320]", border: "border-[#f1c3bb]", text: "text-[#971f12]", bar: "bg-[#d23320]", ring: "ring-[#f1c3bb]", accent: "border-l-[#d23320]" },
-  { key: "orange",  label: "Turuncu",  hex: "#df7314",
-    soft: "bg-[#fdf0e3]", solid: "bg-[#df7314]", border: "border-[#f6d3b2]", text: "text-[#964b0c]", bar: "bg-[#df7314]", ring: "ring-[#f6d3b2]", accent: "border-l-[#df7314]" },
-  { key: "gold",    label: "Altın",    hex: "#c98e20",
-    soft: "bg-[#fbf2e2]", solid: "bg-[#c98e20]", border: "border-[#eedfc0]", text: "text-[#8a5e14]", bar: "bg-[#c98e20]", ring: "ring-[#eedfc0]", accent: "border-l-[#c98e20]" },
-  { key: "olive",   label: "Zeytin",   hex: "#998a2e",
-    soft: "bg-[#f4f1e2]", solid: "bg-[#998a2e]", border: "border-[#ded5b1]", text: "text-[#675c16]", bar: "bg-[#998a2e]", ring: "ring-[#ded5b1]", accent: "border-l-[#998a2e]" },
-  { key: "teal",    label: "Turkuaz",  hex: "#1796a4",
-    soft: "bg-[#e6f6f7]", solid: "bg-[#1796a4]", border: "border-[#c2e6ea]", text: "text-[#11707a]", bar: "bg-[#1796a4]", ring: "ring-[#c2e6ea]", accent: "border-l-[#1796a4]" },
-  { key: "blue",    label: "Mavi",     hex: "#2563c9",
-    soft: "bg-[#e8f1fd]", solid: "bg-[#2563c9]", border: "border-[#c4daf6]", text: "text-[#1a4889]", bar: "bg-[#2563c9]", ring: "ring-[#c4daf6]", accent: "border-l-[#2563c9]" },
-  { key: "violet",  label: "Mor",      hex: "#7c3aed",
-    soft: "bg-[#f1ecfc]", solid: "bg-[#7c3aed]", border: "border-[#d7c8f3]", text: "text-[#5325a3]", bar: "bg-[#7c3aed]", ring: "ring-[#d7c8f3]", accent: "border-l-[#7c3aed]" },
-  { key: "magenta", label: "Magenta",  hex: "#cc2e93",
-    soft: "bg-[#fce9f3]", solid: "bg-[#cc2e93]", border: "border-[#f3c4e0]", text: "text-[#9a216c]", bar: "bg-[#cc2e93]", ring: "ring-[#f3c4e0]", accent: "border-l-[#cc2e93]" },
-  { key: "slate",   label: "Kurşuni",  hex: "#5b6e8a",
-    soft: "bg-[#eff2f6]", solid: "bg-[#5b6e8a]", border: "border-[#dee4ec]", text: "text-[#43526b]", bar: "bg-[#5b6e8a]", ring: "ring-[#dee4ec]", accent: "border-l-[#5b6e8a]" },
+  { key: "crimson", label: "Kırmızı",  hex: "#d82717",
+    soft: "bg-[#ffede8]", solid: "bg-[#d82717]", border: "border-[#fac7bb]", text: "text-[#9d1c0f]", bar: "bg-[#d82717]", ring: "ring-[#fac7bb]", accent: "border-l-[#d82717]" },
+  { key: "orange",  label: "Turuncu",  hex: "#dc751f",
+    soft: "bg-[#ffede2]", solid: "bg-[#dc751f]", border: "border-[#f3cbb1]", text: "text-[#7c400e]", bar: "bg-[#dc751f]", ring: "ring-[#f3cbb1]", accent: "border-l-[#dc751f]" },
+  { key: "gold",    label: "Altın",    hex: "#c08921",
+    soft: "bg-[#fcefe0]", solid: "bg-[#c08921]", border: "border-[#eacfad]", text: "text-[#6a4a0f]", bar: "bg-[#c08921]", ring: "ring-[#eacfad]", accent: "border-l-[#c08921]" },
+  { key: "olive",   label: "Zeytin",   hex: "#766b16",
+    soft: "bg-[#f6f1df]", solid: "bg-[#766b16]", border: "border-[#ded3ac]", text: "text-[#595110]", bar: "bg-[#766b16]", ring: "ring-[#ded3ac]", accent: "border-l-[#766b16]" },
+  { key: "teal",    label: "Turkuaz",  hex: "#2b95a2",
+    soft: "bg-[#dcf5f9]", solid: "bg-[#2b95a2]", border: "border-[#9edee7]", text: "text-[#185860]", bar: "bg-[#2b95a2]", ring: "ring-[#9edee7]", accent: "border-l-[#2b95a2]" },
+  { key: "blue",    label: "Mavi",     hex: "#1f63cb",
+    soft: "bg-[#eef0ff]", solid: "bg-[#1f63cb]", border: "border-[#cbd1f9]", text: "text-[#1a4d9f]", bar: "bg-[#1f63cb]", ring: "ring-[#cbd1f9]", accent: "border-l-[#1f63cb]" },
+  { key: "violet",  label: "Mor",      hex: "#7a3bed",
+    soft: "bg-[#f6eefe]", solid: "bg-[#7a3bed]", border: "border-[#deccf2]", text: "text-[#5b1cd8]", bar: "bg-[#7a3bed]", ring: "ring-[#deccf2]", accent: "border-l-[#7a3bed]" },
+  { key: "magenta", label: "Magenta",  hex: "#ce2a93",
+    soft: "bg-[#ffebf5]", solid: "bg-[#ce2a93]", border: "border-[#f5c6de]", text: "text-[#921d68]", bar: "bg-[#ce2a93]", ring: "ring-[#f5c6de]", accent: "border-l-[#ce2a93]" },
+  { key: "slate",   label: "Kurşuni",  hex: "#5a6e8b",
+    soft: "bg-[#edf1f8]", solid: "bg-[#5a6e8b]", border: "border-[#cad4e3]", text: "text-[#415167]", bar: "bg-[#5a6e8b]", ring: "ring-[#cad4e3]", accent: "border-l-[#5a6e8b]" },
   /* Aşağıdaki üçü, ekip dokuz kişiyi aştığında devreye girer. Aynı hue ailesinde
      bir "güçlü" tonla eşleşirler ama AÇIKLIK farkı yeterince büyük: lacivert
      maviden belirgin koyu, erik magentadan koyu, gül kırmızıdan pembe.
      Yan yana ayırt edilirler; yine de ilk dokuz kadar güçlü değiller, o yüzden
      sıranın SONUNDALAR — otomatik atama önce güçlü tonları tüketir. */
-  { key: "navy",    label: "Lacivert", hex: "#1e3a8a",
-    soft: "bg-[#e7ecf8]", solid: "bg-[#1e3a8a]", border: "border-[#c3cfeb]", text: "text-[#152a63]", bar: "bg-[#1e3a8a]", ring: "ring-[#c3cfeb]", accent: "border-l-[#1e3a8a]" },
-  { key: "plum",    label: "Erik",     hex: "#86198f",
-    soft: "bg-[#f7e8f8]", solid: "bg-[#86198f]", border: "border-[#e5c2e8]", text: "text-[#5e1265]", bar: "bg-[#86198f]", ring: "ring-[#e5c2e8]", accent: "border-l-[#86198f]" },
-  { key: "rose",    label: "Gül",      hex: "#e11d48",
-    soft: "bg-[#fde8ec]", solid: "bg-[#e11d48]", border: "border-[#f5c2ce]", text: "text-[#9f1239]", bar: "bg-[#e11d48]", ring: "ring-[#f5c2ce]", accent: "border-l-[#e11d48]" },
+  { key: "navy",    label: "Lacivert", hex: "#143990",
+    soft: "bg-[#f0efff]", solid: "bg-[#143990]", border: "border-[#d1cff7]", text: "text-[#1d48af]", bar: "bg-[#143990]", ring: "ring-[#d1cff7]", accent: "border-l-[#143990]" },
+  { key: "plum",    label: "Erik",     hex: "#851a90",
+    soft: "bg-[#fbecfb]", solid: "bg-[#851a90]", border: "border-[#eac9ea]", text: "text-[#861e90]", bar: "bg-[#851a90]", ring: "ring-[#eac9ea]", accent: "border-l-[#851a90]" },
+  { key: "rose",    label: "Gül",      hex: "#cc4469",
+    soft: "bg-[#ffecef]", solid: "bg-[#cc4469]", border: "border-[#f4c8cf]", text: "text-[#8e2c47]", bar: "bg-[#cc4469]", ring: "ring-[#f4c8cf]", accent: "border-l-[#cc4469]" },
 ];
 
 /**
@@ -146,15 +160,16 @@ function mix(hex: string, t: number): string {
    DOLU ZEMİN ÜSTÜNDEKİ METİN — beyaz mı mürekkep mi, ÖLÇÜLEREK seçilir.
 
    Kimlik rozeti (PersonAvatar) kişinin hex'ini zemin yapıp baş harfleri BEYAZ
-   yazıyordu. Paletin dört tonu beyaz metin için fazla açık:
-     Turuncu #df7314 → 3.18   Altın #c98e20 → 2.85
-     Zeytin  #998a2e → 3.48   Turkuaz #1796a4 → 3.54
-   Dördü de WCAG AA'nın (4.5) altında ve baş harfler 8.5–13px, yani "büyük
+   yazıyordu. Paletin üç tonu beyaz metin için fazla açık:
+     Turuncu #dc751f → 3.18   Altın #c08921 → 3.07   Turkuaz #2b95a2 → 3.55
+   Üçü de WCAG AA'nın (4.5) altında ve baş harfler 8.5–13px, yani "büyük
    metin" istisnasına da girmiyorlar. Okunmuyorlardı.
+   (Zeytin 2026-09-12'de koyulaştığı için artık beyazı 5.41 ile taşıyor;
+   liste ÖLÇÜMLE değil örnekle verilmiştir, kural aşağıda.)
 
    ÇÖZÜM KİMLİĞE DOKUNMAZ: hex aynı kalır — şerit, sol kenar, nokta ve kart
    zemini hep ondan türer; kişinin rengi kişinin rengidir. Değişen tek şey
-   ÜSTÜNE yazılan mürekkep. Sekiz ton beyaz alır, dördü koyu mürekkep.
+   ÜSTÜNE yazılan mürekkep. Dokuz ton beyaz alır, üçü koyu mürekkep.
    Kural sabit listeyle değil ÖLÇÜMLE işler; palete yeni bir ton eklense ya da
    kullanıcı kendi hex'ini girse de doğru cevabı kendi bulur.
    ────────────────────────────────────────────────────────────────────────── */

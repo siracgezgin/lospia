@@ -154,3 +154,87 @@ kaynak derecesi ikinci ölçüt.** Kurum içi yazılmış aforizmalar
   local ve prod eşit. Konu bazlı "aksadı" işareti artık canlıda çalışıyor.
 - Repo kökündeki `'` adlı 182 KB'lık kazara dosya (arama sonucu HTML'i). Takip edilmiyor;
   silmek için onay gerekiyor.
+
+---
+
+# İkinci tur — 12.09.2026: "renkleri canlılaştır"
+
+**İstek:** "profesyonelce iyileştir, diğer kısımları komple analiz et, renkleri
+canlılaştır ve pushla canlıya."
+
+## 8. Bulgu: tema `globals.css`'te durmuştu
+
+İznik jetonları kuruldu ama uygulamanın renk taşıyan geri kalanı eski paletle
+kaldı. Ölçüm:
+
+| yer | durum |
+|---|---|
+| `lib/design/semantics.ts` | ~90 sabit hex — kartlar, çipler, rozetler, grafikler |
+| `lib/design/person-colors.ts` | 12 kişi tonu, aynı eski hex'ler |
+| `lib/planning/categories.ts` | **tamamen Tailwind varsayılanı** (amber-50, emerald-800…) |
+| `lib/office/*`, `lib/crm/*`, `lib/creative/*` | aynı eski paletin kopyaları |
+
+Sonuç: aynı anlamın iki rengi vardı. "Gecikti" çipi `#a83a2c`, `--overdue`
+jetonu `#93002b`. Dokuz durumun tamamı böyleydi — tema değişince çipler eski
+temada kalıyordu.
+
+## 9. Yapılanlar
+
+**Durum çipleri artık jetondan türer.** Zemin ve metin `--overdue`, `--hold`,
+`--approval`, `--warning`, `--success`, `--danger`, `--urgent` hue'sundan,
+ailelerle aynı merdivenle (zemin L\*88.5/C\*17, metin L\*34). Kendi hex'leri yok.
+
+**Kimlik aileleri tek doygunluk seviyesine oturdu** (gamut'un %88'i — kabul
+görmüş kırmızı/mor/mavi/pembe ailelerinin zaten bulunduğu yer). Hue ve açıklık
+korundu: hiçbir departman renk değiştirmedi.
+
+**Tintler gri olmaktan çıktı.** En büyük kazanç kartın gövdesinde:
+
+| aile | çip kroması eski → yeni |
+|---|---|
+| turkuaz | 9.3 → 17.2 |
+| mavi | 11.9 → 17.2 |
+| lacivert | 10.8 → 17.3 |
+| gül | 7.1 → 13.9 |
+| kurşuni | 4.0 → 7.3 |
+
+**Takvim uygulamanın paletine geçti.** Dokuz kategori Tailwind varsayılanından
+departman ailelerine bağlandı. "Sistem" emerald'dı — ayrılmış "tamamlandı"
+yeşiliyle aynı aile; marka hue'suna (252°) alındı.
+
+**Kapanan erişilebilirlik kusurları**
+
+| kusur | eski | yeni |
+|---|---|---|
+| "Kontrol / Onay" sütun başlığı | **2.80** | 4.61 |
+| Altın kimlik rengi beyazda | **2.85** | 3.07 |
+| Kum kimlik rengi beyazda | **2.67** | 3.08 |
+| Pasif çip metni | **4.09** | 5.41 |
+
+**Kapanan tutarsızlıklar:** "Gül" iki ayrı renkti (kişi tonu `#e11d48`, Tasarım
+kategorisi `#cd7c91`) — tek aileye indi. "Dış ekip" ile "Influencer" CRM'de aynı
+hue'daydı; on yedi segment renk çemberine yayıldı. Tailwind'in `red-600`/`800`'ü
+(Acil çipi) ve `green-300`/`green-50`'si (Kontrol/Onay) jetonlara çevrildi.
+
+`--brand-soft` C\* 9.2 → 13.0: seçili kutucuk beyazdan belirgin ayrılıyor.
+
+## 10. Doğrulama
+
+- `typecheck` ✓ · `lint` 0 hata ✓ · `build` ✓
+- **40 ayrı zemin/metin çifti, AA altı 0, en düşük 5.05.**
+- Panel içinde Tailwind hazır rengi **kalmadı** (pazarlama sitesi hariç — o ayrı
+  bir tasarım yüzeyi).
+- Kimlik renkleri karşılıklı ayrım: en yakın çift ΔE 13.0 (eskiden 11.2).
+- **Gözle doğrulanmadı** — oturum açmadan iç ekranlar görülemiyor.
+
+## 11. ÇÖZÜLMEYEN — dürüst not
+
+Sıcak bant (kırmızı 39° · turuncu 60° · altın 78° · zeytin 97°) kırmızı-yeşil
+körlüğünde tek bir sarı-kahve eksenine düşüyor. Ölçüldü: en yakın çift
+döteranopide ΔE 4.4, protanopide 2.5 — "ayırt edilir" eşiği ~12. Önceki palette
+1.9 / 5.0 idi. Dört sıcak tonu yirmi L\* genişliğindeki bir aralığa sığdırmanın
+başka yolu yok; ayrımı artırmak için altını bronza, zeytini neredeyse siyaha
+çekmek gerekiyor — denendi, ΔE 4.3'te tavan yaptı ve rengin kendisi ölüyordu.
+
+**Sistemin gerçek cevabı renk değil:** her kişinin bir ikonu ve baş harfleri var.
+Yeni yüzey eklerken rengi TEK ayırt edici olarak kullanma.

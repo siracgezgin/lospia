@@ -69,31 +69,37 @@ export function sourceLabel(key: string | null | undefined): string | null {
 }
 
 // Soft badge tone per segment (reuses the muted palette used across the app).
+/* ON YEDİ SEGMENT, RENK ÇEMBERİNE YAYILDI.
+   Önceki hâlinde "Dış ekip" ile "Influencer" aynı hue'daydı (309) ve yalnız
+   doygunlukla ayrılıyordu; "Basın" ile "Dernek" ise iki ayrı gri tonuydu —
+   yan yana ayırt edilmiyorlardı. Şimdi her segmentin çemberde kendi yeri var,
+   üçü (Basın, Dernek, Diğer) bilerek sönük: kimliği olmayan kayıt renk
+   taşımasın. Zemin/metin çifti kart aileleriyle aynı merdivenden çıkıyor,
+   on yedisinin de kontrastı 5.96–6.08. */
 export const SEGMENT_TONE: Record<string, string> = {
-  outsource: "bg-[#eaf2ec] text-[#2f6142]",
-  toplanti: "bg-[#e9eefb] text-[#28448f]",
-  dis_ekip: "bg-[#f2eef7] text-[#5b3d84]",
-  uretim: "bg-[#f7efe4] text-[#82551a]",
-  ekibimiz: "bg-[#e6f4f1] text-[#15665b]",
-  dernek: "bg-[#f0f1f4] text-[#4a5262]",
-  vip: "bg-[#fbf2e2] text-[#8a5e14]",
-  wholesale: "bg-[#e8f1fd] text-[#1a4889]",
-  konsinye: "bg-[#e6f6f7] text-[#11707a]",
-  pr: "bg-[#fce9f3] text-[#9a216c]",
-  influencer: "bg-[#f1ecfc] text-[#5325a3]",
-  basin: "bg-[#eff2f6] text-[#43526b]",
-  stylist: "bg-[#f9eef1] text-[#9c3a55]",
-  celebrity: "bg-[#fdeae7] text-[#971f12]",
-  isbirligi: "bg-[#fdf0e3] text-[#964b0c]",
-  tedarikci: "bg-[#f4f1e2] text-[#675c16]",
-  diger: "bg-[#eef0f2] text-[#5c636b]",
+  celebrity:  "bg-[#ffd5ca] text-[#9d1c0f]",
+  isbirligi:  "bg-[#f9d8c3] text-[#7c400e]",
+  vip:        "bg-[#f2dbbf] text-[#6a4a0f]",
+  tedarikci:  "bg-[#e7debe] text-[#595110]",
+  uretim:     "bg-[#dce1c1] text-[#465610]",
+  outsource:  "bg-[#c7e6ce] text-[#165c31]",
+  ekibimiz:   "bg-[#b9e8de] text-[#165a50]",
+  konsinye:   "bg-[#b4e7ef] text-[#185860]",
+  toplanti:   "bg-[#c2e2fc] text-[#175575]",
+  wholesale:  "bg-[#d8dcfd] text-[#1a4d9f]",
+  dis_ekip:   "bg-[#e1dafa] text-[#273dca]",
+  influencer: "bg-[#edd7f4] text-[#7d1da7]",
+  pr:         "bg-[#f5d5ed] text-[#8c1e7d]",
+  stylist:    "bg-[#fcd3e4] text-[#941e60]",
+  basin:      "bg-[#c9e2ed] text-[#37545f]",
+  dernek:     "bg-[#eceff8] text-[#505a6d]",
+  diger:      "bg-[#e7f1f7] text-[#505b62]",
 };
-
 export const STATUS_TONE: Record<string, string> = {
-  aktif: "bg-[#dcf0e6] text-[#1f6e4d]",
-  takipte: "bg-[#e3effb] text-[#1f5fa8]",
-  beklemede: "bg-[#f6ecd4] text-[#8a6516]",
-  pasif: "bg-[#eef0f2] text-[#7a828b]",
+  aktif: "bg-[#dcf0e0] text-[#1e713d]",
+  takipte: "bg-[#cbe0fe] text-[#185382]",
+  beklemede: "bg-[#f5dac0] text-[#70470f]",
+  pasif: "bg-[#e8f0f6] text-[#596268]",
 };
 
 

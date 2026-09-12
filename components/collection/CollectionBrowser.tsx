@@ -59,16 +59,16 @@ const UNCAT = "__uncat__";
  *  var, o yüzden `Handbag`. Dördü de aynı çizgi kalınlığında, hepsi somut
  *  bir nesne. */
 const CATEGORY_IDENTITY: Record<string, { hex: string; icon: typeof Shirt }> = {
-  one_of_a_kind: { hex: "#c98e20", icon: Scissors },   // altın
-  ready_to_wear: { hex: "#5b6e8a", icon: Shirt },      // kurşuni
-  shoes:         { hex: "#1796a4", icon: Footprints }, // turkuaz
-  accessories:   { hex: "#7c3aed", icon: Handbag },    // mor
+  one_of_a_kind: { hex: "#c08921", icon: Scissors },   // altın
+  ready_to_wear: { hex: "#5a6e8b", icon: Shirt },      // kurşuni
+  shoes:         { hex: "#2b95a2", icon: Footprints }, // turkuaz
+  accessories:   { hex: "#7a3bed", icon: Handbag },    // mor
 };
-const UNCAT_IDENTITY = { hex: "#998a2e", icon: ClipboardList };
+const UNCAT_IDENTITY = { hex: "#766b16", icon: ClipboardList };
 
 /* Kullanıcının açtığı kategorinin kimliği: renk ANAHTARDAN türetilir, rastgele
    değil — aynı kategori her açılışta aynı rengi alır. */
-const NEW_CATEGORY_HUES = ["#1f6e4d", "#c98e20", "#2563c9", "#7c3aed", "#cc2e93", "#1796a4", "#d23320"];
+const NEW_CATEGORY_HUES = ["#1e713d", "#c08921", "#1f63cb", "#7a3bed", "#ce2a93", "#2b95a2", "#d82717"];
 function FALLBACK_IDENTITY(key: string): { hex: string; icon: typeof Shirt } {
   let h = 0;
   for (const ch of key) h = ((h * 31) + ch.charCodeAt(0)) & 0x7fffffff;

@@ -23,28 +23,28 @@ export type FileKind = {
   label: string;
 };
 
-export const KIND_FOLDER: FileKind = { icon: Folder, hex: "#c98e20", label: "Klasör" };
-export const KIND_DOC: FileKind = { icon: FileText, hex: "#2563c9", label: "Yazı" };
-export const KIND_SHEET: FileKind = { icon: Table2, hex: "#1f6e4d", label: "Tablo" };
+export const KIND_FOLDER: FileKind = { icon: Folder, hex: "#c08921", label: "Klasör" };
+export const KIND_DOC: FileKind = { icon: FileText, hex: "#1f63cb", label: "Yazı" };
+export const KIND_SHEET: FileKind = { icon: Table2, hex: "#1e713d", label: "Tablo" };
 
 /** MIME (ya da dosya adı uzantısı) → kimlik. */
 export function fileKindOf(mime: string | null | undefined, name: string | null | undefined): FileKind {
   const m = (mime ?? "").toLowerCase();
   const ext = (name ?? "").toLowerCase().split(".").pop() ?? "";
 
-  if (m.startsWith("image/")) return { icon: ImageIcon, hex: "#7c3aed", label: "Görsel" };
-  if (m.startsWith("video/")) return { icon: Film, hex: "#cc2e93", label: "Video" };
-  if (m.startsWith("audio/")) return { icon: Music, hex: "#cc2e93", label: "Ses" };
-  if (m === "application/pdf" || ext === "pdf") return { icon: FileType2, hex: "#d23320", label: "PDF" };
+  if (m.startsWith("image/")) return { icon: ImageIcon, hex: "#7a3bed", label: "Görsel" };
+  if (m.startsWith("video/")) return { icon: Film, hex: "#ce2a93", label: "Video" };
+  if (m.startsWith("audio/")) return { icon: Music, hex: "#ce2a93", label: "Ses" };
+  if (m === "application/pdf" || ext === "pdf") return { icon: FileType2, hex: "#d82717", label: "PDF" };
 
-  if (["doc", "docx", "odt", "rtf"].includes(ext)) return { icon: FileText, hex: "#2563c9", label: "Word" };
-  if (["xls", "xlsx", "csv", "ods"].includes(ext)) return { icon: FileSpreadsheet, hex: "#1f6e4d", label: "Excel" };
-  if (["ppt", "pptx", "key", "odp"].includes(ext)) return { icon: FileType2, hex: "#df7314", label: "Sunum" };
-  if (["md", "markdown"].includes(ext)) return { icon: FileText, hex: "#5b6e8a", label: "Markdown" };
-  if (["txt", "log"].includes(ext)) return { icon: FileText, hex: "#5b6e8a", label: "Metin" };
-  if (["zip", "rar", "7z", "tar", "gz"].includes(ext)) return { icon: FileArchive, hex: "#998a2e", label: "Arşiv" };
+  if (["doc", "docx", "odt", "rtf"].includes(ext)) return { icon: FileText, hex: "#1f63cb", label: "Word" };
+  if (["xls", "xlsx", "csv", "ods"].includes(ext)) return { icon: FileSpreadsheet, hex: "#1e713d", label: "Excel" };
+  if (["ppt", "pptx", "key", "odp"].includes(ext)) return { icon: FileType2, hex: "#dc751f", label: "Sunum" };
+  if (["md", "markdown"].includes(ext)) return { icon: FileText, hex: "#5a6e8b", label: "Markdown" };
+  if (["txt", "log"].includes(ext)) return { icon: FileText, hex: "#5a6e8b", label: "Metin" };
+  if (["zip", "rar", "7z", "tar", "gz"].includes(ext)) return { icon: FileArchive, hex: "#766b16", label: "Arşiv" };
 
-  return { icon: FileIcon, hex: "#5b6e8a", label: ext ? ext.toUpperCase() : "Dosya" };
+  return { icon: FileIcon, hex: "#5a6e8b", label: ext ? ext.toUpperCase() : "Dosya" };
 }
 
 /** Dış bağlantı türü → kimlik. Drive/Canva/Figma… hepsi kendi rengiyle. */
@@ -54,17 +54,17 @@ export function linkKindOf(documentType: string | null | undefined): FileKind {
        birebir aynı görünüyor, tıklayınca dışarı çıkıyordu (Sıraç, 2026-08-30:
        "drive'a tıklıyorum linke gidiyor ama ikonu dosya olarak kalmış").
        İkon nereye götürdüğünü söylemeli — dış bağlantı. */
-    case "drive_link":   return { icon: ExternalLink, hex: "#1f6e4d", label: "Drive bağlantısı" };
-    case "google_doc":   return { icon: FileText, hex: "#2563c9", label: "Google Doküman" };
-    case "google_sheet": return { icon: FileSpreadsheet, hex: "#1f6e4d", label: "Google E-Tablo" };
-    case "canva":        return { icon: Palette, hex: "#1796a4", label: "Canva" };
-    case "figma":        return { icon: Palette, hex: "#7c3aed", label: "Figma" };
-    case "pdf_link":     return { icon: FileType2, hex: "#d23320", label: "PDF bağlantısı" };
-    case "word_link":    return { icon: FileText, hex: "#2563c9", label: "Word bağlantısı" };
-    case "excel_link":   return { icon: FileSpreadsheet, hex: "#1f6e4d", label: "Excel bağlantısı" };
-    case "website":      return { icon: Globe, hex: "#5b6e8a", label: "Web sayfası" };
-    case "internal_note": return { icon: StickyNote, hex: "#c98e20", label: "Dahili not" };
-    default:             return { icon: LinkIcon, hex: "#5b6e8a", label: "Bağlantı" };
+    case "drive_link":   return { icon: ExternalLink, hex: "#1e713d", label: "Drive bağlantısı" };
+    case "google_doc":   return { icon: FileText, hex: "#1f63cb", label: "Google Doküman" };
+    case "google_sheet": return { icon: FileSpreadsheet, hex: "#1e713d", label: "Google E-Tablo" };
+    case "canva":        return { icon: Palette, hex: "#2b95a2", label: "Canva" };
+    case "figma":        return { icon: Palette, hex: "#7a3bed", label: "Figma" };
+    case "pdf_link":     return { icon: FileType2, hex: "#d82717", label: "PDF bağlantısı" };
+    case "word_link":    return { icon: FileText, hex: "#1f63cb", label: "Word bağlantısı" };
+    case "excel_link":   return { icon: FileSpreadsheet, hex: "#1e713d", label: "Excel bağlantısı" };
+    case "website":      return { icon: Globe, hex: "#5a6e8b", label: "Web sayfası" };
+    case "internal_note": return { icon: StickyNote, hex: "#c08921", label: "Dahili not" };
+    default:             return { icon: LinkIcon, hex: "#5a6e8b", label: "Bağlantı" };
   }
 }
 
