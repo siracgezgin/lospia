@@ -512,6 +512,11 @@ export async function assignTopicAsTask(
       .filter((id) => !have.has(id))
       .map((member_id) => ({ workspace_id: ctx.workspaceId, task_id: taskId, member_id }));
     if (toAdd.length) {
+      /* SERVİS ROL İSTEMCİSİ: katılımcı satırı BAŞKA birinin adına yazılır;
+         `task_member_completions` RLS'i üyenin yalnız kendi satırını
+         yazmasına izin verir, bu yüzden atamayı yönetici yaptığında normal
+         istemci reddedilir. Yetki yukarıda kontrol edildi ve satır
+         `ctx.workspaceId` ile damgalanıyor — kapsam korunuyor. */
       const { getAdminClient } = await import("@/lib/supabase/admin");
       const writer = getAdminClient() ?? supabase;
       const { error: partErr } = await writer.from("task_member_completions").insert(toAdd);

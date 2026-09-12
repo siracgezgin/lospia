@@ -492,12 +492,27 @@ export async function removeWorkspaceMemberAccount(
     return { ok: true, hardDeleted: false };
   }
 
-  // Re-attribute the RESTRICT / NOT-NULL authorship refs to the acting owner so
-  // the auth-user cascade isn't blocked. Tasks and history are preserved.
+  /* Yazarlık referansları silinen kullanıcıdan ALINIR — yoksa auth kullanıcısı
+     RESTRICT/NOT NULL kısıtları yüzünden silinemez. Görevler ve geçmiş korunur.
+
+     ÜÇÜ BİLEREK ÇALIŞMA ALANINDAN BAĞIMSIZ: `deleteUser` kullanıcıyı AUTH'tan
+     tümüyle siler, yani kişi bütün çalışma alanlarından gider. Bir tanesini
+     bile geride bırakırsak silme FK hatasıyla düşer ve kullanıcı yarı silinmiş
+     kalır. Bu satırlar o yüzden `targetUserId`'nin TÜM satırlarını taşır. */
   await admin.from("tasks").update({ created_by: ctx.user.id }).eq("created_by", targetUserId);
   await admin.from("task_activity").update({ user_id: ctx.user.id }).eq("user_id", targetUserId);
   await admin.from("attachments").update({ uploaded_by: ctx.user.id }).eq("uploaded_by", targetUserId);
-  await admin.from("workspaces").update({ created_by: ctx.user.id }).eq("created_by", targetUserId);
+  /* AMA `workspaces.created_by` BAŞKA BİR ŞEY: o, bir yazarlık izi değil,
+     ÇALIŞMA ALANININ KURUCUSUDUR. Kapsamsız bırakıldığında, silinen kişinin
+     kurduğu BAŞKA çalışma alanlarının kuruculuğu da bu işlemi yapan yöneticiye
+     geçiyordu — o yöneticinin hiç üyesi olmadığı alanlar dâhil. Bugün tek
+     kiracılı çalıştığımız için sessiz duran bir sınır ihlali; çok kiracıya
+     geçildiğinde veri sahipliğini karıştırırdı. Yalnız BU alan taşınır. */
+  await admin
+    .from("workspaces")
+    .update({ created_by: ctx.user.id })
+    .eq("created_by", targetUserId)
+    .eq("id", ctx.workspaceId);
 
   // Drop pending grants for this e-mail so they can't silently re-attach later.
   if (removedEmail) {

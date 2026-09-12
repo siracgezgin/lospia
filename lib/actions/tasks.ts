@@ -1198,8 +1198,16 @@ export async function deleteSavedView(
   viewId: string
 ): Promise<{ success: true } | { error: string }> {
   const supabase = await createClient();
-  const { error } = await supabase.from("saved_views").delete().eq("id", viewId);
+  /* `count: "exact"` ŞART. RLS "yalnız sahibi siler" diyor; başkasının
+     görünümünü silmeye çalışan kullanıcıda sorgu HATA DÖNDÜRMEZ, sıfır satır
+     siler. Eski kod bu durumda da `success` diyordu — arayüz "silindi"
+     yazıyor, görünüm ekranda duruyordu. Sessiz yalan, hatadan kötüdür. */
+  const { error, count } = await supabase
+    .from("saved_views")
+    .delete({ count: "exact" })
+    .eq("id", viewId);
   if (error) return { error: error.message };
+  if (count === 0) return { error: "Görünüm bulunamadı ya da silme yetkiniz yok." };
   revalidatePath("/board");
   revalidatePath("/list");
   return { success: true };

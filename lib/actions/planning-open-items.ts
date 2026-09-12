@@ -336,6 +336,11 @@ export async function assignOpenItemAsTask(
       .eq("task_id", taskId);
     const have = new Set((existingComps ?? []).map((r) => r.member_id as string));
     if (!have.has(memberId)) {
+      /* SERVİS ROL İSTEMCİSİ: katılımcı satırı BAŞKA birinin adına yazılır;
+         `task_member_completions` RLS'i üyenin yalnız kendi satırını
+         yazmasına izin verir, bu yüzden atamayı yönetici yaptığında normal
+         istemci reddedilir. Yetki yukarıda kontrol edildi ve satır
+         `ctx.workspaceId` ile damgalanıyor — kapsam korunuyor. */
       const { getAdminClient } = await import("@/lib/supabase/admin");
       const writer = getAdminClient() ?? supabase;
       const { error: partErr } = await writer

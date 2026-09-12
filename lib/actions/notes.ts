@@ -150,9 +150,22 @@ export async function reorderNotes(updates: { id: string; position: number }[]) 
   const parsed = z.array(itemSchema).safeParse(updates);
   if (!parsed.success) return { error: "Geçersiz veri" };
 
-  for (const { id, position } of parsed.data) {
-    await supabase.from("workspace_notes").update({ position }).eq("id", id);
-  }
+  /* SIRALI DEĞİL PARALEL. Eskiden her not için ayrı bir `await` vardı: yirmi
+     notluk bir panoda tek sürükle-bırak YİRMİ ardışık Supabase turu demekti ve
+     kullanıcı sıranın "geç oturmasını" bekliyordu (proje hafızası: darboğaz
+     sıralı turlardır). Aynı ifadeler, aynı RLS — yalnız beklemeler üst üste
+     biniyor.
+
+     HATA DA ARTIK YUTULMUYOR: eski kod dönen `error`'a hiç bakmıyordu, RLS bir
+     satırı reddetse bile "başarılı" diyor, sıra ekranda doğru görünüp
+     yenilemede eski hâline dönüyordu. */
+  const results = await Promise.all(
+    parsed.data.map(({ id, position }) =>
+      supabase.from("workspace_notes").update({ position }).eq("id", id),
+    ),
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) return { error: failed.error.message };
 
   revalidatePath("/board");
   return { success: true };
