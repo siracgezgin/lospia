@@ -5,6 +5,7 @@ import { ArrowRight, CheckCircle2, ShieldAlert, XCircle } from "lucide-react";
 import { startOfWeek, addDays, format } from "date-fns";
 import { requireModuleMember } from "@/lib/modules/context";
 import { getProfile } from "@/lib/supabase/server";
+import { kimMatches } from "@/lib/planning/initials";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { PhotoNudge } from "@/components/home/PhotoNudge";
 import { categoryMeta } from "@/lib/planning/categories";
@@ -69,6 +70,8 @@ type HomeMeeting = {
   /** Toplantının kendi katılımcıları — konu bazında kimse eklenmemiş olabilir. */
   participant_ids?: string[] | null;
   collaborator_ids?: string[] | null;
+  /** Serbest metin "Kim" — ekip kişiyi çoğu zaman buraya kısaltmayla yazıyor. */
+  kim?: string | null;
   /** TOPLANTI ÖNCESİ GÖRÜNSÜN diye gündem satırları (2026-09-07).
    *  `participant_ids`/`collaborator_ids` KİMİN konusu olduğunu söyler —
    *  Ana Sayfa önce bakan kişinin kendi konularını yazar. */
@@ -78,6 +81,7 @@ type HomeMeeting = {
     done_at?: string | null;
     participant_ids?: string[] | null;
     collaborator_ids?: string[] | null;
+    kim?: string | null;
   }[] | null;
 };
 
@@ -157,8 +161,8 @@ export default async function HomePage() {
     : Promise.resolve({ data: [] as { created_at: string }[] });
 
   const meetingSelect =
-    "id, meeting_date, time_slot, category, title, status, participant_ids, collaborator_ids, " +
-    "planning_topics(text, position, done_at, participant_ids, collaborator_ids)";
+    "id, meeting_date, time_slot, category, title, status, participant_ids, collaborator_ids, kim, " +
+    "planning_topics(text, position, done_at, participant_ids, collaborator_ids, kim)";
   const [participantTaskIds, meetingsRes0, profile, lastBackupRes] = await Promise.all([
     participantTaskIdsPromise,
     supabase
@@ -190,8 +194,8 @@ export default async function HomePage() {
     meetingsRes = await supabase
       .from("planning_meetings")
       .select(
-        "id, meeting_date, time_slot, category, title, participant_ids, collaborator_ids, " +
-          "planning_topics(text, position, done_at, participant_ids, collaborator_ids)",
+        "id, meeting_date, time_slot, category, title, participant_ids, collaborator_ids, kim, " +
+          "planning_topics(text, position, done_at, participant_ids, collaborator_ids, kim)",
       )
       .eq("workspace_id", workspaceId)
       .gte("meeting_date", todayIso)
@@ -254,39 +258,42 @@ export default async function HomePage() {
   // Takvim tablosu migrate edilmemişse sessizce boş kalır — Ana Sayfa çökmez.
   const meetings = (meetingsRes.error ? [] : (meetingsRes.data ?? [])) as HomeMeeting[];
 
-  /* ANA SAYFA SENİN TOPLANTILARINI YAZAR.
-     Sıraç (2026-09-12): "Toplantı konusu varsa ve kişi dahil edilmişse onda
-     görünsün; diğer türlü bir anlamlı kalmıyor."
+  /* ANA SAYFA SADECE SENİN TOPLANTILARINI YAZAR.
+     Sıraç (2026-09-12, üç kez): "Toplantı konusu varsa ve kişi dahil edilmişse
+     onda görünsün, diğer türlü bir anlamlı kalmıyor." — "halen öyle."
 
-     Burada günün BÜTÜN toplantıları listeleniyordu. Katılmadığın bir toplantı
-     Ana Sayfa'da bir şey söylemez — "bugün ne yapacağım?" sorusunun cevabı
-     değil, gürültüdür. Takvim zaten tam listeyi gösteriyor; burası kişisel.
+     İLK İKİ DENEMEM YETMEDİ. Önce yalnız KONU satırını kişiselleştirdim,
+     toplantının kendisi herkese listelenmeye devam etti. Sonra toplantıyı da
+     süzdüm ama "hiçbirinde adın geçmiyorsa hepsini göster" diye bir YEDEK KURAL
+     bıraktım — tam da şikâyet edilen davranış buydu, dahil olmayan kişi yine
+     üç toplantıyı görüyordu. Yedek kural kalktı.
 
-     Dahil sayılmanın İKİ yolu var, çünkü ekip bazen toplantıya, bazen tek bir
-     konuya kişi ekliyor: toplantının kendi katılımcıları ya da herhangi bir
-     KONUNUN katılımcıları.
+     DAHİL SAYILMANIN ÜÇ YOLU var, çünkü ekip katılımcıyı üç ayrı yoldan
+     giriyor: toplantının katılımcı/destekçi alanları, herhangi bir KONUNUN
+     aynı alanları, ya da serbest metin "Kim" (Aslı'nın takvimindeki "Meral,
+     SE" gibi). Üçüne birden bakılmazsa kişileri kısaltmayla yazan toplantılar
+     kimsenin ana sayfasında görünmezdi.
 
-     VERİ SEYREKSE PANEL BOŞALMASIN: hiçbir toplantıda adın geçmiyorsa günün
-     tamamı gösterilir. Katılımcı alanı çoğu toplantıda boş olabilir (ekip
-     serbest metin "Kim" alanını da kullanıyor) ve o durumda boş bir panel
-     göstermek, bilgiyi tümden saklamak olurdu. */
+     ADIN HİÇBİR YERDE GEÇMİYORSA PANEL BOŞ KALIR ve bunu açıkça yazar. Takvim
+     tam listeyi göstermeye devam ediyor, "Günü aç" bağlantısı bir tık ötede —
+     bilgi kaybolmuyor, yalnız Ana Sayfa kişisel kalıyor. */
+  const viewerName = profile?.full_name ?? null;
+  const isMineIds = (ids?: string[] | null) => (ids ?? []).includes(user.id);
   const inMeeting = (m: HomeMeeting) =>
-    (m.participant_ids ?? []).includes(user.id) ||
-    (m.collaborator_ids ?? []).includes(user.id) ||
+    isMineIds(m.participant_ids) ||
+    isMineIds(m.collaborator_ids) ||
+    kimMatches(m.kim, viewerName) ||
     (m.planning_topics ?? []).some(
       (t) =>
-        (t.participant_ids ?? []).includes(user.id) ||
-        (t.collaborator_ids ?? []).includes(user.id),
+        isMineIds(t.participant_ids) ||
+        isMineIds(t.collaborator_ids) ||
+        kimMatches(t.kim, viewerName),
     );
-  const mineMeetings = meetings.filter(inMeeting);
-  const shown = mineMeetings.length > 0 ? mineMeetings : meetings;
-  /* Kişiselleştiyse başlık da onu söyler — panel "neden eksik?" sorusu
-     doğurmasın. */
-  const meetingsArePersonal = mineMeetings.length > 0;
+  const shown = meetings.filter(inMeeting);
   const todayMeetings = shown.filter((m) => m.meeting_date === todayIso);
   const laterMeetings = shown.filter((m) => m.meeting_date > todayIso);
 
-  const fullName = profile?.full_name ?? null;
+  const fullName = viewerName;
   const firstName = fullName?.trim().split(/\s+/)[0] ?? null;
 
   /* Ana sayfa bir arşiv değil: uzun kuyruklar kesilir, gerisi listeye gider. */
@@ -343,7 +350,13 @@ export default async function HomePage() {
         <Panel title="Haftanın kalanı" href={`/planning?week=${todayIso}`}>
           <ul className="space-y-2 pt-1">
             {laterMeetings.slice(0, 8).map((m) => (
-              <MeetingRow key={m.id} meeting={m} day={weekdayTr(m.meeting_date)} viewerId={user.id} />
+              <MeetingRow
+                key={m.id}
+                meeting={m}
+                day={weekdayTr(m.meeting_date)}
+                viewerId={user.id}
+                viewerName={viewerName}
+              />
             ))}
           </ul>
         </Panel>
@@ -460,18 +473,15 @@ export default async function HomePage() {
                   <SeeAll href={`/planning?v=gun&d=${todayIso}`} label="Günü aç" />
                 </div>
                 {todayMeetings.length === 0 ? (
-                  /* Liste kişiselleştiyse boş mesaj da onu söyler: "toplantı
-                     yok" ile "SENİN toplantın yok" ayrı şeylerdir — takvimde
-                     toplantı dururken "planlı toplantı yok" demek yalan olurdu. */
+                  /* "Toplantı yok" DEMİYOR: takvimde toplantı dururken bu yalan
+                     olurdu. Panel kişisel, mesaj da öyle. */
                   <p className="text-[13.5px] text-subtle">
-                    {meetingsArePersonal
-                      ? "Bugün katıldığın toplantı yok."
-                      : "Planlı toplantı yok."}
+                    Bugün katıldığın toplantı yok.
                   </p>
                 ) : (
                   <ul className="space-y-2">
                     {todayMeetings.map((m) => (
-                      <MeetingRow key={m.id} meeting={m} viewerId={user.id} />
+                      <MeetingRow key={m.id} meeting={m} viewerId={user.id} viewerName={viewerName} />
                     ))}
                   </ul>
                 )}
@@ -639,7 +649,10 @@ function MoreLink({ href }: { href: string }) {
  * Konular başlığın ALTINDA tek satırda, "·" ile ayrık durur: sayı değil METİN
  * (sadelik kuralı — "3 konu" bir puandır, konuların adı bir tariftir).
  */
-function MeetingRow({ meeting, day, viewerId }: { meeting: HomeMeeting; day?: string; viewerId: string }) {
+function MeetingRow(
+  { meeting, day, viewerId, viewerName }:
+  { meeting: HomeMeeting; day?: string; viewerId: string; viewerName: string | null },
+) {
   const meta = categoryMeta(meeting.category);
   const iso = String(meeting.meeting_date).slice(0, 10);
   /* GÜNDEM ÖNCE KİŞİSELDİR.
@@ -657,9 +670,11 @@ function MeetingRow({ meeting, day, viewerId }: { meeting: HomeMeeting; day?: st
   const rows = [...(meeting.planning_topics ?? [])]
     .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
     .filter((t) => !!t.text?.trim());
+  /* Toplantı seviyesindeki kuralın AYNISI: yapısal alanlar + serbest metin. */
   const isMine = (t: (typeof rows)[number]) =>
     (t.participant_ids ?? []).includes(viewerId) ||
-    (t.collaborator_ids ?? []).includes(viewerId);
+    (t.collaborator_ids ?? []).includes(viewerId) ||
+    kimMatches(t.kim, viewerName);
   const mine = rows.filter(isMine);
   const personal = mine.length > 0;
   const agenda = (personal ? mine : rows).map((t) => t.text!.trim());

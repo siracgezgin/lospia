@@ -27,3 +27,30 @@ export function unresolvedKim(kim: string | null | undefined, resolvedNames: str
       ),
   );
 }
+
+/**
+ * Serbest metin "Kim" alanı BU KİŞİYİ mi işaret ediyor?
+ *
+ * Ekip katılımcıyı iki ayrı yoldan giriyor: ya yapısal alanlar
+ * (`participant_ids` / `collaborator_ids`), ya da Aslı'nın takvimindeki gibi
+ * serbest metin ("Meral, SE"). Ana Sayfa "bu toplantı benim mi?" diye
+ * sorarken İKİSİNE de bakmak zorunda — yalnız yapısal alana bakmak, kişileri
+ * kısaltmayla yazan toplantıları herkesin gözünden düşürürdü.
+ *
+ * Eşleşme kuralı `unresolvedKim` ile AYNI: tam ad, baş harfler ya da adın ilk
+ * kelimesi. Tek yerde tanımlı olsun ki iki ekran aynı kişiyi farklı
+ * çözmesin.
+ */
+export function kimMatches(kim: string | null | undefined, name: string | null | undefined): boolean {
+  const who = (name ?? "").trim();
+  if (!who) return false;
+  const tokens = (kim ?? "").split(",").map((t) => t.trim()).filter(Boolean);
+  if (!tokens.length) return false;
+  const ini = initialsOf(who);
+  return tokens.some(
+    (tok) =>
+      lower(who) === lower(tok) ||
+      ini === tok.toLocaleUpperCase("tr-TR") ||
+      lower(who).startsWith(lower(tok) + " "),
+  );
+}
