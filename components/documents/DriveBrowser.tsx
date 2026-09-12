@@ -22,6 +22,7 @@ import { PersonAvatar } from "@/components/ui/PersonAvatar";
 import { personTone } from "@/lib/design/person-colors";
 import { Tile, TileGrid } from "@/components/ui/TileGrid";
 import { SortHeader } from "@/components/ui/SortHeader";
+import { MemberMultiSelect, type Member } from "@/components/planning/MemberMultiSelect";
 import {
   KIND_FOLDER, KIND_DOC, KIND_SHEET, fileKindOf, linkKindOf, humanSize,
   type FileKind,
@@ -388,6 +389,19 @@ export function DriveBrowser({
   /* Mail penceresinin hedefi. Klasörler paylaşılmaz (bir kap, bir dosya
      değil); kayıt türleri paylaşılır. */
   const [shareTarget, setShareTarget] = useState<DriveItem | null>(null);
+
+  /* Paylaşım penceresinin kişi listesi. Ayrı bir sorgu YOK: kabuk zaten
+     memberNames/memberAvatars'ı taşıyor (liste ve kart sahibi için). Adı
+     olmayan kaydı dışarıda bırakıyoruz — seçicide boş satır çizmenin
+     karşılığı yok. */
+  const shareMembers = useMemo<Member[]>(
+    () =>
+      Object.entries(memberNames)
+        .filter(([, name]) => !!name && name !== "—")
+        .map(([id, name]) => ({ id, name, photoUrl: memberAvatars[id] ?? null }))
+        .sort((a, b) => a.name.localeCompare(b.name, "tr")),
+    [memberNames, memberAvatars],
+  );
   /** Arama kutusu — boş değilse TÜM ağaçta arar (Drive gibi). */
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | ItemType>("all");
@@ -959,7 +973,7 @@ export function DriveBrowser({
        "burda paylaş olsun"). Klasörde mail, içindeki her dosya için ayrı
        imzalı indirme bağlantısı taşır. */
     const shareAction: MenuAction = {
-      label: "Paylaş (mail ile)",
+      label: "Paylaş",
       icon: Mail,
       onSelect: () => setShareTarget(it),
     };
@@ -1636,6 +1650,7 @@ export function DriveBrowser({
         <ShareDialog
           key={shareTarget.key}
           item={shareTarget}
+          members={shareMembers}
           onClose={() => setShareTarget(null)}
         />
       )}
@@ -2198,11 +2213,14 @@ function DriveGrid({
  * bağlantısı olarak gider — gerekçesi lib/email/templates/document-share.ts'te.
  */
 function ShareDialog({
-  item, onClose,
+  item, members, onClose,
 }: {
   item: DriveItem;
+  /** Sistemdeki kişiler — takvimdeki davet akışıyla aynı seçici. */
+  members: Member[];
   onClose: () => void;
 }) {
+  const [pickedIds, setPickedIds] = useState<string[]>([]);
   const [emails, setEmails] = useState<string[]>([]);
   const [draft, setDraft] = useState("");
   const [note, setNote] = useState("");
@@ -2226,11 +2244,15 @@ function ShareDialog({
        doğrudan "Gönder"e basıyor ve adresi kaybediyordu. */
     const pending = draft.split(/[,;\s]+/).map((p) => p.trim()).filter(Boolean);
     const all = [...new Set([...emails, ...pending])];
-    if (!all.length) { setError("En az bir e-posta adresi girin."); return; }
+    if (!all.length && !pickedIds.length) {
+      setError("En az bir kişi seçin ya da e-posta adresi girin.");
+      return;
+    }
     setError(null);
     setResult(null);
     startSend(async () => {
       const res = await sendDocumentByEmail(item.type as ShareItemType, item.id, {
+        memberIds: pickedIds,
         recipients: all,
         note: note.trim() || null,
       });
@@ -2240,7 +2262,11 @@ function ShareDialog({
       const parts: string[] = [];
       if (res.sent.length) parts.push(`${res.sent.join(", ")} adresine gönderildi.`);
       if (res.failed.length) {
-        parts.push(`Gönderilemedi: ${res.failed.map((f) => f.to).join(", ")}.`);
+        /* Sebep de yazılır: "adresi tanımlı değil" ile "sunucu reddetti" aynı
+           şey değil; kullanıcı hangisini düzelteceğini bilsin. */
+        parts.push(
+          `Gönderilemedi: ${res.failed.map((f) => `${f.to} (${f.reason})`).join(" · ")}`,
+        );
       }
       setResult(parts.join(" ") || "Gönderilecek adres bulunamadı.");
     });
@@ -2273,6 +2299,40 @@ function ShareDialog({
       }
     >
       <div className="space-y-3">
+        {/* SİSTEMDEKİ KİŞİLER — takvimdeki davet akışının aynısı. Adresini
+            yazdırmak yerine kişiyi seçtiriyoruz: adres kimlikten çözülüyor,
+            yani kişinin bildirim adresi değişse bile paylaşım doğru yere
+            gider. Adresi tanımlı olmayan kişi sessizce düşmez, sonuçta yazar. */}
+        <Field label="Kime" htmlFor="share-people" hint="Ekipten kişi seçin.">
+          <div id="share-people">
+            <MemberMultiSelect
+              members={members}
+              selected={pickedIds}
+              onChange={setPickedIds}
+              placeholder="Kişi seç"
+            />
+          </div>
+        </Field>
+
+        <Field label="Ekip dışından e-posta" htmlFor="share-mail" hint="Enter ya da virgül ile birden çok adres eklenir.">
+          <TextInput
+            id="share-mail"
+            type="email"
+            inputMode="email"
+            placeholder="ornek@firma.com"
+            value={draft}
+            disabled={sending}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === "," || e.key === ";") {
+                e.preventDefault();
+                commitDraft(draft);
+              }
+            }}
+            onBlur={() => commitDraft(draft)}
+          />
+        </Field>
+
         {emails.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {emails.map((e) => (
@@ -2294,26 +2354,6 @@ function ShareDialog({
             ))}
           </div>
         )}
-
-        <Field label="E-posta adresi" htmlFor="share-mail" hint="Enter ya da virgül ile birden çok adres eklenir.">
-          <TextInput
-            id="share-mail"
-            autoFocus
-            type="email"
-            inputMode="email"
-            placeholder="ornek@firma.com"
-            value={draft}
-            disabled={sending}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === "," || e.key === ";") {
-                e.preventDefault();
-                commitDraft(draft);
-              }
-            }}
-            onBlur={() => commitDraft(draft)}
-          />
-        </Field>
 
         <Field label="Not" htmlFor="share-note" hint="İsteğe bağlı — mailin içinde yazar.">
           <TextArea

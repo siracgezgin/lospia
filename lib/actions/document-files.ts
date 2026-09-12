@@ -10,6 +10,7 @@ import { documentShareEmail } from "@/lib/email/templates/document-share";
 /* Tür etiketi UI'daki ikonla AYNI kaynaktan gelir (file-kind.ts). Mailde
    "Sunum" yazarken ekranda "PPTX" görünmesin — tek terminoloji kuralı. */
 import { fileKindOf } from "@/lib/office/file-kind";
+import { getDisplayNotificationEmail } from "@/lib/utils/notification-email";
 
 // Dokümanlar — klasör ağacı + gerçek dosya yükleme (20240312).
 //
@@ -322,13 +323,23 @@ export async function moveDocument(
 const FOLDER_FILE_LIMIT = 25;
 
 const ShareSchema = z.object({
+  /* İKİ KAYNAK: sistemdeki kişiler ve serbest adresler.
+     Takvimin davet akışıyla aynı mantık (Sıraç, 12.09.2026: "paylaş dedikten
+     sonra bizim sistemdeki kişiler de orada çıkmalı, calendardaki mantık").
+     Üyenin adresini kullanıcıya yazdırmak hem zahmet hem hata kaynağıydı;
+     ayrıca kişinin bildirim adresi değişince paylaşım eski adrese giderdi.
+     Kimlikten çözmek her zaman güncel adresi verir. */
+  memberIds: z.array(z.string().uuid()).max(50).optional().default([]),
   /* Adresler tek tek doğrulanır: bir tanesi bozuksa diğerleri yine gitsin
      istemiyoruz — yanlış adres sessizce düşmesin, kullanıcı düzeltsin. */
   recipients: z
     .array(z.string().trim().email("Geçersiz e-posta adresi."))
-    .min(1, "En az bir e-posta adresi girin.")
-    .max(20, "Tek seferde en fazla 20 adrese gönderilebilir."),
+    .max(20, "Tek seferde en fazla 20 adrese gönderilebilir.")
+    .optional()
+    .default([]),
   note: z.string().trim().max(1000).optional().nullable(),
+}).refine((v) => v.memberIds.length + v.recipients.length > 0, {
+  message: "En az bir kişi seçin ya da e-posta adresi girin.",
 });
 
 export type ShareDocumentInput = z.infer<typeof ShareSchema>;
@@ -478,11 +489,50 @@ export async function sendDocumentByEmail(
   const actorName =
     ((actor?.full_name as string | null) || (actor?.email as string | null)) ?? null;
 
-  /* Aynı adres iki kez yazıldıysa tek mail gitsin — "üç kere geldi" demesin. */
-  const recipients = [...new Set(parsed.data.recipients.map((r) => r.trim().toLowerCase()))];
+  /* SEÇİLEN ÜYELERİN ADRESİ KİMLİKTEN ÇÖZÜLÜR — bildirim adresi varsa o,
+     yoksa profil adresi. `@lospia.local` yer tutucusu ATLANIR: o adres
+     yönetici-oluşturmalı hesapların iç giriş kimliğidir, mail alamaz.
+     Adresi olmayan kişi sessizce düşmez; arayüze `failed` olarak döner. */
+  const noAddress: { to: string; reason: string }[] = [];
+  const memberEmails: string[] = [];
+  if (parsed.data.memberIds.length) {
+    const { data: mrows } = await supabase
+      .from("workspace_members")
+      .select("user_id, notification_email, profiles(full_name, email)")
+      .eq("workspace_id", ctx.workspaceId)
+      .in("user_id", parsed.data.memberIds);
+    for (const m of (mrows ?? []) as {
+      user_id: string; notification_email: string | null;
+      profiles: { full_name: string | null; email: string | null } | { full_name: string | null; email: string | null }[] | null;
+    }[]) {
+      const pr = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
+      const { email } = getDisplayNotificationEmail({
+        notification_email: m.notification_email,
+        profiles: { email: pr?.email ?? null },
+      });
+      if (email) memberEmails.push(email);
+      else {
+        noAddress.push({
+          to: pr?.full_name || "Adsız kişi",
+          reason: "Bu kişinin e-posta adresi tanımlı değil (Ayarlar → Kişiler).",
+        });
+      }
+    }
+  }
+
+  /* Aynı adres iki kez yazıldıysa tek mail gitsin — "üç kere geldi" demesin.
+     Üye adresiyle elle yazılan adres çakışırsa da tek mail gider. */
+  const recipients = [
+    ...new Set([...memberEmails, ...parsed.data.recipients].map((r) => r.trim().toLowerCase())),
+  ];
+  if (!recipients.length) {
+    return { error: noAddress.length
+      ? "Seçilen kişilerin e-posta adresi tanımlı değil (Ayarlar → Kişiler)."
+      : "Gönderilecek adres bulunamadı." };
+  }
 
   const sent: string[] = [];
-  const failed: { to: string; reason: string }[] = [];
+  const failed: { to: string; reason: string }[] = [...noAddress];
   for (const to of recipients) {
     const res = await sendEmail(
       documentShareEmail({
