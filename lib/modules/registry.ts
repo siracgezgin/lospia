@@ -251,36 +251,10 @@ export function modulesForRole(isAdmin: boolean): ModuleEntry[] {
   return MODULE_DIRECTORY.filter((m) => m.access === "all" || isAdmin);
 }
 
-// ---------------------------------------------------------------------------
-// ESKİ departman-kart modeli — KULLANIM DIŞI.
-// /modules artık DepartmentCard çizmiyor: 18 link yalnızca 8 rotaya gidiyor ve
-// aynı ekranlara farklı isimlerle ikinci/üçüncü kapılar açıyordu ("her şey her
-// yerde" karmaşasının kaynağı). Tip + veri, components/modules/DepartmentCard
-// derlenmeye devam etsin diye duruyor; dosya silme onayıyla birlikte bu blok da
-// kaldırılacak.
-// ---------------------------------------------------------------------------
-
-export type ModuleReadiness = "ready" | "prep";
-
-export interface ModuleLink {
-  label: string;
-  href: string;
-  readiness: ModuleReadiness;
-  /** Only surfaced to owner/admin when true (e.g. yönetici görünümü). */
-  adminOnly?: boolean;
-}
-
-export interface DepartmentModule {
-  /** Stable key — also matches the seeded department name for task counts. */
-  key: string;
-  /** Department name exactly as seeded (used to join live task counts). */
-  departmentName: string;
-  title: string;
-  description: string;
-  /** AF design colour family key (see lib/design/semantics FAMILY). */
-  colorKey: string;
-  links: ModuleLink[];
-}
-
-/** @deprecated /modules artık bu listeyi çizmiyor — bkz. MODULE_DIRECTORY. */
-export const DEPARTMENT_MODULES: DepartmentModule[] = [];
+/* ESKİ DEPARTMAN-KART MODELİ SİLİNDİ (12.09.2026, kullanıcı onayıyla).
+   /modules o kartları çizmeyi bırakmıştı: 18 bağlantı yalnız 8 rotaya
+   gidiyor, aynı ekranlara farklı isimlerle ikinci-üçüncü kapılar açıyordu
+   ("her şey her yerde" karmaşasının kaynağı). Tip ve boş dizi yalnız
+   components/modules/DepartmentCard derlensin diye duruyordu; o dosya da
+   silindiği için blok tümüyle kalktı.
+   Tek kaynak MODULE_DIRECTORY'dir (yukarıda). */

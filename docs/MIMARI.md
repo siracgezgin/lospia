@@ -372,7 +372,7 @@ supabase gen types typescript --local > types/database.ts
 | `workspace_backups` migration'ı | ✅ prod'a uygulandı (2026-08-30) |
 | `20240334` üye sahipliği + görünürlük | ✅ prod'a uygulandı (2026-08-30) |
 | `types/database.ts` | ✅ `supabase gen types` ile yeniden üretildi (visibility sütunları dahil) |
-| Ölü kod | `components/modules/DepartmentCard.tsx`, `components/home/ShortcutCard.tsx`, `ProductionSheetsView.tsx`, registry'deki `DEPARTMENT_MODULES` — silme onayı bekliyor |
+| Ölü kod | ✅ temizlendi (2026-09-12): 14 dosya + registry'deki `DEPARTMENT_MODULES` bloğu silindi. Kanıt: dosyalar geçici kaldırılıp `tsc`/`lint`/`build` ve 29 rota çalışma zamanı testi yapıldı, hiçbiri kırılmadı |
 | Designer's note maili | Karar netleşmedi (WordPress mi sistem mi) — yazılmadı |
 | Dosya boyutu sınırı | 25 MB; lookbook PDF'i aşabilir — depolama maliyeti kararı |
 | Yedekte olmayanlar | `notifications` (kişiye özel RLS → eksik liste yazardı), `webhook_events`, `request_access_leads` |
