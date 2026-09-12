@@ -99,6 +99,21 @@ const ACTION_META: Record<string, ActionMeta> = {
   folder_deleted:       { verb: "klasörü sildi",                  tone: "danger",   icon: Trash2 },
   spreadsheet_deleted:  { verb: "tabloyu sildi",                  tone: "danger",   icon: Trash2 },
   contact_deleted:      { verb: "ilişki kaydını sildi",           tone: "danger",   icon: Trash2 },
+
+  /* TAKVİM (2026-09-12). Sıraç: "Calendar'da da üstte geçmiş hareketler gibi
+     bir etkinlik geçmişi olsun — kim ne yaptı, ne ekledi, sildi, saat kaçta."
+     Takvim kendi tablosunu açmadı; workspace_activity_logs'a yazıyor ve bu
+     akışta okunuyor — denetim yaparken tek listeye bakılır. */
+  meeting_created:      { verb: "toplantı açtı",                  tone: "info",     icon: Plus },
+  meeting_renamed:      { verb: "toplantı başlığını değiştirdi",  tone: "neutral",  icon: Pencil },
+  meeting_deleted:      { verb: "toplantıyı sildi",               tone: "danger",   icon: Trash2 },
+  meeting_duplicated:   { verb: "toplantıyı çoğalttı",            tone: "neutral",  icon: CalendarClock },
+  meeting_invited:      { verb: "toplantı daveti gönderdi",       tone: "approval", icon: Users },
+  topic_added:          { verb: "konu ekledi",                    tone: "info",     icon: Plus },
+  topic_deleted:        { verb: "konuyu sildi",                   tone: "danger",   icon: Trash2 },
+  topic_done:           { verb: "konuyu tamamlandı işaretledi",   tone: "success",  icon: CheckCircle2 },
+  topic_missed:         { verb: "konuyu aksadı işaretledi",       tone: "danger",   icon: RefreshCw },
+  topic_moved:          { verb: "konuyu taşıdı",                  tone: "neutral",  icon: CalendarClock },
 };
 
 const FALLBACK_META: ActionMeta = { verb: "görevi güncelledi", tone: "neutral", icon: ActivityIcon };
@@ -120,7 +135,7 @@ function norm(s: string): string {
 }
 
 // ── Filters (user-facing groups → action sets) ────────────────────────────────
-type FilterKey = "all" | "created" | "status" | "completed" | "assignment" | "date" | "download" | "deleted";
+type FilterKey = "all" | "created" | "status" | "completed" | "assignment" | "date" | "calendar" | "download" | "deleted";
 
 const FILTERS: { key: FilterKey; label: string; actions: string[]; icon: typeof Plus }[] = [
   { key: "all",        label: "Tümü",              actions: [],                                                                   icon: ActivityIcon },
@@ -132,7 +147,8 @@ const FILTERS: { key: FilterKey; label: string; actions: string[]; icon: typeof 
   /* İki yeni süzgeç: denetimde en çok aranan iki soru "kim ne indirdi" ve
      "kim ne sildi" (2026-08-29). */
   { key: "download",   label: "İndirme",           actions: ["sheet_downloaded", "sheets_exported", "sheet_printed", "file_downloaded"], icon: Download },
-  { key: "deleted",    label: "Silme",             actions: ["sheet_deleted", "category_deleted", "document_deleted", "folder_deleted", "spreadsheet_deleted", "contact_deleted", "task_trashed"], icon: Trash2 },
+  { key: "calendar",   label: "Takvim",            actions: ["meeting_created", "meeting_renamed", "meeting_deleted", "meeting_duplicated", "meeting_invited", "topic_added", "topic_deleted", "topic_done", "topic_missed", "topic_moved"], icon: CalendarClock },
+  { key: "deleted",    label: "Silme",             actions: ["sheet_deleted", "category_deleted", "document_deleted", "folder_deleted", "spreadsheet_deleted", "contact_deleted", "task_trashed", "meeting_deleted", "topic_deleted"], icon: Trash2 },
 ];
 
 // ── Change-detail extraction (old → new) ──────────────────────────────────────
@@ -249,7 +265,7 @@ export function ActivityLogView({
   const counts = useMemo(() => {
     const c: Record<FilterKey, number> = {
       all: searched.length, created: 0, status: 0, completed: 0, assignment: 0, date: 0,
-      download: 0, deleted: 0,
+      calendar: 0, download: 0, deleted: 0,
     };
     for (const f of FILTERS) {
       if (f.key === "all") continue;

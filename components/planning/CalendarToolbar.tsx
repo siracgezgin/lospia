@@ -1,6 +1,7 @@
 "use client";
 
 import { BackLink } from "@/components/modules/BackLink";
+import { CalendarHistory } from "./CalendarHistory";
 
 /**
  * TAKVİMİN ORTAK ARAÇ ÇUBUĞU — hafta, ay ve yıl için TEK gövde.
@@ -29,7 +30,14 @@ export function CalendarToolbar({
     <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-hairline bg-surface px-3 py-1.5 sm:gap-2 sm:px-4">
       <BackLink />
       {children}
-      <span className="ml-auto shrink-0">{viewSwitch}</span>
+      {/* GEÇMİŞ — üç görünümde de AYNI yerde. Çubuk zaten takvimin ortak
+          gövdesi; düğmeyi buraya koymak "bazı ekranda var bazısında yok"
+          durumunu baştan engelliyor. Ölçek seçicinin SOLUNDA: seçici çubuğun
+          sağ ucunun sabit sahibi, geçmiş ondan önce gelir. */}
+      <span className="ml-auto flex shrink-0 items-center gap-1.5">
+        <CalendarHistory />
+        {viewSwitch}
+      </span>
     </div>
   );
 }

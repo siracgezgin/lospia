@@ -10,6 +10,7 @@ import { meetingInviteEmail } from "@/lib/email/templates/meeting-invite";
 import { normalizeSlot, toIstanbulTime } from "@/lib/planning/timezones";
 import { findOrCreateMeeting } from "@/lib/planning/meeting-slot";
 import { addDaysISO, istanbulTodayISO } from "@/lib/utils/today";
+import { logWorkspaceActivity, WORKSPACE_ACTIONS } from "@/lib/activity/log-workspace-activity";
 
 // Planlama — Haftalık Toplantı Takvimi. Toplantı (renkli kutu) + altında Konu'lar.
 // İzin modeli (2026-07-26): üyeler OKUR, yazma yalnız yönetici — hem burada
@@ -150,8 +151,15 @@ export async function createMeeting(
     return { id: (retry.data as { id: string }).id };
   }
   if (error) return { error: toActionErrorMessage(error) };
+  const createdId = (data as { id: string }).id;
+  await logWorkspaceActivity(supabase, {
+    workspaceId: ctx.workspaceId, actorId: ctx.userId,
+    action: WORKSPACE_ACTIONS.MEETING_CREATED, entityType: "meeting",
+    entityId: createdId, entityLabel: nn(v.title) ?? "Adsız toplantı",
+    metadata: { date: v.meeting_date, slot: v.time_slot },
+  });
   revalidatePath("/planning");
-  return { id: (data as { id: string }).id };
+  return { id: createdId };
 }
 
 export async function updateMeeting(
@@ -255,9 +263,19 @@ export async function deleteMeeting(
     .eq("id", meetingId)
     .eq("workspace_id", ctx.workspaceId);
   if (error) return { error: toActionErrorMessage(error) };
+  const gone = before as Record<string, unknown> | null;
+  await logWorkspaceActivity(supabase, {
+    workspaceId: ctx.workspaceId, actorId: ctx.userId,
+    action: WORKSPACE_ACTIONS.MEETING_DELETED, entityType: "meeting",
+    entityId: meetingId,
+    /* Silinen kaydın ADI satırda saklanır — kayıt gittikten sonra okunur tek
+       iz odur, yoksa günlük "bir toplantı silindi" demekten ibaret kalır. */
+    entityLabel: (gone?.title as string | null) ?? "Adsız toplantı",
+    metadata: { date: gone?.meeting_date, slot: gone?.time_slot },
+  });
   revalidatePath("/planning");
 
-  const row = before as Record<string, unknown> | null;
+  const row = gone;
   if (!row) return { ok: true, snapshot: null };
 
   const topicRows = (row.planning_topics as Record<string, unknown>[] | null) ?? [];
@@ -859,6 +877,11 @@ export async function setMeetingTitle(
       .eq("workspace_id", ctx.workspaceId);
     if (error) return { error: toActionErrorMessage(error) };
     if (count === 0) return { error: NOT_FOUND };
+    await logWorkspaceActivity(supabase, {
+      workspaceId: ctx.workspaceId, actorId: ctx.userId,
+      action: WORKSPACE_ACTIONS.MEETING_RENAMED, entityType: "meeting",
+      entityId: target.meetingId, entityLabel: clean || "Adsız toplantı",
+    });
     revalidatePath("/planning");
     return { ok: true, id: target.meetingId };
   }
@@ -1017,8 +1040,18 @@ export async function setTopicOutcome(
   outcome: "open" | "done" | "missed",
 ): Promise<{ ok: true } | { error: string }> {
   const supabase = await createClient();
+  /* Konunun METNİ günlüğe yazılacak: "konu tamamlandı" tek başına hangi konu
+     olduğunu söylemiyor. Yazmadan ÖNCE okunur, çünkü sonra da okunabilir ama
+     bir tur daha atmanın karşılığı yok. */
+  let topicText: string | null = null;
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
+  {
+    const { data: t } = await supabase
+      .from("planning_topics").select("text")
+      .eq("id", topicId).eq("workspace_id", ctx.workspaceId).maybeSingle();
+    topicText = (t as { text: string | null } | null)?.text ?? null;
+  }
   if (!isAdminRole(ctx.role)) return { error: PLANNING_ADMIN_ONLY };
 
   /* ÜÇ DURUM, İKİ KOLON. done_at ve missed_at aynı anda dolamaz (veritabanı
@@ -1044,6 +1077,14 @@ export async function setTopicOutcome(
     return { error: toActionErrorMessage(error) };
   }
   if (count === 0) return { error: "Konu bulunamadı." };
+  if (outcome !== "open") {
+    await logWorkspaceActivity(supabase, {
+      workspaceId: ctx.workspaceId, actorId: ctx.userId,
+      action: outcome === "done" ? WORKSPACE_ACTIONS.TOPIC_DONE : WORKSPACE_ACTIONS.TOPIC_MISSED,
+      entityType: "topic", entityId: topicId,
+      entityLabel: nn(topicText) ?? "Adsız konu",
+    });
+  }
   revalidatePath("/planning");
   revalidatePath("/home");
   return { ok: true };
@@ -1068,12 +1109,14 @@ export async function deleteTopic(
 
   const { data: topic } = await supabase
     .from("planning_topics")
-    .select("id, meeting_id")
+    /* `text` de çekilir: silindikten sonra günlüğe yazılacak tek okunur iz o. */
+    .select("id, meeting_id, text")
     .eq("id", topicId)
     .eq("workspace_id", ctx.workspaceId)
     .maybeSingle();
   if (!topic) return { error: "Konu bulunamadı." };
   const meetingId = (topic as { meeting_id: string }).meeting_id;
+  const topicLabel = (topic as { text: string | null }).text;
 
   const { error } = await supabase
     .from("planning_topics")
@@ -1083,6 +1126,11 @@ export async function deleteTopic(
   if (error) return { error: toActionErrorMessage(error) };
 
   await renumberTopics(supabase, ctx.workspaceId, meetingId, null, 0);
+  await logWorkspaceActivity(supabase, {
+    workspaceId: ctx.workspaceId, actorId: ctx.userId,
+    action: WORKSPACE_ACTIONS.TOPIC_DELETED, entityType: "topic",
+    entityId: topicId, entityLabel: nn(topicLabel) ?? "Adsız konu",
+  });
   revalidatePath("/planning");
   return { ok: true };
 }
@@ -1325,6 +1373,16 @@ export async function sendMeetingInvites(
   }
 
   revalidatePath("/planning");
+  if (sent.length) {
+    await logWorkspaceActivity(supabase, {
+      workspaceId: ctx.workspaceId, actorId: ctx.userId,
+      action: WORKSPACE_ACTIONS.MEETING_INVITED, entityType: "meeting",
+      entityId: meetingId, entityLabel: nn(m.title) ?? "Toplantı",
+      /* KİME gittiği yazılır: "davet gönderdi" tek başına denetimde işe
+         yaramaz, asıl soru kimin haberdar edildiğidir. */
+      metadata: { to: sent, failed: failed.map((f) => f.to) },
+    });
+  }
   return { ok: true, sent, failed };
 }
 
@@ -1408,6 +1466,14 @@ export async function duplicateMeeting(
   }
   if (created.error) return { error: toActionErrorMessage(created.error) };
   const newId = (created.data as { id: string }).id;
+  await logWorkspaceActivity(supabase, {
+    workspaceId: ctx.workspaceId, actorId: ctx.userId,
+    action: WORKSPACE_ACTIONS.MEETING_DUPLICATED, entityType: "meeting",
+    entityId: newId, entityLabel: nn(m.title as string | null) ?? "Adsız toplantı",
+    /* HANGİ GÜNE kopyalandığı yazılır: çoğaltma denetimde en çok karıştırılan
+       eylem — "iki tane niye var?" sorusunun cevabı bu satırda. */
+    metadata: { from: meetingId, date: parsed.data.meeting_date, slot: targetSlot },
+  });
 
   /* KONULAR da gelir — "toplantının devamı" boş bir kutu değil, aynı gündemin
      ikinci oturumudur. Teslim tarihi yeni güne kayar; görev bağı kopar. */

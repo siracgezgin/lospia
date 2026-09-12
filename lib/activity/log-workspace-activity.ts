@@ -33,6 +33,23 @@ export const WORKSPACE_ACTIONS = {
   SPREADSHEET_DELETED: "spreadsheet_deleted",
   FILE_DOWNLOADED: "file_downloaded",
   CONTACT_DELETED: "contact_deleted",
+
+  /* TAKVİM (2026-09-12). Sıraç: "Calendar'da da Excel'deki gibi üstte geçmiş
+     hareketler gibi bir etkinlik geçmişi kısmı olsun — kim ne yaptı, ne ekledi,
+     sildi, saat kaçta."
+     Yeni tablo AÇILMADI: `workspace_activity_logs` göreve bağlı olmayan her
+     olayın kapısı ve `action`/`entity_type` serbest metin. Takvim de bu akışa
+     yazar; /activity sayfası zaten ikisini birleştirip gösteriyor. */
+  MEETING_CREATED: "meeting_created",
+  MEETING_RENAMED: "meeting_renamed",
+  MEETING_DELETED: "meeting_deleted",
+  MEETING_DUPLICATED: "meeting_duplicated",
+  MEETING_INVITED: "meeting_invited",
+  TOPIC_ADDED: "topic_added",
+  TOPIC_DELETED: "topic_deleted",
+  TOPIC_DONE: "topic_done",
+  TOPIC_MISSED: "topic_missed",
+  TOPIC_MOVED: "topic_moved",
 } as const;
 
 export type WorkspaceAction =
