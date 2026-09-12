@@ -8,7 +8,7 @@ import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   useDraggable, useDroppable, type DragEndEvent, type DragStartEvent,
 } from "@dnd-kit/core";
-import { CheckCircle2, Plus, Pencil, X, Loader2, XCircle, Copy, Maximize2 } from "lucide-react";
+import { CheckCircle2, Plus, Pencil, X, Loader2, XCircle, Copy, Maximize2, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { categoryMeta } from "@/lib/planning/categories";
 import { WEEKDAY_SHORT_EN, WEEKDAY_LONG_TR, type RuntimeBand } from "@/lib/planning/bands";
@@ -286,9 +286,16 @@ export function PlanningWeekGrid({
             type="button"
             onClick={() => onOpen(iso, slot, i, next)}
             title={`${WEEKDAY_LONG_TR[i]} — yeni konu ekle`}
-            className="group/add flex min-h-[30px] items-center gap-1 border-r border-hairline px-2 py-1.5 text-left text-[12px] text-subtle transition-colors duration-150 last:border-r-0 hover:bg-surface-hover hover:text-brand"
+            /* "KONU EKLE" SATIRI DOLU HÜCRELERDEN AYRI DURUR.
+               Zemini beyazdı ve dolu hücrelerle aynı görünüyordu; artı işareti
+               de %50 saydamdı — satırın ne olduğu anlaşılmıyordu (Sıraç,
+               12.09.2026: "+ kısımlarını diğerlerinden ayrı bir renk verebilir
+               miyiz, belli olsun; beyazla olunca anlaşılmıyor").
+               Kuyu zemini (`surface-sunken`) bu satırı "henüz içi yok, buraya
+               yazılır" diye okutur — veri taşıyan hücrelerle karışmaz. */
+            className="group/add flex min-h-[30px] items-center gap-1 border-r border-hairline bg-surface-sunken/60 px-2 py-1.5 text-left text-[12px] text-subtle transition-colors duration-150 last:border-r-0 hover:bg-brand-soft hover:text-brand-strong"
           >
-            <Plus size={12} className="shrink-0 opacity-50 transition-opacity duration-150 group-hover/add:opacity-100" aria-hidden />
+            <Plus size={12} className="shrink-0 transition-transform duration-150 group-hover/add:scale-110" aria-hidden />
             <span className="opacity-0 transition-opacity duration-150 group-hover/add:opacity-100">Konu ekle</span>
           </button>
         ))}
@@ -647,7 +654,12 @@ function TitleCell({
           aria-label="Aksadı — sonraki güne eklenmeli"
         />
       )}
-      <span className="min-w-0 flex-1">
+      {/* `pr-5` (yalnız yöneticide): sağ üstteki "aç" düğmesi ABSOLUTE
+          konumlu ve metnin ÜSTÜNE biniyordu — uzun başlıkta ikon harflerin
+          arasında kalıyordu (Sıraç, 12.09.2026: "burada çakışmayla ilgili
+          problem var"). Düğme yalnız hover'da görünse de yeri hep ayrılmalı:
+          metin ona kadar kısalsın, altına girmesin. */}
+      <span className={cn("min-w-0 flex-1", isAdmin && !editing && "pr-5")}>
         {editing ? (
           /* Sürükleme dinleyicileri ÜST düğümde: input'ta pointer olaylarını
              durdurmazsak yazmaya çalışırken hücre sürüklenmeye başlıyor. */
@@ -678,16 +690,27 @@ function TitleCell({
              ikili oluyor ve silip düzeltemiyorum."
              Artık her toplantı KENDİ SATIRINDA ve kendi kartını açıyor;
              fazlalık olan oradan silinebiliyor. */
-          <span className="block space-y-0.5">
+          <span className="block">
+            {/* ÇAKIŞMA AÇIKÇA SÖYLENİR. İki başlık alt alta dizilince kullanıcı
+                bunu "bozuk yazı" sanıyordu (Sıraç, 12.09.2026: "neden iki tane
+                üst üste gelmiş?"). Aynı gün+saatte iki toplantı bir VERİ
+                durumudur; ekran onu bir arıza gibi değil, çözülecek bir çakışma
+                gibi göstermeli. Uyarı satırı + ayraçlı satırlar bunu yapar;
+                her satır kendi kartını açar, fazlalık oradan silinir. */}
+            <span className="mb-0.5 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-danger">
+              <AlertTriangle size={11} className="shrink-0" aria-hidden />
+              {cell.length} toplantı çakışıyor
+            </span>
+            <span className="block divide-y divide-ink/10">
             {cell.map((mm) => (
               <button
                 key={mm.id}
                 type="button"
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => { e.stopPropagation(); onOpen(mm.id); }}
-                title="Bu toplantıyı aç"
+                title="Bu toplantıyı aç — fazlalık olanı buradan silebilirsiniz"
                 className={cn(
-                  "block w-full truncate text-left text-[12.5px] font-bold leading-[1.25] tracking-tight underline-offset-2 hover:underline",
+                  "block w-full truncate py-0.5 text-left text-[12.5px] font-bold leading-[1.25] tracking-tight underline-offset-2 hover:underline",
                   (mm.topics ?? []).some((t) => (t.text ?? "").trim())
                   && (mm.topics ?? []).filter((t) => (t.text ?? "").trim()).every((t) => !!t.done_at)
                     ? "text-success/90" : meta.title,
@@ -697,6 +720,7 @@ function TitleCell({
                 {mm.title || "—"}
               </button>
             ))}
+            </span>
           </span>
         ) : (
           <span

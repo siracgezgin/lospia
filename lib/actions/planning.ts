@@ -81,6 +81,33 @@ export async function createMeeting(
   if (!isAdminRole(ctx.role)) return { error: PLANNING_ADMIN_ONLY };
 
   const v = parsed.data;
+
+  /* AYNI GÜN + SAATE İKİNCİ TOPLANTI AÇILMAZ.
+     Çakışmanın kaynağı buydu: editör BOŞ hücrede açılınca `meetingId` null
+     olur ve kaydetmek `createMeeting`e gider — ama kullanıcı o sırada
+     pencerede TARİHİ ya da SAATİ değiştirmişse, hedef slot doluyken bile
+     ikinci bir satır yazılıyordu. Ekranda "Celebrity / Celebrity" gibi üst
+     üste iki başlık çıkıyordu (Sıraç, 12.09.2026: "neden iki tane üst üste
+     gelmiş, çakışmayla ilgili problem var, çok acil").
+
+     Sessizce var olanı GÜNCELLEMİYORUZ: o, başka birinin toplantısının
+     başlığını habersiz ezmek olurdu. Kullanıcıya durumu söyleyip kararı ona
+     bırakıyoruz — ya başka saat seçer ya var olan toplantıyı açar.
+     (`duplicateMeeting` aynı günü zaten reddediyordu; açık kalan kapı buydu.) */
+  const { data: clash } = await supabase
+    .from("planning_meetings")
+    .select("id")
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("meeting_date", v.meeting_date)
+    .eq("time_slot", v.time_slot)
+    .limit(1)
+    .maybeSingle();
+  if (clash) {
+    return {
+      error: "Bu gün ve saatte zaten bir toplantı var. Var olanı açın ya da başka bir saat seçin.",
+    };
+  }
+
   const { data, error } = await supabase
     .from("planning_meetings")
     .insert({
