@@ -8,14 +8,14 @@ import {
   FolderPlus, Upload, Trash2, Loader2, Download, ChevronLeft, ChevronRight, Home,
   Lock, Users, Pencil, Plus, FileText, Table2, Link2 as LinkIcon,
   List as ListIcon, LayoutGrid, Check, X, MoreHorizontal, FolderOpen,
-  Search, FolderInput, Eye, Folder as FolderIcon, AlertCircle, SearchX,
+  Search, FolderInput, Eye, Folder as FolderIcon, AlertCircle, SearchX, Send, Mail,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { useAnchoredMenu } from "@/lib/utils/use-anchored-menu";
 import { useConfirm } from "@/components/ui/useConfirm";
 import { Button, IconButton } from "@/components/ui/Button";
-import { SelectInput, TextInput } from "@/components/ui/Field";
+import { Field, SelectInput, TextArea, TextInput } from "@/components/ui/Field";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Overlay } from "@/components/ui/Overlay";
 import { PersonAvatar } from "@/components/ui/PersonAvatar";
@@ -28,7 +28,8 @@ import {
 } from "@/lib/office/file-kind";
 import {
   saveFolder, deleteFolder, uploadDocumentFile, moveDocument,
-  getDocumentDownloadUrl, deleteDocumentFile,
+  getDocumentDownloadUrl, deleteDocumentFile, sendDocumentByEmail,
+  type ShareItemType,
 } from "@/lib/actions/document-files";
 import { createTeamworkDoc, deleteOperationDocument, setOperationDocumentVisibility } from "@/lib/actions/documents";
 import {
@@ -384,6 +385,9 @@ export function DriveBrowser({
   /** Kart görünümü DIŞINDA (liste · arama) ya da klasör olmayan öğede adı
    *  değiştirilen kayıt — küçük bir pencerede sorulur. */
   const [renameTarget, setRenameTarget] = useState<DriveItem | null>(null);
+  /* Mail penceresinin hedefi. Klasörler paylaşılmaz (bir kap, bir dosya
+     değil); kayıt türleri paylaşılır. */
+  const [shareTarget, setShareTarget] = useState<DriveItem | null>(null);
   /** Arama kutusu — boş değilse TÜM ağaçta arar (Drive gibi). */
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | ItemType>("all");
@@ -981,10 +985,20 @@ export function DriveBrowser({
       ];
     }
 
+    /* MAİL İLE GÖNDER — klasör dışında her kayıtta. Yetki istemez: kaydı
+       GÖREBİLEN paylaşabilir de; görünürlüğü RLS zaten süzüyor. "Yönetebilen"
+       şartı koysaydık üye kendi yüklediği raporu bile yollayamazdı. */
+    const shareAction: MenuAction = {
+      label: "Mail ile gönder",
+      icon: Mail,
+      onSelect: () => setShareTarget(it),
+    };
+
     if (it.type === "file") {
       const out: MenuAction[] = [...locate];
       if (it.previewable) out.push({ label: "Önizle", icon: Eye, onSelect: () => it.onOpen?.() });
       out.push({ label: "İndir", icon: Download, onSelect: () => download(id) });
+      out.push(shareAction);
       if (!canManage(it)) return out;
       out.push(moveAction(it));
       out.push(visibilityAction(it, (next) => setOperationDocumentVisibility(id, next), `v-${id}`));
@@ -1001,8 +1015,8 @@ export function DriveBrowser({
     }
 
     if (it.type === "link") {
-      if (!canManage(it)) return locate;
-      const out: MenuAction[] = [...locate];
+      if (!canManage(it)) return [...locate, shareAction];
+      const out: MenuAction[] = [...locate, shareAction];
       if (onEditLink) out.push({ label: "Düzenle", icon: Pencil, onSelect: () => onEditLink(id) });
       out.push(moveAction(it));
       out.push(visibilityAction(it, (next) => setOperationDocumentVisibility(id, next), `v-${id}`));
@@ -1018,13 +1032,14 @@ export function DriveBrowser({
       return out;
     }
 
-    if (!canManage(it)) return locate;
+    if (!canManage(it)) return [...locate, shareAction];
     if (it.type === "doc") {
       /* Yazıda "Yeniden adlandır" YOK: başlık gövdeyle birlikte kaydedilir
          (saveTeamworkDoc), gövdesiz çağrı yazının içeriğini siler. Ad, yazının
          kendi editöründe değişir — olmayan bir eylemi menüye koymuyoruz. */
       return [
         ...locate,
+        shareAction,
         moveAction(it),
         visibilityAction(it, (next) => setOperationDocumentVisibility(id, next), `v-${id}`),
         {
@@ -1045,6 +1060,7 @@ export function DriveBrowser({
          (renameOperationSpreadsheet) — Drive'ın gerisiyle aynı satır. */
       return [
         ...locate,
+        shareAction,
         { label: "Yeniden adlandır", icon: Pencil, onSelect: () => setRenameTarget(it) },
         visibilityAction(it, (next) => setOperationSpreadsheetVisibility(id, next), `v-${id}`),
         {
@@ -1217,11 +1233,16 @@ export function DriveBrowser({
             icon={FolderPlus}
             label="Klasör"
             hex={KIND_FOLDER.hex}
-            /* KÖKTE KAPALI. Kutu seçilmeden açılan klasör boş olur ve boş
-               klasör hiçbir kutuya ait olmadığı için hiçbir yerde görünmezdi —
-               kullanıcı "oluşturdum ama yok" durumunda kalırdı. Önce kutu. */
-            disabled={bucket === null}
-            title={bucket === null ? "Önce bir kutu seçin — klasör o türün içinde açılır" : "Yeni klasör"}
+            /* KÖKTE DE AÇIK (Sıraç, 12.09.2026: "yeni klasör oluşturulamıyor,
+               yönetici olmasına rağmen; oluştur diyince gri bir imge oluyor").
+               Düğme bir süre `bucket === null` iken KAPALIYDI: gerekçe, kökte
+               açılan boş klasörün hiçbir kutuya ait olmadığı için hiçbir yerde
+               görünmemesiydi. O gerekçe iki ayrı düzeltmeyle ortadan kalktı —
+               boş klasör artık her kutuda görünüyor (bkz. kutu süzgeci) ve kök
+               ekranı da kendi klasörlerini çiziyor (aşağıdaki "Klasörler"
+               bölümü). Devre dışı düğme, çözülmüş bir sorunun kalıntısıydı ve
+               yöneticiyi bile klasör açmaktan alıkoyuyordu. */
+            title="Yeni klasör"
             /* Süzgeç de sıfırlanır: "Yüklenen dosya" süzgeci açıkken klasör
                açılınca yeni klasör listeye hiç düşmüyordu. */
             onPick={() => { setQuery(""); setTypeFilter("all"); setRenaming(null); setNaming(true); }}
@@ -1414,6 +1435,42 @@ export function DriveBrowser({
               );
             })}
           </TileGrid>
+
+          {/* KÖKTEKİ KLASÖRLER. Kutular TÜRE göre ayırır (Word, Excel, görsel…);
+              klasör ise türden bağımsız bir kap — "Sunumlar" klasöründe hem
+              PDF hem görsel olabilir. Kök ekranı yalnız kutuları çizerken
+              kökte açılan klasör hiçbir yerde görünmüyordu; kullanıcı
+              "oluşturdum ama yok" durumunda kalıyordu (12.09.2026).
+              Artık kutuların altında kendi bölümünde duruyorlar — Drive'ın
+              kökü de böyle: önce klasörler, sonra dosyalar. */}
+          {(items.folders.length > 0 || naming) && (
+            <div className="mt-7">
+              <Section title="Klasörler">
+                <DriveGrid
+                  items={items.folders}
+                  leading={namingTile}
+                  menu={renderMenu}
+                  memberNames={memberNames}
+                  memberAvatars={memberAvatars}
+                  renamingId={renaming}
+                  busy={busy}
+                  onCancelRename={() => setRenaming(null)}
+                  onRename={(f, name) =>
+                    run(
+                      `rn-${f.id}`,
+                      () => saveFolder(f.id, {
+                        name,
+                        parent_id: f.parent_id,
+                        visibility: f.visibility,
+                        section: f.section ?? section,
+                      }),
+                      () => setRenaming(null),
+                    )
+                  }
+                />
+              </Section>
+            </div>
+          )}
         </div>
       )}
 
@@ -1484,7 +1541,10 @@ export function DriveBrowser({
           kullanıcı hem kutuları hem karışık listeyi aynı anda görüyordu.
           Giriş artık YALNIZ kutular; içerik kutunun içinde. Arama açıkken liste
           yine çizilir — arama bütün ağaçta gezer, kutuya girmeyi beklemez. */}
-      {(bucket !== null || searching || naming) && (
+      {/* `|| naming` KALDIRILDI: kökte yeni klasör açılırken ad kutusu artık
+          yukarıdaki "Klasörler" bölümünde çiziliyor. Koşul dursaydı aynı kutu
+          iki kere görünürdü. Kutu içindeyken `bucket !== null` zaten doğru. */}
+      {(bucket !== null || searching) && (
       <>
       {resultCount === 0 && !naming ? (
         filtering ? (
@@ -1569,6 +1629,14 @@ export function DriveBrowser({
 
       {/* YENİDEN ADLANDIR — kart görünümü dışında ve tabloda. Kart
           görünümündeki klasör adını hâlâ kendi kartında yazıyoruz. */}
+      {shareTarget && (
+        <ShareDialog
+          key={shareTarget.key}
+          item={shareTarget}
+          onClose={() => setShareTarget(null)}
+        />
+      )}
+
       {renameTarget && (
         <RenameDialog
           key={renameTarget.key}
@@ -2115,6 +2183,155 @@ function DriveGrid({
  * hiç kartı yoktur. Eskiden bu satır ya hiçbir şey yapmıyor ya da kullanıcıyı
  * zorla kart görünümüne atıp aramasını siliyordu.
  */
+/**
+ * MAİL İLE GÖNDER — bir kaydı e-posta ile paylaşma penceresi.
+ *
+ * Sıraç (2026-09-12): "Klasörün içine diyelim rapor veya sunum ekledik,
+ * onların da yanına mail atılma ibaresi olsun, mail atalım. Calendar'daki gibi."
+ *
+ * Takvimin dış katılımcı akışıyla aynı dili konuşur: adresler tek tek çip
+ * olarak eklenir (virgül, boşluk ve Enter ayırır), sonuç "kime gitti / kime
+ * gitmedi" diye ayrı ayrı yazılır. Dosya EK olarak değil, süreli bir indirme
+ * bağlantısı olarak gider — gerekçesi lib/email/templates/document-share.ts'te.
+ */
+function ShareDialog({
+  item, onClose,
+}: {
+  item: DriveItem;
+  onClose: () => void;
+}) {
+  const [emails, setEmails] = useState<string[]>([]);
+  const [draft, setDraft] = useState("");
+  const [note, setNote] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<string | null>(null);
+  const [sending, startSend] = useTransition();
+
+  /* Adres kutusu: virgül, noktalı virgül, boşluk ve Enter hepsi ayırıcıdır.
+     Kullanıcı adres listesini bir yerden yapıştırdığında tek tek ayıklamak
+     zorunda kalmasın. */
+  function commitDraft(raw: string): void {
+    const parts = raw.split(/[,;\s]+/).map((p) => p.trim()).filter(Boolean);
+    if (!parts.length) return;
+    setEmails((prev) => [...new Set([...prev, ...parts])]);
+    setDraft("");
+    setError(null);
+  }
+
+  function handleSend() {
+    /* Kutuda yazılı kalmış adres de gitsin: kullanıcı Enter'a basmayı unutup
+       doğrudan "Gönder"e basıyor ve adresi kaybediyordu. */
+    const pending = draft.split(/[,;\s]+/).map((p) => p.trim()).filter(Boolean);
+    const all = [...new Set([...emails, ...pending])];
+    if (!all.length) { setError("En az bir e-posta adresi girin."); return; }
+    setError(null);
+    setResult(null);
+    startSend(async () => {
+      const res = await sendDocumentByEmail(item.type as ShareItemType, item.id, {
+        recipients: all,
+        note: note.trim() || null,
+      });
+      if ("error" in res) { setError(res.error); return; }
+      setEmails(all);
+      setDraft("");
+      const parts: string[] = [];
+      if (res.sent.length) parts.push(`${res.sent.join(", ")} adresine gönderildi.`);
+      if (res.failed.length) {
+        parts.push(`Gönderilemedi: ${res.failed.map((f) => f.to).join(", ")}.`);
+      }
+      setResult(parts.join(" ") || "Gönderilecek adres bulunamadı.");
+    });
+  }
+
+  /* Yazı ve tablo uygulamanın içinde yaşar; bağlantı panele gider ve alıcının
+     hesabı olmalı. Bunu pencerede de söylüyoruz — kullanıcı dışarıdan birine
+     yollamadan önce bilsin. */
+  const internal = item.type === "doc" || item.type === "sheet";
+
+  return (
+    <Overlay
+      open
+      onClose={onClose}
+      title="Mail ile gönder"
+      hint={item.name}
+      size="sm"
+      dismissOnBackdrop={false}
+      footer={
+        <>
+          <Button variant="ghost" size="sm" onClick={onClose} disabled={sending}>Kapat</Button>
+          <Button size="sm" onClick={handleSend} loading={sending}>
+            {!sending && <Send size={13} aria-hidden />} Gönder
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        {emails.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {emails.map((e) => (
+              <span
+                key={e}
+                className="inline-flex items-center gap-1 rounded-control bg-brand-soft px-2 py-1 text-[12.5px] font-medium text-brand-strong"
+              >
+                {e}
+                <button
+                  type="button"
+                  onClick={() => setEmails((prev) => prev.filter((x) => x !== e))}
+                  disabled={sending}
+                  aria-label={`${e} adresini çıkar`}
+                  className="tap-target rounded text-brand-strong/70 transition-colors duration-150 ease-standard hover:text-brand-strong"
+                >
+                  <X size={12} aria-hidden />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        <Field label="E-posta adresi" htmlFor="share-mail" hint="Enter ya da virgül ile birden çok adres eklenir.">
+          <TextInput
+            id="share-mail"
+            autoFocus
+            type="email"
+            inputMode="email"
+            placeholder="ornek@firma.com"
+            value={draft}
+            disabled={sending}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === "," || e.key === ";") {
+                e.preventDefault();
+                commitDraft(draft);
+              }
+            }}
+            onBlur={() => commitDraft(draft)}
+          />
+        </Field>
+
+        <Field label="Not" htmlFor="share-note" hint="İsteğe bağlı — mailin içinde yazar.">
+          <TextArea
+            id="share-note"
+            rows={3}
+            placeholder="Merhaba, ekteki raporu inceleyebilir misiniz?"
+            value={note}
+            disabled={sending}
+            onChange={(e) => setNote(e.target.value)}
+          />
+        </Field>
+
+        <p className="text-[12px] leading-relaxed text-subtle">
+          {internal
+            ? "Bağlantı panelde açılır; alıcının AF Operasyon erişimi olmalı."
+            : "Dosya ek olarak değil, 7 gün geçerli güvenli bir indirme bağlantısı olarak gider."}
+        </p>
+
+        {error && <p className="text-[12.5px] font-medium text-danger">{error}</p>}
+        {result && <p className="text-[12.5px] font-medium text-success">{result}</p>}
+      </div>
+    </Overlay>
+  );
+}
+
 function RenameDialog({
   item, busy, onSave, onCancel,
 }: {

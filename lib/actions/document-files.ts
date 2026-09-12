@@ -5,6 +5,11 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import type { AppRole } from "@/lib/auth/permissions";
 import { toActionErrorMessage } from "@/lib/utils/supabase-errors";
+import { sendEmail } from "@/lib/email/send-email";
+import { documentShareEmail } from "@/lib/email/templates/document-share";
+/* Tür etiketi UI'daki ikonla AYNI kaynaktan gelir (file-kind.ts). Mailde
+   "Sunum" yazarken ekranda "PPTX" görünmesin — tek terminoloji kuralı. */
+import { fileKindOf } from "@/lib/office/file-kind";
 
 // Dokümanlar — klasör ağacı + gerçek dosya yükleme (20240312).
 //
@@ -294,4 +299,180 @@ export async function moveDocument(
   if (count === 0) return { error: NOT_FOUND };
   revalidatePath("/documents");
   return { ok: true };
+}
+
+// ── Mail ile paylaş ─────────────────────────────────────────────────────────
+//
+// Sıraç (2026-09-12): "Klasörün içine diyelim rapor veya sunum ekledik,
+// onların da yanına mail atılma ibaresi olsun, mail atalım. Calendar'daki gibi."
+//
+// Takvimin davet gönderme akışıyla AYNI sözleşme (sendMeetingInvites):
+// alıcı başına TEK mail gider — kimse başkasının adresini görmez — ve sonuç
+// `sent` / `failed` olarak döner ki arayüz kimin alamadığını söyleyebilsin.
+//
+// EK DEĞİL BAĞLANTI gönderilir; gerekçesi templates/document-share.ts'te.
+
+/** İmzalı bağlantının ömrü. Alıcı maili ertesi gün açsa da çalışsın. */
+const SHARE_LINK_TTL_SECONDS = 7 * 24 * 60 * 60;
+const SHARE_LINK_TTL_LABEL = "7 gün";
+const MAIL_NOT_CONFIGURED =
+  "E-posta gönderimi henüz açık değil. Yönetici ayarlarından mail kurulumu tamamlanmalı.";
+
+const ShareSchema = z.object({
+  /* Adresler tek tek doğrulanır: bir tanesi bozuksa diğerleri yine gitsin
+     istemiyoruz — yanlış adres sessizce düşmesin, kullanıcı düzeltsin. */
+  recipients: z
+    .array(z.string().trim().email("Geçersiz e-posta adresi."))
+    .min(1, "En az bir e-posta adresi girin.")
+    .max(20, "Tek seferde en fazla 20 adrese gönderilebilir."),
+  note: z.string().trim().max(1000).optional().nullable(),
+});
+
+export type ShareDocumentInput = z.infer<typeof ShareSchema>;
+/** Paylaşılabilir kayıt türleri — DriveBrowser'daki öğe türleriyle birebir. */
+export type ShareItemType = "file" | "doc" | "sheet" | "link";
+
+const APP_BASE_URL = (
+  process.env.EMAIL_TASK_BASE_URL ?? "https://operasyon.aslifilinta.com"
+).replace(/\/+$/, "");
+
+function formatBytes(bytes: number | null | undefined): string | null {
+  if (!bytes || bytes <= 0) return null;
+  const mb = bytes / (1024 * 1024);
+  if (mb >= 1) return `${mb.toLocaleString("tr-TR", { maximumFractionDigits: 1 })} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+/** Klasör zincirini "Koleksiyon / Sunumlar" biçiminde okunur yola çevirir. */
+async function folderPathOf(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  workspaceId: string,
+  folderId: string | null,
+): Promise<string | null> {
+  if (!folderId) return null;
+  const { data } = await supabase
+    .from("document_folders")
+    .select("id, name, parent_id")
+    .eq("workspace_id", workspaceId);
+  const rows = (data ?? []) as { id: string; name: string; parent_id: string | null }[];
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const parts: string[] = [];
+  let cur: string | null = folderId;
+  const guard = new Set<string>(); // bozuk veri döngü yaparsa sonsuza gitmesin
+  while (cur && !guard.has(cur)) {
+    guard.add(cur);
+    const row = byId.get(cur);
+    if (!row) break;
+    parts.unshift(row.name);
+    cur = row.parent_id;
+  }
+  return parts.length ? parts.join(" / ") : null;
+}
+
+export async function sendDocumentByEmail(
+  itemType: ShareItemType,
+  itemId: string,
+  input: ShareDocumentInput,
+): Promise<
+  | { ok: true; sent: string[]; failed: { to: string; reason: string }[] }
+  | { error: string }
+> {
+  const parsed = ShareSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+
+  let fileName = "";
+  let kindLabel = "Dosya";
+  let url = "";
+  let sizeLabel: string | null = null;
+  let folderId: string | null = null;
+  let expiresLabel: string | null = SHARE_LINK_TTL_LABEL;
+  let requiresAccount = false;
+
+  if (itemType === "file" || itemType === "link") {
+    /* RLS ZATEN SÜZÜYOR: "yalnız yöneticiye kapalı" bir kaydı göremeyen kişi
+       burada da satırı alamaz, dolayısıyla paylaşamaz. Ek bir rol kontrolü
+       koymuyoruz — iki ayrı yerde yaşayan yetki kuralı er geç ayrışır. */
+    const { data } = await supabase
+      .from("operation_documents")
+      .select("title, file_name, file_path, file_mime, file_size, folder_id, url")
+      .eq("id", itemId).eq("workspace_id", ctx.workspaceId)
+      .maybeSingle();
+    const row = data as {
+      title: string; file_name: string | null; file_path: string | null;
+      file_mime: string | null; file_size: number | null;
+      folder_id: string | null; url: string | null;
+    } | null;
+    if (!row) return { error: NOT_FOUND };
+    folderId = row.folder_id;
+    fileName = row.file_name ?? row.title;
+
+    if (itemType === "link") {
+      if (!row.url) return { error: "Bu bağlantı kaydında adres yok." };
+      url = row.url;
+      kindLabel = "Bağlantı";
+      expiresLabel = null; // dış adres bizim süremize tabi değil
+    } else {
+      if (!row.file_path) return { error: "Bu kayıtta yüklenmiş dosya yok." };
+      const { data: signed, error: signErr } = await supabase.storage
+        .from(BUCKET)
+        .createSignedUrl(row.file_path, SHARE_LINK_TTL_SECONDS);
+      if (signErr || !signed) {
+        return { error: signErr?.message ?? "İndirme bağlantısı üretilemedi." };
+      }
+      url = signed.signedUrl;
+      sizeLabel = formatBytes(row.file_size);
+      kindLabel = fileKindOf(row.file_mime, fileName).label;
+    }
+  } else {
+    /* Yazı ve tablo uygulamanın İÇİNDE yaşar; dosya olarak dışarı verilecek
+       bir hâli yok. Bağlantı panele gider ve alıcının hesabı olmalı — bunu
+       mailde açıkça yazıyoruz, kapalı kapıya yönlendirmek istemiyoruz. */
+    const table = itemType === "doc" ? "operation_documents" : "operation_spreadsheets";
+    const { data } = await supabase
+      .from(table)
+      .select("title, folder_id")
+      .eq("id", itemId).eq("workspace_id", ctx.workspaceId)
+      .maybeSingle();
+    const row = data as { title: string; folder_id: string | null } | null;
+    if (!row) return { error: NOT_FOUND };
+    folderId = row.folder_id;
+    fileName = row.title;
+    kindLabel = itemType === "doc" ? "Yazı" : "Tablo";
+    url = `${APP_BASE_URL}/${itemType === "doc" ? "documents" : "sheets"}/${itemId}`;
+    expiresLabel = null;
+    requiresAccount = true;
+  }
+
+  const folderPath = await folderPathOf(supabase, ctx.workspaceId, folderId);
+  const { data: actor } = await supabase
+    .from("profiles").select("full_name, email").eq("id", ctx.userId).maybeSingle();
+  const actorName =
+    ((actor?.full_name as string | null) || (actor?.email as string | null)) ?? null;
+
+  /* Aynı adres iki kez yazıldıysa tek mail gitsin — "üç kere geldi" demesin. */
+  const recipients = [...new Set(parsed.data.recipients.map((r) => r.trim().toLowerCase()))];
+
+  const sent: string[] = [];
+  const failed: { to: string; reason: string }[] = [];
+  for (const to of recipients) {
+    const res = await sendEmail(
+      documentShareEmail({
+        to, fileName, kindLabel, url, expiresLabel, folderPath,
+        sizeLabel, actorName, note: parsed.data.note ?? null, requiresAccount,
+      }),
+    );
+    if (res.status === "sent") sent.push(to);
+    else failed.push({ to, reason: res.status === "skipped" ? res.reason : res.error });
+    /* Mail HİÇ yapılandırılmamışsa her adres aynı sebeple düşer; yirmi kez
+       denemenin anlamı yok. İlk "skipped" cevabında durur ve arayüze
+       "kurulum yok" diye anlaşılır bir hata döneriz — kullanıcı gönderdiğini
+       sanıp beklemesin. */
+    if (res.status === "skipped") {
+      return { error: MAIL_NOT_CONFIGURED };
+    }
+  }
+  return { ok: true, sent, failed };
 }
