@@ -16,9 +16,15 @@ import { getPersonDisplayName } from "@/lib/utils/person-display";
  * migration beklemeden çalışır, /activity sayfasındaki genel akışta da aynı
  * satırlar görünür — denetim yaparken iki listeye bakılmaz.
  *
- * YETKİ: RLS "çalışma alanı üyesi okur" diyor, o yeterli. Ayrıca yönetici
- * şartı KOYMUYORUZ — takvimi görebilen onun geçmişini de görebilmeli; kim ne
- * yaptığını saklamak ekip içinde güven değil şüphe üretir.
+ * YETKİ — DİKKAT: `workspace_activity_logs` OKUMASI YALNIZ YÖNETİCİYE açık
+ * (20240332, `wal_select`: role in owner/admin). Günlük bir denetim yüzeyi
+ * olarak kurulmuş.
+ *
+ * Bu yüzden fonksiyon `allowed` bayrağı DÖNDÜRÜR. Yoksa üye pencereyi açınca
+ * RLS sıfır satır süzer ve ekranda "Henüz kayıt yok" yazar — yani sistem
+ * yetkisi olmadığını söylemek yerine kayıt olmadığını söyler. Sessiz yalan,
+ * hatadan kötüdür: üye geçmişin çalışmadığını sanır, yönetici de onun
+ * gördüğünü sanır.
  */
 
 /** Takvimin yazdığı eylemler — okurken de bu liste süzer. */
@@ -41,19 +47,29 @@ export interface CalendarActivityRow {
 type MaybeArray<T> = T | T[] | null;
 const one = <T,>(v: MaybeArray<T>): T | null => (Array.isArray(v) ? v[0] ?? null : v);
 
+export interface CalendarActivityResult {
+  /** false → yetki yok; arayüz "kayıt yok" DEMEZ, sebebi yazar. */
+  allowed: boolean;
+  rows: CalendarActivityRow[];
+}
+
 export async function fetchCalendarActivity(
   limit = 60,
-): Promise<CalendarActivityRow[]> {
+): Promise<CalendarActivityResult> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return [];
+  if (!user) return { allowed: false, rows: [] };
   const { data: member } = await supabase
     .from("workspace_members")
-    .select("workspace_id")
+    .select("workspace_id, role")
     .eq("user_id", user.id)
     .limit(1)
     .maybeSingle();
-  if (!member) return [];
+  if (!member) return { allowed: false, rows: [] };
+  /* Rol BURADA da kontrol edilir, yalnız RLS'e bırakılmaz: RLS satırı süzer
+     ama "neden boş" bilgisini taşımaz. */
+  const role = (member as { role: string }).role;
+  if (role !== "owner" && role !== "admin") return { allowed: false, rows: [] };
 
   const { data, error } = await supabase
     .from("workspace_activity_logs")
@@ -64,9 +80,9 @@ export async function fetchCalendarActivity(
     .limit(Math.min(Math.max(limit, 1), 200));
   /* Günlük OKUNAMAZSA ekran boş bir liste gösterir, hata fırlatmaz: geçmiş bir
      kolaylık, takvimin çalışmasının şartı değil. */
-  if (error) return [];
+  if (error) return { allowed: true, rows: [] };
 
-  return ((data ?? []) as {
+  const rows = ((data ?? []) as {
     id: string; action: string; entity_label: string | null;
     metadata: unknown; created_at: string;
     actor: MaybeArray<{ full_name: string | null; email: string | null }>;
@@ -85,6 +101,7 @@ export async function fetchCalendarActivity(
       whenLabel,
     };
   });
+  return { allowed: true, rows };
 }
 
 /** "2026-09-08" → "8 Eylül". Bozuk değer olduğu gibi döner. */

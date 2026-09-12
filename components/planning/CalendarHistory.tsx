@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  History, Plus, Pencil, Trash2, CopyPlus, Send, CheckCircle2, XCircle,
+  History, Plus, Pencil, Trash2, CopyPlus, Send, CheckCircle2, XCircle, Lock,
   MoveRight, Loader2, type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Overlay } from "@/components/ui/Overlay";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { fetchCalendarActivity, type CalendarActivityRow } from "@/lib/actions/planning-activity";
+import { fetchCalendarActivity, type CalendarActivityResult } from "@/lib/actions/planning-activity";
 
 /**
  * TAKVİM GEÇMİŞİ — "kim ne yaptı, saat kaçta".
@@ -65,17 +65,17 @@ function stamp(iso: string): string {
 
 export function CalendarHistory() {
   const [open, setOpen] = useState(false);
-  const [rows, setRows] = useState<CalendarActivityRow[] | null>(null);
+  const [data, setData] = useState<CalendarActivityResult | null>(null);
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
     fetchCalendarActivity()
-      .then(setRows)
+      .then(setData)
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => { if (open && rows === null) load(); }, [open, rows, load]);
+  useEffect(() => { if (open && data === null) load(); }, [open, data, load]);
 
   return (
     <>
@@ -97,19 +97,28 @@ export function CalendarHistory() {
           hint="Kim ne yaptı, ne zaman"
           size="md"
         >
-          {loading && rows === null ? (
+          {loading && data === null ? (
             <div className="flex items-center justify-center gap-2 py-10 text-[13px] text-muted">
               <Loader2 size={15} className="animate-spin" aria-hidden /> Yükleniyor…
             </div>
-          ) : !rows?.length ? (
+          ) : data && !data.allowed ? (
+            /* YETKİ YOK ≠ KAYIT YOK. Günlüğü okumak yönetici yetkisi ister
+               (RLS `wal_select`); bunu "henüz kayıt yok" diye göstermek üyeye
+               sistemin çalışmadığını sandırırdı. */
+            <EmptyState
+              icon={Lock}
+              title="Geçmişi yalnız yöneticiler görebilir."
+              description="Takvim günlüğü bir denetim kaydıdır; okuma yetkisi yönetici hesaplarına açıktır."
+            />
+          ) : !data?.rows.length ? (
             <EmptyState
               icon={History}
               title="Henüz kayıt yok."
-              description="Toplantı açıldığında, konu eklendiğinde ya da silindiğinde burada görünür."
+              description="Kayıt tutma 12.09.2026'da başladı — bu tarihten ÖNCE yapılan değişiklikler burada görünmez. Bundan sonra toplantı açıldığında, başlık değiştiğinde, konu silindiğinde ya da davet gönderildiğinde satır düşer."
             />
           ) : (
             <ul className="divide-y divide-hairline">
-              {rows.map((r) => {
+              {data.rows.map((r) => {
                 const m = META[r.action] ?? { verb: r.action, tone: "neutral" as Tone, icon: History };
                 const Icon = m.icon;
                 return (
