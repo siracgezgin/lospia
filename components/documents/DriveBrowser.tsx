@@ -1267,7 +1267,13 @@ export function DriveBrowser({
           <div
             role="group"
             aria-label="Görünüm"
-            className="ml-auto inline-flex h-9 shrink-0 items-center rounded-control border border-line bg-surface p-0.5 pointer-coarse:h-11"
+            /* `ml-auto` YOK. Eskiden bu grup satırın tek sağa yaslananıydı;
+               üretim düğmeleri de bu satıra gelince İKİSİ birden sağa itmeye
+               çalıştı ve görünüm düğmeleri ortada asılı kaldı (Sıraç,
+               12.09.2026: "ortadaki görünüm kartı neden böyle ortada kalmış?").
+               Satırda sağa yaslamayı YALNIZ üretim grubu yapar; bu düğmeler
+               süzgecin hemen yanında, ait oldukları yerde durur. */
+            className="inline-flex h-9 shrink-0 items-center rounded-control border border-line bg-surface p-0.5 pointer-coarse:h-11"
           >
             <button
               type="button"
