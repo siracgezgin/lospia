@@ -751,7 +751,13 @@ export function DriveBrowser({
     return out;
   }, [moving, folders, rootLabel]);
 
-  function run(key: string, fn: () => Promise<{ error?: string } | unknown>, after?: () => void) {
+  function run(
+    key: string,
+    fn: () => Promise<{ error?: string } | unknown>,
+    /* `after` artık SONUCU alır: yeni klasör oluşturulduğunda id'sine ihtiyaç
+       var (kökte oluşturulan klasöre hemen giriliyor — aşağıdaki namingTile). */
+    after?: (_res: unknown) => void,
+  ) {
     setError(null);
     setBusy(key);
     startWork(async () => {
@@ -760,7 +766,7 @@ export function DriveBrowser({
       try {
         const res = (await fn()) as { error?: string };
         if (res && "error" in res && res.error) { setError(res.error); return; }
-        after?.();
+        after?.(res);
         router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Beklenmeyen bir hata oluştu.");
@@ -1098,7 +1104,15 @@ export function DriveBrowser({
           "folder",
           /* Varsayılan "all": klasör açan kişi aksini söylemedikçe ekip görür. */
           () => saveFolder(null, { name, parent_id: cwd, visibility: "all", section }),
-          () => setNaming(false),
+          (res) => {
+            setNaming(false);
+            /* KÖKTE açılan klasöre HEMEN GİR. Kök ekranı kutu seçicidir ve
+               klasör listesi çizmez; giriş olmasaydı kullanıcı klasörü
+               oluşturup hiçbir yerde göremezdi. Bir kutunun İÇİNDEYKEN
+               oluşturulan klasör zaten listede beliriyor, orada kalıyoruz. */
+            const id = (res as { id?: string } | null)?.id;
+            if (!cwd && id) setCwd(id);
+          },
         )
       }
       onCancel={() => setNaming(false)}
@@ -1436,38 +1450,20 @@ export function DriveBrowser({
             })}
           </TileGrid>
 
-          {/* KÖKTEKİ KLASÖRLER. Kutular TÜRE göre ayırır (Word, Excel, görsel…);
-              klasör ise türden bağımsız bir kap — "Sunumlar" klasöründe hem
-              PDF hem görsel olabilir. Kök ekranı yalnız kutuları çizerken
-              kökte açılan klasör hiçbir yerde görünmüyordu; kullanıcı
-              "oluşturdum ama yok" durumunda kalıyordu (12.09.2026).
-              Artık kutuların altında kendi bölümünde duruyorlar — Drive'ın
-              kökü de böyle: önce klasörler, sonra dosyalar. */}
-          {(items.folders.length > 0 || naming) && (
+          {/* Kökte YALNIZ ad kutusu çizilir; klasör LİSTESİ çizilmez.
+              Sıraç (12.09.2026, ekran görüntüsüyle): "altta klasörler kalkmalı."
+              Kök ekranı "Ne arıyorsunuz?" sorusunu soran bir KUTU SEÇİCİDİR;
+              altına klasör listesi eklemek o soruyu bulandırıyordu. Klasörler
+              zaten kutuların içinde görünüyor (boş klasör her kutuda çıkar).
+
+              Peki kökte açılan klasör kaybolmuyor mu? Hayır: kaydedilir
+              kaydedilmez İÇİNE GİRİLİYOR (aşağıda `setCwd`). Kullanıcı
+              "oluşturdum ama yok" durumunda kalmıyor, doğrudan dosya
+              koyabileceği yerde duruyor. */}
+          {naming && (
             <div className="mt-7">
-              <Section title="Klasörler">
-                <DriveGrid
-                  items={items.folders}
-                  leading={namingTile}
-                  menu={renderMenu}
-                  memberNames={memberNames}
-                  memberAvatars={memberAvatars}
-                  renamingId={renaming}
-                  busy={busy}
-                  onCancelRename={() => setRenaming(null)}
-                  onRename={(f, name) =>
-                    run(
-                      `rn-${f.id}`,
-                      () => saveFolder(f.id, {
-                        name,
-                        parent_id: f.parent_id,
-                        visibility: f.visibility,
-                        section: f.section ?? section,
-                      }),
-                      () => setRenaming(null),
-                    )
-                  }
-                />
+              <Section title="Yeni klasör">
+                <TileGrid row>{namingTile}</TileGrid>
               </Section>
             </div>
           )}
