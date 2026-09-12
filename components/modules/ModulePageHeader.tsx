@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import { BackLink } from "./BackLink";
+import { Breadcrumbs, type BreadcrumbItem } from "@/components/ui/Breadcrumbs";
 
 interface Props {
   /** Sayfa başlığı — EKRANDA çizilmez (uygulama çubuğu zaten yazıyor), yalnız
@@ -8,6 +9,12 @@ interface Props {
   /** "Geri"nin hedefini ELLE ver. Boşsa yolun kendisinden türetilir; kök
    *  sayfalarda düğme hiç çizilmez (bkz. lib/nav/parent-path.ts). */
   backHref?: string;
+  /**
+   * TAM ZİNCİRİ elle ver. Rota tek başına gerçek konumu bilmediğinde gerekir:
+   * bir tablo `/sheets/<id>`de yaşar ama ASIL yeri "AF Teamwork › Excel ›
+   * Excel Tabloları"dır ve bunu yalnız sayfa bilir. Verilirse `backHref`
+   * yok sayılır. */
+  crumbs?: BreadcrumbItem[];
   /** Sağa yaslı aksiyonlar (düğmeler, süzgeçler). */
   rightSlot?: React.ReactNode;
 
@@ -48,6 +55,7 @@ interface Props {
 export function ModulePageHeader({
   title,
   backHref,
+  crumbs,
   rightSlot,
 }: Props) {
   return (
@@ -57,7 +65,7 @@ export function ModulePageHeader({
        ama yalnız `mb-2` kadar yer tutar — görünür bir boşluk bırakmaz. */
     <div className="mb-2 flex flex-col gap-2 empty:mb-0 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
       <h1 className="sr-only">{title}</h1>
-      <BackLink href={backHref} />
+      {crumbs ? <Breadcrumbs items={crumbs} /> : <BackLink href={backHref} />}
       {rightSlot && (
         /* sm:ml-auto ŞART: BackLink kök sayfada hiç çizilmiyor ve satırda tek
            çocuk kalıyor — `justify-between` tek çocuğu SOLA yaslıyordu. Aynı

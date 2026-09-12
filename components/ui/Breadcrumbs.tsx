@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { ArrowLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import type { Crumb } from "@/lib/nav/breadcrumbs";
 
@@ -52,22 +52,37 @@ export function Breadcrumbs({
         /* Derin zincirde yol uzayınca GÖVDE yatay kaymasın; yol kendi kabında
            kaysın. Kaydırma çubuğu gizli — ince gri bir çizgi başlığın altında
            gürültü yapıyordu. */
-        "flex min-w-0 items-center gap-1 overflow-x-auto text-[13.5px]",
+        "flex min-w-0 items-center overflow-x-auto text-[13px] font-medium",
         "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
         className,
       )}
     >
       {trail.map((item, i) => {
         const last = i === trail.length - 1;
-        const body = (
-          <span className="block max-w-[14rem] truncate">{item.label}</span>
-        );
+        const first = i === 0;
+        const body = <span className="block max-w-[15rem] truncate">{item.label}</span>;
+
+        /* TIKLANABİLİR HALKA TIKLANABİLİR GÖRÜNÜR. Önceki hâlinde bütün
+           halkalar aynı düz gri metindi ve yalnız fareyle üstüne gelince
+           koyulaşıyordu — dokunmatikte hiçbir ipucu yoktu, "bakınca da
+           anlaşılmıyor" (Sıraç, 12.09.2026). Artık üstlerinde hafif bir kutu
+           beliriyor ve ilk halka geri oku taşıyor: zincirin başı aynı zamanda
+           "çıkış" kapısıdır. */
         const shared =
-          "inline-flex h-8 shrink-0 items-center rounded-control px-1.5 transition-colors duration-150 ease-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring";
+          "inline-flex h-7 shrink-0 items-center gap-1 rounded-control px-1.5 transition-[background-color,color] duration-150 ease-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring";
+        const clickable = cn(shared, "text-muted hover:bg-surface-muted hover:text-ink");
+        const inner = (
+          <>
+            {first && <ArrowLeft size={13} className="shrink-0" aria-hidden />}
+            {body}
+          </>
+        );
 
         return (
-          <span key={`${item.label}-${i}`} className="inline-flex shrink-0 items-center gap-1">
-            {i > 0 && <ChevronRight size={12} className="shrink-0 text-subtle" aria-hidden />}
+          <span key={`${item.label}-${i}`} className="inline-flex shrink-0 items-center">
+            {i > 0 && (
+              <ChevronRight size={13} className="mx-0.5 shrink-0 text-line-strong" aria-hidden />
+            )}
             {last ? (
               /* aria-current="page": ekran okuyucu da hangisinin bulunulan yer
                  olduğunu bilsin — kalın yazı yalnız gören kullanıcıya söyler. */
@@ -75,13 +90,9 @@ export function Breadcrumbs({
                 {body}
               </span>
             ) : item.href ? (
-              <Link href={item.href} className={cn(shared, "text-muted hover:text-ink")}>
-                {body}
-              </Link>
+              <Link href={item.href} className={clickable}>{inner}</Link>
             ) : (
-              <button type="button" onClick={item.onSelect} className={cn(shared, "text-muted hover:text-ink")}>
-                {body}
-              </button>
+              <button type="button" onClick={item.onSelect} className={clickable}>{inner}</button>
             )}
           </span>
         );

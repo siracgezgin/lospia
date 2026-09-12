@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Pencil, Info, Loader2, Check, AlertCircle, RotateCw, Download, Copy, Trash2, CloudOff, FolderOpen,
+  Pencil, Info, Loader2, Check, AlertCircle, RotateCw, Download, Copy, Trash2, CloudOff,
 } from "lucide-react";
 import {
   saveSpreadsheetSnapshot,
@@ -27,10 +27,16 @@ interface Props {
   contacts: { id: string; name: string }[];
   currentUserId: string;
   isAdmin: boolean;
-  /** "AF Teamwork › Föyler" — tablonun NEREYE kaydedildiği. Aslı Hanım
-   *  (2026-09-07): "Nereye kaydetti?" Otomatik kayıt sessizce çalışıyordu ama
-   *  hedefini söylemiyordu. */
-  savedTo?: string | null;
+  /**
+   * Tablonun GERÇEK konumu — kök klasörden buraya kadarki zincir.
+   *
+   * Aslı Hanım (2026-09-07) "Nereye kaydetti?" diye sormuştu; cevabı başlığın
+   * altında küçük bir satıra yazılmıştı. Ama o satır ÖLÜ metindi ve kırıntı
+   * yolu aynı anda "AF Teamwork › Tablo" diyerek yanlış yeri gösteriyordu
+   * (Sıraç, 12.09.2026). Konum artık kırıntı yolunun kendisinde ve her halka
+   * kendi klasörünü açıyor — hem doğru hem tıklanır.
+   */
+  folderTrail?: { id: string; name: string }[];
 }
 
 /** Kaydetme durumu — kullanıcıya TEK bir cümleyle söylenir. */
@@ -60,7 +66,7 @@ function downloadNameOf(disposition: string | null, fallbackTitle: string): stri
 }
 
 export function SheetDetailView({
-  sheet, departments, tasks, contacts, currentUserId, isAdmin, savedTo = null,
+  sheet, departments, tasks, contacts, currentUserId, isAdmin, folderTrail = [],
 }: Props) {
   const router = useRouter();
   const { ask, dialog } = useConfirm();
@@ -390,7 +396,16 @@ export function SheetDetailView({
           bağlı değil, doğrudan bağlantıyla açıldığında da doğru çalışır. */}
       <ModulePageHeader
         title={sheet.title}
-        backHref={sheet.folder_id ? `/documents?f=${sheet.folder_id}` : "/documents"}
+        /* Zincirin tamamı ELLE veriliyor: rota (`/sheets/<id>`) tablonun
+           hangi klasörde durduğunu bilmiyor, yalnız bu sayfa biliyor. */
+        crumbs={[
+          { label: "AF Teamwork", href: "/documents" },
+          ...folderTrail.map((f: { id: string; name: string }) => ({
+            label: f.name,
+            href: `/documents?f=${f.id}`,
+          })),
+          { label: metaTitle || sheet.title },
+        ]}
         rightSlot={
           <>
             {/* İNDİRME: gerçek bir GET rotası (bkz. [id]/export/route.ts).
@@ -488,15 +503,9 @@ export function SheetDetailView({
         />
       </div>
 
-      {/* KONUM — "kaydedildi" tek başına yetmiyordu: Aslı Hanım tabloyu
-          kapatırken "Nereye kaydetti?" diye sordu. Klasör adı başlığın hemen
-          altında, sakin bir satır olarak durur. */}
-      {savedTo && (
-        <p className="mb-2 flex items-center gap-1.5 px-2 text-[12.5px] text-subtle">
-          <FolderOpen size={13} className="shrink-0" aria-hidden />
-          <span className="min-w-0 truncate">{savedTo}</span>
-        </p>
-      )}
+      {/* KONUM SATIRI KALDIRILDI: aynı bilgiyi kırıntı yolu zaten yazıyor ve
+          orada TIKLANABİLİR. İkisi birden durunca ekranda aynı yol iki kez
+          görünüyordu — biri üstte doğru, biri altta ölü metin. */}
 
       {notice && (
         <div

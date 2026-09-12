@@ -76,22 +76,38 @@ export default async function SheetDetailPage({
       .order("name"),
   ]);
 
-  /* NEREYE KAYDEDİLDİĞİ — klasör adı ekranda yazsın (2026-09-07). */
-  let folderName: string | null = null;
+  /* GERÇEK KONUM — kırıntı yolunun klasör halkaları.
+     Eskiden yalnız klasörün ADI çekiliyor ve başlığın altında küçük bir
+     satırda yazıyordu; kırıntı yolu ise "AF Teamwork › Tablo" diyerek en başa
+     işaret ediyordu (Sıraç, 12.09.2026: "Excel içindeki klasörlerden birinin
+     içindeki dosyayı açtım ama direkt en baş gösteriyor").
+     Artık ÜST KLASÖR ZİNCİRİNİN tamamı çekiliyor ve her halka kendi klasörünü
+     açıyor — kullanıcı tablodan çıkıp geldiği yere tek tıkla dönebiliyor. */
+  let folderTrail: { id: string; name: string }[] = [];
   if (sheet.folder_id) {
-    const { data: folder } = await supabase
+    const { data: allFolders } = await supabase
       .from("document_folders")
-      .select("name")
-      .eq("id", sheet.folder_id)
-      .eq("workspace_id", workspaceId)
-      .maybeSingle();
-    folderName = (folder as { name: string } | null)?.name ?? null;
+      .select("id, name, parent_id")
+      .eq("workspace_id", workspaceId);
+    const byId = new Map(
+      ((allFolders ?? []) as { id: string; name: string; parent_id: string | null }[])
+        .map((f) => [f.id, f]),
+    );
+    const guard = new Set<string>();   // bozuk veri döngü yaparsa durdurur
+    let cur: string | null = sheet.folder_id as string;
+    while (cur && !guard.has(cur)) {
+      guard.add(cur);
+      const f = byId.get(cur);
+      if (!f) break;
+      folderTrail.unshift({ id: f.id, name: f.name });
+      cur = f.parent_id;
+    }
   }
 
   return (
     <SheetDetailView
       sheet={sheet}
-      savedTo={folderName ? `AF Teamwork › ${folderName}` : "AF Teamwork"}
+      folderTrail={folderTrail}
       departments={(deptsResult.data ?? []) as WorkspaceDepartment[]}
       tasks={(tasksResult.data ?? []) as { id: string; title: string }[]}
       contacts={(contactsResult.data ?? []) as { id: string; name: string }[]}

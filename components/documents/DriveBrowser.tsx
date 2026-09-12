@@ -1187,131 +1187,35 @@ export function DriveBrowser({
         </div>
       )}
 
-
-      {/* Kırıntı yolu + üretim düğmeleri */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        {/* TEK SATIR: Geri · kırıntı yolu · üretim. Kökteyken kırıntı yolu hiç
-            çizilmez — nerede olduğunu uygulama çubuğu zaten söylüyor.
-            `overflow-x-auto`: derin klasörde yol uzayınca gövde YATAY
-            KAYMASIN, yol kendi kabında kaysın. */}
-        {/* KIRINTI YOLU — uygulamanın ortak bileşeni (components/ui/Breadcrumbs).
-            Burada bir zamanlar kendi zinciri vardı ve BOZUKTU: kutu etiketinden
-            sonra zincirin ORTASINA bir ev ikonu giriyordu —
-            "AF Teamwork › Excel › 🏠 › Excel Tabloları" (Sıraç, 12.09.2026).
-            O ikon kutu bağlantısıyla AYNI işi yapıyordu (setCwd(null)), yani
-            hem gereksizdi hem zinciri okunamaz hâle getiriyordu.
-            Zincir artık tek dilde: kök › kutu › klasörler, ayıraç tek tür,
-            son halka koyu ve tıklanmaz. */}
-        <Breadcrumbs
-          ariaLabel="Klasör yolu"
-          className="flex-1"
-          items={[
-            { label: rootLabel, onSelect: () => { setBucket(null); setCwd(null); setQuery(""); } },
-            ...(bucket
-              ? [{ label: BUCKET_BY_KEY.get(bucket)?.label ?? "", onSelect: () => setCwd(null) }]
-              : []),
-            ...trail.map((f) => ({ label: f.name, onSelect: () => setCwd(f.id) })),
-          ]}
-        />
-
-        {/* ÜRETİM DÜĞMELERİ — beşi de AÇIK, menü arkasında değil.
-            Sıraç (2026-08-29): "Bunları ayrı ayrı verelim sağ üstte, açık
-            olsun ve anlaşılır olsun. Klasör sarımsı, Excel yeşil, Word mavi."
-            Renkler uydurulmadı: listedeki dosya ikonlarının rengiyle AYNI
-            kaynaktan (lib/office/file-kind.ts) geliyor.
-            Dar ekranda yazılar gizlenir, ikon kalır. */}
-        <div className="flex shrink-0 items-center gap-1.5">
-          {/* KLASÖR herkese açık: üye de kendi çalışma alanını kurabilmeli.
-              Açtığı klasörü yalnız kendisi yönetir (canManage + RLS 20240334). */}
-          <CreateButton
-            icon={FolderPlus}
-            label="Klasör"
-            hex={KIND_FOLDER.hex}
-            /* KÖKTE DE AÇIK (Sıraç, 12.09.2026: "yeni klasör oluşturulamıyor,
-               yönetici olmasına rağmen; oluştur diyince gri bir imge oluyor").
-               Düğme bir süre `bucket === null` iken KAPALIYDI: gerekçe, kökte
-               açılan boş klasörün hiçbir kutuya ait olmadığı için hiçbir yerde
-               görünmemesiydi. O gerekçe iki ayrı düzeltmeyle ortadan kalktı —
-               boş klasör artık her kutuda görünüyor (bkz. kutu süzgeci) ve kök
-               ekranı da kendi klasörlerini çiziyor (aşağıdaki "Klasörler"
-               bölümü). Devre dışı düğme, çözülmüş bir sorunun kalıntısıydı ve
-               yöneticiyi bile klasör açmaktan alıkoyuyordu. */
-            title="Yeni klasör"
-            /* Süzgeç de sıfırlanır: "Yüklenen dosya" süzgeci açıkken klasör
-               açılınca yeni klasör listeye hiç düşmüyordu. */
-            onPick={() => { setQuery(""); setTypeFilter("all"); setRenaming(null); setNaming(true); }}
-          />
-          {/* ÜRETİM DÜĞMELERİ KUTUYA GÖRE. Excel kutusundayken "Word"e
-              basmak, açıldığı anda görünmeyen bir yazı üretiyordu — "her şey
-              kendi yerinde" tam olarak bunun olmaması demek. Kutu seçilmemişse
-              (giriş) hepsi açık kalır. */}
-          {(bucket === null || bucket === "doc") && (
-          <CreateButton
-            icon={FileText}
-            label="Word"
-            title="Yeni yazı (Word)"
-            hex={KIND_DOC.hex}
-            busy={busy === "newdoc"}
-            onPick={() =>
-              run("newdoc", async () => {
-                const res = await createTeamworkDoc({ title: "Adsız yazı", folder_id: cwd, section });
-                if ("error" in res) return res;
-                router.push(`/documents/${res.id}`);
-                return {};
-              })
-            }
-          />
-          )}
-          {(bucket === null || bucket === "sheet") && (
-          <CreateButton
-            icon={Table2}
-            label="Excel"
-            title="Yeni tablo (Excel)"
-            hex={KIND_SHEET.hex}
-            busy={busy === "newsheet"}
-            onPick={() =>
-              run("newsheet", async () => {
-                const res = await createSheetInFolder({ title: "Adsız tablo", folder_id: cwd, section });
-                if ("error" in res) return res;
-                router.push(`/sheets/${res.id}`);
-                return {};
-              })
-            }
-          />
-          )}
-          {onNewLink && (bucket === null || bucket === "link") && (
-            <CreateButton
-              icon={LinkIcon}
-              label="Bağlantı"
-              title="Bağlantı ekle (Drive, Canva…)"
-              /* Renk ELLE YAZILMAZ: listedeki bağlantı ikonunun rengiyle aynı
-                 kaynaktan gelir (lib/office/file-kind.ts). */
-              hex={LINK_HEX}
-              onPick={() => onNewLink(cwd)}
-            />
-          )}
-          {/* Yükleme yalnız dosya kutularında: Word/Excel kutusuna dosya
-              yüklemek onu o kutuda görünmez kılardı. */}
-          {(bucket === null || bucket === "image" || bucket === "file") && (
-            <CreateButton
-              icon={Upload}
-              label="Yükle"
-              title="Dosya yükle — birden fazla seçebilir ya da sürükleyip bırakabilirsiniz"
-              hex={UPLOAD_HEX}
-              busy={uploading}
-              onPick={openFilePicker}
-            />
-          )}
-          {/* `multiple`: on dosya seçilip biri yükleniyordu. */}
-          <input ref={fileRef} type="file" multiple className="hidden" onChange={onPick} />
-        </div>
-      </div>
+      {/* KIRINTI YOLU — ortak bileşen (components/ui/Breadcrumbs).
+          Burada bir zamanlar kendi zinciri vardı ve BOZUKTU: kutu etiketinden
+          sonra zincirin ORTASINA bir ev ikonu giriyordu — "AF Teamwork ›
+          Excel › 🏠 › Excel Tabloları" (Sıraç, 12.09.2026). O ikon kutu
+          bağlantısıyla AYNI işi yapıyordu (setCwd(null)): hem gereksizdi hem
+          zinciri okunamaz kılıyordu.
+          Kökte tek halkaya iner ve HİÇ ÇİZİLMEZ — satır da yer kaplamaz. */}
+      <Breadcrumbs
+        ariaLabel="Klasör yolu"
+        items={[
+          { label: rootLabel, onSelect: () => { setBucket(null); setCwd(null); setQuery(""); } },
+          ...(bucket
+            ? [{ label: BUCKET_BY_KEY.get(bucket)?.label ?? "", onSelect: () => setCwd(null) }]
+            : []),
+          ...trail.map((f) => ({ label: f.name, onSelect: () => setCwd(f.id) })),
+        ]}
+      />
 
       {/* ARAMA · TÜR · GÖRÜNÜM. Süzgeç kuralı (CLAUDE.md): başlık · tür —
           fazlası satırın içinde yazar. Arama TÜM ağaçta çalışır; bulunan
           öğenin yolu satırın altında durur. */}
-      {hasAnything && (
-        <div className="flex flex-wrap items-center gap-2">
+      {/* `hasAnything` YALNIZ ARAMA VE SÜZGECİ kapatır, üretim düğmelerini
+          DEĞİL. Düğmeler bu satıra taşınınca boş çalışma alanında hepsi birden
+          kayboluyordu: hiç dosya yokken klasör de açamıyordunuz, yani ilk
+          dosyayı koymanın yolu kalmıyordu. Satır her zaman çizilir; içindeki
+          arama/süzgeç aramaya değecek bir şey olduğunda belirir. */}
+      <div className="flex flex-wrap items-center gap-2">
+        {hasAnything && (
+          <>
           <div className="relative min-w-0 flex-1 sm:max-w-xs">
             <Search
               size={14}
@@ -1395,8 +1299,110 @@ export function DriveBrowser({
             </button>
           </div>
           )}
-        </div>
-      )}
+          </>
+        )}
+
+          {/* ÜRETİM DÜĞMELERİ — beşi de AÇIK, menü arkasında değil.
+              Sıraç (2026-08-29): "Bunları ayrı ayrı verelim sağ üstte, açık
+              olsun ve anlaşılır olsun. Klasör sarımsı, Excel yeşil, Word mavi."
+              Renkler uydurulmadı: listedeki dosya ikonlarının rengiyle AYNI
+              kaynaktan (lib/office/file-kind.ts) geliyor.
+              Dar ekranda yazılar gizlenir, ikon kalır.
+
+              KENDİ SATIRINDAN BU SATIRA TAŞINDI (12.09.2026). Eskiden kırıntı
+              yolunun satırındaydılar; kökte kırıntı yolu hiç çizilmediği için o
+              satır boş bir şerit olarak kalıyor ve ekranın tepesinde
+              karşılıksız yer kaplıyordu (Sıraç: "neden üst üste? Ara kısmının
+              hizasında sağ tarafta gelebilirler, hem o gereksiz üst boşluk da
+              kalkar"). Artık arama ve süzgeçle aynı hizada, sağa yaslı.
+              `ml-auto`: görünüm düğmeleri girişte çizilmiyor, o yüzden sağa
+              yaslamayı bu grup kendi üstlenmeli. */}
+          <div className="ml-auto flex shrink-0 items-center gap-1.5">
+            {/* KLASÖR herkese açık: üye de kendi çalışma alanını kurabilmeli.
+                Açtığı klasörü yalnız kendisi yönetir (canManage + RLS 20240334). */}
+            <CreateButton
+              icon={FolderPlus}
+              label="Klasör"
+              hex={KIND_FOLDER.hex}
+              /* KÖKTE DE AÇIK (Sıraç, 12.09.2026: "yeni klasör oluşturulamıyor,
+                 yönetici olmasına rağmen; oluştur diyince gri bir imge oluyor").
+                 Düğme bir süre `bucket === null` iken KAPALIYDI: gerekçe, kökte
+                 açılan boş klasörün hiçbir kutuya ait olmadığı için hiçbir yerde
+                 görünmemesiydi. O gerekçe iki ayrı düzeltmeyle ortadan kalktı —
+                 boş klasör artık her kutuda görünüyor (bkz. kutu süzgeci) ve kök
+                 ekranı da kendi klasörlerini çiziyor (aşağıdaki "Klasörler"
+                 bölümü). Devre dışı düğme, çözülmüş bir sorunun kalıntısıydı ve
+                 yöneticiyi bile klasör açmaktan alıkoyuyordu. */
+              title="Yeni klasör"
+              /* Süzgeç de sıfırlanır: "Yüklenen dosya" süzgeci açıkken klasör
+                 açılınca yeni klasör listeye hiç düşmüyordu. */
+              onPick={() => { setQuery(""); setTypeFilter("all"); setRenaming(null); setNaming(true); }}
+            />
+            {/* ÜRETİM DÜĞMELERİ KUTUYA GÖRE. Excel kutusundayken "Word"e
+                basmak, açıldığı anda görünmeyen bir yazı üretiyordu — "her şey
+                kendi yerinde" tam olarak bunun olmaması demek. Kutu seçilmemişse
+                (giriş) hepsi açık kalır. */}
+            {(bucket === null || bucket === "doc") && (
+            <CreateButton
+              icon={FileText}
+              label="Word"
+              title="Yeni yazı (Word)"
+              hex={KIND_DOC.hex}
+              busy={busy === "newdoc"}
+              onPick={() =>
+                run("newdoc", async () => {
+                  const res = await createTeamworkDoc({ title: "Adsız yazı", folder_id: cwd, section });
+                  if ("error" in res) return res;
+                  router.push(`/documents/${res.id}`);
+                  return {};
+                })
+              }
+            />
+            )}
+            {(bucket === null || bucket === "sheet") && (
+            <CreateButton
+              icon={Table2}
+              label="Excel"
+              title="Yeni tablo (Excel)"
+              hex={KIND_SHEET.hex}
+              busy={busy === "newsheet"}
+              onPick={() =>
+                run("newsheet", async () => {
+                  const res = await createSheetInFolder({ title: "Adsız tablo", folder_id: cwd, section });
+                  if ("error" in res) return res;
+                  router.push(`/sheets/${res.id}`);
+                  return {};
+                })
+              }
+            />
+            )}
+            {onNewLink && (bucket === null || bucket === "link") && (
+              <CreateButton
+                icon={LinkIcon}
+                label="Bağlantı"
+                title="Bağlantı ekle (Drive, Canva…)"
+                /* Renk ELLE YAZILMAZ: listedeki bağlantı ikonunun rengiyle aynı
+                   kaynaktan gelir (lib/office/file-kind.ts). */
+                hex={LINK_HEX}
+                onPick={() => onNewLink(cwd)}
+              />
+            )}
+            {/* Yükleme yalnız dosya kutularında: Word/Excel kutusuna dosya
+                yüklemek onu o kutuda görünmez kılardı. */}
+            {(bucket === null || bucket === "image" || bucket === "file") && (
+              <CreateButton
+                icon={Upload}
+                label="Yükle"
+                title="Dosya yükle — birden fazla seçebilir ya da sürükleyip bırakabilirsiniz"
+                hex={UPLOAD_HEX}
+                busy={uploading}
+                onPick={openFilePicker}
+              />
+            )}
+            {/* `multiple`: on dosya seçilip biri yükleniyordu. */}
+            <input ref={fileRef} type="file" multiple className="hidden" onChange={onPick} />
+          </div>
+      </div>
       {/* ── GİRİŞ: TÜR KUTULARI ──────────────────────────────────────────
           Aslı Hanım (2026-09-07): "AF Teamwork'e girdim, orada EXCEL YAZILI
           KUTU olsun; içine girince excel dosyaları olsun, bunlar klasörleşmiş
