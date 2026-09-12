@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { redirect, notFound } from "next/navigation";
+import { notFound } from "next/navigation";
 import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { TaskDetail } from "@/components/task/TaskDetail";
 import type { Task, TaskActivity, TaskActivityLogWithActor, TimeEntry, CustomFieldDefinition, Profile, WorkspaceContact, WorkspaceDepartment, TaskNoteWithAuthor } from "@/types";

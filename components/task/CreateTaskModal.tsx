@@ -26,6 +26,7 @@ import {
   DEFAULT_VISIBILITY, type TaskVisibility,
 } from "@/lib/utils/visibility";
 import type { TaskStatus, TaskPriority, Profile, WorkspaceContact } from "@/types";
+import { istanbulTodayISO } from "@/lib/utils/today";
 
 type BoardMember = {
   memberId: string; userId: string; name: string; isAdmin?: boolean;
@@ -111,7 +112,7 @@ export function CreateTaskModal({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [responsibleIds, setResponsibleIds] = useState<string[]>(defaultResponsibleIds);
-  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [startDate, setStartDate] = useState(() => istanbulTodayISO());
   const [dueDate, setDueDate] = useState(defaultDueDate);
   /* SAAT — takvimle aynı dil. Kayıtlı saat NEW YORK duvar saatidir
      (lib/planning/timezones.ts); İstanbul karşılığı hesaplanıp yanında yazar,

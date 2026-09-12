@@ -22,6 +22,7 @@ import { notifyTaskEvent } from "@/lib/notifications/notify";
 import { setTaskParticipants } from "@/lib/actions/completions";
 import { pointsForEffort, type EffortSize } from "@/lib/points/effort";
 import type { Json, TaskStatus as TaskStatusType } from "@/types";
+import { istanbulTodayISO } from "@/lib/utils/today";
 
 const ADMIN_ROLES: AppRole[] = ["owner", "admin"];
 const isAdminRole = (r: AppRole) => ADMIN_ROLES.includes(r);
@@ -221,7 +222,9 @@ export async function createTask(
 
   // AF works weekly: a new task's entry date (start_date) defaults to today so
   // it always lands in the current week's board even if no due date is set yet.
-  const today = new Date().toISOString().slice(0, 10);
+  /* İSTANBUL günü — Vercel UTC'de çalışıyor; `new Date().toISOString()`
+     00:00–03:00 arasında BİR ÖNCEKİ günü veriyordu (bkz. lib/utils/today.ts). */
+  const today = istanbulTodayISO();
   // Effort is an admin-only lever; members always create at the default (medium
   // / 3 points). points_value is always derived from effort server-side.
   const effort_size: EffortSize = isAdminRole(role) && createInput.effort_size

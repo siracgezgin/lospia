@@ -220,7 +220,6 @@ async function addProductionSheet(
     for (let c = 5; c <= COLS; c++) ws.getCell(r, c).border = border;
     ws.getRow(r).height = 17;
   }
-  const drawTop = MEAS_HEAD;
 
   // ── TESLİM EDİLEN ÜRÜNLER ─────────────────────────────────────────────────
   const DELIV_HEAD = MEAS_HEAD + ROWS_PER_TABLE + 1;

@@ -36,6 +36,7 @@ import { PersonAvatar } from "@/components/ui/PersonAvatar";
 import { CrmContactModal } from "./CrmContactModal";
 import { ContactMatchingPanel } from "./ContactMatchingPanel";
 import type { WorkspaceContact } from "@/types";
+import { istanbulTodayISO } from "@/lib/utils/today";
 
 export interface CrmMember {
   userId: string;
@@ -261,7 +262,7 @@ export function CrmView({
         cell: (info) => {
           const d = info.getValue();
           if (!d) return <span className="text-subtle">—</span>;
-          const overdue = d < new Date().toISOString().slice(0, 10);
+          const overdue = d < istanbulTodayISO();
           return (
             <span
               className={cn("whitespace-nowrap text-[13px] tabular-nums", overdue ? "font-medium text-danger" : "text-muted")}
@@ -509,7 +510,7 @@ export function CrmView({
           <div className="anim-fade-up rounded-card border border-line bg-surface shadow-card">{emptyState}</div>
         ) : (
           filtered.map((c) => {
-            const overdue = !!c.next_follow_up_at && c.next_follow_up_at < new Date().toISOString().slice(0, 10);
+            const overdue = !!c.next_follow_up_at && c.next_follow_up_at < istanbulTodayISO();
             const sub = [c.organization, c.role_label, segmentLabel(c.segment)].filter(Boolean).join(" · ");
             return (
               <div key={c.id} className="anim-fade-up rounded-card border border-line bg-surface p-3.5 shadow-card">

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+
 import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import {
   AtSign, LogOut, Shield, Home, ListChecks, CalendarDays, Settings as SettingsIcon,

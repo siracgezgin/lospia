@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+
 import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { ArrowRight, CheckCircle2, ShieldAlert, XCircle } from "lucide-react";
 import { startOfWeek, addDays, format } from "date-fns";

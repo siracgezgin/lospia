@@ -9,6 +9,7 @@ import { sendEmail } from "@/lib/email/send-email";
 import { meetingInviteEmail } from "@/lib/email/templates/meeting-invite";
 import { normalizeSlot, toIstanbulTime } from "@/lib/planning/timezones";
 import { findOrCreateMeeting } from "@/lib/planning/meeting-slot";
+import { addDaysISO, istanbulTodayISO } from "@/lib/utils/today";
 
 // Planlama — Haftalık Toplantı Takvimi. Toplantı (renkli kutu) + altında Konu'lar.
 // İzin modeli (2026-07-26): üyeler OKUR, yazma yalnız yönetici — hem burada
@@ -445,7 +446,9 @@ export async function assignTopicAsTask(
     .maybeSingle();
   const title = (nn(topic.text as string) || nn(meeting?.title as string) || "Planlama görevi")!;
   const dueDate = (input.dueDate ?? "").match(/^\d{4}-\d{2}-\d{2}$/) ? input.dueDate! : null;
-  const today = new Date().toISOString().slice(0, 10);
+  /* İSTANBUL günü — Vercel UTC'de çalışıyor; `new Date().toISOString()`
+     00:00–03:00 arasında BİR ÖNCEKİ günü veriyordu (bkz. lib/utils/today.ts). */
+  const today = istanbulTodayISO();
 
   let taskId = topic.task_id as string | null;
   if (taskId) {
@@ -614,12 +617,10 @@ export async function deleteTemplate(
   return { ok: true };
 }
 
-/** yyyy-MM-dd + n gün (saat dilimi oynamasın diye UTC üzerinden). */
-function addDaysIso(iso: string, days: number): string {
-  const d = new Date(`${iso}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
+/* addDaysIso YEREL KOPYASI KALDIRILDI — tek kaynak lib/utils/today.ts.
+   Doğru yazılmıştı ama aynı hesap dört yerde duruyordu; biri bozulduğunda
+   diğerleri sessizce ayrışırdı. */
+const addDaysIso = addDaysISO;
 
 /**
  * Haftayı şablondan kurar: aktif her şablon için o haftanın gününe bir toplantı

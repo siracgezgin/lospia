@@ -1,5 +1,5 @@
 import { createClient, getAuthUser } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+
 import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { DashboardView, type DueSoonTask, type ReportPerson } from "@/components/dashboard/DashboardView";
 import { MemberDashboardView } from "@/components/dashboard/MemberDashboardView";

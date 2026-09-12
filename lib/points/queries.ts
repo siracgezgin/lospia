@@ -1,4 +1,5 @@
 import type { createClient } from "@/lib/supabase/server";
+import { addDaysISO, istanbulTodayISO } from "@/lib/utils/today";
 
 type SB = Awaited<ReturnType<typeof createClient>>;
 
@@ -99,11 +100,16 @@ export interface MemberDashboardData {
 }
 
 // End of the current week (Sunday) as YYYY-MM-DD.
+/* Haftanın sonu (Pazar), İSTANBUL gününe göre.
+   Eski hâli `new Date()` üzerinden `getDay()` + `setDate()` + `toISOString()`
+   yapıyordu: Vercel UTC'de çalıştığı için hem gün adı hem sonuç bir gün
+   kayabiliyor, puan ekranı yanlış haftayı topluyordu. Artık hesap gün
+   dizesi üzerinden yapılıyor — saat dilimi denklemden çıktı. */
 function endOfWeekISO(now = new Date()): string {
-  const d = new Date(now);
-  const dow = d.getDay(); // 0 = Sunday
-  d.setDate(d.getDate() + (dow === 0 ? 0 : 7 - dow));
-  return d.toISOString().slice(0, 10);
+  const today = istanbulTodayISO(now);
+  const [y, m, d] = today.split("-").map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0 = Pazar
+  return addDaysISO(today, dow === 0 ? 0 : 7 - dow);
 }
 
 export async function getMemberDashboardData(
@@ -111,7 +117,9 @@ export async function getMemberDashboardData(
   workspaceId: string,
   userId: string,
 ): Promise<MemberDashboardData> {
-  const today = new Date().toISOString().slice(0, 10);
+  /* İSTANBUL günü — Vercel UTC'de çalışıyor; `new Date().toISOString()`
+     00:00–03:00 arasında BİR ÖNCEKİ günü veriyordu (bkz. lib/utils/today.ts). */
+  const today = istanbulTodayISO();
   const weekEnd = endOfWeekISO();
 
   // The user's responsible task ids = tasks assigned to them ∪ tasks they
@@ -162,11 +170,9 @@ export async function getMemberDashboardData(
   return { active, overdue, dueThisWeek, review, done, dueSoon };
 }
 
-function addDaysISO(iso: string, days: number): string {
-  const d = new Date(iso + "T00:00:00");
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
-}
+/* Yerel kopya SİLİNDİ: `iso + "T00:00:00"` YEREL gece yarısıdır ve sonuç
+   `toISOString()` ile UTC'ye çevrilince İstanbul'da bir gün geri kayıyordu.
+   Doğrusu lib/utils/today.ts'te; burada yeniden yazmak hatayı çoğaltmaktı. */
 
 // ---------------------------------------------------------------------------
 // Admin summary — full workspace visibility (owner/admin only).

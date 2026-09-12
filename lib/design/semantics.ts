@@ -20,6 +20,7 @@
 import type { CSSProperties } from "react";
 import type { TaskPriority, TaskStatus } from "@/types";
 import { hexOfColorKey, personStyles } from "@/lib/design/person-colors";
+import { addDaysISO, istanbulTodayISO } from "@/lib/utils/today";
 
 // ── Card visual style (category-driven, plus the reserved done style) ─────────
 
@@ -259,7 +260,10 @@ export interface CardSignals {
 
 /** Precedence-ordered operational state (drives the secondary chip, not color). */
 export function getCardState(t: CardSignals): CardState {
-  const today = new Date().toISOString().slice(0, 10);
+  /* İSTANBUL günü — sunucunun (UTC) günü DEĞİL. Vercel UTC'de çalıştığı için
+     00:00–03:00 arasında bir önceki günü verir ve "bugün teslim" işler
+     GECİKMİŞ görünürdü (bkz. lib/utils/today.ts). */
+  const today = istanbulTodayISO();
   if (t.status === "done") return "done";
   if (!!t.due_date && t.due_date < today) return "overdue";
 
@@ -269,9 +273,10 @@ export function getCardState(t: CardSignals): CardState {
   if (isWaiting) return "blocked";
 
   if (t.due_date) {
-    const soon = new Date(today + "T00:00:00");
-    soon.setDate(soon.getDate() + 3);
-    if (t.due_date <= soon.toISOString().slice(0, 10)) return "due_soon";
+    /* Gün aritmetiği UTC'de yapılır: eski kod YEREL gece yarısından başlayıp
+       sonucu UTC'ye çeviriyordu ve İstanbul'da bir gün geri kayıyordu —
+       "yaklaşan" penceresi üç gün yerine iki gün çalışıyordu. */
+    if (t.due_date <= addDaysISO(today, 3)) return "due_soon";
   }
   return "normal";
 }

@@ -21,27 +21,7 @@
  */
 
 import type { LucideIcon } from "lucide-react";
-import {
-  Archive,
-  Boxes,
-  Calculator,
-  CalendarRange,
-  Contact,
-  FileText,
-  FolderOpen,
-  HandCoins,
-  Kanban,
-  LayoutDashboard,
-  List,
-  Palette,
-  ScrollText,
-  Settings,
-  ShieldCheck,
-  Table2,
-  Target,
-  Trash2,
-  Wallet,
-} from "lucide-react";
+import { Archive, Boxes, Calculator, CalendarRange, Contact, FolderOpen, HandCoins, Kanban, LayoutDashboard, List, ScrollText, Settings, ShieldCheck, Target, Trash2, Wallet } from "lucide-react";
 
 /** Kim GÖRÜR: "all" = tüm üyeler (düzenleme yetkisi ekran içinde isAdmin ile
  *  daralır — "herkes görsün, yönetici müdahale etsin"), "admin" = yalnız

@@ -7,6 +7,7 @@ import { buildAllProductionSheetsWorkbook } from "@/lib/production/xlsx";
 import { logWorkspaceActivity, WORKSPACE_ACTIONS } from "@/lib/activity/log-workspace-activity";
 import { resolveSeasonId } from "@/lib/collection/season";
 import type { ProductionSheet } from "@/types";
+import { istanbulTodayISO } from "@/lib/utils/today";
 
 export const dynamic = "force-dynamic";
 
@@ -72,7 +73,9 @@ export async function GET(req: Request) {
 
   const buffer = await buildAllProductionSheetsWorkbook(sheets, memberNames);
 
-  const today = new Date().toISOString().slice(0, 10);
+  /* Dosya adındaki tarih de İstanbul günü olmalı: sunucu UTC'de
+     çalıştığı için gece yarısından sonra dün tarihli dosya üretiyordu. */
+  const today = istanbulTodayISO();
   const asciiName = `Uretim-Foyleri-${today}.xlsx`;
   const utf8Name = encodeURIComponent(`Üretim Föyleri ${today}.xlsx`);
 

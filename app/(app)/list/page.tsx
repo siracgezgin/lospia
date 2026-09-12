@@ -1,5 +1,5 @@
 import { createClient, getAuthUser } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+
 import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { TaskListView } from "@/components/list/TaskListView";
 import type { Task, SavedView, Profile, WorkspaceContact, WorkspaceDepartment, WorkspaceRole } from "@/types";

@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+
 import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { Boxes } from "lucide-react";
 import { requireModuleMember } from "@/lib/modules/context";

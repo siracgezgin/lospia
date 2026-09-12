@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+
 import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { requireModuleMember } from "@/lib/modules/context";
 import { AccessDenied } from "@/components/modules/AccessDenied";

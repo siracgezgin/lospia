@@ -22,6 +22,7 @@ import { parseCsvTasks, matchDepartment, type CsvFormat } from "@/lib/import/csv
 import { logTaskActivity, ACTIVITY_ACTIONS } from "@/lib/activity/log-task-activity";
 import { pointsForEffort } from "@/lib/points/effort";
 import type { AppRole } from "@/lib/auth/permissions";
+import { istanbulTodayISO } from "@/lib/utils/today";
 
 const MAX_CSV_BYTES = 1_000_000; // 1 MB — operasyon CSV'leri için fazlasıyla geniş
 const MAX_ROWS = 500;
@@ -212,7 +213,9 @@ export async function applyCsvImport(
     return idx;
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  /* İSTANBUL günü — Vercel UTC'de çalışıyor; `new Date().toISOString()`
+     00:00–03:00 arasında BİR ÖNCEKİ günü veriyordu (bkz. lib/utils/today.ts). */
+  const today = istanbulTodayISO();
   let created = 0;
   const errors: string[] = [];
 

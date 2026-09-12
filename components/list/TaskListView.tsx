@@ -43,6 +43,7 @@ import { SortHeader } from "@/components/ui/SortHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CreateTaskModal } from "@/components/task/CreateTaskModal";
 import { CsvImportModal } from "@/components/task/CsvImportModal";
+import { istanbulTodayISO } from "@/lib/utils/today";
 
 interface Props {
   tasks: Task[];
@@ -412,7 +413,8 @@ function PriorityBadge({ priority }: { priority: TaskPriority }) {
 // Gecikme: renk TEK BAŞINA sinyal değil — yanında ikon; emoji yok.
 function DueDate({ value, done }: { value: string | null; done: boolean }) {
   if (!value) return <span className="text-[12.5px] text-subtle">—</span>;
-  const today = new Date().toISOString().slice(0, 10);
+  /* İstanbul günü — sunucunun UTC günü değil (bkz. lib/utils/today.ts). */
+  const today = istanbulTodayISO();
   const isOverdue = value < today && !done;
   return (
     <span className={cn(

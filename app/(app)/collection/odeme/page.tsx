@@ -3,7 +3,7 @@
  * tablosu. Usta başına ödememesi. Hakan Usta ödeme tablosu. Bu kalsın."
  * Maliyet AYRI ekrandır: /collection/maliyet
  */
-import { redirect } from "next/navigation";
+
 import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { HandCoins } from "lucide-react";
 import { requireModuleMember } from "@/lib/modules/context";

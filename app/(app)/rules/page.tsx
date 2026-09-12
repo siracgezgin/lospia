@@ -1,5 +1,5 @@
 import { createClient, getAuthUser } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+
 import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { RulesView } from "@/components/rules/RulesView";
 import { markRulesSeen } from "@/lib/actions/members";

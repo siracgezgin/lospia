@@ -2,20 +2,7 @@
 
 import { useState } from "react";
 import { CalendarDays, ChevronDown, LayoutGrid, LineChart, List, Search } from "lucide-react";
-import {
-  BOARD_COLUMNS,
-  CALENDAR_WEEK,
-  DASH_DEPTS,
-  DASH_FOCUS,
-  DASH_TILES,
-  DEPT,
-  Chip,
-  DeptChip,
-  MiniTaskCard,
-  OwnerDot,
-  StatusChip,
-  LIST_ROWS,
-} from "./previewUi";
+import { BOARD_COLUMNS, CALENDAR_WEEK, DASH_DEPTS, DASH_FOCUS, DASH_TILES, DEPT, DeptChip, MiniTaskCard, OwnerDot, StatusChip, LIST_ROWS } from "./previewUi";
 
 // Interactive Lospia product showcase for the landing page. Four clickable
 // tabs (Pano / Liste / Takvim / Gösterge Paneli) switch a drawn, demo-safe

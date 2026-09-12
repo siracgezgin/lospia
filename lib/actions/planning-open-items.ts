@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import type { AppRole } from "@/lib/auth/permissions";
 import { toActionErrorMessage } from "@/lib/utils/supabase-errors";
+import { istanbulTodayISO } from "@/lib/utils/today";
 
 // Planlama — "Tamamlanmamış Eksik Konular". Aslı Hanım'ın takviminin altındaki
 // kişi sütunları: bitmemiş işlerin not defteri. Takvimden farkı:
@@ -272,7 +273,9 @@ export async function assignOpenItemAsTask(
 
   const title = (item.text as string).trim();
   const dueDate = (input.dueDate ?? "").match(/^\d{4}-\d{2}-\d{2}$/) ? input.dueDate! : null;
-  const today = new Date().toISOString().slice(0, 10);
+  /* İSTANBUL günü — Vercel UTC'de çalışıyor; `new Date().toISOString()`
+     00:00–03:00 arasında BİR ÖNCEKİ günü veriyordu (bkz. lib/utils/today.ts). */
+  const today = istanbulTodayISO();
 
   let taskId = item.task_id as string | null;
   if (taskId) {

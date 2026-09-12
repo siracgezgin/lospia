@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+
 import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { headers } from "next/headers";
 import { createClient, getAuthUser, getMembership, getProfile } from "@/lib/supabase/server";

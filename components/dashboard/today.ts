@@ -1,17 +1,11 @@
-const TZ = "Europe/Istanbul";
-
 /**
- * "Bugün" — İstanbul takvim günü, "YYYY-MM-DD".
+ * Bu dosya artık TEK KAYNAK DEĞİL — `lib/utils/today.ts` öyle.
  *
- * NEDEN `new Date().toISOString().slice(0,10)` DEĞİL: o ifade SUNUCUNUN
- * saatini kullanır. Vercel UTC'de çalıştığı için 00:00–03:00 arasında bir
- * önceki günü döndürür; "bugün teslim" işleri gecikmiş görünürdü. Aynı ifade
- * bir istemci bileşeninde kullanıldığında sunucu (UTC) ile tarayıcı (yerel)
- * farklı gün üretiyor ve React hydration uyuşmazlığı çıkıyordu.
- *
- * Intl `timeZone` verildiğinde her iki tarafta AYNI sonucu verir — bu yüzden
- * hem sunucu sayfaları hem istemci tabloları bu tek kaynaktan okur.
+ * "Bugün"ü İstanbul gününden okuma kuralı burada doğmuştu ama bir bileşen
+ * klasöründe saklı kaldığı için yayılamadı: aynı hata `getCardState`
+ * ("Gecikti" rozeti), Liste ekranı, Pano sıralaması, CRM takibi ve görev
+ * oluşturma varsayılanında duruyordu (2026-09-12 denetimi). Kural paylaşılan
+ * yere taşındı; buradaki dışa aktarım eski çağrı yerleri kırılmasın diye
+ * duruyor. YENİ KODDA doğrudan `@/lib/utils/today` içe aktar.
  */
-export function istanbulTodayISO(now: Date = new Date()): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(now);
-}
+export { istanbulTodayISO } from "@/lib/utils/today";

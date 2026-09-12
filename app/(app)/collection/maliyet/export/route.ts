@@ -6,6 +6,7 @@ import { buildCostWorkbook, type CostBomLite } from "@/lib/production/xlsx";
 import { getCategoryTree } from "@/lib/collection/category-tree";
 import { resolveSeasonId } from "@/lib/collection/season";
 import type { ProductionSheet } from "@/types";
+import { istanbulTodayISO } from "@/lib/utils/today";
 
 export const dynamic = "force-dynamic";
 
@@ -69,7 +70,9 @@ export async function GET(req: Request) {
 
   const buffer = await buildCostWorkbook(rows, { bomBySheet, categories, seasonName });
 
-  const today = new Date().toISOString().slice(0, 10);
+  /* Dosya adındaki tarih de İstanbul günü olmalı: sunucu UTC'de
+     çalıştığı için gece yarısından sonra dün tarihli dosya üretiyordu. */
+  const today = istanbulTodayISO();
   const suffix = seasonName ? ` ${seasonName}` : "";
   const asciiBase = `Maliyet${suffix}-${today}`.replace(/[^\x20-\x7E]/g, "_").replace(/[\\/:*?"<>|]+/g, "-");
   const utf8Name = encodeURIComponent(`Maliyet${suffix} ${today}.xlsx`);

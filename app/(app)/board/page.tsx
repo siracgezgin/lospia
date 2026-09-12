@@ -1,5 +1,5 @@
 import { createClient, getAuthUser } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+
 import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { KanbanBoard } from "@/components/board/KanbanBoard";
 import { EmptyState } from "@/components/ui/EmptyState";

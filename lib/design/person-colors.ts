@@ -28,7 +28,7 @@
  * Bir kişinin rengi asla "bitti" gibi okunmamalı.
  */
 
-import type { LucideIcon, LucideProps } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import {
   Feather, Flame, Gem, Leaf, Compass, Anchor, Crown, Rocket,
   Sparkles, Wand2, Mountain, Waves, Star, Heart, Sun, Moon,

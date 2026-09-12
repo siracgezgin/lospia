@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { defaultRuntimeBands, type RuntimeBand } from "@/lib/planning/bands";
+import { addDaysISO } from "@/lib/utils/today";
 
 /**
  * Haftanın iskeletini OTOMATİK kurar (kaynak: PLANNING_BANDS).
@@ -80,9 +81,7 @@ export async function ensureWeekScaffold(
   return error ? 0 : rows.length;
 }
 
-/** "2026-08-17" + 3 → "2026-08-20" (UTC, saat dilimi kaymasız). */
-function addDaysIso(iso: string, days: number): string {
-  const d = new Date(`${iso}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
+/* addDaysIso YEREL KOPYASI KALDIRILDI — tek kaynak lib/utils/today.ts.
+   Doğru yazılmıştı ama aynı hesap dört yerde duruyordu; biri bozulduğunda
+   diğerleri sessizce ayrışırdı. */
+const addDaysIso = addDaysISO;

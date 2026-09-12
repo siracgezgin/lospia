@@ -1,6 +1,6 @@
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import Link from "next/link";
-import { redirect } from "next/navigation";
+
 import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { WorkspaceNameEditor } from "@/components/settings/WorkspaceNameEditor";
 import { MembersManager } from "@/components/settings/MembersManager";

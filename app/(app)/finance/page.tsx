@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+
 import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";

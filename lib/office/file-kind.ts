@@ -1,8 +1,4 @@
-import {
-  Folder, FileText, Table2, Image as ImageIcon, FileType2, FileSpreadsheet,
-  FileArchive, Film, Music, File as FileIcon, FolderOpen, Palette, Globe, ExternalLink,
-  StickyNote, Link2 as LinkIcon, type LucideIcon,
-} from "lucide-react";
+import { Folder, FileText, Table2, Image as ImageIcon, FileType2, FileSpreadsheet, FileArchive, Film, Music, File as FileIcon, Palette, Globe, ExternalLink, StickyNote, Link2 as LinkIcon, type LucideIcon } from "lucide-react";
 
 /**
  * DOSYA TÜRÜ = GÖRSEL KİMLİK.

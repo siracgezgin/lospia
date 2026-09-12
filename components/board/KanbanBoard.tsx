@@ -75,9 +75,10 @@ import { WeeklyNoteFeed } from "@/components/board/WeeklyNoteFeed";
 import { BoardRulesPanel } from "@/components/board/BoardRulesPanel";
 import { WorkspaceLiveRefresh } from "@/components/realtime/WorkspaceLiveRefresh";
 import { canCreateTask, canDeleteTask, canArchiveTask, canCompleteTask } from "@/lib/auth/permissions";
-import type { Task, SavedView, TaskStatus, TaskPriority, Profile, WorkspaceContact, WorkspaceNote, WorkspaceRole, WorkspaceDepartment, BoardNoteFeedItem } from "@/types";
+import type { Task, SavedView, TaskStatus, Profile, WorkspaceContact, WorkspaceNote, WorkspaceRole, WorkspaceDepartment, BoardNoteFeedItem } from "@/types";
 import type { BoardRule, BoardMember } from "@/app/(app)/board/page";
 import type { TaskParticipant } from "@/types";
+import { addDaysISO, istanbulTodayISO } from "@/lib/utils/today";
 
 // Department metadata (id → {name, color}) shared with all card renderers.
 const DeptMetaContext = createContext<Record<string, DeptMeta>>({});
@@ -426,7 +427,10 @@ function formatWeekLabel(monday: Date): string {
 // ── Filter helpers ─────────────────────────────────────────────────────────────
 
 function applyViewFilter(tasks: Task[], slug: string, userId: string, monday: Date): Task[] {
-  const today = localISO(new Date());
+  /* İSTANBUL günü. `localISO(new Date())` MAKİNENİN gününü verir: tarayıcıda
+     doğru ama SSR'da sunucu UTC olduğu için farklı gün üretip hydration
+     uyuşmazlığı çıkarıyordu (bkz. lib/utils/today.ts). */
+    const today = istanbulTodayISO();
 
   // Weekly membership is DUE-DATE-ONLY and strictly date-only, and it applies to
   // EXACTLY ONE view: "Bu hafta". A task belongs to a week if and only if its
@@ -479,12 +483,6 @@ function applyViewFilter(tasks: Task[], slug: string, userId: string, monday: Da
     default:          // varsayılan görünüm = Bu hafta
       return tasks.filter((t) => notArchived(t) && inWeek(t));
   }
-}
-
-// The ONLY week-scoped view. Drives whether the week navigator is rendered, so
-// a user on "Gecikenler" can never believe the week header filters their list.
-function isWeekScopedSlug(slug: string): boolean {
-  return slug === "this-week";
 }
 
 // Haftalık üyelik SADECE due_date üzerinden ve tarih-bazlıdır (Pzt–Paz aralığı,
@@ -646,9 +644,10 @@ function taskUrgencyRank(t: Task, today: string): number {
   if (t.priority === "urgent" && t.status !== "done") return 0;
   if (t.status !== "done" && t.due_date && t.due_date < today) return 1; // overdue
   if (t.status !== "done" && t.due_date) {
-    const soon = new Date(today + "T00:00:00");
-    soon.setDate(soon.getDate() + 3);
-    if (t.due_date <= soon.toISOString().slice(0, 10)) return 2; // due soon (≤3d)
+    /* Gün aritmetiği UTC'de: eski kod YEREL gece yarısından başlayıp sonucu
+       UTC'ye çeviriyordu ve İstanbul'da bir gün geri kayıyordu — "yaklaşan"
+       penceresi üç gün yerine iki gün çalışıyordu (bkz. lib/utils/today.ts). */
+    if (t.due_date <= addDaysISO(today, 3)) return 2; // yaklaşan (≤3g)
   }
   return 3;
 }
@@ -1714,7 +1713,6 @@ export function KanbanBoard({
   const currentMonday = getMondayOf(new Date());
   const isCurrentWeek = weekStart.toDateString() === currentMonday.toDateString();
 
-
   // Toast notifications (optionally with an action link, e.g. "open in Tüm işler")
   type Toast = { id: string; msg: string; action?: { label: string; href: string } };
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -1917,7 +1915,10 @@ export function KanbanBoard({
 
   // Distribute filtered tasks into columns
   const tasksByCol = useMemo(() => {
-    const today = localISO(new Date());
+    /* İSTANBUL günü. `localISO(new Date())` MAKİNENİN gününü verir: tarayıcıda
+     doğru ama SSR'da sunucu UTC olduğu için farklı gün üretip hydration
+     uyuşmazlığı çıkarıyordu (bkz. lib/utils/today.ts). */
+    const today = istanbulTodayISO();
     return BOARD_COLUMNS.reduce<Record<BoardColId, Task[]>>((acc, col) => {
       acc[col.id] = filteredTasks
         .filter((t) => (col.statuses as TaskStatus[]).includes(t.status))
