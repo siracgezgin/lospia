@@ -414,6 +414,20 @@ export function DriveBrowser({
      null = giriş (kutular). Bir kutu seçilince yalnız o türün klasörleri ve
      dosyaları görünür; klasör gezinmesi kutunun içinde sürer. */
   const [bucket, setBucket] = useState<BucketKey | null>(null);
+  /* İÇERİK EKRANI mı, KUTU SEÇİCİ mi?
+     `cwd` ADRESTE (?f=<id>), `bucket` ise bileşen DURUMUNDA yaşıyor. İkisi
+     ayrışabiliyordu: bir klasörün içindeyken sayfa yenilenince (ya da ?f=
+     bağlantısı doğrudan açılınca) cwd geri gelir ama bucket sıfırlanır —
+     ekran klasörün içeriğini değil KUTU SEÇİCİYİ çizerdi.
+
+     Şeyda Nisa (12.09.2026): "Rapor klasörünü açtığımda tike tıklıyorum,
+     klasör oluşuyor ama klasör gelmiyor." Kayıt açılıyordu; ekran yanlış
+     bölümü çiziyordu. Kökte klasör açınca içine girme davranışı da tam bu
+     duruma düşüyordu (cwd doldu, bucket boş).
+
+     Kural artık tek: İÇERİDEYSEK içerik çizilir — kutu seçili olsun ya da
+     olmasın. */
+  const inFolderOrBucket = bucket !== null || !!cwd;
   const [upload, setUpload] = useState<UploadState | null>(null);
   const [preview, setPreview] = useState<PreviewState | null>(null);
   /** "Taşı" penceresinde duran öğe. */
@@ -1263,7 +1277,7 @@ export function DriveBrowser({
               kart ve liste görünümü seçeneği olmasın; Excel'e filan girince
               olabilir tabi"). Girişte zaten liste yok — seçecek bir görünüm
               olmadan duran bir kontrol, çalışmıyor sanılıyordu. */}
-          {(bucket !== null || searching) && (
+          {(inFolderOrBucket || searching) && (
           <div
             role="group"
             aria-label="Görünüm"
@@ -1417,7 +1431,7 @@ export function DriveBrowser({
           Kartlar Collection/CRM ile AYNI `Tile` primitifi — modülden modüle
           aynı hareket. Arama açıkken kutular gizlenir: arama bütün ağaçta
           gezer, kutuya girmeyi beklemez. */}
-      {bucket === null && !searching && (
+      {!inFolderOrBucket && !searching && (
         <div className="anim-fade mt-1">
           <div className="mb-4">
             <h2 className="text-lg font-semibold tracking-tight text-ink sm:text-xl">Ne arıyorsunuz?</h2>
@@ -1532,7 +1546,7 @@ export function DriveBrowser({
       {/* `|| naming` KALDIRILDI: kökte yeni klasör açılırken ad kutusu artık
           yukarıdaki "Klasörler" bölümünde çiziliyor. Koşul dursaydı aynı kutu
           iki kere görünürdü. Kutu içindeyken `bucket !== null` zaten doğru. */}
-      {(bucket !== null || searching) && (
+      {(inFolderOrBucket || searching) && (
       <>
       {resultCount === 0 && !naming ? (
         filtering ? (
