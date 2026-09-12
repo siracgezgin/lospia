@@ -540,13 +540,18 @@ export async function updateProductionSheetImages(
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
 
-  const { error } = await supabase
+  /* `count: "exact"` — föy başka bir çalışma alanına aitse ya da silinmişse
+     sorgu HATA DÖNDÜRMEZ, sıfır satır günceller. Sayıya bakmazsak arayüz
+     "kaydedildi" der, görseller kaybolur. (Aynı sessiz yalan deleteSavedView'da
+     da vardı.) */
+  const { error, count } = await supabase
     .from("production_sheets")
-    .update({ photo_refs: parsed.data, updated_by: ctx.userId })
+    .update({ photo_refs: parsed.data, updated_by: ctx.userId }, { count: "exact" })
     .eq("id", sheetId)
     .eq("workspace_id", ctx.workspaceId);
 
   if (error) return { error: toActionErrorMessage(error) };
+  if (count === 0) return { error: "Föy bulunamadı ya da düzenleme yetkiniz yok." };
   revalidatePath("/production");
   revalidatePath(`/production/${sheetId}`);
   return { ok: true };

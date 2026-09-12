@@ -3,6 +3,9 @@ import { headers } from "next/headers";
 import { Inter } from "next/font/google";
 import { getAppBrandForHost } from "@/lib/branding";
 import "./globals.css";
+/* Zod hata mesajları Türkçe — istemci tarafı için. Sunucu tarafını
+   instrumentation.ts kuruyor; ikisi de aynı dili konuşsun. */
+import "@/lib/utils/zod-tr";
 
 // Ürün yazı yüzü — Inter (variable). Ekran için çizilmiş nötr grotesk: küçük
 // puntoda ve yoğun tablolarda (planlama ızgarası, maliyet tablosu) Manrope'un

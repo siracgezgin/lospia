@@ -174,6 +174,31 @@ export async function updateMeeting(
   if (!isAdminRole(ctx.role)) return { error: PLANNING_ADMIN_ONLY };
 
   const v = parsed.data;
+
+  /* AYNI KAPI, İKİNCİ YOL. `createMeeting` çakışmayı reddediyor ama var olan
+     bir toplantının TARİHİ/SAATİ dolu bir slota taşınırsa aynı hücrede yine
+     iki toplantı oluşuyordu — kullanıcı için fark yok, ekranda yine üst üste
+     iki başlık. `neq("id")` KENDİSİNİ dışarıda bırakır: bir toplantıyı kendi
+     yerinde güncellemek çakışma değildir.
+
+     Arayüz bunu zaten UYARIYOR (MeetingEditor `conflict`) ama uyarı yalnız
+     YÜKLÜ HAFTANIN verisine bakabiliyor; başka bir haftaya taşımada susuyordu.
+     Sunucu tüm veriyi görür. */
+  const { data: clash } = await supabase
+    .from("planning_meetings")
+    .select("id")
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("meeting_date", v.meeting_date)
+    .eq("time_slot", v.time_slot)
+    .neq("id", meetingId)
+    .limit(1)
+    .maybeSingle();
+  if (clash) {
+    return {
+      error: "Bu gün ve saatte başka bir toplantı var. Var olanı açın ya da başka bir saat seçin.",
+    };
+  }
+
   const base = {
     meeting_date: v.meeting_date,
     time_slot: v.time_slot,
