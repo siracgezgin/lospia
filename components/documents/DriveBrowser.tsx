@@ -959,7 +959,7 @@ export function DriveBrowser({
        "burda paylaş olsun"). Klasörde mail, içindeki her dosya için ayrı
        imzalı indirme bağlantısı taşır. */
     const shareAction: MenuAction = {
-      label: "Mail ile gönder",
+      label: "Paylaş (mail ile)",
       icon: Mail,
       onSelect: () => setShareTarget(it),
     };
@@ -2248,19 +2248,18 @@ function ShareDialog({
 
   /* Pencerede de NE GÖNDERİLECEĞİ yazılır — kullanıcı dışarıdan birine
      yollamadan önce bilsin. Üç durum var ve üçü farklı şey gönderiyor. */
-  const internal = item.type === "doc" || item.type === "sheet";
   const isFolder = item.type === "folder";
+  /* Mail DOSYA GÖNDERMEZ, panele DAVET eder. Kullanıcı göndermeden önce bunu
+     bilsin: "ek gitti mi?" sorusu sonradan gelmesin. */
   const explainer = isFolder
-    ? "Klasördeki her dosya için ayrı indirme bağlantısı gönderilir; bağlantılar 7 gün geçerlidir. Alt klasörler dâhil edilmez."
-    : internal
-      ? "Bağlantı panelde açılır; alıcının AF Operasyon erişimi olmalı."
-      : "Dosya ek olarak değil, 7 gün geçerli güvenli bir indirme bağlantısı olarak gider.";
+    ? "Mail, klasörün içindekileri tanıtır ve alıcıyı panelde bu klasöre götürür. Dosya eki gönderilmez."
+    : "Mail, alıcıyı panelde bu kaydın durduğu yere götürür. Dosya eki gönderilmez.";
 
   return (
     <Overlay
       open
       onClose={onClose}
-      title={isFolder ? "Klasörü mail ile gönder" : "Mail ile gönder"}
+      title={isFolder ? "Klasörü paylaş" : "Paylaş"}
       hint={item.name}
       size="sm"
       dismissOnBackdrop={false}
@@ -2320,7 +2319,7 @@ function ShareDialog({
           <TextArea
             id="share-note"
             rows={3}
-            placeholder="Merhaba, ekteki raporu inceleyebilir misiniz?"
+            placeholder="Merhaba, bu klasörü sizin için hazırladım; bakabilir misiniz?"
             value={note}
             disabled={sending}
             onChange={(e) => setNote(e.target.value)}

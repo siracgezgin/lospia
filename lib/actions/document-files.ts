@@ -303,20 +303,23 @@ export async function moveDocument(
 
 // ── Mail ile paylaş ─────────────────────────────────────────────────────────
 //
-// Sıraç (2026-09-12): "Klasörün içine diyelim rapor veya sunum ekledik,
-// onların da yanına mail atılma ibaresi olsun, mail atalım. Calendar'daki gibi."
+// Sıraç (2026-09-12): "Amaç dosya gönderme değil, onları sisteme davet etme.
+// İndirme işi sonraki aşamalarda. Şimdi sadece böyle bir klasör olduğunu
+// paylaşmak — yani kişilere, gelip görsünler."
+//
+// Bu yüzden mail DOSYA TAŞIMAZ: panele, kaydın durduğu yere götüren tek bir
+// bağlantı taşır. İlk sürümü her dosya için imzalı indirme bağlantısı
+// üretiyordu; yanlış kurulmuştu. İçerik panelde yaşıyor, orada güncelleniyor
+// ve orada yetkiye bağlı — maile kopyalanan dosya o andan sonra kendi hayatını
+// yaşar, eskir ve geri alınamaz. Davet her zaman güncel olanı gösterir.
 //
 // Takvimin davet gönderme akışıyla AYNI sözleşme (sendMeetingInvites):
 // alıcı başına TEK mail gider — kimse başkasının adresini görmez — ve sonuç
 // `sent` / `failed` olarak döner ki arayüz kimin alamadığını söyleyebilsin.
-//
-// EK DEĞİL BAĞLANTI gönderilir; gerekçesi templates/document-share.ts'te.
 
-/** İmzalı bağlantının ömrü. Alıcı maili ertesi gün açsa da çalışsın. */
-const SHARE_LINK_TTL_SECONDS = 7 * 24 * 60 * 60;
-const SHARE_LINK_TTL_LABEL = "7 gün";
-const MAIL_NOT_CONFIGURED =
-  "E-posta gönderimi henüz açık değil. Yönetici ayarlarından mail kurulumu tamamlanmalı.";
+/** Klasör mailinde tanıtılacak en fazla dosya. Üstü "N dosya daha var" diye
+ *  YAZILIR; sessizce kırpmak "hepsi bu" yanılgısı üretirdi. */
+const FOLDER_FILE_LIMIT = 25;
 
 const ShareSchema = z.object({
   /* Adresler tek tek doğrulanır: bir tanesi bozuksa diğerleri yine gitsin
@@ -332,13 +335,12 @@ export type ShareDocumentInput = z.infer<typeof ShareSchema>;
 /** Paylaşılabilir kayıt türleri — DriveBrowser'daki öğe türleriyle birebir. */
 export type ShareItemType = "file" | "doc" | "sheet" | "link" | "folder";
 
-/** Klasör mailinde listelenecek en fazla dosya. Üstü "N dosya daha var" diye
- *  YAZILIR; sessizce kırpmak "hepsi bu" yanılgısı üretirdi. */
-const FOLDER_FILE_LIMIT = 25;
-
 const APP_BASE_URL = (
   process.env.EMAIL_TASK_BASE_URL ?? "https://operasyon.aslifilinta.com"
 ).replace(/\/+$/, "");
+
+const MAIL_NOT_CONFIGURED =
+  "E-posta gönderimi henüz açık değil. Yönetici ayarlarından mail kurulumu tamamlanmalı.";
 
 function formatBytes(bytes: number | null | undefined): string | null {
   if (!bytes || bytes <= 0) return null;
@@ -373,6 +375,11 @@ async function folderPathOf(
   return parts.length ? parts.join(" / ") : null;
 }
 
+/** Bölüm rotası: AF Teamwork mü Kütüphane mi. Klasörün kendi `section`'ı esas. */
+function sectionRoute(section: string | null | undefined): string {
+  return section === "library" ? "/library" : "/documents";
+}
+
 export async function sendDocumentByEmail(
   itemType: ShareItemType,
   itemId: string,
@@ -392,106 +399,65 @@ export async function sendDocumentByEmail(
   let url = "";
   let sizeLabel: string | null = null;
   let folderId: string | null = null;
-  let expiresLabel: string | null = SHARE_LINK_TTL_LABEL;
-  let requiresAccount = false;
-  let sharedFiles: { name: string; meta: string; url: string }[] = [];
+  let sharedFiles: { name: string; meta: string }[] = [];
   let omitted = 0;
 
-  if (itemType === "file" || itemType === "link") {
-    /* RLS ZATEN SÜZÜYOR: "yalnız yöneticiye kapalı" bir kaydı göremeyen kişi
-       burada da satırı alamaz, dolayısıyla paylaşamaz. Ek bir rol kontrolü
-       koymuyoruz — iki ayrı yerde yaşayan yetki kuralı er geç ayrışır. */
-    const { data } = await supabase
-      .from("operation_documents")
-      .select("title, file_name, file_path, file_mime, file_size, folder_id, url")
-      .eq("id", itemId).eq("workspace_id", ctx.workspaceId)
-      .maybeSingle();
-    const row = data as {
-      title: string; file_name: string | null; file_path: string | null;
-      file_mime: string | null; file_size: number | null;
-      folder_id: string | null; url: string | null;
-    } | null;
-    if (!row) return { error: NOT_FOUND };
-    folderId = row.folder_id;
-    fileName = row.file_name ?? row.title;
-
-    if (itemType === "link") {
-      if (!row.url) return { error: "Bu bağlantı kaydında adres yok." };
-      url = row.url;
-      kindLabel = "Bağlantı";
-      expiresLabel = null; // dış adres bizim süremize tabi değil
-    } else {
-      if (!row.file_path) return { error: "Bu kayıtta yüklenmiş dosya yok." };
-      const { data: signed, error: signErr } = await supabase.storage
-        .from(BUCKET)
-        .createSignedUrl(row.file_path, SHARE_LINK_TTL_SECONDS);
-      if (signErr || !signed) {
-        return { error: signErr?.message ?? "İndirme bağlantısı üretilemedi." };
-      }
-      url = signed.signedUrl;
-      sizeLabel = formatBytes(row.file_size);
-      kindLabel = fileKindOf(row.file_mime, fileName).label;
-    }
-  } else if (itemType === "folder") {
-    /* KLASÖR — tek bir bağlantısı yok, İÇERİĞİ paylaşılır.
-       Panel adresi göndermek işe yaramazdı: alıcı çoğu zaman ekip dışından
-       (üretici, tedarikçi) ve hesabı yok. Bunun yerine klasördeki her dosya
-       için ayrı imzalı indirme bağlantısı üretilir; mailde ad, tür ve boyutla
-       birlikte listelenir. Alt klasörler DÂHİL EDİLMEZ — mail bir dosya
-       tarayıcısı değil; iç içe ağacı düzleştirmek listeyi okunamaz yapardı. */
+  if (itemType === "folder") {
+    /* KLASÖR — davetin asıl hedefi. Bağlantı `?f=<id>` ile doğrudan klasörü
+       açar (DriveBrowser açık klasörü adreste tutuyor). İçindekiler yalnız
+       TANITIM için listelenir: alıcı neye çağrıldığını bilerek gelsin. */
     const { data: f } = await supabase
       .from("document_folders")
-      .select("name, parent_id")
+      .select("name, parent_id, section")
       .eq("id", itemId).eq("workspace_id", ctx.workspaceId)
       .maybeSingle();
-    const folder = f as { name: string; parent_id: string | null } | null;
+    const folder = f as { name: string; parent_id: string | null; section: string | null } | null;
     if (!folder) return { error: NOT_FOUND };
 
     const { data: rows } = await supabase
       .from("operation_documents")
-      .select("title, file_name, file_path, file_mime, file_size")
+      .select("title, file_name, file_mime, file_size")
       .eq("workspace_id", ctx.workspaceId)
       .eq("folder_id", itemId)
-      .not("file_path", "is", null)
       .order("created_at", { ascending: false });
     const docs = (rows ?? []) as {
-      title: string; file_name: string | null; file_path: string | null;
+      title: string; file_name: string | null;
       file_mime: string | null; file_size: number | null;
     }[];
-    if (!docs.length) {
-      return { error: "Bu klasörde gönderilecek yüklenmiş dosya yok." };
-    }
-
-    const take = docs.slice(0, FOLDER_FILE_LIMIT);
-    /* Bağlantılar PARALEL imzalanır: yirmi beş dosya için ardışık imza yirmi
-       beş tur demekti ve gönder düğmesi saniyelerce bekliyordu. */
-    const signed = await Promise.all(
-      take.map(async (d) => {
-        const { data } = await supabase.storage
-          .from(BUCKET)
-          .createSignedUrl(d.file_path!, SHARE_LINK_TTL_SECONDS);
-        if (!data) return null;
-        const nm = d.file_name ?? d.title;
-        const size = formatBytes(d.file_size);
-        return {
-          name: nm,
-          meta: [fileKindOf(d.file_mime, nm).label, size].filter(Boolean).join(" · "),
-          url: data.signedUrl,
-        };
-      }),
-    );
-    sharedFiles = signed.filter((x): x is NonNullable<typeof x> => x !== null);
-    if (!sharedFiles.length) return { error: "İndirme bağlantıları üretilemedi." };
-    omitted = docs.length - sharedFiles.length;
+    sharedFiles = docs.slice(0, FOLDER_FILE_LIMIT).map((d) => {
+      const nm = d.file_name ?? d.title;
+      const size = formatBytes(d.file_size);
+      return { name: nm, meta: [fileKindOf(d.file_mime, nm).label, size].filter(Boolean).join(" · ") };
+    });
+    omitted = Math.max(0, docs.length - sharedFiles.length);
 
     fileName = folder.name;
     kindLabel = "Klasör";
     folderId = folder.parent_id;   // yol ÜST klasörden türer
-    url = `${APP_BASE_URL}/documents`;
+    url = `${APP_BASE_URL}${sectionRoute(folder.section)}?f=${encodeURIComponent(itemId)}`;
+  } else if (itemType === "file" || itemType === "link") {
+    /* RLS ZATEN SÜZÜYOR: "yalnız yöneticiye kapalı" bir kaydı göremeyen kişi
+       burada da satırı alamaz, dolayısıyla paylaşamaz. */
+    const { data } = await supabase
+      .from("operation_documents")
+      .select("title, file_name, file_mime, file_size, folder_id, section")
+      .eq("id", itemId).eq("workspace_id", ctx.workspaceId)
+      .maybeSingle();
+    const row = data as {
+      title: string; file_name: string | null; file_mime: string | null;
+      file_size: number | null; folder_id: string | null; section: string | null;
+    } | null;
+    if (!row) return { error: NOT_FOUND };
+    folderId = row.folder_id;
+    fileName = row.file_name ?? row.title;
+    kindLabel = itemType === "link" ? "Bağlantı" : fileKindOf(row.file_mime, fileName).label;
+    sizeLabel = formatBytes(row.file_size);
+    /* Tek dosyanın kendi rotası yok; kaydın DURDUĞU YERE götürüyoruz — alıcı
+       klasörü açıp dosyayı orada görüyor. Klasörsüzse bölümün kökü. */
+    const base = `${APP_BASE_URL}${sectionRoute(row.section)}`;
+    url = row.folder_id ? `${base}?f=${encodeURIComponent(row.folder_id)}` : base;
   } else {
-    /* Yazı ve tablo uygulamanın İÇİNDE yaşar; dosya olarak dışarı verilecek
-       bir hâli yok. Bağlantı panele gider ve alıcının hesabı olmalı — bunu
-       mailde açıkça yazıyoruz, kapalı kapıya yönlendirmek istemiyoruz. */
+    /* Yazı ve tablo kendi sayfalarında yaşıyor — doğrudan oraya götürülür. */
     const table = itemType === "doc" ? "operation_documents" : "operation_spreadsheets";
     const { data } = await supabase
       .from(table)
@@ -504,8 +470,6 @@ export async function sendDocumentByEmail(
     fileName = row.title;
     kindLabel = itemType === "doc" ? "Yazı" : "Tablo";
     url = `${APP_BASE_URL}/${itemType === "doc" ? "documents" : "sheets"}/${itemId}`;
-    expiresLabel = null;
-    requiresAccount = true;
   }
 
   const folderPath = await folderPathOf(supabase, ctx.workspaceId, folderId);
@@ -522,20 +486,16 @@ export async function sendDocumentByEmail(
   for (const to of recipients) {
     const res = await sendEmail(
       documentShareEmail({
-        to, fileName, kindLabel, url, expiresLabel, folderPath,
-        sizeLabel, actorName, note: parsed.data.note ?? null, requiresAccount,
-        files: sharedFiles, omittedCount: omitted,
+        to, fileName, kindLabel, url, folderPath, sizeLabel, actorName,
+        note: parsed.data.note ?? null, files: sharedFiles, omittedCount: omitted,
       }),
     );
     if (res.status === "sent") sent.push(to);
     else failed.push({ to, reason: res.status === "skipped" ? res.reason : res.error });
     /* Mail HİÇ yapılandırılmamışsa her adres aynı sebeple düşer; yirmi kez
        denemenin anlamı yok. İlk "skipped" cevabında durur ve arayüze
-       "kurulum yok" diye anlaşılır bir hata döneriz — kullanıcı gönderdiğini
-       sanıp beklemesin. */
-    if (res.status === "skipped") {
-      return { error: MAIL_NOT_CONFIGURED };
-    }
+       "kurulum yok" diye anlaşılır bir hata döneriz. */
+    if (res.status === "skipped") return { error: MAIL_NOT_CONFIGURED };
   }
   return { ok: true, sent, failed };
 }

@@ -192,16 +192,17 @@ export function renderParagraph(text: string): string {
 
 
 /**
- * DOSYA LİSTESİ — klasör paylaşımında her dosya kendi satırında durur.
+ * İÇERİK LİSTESİ — klasör paylaşımında "içinde ne var" sorusunu cevaplar.
  *
- * Neden düz bir bağlantı yığını değil: alıcı "hangi dosya neydi?" diye
- * tahmin etmek zorunda kalmasın. Her satırda ad, tür ve boyut yazar; indirme
- * bağlantısı adın kendisindedir. `name`/`meta` kullanıcı verisidir, kaçırılır;
- * `href` bizim ürettiğimiz imzalı adrestir ama öznitelik bağlamında olduğu
- * için savunma amaçlı yine kaçırılır.
+ * BAĞLANTI YOK, bilerek. Bu mail dosya TESLİM ETMEZ; klasörün varlığını
+ * duyurur ve kişiyi panele çağırır (Sıraç, 12.09.2026: "amaç dosya gönderme
+ * değil, onları sisteme davet etme; şimdi sadece böyle bir klasör olduğunu
+ * paylaşmak, kişiler gelip görsün"). İndirme sonraki aşamaların işi.
+ * Liste yalnız kararı kolaylaştırır: alıcı neye çağrıldığını bilir.
+ * `name`/`meta` kullanıcı verisidir, kaçırılır.
  */
 export function renderFileList(
-  files: ReadonlyArray<{ name: string; meta: string; href: string }>,
+  files: ReadonlyArray<{ name: string; meta: string }>,
 ): string {
   if (!files.length) return "";
   const rows = files
@@ -209,9 +210,9 @@ export function renderFileList(
       (f) => `
       <tr>
         <td style="padding: 10px 0; border-bottom: 1px solid ${COLORS.border};">
-          <a href="${escapeHtml(f.href)}" style="font-family: ${FONT_STACK}; font-size: 14px; font-weight: 600; color: ${COLORS.brand}; text-decoration: none; word-break: break-word;">${escapeHtml(
+          <div style="font-family: ${FONT_STACK}; font-size: 14px; font-weight: 600; color: ${COLORS.heading}; word-break: break-word;">${escapeHtml(
             f.name,
-          )}</a>
+          )}</div>
           <div style="margin-top: 2px; font-family: ${FONT_STACK}; font-size: 12px; color: ${COLORS.muted};">${escapeHtml(
             f.meta,
           )}</div>
