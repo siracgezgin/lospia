@@ -17,6 +17,7 @@ import { PlanningDayView } from "./PlanningDayView";
 import { MeetingEditor } from "./MeetingEditor";
 import type { Member } from "./MemberMultiSelect";
 import type { PlanningMeetingWithTopics } from "@/types";
+import { CELL_INTERACTIVE } from "./cell-style";
 
 /**
  * AY GÖRÜNÜMÜ — TOPLANTI takvimi.
@@ -162,9 +163,12 @@ export function PlanningMonthView({
                   onClick={() => setOpenDay(iso)}
                   title={`${format(parseISO(iso), "d MMMM EEEE", { locale: tr })} — günü aç`}
                   className={cn(
-                    /* Beyaz kartın İÇİNDEKİ tablo hücresi: hover tek kanal ve
-                       tablo satırının zemini (surface-hover). */
-                    "flex min-h-[92px] flex-col items-stretch gap-0.5 border-b border-r border-hairline p-1.5 text-left transition-colors duration-150 hover:bg-surface-hover",
+                    /* Hücre hover'ı takvimin ORTAK dili (cell-style.ts):
+                       Excel gibi iç çerçeve. `hover:bg-surface-hover` burada
+                       zayıf kalıyordu — dolu günler kendi rengini taşıyor ve
+                       zemin değişimi o renklerin altında kayboluyordu. */
+                    "flex min-h-[92px] flex-col items-stretch gap-0.5 border-b border-r border-hairline p-1.5 text-left",
+                    CELL_INTERACTIVE,
                     !inMonth && "bg-surface-sunken/40 opacity-55",
                   )}
                 >

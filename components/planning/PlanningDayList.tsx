@@ -13,12 +13,7 @@ import { BandEditor } from "./BandEditor";
 import { istanbulLabel, AWAY_LABEL, HOME_LABEL } from "@/lib/planning/timezones";
 import { KimBadges } from "./KimBadges";
 import type { PlanningMeetingWithTopics, PlanningTopic } from "@/types";
-
-/** Şerit başlığının hover/basılı hâli: kategori rengini EZMEYEN ince mürekkep
- *  perdesi (`after:`). Zemini `hover:bg-*` ile boyamak meta.cell rengini
- *  siliyordu — masaüstü ızgarası da (PlanningWeekGrid) aynı perdeyi kullanır. */
-const HEAD_VEIL =
-  "relative after:pointer-events-none after:absolute after:inset-0 after:bg-ink/[0.04] after:opacity-0 after:transition-opacity after:duration-150 hover:after:opacity-100 active:after:opacity-100";
+import { STRIP_INTERACTIVE } from "./cell-style";
 
 interface Props {
   weekDays: string[];
@@ -273,7 +268,7 @@ export function PlanningDayList({
                 <button
                   type="button"
                   onClick={() => onOpen(iso, slot, dayIdx)}
-                  className={cn(headCls, HEAD_VEIL)}
+                  className={cn(headCls, STRIP_INTERACTIVE)}
                 >
                   {head}
                 </button>

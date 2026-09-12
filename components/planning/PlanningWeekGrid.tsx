@@ -17,6 +17,7 @@ import { istanbulLabel, AWAY_LABEL, HOME_LABEL, normalizeSlot } from "@/lib/plan
 import { moveMeeting, moveTopic, duplicateMeeting, setMeetingTitle } from "@/lib/actions/planning";
 import { KimBadges } from "./KimBadges";
 import type { PlanningMeetingWithTopics, PlanningTopic } from "@/types";
+import { CELL_DROP_TARGET, CELL_INTERACTIVE } from "./cell-style";
 
 interface Props {
   weekDays: string[];
@@ -49,11 +50,6 @@ function slotMinutes(slot: string): number {
   const m = /^(\d{1,2}):(\d{2})/.exec(normalizeSlot(slot));
   return m ? +m[1] * 60 + +m[2] : 24 * 60 + 1;
 }
-
-/** Tıklanabilir hücrenin hover hâli: kategori rengini ezmeyen ince mürekkep
- *  perdesi (`after:`); filtre/brightness kullanılmaz. */
-const HOVER_VEIL =
-  "cursor-pointer after:pointer-events-none after:absolute after:inset-0 after:bg-ink/[0.04] after:opacity-0 after:transition-opacity after:duration-150 hover:after:opacity-100";
 
 /** Sürüklenemeyen ama tıklanabilen hücre klavyeden de açılsın: Enter/Boşluk.
  *  Sürüklenebilir hücrede rol ve tabIndex'i dnd-kit'in `attributes`ı verir. */
@@ -621,11 +617,12 @@ function TitleCell({
            renk ve tik ile birlikte üç sinyal aynı şeyi söylüyor. */
         outcome === "done" && "bg-success/12",
         outcome === "missed" && "bg-danger/8",
-        // Hover: filtre (brightness) yerine ince bir mürekkep perdesi — kategori
-        // rengi bozulmaz, sürükleme halkasıyla (ring) çakışmaz.
-        isAdmin && HOVER_VEIL,
+        /* Hover: Excel gibi İÇ ÇERÇEVE (bkz. cell-style.ts). Eski perde
+           (%4 mürekkep) renkli hücrelerde neredeyse görünmüyordu; ızgarada
+           göz zaten hücre sınırını takip ediyor, sinyali oraya koymak doğru. */
+        isAdmin && CELL_INTERACTIVE,
         canDrag && "active:cursor-grabbing",
-        isOver && "ring-2 ring-inset ring-brand-ring",
+        isOver && CELL_DROP_TARGET,
         isDragging && "opacity-40",
       )}
       title={canDrag ? "Sürükleyip başka gün/saate taşıyabilirsiniz" : undefined}
@@ -799,9 +796,9 @@ function TopicCell({
         isToday && "bg-brand-soft/40",
         topicDone && "bg-success/10",
         topicMissed && "bg-danger/8",
-        isAdmin && HOVER_VEIL,
+        isAdmin && CELL_INTERACTIVE,
         canDrag && "active:cursor-grabbing",
-        isOver && "ring-2 ring-inset ring-brand-ring",
+        isOver && CELL_DROP_TARGET,
         isDragging && "opacity-40",
       )}
     >

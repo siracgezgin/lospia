@@ -14,6 +14,7 @@ import { tr } from "date-fns/locale";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Button } from "@/components/ui/Button";
+import { CELL_INTERACTIVE } from "./cell-style";
 
 /** Bir günün yoğunluğu — görev + toplantı sayısı. */
 export type YearDayLoad = { tasks: number; meetings: number };
@@ -173,9 +174,12 @@ export function CalendarYearView({ loadByDay, initialYear, viewSwitch }: Props) 
                         : undefined
                     }
                     className={cn(
-                      "m-px grid aspect-square place-items-center rounded text-[12px] tabular-nums transition-colors duration-150",
+                      "m-px grid aspect-square place-items-center rounded text-[12px] tabular-nums",
+                      /* Yıl ızgarasında da aynı çerçeve dili — gün kareleri
+                         küçük ve çoğu bir yük rengi taşıyor; zemin değişimi
+                         orada hiç okunmuyordu (bkz. cell-style.ts). */
                       inMonth
-                        ? "text-muted hover:bg-surface-hover hover:text-ink"
+                        ? cn("text-muted hover:text-ink", CELL_INTERACTIVE)
                         : "pointer-events-none text-transparent",
                       inMonth && dayTone(load),
                       inMonth && isToday(day) && "ring-1 ring-inset ring-brand",
