@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   History, Plus, Pencil, Trash2, CopyPlus, Send, CheckCircle2, XCircle, Lock,
   MoveRight, Loader2, type LucideIcon,
@@ -68,6 +68,11 @@ export function CalendarHistory() {
   const [data, setData] = useState<CalendarActivityResult | null>(null);
   const [loading, setLoading] = useState(false);
 
+  /* VERİ AÇILIŞTA ÇEKİLİR — ama ETKİ İÇİNDEN DEĞİL.
+     Önceki hâli `useEffect` içinde `setLoading(true)` çağırıyordu; React
+     derleyicisi bunu haklı olarak zincirleme çizim uyarısıyla işaretliyor:
+     etkiden eşzamanlı durum yazmak fazladan bir tur çizim doğurur. Pencereyi
+     açan ZATEN bir olaydır; yükleme de o olayda başlar. */
   const load = useCallback(() => {
     setLoading(true);
     fetchCalendarActivity()
@@ -75,13 +80,18 @@ export function CalendarHistory() {
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => { if (open && data === null) load(); }, [open, data, load]);
+  const openHistory = useCallback(() => {
+    setOpen(true);
+    /* Bir kez çekilir; pencere kapanıp açılınca liste elde kalır. Tazelemek
+       isteyen sayfayı yeniler — geçmiş saniyelik bir veri değil. */
+    if (data === null && !loading) load();
+  }, [data, loading, load]);
 
   return (
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={openHistory}
         title="Takvimde kim ne yaptı — etkinlik geçmişi"
         className="tap-target inline-flex h-9 shrink-0 items-center gap-1.5 rounded-control border border-line bg-surface px-2.5 text-[13px] font-medium text-muted transition-[background-color,border-color,color] duration-150 ease-standard hover:border-line-strong hover:bg-surface-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
       >

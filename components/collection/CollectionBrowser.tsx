@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useCallback, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -174,9 +174,55 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
       router.refresh();
     });
   }
-  // Seçim: null = giriş ekranı (kutucuklar). category = ana kategori ya da UNCAT.
-  const [selCat, setSelCat] = useState<string | null>(null);
-  const [selSub, setSelSub] = useState<string | null>(null);
+  /* SEÇİM ADRESTE TUTULUR (?kat=<kategori>&alt=<alt kategori>).
+     null = giriş ekranı (kutucuklar); `kat` ana kategori ya da UNCAT.
+
+     Önce yalnız bileşen durumundaydı ve üç şey çalışmıyordu:
+       • Bir kategorinin içindeyken sayfayı yenileyince kullanıcı KÖKE
+         atılıyordu — AF Teamwork'te aynı sorun `?f=` ile çözülmüştü
+         (Sıraç, 2026-09-06), Koleksiyon'da duruyordu.
+       • Bir kategoriye bağlantı verilemiyordu: "şu kategoriye bak" demek
+         için karşı tarafa tıklama tarifi yazmak gerekiyordu.
+       • Bir föye girip geri dönünce seçim kayboluyordu.
+     Adres tek doğruluk kaynağı olunca üçü de kendiliğinden çalışır.
+
+     `sezon` gibi var olan parametreler KORUNUR: aynı adreste iki ayrı süzgeç
+     yaşıyor, biri diğerini silmemeli. */
+
+  /* ADRESTEKİ DEĞER DOĞRULANIR. Seçim adrese taşınınca artık dışarıdan
+     gelebiliyor: kullanıcı elle yazabilir, aylar önce paylaşılmış bir bağlantı
+     açabilir, kategori o arada silinmiş olabilir. Tanınmayan bir anahtar
+     başlığa "Kategorisiz" yazıp boş bir liste gösterirdi — ekran yalan söyler.
+     Tanınmıyorsa seçim YOK sayılır ve giriş ekranı açılır; adres bozuksa
+     kullanıcı bildiği yere düşer. */
+  const rawCat = params.get("kat");
+  const selCat =
+    rawCat === UNCAT || (rawCat && tree.some((c) => c.key === rawCat)) ? rawCat : null;
+  const subs = selCat && selCat !== UNCAT ? subsOf(tree, selCat) : [];
+
+  /* ÜÇ KADEMELİ AĞAÇ (Accessories › Hats › Bucket Hat).
+     Sıraç (2026-08-30) koleksiyon yapısını üç seviye verdi. Çipler yine TEK
+     satır: seçilen dalın altı varsa ikinci bir satır açılır — ağaç paneli ya da
+     açılır kutu İCAT EDİLMEZ (tek tasarım dili).
+
+     Alt kategori de aynı denetimden geçer: yolu bulunamayan `alt` yok sayılır,
+     kategorinin tamamı gösterilir. */
+  const rawSub = params.get("alt");
+  const openPath = rawSub ? subPath(subs, rawSub) : [];
+  const selSub = openPath.length > 0 ? rawSub : null;
+  const setSelection = useCallback((cat: string | null, sub: string | null) => {
+    const next = new URLSearchParams(params.toString());
+    if (cat) next.set("kat", cat); else next.delete("kat");
+    if (sub) next.set("alt", sub); else next.delete("alt");
+    const qs = next.toString();
+    /* scroll:false — kategori değiştirmek sayfanın başına atmasın; Drive'da da
+       liste yerinde kalır. */
+    router.push(qs ? `?${qs}` : "?", { scroll: false });
+  }, [params, router]);
+  /* Sarmalayıcı MEMOİZE EDİLMEZ: `selCat` artık adresten türeyen koşullu bir
+     değer, React derleyicisi bu bağımlılığı koruyamıyor. Çipler her
+     görüntülemede zaten yeniden çiziliyor; burada kazanılacak bir şey yok. */
+  const setSelSub = (sub: string | null) => setSelection(selCat, sub);
 
   const visible = useMemo(() => sheets.filter((s) => s.status !== "archived"), [sheets]);
   const q = norm(query.trim());
@@ -225,13 +271,6 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
   const hasUncat = (counts.cat[UNCAT] ?? 0) > 0;
   // Giriş ekranı: kategori seçilmemiş VE arama yapılmıyorsa kutucuklar.
   const showTiles = selCat === null && !q;
-  const subs = selCat && selCat !== UNCAT ? subsOf(tree, selCat) : [];
-
-  /* ÜÇ KADEMELİ AĞAÇ (Accessories › Hats › Bucket Hat).
-     Sıraç (2026-08-30) koleksiyon yapısını üç seviye verdi. Çipler yine TEK
-     satır: seçilen dalın altı varsa ikinci bir satır açılır — ağaç paneli ya da
-     açılır kutu İCAT EDİLMEZ (tek tasarım dili). */
-  const openPath = selSub ? subPath(subs, selSub) : [];
   const childRow: SubCategory[] = openPath[0]?.children ?? [];
 
   /** Bir dalın kendisi + tüm altları — süzgeç bunlarla eşleşir. */
@@ -364,7 +403,7 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
               return (
                 <Tile
                   key={c.key}
-                  onClick={() => { setSelCat(c.key); setSelSub(null); }}
+                  onClick={() => setSelection(c.key, null)}
                   title={c.label}
                   meta={n > 0 ? `${n} ürün` : "Henüz ürün yok"}
                   icon={id.icon}
@@ -394,7 +433,7 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
             })}
             {hasUncat && (
               <Tile
-                onClick={() => { setSelCat(UNCAT); setSelSub(null); }}
+                onClick={() => setSelection(UNCAT, null)}
                 title="Kategorisiz"
                 meta={`${counts.cat[UNCAT]} ürün`}
                 icon={UNCAT_IDENTITY.icon}
@@ -432,7 +471,7 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => { setSelCat(null); setSelSub(null); setQuery(""); }}
+                onClick={() => { setSelection(null, null); setQuery(""); }}
                 className="shrink-0"
               >
                 <ChevronLeft size={15} /> Kategoriler
