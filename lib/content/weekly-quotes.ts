@@ -407,7 +407,8 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 9,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "medium",
-    approvedForUi: true,
+    // Sıraç (12.09.2026): "Bu ne saçma bir cümle… bu kişinin böyle bir sözü yok." HAKLI: özgün cümle "En çok insan formuyla ilgileniyorum; giysi, yaşayan insana en yakın olan şeydir" idi. İlk yarısını atınca geriye anlamsız bir parça kaldı — kısaltma anlamı öldürdü.
+    approvedForUi: false,
   },
   {
     id: "quote_021",
@@ -424,7 +425,8 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 10,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "medium",
-    approvedForUi: true,
+    // Aynı kısaltma hatası: "Beni ilgilendiren kumaşın teknolojisi" bağlamı düşünce cümle boşa düştü.
+    approvedForUi: false,
   },
   {
     id: "quote_022",
@@ -2047,6 +2049,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 8,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "high",
+    // "O" neye işaret ediyor belli değil — kısaltma zamiri sahipsiz bıraktı.
     approvedForUi: false,
   },
   {
@@ -2064,6 +2067,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 9,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "high",
+    // "Onlar" sahipsiz — özgün metinde hangi elbiseden söz edildiği yazıyordu.
     approvedForUi: false,
   },
   {
@@ -2115,6 +2119,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 8,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "high",
+    // Bağlamsız teknik cümle; kartta bilmece gibi okunuyor.
     approvedForUi: false,
   },
   {
@@ -2302,7 +2307,8 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 8,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "high",
-    approvedForUi: true,
+    // Heykeltıraş olma bağlamı düşünce eksik kaldı.
+    approvedForUi: false,
   },
   {
     id: "quote_131",
@@ -2319,6 +2325,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 8,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "high",
+    // Bağlamsız; okuyan neyi anlatıldığını çıkaramıyor.
     approvedForUi: false,
   },
   {
@@ -2336,6 +2343,7 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 10,
     uiDisplaySuggestion: "Tasarımcıdan Not",
     sourceConfidence: "high",
+    // Kalıpçıya anlamlı, ekranın geri kalanına bilmece.
     approvedForUi: false,
   },
   {
@@ -2545,6 +2553,216 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     sourceConfidence: "high",
     approvedForUi: true,
   },
+  // -------------------------------------------------------------------------
+  // KOLLEKTİF ÇALIŞMA — Mevlânâ, Yunus Emre ve doğrulanmış düşünürler
+  // (quote_200 …, 12.09.2026)
+  //
+  //   "Mevlana'dan, Yunus Emre'den kısa, anlamlı, motive edici sözler ekle;
+  //    kollektif çalışmayı enjekte edecek şekilde. Böyle boş cümleler değil.
+  //    Yabancılar, bilim adamları vs. de olabilir ama GERÇEK ve OLAN sözler
+  //    olsun, anlamlı olsun, bizimle örtüşmeli."  (Sıraç, 12.09.2026)
+  //
+  // Havuz o güne dek yalnız moda tasarımcılarındandı ve hepsi ATÖLYE anlatan
+  // sözlerdi. Ekip yalnız tasarımcı değil: kalıpçı, üretim, satın alma, ofis.
+  // Birlikte çalışmayı anlatan tek cümle yoktu.
+  //
+  // ATIF DİSİPLİNİ: Henry Ford'a atfedilen "bir araya gelmek başlangıçtır,
+  // birlikte çalışmak başarıdır" ünlü teamwork sözü BİLEREK ALINMADI —
+  // gerçekte Edward Everett Hale'e ait, Ford'a yanlış atfediliyor. Ünlü
+  // olması doğru olmasını sağlamıyor.
+  //
+  // Yunus ve Mevlânâ satırlarında `sourceConfidence: "medium"`: metinler
+  // yüzyıllardır elden ele geçtiği için tek bir kritik basıma işaret etmek
+  // dürüst olmazdı. Sözlerin kendisi divanlarda ve Mesnevi seçkilerinde
+  // yazılı; el yazması varyantları akademik bir tartışmadır.
+  // -------------------------------------------------------------------------
+  {
+    id: "quote_200",
+    weekIndex: 200,
+    quoteTr: "Gelin tanış olalım, işi kolay kılalım.",
+    quoteOriginal: "Gelin tanış olalım / İşi kolay kılalım",
+    author: "Yunus Emre",
+    authorRole: "Şair, düşünür",
+    category: "wisdom",
+    theme: "birlik",
+    sourceType: "verified_quote",
+    sourceUrl: "https://yunusemresiirleri.com/siir/gelin-tanis-olalim.html",
+    usageRecommendation: "use",
+    brandFitScore: 9,
+    uiDisplaySuggestion: "Haftanın Sözü",
+    sourceConfidence: "high",
+    approvedForUi: true,
+  },
+  {
+    id: "quote_201",
+    weekIndex: 201,
+    quoteTr: "Sevelim sevilelim, dünya kimseye kalmaz.",
+    quoteOriginal: "Sevelim sevilelim / Dünya kimseye kalmaz",
+    author: "Yunus Emre",
+    authorRole: "Şair, düşünür",
+    category: "wisdom",
+    theme: "birlik",
+    sourceType: "verified_quote",
+    sourceUrl: "https://yunusemresiirleri.com/siir/gelin-tanis-olalim.html",
+    usageRecommendation: "use",
+    brandFitScore: 9,
+    uiDisplaySuggestion: "Haftanın Sözü",
+    sourceConfidence: "high",
+    approvedForUi: true,
+  },
+  {
+    id: "quote_202",
+    weekIndex: 202,
+    quoteTr: "İlim ilim bilmektir, ilim kendin bilmektir.",
+    quoteOriginal: null,
+    author: "Yunus Emre",
+    authorRole: "Şair, düşünür",
+    category: "wisdom",
+    theme: "bilgi",
+    sourceType: "verified_quote",
+    sourceUrl: "https://www.siir.gen.tr/siir/y/yunus_emre/ilim_ilim_bilmektir.htm",
+    usageRecommendation: "use",
+    brandFitScore: 9,
+    uiDisplaySuggestion: "Haftanın Sözü",
+    sourceConfidence: "medium",
+    approvedForUi: true,
+  },
+  {
+    id: "quote_203",
+    weekIndex: 203,
+    quoteTr: "Söz ola kese savaşı, söz ola kestire başı.",
+    quoteOriginal: null,
+    author: "Yunus Emre",
+    authorRole: "Şair, düşünür",
+    category: "wisdom",
+    theme: "iletişim",
+    sourceType: "verified_quote",
+    sourceUrl: "https://www.siir.gen.tr/siir/y/yunus_emre/soz_ola.htm",
+    usageRecommendation: "use",
+    brandFitScore: 9,
+    uiDisplaySuggestion: "Haftanın Sözü",
+    sourceConfidence: "medium",
+    approvedForUi: true,
+  },
+  {
+    id: "quote_204",
+    weekIndex: 204,
+    quoteTr: "Dün dünde kaldı; bugün yeni şeyler söylemek lazım.",
+    quoteOriginal: "Dün dünde kaldı cancağızım, bugün yeni şeyler söylemek lazım.",
+    author: "Mevlânâ Celâleddîn-i Rûmî",
+    authorRole: "Mutasavvıf, şair",
+    category: "wisdom",
+    theme: "yenilenme",
+    sourceType: "verified_quote",
+    sourceUrl: "https://www.insaniyet.net/dun-dunde-kaldi-cancagizim-mevlana-ne-demek-istedi/",
+    usageRecommendation: "use",
+    brandFitScore: 9,
+    uiDisplaySuggestion: "Haftanın Sözü",
+    sourceConfidence: "medium",
+    approvedForUi: true,
+  },
+  {
+    id: "quote_205",
+    weekIndex: 205,
+    quoteTr: "Ya olduğun gibi görün, ya göründüğün gibi ol.",
+    quoteOriginal: null,
+    author: "Mevlânâ Celâleddîn-i Rûmî",
+    authorRole: "Mutasavvıf, şair",
+    category: "wisdom",
+    theme: "dürüstlük",
+    sourceType: "verified_quote",
+    sourceUrl: "https://www.insaniyet.net/",
+    usageRecommendation: "use",
+    brandFitScore: 9,
+    uiDisplaySuggestion: "Haftanın Sözü",
+    sourceConfidence: "medium",
+    approvedForUi: true,
+  },
+  {
+    id: "quote_206",
+    weekIndex: 206,
+    quoteTr: "Hamdım, piştim, yandım.",
+    quoteOriginal: null,
+    author: "Mevlânâ Celâleddîn-i Rûmî",
+    authorRole: "Mutasavvıf, şair",
+    category: "wisdom",
+    theme: "olgunlaşma",
+    sourceType: "verified_quote",
+    sourceUrl: "https://www.insaniyet.net/",
+    usageRecommendation: "use",
+    brandFitScore: 9,
+    uiDisplaySuggestion: "Haftanın Sözü",
+    sourceConfidence: "medium",
+    approvedForUi: true,
+  },
+  {
+    id: "quote_207",
+    weekIndex: 207,
+    quoteTr: "Tek başımıza az şey yaparız; birlikte çok şey.",
+    quoteOriginal: "Alone we can do so little; together we can do so much.",
+    author: "Helen Keller",
+    authorRole: "Yazar, eğitimci",
+    category: "wisdom",
+    theme: "birlikte çalışma",
+    sourceType: "translated_quote",
+    sourceUrl: "https://quoteinvestigator.com/2014/04/21/together/",
+    usageRecommendation: "use_as_translation",
+    brandFitScore: 9,
+    uiDisplaySuggestion: "Haftanın Sözü",
+    sourceConfidence: "high",
+    approvedForUi: true,
+  },
+  {
+    id: "quote_208",
+    weekIndex: 208,
+    quoteTr: "Daha uzağı gördüysem, devlerin omuzlarında durduğum içindir.",
+    quoteOriginal: "If I have seen further it is by standing on the shoulders of giants.",
+    author: "Isaac Newton",
+    authorRole: "Fizikçi",
+    category: "wisdom",
+    theme: "miras",
+    sourceType: "translated_quote",
+    sourceUrl: "https://www.britannica.com/biography/Isaac-Newton",
+    usageRecommendation: "use_as_translation",
+    brandFitScore: 9,
+    uiDisplaySuggestion: "Haftanın Sözü",
+    sourceConfidence: "high",
+    approvedForUi: true,
+  },
+  {
+    id: "quote_209",
+    weekIndex: 209,
+    quoteTr: "Bütün, parçalarının toplamından fazladır.",
+    quoteOriginal: "The whole is more than the sum of its parts.",
+    author: "Aristoteles",
+    authorRole: "Filozof",
+    category: "wisdom",
+    theme: "birlikte çalışma",
+    sourceType: "translated_quote",
+    sourceUrl: "https://plato.stanford.edu/entries/aristotle-metaphysics/",
+    usageRecommendation: "use_as_translation",
+    brandFitScore: 9,
+    uiDisplaySuggestion: "Haftanın Sözü",
+    sourceConfidence: "high",
+    approvedForUi: true,
+  },
+  {
+    id: "quote_210",
+    weekIndex: 210,
+    quoteTr: "Hayatta korkulacak bir şey yok; yalnızca anlaşılacak şeyler var.",
+    quoteOriginal: "Nothing in life is to be feared, it is only to be understood.",
+    author: "Marie Curie",
+    authorRole: "Fizikçi, kimyager",
+    category: "wisdom",
+    theme: "cesaret",
+    sourceType: "translated_quote",
+    sourceUrl: "https://www.nobelprize.org/prizes/physics/1903/marie-curie/biographical/",
+    usageRecommendation: "use_as_translation",
+    brandFitScore: 9,
+    uiDisplaySuggestion: "Haftanın Sözü",
+    sourceConfidence: "high",
+    approvedForUi: true,
+  },
 ];
 
 /**
@@ -2565,13 +2783,22 @@ const APPROVED_RAW: WeeklyQuote[] = WEEKLY_QUOTES.filter(
 );
 
 /**
- * Havuz dosyada yazara göre kümelenmiş duruyor (okunurluk için). Rotasyon o
- * sırayı olduğu gibi izleseydi aynı tasarımcı arka arkaya iki-üç hafta
- * çıkardı — kart "takıldı" gibi görünür. Burada yazarlar deterministik olarak
- * seyreltiliyor: en çok sözü olan yazardan başlanır, önce çift indisler sonra
- * tek indisler doldurulur. Bir yazarın payı toplamın yarısını geçmediği sürece
- * (havuzda tavan 3/47) bu yerleştirme iki komşu haftaya aynı yazarı DÜŞÜREMEZ.
- * Rastgelelik yok: aynı girdi hep aynı sırayı verir.
+ * ROTASYON İKİ EKSENDE DAĞITILIR: yazar ve SES.
+ *
+ * Havuz dosyada yazara göre kümeli duruyor (okunurluk için). Rotasyon o sırayı
+ * izleseydi aynı tasarımcı arka arkaya haftalarca çıkardı — kart "takıldı" gibi
+ * görünür. `spreadByAuthor` bunu çözüyordu.
+ *
+ * AMA YETMEDİ. 12.09.2026'da havuza ikinci bir ses girdi: Mevlânâ, Yunus Emre
+ * ve doğrulanmış düşünürler (kategori `wisdom`). Bu yazarların her birinden az
+ * söz olduğu için yazar-seyreltmesi hepsini kuyruğa atıyordu: ilk bilgelik sözü
+ * sıranın 19. sırasındaydı ve ikisi iki KÜME hâlinde toplanıyordu. Yani ekip
+ * on hafta boyunca yalnız atölye sözü görecek, sonra üst üste bilgelik sözü
+ * görecekti — iki ses de kendi bloğunda kalırdı.
+ *
+ * Çözüm: her SES kendi içinde yazara göre seyreltilir, sonra ikisi ORANLI
+ * birleştirilir. 49 moda + 11 bilgelik → kabaca her 4-5 haftada bir bilgelik
+ * sözü. Hâlâ tamamen deterministik: aynı girdi hep aynı sırayı verir.
  */
 function spreadByAuthor(quotes: WeeklyQuote[]): WeeklyQuote[] {
   const groups = new Map<string, WeeklyQuote[]>();
@@ -2586,6 +2813,9 @@ function spreadByAuthor(quotes: WeeklyQuote[]): WeeklyQuote[] {
     .sort((a, b) => b.bucket.length - a.bucket.length || a.firstSeen - b.firstSeen)
     .flatMap((entry) => entry.bucket);
 
+  /* Önce çift indisler, sonra tek indisler doldurulur. Bir yazarın payı
+     toplamın yarısını geçmediği sürece bu yerleştirme iki komşu haftaya aynı
+     yazarı DÜŞÜREMEZ. */
   const out = new Array<WeeklyQuote>(ordered.length);
   let slot = 0;
   for (const quote of ordered) {
@@ -2596,8 +2826,33 @@ function spreadByAuthor(quotes: WeeklyQuote[]): WeeklyQuote[] {
   return out;
 }
 
+/**
+ * İki sırayı ORANLI birleştirir: azınlık ses düzenli aralıklarla araya girer,
+ * kuyrukta toplanmaz. `minor` boşsa `major` olduğu gibi döner.
+ */
+function interleaveByRatio(major: WeeklyQuote[], minor: WeeklyQuote[]): WeeklyQuote[] {
+  if (!minor.length) return major;
+  if (!major.length) return minor;
+  const out: WeeklyQuote[] = [];
+  const step = (major.length + minor.length) / minor.length;
+  let mi = 0;
+  let next = step - 1; // ilk azınlık sözü baştan bir tık sonra çıksın
+  for (let i = 0; i < major.length; i++) {
+    out.push(major[i]!);
+    while (mi < minor.length && out.length >= Math.round(next)) {
+      out.push(minor[mi++]!);
+      next += step;
+    }
+  }
+  while (mi < minor.length) out.push(minor[mi++]!);
+  return out;
+}
+
 /** UI'da gösterilmesi editoryal olarak onaylanmış sözler (yazarlar seyreltilmiş). */
-export const APPROVED_WEEKLY_QUOTES: WeeklyQuote[] = spreadByAuthor(APPROVED_RAW);
+export const APPROVED_WEEKLY_QUOTES: WeeklyQuote[] = interleaveByRatio(
+  spreadByAuthor(APPROVED_RAW.filter((q) => q.category !== "wisdom")),
+  spreadByAuthor(APPROVED_RAW.filter((q) => q.category === "wisdom")),
+);
 
 /**
  * Deterministik haftalık söz seçimi.
