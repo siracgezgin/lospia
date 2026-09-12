@@ -1,3 +1,5 @@
+import { ROUTE_OWNER } from "@/lib/nav/app-nav";
+
 /**
  * "Geri" NEREYE gider? — tek kaynak.
  *
@@ -18,27 +20,36 @@
  */
 
 /** Sol menüden doğrudan gidilen sayfalar — bunların üstü yoktur. */
+/* KÖK = sol menüde KENDİ SATIRI olan sayfa. Üstü yoktur, kırıntı yolu tek
+   halkaya iner ve hiç çizilmez.
+
+   BURADAN ÇIKANLAR (12.09.2026): /rules, /activity, /archive, /trash ve
+   Koleksiyon sekmeleri. Hepsinin ROUTE_OWNER'da bir sahibi vardı — yani sol
+   menüde başka bir satır yanıyordu — ama burada "kök" sayıldıkları için
+   kırıntı yolu boş kalıyordu. Kullanıcı Arşiv'e girip "buraya nereden
+   geldim?" diye bakınca hiçbir şey bulamıyordu.
+
+   Eskiden Koleksiyon sekmeleri "Geri düğmesi sekmeden sekmeye farklı yerde
+   çıkıyor" diye kök sayılmıştı; o sorun düğmenin kendisindeydi. Kırıntı yolu
+   her sekmede AYNI yerde ve aynı biçimde duruyor, üstelik hangi sekmede
+   olduğunu da yazıyor. Aynı gerekçeyle /dashboard (Reports) da çıktı: List'in
+   son sekmesidir ve menüde List yanar — "List › Reports" bunu yazar. */
 const ROOTS = new Set([
-  "/home", "/planning", "/board", "/dashboard", "/list",
+  "/home", "/planning", "/board", "/list",
   "/collection", "/documents", "/crm",
-  "/modules", "/admin-board", "/settings",
-  "/activity", "/archive", "/trash", "/rules", "/profile",
-  /* Koleksiyon SEKMELERİ de kök sayılır. Dördü aynı ekranın görünümleridir ve
-     aralarında gezinme SEKME ÇUBUĞUdur; ayrıca "Geri" koymak hem gereksiz hem
-     de düğmeyi sekmeden sekmeye farklı yerde gösteriyordu (2026-08-29: "her
-     alt başlığa tıklayınca farklı yerde geliyor geri tuşu"). */
-  "/collection/maliyet", "/collection/odeme", "/collection/veri",
+  "/modules", "/admin-board", "/settings", "/finance", "/profile",
 ]);
 
-/** Kendiliğinden türetilemeyen üst sayfalar. */
-const EXPLICIT: { test: (_p: string) => boolean; parent: string }[] = [
-  // Üretim föyü Koleksiyon'un altında yaşar; yolu ("/production/…") bunu
-  // söylemiyor, o yüzden elle eşleniyor.
-  { test: (p) => p.startsWith("/production"), parent: "/collection" },
-  // Tablo editörü AF Teamwork'ün içinde açılır.
-  { test: (p) => p.startsWith("/sheets"), parent: "/documents" },
-  // Kişi raporu Reports'un altında.
-  { test: (p) => p.startsWith("/reports"), parent: "/dashboard" },
+/**
+ * Yol tabanlı iç içelik — aynı modülün DAHA DERİN sayfası.
+ * Örn. /production/<id>/print'in üstü /production/<id>'dir; modül köküne
+ * atlamak arada bir basamağı yutardı.
+ */
+const NESTED: { test: (_p: string) => boolean; parent: (_p: string) => string }[] = [
+  {
+    test: (p) => /^\/production\/[^/]+\/print$/.test(p),
+    parent: (p) => p.replace(/\/print$/, ""),
+  },
 ];
 
 /**
@@ -49,9 +60,21 @@ export function parentPathOf(pathname: string | null | undefined): string | null
   const path = (pathname ?? "").split("?")[0].replace(/\/+$/, "") || "/";
   if (ROOTS.has(path)) return null;
 
-  for (const rule of EXPLICIT) {
-    if (rule.test(path)) return rule.parent === path ? null : rule.parent;
+  // Önce aynı modül içindeki derinlik (föy → yazdırma gibi).
+  for (const rule of NESTED) {
+    if (rule.test(path)) {
+      const parent = rule.parent(path);
+      return parent === path ? null : parent;
+    }
   }
+
+  /* Sonra MODÜL SAHİBİ. ROUTE_OWNER sol menünün hangi satırı yaktığını
+     söyleyen listedir; "üst" tanımının ondan farklı olması, menüde bir şey
+     yanarken kırıntı yolunda başka bir şey yazmasına yol açıyordu. Tek liste. */
+  const owned = ROUTE_OWNER.find(
+    ([prefix]) => path === prefix || path.startsWith(prefix + "/"),
+  );
+  if (owned) return owned[1] === path ? null : owned[1];
 
   // /collection/maliyet → /collection · /documents/<id> → /documents
   const cut = path.lastIndexOf("/");

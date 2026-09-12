@@ -22,6 +22,7 @@ import { PersonAvatar } from "@/components/ui/PersonAvatar";
 import { personTone } from "@/lib/design/person-colors";
 import { Tile, TileGrid } from "@/components/ui/TileGrid";
 import { SortHeader } from "@/components/ui/SortHeader";
+import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { MemberMultiSelect, type Member } from "@/components/planning/MemberMultiSelect";
 import {
   KIND_FOLDER, KIND_DOC, KIND_SHEET, fileKindOf, linkKindOf, humanSize,
@@ -321,7 +322,6 @@ interface Props {
   /** Araç çubuğunun başına konur (ör. "← Geri"). Ayrı bir satır açmamak için:
    *  kökteyken kırıntı yolu boş kalıyor ve tek başına bir ev simgesi satırı
    *  duruyordu (2026-08-29: "şu gereksiz ikon boşluk ne öyle"). */
-  leading?: React.ReactNode;
   /** Bağlantı formunu açar; formu sayfa sahibi (DocumentsView) yönetir. */
   onNewLink?: (_folderId: string | null) => void;
   onEditLink?: (_id: string) => void;
@@ -352,7 +352,7 @@ interface Props {
  */
 export function DriveBrowser({
   folders, files, docs = [], sheets = [], links = [], memberNames, memberAvatars = {}, currentUserId = null, isAdmin,
-  rootLabel = "AF Teamwork", leading, onNewLink, onEditLink,
+  rootLabel = "AF Teamwork", onNewLink, onEditLink,
 }: Props) {
   const { ask, dialog } = useConfirm();
   /* TEK BÖLÜM. Bir süre "AF Teamwork" ve "Kütüphane" diye iki bölüm vardı;
@@ -1194,66 +1194,25 @@ export function DriveBrowser({
             çizilmez — nerede olduğunu uygulama çubuğu zaten söylüyor.
             `overflow-x-auto`: derin klasörde yol uzayınca gövde YATAY
             KAYMASIN, yol kendi kabında kaysın. */}
-        <nav
-          aria-label="Klasör yolu"
-          className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto text-[13.5px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        >
-          {leading}
-          {/* KUTU ADI kırıntı yolunun ilk halkası: "AF Teamwork › Excel ›
-              Föyler". Tıklamak kutulara döner. */}
-          {bucket && (
-            <span className="inline-flex shrink-0 items-center gap-1">
-              <button
-                type="button"
-                onClick={() => { setBucket(null); setCwd(null); setQuery(""); }}
-                className="tap-target inline-flex h-8 shrink-0 items-center rounded-control px-1.5 text-muted transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
-              >
-                {rootLabel}
-              </button>
-              <ChevronRight size={12} className="text-subtle" aria-hidden />
-              <button
-                type="button"
-                onClick={() => setCwd(null)}
-                aria-current={trail.length === 0 ? "location" : undefined}
-                className={cn(
-                  "inline-flex h-8 items-center rounded-control px-1.5 transition-colors duration-150",
-                  trail.length === 0 ? "font-semibold text-ink" : "text-muted hover:text-ink",
-                )}
-              >
-                {BUCKET_BY_KEY.get(bucket)?.label ?? ""}
-              </button>
-            </span>
-          )}
-          {trail.length > 0 && (
-            <>
-              <button
-                type="button"
-                onClick={() => setCwd(null)}
-                title={rootLabel}
-                aria-label={rootLabel}
-                className="tap-target ml-1 inline-flex h-8 shrink-0 items-center rounded-control px-1.5 text-muted transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
-              >
-                <Home size={14} />
-              </button>
-              {trail.map((f, i) => (
-                <span key={f.id} className="inline-flex shrink-0 items-center gap-1">
-                  <ChevronRight size={12} className="text-subtle" aria-hidden />
-                  <button
-                    type="button"
-                    onClick={() => setCwd(f.id)}
-                    aria-current={i === trail.length - 1 ? "location" : undefined}
-                    className={cn(
-                      "inline-flex h-8 max-w-[14rem] items-center truncate rounded-control px-1.5 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring",
-                      i === trail.length - 1 ? "font-semibold text-ink" : "text-muted hover:text-ink",
-                    )}
-                  >
-                    {f.name}
-                  </button>
-                </span>
-              ))}
-            </>
-          )}
-        </nav>
+        {/* KIRINTI YOLU — uygulamanın ortak bileşeni (components/ui/Breadcrumbs).
+            Burada bir zamanlar kendi zinciri vardı ve BOZUKTU: kutu etiketinden
+            sonra zincirin ORTASINA bir ev ikonu giriyordu —
+            "AF Teamwork › Excel › 🏠 › Excel Tabloları" (Sıraç, 12.09.2026).
+            O ikon kutu bağlantısıyla AYNI işi yapıyordu (setCwd(null)), yani
+            hem gereksizdi hem zinciri okunamaz hâle getiriyordu.
+            Zincir artık tek dilde: kök › kutu › klasörler, ayıraç tek tür,
+            son halka koyu ve tıklanmaz. */}
+        <Breadcrumbs
+          ariaLabel="Klasör yolu"
+          className="flex-1"
+          items={[
+            { label: rootLabel, onSelect: () => { setBucket(null); setCwd(null); setQuery(""); } },
+            ...(bucket
+              ? [{ label: BUCKET_BY_KEY.get(bucket)?.label ?? "", onSelect: () => setCwd(null) }]
+              : []),
+            ...trail.map((f) => ({ label: f.name, onSelect: () => setCwd(f.id) })),
+          ]}
+        />
 
         {/* ÜRETİM DÜĞMELERİ — beşi de AÇIK, menü arkasında değil.
             Sıraç (2026-08-29): "Bunları ayrı ayrı verelim sağ üstte, açık
@@ -2082,7 +2041,7 @@ function DriveGrid({
   renamingId, onRename, onCancelRename, busy,
 }: {
   items: DriveItem[];
-  /** Izgaranın başına konan kart (yeni klasör adı kutusu). */
+  /** Izgaranın BAŞINA konan kart — yeni klasör ad kutusu. */
   leading?: React.ReactNode;
   menu: (_it: DriveItem) => React.ReactNode;
   memberNames: Record<string, string>;

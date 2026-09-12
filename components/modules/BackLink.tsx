@@ -1,49 +1,47 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
+import { routeCrumbs, routeLabelOf } from "@/lib/nav/breadcrumbs";
 import { parentPathOf } from "@/lib/nav/parent-path";
 
 /**
- * "← Geri" — HİYERARŞİK, geçmişe göre değil.
+ * Sayfanın hiyerarşi satırı — artık "← Geri" DEĞİL, TAM ZİNCİR.
  *
- * Sıraç (2026-08-29):
- *   "AF Teamwork'te geriye basıyorum beni CRM'e atıyor. CRM'de geriye
- *    basıyorum Board'a gidiyor… bozuk çalışıyor."
- *   "/collection'da geri butonu olması gereksiz. Bir yere girmişsem geri
- *    gelmeli ve soldaki başlığa dönmeli."
+ * Sıraç (2026-09-12): "Geri gelince nereye geldiğin belli değil… bakınca da
+ * anlaşılmıyor, tıklayınca da."
  *
- * Önce `router.back()` kullanıyordu: "bir önce BAKTIĞIN sayfa"ya gider. Sol
- * menüden CRM → AF Teamwork gezinildiyse AF Teamwork'te "Geri" CRM'e dönüyordu
- * — tarayıcı açısından doğru, kullanıcı açısından bozuk.
+ * Eskiden burada yalnız "← Geri" yazıyordu. Hedefi doğruydu (hiyerarşik, bkz.
+ * lib/nav/parent-path.ts) ama NEREYE gideceğini söylemiyordu: kullanıcı
+ * tıklamadan önce bilmiyor, tıkladıktan sonra da nereye düştüğünü anlamıyordu.
+ * Artık zincirin tamamı yazılı — "Collection › Üretim Föyü" hem nerede
+ * olduğunu hem üstünde ne olduğunu aynı anda söyler.
  *
- * Artık hedef yolun KENDİSİNDEN türer (lib/nav/parent-path.ts):
- *   • Sol menüde kendi satırı olan sayfa bir köktür → düğme HİÇ ÇİZİLMEZ.
- *   • Alt sayfa kendi üstüne döner: /production/<id> → /collection gibi.
+ * Kök sayfalarda zincir tek halkaya iner ve Breadcrumbs kendini çizmez;
+ * uygulama çubuğu o adı zaten yazıyor.
  *
- * Sayfa içi kırılımlar (Koleksiyon'da kategori seçimi, Drive'da klasör) rota
- * değiştirmez; onların kendi "geri"si bulundukları bileşende yaşar.
+ * Adı `BackLink` KALDI: on sayfa ve ModulePageHeader bu adı çağırıyor, tek
+ * seferde hepsini yeniden adlandırmak bu düzeltmeyi gereksiz büyütürdü.
  */
 export function BackLink({
-  /** Yolun kendisinden türetilene karşı ELLE hedef. */
+  /** Yolun kendisinden türetilene karşı ELLE hedef (nadiren gerekir). */
   href,
 }: {
   href?: string;
 }) {
   const pathname = usePathname();
-  const target = href ?? parentPathOf(pathname);
 
-  // Kök sayfada gösterilecek bir "üst" yok — satır hiç açılmaz.
-  if (!target) return null;
+  /* Elle hedef verildiyse iki halkalı basit bir zincir kurulur: verilen üst +
+     bulunulan sayfa. Türetme kuralı bunu bilemez, çağıran bilir. */
+  if (href) {
+    const parentLabel = routeLabelOf(href);
+    const selfLabel = routeLabelOf(pathname);
+    if (!parentLabel || !selfLabel) return null;
+    return <Breadcrumbs items={[{ label: parentLabel, href }, { label: selfLabel }]} />;
+  }
 
-  return (
-    <Link
-      href={target}
-      className="tap-target inline-flex h-8 items-center gap-1.5 rounded-control px-1 text-[13.5px] font-medium text-muted transition-colors duration-150 hover:text-ink"
-    >
-      <ArrowLeft size={15} className="shrink-0" aria-hidden />
-      Geri
-    </Link>
-  );
+  /* Üstü olmayan sayfada çizecek bir şey yok — erken çıkış, boş <nav>
+     oluşmasın. */
+  if (!parentPathOf(pathname)) return null;
+  return <Breadcrumbs items={routeCrumbs(pathname)} />;
 }

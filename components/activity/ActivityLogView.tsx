@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/Button";
 import { TextInput } from "@/components/ui/Field";
 import { loadMoreActivity } from "@/app/(app)/activity/actions";
 import type { TaskStatus, TaskPriority } from "@/types";
+import { BackLink } from "@/components/modules/BackLink";
 
 // One audit row, flattened on the server (actor/task joins resolved to scalars).
 export type ActivityRow = {
@@ -287,6 +288,7 @@ export function ActivityLogView({
 
   return (
     <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
+      <BackLink />
       <h1 className="sr-only">Activity Log</h1>
 
       {/* ── Arama — kişi · iş · yapılan işlem, tek kutu ─────────────────────── */}

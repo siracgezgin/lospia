@@ -10,6 +10,7 @@ import { MaterialsManager, type ManagerMaterial } from "@/components/settings/Ma
 import { ProductDataTiles } from "@/components/collection/ProductDataTiles";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
+import { BackLink } from "@/components/modules/BackLink";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Product Data" };
@@ -119,9 +120,13 @@ export default async function CollectionDataPage({
 
   return (
     <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
-      {/* Başlık uygulama çubuğunda. "Geri" YOK: dört sekme aynı ekranın
-          görünümleri, aralarında gezinme sekme çubuğunun kendisi. */}
+      {/* Başlık uygulama çubuğunda; hiyerarşi satırı kardeş sekmelerle AYNI
+          yerde ve aynı biçimde ("Collection › Product Data"). Eskiden burada
+          hiçbir şey yoktu: Maliyet ve Ödeme sekmelerinde satır varken bu
+          sekmeye geçince kayboluyordu (Sıraç, 12.09.2026: "bazısında var
+          bazısında yok"). */}
       <h1 className="sr-only">Product Data</h1>
+      <BackLink />
       <CollectionTabs active="veri" />
 
       {/* GİRİŞ = KUTULAR */}

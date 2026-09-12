@@ -116,7 +116,6 @@ export function DocumentsView({
           currentUserId={currentUserId}
           isAdmin={isAdmin}
           rootLabel="AF Teamwork"
-          leading={<BackLink />}
           onNewLink={(folderId) => { setEditing(null); setLinkFolder(folderId); setModalOpen(true); }}
           onEditLink={(id) => {
             const d = documents.find((x) => x.id === id) ?? null;

@@ -10,6 +10,7 @@ import { TextInput } from "@/components/ui/Field";
 import { useConfirm } from "@/components/ui/useConfirm";
 import { formatDateTR } from "@/lib/utils/format-date";
 import type { Task } from "@/types";
+import { BackLink } from "@/components/modules/BackLink";
 
 interface Props {
   tasks: Task[];
@@ -144,6 +145,7 @@ export function TrashView({ tasks: initialTasks }: Props) {
 
   return (
     <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
+      <BackLink />
       {/* Tek kutu — çöp kutusunda süzülecek tür/departman yok, iş ADI var. */}
       {tasks.length > 0 && (
         <div className="relative mb-3 max-w-sm">

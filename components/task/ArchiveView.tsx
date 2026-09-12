@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { TextInput } from "@/components/ui/Field";
 import { formatDateTR } from "@/lib/utils/format-date";
 import type { Task } from "@/types";
+import { BackLink } from "@/components/modules/BackLink";
 
 interface Props {
   manuallyArchived: Task[];
@@ -116,6 +117,7 @@ export function ArchiveView({ manuallyArchived, oldCompleted }: Props) {
 
   return (
     <div className="w-full px-4 py-4 sm:px-6 lg:px-8 space-y-6">
+      <BackLink />
       {/* Tek kutu, süzgeç yığını yok — arşivde tür/departman ayrımı yok,
           aranan şey işin ADI. */}
       {totalCount > 0 && (

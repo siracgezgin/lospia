@@ -107,14 +107,23 @@ export function navSectionsForRole(isAdmin: boolean): NavSection[] {
  * Anahtar bir ÖNEK'tir: "/x" hem "/x" hem "/x/…" ile eşleşir. Değer, menüde
  * yanacak satırın href'idir ve NAV_SECTIONS içinde GERÇEKTEN bulunmalıdır.
  */
-const ROUTE_OWNER: ReadonlyArray<readonly [prefix: string, owner: string]> = [
+/**
+ * Bir rota HANGİ sol menü satırına aittir.
+ *
+ * TEK KAYNAK: hem sol menünün hangi satırı yakacağını, hem kırıntı yolunun
+ * "üst" halkasını bu liste belirler (bkz. lib/nav/parent-path.ts). Eskiden iki
+ * ayrı liste vardı ve AYRIŞMIŞLARDI — /reports burada List'e, parent-path'te
+ * Dashboard'a bağlıydı; menüde List yanarken kırıntı yolu Reports yazıyordu
+ * (Sıraç, 12.09.2026: "bazısı eksik, bazısı bozuk"). Tek liste, tek cevap.
+ */
+export const ROUTE_OWNER: ReadonlyArray<readonly [prefix: string, owner: string]> = [
   // Raporlar List yüzeyinin son sekmesidir (bkz. components/shared/SurfaceTabs).
   ["/dashboard", "/list"],
   // Kişi bazlı tek sayfa rapor — Raporlar'ın alt sayfası, yani yine List.
   ["/reports", "/list"],
   // Sheets sol bardan kalktı; AF Teamwork'ün kutucuğudur.
-  // (Library henüz bir rota olarak açılmadı — açıldığında buraya "/library"
-  //  satırı eklenir; olmayan rota için burada ölü satır tutmuyoruz.)
+  // (Library henüz bir rota DEĞİL — açıldığında buraya "/library" satırı
+  //  eklenir; olmayan rota için ölü satır tutmuyoruz.)
   ["/sheets", "/documents"],
   // Üretim Föyü editörü Koleksiyon'dan açılır; kendi menü satırı yoktur.
   ["/production", "/collection"],
@@ -122,6 +131,10 @@ const ROUTE_OWNER: ReadonlyArray<readonly [prefix: string, owner: string]> = [
   ["/rules", "/board"],
   // Görev detayı tam sayfa açılabilir; işlerin listelendiği yüzey List'tir.
   ["/tasks", "/list"],
+  /* GOALS sol menüden kalktı (Board'un ikinci sekmesi oldu) ama kendi rotası
+     çalışıyor. Sahibi yazılmayınca menüde hiçbir satır yanmıyor ve kırıntı
+     yolu tek halkaya düşüyordu — kullanıcı oraya nereden geldiğini göremiyordu. */
+  ["/goals", "/board"],
   /* Hareket kaydı · Arşiv · Çöp: /modules hub'ından ve profil menüsünden
      açılan YÖNETİCİ yüzeyleri. Menüde kendi satırları yok (Admin bölümü üç
      satırla sınırlı) — hepsi Ayarlar'ın yanında yaşar, o yüzden orada yanar.
