@@ -330,7 +330,11 @@ const ShareSchema = z.object({
 
 export type ShareDocumentInput = z.infer<typeof ShareSchema>;
 /** Paylaşılabilir kayıt türleri — DriveBrowser'daki öğe türleriyle birebir. */
-export type ShareItemType = "file" | "doc" | "sheet" | "link";
+export type ShareItemType = "file" | "doc" | "sheet" | "link" | "folder";
+
+/** Klasör mailinde listelenecek en fazla dosya. Üstü "N dosya daha var" diye
+ *  YAZILIR; sessizce kırpmak "hepsi bu" yanılgısı üretirdi. */
+const FOLDER_FILE_LIMIT = 25;
 
 const APP_BASE_URL = (
   process.env.EMAIL_TASK_BASE_URL ?? "https://operasyon.aslifilinta.com"
@@ -390,6 +394,8 @@ export async function sendDocumentByEmail(
   let folderId: string | null = null;
   let expiresLabel: string | null = SHARE_LINK_TTL_LABEL;
   let requiresAccount = false;
+  let sharedFiles: { name: string; meta: string; url: string }[] = [];
+  let omitted = 0;
 
   if (itemType === "file" || itemType === "link") {
     /* RLS ZATEN SÜZÜYOR: "yalnız yöneticiye kapalı" bir kaydı göremeyen kişi
@@ -426,6 +432,62 @@ export async function sendDocumentByEmail(
       sizeLabel = formatBytes(row.file_size);
       kindLabel = fileKindOf(row.file_mime, fileName).label;
     }
+  } else if (itemType === "folder") {
+    /* KLASÖR — tek bir bağlantısı yok, İÇERİĞİ paylaşılır.
+       Panel adresi göndermek işe yaramazdı: alıcı çoğu zaman ekip dışından
+       (üretici, tedarikçi) ve hesabı yok. Bunun yerine klasördeki her dosya
+       için ayrı imzalı indirme bağlantısı üretilir; mailde ad, tür ve boyutla
+       birlikte listelenir. Alt klasörler DÂHİL EDİLMEZ — mail bir dosya
+       tarayıcısı değil; iç içe ağacı düzleştirmek listeyi okunamaz yapardı. */
+    const { data: f } = await supabase
+      .from("document_folders")
+      .select("name, parent_id")
+      .eq("id", itemId).eq("workspace_id", ctx.workspaceId)
+      .maybeSingle();
+    const folder = f as { name: string; parent_id: string | null } | null;
+    if (!folder) return { error: NOT_FOUND };
+
+    const { data: rows } = await supabase
+      .from("operation_documents")
+      .select("title, file_name, file_path, file_mime, file_size")
+      .eq("workspace_id", ctx.workspaceId)
+      .eq("folder_id", itemId)
+      .not("file_path", "is", null)
+      .order("created_at", { ascending: false });
+    const docs = (rows ?? []) as {
+      title: string; file_name: string | null; file_path: string | null;
+      file_mime: string | null; file_size: number | null;
+    }[];
+    if (!docs.length) {
+      return { error: "Bu klasörde gönderilecek yüklenmiş dosya yok." };
+    }
+
+    const take = docs.slice(0, FOLDER_FILE_LIMIT);
+    /* Bağlantılar PARALEL imzalanır: yirmi beş dosya için ardışık imza yirmi
+       beş tur demekti ve gönder düğmesi saniyelerce bekliyordu. */
+    const signed = await Promise.all(
+      take.map(async (d) => {
+        const { data } = await supabase.storage
+          .from(BUCKET)
+          .createSignedUrl(d.file_path!, SHARE_LINK_TTL_SECONDS);
+        if (!data) return null;
+        const nm = d.file_name ?? d.title;
+        const size = formatBytes(d.file_size);
+        return {
+          name: nm,
+          meta: [fileKindOf(d.file_mime, nm).label, size].filter(Boolean).join(" · "),
+          url: data.signedUrl,
+        };
+      }),
+    );
+    sharedFiles = signed.filter((x): x is NonNullable<typeof x> => x !== null);
+    if (!sharedFiles.length) return { error: "İndirme bağlantıları üretilemedi." };
+    omitted = docs.length - sharedFiles.length;
+
+    fileName = folder.name;
+    kindLabel = "Klasör";
+    folderId = folder.parent_id;   // yol ÜST klasörden türer
+    url = `${APP_BASE_URL}/documents`;
   } else {
     /* Yazı ve tablo uygulamanın İÇİNDE yaşar; dosya olarak dışarı verilecek
        bir hâli yok. Bağlantı panele gider ve alıcının hesabı olmalı — bunu
@@ -462,6 +524,7 @@ export async function sendDocumentByEmail(
       documentShareEmail({
         to, fileName, kindLabel, url, expiresLabel, folderPath,
         sizeLabel, actorName, note: parsed.data.note ?? null, requiresAccount,
+        files: sharedFiles, omittedCount: omitted,
       }),
     );
     if (res.status === "sent") sent.push(to);

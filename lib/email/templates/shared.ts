@@ -23,16 +23,20 @@ export function escapeHtml(value: string): string {
 
 // Brand palette — mirrors the app's UI tokens (globals.css --brand family) so
 // mail and product read as one system. Kept small and inline-friendly.
+/* Uygulamanın globals.css token'larıyla AYNI değerler — mail ile panel tek
+   sistem gibi okunsun. 12.09.2026'da İznik paletine güncellendi: eski değerler
+   (petrol #2f5d6b) tema değişiminden sonra geride kalmıştı, yani mail markanın
+   artık kullanmadığı bir rengi taşıyordu. */
 const COLORS = {
-  pageBg: "#f4f5f7",
-  cardBg: "#ffffff",
-  border: "#e5e7eb",
-  heading: "#111827",
-  body: "#374151",
-  muted: "#6b7280",
-  brand: "#2f5d6b", // app --brand (petrol)
-  brandStrong: "#264c58", // app --brand-strong
-  brandSoft: "#eaf2f4", // app --brand-soft
+  pageBg: "#e8eef2", // app --app-bg
+  cardBg: "#ffffff", // app --surface
+  border: "#c6d3db", // app --border
+  heading: "#10171c", // app --text
+  body: "#46545f", // app --text-muted
+  muted: "#5b6872", // app --text-subtle
+  brand: "#0077a5", // app --brand (İznik turkuazı)
+  brandStrong: "#00537a", // app --brand-strong
+  brandSoft: "#d8eff9", // app --brand-soft
   brandText: "#ffffff",
 } as const;
 
@@ -184,4 +188,39 @@ export function renderParagraph(text: string): string {
   return `<p style="margin: 0 0 16px; font-family: ${FONT_STACK}; font-size: 15px; line-height: 1.6; color: ${COLORS.body};">${escapeHtml(
     text,
   )}</p>`;
+}
+
+
+/**
+ * DOSYA LİSTESİ — klasör paylaşımında her dosya kendi satırında durur.
+ *
+ * Neden düz bir bağlantı yığını değil: alıcı "hangi dosya neydi?" diye
+ * tahmin etmek zorunda kalmasın. Her satırda ad, tür ve boyut yazar; indirme
+ * bağlantısı adın kendisindedir. `name`/`meta` kullanıcı verisidir, kaçırılır;
+ * `href` bizim ürettiğimiz imzalı adrestir ama öznitelik bağlamında olduğu
+ * için savunma amaçlı yine kaçırılır.
+ */
+export function renderFileList(
+  files: ReadonlyArray<{ name: string; meta: string; href: string }>,
+): string {
+  if (!files.length) return "";
+  const rows = files
+    .map(
+      (f) => `
+      <tr>
+        <td style="padding: 10px 0; border-bottom: 1px solid ${COLORS.border};">
+          <a href="${escapeHtml(f.href)}" style="font-family: ${FONT_STACK}; font-size: 14px; font-weight: 600; color: ${COLORS.brand}; text-decoration: none; word-break: break-word;">${escapeHtml(
+            f.name,
+          )}</a>
+          <div style="margin-top: 2px; font-family: ${FONT_STACK}; font-size: 12px; color: ${COLORS.muted};">${escapeHtml(
+            f.meta,
+          )}</div>
+        </td>
+      </tr>`,
+    )
+    .join("\n");
+  return `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 4px 0 20px;">
+      ${rows}
+    </table>`;
 }

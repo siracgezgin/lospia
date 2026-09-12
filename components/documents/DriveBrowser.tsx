@@ -950,11 +950,27 @@ export function DriveBrowser({
         }]
       : [];
 
+    /* MAİL İLE GÖNDER — KLASÖR DÂHİL her kayıtta. Yetki istemez: kaydı
+       GÖREBİLEN paylaşabilir de; görünürlüğü RLS zaten süzüyor. "Yönetebilen"
+       şartı koysaydık üye kendi yüklediği raporu bile yollayamazdı.
+
+       Klasör önce dışarıda bırakılmıştı ("tek bir bağlantısı yok" diye); oysa
+       paylaşılmak istenen tam da klasörün kendisi oluyor (Sıraç, 12.09.2026:
+       "burda paylaş olsun"). Klasörde mail, içindeki her dosya için ayrı
+       imzalı indirme bağlantısı taşır. */
+    const shareAction: MenuAction = {
+      label: "Mail ile gönder",
+      icon: Mail,
+      onSelect: () => setShareTarget(it),
+    };
+
+
     if (it.type === "folder" && it.folder) {
       const f = it.folder;
-      if (!canManage(it)) return locate;
+      if (!canManage(it)) return [...locate, shareAction];
       return [
         ...locate,
+        shareAction,
         {
           label: "Yeniden adlandır",
           icon: Pencil,
@@ -990,15 +1006,6 @@ export function DriveBrowser({
         },
       ];
     }
-
-    /* MAİL İLE GÖNDER — klasör dışında her kayıtta. Yetki istemez: kaydı
-       GÖREBİLEN paylaşabilir de; görünürlüğü RLS zaten süzüyor. "Yönetebilen"
-       şartı koysaydık üye kendi yüklediği raporu bile yollayamazdı. */
-    const shareAction: MenuAction = {
-      label: "Mail ile gönder",
-      icon: Mail,
-      onSelect: () => setShareTarget(it),
-    };
 
     if (it.type === "file") {
       const out: MenuAction[] = [...locate];
@@ -2239,16 +2246,21 @@ function ShareDialog({
     });
   }
 
-  /* Yazı ve tablo uygulamanın içinde yaşar; bağlantı panele gider ve alıcının
-     hesabı olmalı. Bunu pencerede de söylüyoruz — kullanıcı dışarıdan birine
-     yollamadan önce bilsin. */
+  /* Pencerede de NE GÖNDERİLECEĞİ yazılır — kullanıcı dışarıdan birine
+     yollamadan önce bilsin. Üç durum var ve üçü farklı şey gönderiyor. */
   const internal = item.type === "doc" || item.type === "sheet";
+  const isFolder = item.type === "folder";
+  const explainer = isFolder
+    ? "Klasördeki her dosya için ayrı indirme bağlantısı gönderilir; bağlantılar 7 gün geçerlidir. Alt klasörler dâhil edilmez."
+    : internal
+      ? "Bağlantı panelde açılır; alıcının AF Operasyon erişimi olmalı."
+      : "Dosya ek olarak değil, 7 gün geçerli güvenli bir indirme bağlantısı olarak gider.";
 
   return (
     <Overlay
       open
       onClose={onClose}
-      title="Mail ile gönder"
+      title={isFolder ? "Klasörü mail ile gönder" : "Mail ile gönder"}
       hint={item.name}
       size="sm"
       dismissOnBackdrop={false}
@@ -2315,11 +2327,7 @@ function ShareDialog({
           />
         </Field>
 
-        <p className="text-[12px] leading-relaxed text-subtle">
-          {internal
-            ? "Bağlantı panelde açılır; alıcının AF Operasyon erişimi olmalı."
-            : "Dosya ek olarak değil, 7 gün geçerli güvenli bir indirme bağlantısı olarak gider."}
-        </p>
+        <p className="text-[12px] leading-relaxed text-subtle">{explainer}</p>
 
         {error && <p className="text-[12.5px] font-medium text-danger">{error}</p>}
         {result && <p className="text-[12.5px] font-medium text-success">{result}</p>}
