@@ -66,6 +66,9 @@ type HomeMeeting = {
   title: string | null;
   /** Toplantı sonucu (20240338) — kolon migrate edilmemişse gelmez. */
   status?: string | null;
+  /** Toplantının kendi katılımcıları — konu bazında kimse eklenmemiş olabilir. */
+  participant_ids?: string[] | null;
+  collaborator_ids?: string[] | null;
   /** TOPLANTI ÖNCESİ GÖRÜNSÜN diye gündem satırları (2026-09-07).
    *  `participant_ids`/`collaborator_ids` KİMİN konusu olduğunu söyler —
    *  Ana Sayfa önce bakan kişinin kendi konularını yazar. */
@@ -154,7 +157,7 @@ export default async function HomePage() {
     : Promise.resolve({ data: [] as { created_at: string }[] });
 
   const meetingSelect =
-    "id, meeting_date, time_slot, category, title, status, " +
+    "id, meeting_date, time_slot, category, title, status, participant_ids, collaborator_ids, " +
     "planning_topics(text, position, done_at, participant_ids, collaborator_ids)";
   const [participantTaskIds, meetingsRes0, profile, lastBackupRes] = await Promise.all([
     participantTaskIdsPromise,
@@ -187,7 +190,7 @@ export default async function HomePage() {
     meetingsRes = await supabase
       .from("planning_meetings")
       .select(
-        "id, meeting_date, time_slot, category, title, " +
+        "id, meeting_date, time_slot, category, title, participant_ids, collaborator_ids, " +
           "planning_topics(text, position, done_at, participant_ids, collaborator_ids)",
       )
       .eq("workspace_id", workspaceId)
@@ -250,8 +253,38 @@ export default async function HomePage() {
 
   // Takvim tablosu migrate edilmemişse sessizce boş kalır — Ana Sayfa çökmez.
   const meetings = (meetingsRes.error ? [] : (meetingsRes.data ?? [])) as HomeMeeting[];
-  const todayMeetings = meetings.filter((m) => m.meeting_date === todayIso);
-  const laterMeetings = meetings.filter((m) => m.meeting_date > todayIso);
+
+  /* ANA SAYFA SENİN TOPLANTILARINI YAZAR.
+     Sıraç (2026-09-12): "Toplantı konusu varsa ve kişi dahil edilmişse onda
+     görünsün; diğer türlü bir anlamlı kalmıyor."
+
+     Burada günün BÜTÜN toplantıları listeleniyordu. Katılmadığın bir toplantı
+     Ana Sayfa'da bir şey söylemez — "bugün ne yapacağım?" sorusunun cevabı
+     değil, gürültüdür. Takvim zaten tam listeyi gösteriyor; burası kişisel.
+
+     Dahil sayılmanın İKİ yolu var, çünkü ekip bazen toplantıya, bazen tek bir
+     konuya kişi ekliyor: toplantının kendi katılımcıları ya da herhangi bir
+     KONUNUN katılımcıları.
+
+     VERİ SEYREKSE PANEL BOŞALMASIN: hiçbir toplantıda adın geçmiyorsa günün
+     tamamı gösterilir. Katılımcı alanı çoğu toplantıda boş olabilir (ekip
+     serbest metin "Kim" alanını da kullanıyor) ve o durumda boş bir panel
+     göstermek, bilgiyi tümden saklamak olurdu. */
+  const inMeeting = (m: HomeMeeting) =>
+    (m.participant_ids ?? []).includes(user.id) ||
+    (m.collaborator_ids ?? []).includes(user.id) ||
+    (m.planning_topics ?? []).some(
+      (t) =>
+        (t.participant_ids ?? []).includes(user.id) ||
+        (t.collaborator_ids ?? []).includes(user.id),
+    );
+  const mineMeetings = meetings.filter(inMeeting);
+  const shown = mineMeetings.length > 0 ? mineMeetings : meetings;
+  /* Kişiselleştiyse başlık da onu söyler — panel "neden eksik?" sorusu
+     doğurmasın. */
+  const meetingsArePersonal = mineMeetings.length > 0;
+  const todayMeetings = shown.filter((m) => m.meeting_date === todayIso);
+  const laterMeetings = shown.filter((m) => m.meeting_date > todayIso);
 
   const fullName = profile?.full_name ?? null;
   const firstName = fullName?.trim().split(/\s+/)[0] ?? null;
@@ -427,7 +460,14 @@ export default async function HomePage() {
                   <SeeAll href={`/planning?v=gun&d=${todayIso}`} label="Günü aç" />
                 </div>
                 {todayMeetings.length === 0 ? (
-                  <p className="text-[13.5px] text-subtle">Planlı toplantı yok.</p>
+                  /* Liste kişiselleştiyse boş mesaj da onu söyler: "toplantı
+                     yok" ile "SENİN toplantın yok" ayrı şeylerdir — takvimde
+                     toplantı dururken "planlı toplantı yok" demek yalan olurdu. */
+                  <p className="text-[13.5px] text-subtle">
+                    {meetingsArePersonal
+                      ? "Bugün katıldığın toplantı yok."
+                      : "Planlı toplantı yok."}
+                  </p>
                 ) : (
                   <ul className="space-y-2">
                     {todayMeetings.map((m) => (
