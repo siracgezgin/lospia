@@ -549,3 +549,137 @@ export async function sendDocumentByEmail(
   }
   return { ok: true, sent, failed };
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   YÜKLENEN EXCEL'İ YERİNDE AÇ
+
+   Sıraç (2026-09-16): "Tıklayınca açmıyor, indiriyor."
+
+   Yüklenen dosyalarda yalnız GÖRSEL ve PDF yerinde açılıyordu; gerisi tek
+   davranış olarak indiriliyordu. Ama AF Teamwork'e yüklenen şeylerin çoğu
+   Excel: Kısmet AFCOM.xlsx'i yükledi, üstüne tıkladı, dosya bilgisayarına
+   indi. İçeriğini görmek için Excel'i açması, ekip arkadaşına sorması için de
+   dosyayı tekrar göndermesi gerekiyordu — sistemde duran bir dosyanın sistemde
+   görünmemesi, onu orada tutmanın anlamını zayıflatıyor.
+
+   NEDEN SUNUCUDA AYRIŞTIRILIYOR: tarayıcıya bir ayrıştırıcı kütüphane
+   göndermek sayfanın ilk yükünü herkes için büyütürdü, oysa bu ekran günde
+   birkaç kez açılıyor. `exceljs` zaten bağımlılıkta (üretim föyü dışa
+   aktarımı) — yeni paket YOK.
+
+   NEDEN SALT OKUNUR: burası bir görüntüleyici, bir düzenleyici değil.
+   Dosyayı değiştirmek isteyen indirir; sistemde düzenlenebilir bir tablo
+   isteyen "Yeni tablo" açar. Araya yarım bir düzenleyici koymak, hangi
+   kopyanın doğru olduğu sorusunu doğururdu.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/** Önizlemenin sınırları — büyük bir dosya tarayıcıyı kilitlemesin. */
+const PREVIEW_MAX_SHEETS = 12;
+const PREVIEW_MAX_ROWS = 300;
+const PREVIEW_MAX_COLS = 40;
+
+export interface SheetPreviewTab {
+  name: string;
+  rows: string[][];
+  /** Sayfa kırpıldıysa gerçek boyut — arayüz "ilk 300 satır" diyebilsin. */
+  totalRows: number;
+  totalCols: number;
+}
+
+export interface SheetPreview {
+  tabs: SheetPreviewTab[];
+  truncated: boolean;
+}
+
+/** ExcelJS hücresi → ekranda görünecek metin. Formül hücresinde SONUÇ yazılır:
+ *  kullanıcı "=B2*1.2" değil, hesabın sonucunu görmek ister. */
+function cellText(v: unknown): string {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "string") return v;
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  if (v instanceof Date) {
+    return new Intl.DateTimeFormat("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(v);
+  }
+  const o = v as Record<string, unknown>;
+  if ("result" in o) return cellText(o.result);          // formül
+  if ("text" in o) return cellText(o.text);              // köprü / zengin metin
+  if ("richText" in o && Array.isArray(o.richText)) {
+    return (o.richText as { text?: string }[]).map((r) => r.text ?? "").join("");
+  }
+  if ("error" in o) return String(o.error);              // #DIV/0! vb.
+  return "";
+}
+
+export async function getDocumentSheetPreview(
+  documentId: string,
+): Promise<SheetPreview | { error: string }> {
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+
+  /* Satır RLS ile okunur — yetkisi olmayan kişi dosyanın içeriğini göremez.
+     İndirme yolunda olduğu gibi burada da ayrıca yetki kontrolü YAZILMAZ;
+     tek kapı RLS'tir. */
+  const { data: row } = await supabase
+    .from("operation_documents")
+    .select("file_path, file_name, title")
+    .eq("id", documentId)
+    .eq("workspace_id", ctx.workspaceId)
+    .maybeSingle();
+  const rec = row as { file_path: string | null; file_name: string | null; title: string } | null;
+  if (!rec?.file_path) return { error: NOT_FOUND };
+
+  const { data: blob, error: dlErr } = await supabase.storage.from(BUCKET).download(rec.file_path);
+  if (dlErr || !blob) return { error: "Dosya okunamadı." };
+
+  try {
+    const buf = Buffer.from(await blob.arrayBuffer());
+    const { default: ExcelJS } = await import("exceljs");
+    const wb = new ExcelJS.Workbook();
+    const name = (rec.file_name ?? rec.title ?? "").toLowerCase();
+    if (name.endsWith(".csv")) {
+      /* CSV'de ExcelJS bir Stream ister; küçük dosyalar için metinden okumak
+         hem yeterli hem bağımlılıksız. Ayraç virgül ya da noktalı virgül
+         olabiliyor (Türkçe Excel noktalı virgül yazar). */
+      const text = buf.toString("utf8");
+      const lines = text.split(/\r?\n/).filter((l, i, a) => l.trim() !== "" || i < a.length - 1);
+      const sep = (lines[0]?.split(";").length ?? 0) > (lines[0]?.split(",").length ?? 0) ? ";" : ",";
+      const rows = lines.slice(0, PREVIEW_MAX_ROWS).map((l) =>
+        l.split(sep).slice(0, PREVIEW_MAX_COLS).map((c) => c.replace(/^"|"$/g, "")),
+      );
+      return {
+        tabs: [{ name: "CSV", rows, totalRows: lines.length, totalCols: rows[0]?.length ?? 0 }],
+        truncated: lines.length > PREVIEW_MAX_ROWS,
+      };
+    }
+
+    await wb.xlsx.load(buf as unknown as ArrayBuffer);
+    let truncated = false;
+    const tabs: SheetPreviewTab[] = [];
+    for (const ws of wb.worksheets.slice(0, PREVIEW_MAX_SHEETS)) {
+      const totalRows = ws.rowCount;
+      const totalCols = ws.columnCount;
+      if (totalRows > PREVIEW_MAX_ROWS || totalCols > PREVIEW_MAX_COLS) truncated = true;
+      const rows: string[][] = [];
+      const lastRow = Math.min(totalRows, PREVIEW_MAX_ROWS);
+      const lastCol = Math.min(totalCols, PREVIEW_MAX_COLS);
+      for (let r = 1; r <= lastRow; r++) {
+        const row = ws.getRow(r);
+        const cells: string[] = [];
+        for (let c = 1; c <= lastCol; c++) cells.push(cellText(row.getCell(c).value));
+        rows.push(cells);
+      }
+      /* Sondaki tamamen boş satırlar atılır: Excel dosyaları çoğu zaman
+         yüzlerce boş satırla geliyor ve önizleme boşlukla başlıyordu. */
+      while (rows.length > 0 && rows[rows.length - 1].every((c) => c.trim() === "")) rows.pop();
+      tabs.push({ name: ws.name || `Sayfa ${tabs.length + 1}`, rows, totalRows, totalCols });
+    }
+    if (wb.worksheets.length > PREVIEW_MAX_SHEETS) truncated = true;
+    if (tabs.length === 0) return { error: "Dosyada gösterilecek bir sayfa bulunamadı." };
+    return { tabs, truncated };
+  } catch {
+    /* Bozuk ya da desteklenmeyen dosya önizlenemez — indirme yolu HÂLÂ AÇIK,
+       o yüzden bu bir çıkmaz değil. */
+    return { error: "Bu dosya yerinde açılamadı; indirerek görüntüleyebilirsiniz." };
+  }
+}

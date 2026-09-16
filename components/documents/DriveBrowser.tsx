@@ -31,7 +31,8 @@ import {
 import {
   saveFolder, deleteFolder, uploadDocumentFile, moveDocument,
   getDocumentDownloadUrl, deleteDocumentFile, sendDocumentByEmail,
-  type ShareItemType,
+  getDocumentSheetPreview,
+  type ShareItemType, type SheetPreview,
 } from "@/lib/actions/document-files";
 import { createTeamworkDoc, deleteOperationDocument, setOperationDocumentVisibility } from "@/lib/actions/documents";
 import {
@@ -218,10 +219,12 @@ type UploadState = {
 type PreviewState = {
   id: string;
   name: string;
-  mode: "image" | "pdf";
+  mode: "image" | "pdf" | "sheet";
   url: string | null;
   loading: boolean;
   error: string | null;
+  /** Yalnız `mode === "sheet"`: sunucuda ayrıştırılmış sayfalar. */
+  sheet?: SheetPreview | null;
 };
 
 /** Sunucudaki sınırın aynısı (lib/actions/document-files.ts). Burada da
@@ -256,12 +259,21 @@ const TYPE_FILTERS: { key: "all" | ItemType; label: string }[] = [
   { key: "file", label: "Yüklenen dosya" },
 ];
 
-/** Dosya yerinde açılabiliyor mu? Görsel ve PDF açılır; gerisi indirilir. */
-function previewModeOf(mime: string | null, name: string | null): "image" | "pdf" | null {
+/** Dosya yerinde açılabiliyor mu? Görsel, PDF ve tablo açılır; gerisi indirilir.
+ *
+ *  Sıraç (2026-09-16): "Tıklayınca açmıyor, indiriyor." Yüklenen Excel'ler
+ *  buraya girmiyordu, oysa AF Teamwork'e yüklenenlerin çoğu Excel. Uzantıya da
+ *  bakılır: bazı tarayıcılar .xlsx'i `application/octet-stream` diye yolluyor
+ *  ve yalnız MIME'a güvenen kural o dosyaları kaçırırdı. */
+function previewModeOf(mime: string | null, name: string | null): "image" | "pdf" | "sheet" | null {
   const m = (mime ?? "").toLowerCase();
+  const n = (name ?? "").toLowerCase();
   if (m.startsWith("image/")) return "image";
-  if (m === "application/pdf") return "pdf";
-  if ((name ?? "").toLowerCase().endsWith(".pdf")) return "pdf";
+  if (m === "application/pdf" || n.endsWith(".pdf")) return "pdf";
+  if (
+    m.includes("spreadsheetml") || m === "application/vnd.ms-excel" || m === "text/csv" ||
+    n.endsWith(".xlsx") || n.endsWith(".xlsm") || n.endsWith(".xls") || n.endsWith(".csv")
+  ) return "sheet";
   return null;
 }
 
@@ -537,6 +549,27 @@ export function DriveBrowser({
     const mode = previewModeOf(f.file_mime, f.file_name ?? f.title);
     if (!mode) return;
     const name = f.file_name ?? f.title;
+
+    /* TABLO: imzalı adres işe yaramaz — tarayıcı .xlsx'i gösteremez, indirir.
+       İçerik sunucuda ayrıştırılıp ızgara olarak gelir. */
+    if (mode === "sheet") {
+      setPreview({ id: f.id, name, mode, url: null, loading: true, error: null, sheet: null });
+      void (async () => {
+        try {
+          const res = await getDocumentSheetPreview(f.id);
+          setPreview((p) => {
+            if (!p || p.id !== f.id) return p;
+            if ("error" in res) return { ...p, loading: false, error: res.error };
+            return { ...p, loading: false, sheet: res };
+          });
+        } catch (e) {
+          const message = e instanceof Error ? e.message : "Önizleme açılamadı.";
+          setPreview((p) => (p && p.id === f.id ? { ...p, loading: false, error: message } : p));
+        }
+      })();
+      return;
+    }
+
     if (f.thumbUrl) {
       setPreview({ id: f.id, name, mode, url: f.thumbUrl, loading: false, error: null });
       return;
@@ -1801,6 +1834,8 @@ export function DriveBrowser({
               <AlertCircle size={15} className="mt-0.5 shrink-0" aria-hidden />
               <span className="min-w-0 break-words">{preview.error}</span>
             </div>
+          ) : preview.mode === "sheet" ? (
+            preview.sheet ? <SheetPreviewGrid data={preview.sheet} /> : null
           ) : preview.url && preview.mode === "image" ? (
             /* SABİT ÇERÇEVE. Önceden yükseklik görsele bağlıydı: küçük bir
                fotoğraf minicik, büyüğü ekranı kaplayan bir pencere açıyordu ve
@@ -1827,9 +1862,13 @@ export function DriveBrowser({
               className="h-[65vh] w-full rounded-control border border-line bg-surface-sunken"
             />
           ) : null}
-          <p className="mt-2 text-[12px] text-muted">
-            Önizleme adresi kısa sürelidir; dosyayı saklamak için indirin.
-          </p>
+          {/* Tabloda imzalı adres kullanılmıyor (içerik sunucuda ayrıştırıldı),
+              o yüzden "adres kısa sürelidir" uyarısı orada yanlış olurdu. */}
+          {preview.mode !== "sheet" && (
+            <p className="mt-2 text-[12px] text-muted">
+              Önizleme adresi kısa sürelidir; dosyayı saklamak için indirin.
+            </p>
+          )}
         </Overlay>
       )}
 
@@ -2495,6 +2534,98 @@ function FolderNameTile({
       <IconButton size="sm" aria-label="Vazgeç" title="Vazgeç" onClick={onCancel}>
         <X size={15} aria-hidden />
       </IconButton>
+    </div>
+  );
+}
+
+/**
+ * YÜKLENEN EXCEL'İN YERİNDE GÖRÜNÜMÜ — salt okunur ızgara.
+ *
+ * Sıraç (2026-09-16): "Tıklayınca açmıyor, indiriyor."
+ *
+ * İlk satır BAŞLIK gibi çizilir çünkü Excel dosyalarının neredeyse tamamında
+ * öyledir; yanılırsa da kaybedilen bir şey yok — bir satır koyu görünür.
+ * Sol kenarda satır numarası var ki kullanıcı dosyayı Excel'de açtığında
+ * aynı satırı bulabilsin.
+ *
+ * Yatay kaydırma KENDİ kabındadır (CLAUDE.md: tablo kendi overflow'unda).
+ * Sayfa sekmeleri yalnız birden fazla sayfa varsa çizilir — tek sekme bir
+ * seçim değildir, gürültüdür.
+ */
+function SheetPreviewGrid({ data }: { data: SheetPreview }) {
+  const [tab, setTab] = useState(0);
+  const sheet = data.tabs[Math.min(tab, data.tabs.length - 1)];
+  if (!sheet) return null;
+  const [head, ...body] = sheet.rows;
+
+  return (
+    <div className="space-y-2">
+      {data.tabs.length > 1 && (
+        <div className="flex flex-wrap gap-1">
+          {data.tabs.map((t, i) => (
+            <button
+              key={`${t.name}-${i}`}
+              type="button"
+              onClick={() => setTab(i)}
+              className={cn(
+                "tap-target rounded-control px-2.5 py-1 text-[12.5px] font-medium transition-[background-color,color] duration-150 ease-standard",
+                i === tab
+                  ? "bg-brand-soft text-brand-strong"
+                  : "text-muted hover:bg-surface-muted hover:text-ink",
+              )}
+            >
+              {t.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="max-h-[60vh] overflow-auto rounded-control border border-line">
+        <table className="w-max min-w-full border-collapse text-[12.5px]">
+          <tbody>
+            {head && (
+              <tr className="sticky top-0 z-10 bg-surface-sunken">
+                <th className="w-10 border-b border-r border-hairline px-2 py-1.5 text-right font-normal text-subtle tabular-nums">
+                  1
+                </th>
+                {head.map((c, i) => (
+                  <th
+                    key={i}
+                    className="max-w-[22rem] truncate border-b border-r border-hairline px-2.5 py-1.5 text-left font-semibold text-ink"
+                    title={c}
+                  >
+                    {c}
+                  </th>
+                ))}
+              </tr>
+            )}
+            {body.map((row, r) => (
+              <tr key={r} className="even:bg-surface-muted">
+                <td className="w-10 border-b border-r border-hairline px-2 py-1.5 text-right text-subtle tabular-nums">
+                  {r + 2}
+                </td>
+                {row.map((c, i) => (
+                  <td
+                    key={i}
+                    className="max-w-[22rem] truncate border-b border-r border-hairline px-2.5 py-1.5 text-ink"
+                    title={c}
+                  >
+                    {c}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="text-[12px] text-muted">
+        {/* Kırpma SESSİZ olmaz: eksik veriyi tam sanmak, veriyi hiç görmemekten
+            kötüdür. Tam dosya bir tık ötede — pencerenin altındaki "İndir". */}
+        {data.truncated
+          ? `Salt okunur önizleme — ilk ${sheet.rows.length} satır gösteriliyor (dosyada ${sheet.totalRows}). Tamamı için indirin.`
+          : "Salt okunur önizleme. Düzenlemek için dosyayı indirin."}
+      </p>
     </div>
   );
 }
