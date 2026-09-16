@@ -12,6 +12,14 @@ import type { OperationDocument, WorkspaceDepartment } from "@/types";
 
 export const dynamic = "force-dynamic";
 
+/* AKTARIM UZUN SÜREBİLİR — sunucu aksiyonu bu sayfanın zaman sınırını miras
+   alır. AFCOM gibi bir dosya 13 sayfa, ~38 bin hücre ve yüzlerce gömülü görsel
+   taşıyor; her görsel bir yükleme artı bir kayıt demek. Varsayılan sınır
+   (saniyeler) bunun ortasında kesilir ve kullanıcı sebebini göremeden "dosya
+   açılamadı" görürdü. Yedekleme rotası da aynı gerekçeyle 300 kullanıyor
+   (app/api/backup/route.ts). */
+export const maxDuration = 300;
+
 export default async function DocumentsPage() {
   const { supabase, user, workspaceId, isAdmin, gate } = await requireModuleMember();
   if (gate === "login") redirectToSignIn();
