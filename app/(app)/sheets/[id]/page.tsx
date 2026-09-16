@@ -6,6 +6,9 @@ import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { SetupRequiredNotice } from "@/components/modules/SetupRequiredNotice";
 import { maybeDatabaseSetupRequired } from "@/lib/utils/supabase-errors";
 import { SheetDetailView } from "@/components/sheets/SheetDetailView";
+import { getProfile } from "@/lib/supabase/server";
+import { getPersonDisplayName } from "@/lib/utils/person-display";
+import { hexOfColorKey, personTone } from "@/lib/design/person-colors";
 import type { OperationSpreadsheet, WorkspaceDepartment } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -104,6 +107,30 @@ export default async function SheetDetailPage({
     }
   }
 
+  /* KİMLE BİRLİKTE ÇALIŞIYORUM şeridi için bakan kişinin kimliği.
+     Renk, kişinin çalışma alanındaki seçilmiş rengi; seçim yoksa kimliğinden
+     türetilen ton (person-colors.ts) — panonun geri kalanıyla aynı kaynak, ki
+     kişi her ekranda aynı renkte görünsün. */
+  const [profile, memberRow] = await Promise.all([
+    getProfile(user.id),
+    supabase
+      .from("workspace_members")
+      .select("color_key")
+      .eq("user_id", user.id)
+      .eq("workspace_id", workspaceId)
+      .maybeSingle(),
+  ]);
+  const colorKey = (memberRow.data as { color_key: string | null } | null)?.color_key ?? null;
+  const me = {
+    userId: user.id,
+    name: getPersonDisplayName({
+      full_name: profile?.full_name ?? null,
+      email: profile?.email ?? null,
+    }),
+    color: hexOfColorKey(colorKey) ?? personTone(user.id).hex,
+    photo: profile?.avatar_url ?? null,
+  };
+
   return (
     <SheetDetailView
       sheet={sheet}
@@ -113,6 +140,7 @@ export default async function SheetDetailPage({
       contacts={(contactsResult.data ?? []) as { id: string; name: string }[]}
       currentUserId={user.id}
       isAdmin={isAdmin}
+      me={me}
     />
   );
 }

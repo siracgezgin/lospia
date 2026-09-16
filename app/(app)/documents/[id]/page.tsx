@@ -4,6 +4,9 @@ import { requireModuleMember } from "@/lib/modules/context";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { BackLink } from "@/components/modules/BackLink";
 import { DocEditor } from "@/components/documents/DocEditor";
+import { getProfile } from "@/lib/supabase/server";
+import { getPersonDisplayName } from "@/lib/utils/person-display";
+import { hexOfColorKey, personTone } from "@/lib/design/person-colors";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "AF Teamwork" };
@@ -64,6 +67,29 @@ export default async function TeamworkDocPage({
   }
   const savedTo = folderName ? `AF Teamwork › ${folderName}` : "AF Teamwork";
 
+  /* Bakan kişinin kimliği — tablodakiyle AYNI kaynak, ki kişi her iki
+     ekranda da aynı yüz ve aynı renkle görünsün. */
+  const [profile, memberRow] = await Promise.all([
+    getProfile(user.id),
+    supabase
+      .from("workspace_members")
+      .select("color_key")
+      .eq("user_id", user.id)
+      .eq("workspace_id", workspaceId)
+      .maybeSingle(),
+  ]);
+  const me = {
+    userId: user.id,
+    name: getPersonDisplayName({
+      full_name: profile?.full_name ?? null,
+      email: profile?.email ?? null,
+    }),
+    color:
+      hexOfColorKey((memberRow.data as { color_key: string | null } | null)?.color_key ?? null) ??
+      personTone(user.id).hex,
+    photo: profile?.avatar_url ?? null,
+  };
+
   return (
     <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
       {/* Başlık uygulama çubuğunda; "Geri" editörün başlık satırında. */}
@@ -77,6 +103,7 @@ export default async function TeamworkDocPage({
         initialBody={row.body ?? ""}
         savedTo={savedTo}
         readOnly={!canEdit}
+        me={me}
       />
     </div>
   );

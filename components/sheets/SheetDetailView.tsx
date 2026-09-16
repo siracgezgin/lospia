@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils/cn";
 import { Button, IconButton } from "@/components/ui/Button";
 import { useConfirm } from "@/components/ui/useConfirm";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
+import { PresenceBar } from "@/components/ui/PresenceBar";
 import { SpreadsheetEditor, type SheetEditorApi } from "./SpreadsheetEditor";
 import { SheetFormModal } from "./SheetFormModal";
 import type { OperationSpreadsheet, WorkspaceDepartment } from "@/types";
@@ -37,6 +38,8 @@ interface Props {
    * kendi klasörünü açıyor — hem doğru hem tıklanır.
    */
   folderTrail?: { id: string; name: string }[];
+  /** Bakan kişinin kimliği — "kimle birlikte çalışıyorum" şeridi için. */
+  me: { userId: string; name: string; color: string | null; photo: string | null };
 }
 
 /** Kaydetme durumu — kullanıcıya TEK bir cümleyle söylenir. */
@@ -66,7 +69,7 @@ function downloadNameOf(disposition: string | null, fallbackTitle: string): stri
 }
 
 export function SheetDetailView({
-  sheet, departments, tasks, contacts, currentUserId, isAdmin, folderTrail = [],
+  sheet, departments, tasks, contacts, currentUserId, isAdmin, folderTrail = [], me,
 }: Props) {
   const router = useRouter();
   const { ask, dialog } = useConfirm();
@@ -408,6 +411,10 @@ export function SheetDetailView({
         ]}
         rightSlot={
           <>
+            {/* KİMLE BİRLİKTE ÇALIŞIYORUM — eylemlerin SOLUNDA durur.
+                Sağ uçtaki düğmeler tıklanan şeyler; yüzler bilgi taşıyor ve
+                tıklanmıyor, ikisi karışmasın. Kimse yoksa hiç çizilmez. */}
+            <PresenceBar channelKey={`sheet:${sheet.id}`} me={me} className="mr-1" />
             {/* İNDİRME: gerçek bir GET rotası (bkz. [id]/export/route.ts).
                 Excel'de açılabilmeyen bir tablo "Excel gibi" değildir. */}
             <Button

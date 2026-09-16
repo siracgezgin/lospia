@@ -16,6 +16,7 @@ import { SelectInput, TextInput } from "@/components/ui/Field";
 import { useConfirm } from "@/components/ui/useConfirm";
 import { saveTeamworkDoc, uploadDocImage } from "@/lib/actions/documents";
 import { sanitizeRichText } from "@/lib/office/sanitize-html";
+import { PresenceBar } from "@/components/ui/PresenceBar";
 import {
   DOC_FONTS, DOC_FONT_SIZES, DOC_LINE_SPACING,
   DOC_BASE_FONT_PT, DOC_BASE_LINE_HEIGHT,
@@ -31,6 +32,8 @@ interface Props {
    *  "Nereye kaydetti?" Otomatik kayıt sessizdi ve hedefi söylemiyordu. */
   savedTo?: string | null;
   readOnly?: boolean;
+  /** Bakan kişinin kimliği — "kimle birlikte çalışıyorum" şeridi için. */
+  me: { userId: string; name: string; color: string | null; photo: string | null };
 }
 
 /**
@@ -59,7 +62,7 @@ interface Props {
  * sayfadan ayrılırken. Kaydedilmemiş değişiklik varken sekme kapanmaz.
  */
 export function DocEditor({
-  docId, initialTitle, initialBody, savedTo = null, readOnly = false, backSlot,
+  docId, initialTitle, initialBody, savedTo = null, readOnly = false, backSlot, me,
 }: Props) {
   const router = useRouter();
   const { ask, dialog } = useConfirm();
@@ -703,7 +706,13 @@ export function DocEditor({
     <div className="space-y-3">
       <style dangerouslySetInnerHTML={{ __html: DOC_CSS }} />
 
-      {backSlot && <div className="no-print mb-1">{backSlot}</div>}
+      {/* Geri bağlantısı SOLDA, birlikte çalışanlar SAĞDA — aynı satırda.
+          Şerit için ayrı bir satır açmak, yazının başladığı yeri aşağı iter ve
+          sayfanın en değerli kısmından yer çalar. */}
+      <div className="no-print mb-1 flex min-h-8 items-center justify-between gap-2">
+        {backSlot ?? <span />}
+        <PresenceBar channelKey={`doc:${docId}`} me={me} />
+      </div>
 
       {/* Başlık — belgenin adı, listede bu görünür. Kâğıtta girdi kutusu değil
           gerçek bir başlık basılır. */}
