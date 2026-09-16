@@ -138,25 +138,50 @@ type DriveItem = {
    kutu üyeliği ItemType'a değil aşağıdaki `match` fonksiyonuna bakar. */
 export type BucketKey = "sheet" | "doc" | "image" | "file" | "link";
 
+/**
+ * BİR ÖĞE HANGİ KUTUYA AİT — TEK KURAL.
+ *
+ * Sıraç (2026-09-16), Kısmet'in mesajını aktararak: "AFCOM excelimizi
+ * operasyon sistemine yüklemeye çalışıyorum ama birkaç yöntem denedim
+ * başarısız oldum."
+ *
+ * SEBEBİ BU FONKSİYONUN ESKİ HÂLİYDİ. Kutu üyeliği DEPOLAMA TÜRÜNE bakıyordu:
+ * "Excel" kutusu yalnız sistemin kendi tablolarını (`type === "sheet"`)
+ * topluyordu. Yüklenen bir .xlsx ise `type === "file"` olduğu için "Dosyalar"
+ * kutusuna düşüyordu. Yani "Excel" yazan kutu, kullanıcının Excel dosyasını
+ * İÇERMİYORDU; Kısmet doğru yere bakıp yanlış sonuç alıyordu.
+ *
+ * Artık ölçüt TÜR ETİKETİ: `fileKindOf` bir .xlsx'e zaten "Excel", bir .docx'e
+ * "Word" diyor — listedeki ikon da oradan geliyor. Kutu da aynı kaynağı
+ * kullanınca "Excel" kutusunda hem sistemin tabloları hem yüklenmiş Excel
+ * dosyaları yan yana durur; kutunun adı ne vaat ediyorsa o çıkar.
+ *
+ * Aslı Hanım (2026-09-07) zaten bunu istemişti: "AF Teamwork'e girdim, orada
+ * EXCEL YAZILI KUTU olsun; içine girince excel dosyaları olsun."
+ */
+export function bucketOfKind(type: DriveItem["type"], kindLabel: string): BucketKey | null {
+  if (type === "folder") return null;
+  if (type === "link") return "link";
+  if (type === "sheet") return "sheet";
+  if (type === "doc") return "doc";
+  // type === "file" — yüklenen dosya. Etiketi nereye aitse oraya.
+  if (kindLabel === "Görsel") return "image";
+  if (kindLabel === "Excel") return "sheet";
+  if (kindLabel === "Word") return "doc";
+  return "file";
+}
+
 const BUCKETS: {
   key: BucketKey;
   label: string;
   hint: string;
   match: (_i: DriveItem) => boolean;
 }[] = [
-  { key: "sheet", label: "Excel", hint: "Tablolar", match: (i) => i.type === "sheet" },
-  { key: "doc", label: "Word", hint: "Yazılar", match: (i) => i.type === "doc" },
-  {
-    key: "image", label: "Görseller", hint: "Fotoğraf ve çizimler",
-    // Görsel tespiti ikonun geldiği yerle AYNI kaynaktan: iki yerde iki
-    // farklı kural olursa kutu ile listedeki simge ayrışır.
-    match: (i) => i.type === "file" && i.kind.label === "Görsel",
-  },
-  {
-    key: "file", label: "Dosyalar", hint: "PDF, sunum, diğer yüklemeler",
-    match: (i) => i.type === "file" && i.kind.label !== "Görsel",
-  },
-  { key: "link", label: "Bağlantılar", hint: "Drive, Canva, Figma…", match: (i) => i.type === "link" },
+  { key: "sheet", label: "Excel", hint: "Tablolar ve yüklenen Excel dosyaları", match: (i) => bucketOfKind(i.type, i.kind.label) === "sheet" },
+  { key: "doc", label: "Word", hint: "Yazılar ve yüklenen Word dosyaları", match: (i) => bucketOfKind(i.type, i.kind.label) === "doc" },
+  { key: "image", label: "Görseller", hint: "Fotoğraf ve çizimler", match: (i) => bucketOfKind(i.type, i.kind.label) === "image" },
+  { key: "file", label: "Dosyalar", hint: "PDF, sunum, diğer yüklemeler", match: (i) => bucketOfKind(i.type, i.kind.label) === "file" },
+  { key: "link", label: "Bağlantılar", hint: "Drive, Canva, Figma…", match: (i) => bucketOfKind(i.type, i.kind.label) === "link" },
 ];
 
 const BUCKET_BY_KEY = new Map(BUCKETS.map((b) => [b.key, b]));
@@ -624,15 +649,17 @@ export function DriveBrowser({
            sayılırdı. */
         const direct = new Set<string>();
         const noteFolder = (folderId: string | null) => { if (folderId) direct.add(folderId); };
+        /* Kutu üyeliği TEK yerden (bucketOfKind) — klasör süzgeci ile kutu
+           içeriği ayrışmasın. Eskiden burada ayrı bir kural vardı ve yüklenen
+           Excel'ler "Dosyalar" sayıldığı için Excel kutusunda o klasör hiç
+           görünmüyordu. */
         if (bucket === "doc") docs.forEach((d) => noteFolder(d.folder_id));
         if (bucket === "sheet") sheets.forEach((x) => noteFolder(x.folder_id));
         if (bucket === "link") links.forEach((l) => noteFolder(l.folder_id));
-        if (bucket === "image" || bucket === "file") {
-          files.forEach((f) => {
-            const isImage = fileKindOf(f.file_mime, f.file_name ?? f.title).label === "Görsel";
-            if ((bucket === "image") === isImage) noteFolder(f.folder_id);
-          });
-        }
+        files.forEach((f) => {
+          const kind = fileKindOf(f.file_mime, f.file_name ?? f.title).label;
+          if (bucketOfKind("file", kind) === bucket) noteFolder(f.folder_id);
+        });
         const keep = new Set<string>();
         const parentOf = new Map(folders.map((f) => [f.id, f.parent_id]));
         for (const fid of direct) {
@@ -720,9 +747,12 @@ export function DriveBrowser({
     out.doc = docs.length;
     out.sheet = sheets.length;
     out.link = links.length;
+    /* Yüklenen dosyalar da ETİKETİNE göre dağılır — sayı, kutuya girince
+       görülecek şeyle birebir aynı olmalı. */
     for (const f of files) {
-      const isImage = fileKindOf(f.file_mime, f.file_name ?? f.title).label === "Görsel";
-      if (isImage) out.image++; else out.file++;
+      const kind = fileKindOf(f.file_mime, f.file_name ?? f.title).label;
+      const k = bucketOfKind("file", kind);
+      if (k) out[k]++;
     }
     return out;
   }, [docs, sheets, links, files]);
@@ -1361,12 +1391,18 @@ export function DriveBrowser({
             {/* ÜRETİM DÜĞMELERİ KUTUYA GÖRE. Excel kutusundayken "Word"e
                 basmak, açıldığı anda görünmeyen bir yazı üretiyordu — "her şey
                 kendi yerinde" tam olarak bunun olmaması demek. Kutu seçilmemişse
-                (giriş) hepsi açık kalır. */}
+                (giriş) hepsi açık kalır.
+
+                ADLARI "YENİ …" OLDU (2026-09-16). Düğme "Excel" yazıyordu ve
+                yanında "Yükle" yoktu; Excel dosyasını sisteme koymak isteyen
+                Kısmet haklı olarak buna bastı ve BOŞ BİR "Adsız tablo" üretti.
+                Bir düğme ne YAPTIĞINI söylemeli, hangi dosya TÜRÜNE benzediğini
+                değil: "Yeni tablo" üretir, "Yükle" var olanı koyar. */}
             {(bucket === null || bucket === "doc") && (
             <CreateButton
               icon={FileText}
-              label="Word"
-              title="Yeni yazı (Word)"
+              label="Yeni yazı"
+              title="Boş bir Word yazısı oluştur"
               hex={KIND_DOC.hex}
               busy={busy === "newdoc"}
               onPick={() =>
@@ -1382,8 +1418,8 @@ export function DriveBrowser({
             {(bucket === null || bucket === "sheet") && (
             <CreateButton
               icon={Table2}
-              label="Excel"
-              title="Yeni tablo (Excel)"
+              label="Yeni tablo"
+              title="Boş bir Excel tablosu oluştur"
               hex={KIND_SHEET.hex}
               busy={busy === "newsheet"}
               onPick={() =>
@@ -1400,25 +1436,36 @@ export function DriveBrowser({
               <CreateButton
                 icon={LinkIcon}
                 label="Bağlantı"
-                title="Bağlantı ekle (Drive, Canva…)"
+                title="Dış bağlantı ekle (Drive, Canva, Figma…)"
                 /* Renk ELLE YAZILMAZ: listedeki bağlantı ikonunun rengiyle aynı
                    kaynaktan gelir (lib/office/file-kind.ts). */
                 hex={LINK_HEX}
                 onPick={() => onNewLink(cwd)}
               />
             )}
-            {/* Yükleme yalnız dosya kutularında: Word/Excel kutusuna dosya
-                yüklemek onu o kutuda görünmez kılardı. */}
-            {(bucket === null || bucket === "image" || bucket === "file") && (
-              <CreateButton
-                icon={Upload}
-                label="Yükle"
-                title="Dosya yükle — birden fazla seçebilir ya da sürükleyip bırakabilirsiniz"
-                hex={UPLOAD_HEX}
-                busy={uploading}
-                onPick={openFilePicker}
-              />
-            )}
+            {/* YÜKLE HER YERDE DURUR — kök, her kutu, her klasör.
+                Sıraç (2026-09-16): "Buradaki her klasörde yükleme butonu
+                olmalı." Kısmet AFCOM Excel'ini yükleyemeden vazgeçmişti.
+
+                Düğme Word, Excel ve Bağlantılar kutularında GİZLİYDİ; gerekçe
+                yorumda şöyle yazıyordu: "Word/Excel kutusuna dosya yüklemek
+                onu o kutuda görünmez kılardı." Gerekçe DOĞRUYDU ama çözüm
+                yanlış yerdeydi — görünmezliğin sebebi kutunun yanlış
+                ölçütle eşleşmesiydi (bkz. bucketOfKind). O düzeldi: yüklenen
+                .xlsx artık Excel kutusunda duruyor. Dolayısıyla düğmeyi
+                saklamanın sebebi kalmadı.
+
+                DERS: bir düğmeyi gizleyerek kapatılan her kapı, kök neden
+                çözülünce AÇILMALI (bkz. klasör oluşturma, 2026-08-30). Aksi
+                halde ekran, artık var olmayan bir kısıtı anlatmaya devam eder. */}
+            <CreateButton
+              icon={Upload}
+              label="Dosya yükle"
+              title="Bilgisayarındaki dosyayı yükle — Excel, Word, PDF, görsel… birden fazla seçebilir ya da sürükleyip bırakabilirsin"
+              hex={UPLOAD_HEX}
+              busy={uploading}
+              onPick={openFilePicker}
+            />
             {/* `multiple`: on dosya seçilip biri yükleniyordu. */}
             <input ref={fileRef} type="file" multiple className="hidden" onChange={onPick} />
           </div>
