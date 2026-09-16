@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { PersonAvatar } from "@/components/ui/PersonAvatar";
+import { personStyles } from "@/lib/design/person-colors";
 import { cn } from "@/lib/utils/cn";
 
 /**
@@ -103,59 +104,74 @@ export function PresenceBar({
   const rest = peers.length - shown.length;
   const names = peers.map((p) => p.name).join(", ");
 
-  /* ADI YAZ, YALNIZ YÜZ KOYMA.
-     Sıraç (2026-09-16): "Kişi görünüyor evet ama yukarıda olduğu için
-     anlaşılmıyor." Tek başına küçük bir yuvarlak, başlık çubuğundaki diğer
-     yuvarlaklardan (kendi avatarın, bildirim zili) ayırt edilmiyordu —
-     "bu ne?" diye sorduran bir işaretti.
+  /* KİŞİ KARTI — düz yazı ad DEĞİL.
+     Sıraç (2026-09-16): "Kişinin adı değil kartı çıksın."
 
-     Artık bir ŞERİT: canlı olduğunu söyleyen nabız noktası + yüz + AD. Tek
-     kişide adı yazılır; ikiden fazlasında isim listesi çubuğu taşıracağı için
-     "N kişi" denir ve adlar ipucunda kalır. */
-  const label =
-    peers.length === 1 ? shown[0].name
-    : peers.length === 2 ? `${shown[0].name}, ${shown[1].name}`
-    : `${peers.length} kişi`;
+     Ad, başlık çubuğunda gri bir metin olarak duruyordu ve yanındaki
+     düğmelerden ayrışmıyordu. Panoda kişi HER ZAMAN kendi rengiyle görünür
+     (person-colors) — burada da öyle olmalı: yüzü, rengi ve adı tek bir
+     kartta. Renk satır içi stille verilir, cn() DIŞINDA: tailwind-merge
+     kenarlık renklerini yutuyor (proje kuralı).
+
+     ÜÇ VE ÜSTÜ kart olarak dizilmez; çubuğu taşırırdı. O zaman yüzler üst üste
+     biner ve sayı yazılır, adlar ipucunda kalır. */
+  const asCards = peers.length <= 2;
 
   return (
     <div
-      className={cn(
-        "flex min-w-0 items-center gap-1.5 rounded-control border border-line bg-surface-muted py-1 pl-1.5 pr-2.5",
-        className,
-      )}
+      className={cn("flex min-w-0 items-center gap-1.5", className)}
       role="group"
       aria-label={`Şu anda birlikte: ${names}`}
       title={`Şu anda bu kayıtta: ${names}`}
     >
-      {/* NABIZ: "şu anda" bilgisini taşıyan tek işaret. Yeşil nokta her
-          arayüzde aynı şeyi söyler — biri burada, canlı. */}
-      <span aria-hidden className="relative grid size-2 shrink-0 place-items-center">
-        <span className="absolute size-2 animate-ping rounded-full bg-success/60" />
-        <span className="size-2 rounded-full bg-success" />
-      </span>
-      <span className="flex shrink-0 items-center">
-        {shown.map((p) => (
-          <PersonAvatar
-            key={p.userId}
-            name={p.name}
-            photoUrl={p.photo}
-            colorHex={p.color}
-            size="sm"
-            ring
-            className="-ml-1.5 first:ml-0"
-          />
-        ))}
-        {rest > 0 && (
-          <span className="-ml-1.5 grid size-7 place-items-center rounded-full bg-surface-sunken text-[11px] font-semibold tabular-nums text-muted ring-2 ring-surface">
-            +{rest}
+      {asCards
+        ? shown.map((p) => {
+            const st = p.color ? personStyles(p.color) : null;
+            return (
+              <span
+                key={p.userId}
+                className="flex min-w-0 items-center gap-1.5 rounded-full border py-1 pl-1 pr-2.5"
+                style={{ ...(st?.soft ?? {}), ...(st?.border ?? {}) }}
+              >
+                {/* NABIZ: "şu anda burada" bilgisini taşıyan tek işaret. */}
+                <span aria-hidden className="relative grid size-2 shrink-0 place-items-center">
+                  <span className="absolute size-2 animate-ping rounded-full bg-success/60" />
+                  <span className="size-2 rounded-full bg-success" />
+                </span>
+                <PersonAvatar name={p.name} photoUrl={p.photo} colorHex={p.color} size="sm" ring />
+                <span
+                  className="hidden min-w-0 truncate text-[12.5px] font-semibold sm:block"
+                  style={st?.text}
+                >
+                  {p.name}
+                </span>
+              </span>
+            );
+          })
+        : (
+          <span className="flex items-center gap-1.5 rounded-full border border-line bg-surface-muted py-1 pl-2 pr-2.5">
+            <span aria-hidden className="relative grid size-2 shrink-0 place-items-center">
+              <span className="absolute size-2 animate-ping rounded-full bg-success/60" />
+              <span className="size-2 rounded-full bg-success" />
+            </span>
+            <span className="flex shrink-0 items-center">
+              {shown.map((p) => (
+                <PersonAvatar
+                  key={p.userId}
+                  name={p.name}
+                  photoUrl={p.photo}
+                  colorHex={p.color}
+                  size="sm"
+                  ring
+                  className="-ml-1.5 first:ml-0"
+                />
+              ))}
+            </span>
+            <span className="text-[12.5px] font-semibold tabular-nums text-muted">
+              {rest > 0 ? `+${rest}` : `${peers.length} kişi`}
+            </span>
           </span>
         )}
-      </span>
-      {/* Ad telefonda gizlenir: dar ekranda yüz + nokta zaten "biri burada"
-          diyor, isim satırı taşırırdı. */}
-      <span className="hidden min-w-0 truncate text-[12.5px] font-medium text-muted sm:block">
-        {label}
-      </span>
     </div>
   );
 }

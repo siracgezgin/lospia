@@ -96,7 +96,6 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
      adres imzalıdır ve saatliktir, o yüzden burada AYRI tutulur — anlık
      görüntüye yazılsaydı yarın kırık resim olurdu (lib/actions/sheet-images). */
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
   const [wb, setWb] = useState<WorkbookSnapshot>(() => initialSnapshot ?? emptyWorkbook());
   const [sel, setSel] = useState<Sel>({ r1: 0, c1: 0, r2: 0, c2: 0 });
   const [editing, setEditingState] = useState<EditState | null>(null);
@@ -324,29 +323,6 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
   }, [commit]);
 
   // ── Biçim ─────────────────────────────────────────────────────────────────
-  /* Etkin sayfadaki görsellerin adresleri. Kimlik kümesi değişmedikçe yeni
-     istek atılmaz (yoksa her tuş vuruşunda imza üretilirdi); anahtar sıralı
-     kimlik dizisidir. */
-  const imageIdKey = useMemo(() => {
-    const ids = new Set<string>();
-    for (const cell of Object.values(sheet.cells)) if (cell.img?.id) ids.add(cell.img.id);
-    return [...ids].sort().join(",");
-  }, [sheet.cells]);
-
-  useEffect(() => {
-    /* Hiç görsel yoksa DURUM SIFIRLANMAZ: efekt içinde senkron setState
-       fazladan bir çizim turu doğurur (ve lint kuralı reddeder). Harita
-       kimlikle anahtarlı olduğu için eski adreslerin durması zararsız —
-       kullanılmayan kimse okunmuyor. */
-    if (!imageIdKey) return;
-    let cancelled = false;
-    (async () => {
-      const res = await signSheetImages(imageIdKey.split(","));
-      if (cancelled || "error" in res) return;
-      setImageUrls(res.urls);
-    })();
-    return () => { cancelled = true; };
-  }, [imageIdKey]);
 
   /* Seçili hücreye Drive'dan seçilen görseli koyar. Metni SİLMEZ: kullanıcı
      hem ürün adını hem fotoğrafını aynı hücrede tutmak isteyebilir; görsel
@@ -836,6 +812,60 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
   const visibleRows: number[] = [];
   for (let r = firstRow; r <= lastRow; r++) visibleRows.push(r);
 
+  /* GÖRSEL ADRESLERİ YALNIZ GÖRÜNENLER İÇİN ÜRETİLİR.
+     Sıraç (2026-09-16): "Donmanın sebebi önceden eklediğim resimlerse onları
+     kaldıralım DB'den."
+
+     Sebep resimlerin VARLIĞI değil, hepsinin birden imzalanmasıydı. Kod
+     sayfadaki BÜTÜN görselleri topluyordu: AFCOM'da ~990 ürün fotoğrafı var ve
+     tablo her açılışta 990 imzalı adres ürettiriyordu (tek sorgu + 990 yollu
+     imza çağrısı + yüzlerce kilobaytlık cevap). Üstelik `Object.values(cells)`
+     ~15.000 hücreyi HER TUŞ VURUŞUNDA tarıyordu.
+
+     Artık yalnız GÖRÜNÜR satırlardaki görseller imzalanıyor — ekranda beş
+     fotoğraf varsa beş imza. Aşağı inildikçe yenileri eklenir; harita kimlikle
+     anahtarlı olduğu için önceden alınanlar durur ve tekrar istenmez.
+     Resimleri silmeye gerek yok. */
+  const [imageUrls, setImageUrlsState] = useState<Record<string, string>>({});
+  /* Hangi kimlikler İSTENDİ. Durumu render sırasında okumak yasak (React
+     derleyicisi haklı olarak reddediyor) ve zaten yetmezdi: aynı fotoğraf
+     için cevap dönmeden ikinci istek gitmesin diye İSTEK anında işaretlenir,
+     cevap değil. */
+  const requestedRef = useRef<Set<string>>(new Set());
+
+  const visibleImageKey = useMemo(() => {
+    const ids = new Set<string>();
+    for (let r = firstRow; r <= lastRow; r++) {
+      for (let c = 0; c < sheet.cols; c++) {
+        const id = sheet.cells[key(r, c)]?.img?.id;
+        if (id) ids.add(id);
+      }
+    }
+    return [...ids].sort().join(",");
+  }, [sheet.cells, sheet.cols, firstRow, lastRow]);
+
+  useEffect(() => {
+    if (!visibleImageKey) return;
+    /* Zaten adresi olanlar atlanır: kaydırırken aynı fotoğraf için ikinci kez
+       imza istenmesin. */
+    const need = visibleImageKey.split(",").filter((id) => !requestedRef.current.has(id));
+    if (need.length === 0) return;
+    need.forEach((id) => requestedRef.current.add(id));
+    let cancelled = false;
+    (async () => {
+      const res = await signSheetImages(need);
+      if (cancelled) return;
+      if ("error" in res) {
+        /* Başarısız istekler İŞARETTEN DÜŞER: yoksa geçici bir ağ hatası o
+           fotoğrafları oturum boyunca kalıcı olarak boş bırakırdı. */
+        need.forEach((id) => requestedRef.current.delete(id));
+        return;
+      }
+      setImageUrlsState((prev) => ({ ...prev, ...res.urls }));
+    })();
+    return () => { cancelled = true; };
+  }, [visibleImageKey]);
+
   const colLefts = useMemo(() => {
     const out: number[] = [];
     let x = 0;
@@ -1146,6 +1176,13 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                         setSel(e.shiftKey ? { r1: active.r, c1: active.c, r2: r, c2: c } : { r1: r, c1: c, r2: r, c2: c });
                         scrollRef.current?.focus();
                       }}
+                      /* ÜÇÜNCÜ KAPI. `mousedown` tabanlı iki yol (tarayıcının
+                         `detail` sayacı ve kendi zamanlayıcımız) kastığında
+                         ıskalayabiliyor; `dblclick` tarayıcının KENDİ çift tık
+                         kararıdır ve mousedown sırasına bağlı değildir. Üçü
+                         birden aynı işi yapar — hangisi önce gelirse hücre
+                         düzenlemeye açılır, ikinci çağrı zararsızdır. */
+                      onDoubleClick={(e) => { e.preventDefault(); startEdit(r, c); }}
                       onMouseEnter={() => {
                         if (dragging) setSel((s) => ({ ...s, r2: r, c2: c }));
                         else if (fillRef.current) {
