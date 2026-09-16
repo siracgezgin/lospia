@@ -22,10 +22,11 @@
  * KULLANIM
  *   npx tsx scripts/cleanup-image-folder.ts "Excel Görselleri"
  *
- *   Canlı:
- *     IMPORT_SUPABASE_URL=https://<proj>.supabase.co \
- *     IMPORT_SUPABASE_SERVICE_ROLE_KEY=sb_secret_… \
- *     npx tsx scripts/cleanup-image-folder.ts "Excel Görselleri" --prod
+ *   Canlı: proje kökünde `.env.prod` aç (gitignore'da), iki satır yaz —
+ *     IMPORT_SUPABASE_URL=https://xxxx.supabase.co
+ *     IMPORT_SUPABASE_SERVICE_ROLE_KEY=sb_secret_xxxx
+ *   sonra:
+ *     npm run cleanup:images -- "Excel Görselleri" --prod
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import * as fs from "fs";
@@ -36,12 +37,16 @@ const ARGS = process.argv.slice(2);
 const PROD = ARGS.includes("--prod");
 const DEL_UNUSED = ARGS.includes("--sil-kullanilmayan");
 const DEL_ALL = ARGS.includes("--sil-hepsi");
-const FOLDER_NAME = ARGS.find((a) => !a.startsWith("--"));
+/* NPM TIRNAKLARI DÜŞÜRÜYOR. `npm run cleanup:images -- "Excel Görselleri"`
+   betiğe iki ayrı argüman olarak ulaşıyor ve yalnız ilkini almak klasör adını
+   "Excel" yapıyordu — var olmayan bir klasör. Bayrak olmayan ne varsa
+   birleştirilir; boşluklu klasör adları böyle de çalışır. */
+const FOLDER_NAME = ARGS.filter((a) => !a.startsWith("--")).join(" ").trim() || undefined;
 
 const BUCKET = "documents";
 
-function loadDotEnvLocal(): Record<string, string> {
-  const p = path.join(process.cwd(), ".env.local");
+function readEnvFile(name: string): Record<string, string> {
+  const p = path.join(process.cwd(), name);
   const env: Record<string, string> = {};
   if (!fs.existsSync(p)) return env;
   for (const line of fs.readFileSync(p, "utf8").split("\n")) {
@@ -54,24 +59,48 @@ function loadDotEnvLocal(): Record<string, string> {
   return env;
 }
 
+/**
+ * Hedef veritabanı. Anahtarı HER SEFERİNDE komut satırına yapıştırmak zorunda
+ * kalma: `.env.prod` dosyası da okunur ve `.env.*` zaten gitignore'da.
+ * Sıra: ortam değişkeni → .env.prod → .env.local (yerel).
+ */
 function resolveTarget(): { url: string; key: string; label: string } {
-  const envUrl = process.env.IMPORT_SUPABASE_URL;
-  const envKey = process.env.IMPORT_SUPABASE_SERVICE_ROLE_KEY;
-  if (PROD || envUrl || envKey) {
-    if (!envUrl || !envKey) {
-      console.error("❌  --prod için IMPORT_SUPABASE_URL ve IMPORT_SUPABASE_SERVICE_ROLE_KEY gerekli.");
+  const prodFile = readEnvFile(".env.prod");
+  const url = process.env.IMPORT_SUPABASE_URL ?? prodFile.IMPORT_SUPABASE_URL;
+  const key = process.env.IMPORT_SUPABASE_SERVICE_ROLE_KEY ?? prodFile.IMPORT_SUPABASE_SERVICE_ROLE_KEY;
+
+  if (PROD || url || key) {
+    if (!url || !key) {
+      console.error("❌  Canlı veritabanı için iki değer gerekiyor:\n");
+      console.error("      IMPORT_SUPABASE_URL                 = https://<proje-kimliği>.supabase.co");
+      console.error("      IMPORT_SUPABASE_SERVICE_ROLE_KEY    = sb_secret_…\n");
+      console.error("    Supabase paneli → Project Settings → API");
+      console.error("      • Project URL buradan kopyalanır");
+      console.error("      • Secret keys → default (sb_secret_…) — publishable DEĞİL\n");
+      console.error("    En kolayı: proje kökünde `.env.prod` dosyası açıp iki satırı yaz");
+      console.error("    (bu dosya gitignore'da, bir kez yazarsın):\n");
+      console.error("      IMPORT_SUPABASE_URL=https://xxxx.supabase.co");
+      console.error("      IMPORT_SUPABASE_SERVICE_ROLE_KEY=sb_secret_xxxx\n");
+      console.error("    Sonra sadece: npm run cleanup:images -- \"Excel Görselleri\" --prod");
       process.exit(1);
     }
-    return { url: envUrl, key: envKey, label: "PRODUCTION" };
+    if (key.startsWith("sb_publishable_")) {
+      console.error("❌  Bu bir tarayıcı anahtarı (publishable) — kayıtları silemez.");
+      console.error("    Secret keys → default (sb_secret_…) kullanın.");
+      process.exit(1);
+    }
+    return { url, key, label: "PRODUCTION" };
   }
-  const local = loadDotEnvLocal();
-  const url = local.NEXT_PUBLIC_SUPABASE_URL;
-  const key = local.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) {
-    console.error("❌  .env.local içinde NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY yok");
+
+  const local = readEnvFile(".env.local");
+  const lUrl = local.NEXT_PUBLIC_SUPABASE_URL;
+  const lKey = local.SUPABASE_SERVICE_ROLE_KEY;
+  if (!lUrl || !lKey) {
+    console.error("❌  .env.local içinde NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY yok.");
+    console.error("    Canlıya bakmak için --prod kullanın.");
     process.exit(1);
   }
-  return { url, key, label: "LOCAL" };
+  return { url: lUrl, key: lKey, label: "LOCAL" };
 }
 
 const mb = (b: number) => `${(b / 1024 / 1024).toFixed(1)} MB`;
