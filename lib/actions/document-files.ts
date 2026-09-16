@@ -684,6 +684,59 @@ export async function getDocumentSheetPreview(
   }
 }
 
+/** Tek aktarımda taşınacak en fazla görsel. Sınır KEYFİ DEĞİL: her görsel bir
+ *  yükleme + bir satır açıyor ve sunucu aksiyonunun süresi sonsuz değil.
+ *  Aşılırsa kullanıcıya SÖYLENİR; orijinal dosya zaten Drive'da duruyor. */
+const IMPORT_IMAGE_LIMIT = 300;
+
+/** Aktarılan görseller için alt klasör — varsa bulur, yoksa açar.
+ *  Yüzlerce fotoğrafı föyün yanına dökmek Drive'ı okunmaz hâle getirirdi.
+ *  Klasör AÇILAMAZSA null döner ve görseller köke düşer: aktarımın tamamını
+ *  bir klasör yüzünden iptal etmek doğru olmazdı. */
+async function ensureFolder(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ctx: { workspaceId: string; userId: string },
+  name: string,
+  parentId: string | null,
+  section: string,
+): Promise<string | null> {
+  const clean = name.trim().slice(0, 200) || "Görseller";
+
+  const find = async () => {
+    /* parent_id NULL ise `.eq` işe yaramaz (SQL'de NULL = NULL yanlıştır);
+       kök için `.is` gerekir. İki ayrı sorgu yazmak yerine tek yerde ayrılır. */
+    let q = supabase
+      .from("document_folders")
+      .select("id")
+      .eq("workspace_id", ctx.workspaceId)
+      .eq("name", clean);
+    q = parentId === null ? q.is("parent_id", null) : q.eq("parent_id", parentId);
+    const { data } = await q.limit(1).maybeSingle();
+    return data ? (data as { id: string }).id : null;
+  };
+
+  const existing = await find();
+  if (existing) return existing;
+
+  const { data: created, error } = await supabase
+    .from("document_folders")
+    .insert({
+      workspace_id: ctx.workspaceId,
+      name: clean,
+      parent_id: parentId,
+      section,
+      visibility: "all",
+      created_by: ctx.userId,
+      updated_by: ctx.userId,
+    })
+    .select("id")
+    .single();
+  /* Aynı anda iki aktarım aynı klasörü açmaya çalışırsa biri tekillik
+     kısıtına takılır — hata değil, yarış. Var olanı bulup devam et. */
+  if (error) return await find();
+  return created ? (created as { id: string }).id : null;
+}
+
 /**
  * YÜKLENEN EXCEL'İ DÜZENLENEBİLİR TABLOYA AKTAR.
  *
@@ -729,6 +782,10 @@ export async function importUploadedSheet(
   const { data: blob, error: dlErr } = await supabase.storage.from(BUCKET).download(rec.file_path);
   if (dlErr || !blob) return { error: "Dosya okunamadı." };
 
+  /* Başlık uzantısız: "AFCOM.xlsx" değil "AFCOM" — sistemdeki tablo bir dosya
+     değil, bir kayıt. Aynı addan ikincisi gelirse kullanıcı kendisi ayırır. */
+  const title = name.replace(/\.(xlsx|xlsm)$/i, "").slice(0, 300) || "Aktarılan tablo";
+
   let snapshot: unknown;
   let notes: string[] = [];
   try {
@@ -740,13 +797,109 @@ export async function importUploadedSheet(
     const report = workbookToSnapshot(wb);
     snapshot = report.snapshot;
     notes = report.notes;
+
+    /* ── GÖMÜLÜ GÖRSELLER ────────────────────────────────────────────────
+       Sıraç (2026-09-16): "Resimler yok geliyor, resimlerin de gelmesi
+       lazımdı." AFCOM'un ilk sütunu ürün fotoğrafı — onlar gelmezse tablo
+       kataloğun yarısı oluyor.
+
+       Görseller Drive'a AYRI DOSYALAR olarak yüklenir ve hücre yalnız
+       kimliklerini tutar (lib/sheets/model CellImage). Bu, ekibin zaten
+       kullandığı model: "Aynı resmi birkaç defa yüklemek sistemi gereksiz
+       ağırlaştırır" (Sıraç, 2026-09-06). Excel'de aynı görsel birden çok
+       hücrede olabiliyor; ExcelJS onu tek bir medya kaydında topluyor, biz de
+       BİR KEZ yükleyip her hücreden aynı kimliğe işaret ediyoruz.
+
+       Görseller kendi alt klasörüne konur: yüzlerce fotoğrafı föyün yanına
+       dökmek Drive'ı okunmaz hâle getirirdi. */
+    if (report.images.length > 0) {
+      const used = [...new Set(report.images.map((i) => i.imageId))];
+      const capped = used.slice(0, IMPORT_IMAGE_LIMIT);
+      if (used.length > capped.length) {
+        notes.push(
+          `Dosyada ${used.length} görsel var; ilk ${capped.length} tanesi aktarıldı. ` +
+          "Kalanlar için orijinal dosya Drive'da duruyor.",
+        );
+      }
+
+      const imgFolderId = await ensureFolder(
+        supabase, ctx, `${title} — görseller`, rec.folder_id, rec.section ?? "teamwork",
+      );
+
+      /* Yüklemeler SIRAYLA değil, küçük bir havuzla: yüzlerce görselde
+         sıralı yükleme dakikalar sürer, sınırsız paralel ise depolamayı
+         boğar. Altı eşzamanlı istek ikisinin arasında duruyor. */
+      const idByMedia = new Map<number, string>();
+      let failed = 0;
+      const queue = [...capped];
+      const worker = async () => {
+        for (;;) {
+          const mediaId = queue.shift();
+          if (mediaId === undefined) return;
+          try {
+            const media = wb.getImage(mediaId) as unknown as {
+              buffer?: Buffer; extension?: string; name?: string;
+            };
+            if (!media?.buffer?.length) { failed++; continue; }
+            const ext = (media.extension ?? "png").replace(/[^a-z0-9]/gi, "") || "png";
+            const fileName = `${(media.name ?? `gorsel-${mediaId + 1}`).replace(/[^\w.\-() ]/g, "_")}.${ext}`;
+            const path = `${ctx.workspaceId}/${imgFolderId ?? "kok"}/${crypto.randomUUID()}-${fileName}`;
+            const { error: upErr } = await supabase.storage
+              .from(BUCKET)
+              .upload(path, media.buffer, { contentType: `image/${ext === "jpg" ? "jpeg" : ext}`, upsert: false });
+            if (upErr) { failed++; continue; }
+            const { data: docRow, error: insErr } = await supabase
+              .from("operation_documents")
+              .insert({
+                workspace_id: ctx.workspaceId,
+                title: fileName,
+                document_type: "file",
+                folder_id: imgFolderId,
+                file_path: path,
+                file_name: fileName,
+                file_size: media.buffer.length,
+                file_mime: `image/${ext === "jpg" ? "jpeg" : ext}`,
+                section: rec.section ?? "teamwork",
+                status: "approved",
+                owner_id: ctx.userId,
+                created_by: ctx.userId,
+              })
+              .select("id")
+              .single();
+            /* Kayıt açılamazsa yüklenen bayt depoda ÖKSÜZ kalmasın. */
+            if (insErr || !docRow) {
+              await supabase.storage.from(BUCKET).remove([path]);
+              failed++;
+              continue;
+            }
+            idByMedia.set(mediaId, (docRow as { id: string }).id);
+          } catch {
+            failed++;
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: 6 }, worker));
+
+      /* Yerleşimleri hücrelere yaz. */
+      const wbSnap = snapshot as { sheets: { cells: Record<string, Record<string, unknown>> }[] };
+      let placed = 0;
+      for (const im of report.images) {
+        const docId = idByMedia.get(im.imageId);
+        if (!docId) continue;
+        const sheet = wbSnap.sheets[im.sheet];
+        if (!sheet) continue;
+        const k = `${im.r}:${im.c}`;
+        const cell = sheet.cells[k] ?? {};
+        cell.img = { id: docId, name: "Görsel", cs: im.cs, rs: im.rs };
+        sheet.cells[k] = cell;
+        placed++;
+      }
+      if (placed > 0) notes.push(`${placed} görsel tabloya yerleştirildi.`);
+      if (failed > 0) notes.push(`${failed} görsel aktarılamadı.`);
+    }
   } catch {
     return { error: "Bu dosya tabloya aktarılamadı; indirerek Excel'de açabilirsiniz." };
   }
-
-  /* Başlık uzantısız: "AFCOM.xlsx" değil "AFCOM" — sistemdeki tablo bir dosya
-     değil, bir kayıt. Aynı addan ikincisi gelirse kullanıcı kendisi ayırır. */
-  const title = name.replace(/\.(xlsx|xlsm)$/i, "").slice(0, 300) || "Aktarılan tablo";
 
   const { data: created, error } = await supabase
     .from("operation_spreadsheets")

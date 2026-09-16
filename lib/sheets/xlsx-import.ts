@@ -105,10 +105,27 @@ function valueOf(v: unknown): string {
   return "";
 }
 
+/** Dosyada gömülü bir görselin YERLEŞİMİ — baytı burada değil, kimliği var. */
+export interface ImagePlacement {
+  /** ExcelJS media dizinindeki sıra; aynı görsel birden çok yerde olabilir. */
+  imageId: number;
+  /** Kaçıncı sayfa (snapshot.sheets dizini). */
+  sheet: number;
+  /** Sıfır tabanlı hücre. */
+  r: number;
+  c: number;
+  /** Kaç sütuna / satıra yayılıyor. */
+  cs: number;
+  rs: number;
+}
+
 export interface ImportReport {
   snapshot: WorkbookSnapshot;
   /** Kullanıcıya SÖYLENECEK kayıplar — sessiz kırpma yok. */
   notes: string[];
+  /** Görseller bu modülde YÜKLENMEZ: burası saf dönüşüm, ağ işi çağıranın.
+   *  Çağıran her biri için Drive kaydı açıp `img` alanını doldurur. */
+  images: ImagePlacement[];
 }
 
 /**
@@ -121,6 +138,7 @@ export function workbookToSnapshot(wb: unknown): ImportReport {
   const book = wb as { worksheets: unknown[] };
   const notes: string[] = [];
   const sheets: Sheet[] = [];
+  const images: ImagePlacement[] = [];
 
   for (const wsRaw of book.worksheets) {
     const ws = wsRaw as {
@@ -129,6 +147,10 @@ export function workbookToSnapshot(wb: unknown): ImportReport {
       getColumn: (_c: number) => { width?: number };
       model?: { merges?: string[] };
       views?: { ySplit?: number }[];
+      getImages?: () => {
+        imageId: string | number;
+        range: { tl?: { col: number; row: number }; br?: { col: number; row: number } };
+      }[];
     };
 
     const rowsWanted = Math.max(ws.rowCount, 1);
@@ -183,6 +205,18 @@ export function workbookToSnapshot(wb: unknown): ImportReport {
       }
     }
 
+    /* SATIR YÜKSEKLİKLERİ. İlk sürümde okunmuyordu ve sonuç ekranda görüldü
+       (Sıraç, 2026-09-16: "böyle bozuk geliyor"): Excel'de yüksekliğe ayarlanmış
+       çok satırlı ürün açıklamaları, sistemde 30 pikselik sabit satıra sıkışıp
+       kırpılıyordu. Excel PUNTO kullanır, ızgara piksel — 1pt = 4/3px. */
+    const rowH: Record<number, number> = {};
+    for (let r = 1; r <= rows; r++) {
+      const h = ws.getRow(r)?.height;
+      if (typeof h === "number" && h > 0) {
+        rowH[r - 1] = Math.round(Math.min(Math.max(h * (4 / 3), 20), 400));
+      }
+    }
+
     const colW: Record<number, number> = {};
     for (let c = 1; c <= cols; c++) {
       const w = ws.getColumn(c)?.width;
@@ -192,6 +226,26 @@ export function workbookToSnapshot(wb: unknown): ImportReport {
       if (typeof w === "number" && w > 0) colW[c - 1] = Math.round(Math.min(Math.max(w * 7, 40), 600));
     }
 
+    /* GÖMÜLÜ GÖRSELLER. Excel'de görsel hücrenin İÇİNDE değil ÜSTÜNDE yüzer ve
+       bir aralığı kaplar; modelin CellImage'i de aynı şeyi yapıyor (cs/rs).
+       Bayt BURADA taşınmaz — bu modül saf dönüşüm, yükleme çağıranın işi. */
+    const sheetIndex = sheets.length;
+    for (const im of ws.getImages?.() ?? []) {
+      const tl = im.range?.tl;
+      if (!tl) continue;
+      const r = Math.round(tl.row);
+      const c = Math.round(tl.col);
+      if (r < 0 || c < 0 || r >= rows || c >= cols) continue;
+      const br = im.range?.br;
+      images.push({
+        imageId: Number(im.imageId),
+        sheet: sheetIndex,
+        r, c,
+        cs: br ? Math.max(1, Math.round(br.col) - c) : 1,
+        rs: br ? Math.max(1, Math.round(br.row) - r) : 1,
+      });
+    }
+
     sheets.push({
       id: newSheetId(),
       name: ws.name || `Sayfa${sheets.length + 1}`,
@@ -199,6 +253,7 @@ export function workbookToSnapshot(wb: unknown): ImportReport {
       cols: Math.max(cols, 8),
       cells,
       colW: Object.keys(colW).length ? colW : undefined,
+      rowH: Object.keys(rowH).length ? rowH : undefined,
       merges: merges.length ? merges : undefined,
       frozen: ws.views?.[0]?.ySplit || undefined,
     });
@@ -212,13 +267,14 @@ export function workbookToSnapshot(wb: unknown): ImportReport {
     notes.push("Dosyada okunabilir bir sayfa bulunamadı; boş bir tablo açıldı.");
   }
 
-  /* NE TAŞINMADIĞINI SÖYLE. Sessiz kayıp, kaybın kendisinden kötüdür. */
+  /* NE TAŞINMADIĞINI SÖYLE. Sessiz kayıp, kaybın kendisinden kötüdür.
+     GÖRSELLER ARTIK TAŞINIYOR, bu yüzden listeden çıktılar. */
   notes.push(
-    "Grafik, pivot tablo, koşullu biçimlendirme ve gömülü görseller aktarılmaz — " +
-    "yüklenen orijinal dosya Drive'da duruyor.",
+    "Grafik, pivot tablo ve koşullu biçimlendirme aktarılmaz — yüklenen orijinal " +
+    "dosya Drive'da duruyor.",
   );
 
-  return { snapshot: { engine: "wb", sheets, active: 0 }, notes };
+  return { snapshot: { engine: "wb", sheets, active: 0 }, notes, images };
 }
 
 /** "A1:C3" → sıfır tabanlı sınırlar. Tanınmayan biçim null döner. */
