@@ -267,12 +267,11 @@ export function workbookToSnapshot(wb: unknown): ImportReport {
     notes.push("Dosyada okunabilir bir sayfa bulunamadı; boş bir tablo açıldı.");
   }
 
-  /* NE TAŞINMADIĞINI SÖYLE. Sessiz kayıp, kaybın kendisinden kötüdür.
-     GÖRSELLER ARTIK TAŞINIYOR, bu yüzden listeden çıktılar. */
-  notes.push(
-    "Grafik, pivot tablo ve koşullu biçimlendirme aktarılmaz — yüklenen orijinal " +
-    "dosya Drive'da duruyor.",
-  );
+  /* GENEL UYARI BURADA YAZILMAZ. Bir zamanlar her aktarıma "grafik ve pivot
+     aktarılmaz" cümlesi ekleniyordu; her seferinde çıkan uyarı üçüncü seferde
+     okunmaz olur ve GERÇEKTEN bir şey kaybolduğunda da okunmaz. `notes` yalnız
+     o dosyaya özgü kayıpları taşır: kırpılan sayfa, aktarılamayan görsel.
+     Orijinal .xlsx zaten Drive'da duruyor. */
 
   return { snapshot: { engine: "wb", sheets, active: 0 }, notes, images };
 }

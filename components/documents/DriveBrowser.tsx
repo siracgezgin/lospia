@@ -9,7 +9,7 @@ import {
   Lock, Users, Pencil, Plus, FileText, Table2, Link2 as LinkIcon,
   List as ListIcon, LayoutGrid, Check, X, MoreHorizontal, FolderOpen,
   Search, FolderInput, Eye, Folder as FolderIcon, AlertCircle, SearchX, Send, Mail,
-  type LucideIcon, CheckCircle2,
+  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { useAnchoredMenu } from "@/lib/utils/use-anchored-menu";
@@ -31,8 +31,8 @@ import {
 import {
   saveFolder, deleteFolder, uploadDocumentFile, moveDocument,
   getDocumentDownloadUrl, deleteDocumentFile, sendDocumentByEmail,
-  getDocumentSheetPreview, importUploadedSheet,
-  type ShareItemType, type SheetPreview,
+  importUploadedSheet, importUploadedDoc,
+  type ShareItemType,
 } from "@/lib/actions/document-files";
 import { createTeamworkDoc, deleteOperationDocument, setOperationDocumentVisibility } from "@/lib/actions/documents";
 import {
@@ -219,14 +219,10 @@ type UploadState = {
 type PreviewState = {
   id: string;
   name: string;
-  mode: "image" | "pdf" | "sheet";
+  mode: "image" | "pdf";
   url: string | null;
   loading: boolean;
   error: string | null;
-  /** Yalnız `mode === "sheet"`: sunucuda ayrıştırılmış sayfalar. */
-  sheet?: SheetPreview | null;
-  /** Aktarım bittiyse: oluşan tablonun kimliği + taşınmayanların notu. */
-  imported?: { id: string; notes: string[] } | null;
 };
 
 /** Sunucudaki sınırın aynısı (lib/actions/document-files.ts). Burada da
@@ -261,21 +257,33 @@ const TYPE_FILTERS: { key: "all" | ItemType; label: string }[] = [
   { key: "file", label: "Yüklenen dosya" },
 ];
 
-/** Dosya yerinde açılabiliyor mu? Görsel, PDF ve tablo açılır; gerisi indirilir.
- *
- *  Sıraç (2026-09-16): "Tıklayınca açmıyor, indiriyor." Yüklenen Excel'ler
- *  buraya girmiyordu, oysa AF Teamwork'e yüklenenlerin çoğu Excel. Uzantıya da
- *  bakılır: bazı tarayıcılar .xlsx'i `application/octet-stream` diye yolluyor
- *  ve yalnız MIME'a güvenen kural o dosyaları kaçırırdı. */
-function previewModeOf(mime: string | null, name: string | null): "image" | "pdf" | "sheet" | null {
+/** Yüklenen dosya bir HESAP TABLOSU mu? Uzantıya da bakılır: bazı tarayıcılar
+ *  .xlsx'i `application/octet-stream` diye yolluyor ve yalnız MIME'a güvenen
+ *  kural o dosyaları kaçırırdı. */
+function isSpreadsheetFile(mime: string | null, name: string | null): boolean {
   const m = (mime ?? "").toLowerCase();
   const n = (name ?? "").toLowerCase();
-  if (m.startsWith("image/")) return "image";
-  if (m === "application/pdf" || n.endsWith(".pdf")) return "pdf";
-  if (
+  return (
     m.includes("spreadsheetml") || m === "application/vnd.ms-excel" || m === "text/csv" ||
-    n.endsWith(".xlsx") || n.endsWith(".xlsm") || n.endsWith(".xls") || n.endsWith(".csv")
-  ) return "sheet";
+    n.endsWith(".xlsx") || n.endsWith(".xlsm") || n.endsWith(".csv")
+  );
+}
+
+/** Yüklenen dosya bir WORD belgesi mi? Excel'deki gibi uzantıya da bakılır. */
+function isWordFile(mime: string | null, name: string | null): boolean {
+  const m = (mime ?? "").toLowerCase();
+  const n = (name ?? "").toLowerCase();
+  return m.includes("wordprocessingml") || n.endsWith(".docx");
+}
+
+/** Dosya PENCEREDE açılabiliyor mu? Yalnız görsel ve PDF — onlarda
+ *  düzenlenecek bir şey yok, bakmak yeterli. Tablo pencereye HİÇ uğramaz,
+ *  doğrudan tam ekran düzenleyiciye gider (bkz. onOpen). */
+function previewModeOf(mime: string | null, name: string | null): "image" | "pdf" | null {
+  const m = (mime ?? "").toLowerCase();
+  if (m.startsWith("image/")) return "image";
+  if (m === "application/pdf") return "pdf";
+  if ((name ?? "").toLowerCase().endsWith(".pdf")) return "pdf";
   return null;
 }
 
@@ -546,31 +554,39 @@ export function DriveBrowser({
   );
 
   /**
-   * Yüklenen Excel'i sistemin tablosuna aktarıp DÜZENLEYİCİDE açar.
+   * Yüklenen Excel'i TAM EKRAN düzenleyicide açar — tek tıkla.
    *
-   * Aktarım bir KOPYA üretir; orijinal .xlsx Drive'da kalır. "Hangi kopya
-   * doğru?" sorusunun cevabı bu yüzden net: orijinal = geldiği hâli,
-   * tablo = üstünde çalıştığımız hâli.
+   * İlk açılışta dosya sistemin tablo modeline aktarılır ve tabloya bağlanır
+   * (`source_document_id`); sonraki her açılış aynı tabloya gider. Kullanıcı
+   * açısından "dosya açılıyor", teknik olarak bir kez aktarım.
+   *
+   * Aktarım uzun sürebilir (yüzlerce görsel); satır bu sırada MEŞGUL görünür,
+   * yoksa kullanıcı tıklamanın işe yaramadığını sanıp tekrar tıklardı.
    */
-  const importToSheet = useCallback((id: string) => {
-    setError(null);
-    setBusy(`imp-${id}`);
-    startWork(async () => {
-      try {
-        const res = await importUploadedSheet(id);
-        if ("error" in res) { setError(res.error); return; }
-        /* HEMEN YÖNLENDİRİLMİYOR — bilerek. Ne taşınmadığını söyleyen not,
-           tabloya atlarsak okunmadan kaybolurdu; oysa "grafiklerim nerede?"
-           sorusunun cevabı tam olarak orada yazıyor. Pencere bir onaya
-           dönüşür, gitme kararını kullanıcı verir. */
-        setPreview((p) => (p && p.id === id ? { ...p, imported: { id: res.id, notes: res.notes } } : p));
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Tabloya aktarılamadı.");
-      } finally {
-        setBusy(null);
-      }
-    });
-  }, [startWork]);
+  const openImported = useCallback(
+    (id: string, kind: "sheet" | "doc") => {
+      setError(null);
+      setBusy(`open-${id}`);
+      startWork(async () => {
+        try {
+          const res = kind === "sheet"
+            ? await importUploadedSheet(id)
+            : await importUploadedDoc(id);
+          if ("error" in res) { setError(res.error); return; }
+          /* Kayıp VARSA söylenir ama yol KESİLMEZ: kullanıcı dosyayı açmak
+             istedi, uyarı yüzünden ekranda tutmak amacı engellerdi. Uyarı
+             Drive'da kalır, kullanıcı geri döndüğünde orada durur. */
+          if (res.warnings.length > 0) setError(res.warnings.join(" "));
+          router.push(kind === "sheet" ? `/sheets/${res.id}` : `/documents/${res.id}`);
+        } catch (e) {
+          setError(e instanceof Error ? e.message : "Dosya açılamadı.");
+        } finally {
+          setBusy(null);
+        }
+      });
+    },
+    [startWork, router],
+  );
 
   /** Görsel/PDF'i YERİNDE açar. Görselin imzalı adresi sunucudan hazır gelir
    *  (thumbUrl, 1 saat) — o zaman ek istek atılmaz. */
@@ -578,26 +594,6 @@ export function DriveBrowser({
     const mode = previewModeOf(f.file_mime, f.file_name ?? f.title);
     if (!mode) return;
     const name = f.file_name ?? f.title;
-
-    /* TABLO: imzalı adres işe yaramaz — tarayıcı .xlsx'i gösteremez, indirir.
-       İçerik sunucuda ayrıştırılıp ızgara olarak gelir. */
-    if (mode === "sheet") {
-      setPreview({ id: f.id, name, mode, url: null, loading: true, error: null, sheet: null });
-      void (async () => {
-        try {
-          const res = await getDocumentSheetPreview(f.id);
-          setPreview((p) => {
-            if (!p || p.id !== f.id) return p;
-            if ("error" in res) return { ...p, loading: false, error: res.error };
-            return { ...p, loading: false, sheet: res };
-          });
-        } catch (e) {
-          const message = e instanceof Error ? e.message : "Önizleme açılamadı.";
-          setPreview((p) => (p && p.id === f.id ? { ...p, loading: false, error: message } : p));
-        }
-      })();
-      return;
-    }
 
     if (f.thumbUrl) {
       setPreview({ id: f.id, name, mode, url: f.thumbUrl, loading: false, error: null });
@@ -673,6 +669,8 @@ export function DriveBrowser({
     const fileItems: DriveItem[] = inScope(files, (f) => f.folder_id).map((d) => {
       const name = d.file_name ?? d.title;
       const mode = previewModeOf(d.file_mime, name);
+      const sheetFile = isSpreadsheetFile(d.file_mime, name);
+      const wordFile = isWordFile(d.file_mime, name);
       return {
         key: `x-${d.id}`,
         id: d.id,
@@ -684,11 +682,27 @@ export function DriveBrowser({
         size: d.file_size,
         thumbUrl: d.thumbUrl ?? null,
         parentId: d.folder_id,
+        /* Ok tuşlarıyla gezinme PENCEREDEKİ öğeler arasındadır; tablo
+           pencereye girmediği için o dizide yer almaz. */
         previewable: mode !== null,
         restricted: d.visibility === "admin",
-        /* Görsel/PDF önce GÖSTERİLİR — Drive da öyle yapar. Diğer türlerde
-           tek anlamlı davranış indirmektir. */
-        onOpen: () => (mode ? openPreview(d) : download(d.id)),
+        /* NE OLARAK EKLENDİYSE ÖYLE AÇILIR (Sıraç, 2026-09-16: "Excel olarak
+           eklediğimiz dosyalar nasıl eklendiyse öyle açılmalı ve kullanılmalı,
+           yarım ekran değil Excel gibi tam ekran").
+
+           EXCEL → tam ekran tablo düzenleyici. WORD → tam ekran yazı
+           düzenleyici. Önce yarım ekran bir önizleme açılıp "Tablo olarak
+           düzenle" + "Tabloyu aç" isteniyordu: üç adım, ikisi gereksiz.
+           Dosya zaten düzenlenmek için yüklendi. İlk tıkta aktarılır, sonraki
+           her tıkta AYNI kayıt açılır (source_document_id, 20240345).
+
+           Görsel/PDF önizlemede kalır — onlarda düzenlenecek bir şey yok ve
+           pencere doğru araç. Gerisi indirilir. */
+        onOpen: () =>
+          sheetFile ? openImported(d.id, "sheet")
+          : wordFile ? openImported(d.id, "doc")
+          : mode ? openPreview(d)
+          : download(d.id),
       };
     });
 
@@ -766,7 +780,7 @@ export function DriveBrowser({
     return { folders: folderOut.sort(byName), files: fileOut.sort(byNewest) };
   }, [
     folders, docs, sheets, links, files, cwd, searching, needle, typeFilter, bucket,
-    childCount, pathOf, download, openPreview, onEditLink,
+    childCount, pathOf, download, openPreview, openImported, setCwd, onEditLink,
   ]);
 
   /* ÖNİZLEMEDE GEZİNME. Klasörde otuz görsel varken her birini görmek için
@@ -1847,25 +1861,7 @@ export function DriveBrowser({
                 </div>
               )}
               <Button variant="ghost" size="sm" onClick={() => setPreview(null)}>Kapat</Button>
-              {/* DÜZENLE yalnız tabloda ve yalnız önizleme AÇILABİLDİYSE:
-                  ayrıştırılamayan bir dosya tabloya da aktarılamaz, düğmeyi
-                  göstermek boş bir vaat olurdu. */}
-              {preview.mode === "sheet" && preview.sheet && !preview.imported && (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  loading={busy === `imp-${preview.id}`}
-                  onClick={() => importToSheet(preview.id)}
-                >
-                  <Table2 size={14} aria-hidden /> Tablo olarak düzenle
-                </Button>
-              )}
-              {preview.imported && (
-                <Button size="sm" onClick={() => router.push(`/sheets/${preview.imported!.id}`)}>
-                  <Table2 size={14} aria-hidden /> Tabloyu aç
-                </Button>
-              )}
-              <Button variant="ghost" size="sm" onClick={() => download(preview.id)} loading={busy === `dl-${preview.id}`}>
+              <Button size="sm" onClick={() => download(preview.id)} loading={busy === `dl-${preview.id}`}>
                 <Download size={14} aria-hidden /> İndir
               </Button>
             </>
@@ -1881,28 +1877,6 @@ export function DriveBrowser({
               <AlertCircle size={15} className="mt-0.5 shrink-0" aria-hidden />
               <span className="min-w-0 break-words">{preview.error}</span>
             </div>
-          ) : preview.imported ? (
-            <div className="space-y-3 py-2">
-              <div className="flex items-start gap-2.5 rounded-control border border-success/30 bg-success/10 px-3 py-2.5">
-                <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-success" aria-hidden />
-                <p className="min-w-0 text-[13px] leading-relaxed text-ink">
-                  Tablo oluşturuldu. Yüklediğiniz <strong>{preview.name}</strong> dosyası
-                  Drive&apos;da olduğu gibi duruyor; düzenleme bu yeni tabloda yapılır.
-                </p>
-              </div>
-              {preview.imported.notes.length > 0 && (
-                <ul className="space-y-1.5 text-[12.5px] leading-relaxed text-muted">
-                  {preview.imported.notes.map((n, i) => (
-                    <li key={i} className="flex gap-2">
-                      <span aria-hidden className="mt-1.5 size-1 shrink-0 rounded-full bg-line-strong" />
-                      <span className="min-w-0">{n}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          ) : preview.mode === "sheet" ? (
-            preview.sheet ? <SheetPreviewGrid data={preview.sheet} /> : null
           ) : preview.url && preview.mode === "image" ? (
             /* SABİT ÇERÇEVE. Önceden yükseklik görsele bağlıydı: küçük bir
                fotoğraf minicik, büyüğü ekranı kaplayan bir pencere açıyordu ve
@@ -1929,13 +1903,9 @@ export function DriveBrowser({
               className="h-[65vh] w-full rounded-control border border-line bg-surface-sunken"
             />
           ) : null}
-          {/* Tabloda imzalı adres kullanılmıyor (içerik sunucuda ayrıştırıldı),
-              o yüzden "adres kısa sürelidir" uyarısı orada yanlış olurdu. */}
-          {preview.mode !== "sheet" && (
-            <p className="mt-2 text-[12px] text-muted">
-              Önizleme adresi kısa sürelidir; dosyayı saklamak için indirin.
-            </p>
-          )}
+          <p className="mt-2 text-[12px] text-muted">
+            Önizleme adresi kısa sürelidir; dosyayı saklamak için indirin.
+          </p>
         </Overlay>
       )}
 
@@ -2601,98 +2571,6 @@ function FolderNameTile({
       <IconButton size="sm" aria-label="Vazgeç" title="Vazgeç" onClick={onCancel}>
         <X size={15} aria-hidden />
       </IconButton>
-    </div>
-  );
-}
-
-/**
- * YÜKLENEN EXCEL'İN YERİNDE GÖRÜNÜMÜ — salt okunur ızgara.
- *
- * Sıraç (2026-09-16): "Tıklayınca açmıyor, indiriyor."
- *
- * İlk satır BAŞLIK gibi çizilir çünkü Excel dosyalarının neredeyse tamamında
- * öyledir; yanılırsa da kaybedilen bir şey yok — bir satır koyu görünür.
- * Sol kenarda satır numarası var ki kullanıcı dosyayı Excel'de açtığında
- * aynı satırı bulabilsin.
- *
- * Yatay kaydırma KENDİ kabındadır (CLAUDE.md: tablo kendi overflow'unda).
- * Sayfa sekmeleri yalnız birden fazla sayfa varsa çizilir — tek sekme bir
- * seçim değildir, gürültüdür.
- */
-function SheetPreviewGrid({ data }: { data: SheetPreview }) {
-  const [tab, setTab] = useState(0);
-  const sheet = data.tabs[Math.min(tab, data.tabs.length - 1)];
-  if (!sheet) return null;
-  const [head, ...body] = sheet.rows;
-
-  return (
-    <div className="space-y-2">
-      {data.tabs.length > 1 && (
-        <div className="flex flex-wrap gap-1">
-          {data.tabs.map((t, i) => (
-            <button
-              key={`${t.name}-${i}`}
-              type="button"
-              onClick={() => setTab(i)}
-              className={cn(
-                "tap-target rounded-control px-2.5 py-1 text-[12.5px] font-medium transition-[background-color,color] duration-150 ease-standard",
-                i === tab
-                  ? "bg-brand-soft text-brand-strong"
-                  : "text-muted hover:bg-surface-muted hover:text-ink",
-              )}
-            >
-              {t.name}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div className="max-h-[60vh] overflow-auto rounded-control border border-line">
-        <table className="w-max min-w-full border-collapse text-[12.5px]">
-          <tbody>
-            {head && (
-              <tr className="sticky top-0 z-10 bg-surface-sunken">
-                <th className="w-10 border-b border-r border-hairline px-2 py-1.5 text-right font-normal text-subtle tabular-nums">
-                  1
-                </th>
-                {head.map((c, i) => (
-                  <th
-                    key={i}
-                    className="max-w-[22rem] truncate border-b border-r border-hairline px-2.5 py-1.5 text-left font-semibold text-ink"
-                    title={c}
-                  >
-                    {c}
-                  </th>
-                ))}
-              </tr>
-            )}
-            {body.map((row, r) => (
-              <tr key={r} className="even:bg-surface-muted">
-                <td className="w-10 border-b border-r border-hairline px-2 py-1.5 text-right text-subtle tabular-nums">
-                  {r + 2}
-                </td>
-                {row.map((c, i) => (
-                  <td
-                    key={i}
-                    className="max-w-[22rem] truncate border-b border-r border-hairline px-2.5 py-1.5 text-ink"
-                    title={c}
-                  >
-                    {c}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <p className="text-[12px] text-muted">
-        {/* Kırpma SESSİZ olmaz: eksik veriyi tam sanmak, veriyi hiç görmemekten
-            kötüdür. Tam dosya bir tık ötede — pencerenin altındaki "İndir". */}
-        {data.truncated
-          ? `Salt okunur önizleme — ilk ${sheet.rows.length} satır gösteriliyor (dosyada ${sheet.totalRows}). Tamamı için indirin.`
-          : "Salt okunur önizleme. Düzenlemek için dosyayı indirin."}
-      </p>
     </div>
   );
 }
