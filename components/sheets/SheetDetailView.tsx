@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Pencil, Info, Loader2, Check, AlertCircle, RotateCw, Download, Copy, Trash2, CloudOff,
+  Pencil, Info, Loader2, Check, AlertCircle, RotateCw, Download, Copy, Trash2, CloudOff, Maximize2, Minimize2,
 } from "lucide-react";
 import {
   saveSpreadsheetSnapshot,
@@ -79,6 +79,57 @@ export function SheetDetailView({
   const [notice, setNotice] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [isBusy, startWork] = useTransition();
+
+  /* ── TAM EKRAN ──────────────────────────────────────────────────────────
+     Sıraç (2026-09-16, iki kez): "Excel gibi tam ekran olmalı."
+
+     Izgara `100dvh - 17.5rem` yüksekliğindeydi: sol menü, uygulama çubuğu,
+     kırıntı yolu, başlık ve araç çubuğu ekranın 280 pikselini yiyordu ve geriye
+     990 satırlık bir tablo için avuç içi kadar yer kalıyordu. Excel'de ızgara
+     ekranın kendisidir.
+
+     İKİ KATMAN AÇILIR:
+       1. Uygulama kabuğu (sol menü, üst çubuk, kırıntı) örtülür — düzenleyici
+          `fixed inset-0` ile ekranı kaplar.
+       2. TARAYICI kabuğu da kapatılır (Fullscreen API): sekmeler, adres
+          çubuğu, yer imleri. "Excel gibi" tam olarak bu demek; yalnız birinci
+          katmanı yapıp durmak, ekranın üçte birini tarayıcıya bırakırdı.
+
+     İkincisi BAŞARISIZ OLABİLİR (tarayıcı reddeder, izin yok, iframe). O
+     durumda birinci katman tek başına çalışmaya devam eder — özellik yarım
+     kalmaz, yalnız tarayıcı çubuğu görünür kalır. */
+  const [fullscreen, setFullscreen] = useState(false);
+  const fsRef = useRef<HTMLDivElement>(null);
+
+  const enterFullscreen = useCallback(() => {
+    setFullscreen(true);
+    const el = fsRef.current;
+    if (el && !document.fullscreenElement) {
+      void el.requestFullscreen?.().catch(() => { /* tarayıcı reddederse katman yeter */ });
+    }
+  }, []);
+
+  const exitFullscreen = useCallback(() => {
+    setFullscreen(false);
+    if (document.fullscreenElement) void document.exitFullscreen?.().catch(() => {});
+  }, []);
+
+  /* Kullanıcı Esc'e basınca tarayıcı tam ekrandan ÇIKAR ama bizim katman
+     açık kalırdı — ekran "kilitlenmiş" gibi görünürdü. İki durum tek yerden
+     eşitlenir. */
+  useEffect(() => {
+    const onChange = () => { if (!document.fullscreenElement) setFullscreen(false); };
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  /* Tarayıcı tam ekranı hiç açılmadıysa Esc'in de bir karşılığı olmalı. */
+  useEffect(() => {
+    if (!fullscreen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !document.fullscreenElement) setFullscreen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [fullscreen]);
 
   // Content edit rights mirror the server rule (saveSpreadsheetSnapshot):
   // locked/archived sheets are read-only for everyone (an admin consciously
@@ -415,6 +466,15 @@ export function SheetDetailView({
                 Sağ uçtaki düğmeler tıklanan şeyler; yüzler bilgi taşıyor ve
                 tıklanmıyor, ikisi karışmasın. Kimse yoksa hiç çizilmez. */}
             <PresenceBar channelKey={`sheet:${sheet.id}`} me={me} className="mr-1" />
+            <IconButton
+              size="sm"
+              variant="secondary"
+              aria-label="Tam ekran"
+              title="Tam ekran — ızgara bütün ekranı kaplar (Esc ile çıkılır)"
+              onClick={enterFullscreen}
+            >
+              <Maximize2 size={13} aria-hidden />
+            </IconButton>
             {/* İNDİRME: gerçek bir GET rotası (bkz. [id]/export/route.ts).
                 Excel'de açılabilmeyen bir tablo "Excel gibi" değildir. */}
             <Button
@@ -544,13 +604,42 @@ export function SheetDetailView({
           ve altta mobil gezinme var: aynı çıkarma değeri kullanılırsa ızgara
           ekranın altından taşıp sayfayı ikinci kez kaydırılır hâle getiriyordu.
           Bu yüzden mobilde daha fazla, sm'den itibaren daha az düşülür. */}
-      <div className="h-[calc(100dvh-23rem)] min-h-[320px] w-full min-w-0 sm:h-[calc(100dvh-17.5rem)] sm:min-h-[360px]">
-        <SpreadsheetEditor
-          initialSnapshot={initialGrid}
-          readOnly={readOnly}
-          onReady={onEditorReady}
-          onDirty={scheduleSave}
-        />
+      <div
+        ref={fsRef}
+        className={cn(
+          "w-full min-w-0",
+          fullscreen
+            /* Tam ekranda ızgara kabın KALANINI alır (flex-1), sabit bir
+               yükseklik hesabı değil: üstteki ince şerit ne kadar yer tutarsa
+               tutsun, altı ızgaradır. */
+            ? "fixed inset-0 z-[60] flex flex-col gap-2 bg-app p-2"
+            : "h-[calc(100dvh-23rem)] min-h-[320px] sm:h-[calc(100dvh-17.5rem)] sm:min-h-[360px]",
+        )}
+      >
+        {fullscreen && (
+          /* TAM EKRANDA TEK ŞERİT: ad, kimin içeride olduğu ve çıkış. Araç
+             çubuğu zaten düzenleyicinin içinde; buraya başka bir şey koymak
+             kazanılan yeri geri vermek olurdu. */
+          <div className="flex shrink-0 items-center justify-between gap-2 px-1">
+            <span className="min-w-0 truncate text-[14px] font-semibold tracking-tight text-ink">
+              {metaTitle || sheet.title}
+            </span>
+            <span className="flex shrink-0 items-center gap-2">
+              <PresenceBar channelKey={`sheet:${sheet.id}`} me={me} />
+              <Button variant="secondary" size="sm" onClick={exitFullscreen} title="Tam ekrandan çık (Esc)">
+                <Minimize2 size={13} aria-hidden /> Çık
+              </Button>
+            </span>
+          </div>
+        )}
+        <div className={cn("min-h-0 w-full min-w-0", fullscreen && "flex-1")}>
+          <SpreadsheetEditor
+            initialSnapshot={initialGrid}
+            readOnly={readOnly}
+            onReady={onEditorReady}
+            onDirty={scheduleSave}
+          />
+        </div>
       </div>
 
       {dialog}

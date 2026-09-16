@@ -103,34 +103,59 @@ export function PresenceBar({
   const rest = peers.length - shown.length;
   const names = peers.map((p) => p.name).join(", ");
 
+  /* ADI YAZ, YALNIZ YÜZ KOYMA.
+     Sıraç (2026-09-16): "Kişi görünüyor evet ama yukarıda olduğu için
+     anlaşılmıyor." Tek başına küçük bir yuvarlak, başlık çubuğundaki diğer
+     yuvarlaklardan (kendi avatarın, bildirim zili) ayırt edilmiyordu —
+     "bu ne?" diye sorduran bir işaretti.
+
+     Artık bir ŞERİT: canlı olduğunu söyleyen nabız noktası + yüz + AD. Tek
+     kişide adı yazılır; ikiden fazlasında isim listesi çubuğu taşıracağı için
+     "N kişi" denir ve adlar ipucunda kalır. */
+  const label =
+    peers.length === 1 ? shown[0].name
+    : peers.length === 2 ? `${shown[0].name}, ${shown[1].name}`
+    : `${peers.length} kişi`;
+
   return (
     <div
-      className={cn("flex items-center", className)}
-      /* Ekran okuyucu için TEK cümle: üst üste binmiş yüzleri tek tek okutmak
-         gürültü olurdu. */
+      className={cn(
+        "flex min-w-0 items-center gap-1.5 rounded-control border border-line bg-surface-muted py-1 pl-1.5 pr-2.5",
+        className,
+      )}
       role="group"
       aria-label={`Şu anda birlikte: ${names}`}
-      title={`Şu anda bu tabloda: ${names}`}
+      title={`Şu anda bu kayıtta: ${names}`}
     >
-      {/* Yüzler ÜST ÜSTE BİNER (-ml) ve her birinin etrafında yüzey rengiyle
-          bir halka var — Drive/Docs'ta da aynı dil, yan yana dizmekten daha az
-          yer kaplar. */}
-      {shown.map((p) => (
-        <PersonAvatar
-          key={p.userId}
-          name={p.name}
-          photoUrl={p.photo}
-          colorHex={p.color}
-          size="sm"
-          ring
-          className="-ml-1.5 first:ml-0"
-        />
-      ))}
-      {rest > 0 && (
-        <span className="-ml-1.5 grid size-7 place-items-center rounded-full bg-surface-sunken text-[11px] font-semibold tabular-nums text-muted ring-2 ring-surface">
-          +{rest}
-        </span>
-      )}
+      {/* NABIZ: "şu anda" bilgisini taşıyan tek işaret. Yeşil nokta her
+          arayüzde aynı şeyi söyler — biri burada, canlı. */}
+      <span aria-hidden className="relative grid size-2 shrink-0 place-items-center">
+        <span className="absolute size-2 animate-ping rounded-full bg-success/60" />
+        <span className="size-2 rounded-full bg-success" />
+      </span>
+      <span className="flex shrink-0 items-center">
+        {shown.map((p) => (
+          <PersonAvatar
+            key={p.userId}
+            name={p.name}
+            photoUrl={p.photo}
+            colorHex={p.color}
+            size="sm"
+            ring
+            className="-ml-1.5 first:ml-0"
+          />
+        ))}
+        {rest > 0 && (
+          <span className="-ml-1.5 grid size-7 place-items-center rounded-full bg-surface-sunken text-[11px] font-semibold tabular-nums text-muted ring-2 ring-surface">
+            +{rest}
+          </span>
+        )}
+      </span>
+      {/* Ad telefonda gizlenir: dar ekranda yüz + nokta zaten "biri burada"
+          diyor, isim satırı taşırırdı. */}
+      <span className="hidden min-w-0 truncate text-[12.5px] font-medium text-muted sm:block">
+        {label}
+      </span>
     </div>
   );
 }
