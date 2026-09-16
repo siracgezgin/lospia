@@ -110,7 +110,9 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
     setEditingState(next);
   }, []);
   const [scrollTop, setScrollTop] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
   const [viewH, setViewH] = useState(600);
+  const [viewW, setViewW] = useState(1200);
   const [dragging, setDragging] = useState(false);
   /** Doldurma tutamacı sürükleniyorsa hedef aralık. */
   const [fillTo, setFillTo] = useState<{ r: number; c: number } | null>(null);
@@ -162,12 +164,16 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
 
   const rafRef = useRef<number | null>(null);
   const pendingTopRef = useRef(0);
+  const pendingLeftRef = useRef(0);
   const onScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    pendingTopRef.current = (e.target as HTMLDivElement).scrollTop;
+    const el = e.target as HTMLDivElement;
+    pendingTopRef.current = el.scrollTop;
+    pendingLeftRef.current = el.scrollLeft;
     if (rafRef.current !== null) return;
     rafRef.current = requestAnimationFrame(() => {
       rafRef.current = null;
       setScrollTop((prev) => (prev === pendingTopRef.current ? prev : pendingTopRef.current));
+      setScrollLeft((prev) => (prev === pendingLeftRef.current ? prev : pendingLeftRef.current));
     });
   }, []);
   useEffect(() => () => { if (rafRef.current !== null) cancelAnimationFrame(rafRef.current); }, []);
@@ -185,7 +191,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setViewH(el.clientHeight));
+    const ro = new ResizeObserver(() => { setViewH(el.clientHeight); setViewW(el.clientWidth); });
     ro.observe(el);
     setViewH(el.clientHeight);
     return () => ro.disconnect();
@@ -873,6 +879,33 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
     return { lefts: out, total: x };
   }, [sheet]);
 
+  /* SÜTUN PENCERESİ — satırlarda olduğu gibi yatayda da yalnız görüneni çiz.
+     AFCOM 38 sütun ve K/L gibi kolonlarda 500 karakterlik sarmalı metinler
+     var; ekranda 8 sütun görünürken 38'ini çizmek her satırı beş kat
+     pahalılaştırıyordu. Sol menü açılıp kapanırken tarayıcının bu metinleri
+     yeniden yerleştirmesi de "aç kapat yaparken kasıyor"un sebebi.
+
+     BİRLEŞMELER İÇİN GERİYE YÜRÜNÜR: pencerenin solunda başlayıp içine uzanan
+     bir birleşme (ör. A1:E1 başlığı) çizilmezse ekranda delik kalırdı. */
+  const [firstCol, lastCol] = useMemo(() => {
+    const left = scrollLeft - OVERSCAN_PX;
+    const right = scrollLeft + viewW + OVERSCAN_PX;
+    let a = 0;
+    while (a < sheet.cols - 1 && colLefts.lefts[a + 1] <= left) a++;
+    let b = a;
+    while (b < sheet.cols - 1 && colLefts.lefts[b] < right) b++;
+    /* En fazla 12 sütun geriye bak: bundan geniş bir birleşme yok denecek
+       kadar seyrek ve sınırsız gerileme pencereyi anlamsızca büyütür. */
+    const back = Math.max(0, a - 12);
+    return [back, Math.min(sheet.cols - 1, b)];
+  }, [scrollLeft, viewW, colLefts, sheet.cols]);
+
+  const visibleCols: number[] = [];
+  for (let c = firstCol; c <= lastCol; c++) visibleCols.push(c);
+  /* Soldaki çizilmeyen sütunların toplam genişliği — ızgara kaymasın diye
+     onların yerine tek bir boşluk konur. */
+  const colPadLeft = colLefts.lefts[firstCol] ?? 0;
+
   // ── Durum çubuğu ──────────────────────────────────────────────────────────
   const summary = useMemo(() => {
     const n = norm(sel);
@@ -1038,7 +1071,8 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
           {/* Sütun başlıkları */}
           <div className="sticky top-0 z-20 flex" style={{ height: HEAD_H }}>
             <div className="sticky left-0 z-30 shrink-0 border-b border-r border-line-strong bg-surface-muted" style={{ width: GUTTER_W, height: HEAD_H }} />
-            {colLefts.lefts.map((_l, c) => (
+            {colPadLeft > 0 && <div aria-hidden className="shrink-0" style={{ width: colPadLeft }} />}
+            {visibleCols.map((c) => (
               <div
                 key={c}
                 onMouseDown={() => setSel({ r1: 0, c1: c, r2: sheet.rows - 1, c2: c })}
@@ -1089,7 +1123,8 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                   />
                 </div>
 
-                {colLefts.lefts.map((_left, c) => {
+                {colPadLeft > 0 && <div aria-hidden className="shrink-0" style={{ width: colPadLeft }} />}
+                {visibleCols.map((c) => {
                   const mg = mergeAt(sheet, r, c);
                   if (mg && !mg.anchor) return null;         // birleşmenin gövdesi çizilmez
 

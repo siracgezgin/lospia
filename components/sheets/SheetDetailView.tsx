@@ -495,7 +495,14 @@ export function SheetDetailView({
             {/* KİMLE BİRLİKTE ÇALIŞIYORUM — eylemlerin SOLUNDA durur.
                 Sağ uçtaki düğmeler tıklanan şeyler; yüzler bilgi taşıyor ve
                 tıklanmıyor, ikisi karışmasın. Kimse yoksa hiç çizilmez. */}
-            <PresenceBar channelKey={`sheet:${sheet.id}`} me={me} className="mr-1" />
+            {/* ŞERİT AYNI ANDA TEK YERDE. Tam ekranda kendi ince çubuğunda
+                çiziliyor; ikisini birden bırakmak AYNI KANALA İKİ ABONELİK
+                demekti ve Supabase ikinci `subscribe` çağrısını reddedince
+                ekran komple çöküyordu ("Bu ekran açılamadı", Sıraç
+                2026-09-16). Sayfa başlığı zaten tam ekranda görünmüyor. */}
+            {!fullscreen && (
+              <PresenceBar channelKey={`sheet:${sheet.id}`} me={me} className="mr-1" />
+            )}
             <IconButton
               size="sm"
               variant="secondary"

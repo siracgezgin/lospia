@@ -65,18 +65,28 @@ export function PresenceBar({
 
   useEffect(() => {
     let cancelled = false;
-    const supabase = createClient();
+    /* HİÇBİR ŞEY FIRLATMAZ — bu bileşenin sözü buydu ama tutmuyordu.
+       Aynı kanala ikinci kez abone olmak (iki yerde birden çizildiğinde)
+       Supabase'i hata fırlatmaya itiyor ve hata React'e kadar çıkıp EKRANIN
+       TAMAMINI düşürüyordu: "Bu ekran açılamadı" (Sıraç, 2026-09-16).
+       Kim-burada şeridi bir kolaylıktır; tablonun açılmasının şartı değil. */
+    let channel: ReturnType<ReturnType<typeof createClient>["channel"]> | null = null;
+    let supabase: ReturnType<typeof createClient>;
+    try {
+      supabase = createClient();
+    } catch {
+      return;
+    }
     /* `key` KİŞİ BAŞINA: aynı kişi iki sekme açarsa Presence iki ayrı giriş
        tutar ama ikisi de aynı anahtarda toplanır — listede tek görünür. */
     const self: Peer = { userId, name, color, photo };
-    const channel = supabase.channel(channelKey, {
-      config: { presence: { key: userId } },
-    });
-
-    channel
+    try {
+      const ch = supabase.channel(channelKey, { config: { presence: { key: userId } } });
+      channel = ch;
+      ch
       .on("presence", { event: "sync" }, () => {
         if (cancelled) return;
-        const state = channel.presenceState<Peer>();
+        const state = ch.presenceState<Peer>();
         const seen = new Map<string, Peer>();
         for (const entries of Object.values(state)) {
           for (const p of entries) {
@@ -89,12 +99,15 @@ export function PresenceBar({
         setPeers([...seen.values()]);
       })
       .subscribe((status) => {
-        if (status === "SUBSCRIBED") void channel.track(self);
+        if (status === "SUBSCRIBED") void Promise.resolve(ch.track(self)).catch(() => {});
       });
+    } catch {
+      channel = null;
+    }
 
     return () => {
       cancelled = true;
-      void supabase.removeChannel(channel);
+      if (channel) { try { void supabase.removeChannel(channel); } catch { /* yoksay */ } }
     };
   }, [channelKey, userId, name, color, photo]);
 
