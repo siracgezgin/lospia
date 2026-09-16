@@ -13,7 +13,9 @@
     "seed:demo-workspace": "npx tsx scripts/seed-demo-workspace.ts",
     "import:planning": "npx tsx scripts/import-planning-calendar.ts",
     "storage:usage": "npx tsx scripts/storage-usage.ts",
-    "cleanup:images": "npx tsx scripts/cleanup-image-folder.ts"
+    "cleanup:images": "npx tsx scripts/cleanup-image-folder.ts",
+    "teamwork:inventory": "npx tsx scripts/teamwork-inventory.ts",
+    "cleanup:teamwork": "npx tsx scripts/cleanup-teamwork.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
