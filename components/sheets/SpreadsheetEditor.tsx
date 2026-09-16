@@ -68,7 +68,14 @@ const inSel = (s: Sel, r: number, c: number) => {
   return r >= n.r1 && r <= n.r2 && c >= n.c1 && c <= n.c2;
 };
 
-const OVERSCAN = 6;
+/* TAŞMA PAYI SATIR DEĞİL PİKSEL.
+   `OVERSCAN = 6` satırdı ve 30 piksellik satırlarda doğruydu. AFCOM'da satır
+   yüksekliği 400 piksele çıkıyor: altı satır yukarı + altı satır aşağı, 600
+   piksellik bir görünüm için ekranın BEŞ KATINI çizdiriyordu — üstelik o
+   hücrelerin içi 500 karakterlik sarmalı metin. Sıraç (2026-09-16): "Aşırı
+   kasıyor… aşağı inerken çok yavaş."
+   Piksel cinsinden pay, satır ne kadar yüksek olursa olsun aynı kalır. */
+const OVERSCAN_PX = 240;
 
 /** Bundan geniş bir seçimde (⌘A gibi) biçim yalnız DOLU hücrelere yazılır. */
 const WIDE_SELECTION = 20_000;
@@ -128,6 +135,43 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
   const redoStack = useRef<WorkbookSnapshot[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const editRef = useRef<HTMLInputElement>(null);
+
+  /* KAYDIRMA ÇİZİM HIZINA KISILIR.
+     Her `scroll` olayı doğrudan `setScrollTop` çağırıyordu; tarayıcı saniyede
+     60'tan fazla olay üretebiliyor ve her biri ızgaranın TAMAMINI yeniden
+     çizdiriyordu. Çizimden hızlı durum güncellemesinin karşılığı yok: bir
+     sonraki kareye kadar bekleyip SON değeri yazmak aynı sonucu veriyor,
+     yeniden çizim sayısını üçte bire indiriyor.
+     Ayrıca pencere DEĞİŞMEDİYSE hiç yazılmaz — küçük kaydırmalarda aynı
+     satırlar görünüyorsa React'i uyandırmanın anlamı yok. */
+  /* ÇİFT TIK KENDİ SAYACIMIZLA.
+     Sıraç (2026-09-16): "İki defa tıklayınca düzeltme kısmı olsun; istediğim
+     kadar tıklıyorum, tıklıyor ama düzeltmiyor, imleç de gelmiyor."
+
+     Eskiden `e.detail === 2` okunuyordu — tarayıcının kendi tıklama sayacı.
+     O sayaç, iki tık ARASINDAKİ süre sistem eşiğini (~500ms) aşarsa sıfırlanır.
+     Izgara kastığı için ilk tıkın yeniden çizimi yüzlerce milisaniye sürüyor,
+     ikinci tık eşiğin dışına düşüyor ve `detail` hep 1 kalıyordu: kullanıcı
+     çift tıklıyor, hiçbir şey olmuyor. Yani düzenleme ÖLMÜŞTÜ, üstelik
+     sebebi görünmezdi.
+
+     Kendi sayacımız hücreye ve zamana bakar; eşik 600ms ve yeniden çizim
+     süresinden etkilenmez. Performans düzeltmesiyle birlikte bu da kalıcı bir
+     güvence: ızgara bir gün yine yavaşlarsa düzenleme yine de açılır. */
+  const lastClickRef = useRef<{ r: number; c: number; t: number } | null>(null);
+  const DBL_MS = 600;
+
+  const rafRef = useRef<number | null>(null);
+  const pendingTopRef = useRef(0);
+  const onScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    pendingTopRef.current = (e.target as HTMLDivElement).scrollTop;
+    if (rafRef.current !== null) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
+      setScrollTop((prev) => (prev === pendingTopRef.current ? prev : pendingTopRef.current));
+    });
+  }, []);
+  useEffect(() => () => { if (rafRef.current !== null) cancelAnimationFrame(rafRef.current); }, []);
   /* Formül çubuğu ayrı bir ref tutar: aşağıdaki odak etkisi, odak ZATEN fx'te
      iken hücre kutusuna atlamasın diye buna bakar. Yoksa fx'e yazılan her
      karakter setEditing ile etkiyi tetikliyor ve imleç hücreye kaçıyordu. */
@@ -773,18 +817,20 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
   }, [sheet]);
 
   const firstRow = useMemo(() => {
+    const target = scrollTop - OVERSCAN_PX;
     let lo = 0, hi = sheet.rows - 1, out = 0;
     while (lo <= hi) {
       const mid = (lo + hi) >> 1;
-      if (rowTops.tops[mid] <= scrollTop) { out = mid; lo = mid + 1; } else hi = mid - 1;
+      if (rowTops.tops[mid] <= target) { out = mid; lo = mid + 1; } else hi = mid - 1;
     }
-    return Math.max(0, out - OVERSCAN);
+    return Math.max(0, out);
   }, [scrollTop, rowTops, sheet.rows]);
 
   const lastRow = useMemo(() => {
+    const limit = scrollTop + viewH + OVERSCAN_PX;
     let r = firstRow;
-    while (r < sheet.rows - 1 && rowTops.tops[r] < scrollTop + viewH) r++;
-    return Math.min(sheet.rows - 1, r + OVERSCAN);
+    while (r < sheet.rows - 1 && rowTops.tops[r] < limit) r++;
+    return Math.min(sheet.rows - 1, r);
   }, [firstRow, scrollTop, viewH, rowTops, sheet.rows]);
 
   const visibleRows: number[] = [];
@@ -947,7 +993,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
       <div
         ref={scrollRef}
         tabIndex={0}
-        onScroll={(e) => setScrollTop((e.target as HTMLDivElement).scrollTop)}
+        onScroll={onScroll}
         onKeyDown={onKeyDown}
         onCopy={onCopy}
         onCut={onCut}
@@ -1089,7 +1135,13 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                       data-cell-c={c}
                       onMouseDown={(e) => {
                         if (e.button === 2) return;
-                        if (e.detail === 2) { startEdit(r, c); return; }
+                        const now = e.timeStamp;
+                        const prev = lastClickRef.current;
+                        const isDouble =
+                          e.detail === 2 ||
+                          (prev !== null && prev.r === r && prev.c === c && now - prev.t < DBL_MS);
+                        lastClickRef.current = { r, c, t: now };
+                        if (isDouble) { lastClickRef.current = null; startEdit(r, c); return; }
                         setDragging(true);
                         setSel(e.shiftKey ? { r1: active.r, c1: active.c, r2: r, c2: c } : { r1: r, c1: c, r2: r, c2: c });
                         scrollRef.current?.focus();

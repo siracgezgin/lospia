@@ -49,6 +49,30 @@ type SaveState = "clean" | "dirty" | "saving" | "saved" | "error";
 const SAVE_DEBOUNCE_MS = 900;
 
 /**
+ * KAYDETME ARALIĞI TABLONUN BOYUNA GÖRE.
+ *
+ * Kısmet Yalçın (2026-09-16): "Yapılan değişiklikleri kaydetmesi uzun sürüyor
+ * şu an için."
+ *
+ * Kaydetme tüm çalışma kitabını tek parça JSON olarak gönderiyor. Küçük bir
+ * tabloda bu hiç hissedilmez; AFCOM gibi 13 sayfalık, hücrelerinde 500
+ * karakterlik metinler olan bir dosyada birkaç megabayt eder. Asıl bedel AĞ
+ * DEĞİL: `JSON.stringify` ANA İŞ PARÇACIĞINDA çalışıyor ve her 900 ms'de bir
+ * megabaytlarca nesneyi dizeye çevirmek yazarken ekranı dondurur. Yani "yavaş
+ * kaydediyor" ile "kasıyor" aynı sorunun iki yüzü.
+ *
+ * Aralık ÖLÇÜLEN boya göre uzar. Küçük tablo eskisi gibi 900 ms'de kaydeder —
+ * hiçbir şey kaybetmez. Büyük tabloda daha seyrek ama yine otomatik kaydeder;
+ * üstelik odak kaybında ve sekme gizlenince ZATEN anında yazılıyor
+ * (flushNow), yani bekleme süresi veri riski değil.
+ */
+function debounceForSize(bytes: number): number {
+  if (bytes < 300_000) return SAVE_DEBOUNCE_MS;
+  if (bytes < 1_500_000) return 2_000;
+  return 4_000;
+}
+
+/**
  * İnen dosyanın adı — önce sunucunun söylediği ad (Content-Disposition),
  * o okunamazsa tablonun kendi adı. "download.xlsx" diye bir dosya kimseye
  * hangi tablo olduğunu söylemez.
@@ -169,6 +193,8 @@ export function SheetDetailView({
   const [savedAt, setSavedAt] = useState<Date | null>(null);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Son kaydın boyu — aralığı buna göre ayarlar. İlk kayıt eski hızda. */
+  const lastSizeRef = useRef(0);
   const lastSavedRef = useRef<string | null>(null);
   const dirtyRef = useRef(false);
   const savingRef = useRef(false);
@@ -214,6 +240,9 @@ export function SheetDetailView({
     }
 
     lastSavedRef.current = json;
+    /* Boy her kayıtta ÖLÇÜLÜR, tahmin edilmez: tablo büyüdükçe aralık
+       kendiliğinden uzar, satır silinince kısalır. */
+    lastSizeRef.current = json.length;
     dirtyRef.current = false;
     if (mountedRef.current) {
       setSaveError(null);
@@ -239,7 +268,7 @@ export function SheetDetailView({
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
       void runSaveRef.current();
-    }, SAVE_DEBOUNCE_MS);
+    }, debounceForSize(lastSizeRef.current));
   }, [readOnly]);
 
   const flushNow = useCallback(() => {
