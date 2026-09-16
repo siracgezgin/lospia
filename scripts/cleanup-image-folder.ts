@@ -70,18 +70,30 @@ function resolveTarget(): { url: string; key: string; label: string } {
   const key = process.env.IMPORT_SUPABASE_SERVICE_ROLE_KEY ?? prodFile.IMPORT_SUPABASE_SERVICE_ROLE_KEY;
 
   if (PROD || url || key) {
+    /* HANGİSİ EKSİKSE ONU SÖYLE. İki değeri birden istemek, biri zaten
+       yazılıyken "ne yapacağım" sorusunu doğuruyor. */
     if (!url || !key) {
-      console.error("❌  Canlı veritabanı için iki değer gerekiyor:\n");
-      console.error("      IMPORT_SUPABASE_URL                 = https://<proje-kimliği>.supabase.co");
-      console.error("      IMPORT_SUPABASE_SERVICE_ROLE_KEY    = sb_secret_…\n");
-      console.error("    Supabase paneli → Project Settings → API");
-      console.error("      • Project URL buradan kopyalanır");
-      console.error("      • Secret keys → default (sb_secret_…) — publishable DEĞİL\n");
-      console.error("    En kolayı: proje kökünde `.env.prod` dosyası açıp iki satırı yaz");
-      console.error("    (bu dosya gitignore'da, bir kez yazarsın):\n");
-      console.error("      IMPORT_SUPABASE_URL=https://xxxx.supabase.co");
-      console.error("      IMPORT_SUPABASE_SERVICE_ROLE_KEY=sb_secret_xxxx\n");
-      console.error("    Sonra sadece: npm run cleanup:images -- \"Excel Görselleri\" --prod");
+      const has = (v: string | undefined) => (v ? "✓" : "✗");
+      console.error("\n❌  Canlı veritabanına bağlanılamadı — `.env.prod` eksik.\n");
+      console.error(`      ${has(url)} IMPORT_SUPABASE_URL`);
+      console.error(`      ${has(key)} IMPORT_SUPABASE_SERVICE_ROLE_KEY\n`);
+      if (url && !key) {
+        /* Proje kimliği adresin içinde; panel bağlantısını hazır ver. */
+        const ref = /https:\/\/([a-z0-9]+)\.supabase\.co/i.exec(url)?.[1];
+        console.error("    Adres yazılmış, EKSİK OLAN YALNIZ ANAHTAR.\n");
+        console.error("    1) Şu sayfayı aç:");
+        console.error(`       https://supabase.com/dashboard/project/${ref ?? "<proje>"}/settings/api-keys`);
+        console.error('    2) "Secret keys" bölümündeki `default` anahtarını kopyala');
+        console.error("       (sb_secret_… ile başlar; sb_publishable_… OLAN DEĞİL)");
+        console.error("    3) `.env.prod` dosyasındaki şu satırın SONUNA yapıştır:\n");
+        console.error("       IMPORT_SUPABASE_SERVICE_ROLE_KEY=sb_secret_buraya\n");
+      } else {
+        console.error("    Proje kökünde `.env.prod` dosyası aç (gitignore'da) ve iki satır yaz:\n");
+        console.error("      IMPORT_SUPABASE_URL=https://<proje-kimliği>.supabase.co");
+        console.error("      IMPORT_SUPABASE_SERVICE_ROLE_KEY=sb_secret_…\n");
+        console.error("    İkisi de: Supabase paneli → Project Settings → API\n");
+      }
+      console.error("    Sonra aynı komutu tekrar çalıştır.");
       process.exit(1);
     }
     if (key.startsWith("sb_publishable_")) {
