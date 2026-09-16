@@ -101,9 +101,16 @@ async function loadEditable(
   if (!row) return { error: NOT_FOUND };
   const createdBy = row.created_by as string | null;
   const status = row.status as string;
-  const authorEditable =
-    createdBy === ctx.userId && (status === "draft" || status === "active");
-  if (!isAdmin(ctx) && !authorEditable) return { error: PERM_DENIED };
+  /* AF TEAMWORK ORTAK ÇALIŞMA ALANIDIR (20240346).
+     Burada "yönetici ya da ekleyen" şartı vardı: Kısmet AFCOM'u yüklüyordu,
+     tablo herkese görünüyordu ama açan herkes "salt okunur" duvarına
+     çarpıyordu — ortak alan, tek kişinin yazabildiği bir vitrine dönüşmüştü.
+     Kimin GÖRECEĞİNİ `visibility` söyler; gören de düzenler.
+
+     KİLİTLİ/ARŞİV hâlâ kapalıdır ve yöneticinin bile bilinçli açması gerekir:
+     o iki durum "buna artık dokunulmasın" demenin yoludur.
+     Kim SİLEBİLİR ayrı bir sorudur ve burada cevaplanmaz (bkz. delete). */
+  if (status === "locked" || status === "archived") return { error: PERM_DENIED };
   return { createdBy, status };
 }
 
@@ -168,10 +175,16 @@ export async function updateOperationSpreadsheetMeta(
   if ("error" in editable) return editable;
 
   const data = normalizeMeta(parsed.data);
-  // A member may keep own sheet draft/active but never lock/archive it.
-  if (!isAdmin(ctx) && data.status !== "draft" && data.status !== "active") {
+  /* DURUM HERKESİN DEĞİL. İçeriği herkes düzenler (20240346) ama kilit ve
+     arşiv "buna artık dokunulmasın" demenin yolu: bir üye başkasının
+     tablosunu böyle kapatabilmemeli. Yönetici serbest; ekleyen kendi
+     tablosunu taslak/aktif arasında gezdirir, daha ötesi yöneticinin. */
+  const mayLock = isAdmin(ctx);
+  const mayToggle = mayLock || editable.createdBy === ctx.userId;
+  if (!mayLock && data.status !== "draft" && data.status !== "active") {
     data.status = editable.status as SheetMetaInput["status"];
   }
+  if (!mayToggle) data.status = editable.status as SheetMetaInput["status"];
 
   const { error } = await supabase
     .from("operation_spreadsheets")

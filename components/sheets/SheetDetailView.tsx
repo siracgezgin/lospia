@@ -131,13 +131,14 @@ export function SheetDetailView({
     return () => window.removeEventListener("keydown", onKey);
   }, [fullscreen]);
 
-  // Content edit rights mirror the server rule (saveSpreadsheetSnapshot):
-  // locked/archived sheets are read-only for everyone (an admin consciously
-  // unlocks first); otherwise admin or the author of a draft/active sheet.
+  /* İçerik düzenleme hakkı SUNUCUDAKİ kuralın aynısı (loadEditable, 20240346):
+     AF Teamwork ortak çalışma alanıdır, içeriği çalışma alanındaki herkes
+     düzenler. Tek kapı KİLİT/ARŞİV — onları yöneticinin bilinçli açması
+     gerekir. İki taraf ayrışırsa ekran "düzenleyebilirsin" der, kaydetme
+     reddedilir; ya da tersi, düğme kapalı görünür ama hak vardır. */
   const contentLocked = sheet.status === "locked" || sheet.status === "archived";
-  const authorEditable =
-    sheet.created_by === currentUserId && (sheet.status === "draft" || sheet.status === "active");
-  const readOnly = contentLocked || (!isAdmin && !authorEditable);
+  const authorEditable = sheet.created_by === currentUserId;
+  const readOnly = contentLocked;
   const canEditMeta = isAdmin || authorEditable;
   const canDelete = isAdmin || sheet.created_by === currentUserId;
 
@@ -587,11 +588,13 @@ export function SheetDetailView({
       {readOnly && (
         <div role="status" className="anim-fade-up mb-3 flex items-start gap-2 rounded-card border border-line bg-surface-muted px-3.5 py-2.5 text-[13.5px] leading-relaxed text-muted">
           <Info size={14} className="mt-0.5 shrink-0" aria-hidden />
-          {contentLocked
-            ? sheet.status === "locked"
-              ? "Bu tablo kilitli — içerik salt okunur. Düzenlemek için bir yönetici tablo durumunu değiştirmelidir."
-              : "Bu tablo arşivlendi — içerik salt okunur."
-            : "Bu tabloyu görüntüleyebilirsiniz; içerik düzenleme yetkisi tablo sahibine ve yöneticilere aittir."}
+          {/* Üçüncü dal KALDIRILDI: "düzenleme yetkisi tablo sahibine ve
+              yöneticilere aittir" cümlesi artık doğru değil — tabloyu gören
+              herkes düzenliyor (20240346). Salt okunurluğun tek sebebi kilit
+              ya da arşiv. */}
+          {sheet.status === "locked"
+            ? "Bu tablo kilitli — içerik salt okunur. Düzenlemek için bir yönetici tablonun durumunu değiştirmelidir."
+            : "Bu tablo arşivlendi — içerik salt okunur."}
         </div>
       )}
 

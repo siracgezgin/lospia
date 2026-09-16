@@ -25,7 +25,7 @@ export default async function TeamworkDocPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { supabase, user, workspaceId, isAdmin, gate } = await requireModuleMember();
+  const { supabase, user, workspaceId, gate } = await requireModuleMember();
   if (gate === "login") redirectToSignIn();
   if (gate !== "ok" || !workspaceId || !user) return <AccessDenied />;
 
@@ -46,9 +46,11 @@ export default async function TeamworkDocPage({
   // Bu rota YALNIZ yazılar içindir; dosya/bağlantı kayıtları listede yaşar.
   if (row.document_type !== "doc") notFound();
 
-  /* Sayfa izni ile server action izni AYNI cümle olmalı (RLS 20240334):
-     yönetici her yazıyı, ekleyen kendi yazısını — durumdan bağımsız. */
-  const canEdit = isAdmin || row.created_by === user.id;
+  /* Sayfa izni ile server action izni AYNI cümle olmalı (RLS 20240346):
+     AF Teamwork ortak çalışma alanıdır — yazıyı çalışma alanındaki herkes
+     düzenler. Tek kapı ARŞİV: arşivlemek "buna artık dokunulmasın" demenin
+     yolu ve geri açmak yöneticinin işi. */
+  const canEdit = row.status !== "archived";
 
   /* NEREYE KAYDEDİLDİĞİ YAZAR. Aslı Hanım (2026-09-07), yazıyı kapatırken:
      "NEREYE KAYDETTİ?" · "Ama kaydettiğinde kapanması gerekmiyor mu?"

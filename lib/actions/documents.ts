@@ -112,12 +112,13 @@ async function loadEditable(
   if (!row) return { error: NOT_FOUND };
   const createdBy = row.created_by as string | null;
   const status = row.status as string;
-  /* Kural RLS'le (20240334) BİREBİR aynı: kaydı ekleyen kendi kaydını her
-     durumda düzenler. Durum şartı bilinçli olarak kalktı — üye yayımlanan
-     kendi yazısını düzeltemiyordu. Durum YÜKSELTME koruması ayrı: aşağıda
-     `updateOperationDocument` üyeyi approve/archive'a geçirmiyor. */
-  const authorEditable = createdBy === ctx.userId;
-  if (!isAdmin(ctx) && !authorEditable) return { error: PERM_DENIED };
+  /* Kural RLS'le (20240346) BİREBİR aynı: AF Teamwork ortak çalışma alanıdır,
+     içeriği çalışma alanındaki herkes düzenler. "Yönetici ya da ekleyen"
+     şartı kalktı — biri dosyayı ekleyince diğerleri üstünde çalışamıyordu.
+     ARŞİV kapalıdır: arşivlemek "buna artık dokunulmasın" demenin yoludur ve
+     yöneticinin bilinçli olarak geri açması gerekir.
+     Kim SİLEBİLİR ayrı bir sorudur; delete kendi kuralını taşır. */
+  if (status === "archived") return { error: PERM_DENIED };
   return { createdBy, status };
 }
 
@@ -169,10 +170,12 @@ export async function updateOperationDocument(
   if ("error" in editable) return editable;
 
   const data = normalize(parsed.data);
-  /* Üye KENDİ kaydının durumunu serbestçe değiştirir. Eskiden 'approved' ya da
-     'archived' seçimi sessizce eski değere geri alınıyordu; bu kısıt kaydı
-     GİZLEMEK için vardı (bkz. 20240344) ve o iş artık `visibility`nin. Kendi
-     kaydını silebilen birinin durumunu değiştirememesi zaten tutarsızdı. */
+  /* DURUM HERKESİN DEĞİL. İçeriği herkes düzenler (20240346) ama "arşivle"
+     kaydı listeden düşürür ve düzenlemeye kapatır — bir üye başkasının
+     yazısını böyle kapatabilmemeli. Yönetici ve ekleyen serbest; diğerlerinde
+     durum olduğu gibi bırakılır. */
+  const mayChangeStatus = isAdmin(ctx) || editable.createdBy === ctx.userId;
+  if (!mayChangeStatus) data.status = editable.status as DocumentInput["status"];
 
   const { error } = await supabase
     .from("operation_documents")
