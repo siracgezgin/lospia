@@ -1,5 +1,6 @@
 "use server";
 
+import { createHash } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
@@ -726,8 +727,13 @@ export async function importUploadedSheet(
         );
       }
 
+      /* TEK KLASÖR, dosya başına değil.
+         Önce her aktarım kendi "<dosya adı> — görseller" klasörünü açıyordu.
+         Aynı fotoğraf iki dosyada geçtiğinde hangi klasöre ait olduğunun
+         doğru cevabı yok ve klasör başına kopyalamak tam da kaçındığımız
+         israf. Hepsi tek yerde toplanır; Drive'da da dağınıklık yapmaz. */
       const imgFolderId = await ensureFolder(
-        supabase, ctx, `${title} — görseller`, rec.folder_id, rec.section ?? "teamwork",
+        supabase, ctx, "Aktarılan görseller", null, rec.section ?? "teamwork",
       );
 
       /* Yüklemeler SIRAYLA değil, küçük bir havuzla: yüzlerce görselde
@@ -746,12 +752,46 @@ export async function importUploadedSheet(
             };
             if (!media?.buffer?.length) { failed++; continue; }
             const ext = (media.extension ?? "png").replace(/[^a-z0-9]/gi, "") || "png";
+            const mime = `image/${ext === "jpg" ? "jpeg" : ext}`;
+
+            /* AYNI FOTOĞRAF İKİNCİ KEZ YÜKLENMEZ.
+               Sıraç (2026-09-16): "Gereksiz yer kaplandı, DB dolmasın."
+
+               Yol artık RASTGELE değil, görselin İÇERİĞİNDEN türüyor (sha256).
+               Aynı fotoğraf başka bir dosyada da geçiyorsa, aynı dosya ikinci
+               kez yüklenmişse ya da aktarım tekrarlanmışsa yol da aynı çıkar:
+               depoda tek kopya durur, veritabanında tek satır olur ve bütün
+               tablolar aynı kimliğe işaret eder. Ekibin 2026-09-06'daki kuralı
+               da buydu: "aynı resmi birkaç defa yüklemek sistemi gereksiz
+               ağırlaştırır."
+
+               Kopyaların tamamı TEK KLASÖRDE toplanır (dosya başına ayrı
+               klasör değil): aynı fotoğraf iki dosyada geçince hangi klasöre
+               ait olduğu sorusunun doğru cevabı yok, ve klasör başına
+               kopyalamak tam da kaçındığımız şey olurdu. */
+            const sha = createHash("sha256").update(media.buffer).digest("hex");
             const fileName = `${(media.name ?? `gorsel-${mediaId + 1}`).replace(/[^\w.\-() ]/g, "_")}.${ext}`;
-            const path = `${ctx.workspaceId}/${imgFolderId ?? "kok"}/${crypto.randomUUID()}-${fileName}`;
+            const path = `${ctx.workspaceId}/aktarilan-gorseller/${sha}.${ext}`;
+
+            /* Bu içerik daha önce aktarıldıysa kaydı yeniden kullan. */
+            const { data: dup } = await supabase
+              .from("operation_documents")
+              .select("id")
+              .eq("workspace_id", ctx.workspaceId)
+              .eq("file_path", path)
+              .limit(1)
+              .maybeSingle();
+            if (dup) { idByMedia.set(mediaId, (dup as { id: string }).id); continue; }
+
             const { error: upErr } = await supabase.storage
               .from(BUCKET)
-              .upload(path, media.buffer, { contentType: `image/${ext === "jpg" ? "jpeg" : ext}`, upsert: false });
-            if (upErr) { failed++; continue; }
+              .upload(path, media.buffer, { contentType: mime, upsert: false });
+            /* "Zaten var" HATA DEĞİL: iki aktarım aynı anda aynı fotoğrafı
+               yüklüyor olabilir. Bayt aynı olduğu için ikinci yükleme
+               gereksizdir, kayıt açmaya devam edilir. */
+            const alreadyThere =
+              !!upErr && /exists|duplicate|409/i.test(`${upErr.message ?? ""}`);
+            if (upErr && !alreadyThere) { failed++; continue; }
             const { data: docRow, error: insErr } = await supabase
               .from("operation_documents")
               .insert({
@@ -762,7 +802,7 @@ export async function importUploadedSheet(
                 file_path: path,
                 file_name: fileName,
                 file_size: media.buffer.length,
-                file_mime: `image/${ext === "jpg" ? "jpeg" : ext}`,
+                file_mime: mime,
                 section: rec.section ?? "teamwork",
                 status: "approved",
                 owner_id: ctx.userId,
@@ -770,9 +810,11 @@ export async function importUploadedSheet(
               })
               .select("id")
               .single();
-            /* Kayıt açılamazsa yüklenen bayt depoda ÖKSÜZ kalmasın. */
             if (insErr || !docRow) {
-              await supabase.storage.from(BUCKET).remove([path]);
+              /* Bayt depoda ÖKSÜZ kalmasın — ama yalnız BİZ yüklediysek.
+                 Dosya zaten oradaydıysa başkasının kaydına ait olabilir;
+                 silmek onun görselini de yok ederdi. */
+              if (!alreadyThere) await supabase.storage.from(BUCKET).remove([path]);
               failed++;
               continue;
             }
