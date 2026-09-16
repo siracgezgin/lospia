@@ -9,7 +9,7 @@ import {
   Lock, Users, Pencil, Plus, FileText, Table2, Link2 as LinkIcon,
   List as ListIcon, LayoutGrid, Check, X, MoreHorizontal, FolderOpen,
   Search, FolderInput, Eye, Folder as FolderIcon, AlertCircle, SearchX, Send, Mail,
-  type LucideIcon,
+  type LucideIcon, CheckCircle2,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { useAnchoredMenu } from "@/lib/utils/use-anchored-menu";
@@ -31,7 +31,7 @@ import {
 import {
   saveFolder, deleteFolder, uploadDocumentFile, moveDocument,
   getDocumentDownloadUrl, deleteDocumentFile, sendDocumentByEmail,
-  getDocumentSheetPreview,
+  getDocumentSheetPreview, importUploadedSheet,
   type ShareItemType, type SheetPreview,
 } from "@/lib/actions/document-files";
 import { createTeamworkDoc, deleteOperationDocument, setOperationDocumentVisibility } from "@/lib/actions/documents";
@@ -225,6 +225,8 @@ type PreviewState = {
   error: string | null;
   /** Yalnız `mode === "sheet"`: sunucuda ayrıştırılmış sayfalar. */
   sheet?: SheetPreview | null;
+  /** Aktarım bittiyse: oluşan tablonun kimliği + taşınmayanların notu. */
+  imported?: { id: string; notes: string[] } | null;
 };
 
 /** Sunucudaki sınırın aynısı (lib/actions/document-files.ts). Burada da
@@ -542,6 +544,33 @@ export function DriveBrowser({
     },
     [startWork],
   );
+
+  /**
+   * Yüklenen Excel'i sistemin tablosuna aktarıp DÜZENLEYİCİDE açar.
+   *
+   * Aktarım bir KOPYA üretir; orijinal .xlsx Drive'da kalır. "Hangi kopya
+   * doğru?" sorusunun cevabı bu yüzden net: orijinal = geldiği hâli,
+   * tablo = üstünde çalıştığımız hâli.
+   */
+  const importToSheet = useCallback((id: string) => {
+    setError(null);
+    setBusy(`imp-${id}`);
+    startWork(async () => {
+      try {
+        const res = await importUploadedSheet(id);
+        if ("error" in res) { setError(res.error); return; }
+        /* HEMEN YÖNLENDİRİLMİYOR — bilerek. Ne taşınmadığını söyleyen not,
+           tabloya atlarsak okunmadan kaybolurdu; oysa "grafiklerim nerede?"
+           sorusunun cevabı tam olarak orada yazıyor. Pencere bir onaya
+           dönüşür, gitme kararını kullanıcı verir. */
+        setPreview((p) => (p && p.id === id ? { ...p, imported: { id: res.id, notes: res.notes } } : p));
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Tabloya aktarılamadı.");
+      } finally {
+        setBusy(null);
+      }
+    });
+  }, [startWork]);
 
   /** Görsel/PDF'i YERİNDE açar. Görselin imzalı adresi sunucudan hazır gelir
    *  (thumbUrl, 1 saat) — o zaman ek istek atılmaz. */
@@ -1818,7 +1847,25 @@ export function DriveBrowser({
                 </div>
               )}
               <Button variant="ghost" size="sm" onClick={() => setPreview(null)}>Kapat</Button>
-              <Button size="sm" onClick={() => download(preview.id)} loading={busy === `dl-${preview.id}`}>
+              {/* DÜZENLE yalnız tabloda ve yalnız önizleme AÇILABİLDİYSE:
+                  ayrıştırılamayan bir dosya tabloya da aktarılamaz, düğmeyi
+                  göstermek boş bir vaat olurdu. */}
+              {preview.mode === "sheet" && preview.sheet && !preview.imported && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  loading={busy === `imp-${preview.id}`}
+                  onClick={() => importToSheet(preview.id)}
+                >
+                  <Table2 size={14} aria-hidden /> Tablo olarak düzenle
+                </Button>
+              )}
+              {preview.imported && (
+                <Button size="sm" onClick={() => router.push(`/sheets/${preview.imported!.id}`)}>
+                  <Table2 size={14} aria-hidden /> Tabloyu aç
+                </Button>
+              )}
+              <Button variant="ghost" size="sm" onClick={() => download(preview.id)} loading={busy === `dl-${preview.id}`}>
                 <Download size={14} aria-hidden /> İndir
               </Button>
             </>
@@ -1833,6 +1880,26 @@ export function DriveBrowser({
             <div role="alert" className="flex items-start gap-2 rounded-control border border-danger/30 bg-danger/10 px-3 py-2.5 text-[12.5px] leading-relaxed text-danger">
               <AlertCircle size={15} className="mt-0.5 shrink-0" aria-hidden />
               <span className="min-w-0 break-words">{preview.error}</span>
+            </div>
+          ) : preview.imported ? (
+            <div className="space-y-3 py-2">
+              <div className="flex items-start gap-2.5 rounded-control border border-success/30 bg-success/10 px-3 py-2.5">
+                <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-success" aria-hidden />
+                <p className="min-w-0 text-[13px] leading-relaxed text-ink">
+                  Tablo oluşturuldu. Yüklediğiniz <strong>{preview.name}</strong> dosyası
+                  Drive&apos;da olduğu gibi duruyor; düzenleme bu yeni tabloda yapılır.
+                </p>
+              </div>
+              {preview.imported.notes.length > 0 && (
+                <ul className="space-y-1.5 text-[12.5px] leading-relaxed text-muted">
+                  {preview.imported.notes.map((n, i) => (
+                    <li key={i} className="flex gap-2">
+                      <span aria-hidden className="mt-1.5 size-1 shrink-0 rounded-full bg-line-strong" />
+                      <span className="min-w-0">{n}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           ) : preview.mode === "sheet" ? (
             preview.sheet ? <SheetPreviewGrid data={preview.sheet} /> : null

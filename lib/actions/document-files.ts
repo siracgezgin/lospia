@@ -683,3 +683,88 @@ export async function getDocumentSheetPreview(
     return { error: "Bu dosya yerinde açılamadı; indirerek görüntüleyebilirsiniz." };
   }
 }
+
+/**
+ * YÜKLENEN EXCEL'İ DÜZENLENEBİLİR TABLOYA AKTAR.
+ *
+ * Sıraç (2026-09-16): "Ee düzenleme nerde?"
+ *
+ * Önizleme salt okunurdu ve bu yeterli değildi. Dosyayı YERİNDE düzenleyip
+ * .xlsx'i yeniden yazmak seçilmedi: ExcelJS'in okuyamadığı her şey (grafik,
+ * pivot, koşullu biçim, gömülü görsel) her kayıtta sessizce silinirdi —
+ * kullanıcı bir hücreyi düzelttiğini sanırken dosyanın yarısını kaybederdi.
+ *
+ * Bunun yerine içerik uygulamanın KENDİ tablo modeline aktarılıyor; orada
+ * gerçek bir düzenleyici, sürüm geçmişi ve çok kullanıcılı çalışma zaten var.
+ * Yüklenen orijinal dosya Drive'da DURMAYA DEVAM EDER.
+ */
+export async function importUploadedSheet(
+  documentId: string,
+): Promise<{ id: string; notes: string[] } | { error: string }> {
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+
+  const { data: row } = await supabase
+    .from("operation_documents")
+    .select("file_path, file_name, title, folder_id, section")
+    .eq("id", documentId)
+    .eq("workspace_id", ctx.workspaceId)
+    .maybeSingle();
+  const rec = row as {
+    file_path: string | null; file_name: string | null; title: string;
+    folder_id: string | null; section: string | null;
+  } | null;
+  if (!rec?.file_path) return { error: NOT_FOUND };
+
+  const name = (rec.file_name ?? rec.title ?? "").trim();
+  if (/\.(csv|xls)$/i.test(name)) {
+    /* .xls (eski ikili) ve .csv bu yoldan geçmez: ExcelJS .xls okuyamaz, CSV'de
+       ise biçim/formül zaten yoktur. İkisi için de dürüst cevap indirmektir. */
+    if (/\.xls$/i.test(name)) {
+      return { error: "Eski .xls biçimi aktarılamıyor. Dosyayı Excel'de açıp .xlsx olarak kaydedip yeniden yükleyin." };
+    }
+  }
+
+  const { data: blob, error: dlErr } = await supabase.storage.from(BUCKET).download(rec.file_path);
+  if (dlErr || !blob) return { error: "Dosya okunamadı." };
+
+  let snapshot: unknown;
+  let notes: string[] = [];
+  try {
+    const buf = Buffer.from(await blob.arrayBuffer());
+    const { default: ExcelJS } = await import("exceljs");
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buf as unknown as ArrayBuffer);
+    const { workbookToSnapshot } = await import("@/lib/sheets/xlsx-import");
+    const report = workbookToSnapshot(wb);
+    snapshot = report.snapshot;
+    notes = report.notes;
+  } catch {
+    return { error: "Bu dosya tabloya aktarılamadı; indirerek Excel'de açabilirsiniz." };
+  }
+
+  /* Başlık uzantısız: "AFCOM.xlsx" değil "AFCOM" — sistemdeki tablo bir dosya
+     değil, bir kayıt. Aynı addan ikincisi gelirse kullanıcı kendisi ayırır. */
+  const title = name.replace(/\.(xlsx|xlsm)$/i, "").slice(0, 300) || "Aktarılan tablo";
+
+  const { data: created, error } = await supabase
+    .from("operation_spreadsheets")
+    .insert({
+      workspace_id: ctx.workspaceId,
+      created_by: ctx.userId,
+      owner_id: ctx.userId,
+      title,
+      sheet_type: "freeform",
+      status: "active",
+      folder_id: rec.folder_id,
+      section: rec.section ?? "teamwork",
+      snapshot,
+    })
+    .select("id")
+    .single();
+  if (error) return { error: toActionErrorMessage(error) };
+
+  revalidatePath("/documents");
+  return { id: (created as { id: string }).id, notes };
+}
