@@ -715,16 +715,47 @@ export function DocEditor({
       </div>
 
       {/* Başlık — belgenin adı, listede bu görünür. Kâğıtta girdi kutusu değil
-          gerçek bir başlık basılır. */}
+          gerçek bir başlık basılır.
+
+          ALAN OLDUĞU BELLİ OLMALI. Sıraç (2026-09-17): "Word yazısında başlık
+          kısmı çok anlaşılmıyor, 'Adsız yazı' olarak kalmış — orası daha
+          belirgin olmalı ki kişi orasının isim olduğunu anlasın."
+          Kutu `border-transparent bg-transparent` ile duruyordu: yazı tipi
+          büyük ve kalın olduğu için düz bir SAYFA BAŞLIĞI gibi görünüyordu,
+          tıklanabilir olduğu ancak üstüne gelince anlaşılıyordu. Üstelik yeni
+          belge "Adsız yazı" ADIYLA açıldığı için placeholder hiç
+          görünmüyordu — yani hiçbir ipucu yoktu.
+          Artık üstünde küçük bir etiket var ve kutu her zaman hafif bir
+          zemin/çerçeve taşıyor; salt okunurken ikisi de çizilmez. */}
+      {!readOnly && (
+        <label
+          htmlFor={`doc-title-${docId}`}
+          className="no-print mb-1 block px-2 text-[11.5px] font-semibold uppercase tracking-[0.07em] text-subtle"
+        >
+          Yazının adı
+        </label>
+      )}
       <input
+        id={`doc-title-${docId}`}
         value={title}
         onChange={(e) => { setTitle(e.target.value); titleRef.current = e.target.value; touch(); }}
         onBlur={() => { if (dirtyRef.current) saveNow(); }}
         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); bodyRef.current?.focus(); } }}
+        onFocus={(e) => {
+          /* "Adsız yazı" bir ad değil, ad YOKLUĞUNUN etiketi. Kullanıcı
+             yazmaya başlarken önce onu silmek zorunda kalmasın: odakta
+             tamamı seçili gelir, ilk harf üzerine yazar. */
+          if (e.target.value.trim() === "Adsız yazı") e.target.select();
+        }}
         disabled={readOnly}
-        aria-label="Yazı başlığı"
-        placeholder="Yazı başlığı"
-        className="no-print w-full rounded-control border border-transparent bg-transparent px-2 py-1 text-[24px] font-semibold tracking-tight text-ink transition-colors duration-150 placeholder:text-subtle hover:border-line focus:border-brand-ring focus:outline-none focus:ring-2 focus:ring-brand-ring/40 disabled:hover:border-transparent"
+        aria-label="Yazının adı"
+        placeholder="Yazıya bir ad verin…"
+        className={cn(
+          "no-print w-full rounded-control px-2 py-1 text-[24px] font-semibold tracking-tight text-ink transition-colors duration-150 placeholder:text-subtle",
+          readOnly
+            ? "border border-transparent bg-transparent"
+            : "border border-line bg-surface-muted/60 hover:border-line-strong focus:border-brand-ring focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand-ring/40",
+        )}
       />
       <h1 className="doc-print-title">{title}</h1>
 

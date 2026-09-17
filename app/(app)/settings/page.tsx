@@ -9,7 +9,6 @@ import { DepartmentsManager } from "@/components/settings/DepartmentsManager";
 import type { IdentityMember } from "@/components/settings/PersonIdentityManager";
 import { SettingsTabs, SettingsTab } from "@/components/settings/SettingsTabs";
 import { SettingsSection, CountChip } from "@/components/settings/SettingsSection";
-import { ReviewChainManager, type ChainPerson } from "@/components/settings/ReviewChainManager";
 import { BackupPanel, type LastBackup } from "@/components/settings/BackupPanel";
 import { assignPersonTones } from "@/lib/design/person-colors";
 import { canManageSettings, canRenameWorkspace, canManageWorkspace } from "@/lib/auth/permissions";
@@ -163,21 +162,8 @@ export default async function SettingsPage() {
   /* KONTROL KUYRUĞU (20240341). Aslı Hanım (2026-09-07): "İkinizin yaptığını
      Nisa kontrol etsin, ondan sonra bana gelsin." Tablo migrate edilmemişse
      boş listeye düşülür — Ayarlar bundan etkilenmez. */
-  const reviewChainRes = await supabase
-    .from("workspace_review_chain")
-    .select("reviewer_id")
-    .eq("workspace_id", workspaceId)
-    .order("position", { ascending: true });
-  const reviewChain = reviewChainRes.error
-    ? []
-    : ((reviewChainRes.data ?? []) as { reviewer_id: string }[]).map((r) => r.reviewer_id);
-  const chainPeople: ChainPerson[] = ((membersResult.data ?? []) as unknown as {
-    user_id: string; profiles?: { full_name?: string | null; email?: string | null; avatar_url?: string | null } | null;
-  }[]).map((m) => ({
-    id: m.user_id,
-    name: m.profiles?.full_name || m.profiles?.email || "—",
-    avatarUrl: m.profiles?.avatar_url ?? null,
-  }));
+  /* KONTROL KUYRUĞU SORGUSU DA KALKTI. Ayarlar kabuğu her açılışta bir tur
+     daha atıyordu; okuduğu değeri artık hiçbir bölüm göstermiyor. */
 
   // Kişi Kimliği listesi. Tohum profiles.id (userId) — pano, liste ve raporlar
   // da onu kullanıyor; workspace_members.id kullanılırsa renkler ekranlar
@@ -337,18 +323,22 @@ export default async function SettingsPage() {
                   </div>
                 </SettingsSection>
 
-                {/* KONTROL KUYRUĞU — görevin yöneticiye gelmeden önce
-                    geçeceği kademeler (20240341). */}
-                <SettingsSection
-                  title="Kontrol kuyruğu"
-                  description="Bir görev kontrole gönderildiğinde sırayla kimlerin onayından geçsin? Sıra atlanamaz."
-                >
-                  <ReviewChainManager
-                    people={chainPeople}
-                    initial={reviewChain}
-                    canManage={canManageDepts}
-                  />
-                </SettingsSection>
+                {/* KONTROL KUYRUĞU EKRANDAN KALDIRILDI (Sıraç, 2026-09-17:
+                    "O bundan bahsetmiyordu ya, bu kısım gereksiz olmuş gibi —
+                    kaldıralım, hiç kafa karıştırmasın").
+
+                    Kademeli kontrol zinciri 07.09 toplantısında istenmişti
+                    ("ikinizin yaptığını Nisa kontrol etsin, ondan sonra bana
+                    gelsin") ve 20240341 ile yazıldı. On gün boyunca kuyruğa
+                    kimse eklenmedi: canlıda `workspace_review_chain` ve
+                    `task_review_steps` BOŞ, yani hiçbir görev bu akıştan
+                    geçmedi. Kurulmamış bir özelliğin ayar kutusu Ayarlar'da
+                    yer tutuyor ve ne olduğu anlaşılmıyordu.
+
+                    Sunucu tarafı (lib/actions/task-review.ts) ve görev
+                    ekranındaki panel (TaskReviewChain) DURUYOR; kuyruk boş
+                    olduğu için ikisi de kendiliğinden görünmez. Geri istenirse
+                    bu bölümü geri koymak yeterli, veri kaybı yok. */}
 
                 <SettingsSection title="Çalışma alanı">
                   <dl className="divide-y divide-hairline">

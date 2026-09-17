@@ -671,7 +671,17 @@ export function SheetDetailView({
             </span>
           </div>
         )}
-        <div className={cn("min-h-0 w-full min-w-0", fullscreen && "flex-1")}>
+        {/* YÜKSEKLİK ZİNCİRİNİN KIRIK HALKASI BURADAYDI.
+            Sıraç (2026-09-17): "Excel üzerindeyken aşağı yukarı scroll
+            olmuyor ama tablo dışındaki boş yerde oluyor."
+            `SpreadsheetEditor`'ın kökü `h-full` ile kurulu; bu sarmalayıcıda
+            normal modda HİÇ yükseklik yoktu (yalnız tam ekranda `flex-1`).
+            Yükseklik belirsiz kalınca editör içerik kadar uzuyor, içindeki
+            `flex-1 overflow-auto` ızgara da kaydırılacak bir kap bulamıyordu:
+            ızgara scroll etmiyor, `overscroll-contain` de tekerleği yuttuğu
+            için sayfaya geçmiyordu — tablo üstünde hiçbir şey olmuyor, dışında
+            sayfa kayıyordu. */}
+        <div className={cn("min-h-0 w-full min-w-0", fullscreen ? "flex-1" : "h-full")}>
           <SpreadsheetEditor
             initialSnapshot={initialGrid}
             readOnly={readOnly}
