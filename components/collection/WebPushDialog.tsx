@@ -5,7 +5,7 @@ import { AlertTriangle, Check, Download, FileUp, Globe, Loader2 } from "lucide-r
 import { cn } from "@/lib/utils/cn";
 import { Overlay } from "@/components/ui/Overlay";
 import { Button } from "@/components/ui/Button";
-import { pendingWebEdits, type PendingWebEdit } from "@/lib/actions/collection-web";
+import { pendingWebEdits, saveWebRawDescriptions, type PendingWebEdit } from "@/lib/actions/collection-web";
 import {
   readExportedDescriptions, rewriteDescription, toImportCsv,
   type WebTextField,
@@ -50,6 +50,8 @@ export function WebPushDialog({ onClose }: { onClose: () => void }) {
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [reading, setReading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savedCount, setSavedCount] = useState<number | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   /* HEPSİ Mİ, YALNIZ DEĞİŞENLER Mİ.
@@ -88,6 +90,15 @@ export function WebPushDialog({ onClose }: { onClose: () => void }) {
       } else {
         setRaw(map);
         setFileName(file.name);
+        /* BİR KEZ SOR, BİR DAHA SORMA. Yüklenen dosyadaki ham açıklamalar
+           saklanır; sonraki gönderimlerde panel kendi kopyasını kullanır. */
+        setSaving(true);
+        const res = await saveWebRawDescriptions(
+          [...map.entries()].map(([webProductId, raw]) => ({ webProductId, raw })),
+        );
+        setSaving(false);
+        if ("error" in res) setFileError(res.error);
+        else setSavedCount(res.saved);
       }
     } catch {
       setFileError("Dosya okunamadı.");
@@ -99,16 +110,23 @@ export function WebPushDialog({ onClose }: { onClose: () => void }) {
   const source = scope === "all" ? allItems : items;
 
   const prepared = useMemo<Prepared[]>(() => {
-    if (!source || !raw) return [];
+    if (!source) return [];
     return source.map((item) => {
-      const source = raw.get(item.webProductId);
-      if (source === undefined) {
+      /* ÖNCE YÜKLENEN DOSYA, SONRA SAKLANAN KOPYA. Kullanıcı bu oturumda
+         güncel bir dışa aktarım verdiyse o geçerlidir; vermediyse daha önce
+         saklanmış ham metinle çalışılır ve dosya hiç istenmez. */
+      const html = raw?.get(item.webProductId) ?? item.raw ?? undefined;
+      if (html === undefined) {
         return { item, description: "", written: [], missing: [], absent: true };
       }
-      const res = rewriteDescription(source, item.texts);
+      const res = rewriteDescription(html, item.texts);
       return { item, description: res.description, written: res.written, missing: res.missing, absent: false };
     });
   }, [source, raw]);
+
+  /* Ham metin ELİMİZDE Mİ? Ya bu oturumda dosya yüklendi ya da daha önce
+     saklandı. İkisi de yoksa 2. adım gerçekten gerekli. */
+  const hasRaw = !!raw || (source?.some((i) => !!i.raw) ?? false);
 
   const ready = prepared.filter((p) => p.written.length > 0);
   const problem = prepared.filter((p) => p.written.length === 0);
@@ -199,13 +217,26 @@ export function WebPushDialog({ onClose }: { onClose: () => void }) {
           )}
         </Step>
 
-        {/* ADIM 2 — güncel dışa aktarım */}
-        <Step n={2} title="WooCommerce'den güncel dışa aktarımı yükle" done={!!raw}>
-          <p className="mb-2 text-[12.5px] leading-relaxed text-muted">
-            Sitede <strong className="font-semibold text-ink">Ürünler → Dışa Aktar → Tüm ürünler</strong> ile
-            CSV indir, sonra burada seç. Sitedeki açıklamanın ham hâli yalnız o dosyada bulunuyor;
-            metni oradan alıp yalnız ilgili bölümü değiştiriyoruz, akordeonun kalanına dokunmuyoruz.
-          </p>
+        {/* ADIM 2 — ham metin kaynağı */}
+        <Step n={2} title="Sitedeki açıklamanın ham hâli" done={hasRaw}>
+          {hasRaw && !fileName && (
+            /* SAKLANAN KOPYA VAR: kullanıcıdan hiçbir şey istenmiyor.
+               Sıraç (2026-09-17): "Buradaki mantığı anlamadım, CSV seçmeden
+               var?" — dosya yalnız BİR KEZ isteniyor. */
+            <p className="mb-2 text-[13px] leading-relaxed text-ink">
+              <Check size={14} className="mr-1 inline text-success" aria-hidden />
+              Panelde saklı — dosya istemiyoruz. Sitede elle bir düzenleme yaptıysan
+              güncel dışa aktarımı yükleyip tazeleyebilirsin.
+            </p>
+          )}
+          {!hasRaw && (
+            <p className="mb-2 text-[12.5px] leading-relaxed text-muted">
+              Sitede <strong className="font-semibold text-ink">Ürünler → Dışa Aktar → Tüm ürünler</strong> ile
+              CSV indir ve burada seç. <strong className="font-semibold text-ink">Bu bir kereliktir:</strong> metnin
+              ham hâli panelde saklanır, bir daha istenmez. (Ham metni yalnız o dosya veriyor; site API&apos;si aynı
+              metni biçimlendirilmiş döndürüyor ve o hâli geri yazmak akordeonu bozar.)
+            </p>
+          )}
           <input
             ref={fileInput}
             type="file"
@@ -214,14 +245,20 @@ export function WebPushDialog({ onClose }: { onClose: () => void }) {
             onChange={(e) => { const f = e.target.files?.[0]; if (f) void pickFile(f); }}
           />
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="secondary" size="sm" onClick={() => fileInput.current?.click()} disabled={reading}>
-              {reading ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <FileUp size={14} aria-hidden />}
-              {fileName ? "Başka dosya seç" : "CSV seç"}
+            <Button
+              variant={hasRaw ? "ghost" : "secondary"}
+              size="sm"
+              onClick={() => fileInput.current?.click()}
+              disabled={reading || saving}
+            >
+              {reading || saving ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <FileUp size={14} aria-hidden />}
+              {hasRaw ? "CSV ile tazele" : "CSV seç"}
             </Button>
-            {fileName && (
+            {fileName && !saving && (
               <span className="text-[12.5px] text-muted">
                 <Check size={13} className="mr-1 inline text-success" aria-hidden />
                 {fileName} · {raw?.size} ürün okundu
+                {savedCount !== null && ` · ${savedCount} föye saklandı`}
               </span>
             )}
           </div>
@@ -230,8 +267,8 @@ export function WebPushDialog({ onClose }: { onClose: () => void }) {
 
         {/* ADIM 3 — sonuç */}
         <Step n={3} title="İndir ve siteye yükle" done={ready.length > 0}>
-          {!raw && <p className="text-[13px] text-muted">Önce 2. adımdaki dosyayı seç.</p>}
-          {raw && (
+          {!hasRaw && <p className="text-[13px] text-muted">Önce 2. adımdaki dosyayı seç.</p>}
+          {hasRaw && (
             <>
               <p className="text-[13px] text-ink">
                 <strong className="font-semibold">{ready.length} ürün</strong> dosyaya girecek

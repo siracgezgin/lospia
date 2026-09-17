@@ -255,6 +255,9 @@ export interface PendingWebEdit {
   webName: string | null;
   /** Yalnız DEĞİŞEN alanlar ve föydeki yeni değerleri. */
   texts: Partial<Record<WebTextField, string>>;
+  /** Sitedeki açıklamanın ham hâli — daha önce bir dışa aktarımdan
+   *  saklanmışsa dolu gelir ve kullanıcıdan dosya İSTENMEZ. */
+  raw: string | null;
 }
 
 /**
@@ -277,7 +280,7 @@ export async function pendingWebEdits(): Promise<
 
   const { data, error } = await supabase
     .from("production_sheets")
-    .select("id, title, web_name, web_product_id, designers_note, size_fit, details_care, web_baseline")
+    .select("id, title, web_name, web_product_id, designers_note, size_fit, details_care, web_baseline, web_raw_description")
     .eq("workspace_id", ctx.workspaceId)
     .eq("status", "active")
     .not("web_product_id", "is", null);
@@ -288,8 +291,10 @@ export async function pendingWebEdits(): Promise<
     return { error: toActionErrorMessage(error) };
   }
 
-  type Row = { id: string; title: string; web_name: string | null; web_product_id: number; web_baseline: unknown }
-    & Record<WebTextField, string | null>;
+  type Row = {
+    id: string; title: string; web_name: string | null; web_product_id: number;
+    web_baseline: unknown; web_raw_description: string | null;
+  } & Record<WebTextField, string | null>;
   const items: PendingWebEdit[] = [];
   /* `all`: sitede karşılığı olan HER föy, dolu metinleriyle. Sıraç
      (2026-09-17): "Burada önemli olan bana CSV vermesi." Dosyayı isteme kararı
@@ -311,6 +316,7 @@ export async function pendingWebEdits(): Promise<
       webProductId: Number(row.web_product_id),
       title: row.title,
       webName: row.web_name,
+      raw: row.web_raw_description,
     };
     if (Object.keys(filled).length) all.push({ ...base, texts: filled });
     if (Object.keys(changed).length) items.push({ ...base, texts: changed });
@@ -320,6 +326,61 @@ export async function pendingWebEdits(): Promise<
   items.sort(byTitle);
   all.sort(byTitle);
   return { items, all };
+}
+
+/**
+ * Yüklenen dışa aktarımdaki HAM açıklamaları saklar.
+ *
+ * Sıraç (2026-09-17): "Buradaki mantığı anlamadım. CSV, seçmeden var?"
+ * Dosya artık BİR KEZ isteniyor: burada saklanan metin sonraki gönderimlerde
+ * kullanılıyor, kullanıcıya bir daha sorulmuyor.
+ *
+ * Yalnız sitede karşılığı olan föyler güncellenir; eşleşmeyen ürün ID'leri
+ * sessizce atlanır (dosyada sitenin tamamı var, bizde yalnız föyü olanlar).
+ */
+export async function saveWebRawDescriptions(
+  entries: { webProductId: number; raw: string }[],
+): Promise<{ saved: number } | { error: string }> {
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+  if (ctx.role !== "owner") return { error: SYSTEM_ADMIN_ONLY };
+  if (!entries.length) return { saved: 0 };
+
+  const { data: rows, error } = await supabase
+    .from("production_sheets")
+    .select("id, web_product_id")
+    .eq("workspace_id", ctx.workspaceId)
+    .not("web_product_id", "is", null);
+  if (error) {
+    if (isMissingSchemaError(error)) {
+      return { error: "Veritabanı güncellemesi bekleniyor (20240350). Yönetici `supabase db push` çalıştırmalı." };
+    }
+    return { error: toActionErrorMessage(error) };
+  }
+  const idByWeb = new Map((rows ?? []).map((r) => [Number((r as { web_product_id: number }).web_product_id), (r as { id: string }).id]));
+
+  const now = new Date().toISOString();
+  const jobs = entries
+    .map((e) => ({ sheetId: idByWeb.get(e.webProductId), raw: e.raw }))
+    .filter((j): j is { sheetId: string; raw: string } => !!j.sheetId);
+
+  /* Altılı havuz — çekişteki güncellemelerle aynı ölçü. */
+  let saved = 0;
+  const queue = [...jobs];
+  await Promise.all(Array.from({ length: 6 }, async () => {
+    for (let job = queue.shift(); job; job = queue.shift()) {
+      const { error: upErr } = await supabase
+        .from("production_sheets")
+        .update({ web_raw_description: job.raw, web_raw_at: now })
+        .eq("id", job.sheetId)
+        .eq("workspace_id", ctx.workspaceId);
+      if (!upErr) saved++;
+    }
+  }));
+
+  revalidatePath("/collection");
+  return { saved };
 }
 
 /**
