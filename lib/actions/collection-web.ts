@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { AppRole } from "@/lib/auth/permissions";
 import { toActionErrorMessage, isMissingSchemaError } from "@/lib/utils/supabase-errors";
 import { fetchWebsiteProducts } from "@/lib/collection/website";
+import type { WebTextField } from "@/lib/collection/website-export";
 import { logWorkspaceActivity } from "@/lib/activity/log-workspace-activity";
 
 /**
@@ -41,6 +42,27 @@ export interface WebsiteSyncReport {
   skipped: number;
   skippedNames: string[];
   membershipFailures: number;
+  /** Föyde elle yazılmış olduğu için KORUNAN metinler — siteye gönderilmeyi
+   *  bekliyorlar. Ezilmediler; sayı ekranda "siteye gönder" davetidir. */
+  kept: number;
+  /** Hem föyde hem sitede değişmiş metin: hangisinin doğru olduğuna makine
+   *  karar veremez, föydeki korunur ve adı raporlanır. */
+  conflicts: string[];
+}
+
+/** Sitesi olan föyün, çekişin dokunmaması gereken üç metni. Tip
+ *  `website-export`'tan gelir: CSV'ye giden alanlar ile çekişin koruduğu
+ *  alanlar AYNI küme olmalı, yoksa biri ezer öteki gönderir. */
+const WEB_TEXT_FIELDS: readonly WebTextField[] = ["designers_note", "size_fit", "details_care"];
+
+type Baseline = Partial<Record<WebTextField, string>>;
+
+function readBaseline(v: unknown): Baseline {
+  if (v && typeof v === "object" && !Array.isArray(v)) return v as Baseline;
+  if (typeof v === "string" && v.trim().startsWith("{")) {
+    try { return JSON.parse(v) as Baseline; } catch { return {}; }
+  }
+  return {};
 }
 
 /**
@@ -78,23 +100,23 @@ export async function syncCollectionFromWebsite(): Promise<WebsiteSyncReport | {
 
   const { data: existing, error: exErr } = await supabase
     .from("production_sheets")
-    .select("id, web_product_id")
+    .select("id, web_product_id, designers_note, size_fit, details_care, web_baseline")
     .eq("workspace_id", ctx.workspaceId)
     .not("web_product_id", "is", null);
   if (exErr) {
     if (isMissingSchemaError(exErr)) {
-      return { error: "Veritabanı güncellemesi bekleniyor (20240347). Yönetici `supabase db push` çalıştırmalı." };
+      return { error: "Veritabanı güncellemesi bekleniyor (20240347–20240348). Yönetici `supabase db push` çalıştırmalı." };
     }
     return { error: toActionErrorMessage(exErr) };
   }
-  const idByWeb = new Map(
-    ((existing ?? []) as { id: string; web_product_id: number }[]).map((r) => [Number(r.web_product_id), r.id]),
-  );
+  type Row = { id: string; web_product_id: number; web_baseline: unknown } & Record<WebTextField, string | null>;
+  const sheetByWeb = new Map(((existing ?? []) as Row[]).map((r) => [Number(r.web_product_id), r]));
 
   const now = new Date().toISOString();
   const report: WebsiteSyncReport = {
     created: 0, updated: 0, skipped: 0, skippedNames: [],
     membershipFailures: fetched.membershipFailures,
+    kept: 0, conflicts: [],
   };
 
   /* YAZIM TOPLU. İlk çekişte ~150 föy açılıyor; tek tek insert her biri için
@@ -106,19 +128,52 @@ export async function syncCollectionFromWebsite(): Promise<WebsiteSyncReport | {
   const toUpdate: { id: string; web: Record<string, unknown> }[] = [];
 
   for (const p of fetched.products) {
-    const web = {
+    const siteText: Record<WebTextField, string> = {
+      designers_note: p.designersNote,
+      size_fit: p.sizeFit,
+      details_care: p.detailsCare,
+    };
+    /* Tartışmasız alanlar: sitenin kimliği, adresi, dekupeleri. Bunları ekip
+       föyde yazmıyor, her çekişte sitedeki hali geçerlidir. */
+    const common = {
       web_product_id: p.id,
       web_url: p.url,
       web_name: p.name,
-      designers_note: p.designersNote || null,
-      size_fit: p.sizeFit || null,
-      details_care: p.detailsCare || null,
       web_images: p.images,
       web_synced_at: now,
       updated_by: ctx.userId,
     };
-    const sheetId = idByWeb.get(p.id);
-    if (sheetId) { toUpdate.push({ id: sheetId, web }); continue; }
+
+    const row = sheetByWeb.get(p.id);
+    if (row) {
+      const agreed = readBaseline(row.web_baseline);
+      const next: Record<string, unknown> = { ...common };
+      const baseline: Baseline = { ...agreed };
+      let keptHere = false;
+      let conflictHere = false;
+      for (const f of WEB_TEXT_FIELDS) {
+        const site = siteText[f] ?? "";
+        const own = row[f] ?? "";
+        const last = agreed[f] ?? "";
+        if (own === last) {
+          /* Föyde kimse dokunmamış → site neyse o, mutabakat yenilenir.
+             Kullanıcı CSV'yi yükledikten sonra buraya düşer: site artık
+             föydekini söylüyor, ikisi eşitlenir ve bekleyen iş kapanır. */
+          next[f] = site || null;
+          baseline[f] = site;
+          continue;
+        }
+        /* Föyde emek var: EZME ve mutabakatı da ilerletme — o metin hâlâ
+           siteye gönderilmeyi bekliyor. */
+        keptHere = true;
+        if (site !== last) conflictHere = true;
+      }
+      if (keptHere) report.kept++;
+      if (conflictHere) report.conflicts.push(p.name);
+      next.web_baseline = baseline;
+      toUpdate.push({ id: row.id, web: next });
+      continue;
+    }
     if (!p.category) {
       report.skipped++;
       report.skippedNames.push(p.name);
@@ -131,7 +186,12 @@ export async function syncCollectionFromWebsite(): Promise<WebsiteSyncReport | {
       status: "active",
       category: p.category,
       subcategory: p.subcategory,
-      ...web,
+      designers_note: siteText.designers_note || null,
+      size_fit: siteText.size_fit || null,
+      details_care: siteText.details_care || null,
+      /* Yeni föy siteyle doğuştan mutabık. */
+      web_baseline: siteText,
+      ...common,
     });
   }
 
@@ -170,6 +230,72 @@ export async function syncCollectionFromWebsite(): Promise<WebsiteSyncReport | {
 
   revalidatePath("/collection");
   return report;
+}
+
+/* ── SİTEYE GÖNDERİM ─────────────────────────────────────────────────────── */
+
+export interface PendingWebEdit {
+  sheetId: string;
+  webProductId: number;
+  /** Föydeki ad — ekran bunu gösterir, kullanıcı föyü bu adla tanıyor. */
+  title: string;
+  /** Sitedeki ad — CSV'nin doğru ürüne gittiğini kullanıcı buradan doğrular. */
+  webName: string | null;
+  /** Yalnız DEĞİŞEN alanlar ve föydeki yeni değerleri. */
+  texts: Partial<Record<WebTextField, string>>;
+}
+
+/**
+ * Föyde elle yazılmış, sitede henüz olmayan metinler.
+ *
+ * "Föydeki değer ≠ son mutabakat" ölçütü. Siteye SORULMAZ: gönderim listesini
+ * çizmek için 161 ürünü tekrar çekmek gereksiz — kullanıcı CSV'yi
+ * WooCommerce'e yükledikten sonraki çekiş mutabakatı zaten yeniler ve föy
+ * listeden kendiliğinden düşer.
+ */
+export async function pendingWebEdits(): Promise<{ items: PendingWebEdit[] } | { error: string }> {
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+  if (ctx.role !== "owner" && ctx.role !== "admin") {
+    return { error: "Siteye gönderme yöneticiye açık." };
+  }
+
+  const { data, error } = await supabase
+    .from("production_sheets")
+    .select("id, title, web_name, web_product_id, designers_note, size_fit, details_care, web_baseline")
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("status", "active")
+    .not("web_product_id", "is", null);
+  if (error) {
+    if (isMissingSchemaError(error)) {
+      return { error: "Veritabanı güncellemesi bekleniyor (20240348). Yönetici `supabase db push` çalıştırmalı." };
+    }
+    return { error: toActionErrorMessage(error) };
+  }
+
+  type Row = { id: string; title: string; web_name: string | null; web_product_id: number; web_baseline: unknown }
+    & Record<WebTextField, string | null>;
+  const items: PendingWebEdit[] = [];
+  for (const row of (data ?? []) as Row[]) {
+    const agreed = readBaseline(row.web_baseline);
+    const texts: Partial<Record<WebTextField, string>> = {};
+    for (const f of WEB_TEXT_FIELDS) {
+      const own = row[f] ?? "";
+      if (own !== (agreed[f] ?? "")) texts[f] = own;
+    }
+    if (Object.keys(texts).length === 0) continue;
+    items.push({
+      sheetId: row.id,
+      webProductId: Number(row.web_product_id),
+      title: row.title,
+      webName: row.web_name,
+      texts,
+    });
+  }
+
+  items.sort((a, b) => a.title.localeCompare(b.title, "tr"));
+  return { items };
 }
 
 /**

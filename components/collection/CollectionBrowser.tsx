@@ -7,7 +7,7 @@ import {
   Boxes, Plus, Search, ChevronLeft, FileDown, Printer, Shirt, Scissors,
   Footprints, Handbag, FileSpreadsheet, ClipboardList, ShieldCheck,
   Pencil, FolderPlus, SwatchBook, Trash2, Image as ImageIcon, X,
-  FolderInput, Globe, Loader2,
+  FolderInput, Globe, Loader2, Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { deleteProductionSheet } from "@/lib/actions/production";
@@ -26,6 +26,7 @@ import { labelOf, subLabelOf, subsOf } from "@/lib/collection/category-tree";
 import { subPath, type SubCategory } from "@/lib/collection/taxonomy";
 import { CategoryManagerDialog } from "./CategoryManagerDialog";
 import { MoveSheetDialog } from "./MoveSheetDialog";
+import { WebPushDialog } from "./WebPushDialog";
 import { syncCollectionFromWebsite } from "@/lib/actions/collection-web";
 import type { ProductionSheet } from "@/types";
 
@@ -173,6 +174,8 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
   /* TAŞIMA — "Upcycle'a gönder". Karttaki düğmeyle ya da SAĞ TIKLA açılır
      (Aslı Hanım, 2026-09-17: "atıyorum sağ tıklayarak veya dosya göndererek"). */
   const [moving, setMoving] = useState<CollectionItem | null>(null);
+  /* SİTEYE GÖNDER — çekişin karşı yönü; pencere kendi verisini yükler. */
+  const [pushing, setPushing] = useState(false);
   /* Başarı bildirimi — hata satırıyla aynı yerde, olumlu tonda. */
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -392,6 +395,20 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
                 <span className="hidden sm:inline">{syncing ? "Çekiliyor…" : "Siteden çek"}</span>
               </Button>
             )}
+            {/* Çekişin KARŞI YÖNÜ. İki düğme yan yana durur: biri siteyi föye
+                getirir, öteki föyde yazılanı siteye hazırlar. Gönderim CSV
+                üretir, siteye yazmaz — yükleme kullanıcının elinden geçer. */}
+            {isAdmin && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setPushing(true)}
+                title="Föylerde yazdığın Designer’s Note / Size & Fit / Details & Care metinlerini WooCommerce içe aktarım CSV'si olarak indir"
+              >
+                <Upload size={15} aria-hidden />
+                <span className="hidden sm:inline">Siteye gönder</span>
+              </Button>
+            )}
             {/* HİYERARŞİ: föy bir KATEGORİNİN altında doğar (2026-08-29:
                 "önce kategori… sonra o kategorinin içine girip föy
                 oluşturulmalı"). Bu yüzden "Yeni föy" YALNIZ bir kategorinin
@@ -414,6 +431,7 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
 
 
       {dialog}
+      {pushing && <WebPushDialog onClose={() => setPushing(false)} />}
       {moving && (
         <MoveSheetDialog
           sheet={moving}
