@@ -1384,13 +1384,16 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                 </a>
               ) : sheet?.web_product_id ? (
                 <a
-                  href={`https://www.aslifilinta.com/wp-admin/post.php?post=${sheet.web_product_id}&action=edit`}
+                  /* `?p=ID` WordPress'in kimlikle açma biçimi: ürünün adresi
+                     elimizde olmasa da doğru sayfaya gider. Ürün "özel"
+                     olduğu için ziyaretçiye kapalı, yöneticiye açık. */
+                  href={`https://www.aslifilinta.com/?p=${sheet.web_product_id}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  title="Ürün sitede yayımda değil — yönetim sayfasında açılır"
+                  title="Ürün sitede özel (yayımda değil) — yönetici girişiyle görünür"
                   className="inline-flex items-center gap-1 font-medium text-brand hover:underline"
                 >
-                  Yönetimde aç <ExternalLink size={12} aria-hidden />
+                  Sitede aç <ExternalLink size={12} aria-hidden />
                 </a>
               ) : null}
               {sheet?.web_synced_at && (

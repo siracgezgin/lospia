@@ -913,13 +913,15 @@ function SheetCard({
             yönetim sayfası açılır. */}
         {(s.web_url || s.web_product_id) && (
           <a
-            href={s.web_url || `https://www.aslifilinta.com/wp-admin/post.php?post=${s.web_product_id}&action=edit`}
+            /* Adresi olmayan ürün sitede "özel": `?p=ID` ile yine doğru
+               sayfaya gidilir, yönetici girişiyle görünür. */
+            href={s.web_url || `https://www.aslifilinta.com/?p=${s.web_product_id}`}
             target="_blank"
             rel="noopener noreferrer"
             className={menuItemCls}
           >
             <ExternalLink aria-hidden />
-            <span>{s.web_url ? "Sitede aç" : "Yönetimde aç"}</span>
+            <span>Sitede aç</span>
           </a>
         )}
         {/* TAŞI — sağ tıkı bilmeyen için görünür kapı. */}

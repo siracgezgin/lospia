@@ -90,27 +90,34 @@ export function parseSections(descriptionHtml: string | null | undefined): Recor
 }
 
 /* ── Kategori eşleme ──────────────────────────────────────────────────────
-   Sitenin kategori SLUG'ı → Koleksiyon taksonomisindeki anahtar. Slug ad
-   değişse de sabit kalır. Sıra önemli: EN ÖZEL eşleşme önce denenir — bir
-   ceket hem "Ready to Wear" hem "Jackets" kategorisinde olabilir, doğru yer
-   alt kategoridir.
+   Sitenin kategori SLUG'ı → Koleksiyon taksonomisindeki anahtar. Sıra önemli:
+   EN ÖZEL eşleşme önce denenir.
 
-   HOME (2026-09-17): İlk çekişte kilim ve sandıklar "koleksiyonda karşılığı
-   yok" diye atlanmıştı; Sıraç Kilims ve Chests kategorilerini açtı, artık
-   eşleniyorlar. Bunlar giysi DEĞİL — listenin başındalar ki bir sandık
-   yanlışlıkla "Accessories"e de konmuşsa doğru yerde kalsın.
+   SİTE YAPISI DEĞİŞTİ (18.09.2026). Sıraç kategori adreslerini sadeleştirdi
+   (/category/ready-to-wear/shirts/ → /collections/shirts/) ve hiyerarşiyi
+   düzleştirdi: artık yirmi kategorinin HEPSİ üst düzey (parent=0). Üç eşleme
+   bu yüzden kırılmıştı ve düzeltildi:
+     • "trousers"      → slug "trousers-skirts" oldu; eşleşmeyen ürünler
+                         "kategorisiz" diye atlanacaktı (23 ürün)
+     • "artofanatolia" → kategori SİLİNDİ, 23 ürünü One-of-a-Kind'a taşındı
+     • "ready-to-wear" → üst kategori silindi; alt kategoriler kendi başına
+                         duruyor ve zaten tek tek eşleniyor
+     • "accessory"     → silindi (Headpiece'e katılmış)
 
-   BİLEREK EŞLENMEYENLER: "home" üst slug'ı — oraya ileride yeni bir alt
-   kategori (yastık, halı…) eklenirse sessizce kilime düşmesin, raporda
-   "karşılığı yok" diye görünsün. "New In" de eşlenmez: kategori değil vitrin
-   etiketi, ürün zaten kendi asıl kategorisinde duruyor. */
+   Alt kategori bilgisi bir yerde inceldi: Art of Anatolia gidince o ürünler
+   One-of-a-Kind'ın altında alt kategorisiz kalıyor. Koleksiyondaki mevcut
+   föylerin kategorisine ÇEKİŞ DOKUNMAZ, yani "Clothing"deki 21 föy yerinde
+   duruyor; yalnız bundan sonra gelen yeni ürünler üst kategoriye düşer.
+
+   BİLEREK EŞLENMEYEN: "New In" bir kategori değil vitrin etiketi — ürün zaten
+   kendi asıl kategorisinde duruyor. */
 const CATEGORY_MAP: [slug: string, category: string, subcategory: string | null][] = [
   // Home
   ["kilims", "kilims", null],
   ["chests", "chests", null],
   // Ready to Wear
   ["shirts", "ready_to_wear", "shirts_tops"],
-  ["trousers", "ready_to_wear", "trousers_skirts"],
+  ["trousers-skirts", "ready_to_wear", "trousers_skirts"],
   ["coats-jackets-vests", "ready_to_wear", "jackets_vests"],
   ["dresses-jumpsuits", "ready_to_wear", "dresses_jumpsuits"],
   ["sweatshirts", "ready_to_wear", "sweatshirts_tshirts"],
@@ -118,8 +125,6 @@ const CATEGORY_MAP: [slug: string, category: string, subcategory: string | null]
   // One-of-a-Kind
   ["belts", "one_of_a_kind", "belts"],
   ["headpiece", "one_of_a_kind", "headpiece"],
-  ["accessory", "one_of_a_kind", "headpiece"],
-  ["artofanatolia", "one_of_a_kind", "clothing"],
   // Accessories
   ["bucket-hat", "accessories", "hats"],
   ["eight-cornered-cap", "accessories", "hats"],
@@ -129,7 +134,6 @@ const CATEGORY_MAP: [slug: string, category: string, subcategory: string | null]
   ["peshtemal", "accessories", "wraps"],
   // Üst kategoriler — alt kategori bulunamazsa
   ["shoes", "shoes", null],
-  ["ready-to-wear", "ready_to_wear", null],
   ["one-of-a-kind", "one_of_a_kind", null],
   ["accessories", "accessories", null],
 ];
