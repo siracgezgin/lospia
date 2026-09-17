@@ -1365,7 +1365,15 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-muted">
               {sheet?.web_name && <span>Sitedeki adı: <strong className="text-ink">{sheet.web_name}</strong></span>}
-              {sheet?.web_url && (
+              {/* SİTE BAĞLANTISI HER ZAMAN VAR (Sıraç, 18.09.2026: "Web kısmında
+                  'sitede gör' yok, vardı kalkmış").
+                  Aslında kalkmadı: ürün sitede YAYIMDA DEĞİLSE adresi
+                  yazılmıyor, çünkü o adres ziyaretçiye 404 döner. Ama föye
+                  bakan kişi yönetici — onun için ürünün yönetim sayfası
+                  çalışır ve daha da işine yarar. Yayımdakinde vitrin adresi,
+                  yayımda olmayanda yönetim sayfası açılır; bağlantı hiçbir
+                  föyde eksik kalmaz. */}
+              {sheet?.web_url ? (
                 <a
                   href={sheet.web_url}
                   target="_blank"
@@ -1374,7 +1382,17 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                 >
                   Sitede aç <ExternalLink size={12} aria-hidden />
                 </a>
-              )}
+              ) : sheet?.web_product_id ? (
+                <a
+                  href={`https://www.aslifilinta.com/wp-admin/post.php?post=${sheet.web_product_id}&action=edit`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Ürün sitede yayımda değil — yönetim sayfasında açılır"
+                  className="inline-flex items-center gap-1 font-medium text-brand hover:underline"
+                >
+                  Yönetimde aç <ExternalLink size={12} aria-hidden />
+                </a>
+              ) : null}
               {sheet?.web_synced_at && (
                 <span>Son çekiş: {new Date(sheet.web_synced_at).toLocaleDateString("tr-TR")}</span>
               )}

@@ -13,7 +13,7 @@ import {
   Boxes, Plus, Search, ChevronLeft, FileDown, Printer, Shirt, Scissors,
   Footprints, Handbag, FileSpreadsheet, ClipboardList, ShieldCheck,
   Pencil, FolderPlus, SwatchBook, Trash2, Image as ImageIcon, X,
-  FolderInput, Globe, Loader2, Upload, GripVertical,
+  FolderInput, Globe, Loader2, Upload, GripVertical, ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { deleteProductionSheet } from "@/lib/actions/production";
@@ -49,6 +49,8 @@ export type CollectionItem = Pick<
   | "created_by" | "updated_by" | "archived_at" | "created_at" | "updated_at"
   /** Sitedeki görsellerin adresleri, ilki dekupe (20240347). */
   | "web_images"
+  /** Ürünün sitedeki adresi ve kimliği — karttan doğrudan açmak için. */
+  | "web_url" | "web_product_id"
 >;
 
 interface Props {
@@ -904,6 +906,22 @@ function SheetCard({
           <FileDown aria-hidden />
           <span>Excel indir</span>
         </DownloadLink>
+        {/* SİTEDE AÇ (Sıraç, 18.09.2026: "Web kısmında 'sitede gör' yok").
+            Föyü açmadan ürünün sitedeki hâline gitmenin yolu yoktu; katalogda
+            dekupeye bakarken "bu sitede nasıl görünüyor?" sorusu tam buradan
+            soruluyor. Yayımda olmayan üründe vitrin adresi 404 döneceği için
+            yönetim sayfası açılır. */}
+        {(s.web_url || s.web_product_id) && (
+          <a
+            href={s.web_url || `https://www.aslifilinta.com/wp-admin/post.php?post=${s.web_product_id}&action=edit`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={menuItemCls}
+          >
+            <ExternalLink aria-hidden />
+            <span>{s.web_url ? "Sitede aç" : "Yönetimde aç"}</span>
+          </a>
+        )}
         {/* TAŞI — sağ tıkı bilmeyen için görünür kapı. */}
         <button
           type="button"

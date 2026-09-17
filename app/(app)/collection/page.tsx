@@ -79,8 +79,8 @@ export default async function CollectionPage({
      bağımsız uygulanabilir, o yüzden kademe kademe geriye düşülür. Her
      kademede yalnız o özellik kaybolur, ekran ayakta kalır. */
   const attempts: [columns: string, manualOrder: boolean][] = [
-    [`${LIST_COLUMNS}, web_images, sort_order`, true],
-    [`${LIST_COLUMNS}, web_images`, false],
+    [`${LIST_COLUMNS}, web_images, web_url, web_product_id, sort_order`, true],
+    [`${LIST_COLUMNS}, web_images, web_url, web_product_id`, false],
     [LIST_COLUMNS, false],
   ];
   let sheetsResult = await buildSheetsQuery(attempts[0][0], attempts[0][1]);
