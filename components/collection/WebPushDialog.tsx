@@ -44,6 +44,7 @@ interface Prepared {
 
 export function WebPushDialog({ onClose }: { onClose: () => void }) {
   const [items, setItems] = useState<PendingWebEdit[] | null>(null);
+  const [allItems, setAllItems] = useState<PendingWebEdit[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [raw, setRaw] = useState<Map<number, string> | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -51,12 +52,25 @@ export function WebPushDialog({ onClose }: { onClose: () => void }) {
   const [reading, setReading] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
+  /* HEPSİ Mİ, YALNIZ DEĞİŞENLER Mİ.
+     Sıraç (2026-09-17): "Bu CSV olarak indirmiyor ki? Gönderme kısmını ben WP
+     admin'den yapacağım, burada önemli olan bana CSV vermesi."
+     Pencere yalnız DEĞİŞEN föyleri hazırlıyordu; föyler siteden geldiği ve
+     kimse elle bir şey yazmadığı için liste boştu, dolayısıyla indirme düğmesi
+     de hiç çıkmıyordu. Dosyayı isteme kararı kullanıcının: "tümü" kipinde
+     sitede karşılığı olan bütün föyler yazılır. */
+  const [scope, setScope] = useState<"changed" | "all">("changed");
+
   useEffect(() => {
     let alive = true;
     pendingWebEdits().then((res) => {
       if (!alive) return;
-      if ("error" in res) setLoadError(res.error);
-      else setItems(res.items);
+      if ("error" in res) { setLoadError(res.error); return; }
+      setItems(res.items);
+      setAllItems(res.all);
+      /* Bekleyen değişiklik yoksa kip kendiliğinden "tümü"ne düşer —
+         kullanıcı boş bir pencereyle karşılaşmasın. */
+      if (res.items.length === 0) setScope("all");
     });
     return () => { alive = false; };
   }, []);
@@ -82,9 +96,11 @@ export function WebPushDialog({ onClose }: { onClose: () => void }) {
     }
   }
 
+  const source = scope === "all" ? allItems : items;
+
   const prepared = useMemo<Prepared[]>(() => {
-    if (!items || !raw) return [];
-    return items.map((item) => {
+    if (!source || !raw) return [];
+    return source.map((item) => {
       const source = raw.get(item.webProductId);
       if (source === undefined) {
         return { item, description: "", written: [], missing: [], absent: true };
@@ -92,7 +108,7 @@ export function WebPushDialog({ onClose }: { onClose: () => void }) {
       const res = rewriteDescription(source, item.texts);
       return { item, description: res.description, written: res.written, missing: res.missing, absent: false };
     });
-  }, [items, raw]);
+  }, [source, raw]);
 
   const ready = prepared.filter((p) => p.written.length > 0);
   const problem = prepared.filter((p) => p.written.length === 0);
@@ -113,8 +129,8 @@ export function WebPushDialog({ onClose }: { onClose: () => void }) {
     <Overlay
       open
       onClose={onClose}
-      title="Değişiklikleri siteye gönder"
-      hint="Panelde yazdıklarını WooCommerce'in içe aktarıcısına hazır CSV olarak indirir"
+      title="Siteye yüklenecek CSV'yi hazırla"
+      hint="Dosyayı indirir — WordPress'e yüklemeyi sen yaparsın (Ürünler → İçe Aktar)"
       size="lg"
       footer={
         <>
@@ -127,7 +143,7 @@ export function WebPushDialog({ onClose }: { onClose: () => void }) {
               </Button>
               <Button size="sm" onClick={() => download(ready, "TAM")}>
                 <Download size={14} aria-hidden />
-                Tamamı ({ready.length} ürün)
+                {scope === "all" ? "Tüm föyler" : "Tamamı"} ({ready.length} ürün)
               </Button>
             </>
           )}
@@ -136,21 +152,35 @@ export function WebPushDialog({ onClose }: { onClose: () => void }) {
     >
       <div className="space-y-5">
         {/* ADIM 1 — bekleyenler */}
-        <Step n={1} title="Siteye gidecek düzenlemeler" done={!!items && items.length > 0}>
+        <Step n={1} title="Dosyaya girecek föyler" done={!!source && source.length > 0}>
           {loadError && <Alert>{loadError}</Alert>}
           {!items && !loadError && (
             <p className="flex items-center gap-2 text-[13px] text-muted">
               <Loader2 size={14} className="animate-spin" aria-hidden /> Föyler okunuyor…
             </p>
           )}
-          {items && items.length === 0 && (
+          {items && (
+            /* KAPSAM SEÇİMİ. Değişiklik yokken pencere tamamen boş kalıyordu
+               ve indirme düğmesi hiç çıkmıyordu; oysa kullanıcı dosyayı yine
+               de isteyebilir. */
+            <div className="mb-2 flex flex-wrap items-center gap-1.5">
+              <ScopeChip active={scope === "changed"} onClick={() => setScope("changed")}>
+                Yalnız değişenler ({items.length})
+              </ScopeChip>
+              <ScopeChip active={scope === "all"} onClick={() => setScope("all")}>
+                Tüm föyler ({allItems?.length ?? 0})
+              </ScopeChip>
+            </div>
+          )}
+          {items && items.length === 0 && scope === "changed" && (
             <p className="text-[13px] text-muted">
-              Föylerdeki üç web metni sitedekiyle aynı — gönderilecek bir değişiklik yok.
+              Föylerdeki üç web metni sitedekiyle aynı — değişiklik yok.
+              Yine de dosya istiyorsan <strong className="font-semibold text-ink">Tüm föyler</strong>&apos;i seç.
             </p>
           )}
-          {items && items.length > 0 && (
-            <ul className="divide-y divide-line rounded-card border border-line">
-              {items.map((it) => (
+          {source && source.length > 0 && (
+            <ul className="max-h-[220px] divide-y divide-line overflow-auto rounded-card border border-line">
+              {source.map((it) => (
                 <li key={it.sheetId} className="flex flex-wrap items-baseline gap-x-2 gap-y-1 px-3 py-2">
                   <span className="text-[13.5px] font-semibold text-ink">{it.title}</span>
                   {it.webName && it.webName !== it.title && (
@@ -204,7 +234,7 @@ export function WebPushDialog({ onClose }: { onClose: () => void }) {
           {raw && (
             <>
               <p className="text-[13px] text-ink">
-                <strong className="font-semibold">{ready.length} ürün</strong> güncellenmeye hazır
+                <strong className="font-semibold">{ready.length} ürün</strong> dosyaya girecek
                 {problem.length > 0 && <> · <span className="text-warning">{problem.length} ürün gönderilemiyor</span></>}
               </p>
               {problem.length > 0 && (
@@ -238,6 +268,22 @@ export function WebPushDialog({ onClose }: { onClose: () => void }) {
         </Step>
       </div>
     </Overlay>
+  );
+}
+
+function ScopeChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "tap-target h-8 rounded-full px-3 text-[12.5px] font-medium transition-colors duration-150",
+        active ? "bg-brand-soft text-brand-strong ring-1 ring-brand-ring" : "bg-surface-muted text-muted hover:bg-surface-hover hover:text-ink",
+      )}
+    >
+      {children}
+    </button>
   );
 }
 

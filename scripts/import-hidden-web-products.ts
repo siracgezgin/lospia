@@ -27,6 +27,13 @@ import * as path from "path";
 import { decodeEntities, fetchCategorySlugsByName, mapCategory, parseSections } from "../lib/collection/website";
 
 const APPLY = process.argv.includes("--uygula");
+/* TAZELEME. Daha önce alınmış föylerin web metinlerini CSV'den YENİDEN yazar.
+   Gerekçe (2026-09-17): ilk içe aktarımda metindeki kaçırılmış satır sonları
+   ("\n" dizisi, gerçek satır sonu değil) olduğu gibi kaydedilmişti — 11 föyde
+   "100% Cotton Body \n100% Cotton" gibi görünüyordu. Okuyucu düzeltildi;
+   bu bayrak düzeltilmiş metni mevcut föylere uygular. Kategori, başlık ve
+   föyün kendi alanlarına DOKUNMAZ. */
+const REFRESH = process.argv.includes("--tazele");
 const PROD = process.argv.includes("--prod");
 
 /** Sitenin ürün ID'si artan sayaçtır: büyük ID = sonra açılmış ürün.
@@ -210,12 +217,17 @@ async function main() {
   /* Zaten föyü olan ürün ATLANIR — ikinci föy açmak en kötü sonuç. */
   const { data: existing, error: exErr } = await db
     .from("production_sheets")
-    .select("web_product_id, workspace_id, created_by")
+    .select("id, web_product_id, workspace_id, created_by")
     .not("web_product_id", "is", null);
   if (exErr) { console.error("❌ Mevcut föyler okunamadı:", exErr.message); process.exit(1); }
-  const seen = new Set((existing ?? []).map((r) => Number((r as { web_product_id: number }).web_product_id)));
+  const sheetIdByWeb = new Map(
+    (existing ?? []).map((r) => [Number((r as { web_product_id: number }).web_product_id), (r as { id: string }).id]),
+  );
+  const toRefresh: { sheetId: string; c: Candidate }[] = [];
   const fresh = candidates.filter((c) => {
-    if (!seen.has(c.id)) return true;
+    const sheetId = sheetIdByWeb.get(c.id);
+    if (!sheetId) return true;
+    if (REFRESH) { toRefresh.push({ sheetId, c }); return false; }
     dropped.push({ id: c.id, name: c.name, reason: "zaten föyü var" });
     return false;
   });
@@ -229,6 +241,13 @@ async function main() {
     const has = [c.designersNote && "not", c.sizeFit && "ölçü", c.detailsCare && "detay"].filter(Boolean).join("+") || "bilgi yok";
     console.log(`   ${c.id}  ${c.name.slice(0, 42).padEnd(42)} → ${String(where).padEnd(34)} ${c.images.length} görsel · ${has}`);
   }
+  if (REFRESH) {
+    console.log(`── TAZELENECEK (${toRefresh.length}) — web metinleri CSV'den yeniden yazılır`);
+    for (const { c } of toRefresh.slice(0, 40)) console.log(`   ${c.id}  ${c.name.slice(0, 44)}`);
+    if (toRefresh.length > 40) console.log(`   … ${toRefresh.length - 40} tane daha`);
+    console.log();
+  }
+
   console.log(`\n── ALINMAYACAK (${dropped.length})`);
   const byReason = new Map<string, Dropped[]>();
   for (const d of dropped) {
@@ -244,15 +263,40 @@ async function main() {
   /* HESAP TUTSUN. Her yayımlanmamış ürün ya alınacak ya da bir gerekçeyle
      elenmiş olmalı; toplam tutmuyorsa bir ürün sessizce kayboldu ya da iki
      kez sayıldı — ikisi de raporu yalancı yapar. */
-  if (fresh.length + dropped.length !== hidden.length) {
-    console.log(`\n⚠️  Hesap tutmuyor: ${fresh.length} + ${dropped.length} ≠ ${hidden.length} yayımlanmamış ürün.`);
+  if (fresh.length + dropped.length + toRefresh.length !== hidden.length) {
+    console.log(`\n⚠️  Hesap tutmuyor: ${fresh.length} + ${dropped.length} + ${toRefresh.length} ≠ ${hidden.length} yayımlanmamış ürün.`);
   }
 
   if (!APPLY) {
     console.log(`\nSALT OKUNUR. Uygulamak için: npm run import:hidden-products -- --prod --uygula\n`);
     return;
   }
-  if (!fresh.length) { console.log("\nAlınacak ürün yok.\n"); return; }
+  if (REFRESH && toRefresh.length) {
+    let done = 0;
+    for (const { sheetId, c } of toRefresh) {
+      const { error } = await db
+        .from("production_sheets")
+        .update({
+          designers_note: c.designersNote || null,
+          size_fit: c.sizeFit || null,
+          details_care: c.detailsCare || null,
+          web_images: c.images,
+          /* Mutabakat da tazelenir, yoksa bu metinler "elle değiştirilmiş"
+             sayılıp siteye gönderim listesine düşerdi. */
+          web_baseline: {
+            designers_note: c.designersNote,
+            size_fit: c.sizeFit,
+            details_care: c.detailsCare,
+          },
+        })
+        .eq("id", sheetId);
+      if (error) console.error(`   ❌ ${c.name}: ${error.message}`);
+      else done++;
+    }
+    console.log(`\n✅ ${done} föyün web metni tazelendi.`);
+  }
+
+  if (!fresh.length) { console.log("\nAlınacak yeni ürün yok.\n"); return; }
 
   const now = new Date().toISOString();
   const payload = fresh.map((c) => ({

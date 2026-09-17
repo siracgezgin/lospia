@@ -18,7 +18,7 @@ import {
 import { cn } from "@/lib/utils/cn";
 import { deleteProductionSheet } from "@/lib/actions/production";
 import { useConfirm } from "@/components/ui/useConfirm";
-import { DownloadLink, downloadIconCls } from "@/components/ui/DownloadLink";
+import { DownloadLink } from "@/components/ui/DownloadLink";
 import { CoverImageButton } from "./CoverImageButton";
 import { Button, IconButton } from "@/components/ui/Button";
 import { TextInput } from "@/components/ui/Field";
@@ -471,10 +471,13 @@ export function CollectionBrowser({ sheets, isAdmin, isOwner = false, seasons = 
                 variant="secondary"
                 size="sm"
                 onClick={() => setPushing(true)}
-                title="Föylerde yazdığın Designer’s Note / Size & Fit / Details & Care metinlerini WooCommerce içe aktarım CSV'si olarak indir"
+                title="Föylerdeki Designer’s Note / Size & Fit / Details & Care metinlerini WooCommerce içe aktarım CSV'si olarak indir — yüklemeyi sen yaparsın"
               >
                 <Upload size={15} aria-hidden />
-                <span className="hidden sm:inline">Siteye gönder</span>
+                {/* "Gönder" YANILTIYORDU: düğme siteye bir şey göndermiyor,
+                    CSV indiriyor (Sıraç, 2026-09-17: "Gönderme kısmını ben WP
+                    admin'den yapacağım, önemli olan bana CSV vermesi"). */}
+                <span className="hidden sm:inline">Siteye CSV</span>
               </Button>
             )}
             {/* HİYERARŞİ: föy bir KATEGORİNİN altında doğar (2026-08-29:

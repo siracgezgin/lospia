@@ -57,6 +57,12 @@ export function decodeEntities(s: string): string {
 function htmlToText(html: string): string {
   return decodeEntities(
     html
+      /* KAÇIRILMIŞ SATIR SONU. Sitedeki bazı açıklamalarda satır sonu gerçek
+         karakter değil, iki harflik "\n" dizisi olarak duruyor — geçmişte
+         yüklenen bir CSV'den kalma (17/wordpress/af-guncelleme-TAM.csv:
+         182 satırın 182'sinde aynı iz var). Çevrilmezse föye "100% Cotton
+         Body \n100% Cotton" diye yazılıyor ve metin bozuk okunuyor. */
+      .replace(/\\r?\\n/g, "\n")
       .replace(/\[\/?vc_[^\]]*\]/g, "\n")            // kalan kısa kodlar
       .replace(/<br\s*\/?>/gi, "\n")
       .replace(/<\/(p|div|li|h[1-6])>/gi, "\n")

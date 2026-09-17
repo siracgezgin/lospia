@@ -265,7 +265,9 @@ export interface PendingWebEdit {
  * WooCommerce'e yükledikten sonraki çekiş mutabakatı zaten yeniler ve föy
  * listeden kendiliğinden düşer.
  */
-export async function pendingWebEdits(): Promise<{ items: PendingWebEdit[] } | { error: string }> {
+export async function pendingWebEdits(): Promise<
+  { items: PendingWebEdit[]; all: PendingWebEdit[] } | { error: string }
+> {
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
@@ -289,25 +291,35 @@ export async function pendingWebEdits(): Promise<{ items: PendingWebEdit[] } | {
   type Row = { id: string; title: string; web_name: string | null; web_product_id: number; web_baseline: unknown }
     & Record<WebTextField, string | null>;
   const items: PendingWebEdit[] = [];
+  /* `all`: sitede karşılığı olan HER föy, dolu metinleriyle. Sıraç
+     (2026-09-17): "Burada önemli olan bana CSV vermesi." Dosyayı isteme kararı
+     kullanıcının — değişiklik olmasa da föydeki metinleri siteye yazmak
+     isteyebilir (ör. panelden düzeltilmiş bir bölümü sitede de görmek). */
+  const all: PendingWebEdit[] = [];
+
   for (const row of (data ?? []) as Row[]) {
     const agreed = readBaseline(row.web_baseline);
-    const texts: Partial<Record<WebTextField, string>> = {};
+    const changed: Partial<Record<WebTextField, string>> = {};
+    const filled: Partial<Record<WebTextField, string>> = {};
     for (const f of WEB_TEXT_FIELDS) {
       const own = row[f] ?? "";
-      if (own !== (agreed[f] ?? "")) texts[f] = own;
+      if (own) filled[f] = own;
+      if (own !== (agreed[f] ?? "")) changed[f] = own;
     }
-    if (Object.keys(texts).length === 0) continue;
-    items.push({
+    const base = {
       sheetId: row.id,
       webProductId: Number(row.web_product_id),
       title: row.title,
       webName: row.web_name,
-      texts,
-    });
+    };
+    if (Object.keys(filled).length) all.push({ ...base, texts: filled });
+    if (Object.keys(changed).length) items.push({ ...base, texts: changed });
   }
 
-  items.sort((a, b) => a.title.localeCompare(b.title, "tr"));
-  return { items };
+  const byTitle = (a: PendingWebEdit, b: PendingWebEdit) => a.title.localeCompare(b.title, "tr");
+  items.sort(byTitle);
+  all.sort(byTitle);
+  return { items, all };
 }
 
 /**
