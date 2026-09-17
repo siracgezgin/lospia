@@ -35,7 +35,9 @@ async function getCtx(supabase: Awaited<ReturnType<typeof createClient>>) {
 export interface WebsiteSyncReport {
   created: number;
   updated: number;
-  /** Sitede var ama koleksiyon kategorisine karşılık gelmeyen (Home vb.). */
+  /** Sitede var ama koleksiyon taksonomisinde yeri olmayan ürünler. Çare
+   *  kodda değil ekranda: kategoriyi aç, `CATEGORY_MAP`'e slug'ı ekle, tekrar
+   *  çek. (Kilims ve Chests 2026-09-17'de böyle kazanıldı.) */
   skipped: number;
   skippedNames: string[];
   membershipFailures: number;

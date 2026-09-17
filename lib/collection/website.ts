@@ -89,10 +89,19 @@ export function parseSections(descriptionHtml: string | null | undefined): Recor
    ceket hem "Ready to Wear" hem "Jackets" kategorisinde olabilir, doğru yer
    alt kategoridir.
 
-   BİLEREK EŞLENMEYENLER: "Home" (kilim, sandık) koleksiyonda üretilen ürün
-   değil; "New In" bir kategori değil vitrin etiketi. Bunlar atlanır ve
-   raporda sayılır. */
+   HOME (2026-09-17): İlk çekişte kilim ve sandıklar "koleksiyonda karşılığı
+   yok" diye atlanmıştı; Sıraç Kilims ve Chests kategorilerini açtı, artık
+   eşleniyorlar. Bunlar giysi DEĞİL — listenin başındalar ki bir sandık
+   yanlışlıkla "Accessories"e de konmuşsa doğru yerde kalsın.
+
+   BİLEREK EŞLENMEYENLER: "home" üst slug'ı — oraya ileride yeni bir alt
+   kategori (yastık, halı…) eklenirse sessizce kilime düşmesin, raporda
+   "karşılığı yok" diye görünsün. "New In" de eşlenmez: kategori değil vitrin
+   etiketi, ürün zaten kendi asıl kategorisinde duruyor. */
 const CATEGORY_MAP: [slug: string, category: string, subcategory: string | null][] = [
+  // Home
+  ["kilims", "kilims", null],
+  ["chests", "chests", null],
   // Ready to Wear
   ["shirts", "ready_to_wear", "shirts_tops"],
   ["trousers", "ready_to_wear", "trousers_skirts"],
