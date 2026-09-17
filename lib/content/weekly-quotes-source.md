@@ -1,1307 +1,1010 @@
 # AF Operasyon — Haftanın Sözü
 
-> **Editoryal not:** Bu liste, AF’nin dünyasına uygun olacak şekilde; emek, zanaat, sadelik, estetik, yaratıcılık, kültür, dönüşüm ve sürdürülebilirlik eksenlerinde hazırlanmıştır. Türkçe karşılıklar kartta doğal ve kısa okunması için yer yer sadeleştirilmiştir. Kaynak notu, alıntının dayandığı eser veya bilinen atıf geleneğini gösterir.
+> **Revize sürüm.** Önceki dosyadaki fazla kısaltılmış, serbest aktarılmış veya atfı tartışmalı olabilecek maddeler temizlendi.
+> Bu sürümde ağırlık; kaynağı belirli klasik eserlerden seçilen, AF’nin emek, zanaat, sadelik, estetik, doğa, yaratıcılık ve dönüşüm dünyasıyla örtüşen sözlerde.
 
-**Kart kullanım standardı:** Alıntı + isim. Kaynak notu yalnızca editoryal kontrol içindir; arayüzde gösterilmesi gerekmez.
+> **Çeviri notu:** Yabancı dildeki alıntılar, kartta doğal ve kısa okunabilmesi için kaynak metne anlam sadakati gözetilerek Türkçeleştirilmiştir. Bunlar belirli bir yayınevinin Türkçe baskısından birebir alıntı değildir.
+
+**Arayüz standardı:** Kartta yalnızca söz + isim gösterilsin. `Kaynak notu` editoryal kontrol içindir; kullanıcı arayüzünde gösterilmesi gerekmez.
 
 ---
 
 ## 001
 
-> “Evinizde, yararlı olduğunu bilmediğiniz ya da güzel olduğuna inanmadığınız hiçbir şey bulundurmayın.”
+> “Evinizde yararlı olduğunu bilmediğiniz ya da güzel olduğuna inanmadığınız hiçbir şey bulundurmayın.”
+>
+> — **William Morris**
 
-
-— **William Morris**
-
-
-*Kaynak notu: The Beauty of Life / Hopes and Fears for Art*
-
+*Kaynak notu: Hopes and Fears for Art — “The Beauty of Life”*
 
 ---
 
 ## 002
 
-> “İnsanların yaptığı, insanların kullandığı bir sanat; yapan için de kullanan için de sevinç olmalı.”
-
-
-— **William Morris**
-
+> “Sanatı birkaç kişi için istemiyorum; eğitimi ya da özgürlüğü birkaç kişi için istemediğim gibi.”
+>
+> — **William Morris**
 
 *Kaynak notu: Hopes and Fears for Art*
-
 
 ---
 
 ## 003
 
-> “Zevkle yapılamayan hiçbir iş, yapılmaya değmez.”
+> “Sanat, halk tarafından ve halk için yapılmalı; yapanın da kullananın da mutluluğu olmalı.”
+>
+> — **William Morris**
 
-
-— **William Morris**
-
-
-*Kaynak notu: The Life of William Morris’te aktarılan görüş*
-
+*Kaynak notu: Hopes and Fears for Art*
 
 ---
 
 ## 004
 
-> “Sanat, insanın emeğindeki sevincinin ifadesidir.”
+> “Gerçek sanat, insanın emeğinden duyduğu sevincin ifadesidir.”
+>
+> — **William Morris**
 
-
-— **William Morris**
-
-
-*Kaynak notu: William Morris’in sanat ve emek anlayışı*
-
+*Kaynak notu: Hopes and Fears for Art*
 
 ---
 
 ## 005
 
-> “Güzelliği gündelik hayatın dışına değil, tam ortasına koyun.”
+> “Bütün sanat sadelikten başlar; sanat yükseldikçe sadelik daha da büyür.”
+>
+> — **William Morris**
 
-
-— **William Morris**
-
-
-*Kaynak notu: Morris’in Arts and Crafts yaklaşımının kısa Türkçe aktarımı*
-
+*Kaynak notu: Hopes and Fears for Art — “The Beauty of Life”*
 
 ---
 
 ## 006
 
-> “Sadelik, sanatın yükseldikçe daha da belirginleşen özüdür.”
-
-
-— **William Morris**
-
+> “Dekorasyonun büyük görevlerinden biri, kullanmak zorunda olduğumuz şeylerden bize haz vermesidir.”
+>
+> — **William Morris**
 
 *Kaynak notu: Hopes and Fears for Art*
-
 
 ---
 
 ## 007
 
-> “İyi iş, yalnızca güzel görünmez; doğru ve sağlam yapılır.”
+> “Kalbinizde çözülmemiş olan her şeye karşı sabırlı olun.”
+>
+> — **Rainer Maria Rilke**
 
-
-— **William Morris**
-
-
-*Kaynak notu: Morris’in zanaat anlayışının kısa aktarımı*
-
+*Kaynak notu: Letters to a Young Poet — Mektup 4, 16 Temmuz 1903*
 
 ---
 
 ## 008
 
-> “Sanatı hayata, hayatı da emeğe yeniden bağlayın.”
+> “Soruların kendisini sevmeye çalışın.”
+>
+> — **Rainer Maria Rilke**
 
-
-— **William Morris**
-
-
-*Kaynak notu: Morris’in sanat-emek düşüncesinin kısa aktarımı*
-
+*Kaynak notu: Letters to a Young Poet — Mektup 4*
 
 ---
 
 ## 009
 
-> “Sanat görüneni yeniden üretmez; görünür kılar.”
+> “Cevapları şimdi aramayın; her şeyi yaşamak gerekir.”
+>
+> — **Rainer Maria Rilke**
 
-
-— **Paul Klee**
-
-
-*Kaynak notu: Creative Credo, 1920*
-
+*Kaynak notu: Letters to a Young Poet — Mektup 4*
 
 ---
 
 ## 010
 
-> “Gizli görüleri görünür kılmak, sanatın işlerinden biridir.”
+> “Soruları şimdi yaşayın.”
+>
+> — **Rainer Maria Rilke**
 
-
-— **Paul Klee**
-
-
-*Kaynak notu: MoMA’da aktarılan Klee görüşü*
-
+*Kaynak notu: Letters to a Young Poet — Mektup 4*
 
 ---
 
 ## 011
 
-> “Bir eser hareketten doğar, hareketi kaydeder ve hareketle algılanır.”
+> “Kendi içinize dönün; sizi yazmaya çağıran nedeni arayın.”
+>
+> — **Rainer Maria Rilke**
 
-
-— **Paul Klee**
-
-
-*Kaynak notu: Creative Credo*
-
+*Kaynak notu: Letters to a Young Poet — Mektup 1*
 
 ---
 
 ## 012
 
-> “Bugün, görünen şeylerin ardındaki gerçekliği açığa çıkarıyoruz.”
+> “Gündelik hayatınız size yoksul görünüyorsa onu suçlamayın; kendinizi sorgulayın.”
+>
+> — **Rainer Maria Rilke**
 
-
-— **Paul Klee**
-
-
-*Kaynak notu: Creative Credo*
-
+*Kaynak notu: Letters to a Young Poet — Mektup 1*
 
 ---
 
 ## 013
 
-> “Renk, ruhu doğrudan etkileyen bir güçtür.”
+> “Bir sanat eseri, bir gereksinimden doğduğunda iyidir.”
+>
+> — **Rainer Maria Rilke**
 
-
-— **Wassily Kandinsky**
-
-
-*Kaynak notu: Concerning the Spiritual in Art*
-
+*Kaynak notu: Letters to a Young Poet — Mektup 1*
 
 ---
 
 ## 014
 
-> “Renk klavyedir; gözler çekiçler, ruh ise telleri olan piyanodur.”
+> “Sanat eserleri sonsuz bir yalnızlığa sahiptir; eleştiri onlara en az ulaşabilen şeydir.”
+>
+> — **Rainer Maria Rilke**
 
-
-— **Wassily Kandinsky**
-
-
-*Kaynak notu: Concerning the Spiritual in Art*
-
+*Kaynak notu: Letters to a Young Poet — Mektup 1*
 
 ---
 
 ## 015
 
-> “Biçim, içsel anlamın dışa vurumudur.”
+> “Sevgi şudur: iki yalnızlığın birbirini koruması, sınırlandırması ve selamlaması.”
+>
+> — **Rainer Maria Rilke**
 
-
-— **Wassily Kandinsky**
-
-
-*Kaynak notu: Kandinsky’nin sanat kuramının kısa Türkçe aktarımı*
-
+*Kaynak notu: Letters to a Young Poet*
 
 ---
 
 ## 016
 
-> “Sanat, zamanının çocuğudur.”
+> “Belki de hayatımızdaki bütün ejderhalar, bizi bir kez cesur görmek isteyen varlıklardır.”
+>
+> — **Rainer Maria Rilke**
 
-
-— **Wassily Kandinsky**
-
-
-*Kaynak notu: Concerning the Spiritual in Art*
-
+*Kaynak notu: Letters to a Young Poet*
 
 ---
 
 ## 017
 
-> “İlham vardır; ama sizi çalışırken bulmalıdır.”
+> “Çalışmak, görünür hâle gelmiş sevgidir.”
+>
+> — **Khalil Gibran**
 
-
-— **Pablo Picasso**
-
-
-*Kaynak notu: Picasso’ya güvenilir biçimde atfedilen söz*
-
+*Kaynak notu: The Prophet — “On Work”*
 
 ---
 
 ## 018
 
-> “Her çocuk bir sanatçıdır; mesele büyüyünce de sanatçı kalabilmektir.”
+> “Emek yoluyla hayatı sevmek, hayatın en içteki sırrına yaklaşmaktır.”
+>
+> — **Khalil Gibran**
 
-
-— **Pablo Picasso**
-
-
-*Kaynak notu: Picasso’ya yaygın ve belgeli atıf*
-
+*Kaynak notu: The Prophet — “On Work”*
 
 ---
 
 ## 019
 
-> “Yaptığın şey önemlidir; yalnızca düşündüğün şey değil.”
+> “Çalışırken, saatlerin fısıltısını müziğe dönüştüren bir flüt olursunuz.”
+>
+> — **Khalil Gibran**
 
-
-— **Pablo Picasso**
-
-
-*Kaynak notu: Picasso’nun çalışma yaklaşımının kısa aktarımı*
-
+*Kaynak notu: The Prophet — “On Work”*
 
 ---
 
 ## 020
 
-> “Sanat, gündelik hayatın tozunu ruhtan siler.”
+> “Yaptığınız her şeye kendi ruhunuzdan bir nefes katın.”
+>
+> — **Khalil Gibran**
 
-
-— **Pablo Picasso**
-
-
-*Kaynak notu: Picasso’ya atfedilen, sık belgelenen söz*
-
+*Kaynak notu: The Prophet — “On Work”*
 
 ---
 
 ## 021
 
-> “Yaratıcılık cesaret ister.”
+> “Sahip olduklarınızdan verdiğinizde az verirsiniz; gerçekten verdiğiniz, kendinizden verdiğinizdir.”
+>
+> — **Khalil Gibran**
 
-
-— **Henri Matisse**
-
-
-*Kaynak notu: Matisse’e yaygın ve belgeli atıf*
-
+*Kaynak notu: The Prophet — “On Giving”*
 
 ---
 
 ## 022
 
-> “Görmek, başlı başına yaratıcı bir eylemdir.”
+> “Güzellik, aynada kendine bakan sonsuzluktur.”
+>
+> — **Khalil Gibran**
 
-
-— **Henri Matisse**
-
-
-*Kaynak notu: Matisse’in görme ve resim anlayışının kısa aktarımı*
-
+*Kaynak notu: The Prophet — “On Beauty”*
 
 ---
 
 ## 023
 
-> “Bir sanatçı için en önemli şey, bakmayı öğrenmektir.”
+> “Güzellik, hayat kutsal yüzünü açtığında görünen hayattır.”
+>
+> — **Khalil Gibran**
 
-
-— **Henri Matisse**
-
-
-*Kaynak notu: Matisse’in sanat eğitimi yaklaşımının kısa aktarımı*
-
+*Kaynak notu: The Prophet — “On Beauty”*
 
 ---
 
 ## 024
 
-> “İfade, yüzün içinde değil; bütün düzenin içindedir.”
+> “Gündelik hayatınız, tapınağınız ve dininizdir.”
+>
+> — **Khalil Gibran**
 
-
-— **Henri Matisse**
-
-
-*Kaynak notu: Notes of a Painter’dan kısa Türkçe aktarım*
-
+*Kaynak notu: The Prophet — “On Religion”*
 
 ---
 
 ## 025
 
-> “İyi tasarım dürüsttür.”
+> “Neşeniz, maskesi düşmüş kederinizdir.”
+>
+> — **Khalil Gibran**
 
-
-— **Dieter Rams**
-
-
-*Kaynak notu: Ten Principles for Good Design*
-
+*Kaynak notu: The Prophet — “On Joy and Sorrow”*
 
 ---
 
 ## 026
 
-> “İyi tasarım uzun ömürlüdür.”
+> “Keder varlığınızda ne kadar derin oyuk açarsa, taşıyabileceğiniz sevinç o kadar büyür.”
+>
+> — **Khalil Gibran**
 
-
-— **Dieter Rams**
-
-
-*Kaynak notu: Ten Principles for Good Design*
-
+*Kaynak notu: The Prophet — “On Joy and Sorrow”*
 
 ---
 
 ## 027
 
-> “Daha az, ama daha iyi.”
+> “Acınız, anlayışınızı çevreleyen kabuğun kırılmasıdır.”
+>
+> — **Khalil Gibran**
 
-
-— **Dieter Rams**
-
-
-*Kaynak notu: Rams’ın tasarım yaklaşımı*
-
+*Kaynak notu: The Prophet — “On Pain”*
 
 ---
 
 ## 028
 
-> “İyi tasarım, son ayrıntıya kadar düşünülmüştür.”
+> “Yeryüzü çıplak ayaklarınızı hissetmekten, rüzgâr saçlarınızla oynamaktan hoşlanır.”
+>
+> — **Khalil Gibran**
 
-
-— **Dieter Rams**
-
-
-*Kaynak notu: Ten Principles for Good Design*
-
+*Kaynak notu: The Prophet — “On Clothes”*
 
 ---
 
 ## 029
 
-> “İyi tasarım çevreye karşı sorumludur.”
+> “Dostluk her zaman tatlı bir sorumluluktur; asla bir fırsat değildir.”
+>
+> — **Khalil Gibran**
 
-
-— **Dieter Rams**
-
-
-*Kaynak notu: Ten Principles for Good Design*
-
+*Kaynak notu: Sand and Foam*
 
 ---
 
 ## 030
 
-> “İşlevsellik, iyi tasarımın merkezinde olmalıdır.”
+> “Ağaçlar, yeryüzünün gökyüzüne yazdığı şiirlerdir.”
+>
+> — **Khalil Gibran**
 
-
-— **Dieter Rams**
-
-
-*Kaynak notu: Design by Vitsœ, 1976*
-
+*Kaynak notu: Sand and Foam*
 
 ---
 
 ## 031
 
-> “İnsanları anlamadan iyi tasarımı anlayamazsınız.”
+> “İlerleme, var olanı büyütmekten çok, olacak olana doğru ilerlemektir.”
+>
+> — **Khalil Gibran**
 
-
-— **Dieter Rams**
-
-
-*Kaynak notu: Design by Vitsœ, 1976*
-
+*Kaynak notu: Gibran’ın deneme ve aforizmalarından*
 
 ---
 
 ## 032
 
-> “Gereksiz olanı çıkardığınızda biçim daha sakin ve daha kalıcı olur.”
+> “Zihnin üzerinde gücün var; dış olayların üzerinde değil.”
+>
+> — **Marcus Aurelius**
 
-
-— **Dieter Rams**
-
-
-*Kaynak notu: Design by Vitsœ konuşmasının kısa aktarımı*
-
+*Kaynak notu: Meditations*
 
 ---
 
 ## 033
 
-> “Moda değişir; stil kalır.”
+> “Eylemin önündeki engel, eylemi ilerletir. Yolun önündeki şey, yol olur.”
+>
+> — **Marcus Aurelius**
 
-
-— **Coco Chanel**
-
-
-*Kaynak notu: Chanel’e atfedilen klasik söz*
-
+*Kaynak notu: Meditations 5.20*
 
 ---
 
 ## 034
 
-> “Sadelik, gerçek zarafetin anahtarıdır.”
+> “İyi bir insanın nasıl olması gerektiğini tartışmayı bırak; öyle biri ol.”
+>
+> — **Marcus Aurelius**
 
-
-— **Coco Chanel**
-
-
-*Kaynak notu: Chanel’e atfedilen klasik söz*
-
+*Kaynak notu: Meditations 10.16*
 
 ---
 
 ## 035
 
-> “Yerini dolduramayacağınız biri olmak için farklı olmalısınız.”
+> “Doğru değilse yapma; gerçek değilse söyleme.”
+>
+> — **Marcus Aurelius**
 
-
-— **Coco Chanel**
-
-
-*Kaynak notu: Chanel’e atfedilen klasik söz*
-
+*Kaynak notu: Meditations 12.17*
 
 ---
 
 ## 036
 
-> “Lüks rahat olmalıdır; aksi hâlde lüks değildir.”
+> “Kendini şimdiki anla sınırla.”
+>
+> — **Marcus Aurelius**
 
-
-— **Coco Chanel**
-
-
-*Kaynak notu: Chanel’e atfedilen klasik söz*
-
+*Kaynak notu: Meditations 7.29*
 
 ---
 
 ## 037
 
-> “Moda geçer; stil sonsuzdur.”
+> “İçine iyi bak; orada her zaman yeniden doğabilecek bir güç kaynağı vardır.”
+>
+> — **Marcus Aurelius**
 
-
-— **Yves Saint Laurent**
-
-
-*Kaynak notu: Saint Laurent’e atfedilen klasik söz*
-
+*Kaynak notu: Meditations 7.59*
 
 ---
 
 ## 038
 
-> “Bir kadındaki en güzel şey, kendine olan güvenidir.”
+> “En iyi intikam, sana kötülük edene benzememektir.”
+>
+> — **Marcus Aurelius**
 
-
-— **Yves Saint Laurent**
-
-
-*Kaynak notu: Saint Laurent’e atfedilen sözün kısa Türkçe aktarımı*
-
+*Kaynak notu: Meditations 6.6*
 
 ---
 
 ## 039
 
-> “Yıllar içinde öğrendim ki önemli olan elbise değil, onu giyen kadındır.”
+> “Her işini, hayatındaki son işmiş gibi dikkatle yap.”
+>
+> — **Marcus Aurelius**
 
-
-— **Yves Saint Laurent**
-
-
-*Kaynak notu: Saint Laurent’e atfedilen sözün kısa aktarımı*
-
+*Kaynak notu: Meditations 2.5*
 
 ---
 
 ## 040
 
-> “Daha az satın al. İyi seç. Uzun süre kullan.”
+> “Doğanın seni taşıyamayacağın bir şeye maruz bırakmadığını hatırla.”
+>
+> — **Marcus Aurelius**
 
-
-— **Vivienne Westwood**
-
-
-*Kaynak notu: Westwood’un sürdürülebilirlik mottosu*
-
+*Kaynak notu: Meditations*
 
 ---
 
 ## 041
 
-> “Kaliteyi seç; niceliği değil.”
+> “Karşılaştığın şeyi, sana düşen işin bir parçası olarak kabul et.”
+>
+> — **Marcus Aurelius**
 
-
-— **Vivienne Westwood**
-
-
-*Kaynak notu: Westwood’un sürdürülebilir moda yaklaşımının kısa aktarımı*
-
+*Kaynak notu: Meditations*
 
 ---
 
 ## 042
 
-> “Moda, dünyayı daha iyi hâle getirmek için bir araç olabilir.”
+> “Hayatının mutluluğu, düşüncelerinin niteliğine bağlıdır.”
+>
+> — **Marcus Aurelius**
 
-
-— **Vivienne Westwood**
-
-
-*Kaynak notu: Westwood’un moda ve aktivizm yaklaşımının kısa aktarımı*
-
+*Kaynak notu: Meditations*
 
 ---
 
 ## 043
 
-> “Tasarım felsefe için değil, hayat içindir.”
+> “Ruh, alışkanlık hâline gelen düşüncelerinin rengini alır.”
+>
+> — **Marcus Aurelius**
 
-
-— **Issey Miyake**
-
-
-*Kaynak notu: Miyake’ye atfedilen söz*
-
+*Kaynak notu: Meditations*
 
 ---
 
 ## 044
 
-> “Kıyafet, insan bedeniyle birlikte tamamlanır.”
+> “Sana verilenleri kibirsizce kabul et; senden alınanları bağlılık göstermeden bırak.”
+>
+> — **Marcus Aurelius**
 
-
-— **Issey Miyake**
-
-
-*Kaynak notu: Miyake’nin tasarım yaklaşımının kısa aktarımı*
-
+*Kaynak notu: Meditations 8.33*
 
 ---
 
 ## 045
 
-> “Yeni olanı ararken malzemenin imkânlarını dinleyin.”
+> “Bugünün işini sade, dikkatli ve adil biçimde yap.”
+>
+> — **Marcus Aurelius**
 
-
-— **Issey Miyake**
-
-
-*Kaynak notu: Miyake’nin malzeme odaklı yaklaşımının kısa aktarımı*
-
+*Kaynak notu: Meditations’ın çalışma disiplini üzerine bölümlerinden*
 
 ---
 
 ## 046
 
-> “Göz seyahat etmelidir.”
+> “İnsan için iyi olan, insan doğasına uygun olandır.”
+>
+> — **Marcus Aurelius**
 
-
-— **Diana Vreeland**
-
-
-*Kaynak notu: The Eye Has to Travel*
-
+*Kaynak notu: Meditations*
 
 ---
 
 ## 047
 
-> “Stil, paradan bağımsızdır.”
+> “Bize verilen zaman az değildir; çoğunu biz boşa harcarız.”
+>
+> — **Seneca**
 
-
-— **Diana Vreeland**
-
-
-*Kaynak notu: Vreeland’a atfedilen klasik söz*
-
+*Kaynak notu: On the Shortness of Life*
 
 ---
 
 ## 048
 
-> “Biraz kötü zevk, kırmızı biber gibidir; hepimize biraz gerekir.”
+> “Yaşadığın sürece, yaşamayı öğrenmeye devam et.”
+>
+> — **Seneca**
 
-
-— **Diana Vreeland**
-
-
-*Kaynak notu: Vreeland’a atfedilen sözün kısa Türkçe aktarımı*
-
+*Kaynak notu: Letters to Lucilius*
 
 ---
 
 ## 049
 
-> “Daha fazlası daha fazladır; azı sıkıcı olabilir.”
+> “Gerçekte olduğundan daha çok, hayalimizde acı çekeriz.”
+>
+> — **Seneca**
 
-
-— **Iris Apfel**
-
-
-*Kaynak notu: Apfel’in meşhur mottosunun Türkçe aktarımı*
-
+*Kaynak notu: Letters to Lucilius — Mektup 13*
 
 ---
 
 ## 050
 
-> “Stil, kim olduğunuzu bilmekle ilgilidir.”
+> “Zorluklar zihni, emeğin bedeni güçlendirdiği gibi güçlendirir.”
+>
+> — **Seneca**
 
-
-— **Iris Apfel**
-
-
-*Kaynak notu: Apfel’in stil anlayışının kısa aktarımı*
-
+*Kaynak notu: On Providence*
 
 ---
 
 ## 051
 
-> “Kurallar yok; olsaydı onları yine bozardım.”
+> “Hangi limana gittiğini bilmeyen için hiçbir rüzgâr elverişli değildir.”
+>
+> — **Seneca**
 
-
-— **Iris Apfel**
-
-
-*Kaynak notu: Apfel’e atfedilen sözün kısa aktarımı*
-
+*Kaynak notu: Letters to Lucilius*
 
 ---
 
 ## 052
 
-> “İnanç, şafak hâlâ karanlıkken ışığı hisseden kuştur.”
+> “Geleceğin bütünü belirsizdir; hemen yaşa.”
+>
+> — **Seneca**
 
-
-— **Rabindranath Tagore**
-
-
-*Kaynak notu: Stray Birds*
-
+*Kaynak notu: Letters to Lucilius*
 
 ---
 
 ## 053
 
-> “Kelebek ayları değil anları sayar; yine de zamanı yeter.”
+> “Her yeni günü ayrı bir hayat gibi karşıla.”
+>
+> — **Seneca**
 
-
-— **Rabindranath Tagore**
-
-
-*Kaynak notu: Stray Birds*
-
+*Kaynak notu: Letters to Lucilius*
 
 ---
 
 ## 054
 
-> “Hayatın, yaprağın ucundaki çiy gibi zamanın kıyısında dans etsin.”
+> “Seni daha iyi birine dönüştürecek insanlarla birlikte ol.”
+>
+> — **Seneca**
 
-
-— **Rabindranath Tagore**
-
-
-*Kaynak notu: Stray Birds*
-
+*Kaynak notu: Letters to Lucilius — Mektup 7*
 
 ---
 
 ## 055
 
-> “Ağaçlar, yeryüzünün dinleyen göğe bitmeyen konuşmasıdır.”
+> “Önemli olan ne kadar çok şeye sahip olduğun değil, sahip olduklarının niteliğidir.”
+>
+> — **Seneca**
 
-
-— **Rabindranath Tagore**
-
-
-*Kaynak notu: Tagore’un kısa şiirlerinden Türkçe aktarım*
-
+*Kaynak notu: Letters to Lucilius’un ölçülülük anlayışından*
 
 ---
 
 ## 056
 
-> “Çalışmak, görünür hâle gelmiş sevgidir.”
+> “Hayatı beklerken hayat geçip gider.”
+>
+> — **Seneca**
 
-
-— **Khalil Gibran**
-
-
-*Kaynak notu: The Prophet*
-
+*Kaynak notu: Letters to Lucilius*
 
 ---
 
 ## 057
 
-> “Güzellik, aynada kendine bakan sonsuzluktur.”
+> “İnsanları rahatsız eden şeyler değil, o şeyler hakkında verdikleri yargılardır.”
+>
+> — **Epiktetos**
 
-
-— **Khalil Gibran**
-
-
-*Kaynak notu: The Prophet*
-
+*Kaynak notu: Enchiridion 5*
 
 ---
 
 ## 058
 
-> “Gündelik hayatınız, tapınağınız ve dininizdir.”
+> “Önce kim olmak istediğini söyle; sonra yapman gerekeni yap.”
+>
+> — **Epiktetos**
 
-
-— **Khalil Gibran**
-
-
-*Kaynak notu: The Prophet*
-
+*Kaynak notu: Discourses*
 
 ---
 
 ## 059
 
-> “Emek verirken kendinizden de bir parça verirsiniz.”
+> “Bildiğini sandığın şeyi öğrenmek mümkün değildir.”
+>
+> — **Epiktetos**
 
-
-— **Khalil Gibran**
-
-
-*Kaynak notu: The Prophet’in çalışma bölümünden kısa aktarım*
-
+*Kaynak notu: Discourses*
 
 ---
 
 ## 060
 
-> “Soruları şimdi yaşayın.”
+> “Kendine hâkim olmayan hiç kimse özgür değildir.”
+>
+> — **Epiktetos**
 
-
-— **Rainer Maria Rilke**
-
-
-*Kaynak notu: Letters to a Young Poet*
-
+*Kaynak notu: Discourses*
 
 ---
 
 ## 061
 
-> “Her şeyin olmasına izin verin: güzelliğin de korkunun da. Yürümeye devam edin.”
+> “Gücünün içinde olanı en iyi biçimde kullan; geri kalanını geldiği gibi karşıla.”
+>
+> — **Epiktetos**
 
-
-— **Rainer Maria Rilke**
-
-
-*Kaynak notu: Rilke’nin şiirlerinden kısa Türkçe aktarım*
-
+*Kaynak notu: Discourses*
 
 ---
 
 ## 062
 
-> “Sabırlı olun; çözülememiş olanı sevmeye çalışın.”
+> “Gelişmek istiyorsan, bazı konularda bilgisiz görünmeye razı ol.”
+>
+> — **Epiktetos**
 
-
-— **Rainer Maria Rilke**
-
-
-*Kaynak notu: Letters to a Young Poet*
-
+*Kaynak notu: Enchiridion 13*
 
 ---
 
 ## 063
 
-> “Belki de bütün ejderhalar, bizi cesur görmek isteyen varlıklardır.”
+> “Felsefeni açıklamak yerine, onu davranışlarınla göster.”
+>
+> — **Epiktetos**
 
-
-— **Rainer Maria Rilke**
-
-
-*Kaynak notu: Letters to a Young Poet’tan kısa aktarım*
-
+*Kaynak notu: Enchiridion 46’nın anlamı*
 
 ---
 
 ## 064
 
-> “Bilmek yetmez; uygulamak gerekir. İstemek yetmez; yapmak gerekir.”
+> “Sana ait olanı koru: yargılarını, seçimlerini ve niyetini.”
+>
+> — **Epiktetos**
 
-
-— **Johann Wolfgang von Goethe**
-
-
-*Kaynak notu: Goethe’ye atfedilen klasik söz*
-
+*Kaynak notu: Enchiridion*
 
 ---
 
 ## 065
 
-> “İnsan yalnızca anladığını görür.”
+> “Bir rol sana verildiğinde, onu iyi oynamak senin işindir.”
+>
+> — **Epiktetos**
 
-
-— **Johann Wolfgang von Goethe**
-
-
-*Kaynak notu: Goethe’nin görme ve bilgi anlayışının kısa aktarımı*
-
+*Kaynak notu: Enchiridion 17*
 
 ---
 
 ## 066
 
-> “Güzellik, doğanın gizli yasalarının bir görünüşüdür.”
+> “Her durumda önce neyin senin kontrolünde olduğunu ayırt et.”
+>
+> — **Epiktetos**
 
-
-— **Johann Wolfgang von Goethe**
-
-
-*Kaynak notu: Goethe’nin estetik anlayışının kısa aktarımı*
-
+*Kaynak notu: Enchiridion’un temel ilkesi*
 
 ---
 
 ## 067
 
-> “Gün, küçük bir ömürdür; onu iyi kullanın.”
+> “Hayatımız ayrıntılar içinde dağılıyor. Sadeleştir, sadeleştir.”
+>
+> — **Henry David Thoreau**
 
-
-— **Johann Wolfgang von Goethe**
-
-
-*Kaynak notu: Goethe’ye atfedilen yaşam düşüncesinin kısa aktarımı*
-
+*Kaynak notu: Walden*
 
 ---
 
 ## 068
 
-> “Yolun önündeki engel, yolun kendisine dönüşebilir.”
+> “Ormana gittim; çünkü bilinçli yaşamak istedim.”
+>
+> — **Henry David Thoreau**
 
-
-— **Marcus Aurelius**
-
-
-*Kaynak notu: Meditations*
-
+*Kaynak notu: Walden*
 
 ---
 
 ## 069
 
-> “Yaptığın işi, hayatındaki son işmiş gibi dikkatle yap.”
+> “Hayatın özünü karşılamak ve ondan öğrenilecek olanı öğrenmek istedim.”
+>
+> — **Henry David Thoreau**
 
-
-— **Marcus Aurelius**
-
-
-*Kaynak notu: Meditations*
-
+*Kaynak notu: Walden*
 
 ---
 
 ## 070
 
-> “Şimdiki ana sınır koy; işini burada yap.”
+> “Bir şeyin bedeli, ona karşılık verdiğin yaşam miktarıdır.”
+>
+> — **Henry David Thoreau**
 
-
-— **Marcus Aurelius**
-
-
-*Kaynak notu: Meditations’ın kısa Türkçe aktarımı*
-
+*Kaynak notu: Walden*
 
 ---
 
 ## 071
 
-> “İyi bir insanın nasıl olması gerektiğini tartışmayı bırak; öyle ol.”
+> “İnsan hayallerinin yönünde güvenle ilerlerse, beklemediği bir başarıyla karşılaşır.”
+>
+> — **Henry David Thoreau**
 
-
-— **Marcus Aurelius**
-
-
-*Kaynak notu: Meditations*
-
+*Kaynak notu: Walden*
 
 ---
 
 ## 072
 
-> “Ruh, düşüncelerinin rengine boyanır.”
+> “İyilik, hiçbir zaman başarısız olmayan tek yatırımdır.”
+>
+> — **Henry David Thoreau**
 
-
-— **Marcus Aurelius**
-
-
-*Kaynak notu: Meditations’ın yaygın Türkçe aktarımı*
-
+*Kaynak notu: Walden*
 
 ---
 
 ## 073
 
-> “Bize verilen zaman az değil; çoğunu biz harcıyoruz.”
+> “Yaşamak için ayağa kalkmadıysan, yazmak için oturmak boşunadır.”
+>
+> — **Henry David Thoreau**
 
-
-— **Seneca**
-
-
-*Kaynak notu: On the Shortness of Life*
-
+*Kaynak notu: Journal*
 
 ---
 
 ## 074
 
-> “Yaşadığın sürece, yaşamayı öğrenmeye devam et.”
+> “Meşgul olmak yetmez; karıncalar da meşguldür. Mesele, neyle meşgul olduğundur.”
+>
+> — **Henry David Thoreau**
 
-
-— **Seneca**
-
-
-*Kaynak notu: Letters to Lucilius*
-
+*Kaynak notu: Thoreau’ya ait mektup/aforizma geleneği*
 
 ---
 
 ## 075
 
-> “Zorluklar zihni, emek bedenimizi güçlendirdiği gibi güçlendirir.”
+> “Sabah, günün en uyanık ve en unutulmaz vaktidir.”
+>
+> — **Henry David Thoreau**
 
-
-— **Seneca**
-
-
-*Kaynak notu: Seneca’ya atfedilen klasik söz*
-
+*Kaynak notu: Walden*
 
 ---
 
 ## 076
 
-> “Hiçbir büyük yetenek, bir parça cesur taşkınlık olmadan var olmaz.”
+> “Bütün iyi şeyler vahşi ve özgürdür.”
+>
+> — **Henry David Thoreau**
 
-
-— **Seneca**
-
-
-*Kaynak notu: On Tranquillity / klasik Seneca düşüncesi*
-
+*Kaynak notu: Walking*
 
 ---
 
 ## 077
 
-> “Önce kim olmak istediğini söyle; sonra yapman gerekeni yap.”
+> “Büyük hiçbir şey coşku olmadan başarılmadı.”
+>
+> — **Ralph Waldo Emerson**
 
-
-— **Epiktetos**
-
-
-*Kaynak notu: Discourses*
-
+*Kaynak notu: Essays: First Series — “Circles”*
 
 ---
 
 ## 078
 
-> “Bizi şeyler değil, onlar hakkındaki yargılarımız rahatsız eder.”
+> “Kendine güven; her yürek o demir tele titreşir.”
+>
+> — **Ralph Waldo Emerson**
 
-
-— **Epiktetos**
-
-
-*Kaynak notu: Enchiridion*
-
+*Kaynak notu: Self-Reliance*
 
 ---
 
 ## 079
 
-> “Elinde olanı iyi kullan; geri kalanı geldiği gibi karşıla.”
+> “Kendinde ısrar et; asla taklit etme.”
+>
+> — **Ralph Waldo Emerson**
 
-
-— **Epiktetos**
-
-
-*Kaynak notu: Epiktetos’un öğretisinin kısa aktarımı*
-
+*Kaynak notu: Self-Reliance*
 
 ---
 
 ## 080
 
-> “Özgürlük, kendine hâkim olmakla başlar.”
+> “İnsan olmak isteyen, uyumsuz olmayı göze almalıdır.”
+>
+> — **Ralph Waldo Emerson**
 
-
-— **Epiktetos**
-
-
-*Kaynak notu: Epiktetos’un düşüncesinin kısa aktarımı*
-
+*Kaynak notu: Self-Reliance*
 
 ---
 
 ## 081
 
-> “Hayallerinizin yönünde güvenle ilerleyin.”
+> “Aptalca tutarlılık, küçük zihinlerin korkuluğudur.”
+>
+> — **Ralph Waldo Emerson**
 
-
-— **Henry David Thoreau**
-
-
-*Kaynak notu: Walden’dan kısa aktarım*
-
+*Kaynak notu: Self-Reliance*
 
 ---
 
 ## 082
 
-> “Hayat ayrıntılar içinde dağılıyor. Sadeleştir, sadeleştir.”
+> “Doğa her zaman ruhun renklerini taşır.”
+>
+> — **Ralph Waldo Emerson**
 
-
-— **Henry David Thoreau**
-
-
-*Kaynak notu: Walden*
-
+*Kaynak notu: Nature*
 
 ---
 
 ## 083
 
-> “Bir şeyin bedeli, ona karşılık verdiğiniz yaşam miktarıdır.”
+> “İyi yapılmış bir işin ödülü, onu yapmış olmaktır.”
+>
+> — **Ralph Waldo Emerson**
 
-
-— **Henry David Thoreau**
-
-
-*Kaynak notu: Walden*
-
+*Kaynak notu: New England Reformers*
 
 ---
 
 ## 084
 
-> “Bilinçli yaşamak istedim; hayatın özünü karşılamak için.”
+> “Bir meşe palamudunda bin ormanın ihtimali vardır.”
+>
+> — **Ralph Waldo Emerson**
 
-
-— **Henry David Thoreau**
-
-
-*Kaynak notu: Walden’dan kısa aktarım*
-
+*Kaynak notu: Emerson’ın doğa ve potansiyel düşüncesinden*
 
 ---
 
 ## 085
 
-> “Coşku olmadan büyük hiçbir şey başarılamaz.”
+> “Kelebek ayları değil anları sayar; yine de zamanı yeter.”
+>
+> — **Rabindranath Tagore**
 
-
-— **Ralph Waldo Emerson**
-
-
-*Kaynak notu: Essays*
-
+*Kaynak notu: Stray Birds*
 
 ---
 
 ## 086
 
-> “Doğanın hızını benimseyin; onun sırrı sabırdır.”
+> “Hayatın, yaprağın ucundaki çiy gibi zamanın kıyısında hafifçe dans etsin.”
+>
+> — **Rabindranath Tagore**
 
-
-— **Ralph Waldo Emerson**
-
-
-*Kaynak notu: Emerson’a atfedilen klasik söz*
-
+*Kaynak notu: Stray Birds*
 
 ---
 
 ## 087
 
-> “Kendine güven: her yürek o demir tele titreşir.”
+> “Çiçeğin yapraklarını kopararak onun güzelliğini toplayamazsın.”
+>
+> — **Rabindranath Tagore**
 
-
-— **Ralph Waldo Emerson**
-
-
-*Kaynak notu: Self-Reliance’dan kısa aktarım*
-
+*Kaynak notu: Stray Birds*
 
 ---
 
 ## 088
 
-> “Güzellik, dünyanın Tanrı’ya bakışıdır.”
+> “Tek olan çiçek, çok olan dikenleri kıskanmaz.”
+>
+> — **Rabindranath Tagore**
 
-
-— **Ralph Waldo Emerson**
-
-
-*Kaynak notu: Nature’dan kısa Türkçe aktarım*
-
+*Kaynak notu: Stray Birds*
 
 ---
 
 ## 089
 
-> “Bir kum tanesinde dünyayı, bir kır çiçeğinde göğü görmek.”
+> “Dünyayı yanlış okur, sonra da bizi aldattığını söyleriz.”
+>
+> — **Rabindranath Tagore**
 
-
-— **William Blake**
-
-
-*Kaynak notu: Auguries of Innocence*
-
+*Kaynak notu: Stray Birds*
 
 ---
 
 ## 090
 
-> “Zıtlıklar olmadan ilerleme olmaz.”
+> “Toprağın altındaki kökler, dalları verimli kıldıkları için ödül istemez.”
+>
+> — **Rabindranath Tagore**
 
-
-— **William Blake**
-
-
-*Kaynak notu: The Marriage of Heaven and Hell*
-
+*Kaynak notu: Stray Birds*
 
 ---
 
 ## 091
 
-> “Taşkın canlılık güzelliktir.”
+> “Küçük gerçeğin sözcükleri nettir; büyük gerçeğin büyük bir sessizliği vardır.”
+>
+> — **Rabindranath Tagore**
 
-
-— **William Blake**
-
-
-*Kaynak notu: The Marriage of Heaven and Hell*
-
+*Kaynak notu: Stray Birds*
 
 ---
 
 ## 092
 
-> “Algının kapıları arınsaydı, her şey olduğu gibi görünürdü: sonsuz.”
+> “Yaprak sevdiğinde çiçeğe; çiçek adandığında meyveye dönüşür.”
+>
+> — **Rabindranath Tagore**
 
-
-— **William Blake**
-
-
-*Kaynak notu: The Marriage of Heaven and Hell*
-
+*Kaynak notu: Stray Birds*
 
 ---
 
 ## 093
 
-> “İlim ilim bilmektir, ilim kendin bilmektir.”
+> “Bir kum tanesinde dünyayı, bir kır çiçeğinde göğü gör.”
+>
+> — **William Blake**
 
-
-— **Yunus Emre**
-
-
-*Kaynak notu: Yunus Emre Divanı*
-
+*Kaynak notu: Auguries of Innocence*
 
 ---
 
 ## 094
 
-> “Gelin tanış olalım, işi kolay kılalım.”
+> “Karşıtlıklar olmadan ilerleme olmaz.”
+>
+> — **William Blake**
 
-
-— **Yunus Emre**
-
-
-*Kaynak notu: Yunus Emre Divanı*
-
+*Kaynak notu: The Marriage of Heaven and Hell*
 
 ---
 
 ## 095
 
-> “Sevelim, sevilelim; dünya kimseye kalmaz.”
+> “Coşkun canlılık güzelliktir.”
+>
+> — **William Blake**
 
-
-— **Yunus Emre**
-
-
-*Kaynak notu: Yunus Emre Divanı*
-
+*Kaynak notu: The Marriage of Heaven and Hell*
 
 ---
 
 ## 096
 
-> “Bir ben vardır bende, benden içeri.”
+> “Bir başkasına iyilik etmek istiyorsan, bunu küçük ayrıntılarda yap.”
+>
+> — **William Blake**
 
-
-— **Yunus Emre**
-
-
-*Kaynak notu: Yunus Emre Divanı*
-
+*Kaynak notu: Jerusalem*
 
 ---
 
 ## 097
 
-> “Dünle beraber gitti cancağızım, ne kadar söz varsa düne ait.”
+> “İlim ilim bilmektir; ilim kendin bilmektir.”
+>
+> — **Yunus Emre**
 
-
-— **Mevlânâ Celâleddîn-i Rûmî**
-
-
-*Kaynak notu: Mevlânâ’ya atfedilen ve eser geleneğinde yer alan söz*
-
+*Kaynak notu: Yunus Emre Divanı*
 
 ---
 
 ## 098
 
-> “Yeni şeyler söylemek lâzım.”
+> “Gelin tanış olalım, işi kolay kılalım.”
+>
+> — **Yunus Emre**
 
-
-— **Mevlânâ Celâleddîn-i Rûmî**
-
-
-*Kaynak notu: Mevlânâ’ya atfedilen meşhur sözün kısa aktarımı*
-
+*Kaynak notu: Yunus Emre Divanı*
 
 ---
 
 ## 099
 
-> “Aynı dili konuşanlar değil, aynı duyguyu paylaşanlar anlaşır.”
+> “Sevelim, sevilelim; dünya kimseye kalmaz.”
+>
+> — **Yunus Emre**
 
-
-— **Mevlânâ Celâleddîn-i Rûmî**
-
-
-*Kaynak notu: Mevlânâ’ya yaygın biçimde atfedilen söz*
-
+*Kaynak notu: Yunus Emre Divanı*
 
 ---
 
 ## 100
 
-> “Sabır, sevincin anahtarıdır.”
+> “Bir ben vardır bende, benden içeri.”
+>
+> — **Yunus Emre**
 
-
-— **Mevlânâ Celâleddîn-i Rûmî**
-
-
-*Kaynak notu: Mevlânâ geleneğinde yer alan kısa söz*
-
+*Kaynak notu: Yunus Emre Divanı*
 
 ---
