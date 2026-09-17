@@ -12,6 +12,8 @@
     "prepare:af-live": "npx tsx scripts/prepare-af-live-data.ts",
     "seed:demo-workspace": "npx tsx scripts/seed-demo-workspace.ts",
     "import:planning": "npx tsx scripts/import-planning-calendar.ts",
+    "import:hidden-products": "npx tsx scripts/import-hidden-web-products.ts",
+    "link:sheets-web": "npx tsx scripts/link-sheets-to-web.ts",
     "storage:usage": "npx tsx scripts/storage-usage.ts",
     "cleanup:images": "npx tsx scripts/cleanup-image-folder.ts",
     "teamwork:inventory": "npx tsx scripts/teamwork-inventory.ts",

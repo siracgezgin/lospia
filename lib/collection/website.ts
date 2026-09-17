@@ -225,6 +225,22 @@ async function inPool<T>(items: T[], size: number, fn: (_item: T) => Promise<voi
   }));
 }
 
+/**
+ * Kategori ADI → slug.
+ *
+ * WooCommerce'in CSV dışa aktarımı kategoriyi SLUG değil AD yazıyor
+ * ("One-of-a-Kind > Clothing"). Adı slug'a çevirmek TAHMİN EDİLEMEZ: o ad
+ * `artofanatolia` slug'ına, "Trousers & Skirts" ise `trousers`a karşılık
+ * geliyor. Tek doğru kaynak sitenin kendi listesi.
+ *
+ * Yalnız betikler kullanır (sitede gizli duran ürünlerin içe aktarımı);
+ * uygulamanın kendi çekişi slug'ları zaten API'den alıyor.
+ */
+export async function fetchCategorySlugsByName(): Promise<Map<string, string>> {
+  const rows = await paged<{ slug: string; name: string }>(`${STORE_API}/products/categories`);
+  return new Map(rows.map((c) => [decodeEntities(c.name).trim().toLowerCase(), c.slug]));
+}
+
 /** Bütün ürünler. ANA LİSTE alınamazsa hata FIRLATIR — çağıran yarım bir
  *  listeyle karar vermesin. Kategori üyelikleri ise EK bilgidir: biri
  *  alınamazsa o ürünler yalnız kendi (birincil) kategorisiyle eşlenir, çekiş
