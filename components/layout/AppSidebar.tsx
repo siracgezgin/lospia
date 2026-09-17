@@ -187,7 +187,7 @@ export function AppSidebar({
               Haftanın Sözü
             </p>
             <p
-              className="mt-1.5 line-clamp-3 text-[12.5px] italic leading-[1.6] text-ink/80"
+              className="mt-1.5 line-clamp-4 text-[12.5px] italic leading-[1.55] text-ink/80"
               title={`${weeklyQuote.quoteTr} — ${weeklyQuote.author}`}
             >
               “{weeklyQuote.quoteTr}”
