@@ -1689,6 +1689,14 @@ export type Database = {
       }
       production_sheets: {
         Row: {
+          designers_note: string | null
+          details_care: string | null
+          size_fit: string | null
+          web_images: Json
+          web_name: string | null
+          web_product_id: number | null
+          web_synced_at: string | null
+          web_url: string | null
           accessories_info: string | null
           archived_at: string | null
           category: string | null
@@ -1732,6 +1740,14 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          designers_note?: string | null
+          details_care?: string | null
+          size_fit?: string | null
+          web_images?: Json
+          web_name?: string | null
+          web_product_id?: number | null
+          web_synced_at?: string | null
+          web_url?: string | null
           accessories_info?: string | null
           archived_at?: string | null
           category?: string | null
@@ -1775,6 +1791,14 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          designers_note?: string | null
+          details_care?: string | null
+          size_fit?: string | null
+          web_images?: Json
+          web_name?: string | null
+          web_product_id?: number | null
+          web_synced_at?: string | null
+          web_url?: string | null
           accessories_info?: string | null
           archived_at?: string | null
           category?: string | null

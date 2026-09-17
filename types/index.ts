@@ -413,11 +413,28 @@ export type ProductionSheet = {
   colorway?: string | null;
   /** Varyantsa ana föy. Veri paylaşılmaz; yalnız gruplama. */
   parent_sheet_id?: string | null;
+  /** WEB İÇERİĞİ (20240347) — sitedeki akordeon bölümleriyle bire bir.
+   *  Opsiyonel: migration uygulanmamış kurulumda kolonlar gelmez. */
+  designers_note?: string | null;
+  size_fit?: string | null;
+  details_care?: string | null;
+  /** Sitedeki görsellerin ADRESLERİ, ilki dekupe. Bayt saklanmaz. */
+  web_images?: string[] | null;
+  web_url?: string | null;
+  web_name?: string | null;
+  web_product_id?: number | null;
+  web_synced_at?: string | null;
 };
 
-/** Web nav ana kategorileri (aslifilinta.com). */
-export type ProductionCategory =
-  | "one_of_a_kind" | "ready_to_wear" | "shoes" | "accessories";
+/**
+ * Koleksiyon kategori ANAHTARI.
+ *
+ * Eskiden dört sabit değerlik bir birlik tipiydi ("one_of_a_kind" | …). Ama
+ * taksonomi 2026-08-30'dan beri DÜZENLENEBİLİR ve bugün "upcycle", "2026_looks",
+ * "2026_dekupe" eklendi (2026-09-17). Sabit tip, yeni kategorideki föyü tip
+ * düzeyinde imkânsız kılıyordu. Geçerlilik veritabanındaki kategori tablosunda.
+ */
+export type ProductionCategory = string;
 
 /**
  * Maliyet kalemi — ürünün birim maliyetini oluşturan TEK bir gider.

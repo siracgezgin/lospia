@@ -7,6 +7,7 @@ import {
   Boxes, Plus, Search, ChevronLeft, FileDown, Printer, Shirt, Scissors,
   Footprints, Handbag, FileSpreadsheet, ClipboardList, ShieldCheck,
   Pencil, FolderPlus, SwatchBook, Trash2, Image as ImageIcon, X,
+  FolderInput, Globe, Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { deleteProductionSheet } from "@/lib/actions/production";
@@ -24,6 +25,8 @@ import { COLLECTION_TAXONOMY, type CategoryNode } from "@/lib/collection/taxonom
 import { labelOf, subLabelOf, subsOf } from "@/lib/collection/category-tree";
 import { subPath, type SubCategory } from "@/lib/collection/taxonomy";
 import { CategoryManagerDialog } from "./CategoryManagerDialog";
+import { MoveSheetDialog } from "./MoveSheetDialog";
+import { syncCollectionFromWebsite } from "@/lib/actions/collection-web";
 import type { ProductionSheet } from "@/types";
 
 /** Tarayıcı yalnızca meta + kategori + fiyat + beden dağılımı taşır. */
@@ -35,6 +38,8 @@ export type CollectionItem = Pick<
   | "pricing" | "size_distribution" | "measurements"
   | "confirmed_at" | "confirmed_by"
   | "created_by" | "updated_by" | "archived_at" | "created_at" | "updated_at"
+  /** Sitedeki görsellerin adresleri, ilki dekupe (20240347). */
+  | "web_images"
 >;
 
 interface Props {
@@ -109,6 +114,15 @@ const COVER_PRIORITY = ["cover", "general", "embellishments", "accessories", "se
 
 function coverImage(s: CollectionItem): string | null {
   const imgs = (Array.isArray(s.photo_refs) ? s.photo_refs : []).filter((i) => i?.url);
+  /* 1) Kullanıcının BİLEREK seçtiği kapak her şeyin önünde. */
+  const chosen = imgs.find((i) => i.section === "cover");
+  if (chosen) return chosen.url;
+  /* 2) WEB SİTESİNDEKİ DEKUPE. Aslı Hanım (2026-09-17): "Burada bunların ilk
+        fotoğrafları dekupeler olacak, web sitemizdeki dekupeler." Atölye
+        fotoğrafından ve teknik çizimden önce gelir; kullanıcı başka bir kapak
+        seçmediyse katalog sitedeki gibi görünür. */
+  const dekupe = Array.isArray(s.web_images) ? s.web_images.find(Boolean) : null;
+  if (dekupe) return dekupe;
   for (const section of COVER_PRIORITY) {
     const hit = imgs.find((i) => i.section === section);
     if (hit) return hit.url;
@@ -155,6 +169,32 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
   /* Silme gibi kart eylemlerinin hatası — sayfanın üstünde, kaybolmayan
      tek satır (kart o sırada listede kalmış olabilir). */
   const [actionError, setActionError] = useState<string | null>(null);
+
+  /* TAŞIMA — "Upcycle'a gönder". Karttaki düğmeyle ya da SAĞ TIKLA açılır
+     (Aslı Hanım, 2026-09-17: "atıyorum sağ tıklayarak veya dosya göndererek"). */
+  const [moving, setMoving] = useState<CollectionItem | null>(null);
+  /* Başarı bildirimi — hata satırıyla aynı yerde, olumlu tonda. */
+  const [notice, setNotice] = useState<string | null>(null);
+
+  /* WEB SİTESİNDEN ÇEK — yönetici. Sonuç SAYIYLA söylenir: kaç föy açıldı,
+     kaçı güncellendi, kaçı neden atlandı. "Tamamlandı" demek yetmez;
+     150 föyün sessizce açılması kimsenin görmediği bir değişiklik olurdu. */
+  const [syncing, startSync] = useTransition();
+  function runSync() {
+    setActionError(null);
+    setNotice(null);
+    startSync(async () => {
+      const res = await syncCollectionFromWebsite();
+      if ("error" in res) { setActionError(res.error); return; }
+      const parts = [
+        res.created ? `${res.created} yeni föy açıldı` : null,
+        res.updated ? `${res.updated} föyün web bilgisi güncellendi` : null,
+        res.skipped ? `${res.skipped} ürün atlandı (koleksiyonda karşılığı yok: ${res.skippedNames.slice(0, 3).join(", ")}${res.skippedNames.length > 3 ? "…" : ""})` : null,
+      ].filter(Boolean);
+      setNotice(parts.length ? `Web sitesinden çekildi — ${parts.join(" · ")}.` : "Web sitesinde yeni bir şey yok.");
+      router.refresh();
+    });
+  }
 
   async function removeSheet(sheet: CollectionItem) {
     if (!(await ask({
@@ -340,6 +380,18 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
                 <FileSpreadsheet size={15} /> <span className="hidden sm:inline">Tümünü indir</span>
               </DownloadLink>
             )}
+            {isAdmin && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={runSync}
+                disabled={syncing}
+                title="aslifilinta.com'daki ürünleri dekupe görselleri ve Designer’s Note / Size & Fit / Details & Care bilgileriyle çek"
+              >
+                {syncing ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Globe size={15} aria-hidden />}
+                <span className="hidden sm:inline">{syncing ? "Çekiliyor…" : "Siteden çek"}</span>
+              </Button>
+            )}
             {/* HİYERARŞİ: föy bir KATEGORİNİN altında doğar (2026-08-29:
                 "önce kategori… sonra o kategorinin içine girip föy
                 oluşturulmalı"). Bu yüzden "Yeni föy" YALNIZ bir kategorinin
@@ -362,10 +414,31 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
 
 
       {dialog}
+      {moving && (
+        <MoveSheetDialog
+          sheet={moving}
+          tree={tree}
+          onClose={() => setMoving(null)}
+          onMoved={(label) => {
+            setNotice(`“${moving.title}” → ${label} kategorisine gönderildi.`);
+            setMoving(null);
+            router.refresh();
+          }}
+        />
+      )}
 
       {actionError && (
         <p role="alert" className="anim-fade-down mb-3 rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[13.5px] font-medium text-danger">
           {actionError}
+        </p>
+      )}
+      {/* Olumlu sonuç — kategori kutularında da ürünlerde de aynı yerde. */}
+      {notice && (
+        <p role="status" className="anim-fade-down mb-3 flex items-start justify-between gap-2 rounded-control border border-success/30 bg-success/10 px-3 py-2 text-[13.5px] font-medium text-ink">
+          <span>{notice}</span>
+          <button type="button" onClick={() => setNotice(null)} aria-label="Kapat" className="shrink-0 text-muted hover:text-ink">
+            <X size={14} aria-hidden />
+          </button>
         </p>
       )}
 
@@ -554,6 +627,10 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
                 // sayfayı istemcide yeniden çizdiriyordu (donma şikâyeti).
                 <div
                   key={s.id}
+                  /* SAĞ TIK → "Başka kategoriye gönder". Tarayıcının kendi menüsü
+                     bu kartta bir şey kazandırmıyor (bağlantıyı yeni sekmede
+                     açmak dışında — o da tıklamayla zaten mümkün). */
+                  onContextMenu={(e) => { e.preventDefault(); setMoving(s); }}
                   /* KART: hover'da YALNIZ gölge derinleşir. Kenarlık da
                      değişince kutu iki kanaldan birden oynuyor, ızgara fare
                      gezdikçe titriyordu. */
@@ -615,6 +692,16 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
                         gerekiyordu (2026-08-29: "föy düzenleme silme gibi
                         olması gereken ne varsa olmalı"). Onay penceresi
                         çıkmadan hiçbir şey silinmez. */}
+                    {/* TAŞI — sağ tıkı bilmeyen için görünür kapı. */}
+                    <button
+                      type="button"
+                      onClick={() => setMoving(s)}
+                      className={downloadIconCls}
+                      title="Başka kategoriye gönder (ör. Upcycle)"
+                      aria-label={`${s.title} ürününü başka kategoriye gönder`}
+                    >
+                      <FolderInput size={13} aria-hidden />
+                    </button>
                     {isAdmin && (
                       <button
                         type="button"

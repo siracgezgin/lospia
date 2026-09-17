@@ -6,6 +6,7 @@ import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 import {
   ClipboardList, Plus, Trash2, Save, User, Clock, FileDown, Printer, AlertTriangle, CheckCircle2, Ruler, Wallet, Layers,
+  Globe, ExternalLink,
 } from "lucide-react";
 import {
   createProductionSheet, updateProductionSheet, updateProductionSheetImages,
@@ -86,13 +87,17 @@ interface Props {
  * aldığımda tek sayfa görüp kalıbın üstüne yapıştıracağım"); sekmeler yalnız
  * düzenleme ekranıdır.
  */
-type SheetTabId = "urun" | "olcu" | "maliyet" | "malzeme";
+type SheetTabId = "urun" | "olcu" | "maliyet" | "malzeme" | "web";
 
 const SHEET_TABS: { id: SheetTabId; label: string; icon: typeof ClipboardList }[] = [
   { id: "urun",    label: "Ürün",             icon: ClipboardList },
   { id: "olcu",    label: "Ölçü & Beden",     icon: Ruler },
   { id: "maliyet", label: "Maliyet",          icon: Wallet },
   { id: "malzeme", label: "Malzeme & Talimat", icon: Layers },
+  /* WEB — Aslı Hanım (2026-09-17): "Buraya girdiğimiz zaman web sitesindeki
+     bütün bilgileri gireceğimiz yer olsun. Çünkü ekip hâlâ Excel'de çalışıyor:
+     designer's note, size & fit… o formatı buraya girilecek şekilde hazırla." */
+  { id: "web",     label: "Web",              icon: Globe },
 ];
 
 /** Hangi zorunlu alan hangi sekmede — sekme rozetleri buradan sayılır. */
@@ -142,6 +147,9 @@ function emptyState(): ProductionSheetInput {
     qc_revision: "",
     revision_notes: "",
     production_waste: "",
+    designers_note: "",
+    size_fit: "",
+    details_care: "",
     category: null,
     subcategory: "",
     pricing: {
@@ -192,6 +200,9 @@ function fromSheet(s: ProductionSheet): ProductionSheetInput {
     qc_revision: s.qc_revision ?? "",
     revision_notes: s.revision_notes ?? "",
     production_waste: s.production_waste ?? "",
+    designers_note: s.designers_note ?? "",
+    size_fit: s.size_fit ?? "",
+    details_care: s.details_care ?? "",
     category: s.category ?? null,
     subcategory: s.subcategory ?? "",
     pricing: {
@@ -1331,6 +1342,73 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               </div>
             );
           })()}
+        </Section>
+      </>)}
+
+      {tab === "web" && (<>
+        {/* SİTEDEKİ HÂLİ — dekupe + bağlantı. Görseller sitenin kendi
+            adresinden gelir, kopyalanmaz (20240347). Föy siteden çekilmediyse
+            bu blok görünmez; alanlar yine elle doldurulabilir. */}
+        {(sheet?.web_images?.length || sheet?.web_url) ? (
+          <Section title="Web Sitesindeki Hâli">
+            <div className="flex flex-wrap items-start gap-3">
+              {(sheet?.web_images ?? []).map((src, i) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={src}
+                  src={src}
+                  alt={i === 0 ? "Dekupe" : ""}
+                  loading="lazy"
+                  className="h-40 w-auto rounded-control border border-line bg-surface-muted object-contain"
+                />
+              ))}
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-muted">
+              {sheet?.web_name && <span>Sitedeki adı: <strong className="text-ink">{sheet.web_name}</strong></span>}
+              {sheet?.web_url && (
+                <a
+                  href={sheet.web_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 font-medium text-brand hover:underline"
+                >
+                  Sitede aç <ExternalLink size={12} aria-hidden />
+                </a>
+              )}
+              {sheet?.web_synced_at && (
+                <span>Son çekiş: {new Date(sheet.web_synced_at).toLocaleDateString("tr-TR")}</span>
+              )}
+            </div>
+          </Section>
+        ) : null}
+
+        {/* ÜÇ BÖLÜM, SİTEDEKİ AKORDEONLA BİRE BİR. Tek bir "açıklama" kutusuna
+            yığılmadı: siteye geri yazılacağı gün her paragraf kendi bölümüne
+            gitmeli. Başlıklar sitedekiyle AYNI yazılır — ekip Excel'de de bu
+            adlarla çalışıyor. */}
+        <Section title="Designer’s Note">
+          <TextArea
+            value={form.designers_note ?? ""}
+            onChange={(v) => set("designers_note", v)}
+            rows={5}
+            placeholder="At Aslı Filinta, we believe in sharing the light…"
+          />
+        </Section>
+        <Section title="Size & Fit">
+          <TextArea
+            value={form.size_fit ?? ""}
+            onChange={(v) => set("size_fit", v)}
+            rows={4}
+            placeholder={"One Size\nLength 67cm Sleeve 63cm Bust 100cm Shoulder 36cm\nThis item fits between sizes: Small & Medium"}
+          />
+        </Section>
+        <Section title="Details & Care">
+          <TextArea
+            value={form.details_care ?? ""}
+            onChange={(v) => set("details_care", v)}
+            rows={4}
+            placeholder={"100% Cotton\nDry Clean Only\nMade in Turkey"}
+          />
         </Section>
       </>)}
 

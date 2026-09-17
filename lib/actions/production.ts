@@ -114,8 +114,18 @@ const SheetSchema = z.object({
   qc_revision: longText,
   revision_notes: longText,
   production_waste: longText,
-  category: z.enum(["one_of_a_kind", "ready_to_wear", "shoes", "accessories"]).nullable().optional(),
+  /* KATEGORİ SABİT LİSTE DEĞİL. Burada dört anahtarlık bir enum vardı ama
+     taksonomi 2026-08-30'dan beri DÜZENLENEBİLİR (workspace_product_categories)
+     ve bugün "Upcycle", "2026 Looks", "2026 Dekupe" eklendi. Enum yüzünden o
+     kategorilerdeki bir föy KAYDEDİLEMİYORDU — Aslı Hanım'ın "Ready to Wear'den
+     Upcycle'a gönder" isteği doğrulamadan düşerdi. Anahtarın geçerliliğini
+     kategori tablosu belirler (bkz. moveProductionSheet). */
+  category: z.string().max(80).nullable().optional(),
   subcategory: shortText,
+  /* WEB İÇERİĞİ (20240347) — sitedeki akordeon bölümleriyle bire bir. */
+  designers_note: longText,
+  size_fit: longText,
+  details_care: longText,
   pricing: pricing.default({ unit_price: "", purchase_cost: "", web_sale_price: "", currency: "TL", notes: "" }),
 });
 
@@ -179,6 +189,9 @@ function normalize(v: ProductionSheetInput) {
     production_waste: nn(v.production_waste),
     category: v.category ?? null,
     subcategory: nn(v.subcategory),
+    designers_note: nn(v.designers_note),
+    size_fit: nn(v.size_fit),
+    details_care: nn(v.details_care),
     pricing: v.pricing ?? {},
   };
 }

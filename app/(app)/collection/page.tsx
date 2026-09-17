@@ -5,13 +5,18 @@ import { requireModuleMember } from "@/lib/modules/context";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { SetupRequiredNotice } from "@/components/modules/SetupRequiredNotice";
-import { maybeDatabaseSetupRequired } from "@/lib/utils/supabase-errors";
+import { maybeDatabaseSetupRequired, isMissingSchemaError } from "@/lib/utils/supabase-errors";
 import { CollectionBrowser } from "@/components/collection/CollectionBrowser";
 import { getCategoryTree } from "@/lib/collection/category-tree";
 import { resolveSeasonId } from "@/lib/collection/season";
 import type { ProductionSheet } from "@/types";
 
 export const dynamic = "force-dynamic";
+
+/* "Siteden çek" bu sayfadan çağrılıyor ve sunucu aksiyonu sayfanın süre
+   sınırını miras alıyor. İlk çekiş ~150 föy açıyor; varsayılan sınır
+   (saniyeler) işi ortasında kesebilirdi. AF Teamwork aktarımıyla aynı değer. */
+export const maxDuration = 300;
 
 // Koleksiyon tarayıcısı için kolonlar — kategori + fiyat + beden dağılımı da
 // gerekiyor (kart üzerinde maliyet göstermek için). measurements/talimatlar
@@ -46,19 +51,29 @@ export default async function CollectionPage({
   const seasons = (seasonsRes.data ?? []) as { id: string; name: string; is_current: boolean }[];
   const seasonId = resolveSeasonId(sp?.sezon, seasons);
 
-  const sheetsQuery = supabase
-    .from("production_sheets")
-    .select(LIST_COLUMNS)
-    .eq("workspace_id", workspaceId)
-    .order("updated_at", { ascending: false });
+  const buildSheetsQuery = (columns: string) => {
+    const q = supabase
+      .from("production_sheets")
+      .select(columns)
+      .eq("workspace_id", workspaceId)
+      .order("updated_at", { ascending: false });
+    if (seasonId) q.or(`season_id.eq.${seasonId},season_id.is.null`);
+    return q;
+  };
   // Sezonu OLMAYAN föyler her sezon bağlamında görünür.
   // Gerekçe: prod'daki föylerin bir kısmında sezon metni hiç yoktu (taşımada
   // 12 föyün yalnız 5'i bağlandı). Katı `eq` süzgeci bunları aktif sezonda
   // gizlerdi ve kullanıcıya VERİ KAYBI gibi görünürdü. Sezonsuz föy bir
   // "eksik", saklanacak bir şey değil — görünür kalır, Koleksiyon'da uyarı
   // ile sezona atanması istenir.
-  if (seasonId) sheetsQuery.or(`season_id.eq.${seasonId},season_id.is.null`);
-  const sheetsResult = await sheetsQuery;
+  /* `web_images` 20240347 ile geldi ve migration'ı kullanıcı ELLE uyguluyor.
+     Kolon yokken sorgu komple reddedilir ve ekran "tablo henüz oluşturulmadı"
+     derdi — dağıtım migration'dan önce inerse Koleksiyon kapanırdı. Kolonsuz
+     bir kez daha denenir; o durumda yalnız dekupe kapaklar görünmez. */
+  let sheetsResult = await buildSheetsQuery(`${LIST_COLUMNS}, web_images`);
+  if (sheetsResult.error && isMissingSchemaError(sheetsResult.error)) {
+    sheetsResult = await buildSheetsQuery(LIST_COLUMNS);
+  }
 
   const setup = maybeDatabaseSetupRequired(sheetsResult.error);
   if (setup.setupRequired) {
