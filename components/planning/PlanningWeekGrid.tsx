@@ -575,12 +575,26 @@ function TitleCell({
   const canRename = isAdmin && (cell.length === 0 || !!single);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(title);
+  /* GÖVDE DE DÜZENLENİR (Sıraç, 2026-09-17). Başlığın altındaki metin
+     düzenleme kutusunun dışında kalıyordu: hücreye tıklayınca yalnız başlık
+     değişebiliyor, "1. Nihal hocadan gelen kısa göynekler…" satırı salt
+     okunur duruyordu. Tek toplantılı hücrede iki alan birlikte açılır;
+     çakışmada (iki toplantı) gövde birleşik metin olduğu için kapalı kalır. */
+  const [bodyDraft, setBodyDraft] = useState(single?.content ?? "");
   const [saving, setSaving] = useState(false);
+
+  function startEdit() {
+    setDraft(title);
+    setBodyDraft(single?.content ?? "");
+    setEditing(true);
+  }
 
   async function commit() {
     const next = draft.trim();
+    const nextBody = bodyDraft.trim();
+    const bodyChanged = !!single && nextBody !== (single.content ?? "").trim();
     setEditing(false);
-    if (next === (title ?? "").trim()) return;
+    if (next === (title ?? "").trim() && !bodyChanged) return;
     if (!next && !single) return;              // boş hücreye boş başlık: iş yok
     setSaving(true);
     try {
@@ -588,6 +602,8 @@ function TitleCell({
       await setMeetingTitle(
         single ? { meetingId: single.id } : { meeting_date, time_slot },
         next,
+        /* Tek toplantı yoksa gövde gönderilmez — undefined "dokunma" demek. */
+        single ? nextBody : undefined,
       );
       onSaved();
     } finally {
@@ -607,7 +623,7 @@ function TitleCell({
       {...keyOpen}
       onClick={
         isAdmin
-          ? () => { if (canRename) { setDraft(title); setEditing(true); } else onOpen(); }
+          ? () => { if (canRename) startEdit(); else onOpen(); }
           : undefined
       }
       data-multi={cell.length > 1 ? "true" : undefined}
@@ -659,29 +675,58 @@ function TitleCell({
           arasında kalıyordu (Sıraç, 12.09.2026: "burada çakışmayla ilgili
           problem var"). Düğme yalnız hover'da görünse de yeri hep ayrılmalı:
           metin ona kadar kısalsın, altına girmesin. */}
-      <span className={cn("min-w-0 flex-1", isAdmin && !editing && "pr-5")}>
+      <span className={cn("min-w-0 flex-1", isAdmin && "pr-5")}>
         {editing ? (
-          /* Sürükleme dinleyicileri ÜST düğümde: input'ta pointer olaylarını
-             durdurmazsak yazmaya çalışırken hücre sürüklenmeye başlıyor. */
-          <input
-            autoFocus
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => e.stopPropagation()}
-            onBlur={() => { void commit(); }}
-            onKeyDown={(e) => {
-              e.stopPropagation();
-              if (e.key === "Enter") { e.preventDefault(); void commit(); }
-              if (e.key === "Escape") { e.preventDefault(); setDraft(title); setEditing(false); }
+          /* Sürükleme dinleyicileri ÜST düğümde: alanlarda pointer olaylarını
+             durdurmazsak yazmaya çalışırken hücre sürüklenmeye başlıyor.
+             BLUR SARMALAYICIDA: başlıktan gövdeye geçerken input blur olur ve
+             kutu kapanırdı — odak kutunun İÇİNDE kalıyorsa kaydetme yok. */
+          <span
+            className="block"
+            onBlur={(e) => {
+              if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+              void commit();
             }}
-            aria-label="Toplantı başlığı"
-            placeholder="Başlık…"
-            /* `outline-none` YOK: odak halkası globals.css'teki tek kuraldan
-               gelir, burada susturulunca klavyeyle gelen kullanıcı imlecin
-               hangi hücrede olduğunu göremiyordu. */
-            className="w-full rounded-[4px] border border-brand-ring bg-surface px-1 py-0.5 text-[12.5px] font-bold tracking-tight text-ink"
-          />
+          >
+            <input
+              autoFocus
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === "Enter") { e.preventDefault(); void commit(); }
+                if (e.key === "Escape") { e.preventDefault(); setDraft(title); setEditing(false); }
+              }}
+              aria-label="Toplantı başlığı"
+              placeholder="Başlık…"
+              /* `outline-none` YOK: odak halkası globals.css'teki tek kuraldan
+                 gelir, burada susturulunca klavyeyle gelen kullanıcı imlecin
+                 hangi hücrede olduğunu göremiyordu. */
+              className="w-full rounded-[4px] border border-brand-ring bg-surface px-1 py-0.5 text-[12.5px] font-bold tracking-tight text-ink"
+            />
+            {single && (
+              <textarea
+                value={bodyDraft}
+                onChange={(e) => setBodyDraft(e.target.value)}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  /* Enter YENİ SATIR: gövde çoğu zaman numaralı liste
+                     ("1. … 2. …"). Kaydetmek ⌘/Ctrl+Enter ya da kutudan
+                     çıkmak. */
+                  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); void commit(); }
+                  if (e.key === "Escape") { e.preventDefault(); setBodyDraft(single.content ?? ""); setEditing(false); }
+                }}
+                rows={Math.min(8, Math.max(2, bodyDraft.split("\n").length + 1))}
+                aria-label="Toplantı notu"
+                placeholder="Gündem, not…  (⌘+Enter kaydeder)"
+                className="mt-1 block w-full resize-y rounded-[4px] border border-brand-ring bg-surface px-1 py-0.5 text-[12px] leading-snug text-ink"
+              />
+            )}
+          </span>
         ) : cell.length > 1 ? (
           /* AYNI HÜCREDE İKİ TOPLANTI. Eskiden başlıklar "Celebrity ·
              Celebrity" diye TEK satırda birleşiyordu; hangisinin hangisi
@@ -739,7 +784,9 @@ function TitleCell({
           </span>
         )}
         <KimBadges ids={ids} kim={kim} collaboratorIds={collabIds} memberNames={memberNames} memberPhotos={memberPhotos} personHex={personHex} />
-        {content && (
+        {/* Düzenleme kutusu açıkken gövde AYRICA çizilmez: eskiden hem
+            input'un altında salt okunur duruyor hem de düzenlenemiyordu. */}
+        {content && !editing && (
           <span className="mt-0.5 block whitespace-pre-line text-[12px] leading-snug text-ink/70">
             {content}
           </span>
@@ -749,7 +796,10 @@ function TitleCell({
       {/* PENCERE KAPISI. Başlık artık hücrede düzenlendiği için toplantının
           geri kalanı (kişiler, not, Bildir, sonuç, çoğaltma) bu düğmenin
           arkasında. İç içe <button> değil KARDEŞ: hücre bir <div>, geçerli. */}
-      {isAdmin && !editing && (
+      {/* DÜZENLEME MODUNDA DA DURUR. Eskiden `!editing` koşuluyla kayboluyordu:
+          hücreye tıklayan kullanıcı kişileri/konuları düzenlemek isterse önce
+          Escape'e basmak zorundaydı — çıkış yolu olmayan bir kip. */}
+      {isAdmin && (
         <button
           type="button"
           onPointerDown={(e) => e.stopPropagation()}

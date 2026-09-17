@@ -883,12 +883,24 @@ export async function moveMeeting(
  * Hücrede toplantı yoksa yazılan başlıkla bir tane AÇILIR (boş hücreye
  * yazmak da bir başlangıçtır). Başlık boşaltılırsa toplantı SİLİNMEZ —
  * yalnız adı boşalır; silme ayrı ve onaylı bir eylemdir.
+ *
+ * GÖVDE DE BURADAN YAZILIR (Sıraç, 2026-09-17). Hücrede başlığın altında
+ * duran metin (`content`) düzenleme kutusunun DIŞINDA kalıyordu: kullanıcı
+ * hücreye tıklayınca yalnız başlık düzenlenebiliyor, "1. Nihal hocadan gelen
+ * kısa göynekler…" gibi gövde metni salt okunur duruyordu. Üstüne, düzenleme
+ * açıkken "toplantıyı aç" düğmesi de kayboluyordu — gövdeyi düzeltmenin hiçbir
+ * yolu kalmıyordu. Artık iki alan tek kapıdan geçiyor.
+ *
+ * `content` VERİLMEZSE DOKUNULMAZ (undefined ≠ null): başlığı değiştiren eski
+ * çağrılar gövdeyi silmesin.
  */
 export async function setMeetingTitle(
   target: { meetingId: string } | { meeting_date: string; time_slot: string },
   title: string,
+  content?: string | null,
 ): Promise<{ ok: true; id: string } | { error: string }> {
   const clean = (title ?? "").trim().slice(0, 300);
+  const cleanContent = content === undefined ? undefined : (content ?? "").trim().slice(0, 4000) || null;
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
@@ -897,7 +909,14 @@ export async function setMeetingTitle(
   if ("meetingId" in target) {
     const { error, count } = await supabase
       .from("planning_meetings")
-      .update({ title: clean || null, updated_by: ctx.userId }, { count: "exact" })
+      .update(
+        {
+          title: clean || null,
+          ...(cleanContent === undefined ? {} : { content: cleanContent }),
+          updated_by: ctx.userId,
+        },
+        { count: "exact" },
+      )
       .eq("id", target.meetingId)
       .eq("workspace_id", ctx.workspaceId);
     if (error) return { error: toActionErrorMessage(error) };
@@ -938,6 +957,7 @@ export async function setMeetingTitle(
       time_slot: parsed.data.time_slot,
       category: (sibling as { category: string } | null)?.category ?? "other",
       title: clean,
+      ...(cleanContent === undefined ? {} : { content: cleanContent }),
       participant_ids: [],
       collaborator_ids: [],
       created_by: ctx.userId,

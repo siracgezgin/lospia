@@ -376,6 +376,9 @@ export function CollectionBrowser({ sheets, isAdmin, isOwner = false, seasons = 
     });
   }, [ordered, startReorder]);
 
+  /* Açık kategorinin düğümü — alt kategori ekleme penceresi bunu ister. */
+  const selectedNode = selCat && selCat !== UNCAT ? tree.find((c) => c.key === selCat) ?? null : null;
+
   const hasUncat = (counts.cat[UNCAT] ?? 0) > 0;
   // Giriş ekranı: kategori seçilmemiş VE arama yapılmıyorsa kutucuklar.
   const showTiles = selCat === null && !q;
@@ -637,10 +640,17 @@ export function CollectionBrowser({ sheets, isAdmin, isOwner = false, seasons = 
             {search}
           </div>
 
-          {/* Alt kategoriler — ağaç değil, tek satır çip. */}
-          {subs.length > 0 && (
+          {/* Alt kategoriler — ağaç değil, tek satır çip.
+              YÖNETİCİDE HER ZAMAN ÇİZİLİR: alt kategorisi olmayan bir
+              kategoride (ör. Upcycle) satır hiç görünmediği için ekleme kapısı
+              da yoktu — kullanıcı kategori ızgarasına geri dönüp kalem
+              ikonunu bulmak zorundaydı (Sıraç, 2026-09-17: "kategoriye
+              tıklayınca alt kategori ekle kısmı olmalı"). */}
+          {(subs.length > 0 || (isAdmin && selCat !== UNCAT)) && (
             <div className="mb-3 flex flex-wrap gap-1.5">
-              <SubChip active={!selSub} onClick={() => setSelSub(null)}>Tümü</SubChip>
+              {subs.length > 0 && (
+                <SubChip active={!selSub} onClick={() => setSelSub(null)}>Tümü</SubChip>
+              )}
               {subs.map((sub) => {
                 /* Boş alt kategori GİZLENMİYOR: yeni açılan bir alt kategori
                    içi dolana kadar görünmez kalıyordu ve kullanıcı "eklenmedi"
@@ -655,6 +665,20 @@ export function CollectionBrowser({ sheets, isAdmin, isOwner = false, seasons = 
                   </SubChip>
                 );
               })}
+              {isAdmin && selCat !== UNCAT && selectedNode && (
+                <button
+                  type="button"
+                  onClick={() => setCatEditor(selectedNode)}
+                  /* Çiplerle AYNI yükseklik ve yuvarlaklık, kesikli kenar:
+                     "bu bir seçenek değil, bir eylem" demenin sessiz yolu —
+                     kategori ızgarasındaki "Kategori ekle" kutusuyla aynı
+                     dil. */
+                  className="tap-target inline-flex h-8 items-center gap-1.5 rounded-full border border-dashed border-line px-3 text-[12.5px] font-medium text-muted transition-colors duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink"
+                >
+                  <FolderPlus size={13} aria-hidden />
+                  Alt kategori
+                </button>
+              )}
             </div>
           )}
 
