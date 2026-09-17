@@ -2608,7 +2608,9 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 9,
     uiDisplaySuggestion: "Haftanın Sözü",
     sourceConfidence: "high",
-    approvedForUi: true,
+    /* UI DIŞI (2026-09-17): Ölüm hatırlatması. Doğru ve güzel bir dize ama
+       çalışma gününe asılan bir kartta motive etmiyor. */
+    approvedForUi: false,
   },
   {
     id: "quote_202",
@@ -2625,7 +2627,8 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 9,
     uiDisplaySuggestion: "Haftanın Sözü",
     sourceConfidence: "medium",
-    approvedForUi: true,
+    /* UI DIŞI (2026-09-17): Arkaik ve döngüsel; kartta bilmece gibi duruyor. */
+    approvedForUi: false,
   },
   {
     id: "quote_203",
@@ -2642,7 +2645,8 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 9,
     uiDisplaySuggestion: "Haftanın Sözü",
     sourceConfidence: "medium",
-    approvedForUi: true,
+    /* UI DIŞI (2026-09-17): Arkaik; savaş/baş kesme imgesi ofis ekranına ait değil. */
+    approvedForUi: false,
   },
   {
     id: "quote_204",
@@ -2693,7 +2697,10 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     brandFitScore: 9,
     uiDisplaySuggestion: "Haftanın Sözü",
     sourceConfidence: "medium",
-    approvedForUi: true,
+    /* UI DIŞI (2026-09-17): Sıraç (2026-09-17): "Bu söz ve tasarım motive ne alaka?" Tasavvufta
+       olgunlaşmanın üç aşaması; kartta bağlamsız okununca ne söylediği
+       anlaşılmıyor ve işle bir bağı kurulmuyor. */
+    approvedForUi: false,
   },
   {
     id: "quote_207",
@@ -2757,6 +2764,139 @@ export const WEEKLY_QUOTES: WeeklyQuote[] = [
     theme: "cesaret",
     sourceType: "translated_quote",
     sourceUrl: "https://www.nobelprize.org/prizes/physics/1903/marie-curie/biographical/",
+    usageRecommendation: "use_as_translation",
+    brandFitScore: 9,
+    uiDisplaySuggestion: "Haftanın Sözü",
+    sourceConfidence: "high",
+    approvedForUi: true,
+  },
+  /* ── DÖRDÜNCÜ TUR (2026-09-17) ────────────────────────────────────────────
+     Sıraç: "Bu söz ve tasarım motive ne alaka? Daha etkileyici, anlamlı,
+     sofistike sözler olmalı."
+
+     Şikâyet Mevlânâ'nın "Hamdım, piştim, yandım" sözüyle geldi ama sorun tek
+     bir sözde değildi: bilgelik sesi arkaik Türkçe dizelerden oluşuyordu ve
+     kartta bağlamsız okununca hiçbiri işe dokunmuyordu. Dördü UI dışına
+     alındı (yukarıda gerekçeleriyle duruyorlar).
+
+     Yerine gelenlerin ortak yanı: hepsi TASARIM VE ZANAAT üzerine, hepsi tek
+     cümlede tamamlanıyor ve hepsi ünlü. Moda dışından da olsalar ekibin işine
+     doğrudan değiyorlar — ayrıntı, sadelik, kalite, yaratıcılık.
+     "Kısaltmak cümleyi kısaltmaktır, yarısını atmak değil" kuralına uyuldu:
+     hiçbirinin yarısı atılmadı, uzun olanlar havuza hiç alınmadı. */
+  {
+    id: "quote_211",
+    weekIndex: 211,
+    quoteTr: "Zarafet, reddetmektir.",
+    quoteOriginal: "Elegance is refusal.",
+    author: "Coco Chanel",
+    authorRole: "Moda tasarımcısı",
+    category: "fashion_design",
+    theme: "zarafet",
+    sourceType: "translated_quote",
+    sourceUrl: "https://en.wikiquote.org/wiki/Coco_Chanel",
+    usageRecommendation: "use_as_translation",
+    brandFitScore: 9,
+    uiDisplaySuggestion: "Haftanın Sözü",
+    sourceConfidence: "medium",
+    approvedForUi: true,
+  },
+  {
+    id: "quote_212",
+    weekIndex: 212,
+    quoteTr: "Ayrıntılar ayrıntı değildir; tasarımı onlar yapar.",
+    quoteOriginal: "The details are not the details. They make the design.",
+    author: "Charles Eames",
+    authorRole: "Tasarımcı",
+    category: "wisdom",
+    theme: "özen",
+    sourceType: "translated_quote",
+    sourceUrl: "https://www.eamesoffice.com/",
+    usageRecommendation: "use_as_translation",
+    brandFitScore: 9,
+    uiDisplaySuggestion: "Haftanın Sözü",
+    sourceConfidence: "high",
+    approvedForUi: true,
+  },
+  {
+    id: "quote_213",
+    weekIndex: 213,
+    quoteTr: "İyi tasarım, olabildiğince az tasarımdır.",
+    quoteOriginal: "Good design is as little design as possible.",
+    author: "Dieter Rams",
+    authorRole: "Endüstriyel tasarımcı",
+    category: "wisdom",
+    theme: "sadelik",
+    sourceType: "translated_quote",
+    sourceUrl: "https://www.vitsoe.com/gb/about/good-design",
+    usageRecommendation: "use_as_translation",
+    brandFitScore: 9,
+    uiDisplaySuggestion: "Haftanın Sözü",
+    sourceConfidence: "high",
+    approvedForUi: true,
+  },
+  {
+    id: "quote_214",
+    weekIndex: 214,
+    quoteTr: "Sanat görüneni yansıtmaz; görünür kılar.",
+    quoteOriginal: "Kunst gibt nicht das Sichtbare wieder, sondern macht sichtbar.",
+    author: "Paul Klee",
+    authorRole: "Ressam",
+    category: "wisdom",
+    theme: "yaratıcılık",
+    sourceType: "translated_quote",
+    sourceUrl: "https://en.wikiquote.org/wiki/Paul_Klee",
+    usageRecommendation: "use_as_translation",
+    brandFitScore: 9,
+    uiDisplaySuggestion: "Haftanın Sözü",
+    sourceConfidence: "high",
+    approvedForUi: true,
+  },
+  {
+    id: "quote_215",
+    weekIndex: 215,
+    quoteTr: "Kalite asla tesadüf değildir; akıllı çabanın sonucudur.",
+    quoteOriginal: "Quality is never an accident; it is always the result of intelligent effort.",
+    author: "John Ruskin",
+    authorRole: "Sanat eleştirmeni",
+    category: "wisdom",
+    theme: "ustalık",
+    sourceType: "translated_quote",
+    sourceUrl: "https://en.wikiquote.org/wiki/John_Ruskin",
+    usageRecommendation: "use_as_translation",
+    brandFitScore: 9,
+    uiDisplaySuggestion: "Haftanın Sözü",
+    sourceConfidence: "medium",
+    approvedForUi: true,
+  },
+  {
+    id: "quote_216",
+    weekIndex: 216,
+    quoteTr: "Yaratıcılık, şeyler arasında bağ kurmaktır.",
+    quoteOriginal: "Creativity is just connecting things.",
+    author: "Steve Jobs",
+    authorRole: "Girişimci",
+    category: "wisdom",
+    theme: "yaratıcılık",
+    sourceType: "translated_quote",
+    sourceUrl: "https://www.wired.com/1996/02/jobs-2/",
+    usageRecommendation: "use_as_translation",
+    brandFitScore: 9,
+    uiDisplaySuggestion: "Haftanın Sözü",
+    sourceConfidence: "high",
+    approvedForUi: true,
+  },
+  {
+    id: "quote_217",
+    weekIndex: 217,
+    quoteTr: "Evinde ya işe yarayan ya güzel olan dursun.",
+    quoteOriginal: "Have nothing in your houses that you do not know to be useful, or believe to be beautiful.",
+    author: "William Morris",
+    authorRole: "Tasarımcı, zanaat savunucusu",
+    category: "wisdom",
+    theme: "sadelik",
+    sourceType: "translated_quote",
+    sourceUrl: "https://www.marxists.org/archive/morris/works/1880/hopes/chapters/chapter4.htm",
     usageRecommendation: "use_as_translation",
     brandFitScore: 9,
     uiDisplaySuggestion: "Haftanın Sözü",

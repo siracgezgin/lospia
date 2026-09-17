@@ -192,7 +192,10 @@ export function AppSidebar({
             >
               “{weeklyQuote.quoteTr}”
             </p>
+            {/* ATIF ÇİZGİSİ: söz ile yazarı ayıran klasik işaret. Çizgisiz
+                haliyle isim, sözün devamı gibi okunuyordu. */}
             <p className="mt-1.5 truncate text-[11.5px] font-medium text-muted">
+              <span aria-hidden className="mr-1 text-subtle">—</span>
               {weeklyQuote.author}
             </p>
           </div>
