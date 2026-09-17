@@ -424,6 +424,11 @@ export type ProductionSheet = {
   web_name?: string | null;
   web_product_id?: number | null;
   web_synced_at?: string | null;
+  /** Üç web metninin son mutabık hali (20240348) — çekişin neyi ezmeyeceğini
+   *  ve siteye hangi föyün gönderileceğini bu belirler. */
+  web_baseline?: Record<string, string> | null;
+  /** Koleksiyon ızgarasındaki ELLE sıra (20240349), küçük önce. */
+  sort_order?: number | null;
 };
 
 /**

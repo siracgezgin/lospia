@@ -51,12 +51,17 @@ export default async function CollectionPage({
   const seasons = (seasonsRes.data ?? []) as { id: string; name: string; is_current: boolean }[];
   const seasonId = resolveSeasonId(sp?.sezon, seasons);
 
-  const buildSheetsQuery = (columns: string) => {
+  const buildSheetsQuery = (columns: string, manualOrder: boolean) => {
     const q = supabase
       .from("production_sheets")
       .select(columns)
-      .eq("workspace_id", workspaceId)
-      .order("updated_at", { ascending: false });
+      .eq("workspace_id", workspaceId);
+    /* ELLE SIRA ÖNCE (20240349). Vitrin sırası bir tasarım kararı; föye
+       dokunmak onu listenin başına taşımamalı. `nullsFirst: false` — sırası
+       verilmemiş föy (migration'dan sonra açılmış olabilir) sona düşer, kendi
+       içinde en yeni önce. */
+    if (manualOrder) q.order("sort_order", { ascending: true, nullsFirst: false });
+    q.order("updated_at", { ascending: false });
     if (seasonId) q.or(`season_id.eq.${seasonId},season_id.is.null`);
     return q;
   };
@@ -70,9 +75,17 @@ export default async function CollectionPage({
      Kolon yokken sorgu komple reddedilir ve ekran "tablo henüz oluşturulmadı"
      derdi — dağıtım migration'dan önce inerse Koleksiyon kapanırdı. Kolonsuz
      bir kez daha denenir; o durumda yalnız dekupe kapaklar görünmez. */
-  let sheetsResult = await buildSheetsQuery(`${LIST_COLUMNS}, web_images`);
-  if (sheetsResult.error && isMissingSchemaError(sheetsResult.error)) {
-    sheetsResult = await buildSheetsQuery(LIST_COLUMNS);
+  /* `sort_order` de (20240349) aynı durumda — iki migration birbirinden
+     bağımsız uygulanabilir, o yüzden kademe kademe geriye düşülür. Her
+     kademede yalnız o özellik kaybolur, ekran ayakta kalır. */
+  const attempts: [columns: string, manualOrder: boolean][] = [
+    [`${LIST_COLUMNS}, web_images, sort_order`, true],
+    [`${LIST_COLUMNS}, web_images`, false],
+    [LIST_COLUMNS, false],
+  ];
+  let sheetsResult = await buildSheetsQuery(attempts[0][0], attempts[0][1]);
+  for (let i = 1; i < attempts.length && sheetsResult.error && isMissingSchemaError(sheetsResult.error); i++) {
+    sheetsResult = await buildSheetsQuery(attempts[i][0], attempts[i][1]);
   }
 
   const setup = maybeDatabaseSetupRequired(sheetsResult.error);

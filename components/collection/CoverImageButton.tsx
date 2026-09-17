@@ -35,6 +35,8 @@ export function CoverImageButton({
   title,
   images,
   onError,
+  className,
+  label,
 }: {
   sheetId: string;
   /** Ürün adı — erişilebilir etiket için. */
@@ -42,6 +44,10 @@ export function CoverImageButton({
   /** Föyün mevcut görselleri; kapak bunların arasında `section: "cover"` olan. */
   images: ProductionImage[];
   onError: (_message: string | null) => void;
+  /** Görünüm dışarıdan gelir: kart köşesinde ikon, menüde etiketli satır. */
+  className?: string;
+  /** Verilirse ikonun yanında yazı çıkar (menü satırı). */
+  label?: string;
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -106,15 +112,16 @@ export function CoverImageButton({
           inputRef.current?.click();
         }}
         disabled={busy}
-        className={cn(downloadIconCls, "disabled:pointer-events-none disabled:opacity-50")}
+        className={cn(className ?? downloadIconCls, !className && "disabled:pointer-events-none disabled:opacity-50")}
         title={current ? "Kapak görselini değiştir" : "Kapak görseli ekle"}
         aria-label={`${title} — kapak görseli ${current ? "değiştir" : "ekle"}`}
       >
         {busy ? (
-          <Loader2 size={13} className="animate-spin" aria-hidden />
+          <Loader2 size={label ? 15 : 13} className="animate-spin" aria-hidden />
         ) : (
-          <ImagePlus size={13} aria-hidden />
+          <ImagePlus size={label ? 15 : 13} aria-hidden />
         )}
+        {label && <span>{busy ? "Yükleniyor…" : label}</span>}
       </button>
       <input
         ref={inputRef}

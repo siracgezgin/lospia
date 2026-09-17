@@ -1,13 +1,19 @@
 "use client";
 
 import { useCallback, useMemo, useState, useTransition } from "react";
+import {
+  DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Boxes, Plus, Search, ChevronLeft, FileDown, Printer, Shirt, Scissors,
   Footprints, Handbag, FileSpreadsheet, ClipboardList, ShieldCheck,
   Pencil, FolderPlus, SwatchBook, Trash2, Image as ImageIcon, X,
-  FolderInput, Globe, Loader2, Upload,
+  FolderInput, Globe, Loader2, Upload, GripVertical,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { deleteProductionSheet } from "@/lib/actions/production";
@@ -27,7 +33,9 @@ import { subPath, type SubCategory } from "@/lib/collection/taxonomy";
 import { CategoryManagerDialog } from "./CategoryManagerDialog";
 import { MoveSheetDialog } from "./MoveSheetDialog";
 import { WebPushDialog } from "./WebPushDialog";
+import { SheetCardMenu, menuItemCls, menuItemDangerCls } from "./SheetCardMenu";
 import { syncCollectionFromWebsite } from "@/lib/actions/collection-web";
+import { reorderCollectionSheet } from "@/lib/actions/collection-order";
 import type { ProductionSheet } from "@/types";
 
 /** Tarayıcı yalnızca meta + kategori + fiyat + beden dağılımı taşır. */
@@ -313,6 +321,60 @@ export function CollectionBrowser({ sheets, isAdmin, isOwner = false, seasons = 
     // subTreeKeys yalnız `subs`e bağlıdır; o da selCat'ten türer.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, q, selCat, selSub]);
+
+  /* ── ELLE SIRALAMA ────────────────────────────────────────────────────────
+     Sıraç (2026-09-17): "Bu sıraya göre değil, bizim istediğimiz şekilde
+     olsun." Sıra sunucuda `sort_order` kolonunda (20240349); burada yalnız
+     İYİMSER görüntü tutulur — el bırakıldığı anda kart yeni yerinde durur,
+     sunucu yanıtı beklenmez. Beklenseydi kart önce eski yerine zıplar, sonra
+     doğru yere atlardı. */
+  const [dragOrder, setDragOrder] = useState<string[] | null>(null);
+  const [, startReorder] = useTransition();
+  const canReorder = isAdmin;
+
+  const ordered = useMemo(() => {
+    if (!dragOrder) return filtered;
+    const rank = new Map(dragOrder.map((id, i) => [id, i]));
+    /* Sırası bilinmeyen (yeni eklenmiş) föy sona düşer, kaybolmaz. */
+    return [...filtered].sort(
+      (a, b) => (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER),
+    );
+  }, [filtered, dragOrder]);
+
+  /* Fare 5 piksel, parmak 220 ms — Pano'daki eşiklerle AYNI. Daha kısası
+     kartı açmak isteyen tıklamayı sürükleme sanıyor. */
+  const dragSensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
+  );
+
+  const onDragEnd = useCallback((e: DragEndEvent) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const ids = ordered.map((s) => s.id);
+    const from = ids.indexOf(String(active.id));
+    const to = ids.indexOf(String(over.id));
+    if (from < 0 || to < 0) return;
+
+    const next = arrayMove(ids, from, to);
+    setDragOrder(next);
+
+    /* Sunucuya KOMŞULAR gönderilir, sıra numarası değil: yeni değeri o
+       hesaplar (bkz. lib/actions/collection-order.ts). */
+    const pos = next.indexOf(String(active.id));
+    const prevId = pos > 0 ? next[pos - 1]! : null;
+    const nextId = pos < next.length - 1 ? next[pos + 1]! : null;
+
+    startReorder(async () => {
+      const res = await reorderCollectionSheet(String(active.id), prevId, nextId);
+      if ("error" in res) {
+        setActionError(res.error);
+        /* Yazma başarısızsa iyimser sıra BIRAKILIR — ekran gerçeği göstersin,
+           kullanıcı olmamış bir şeyi olmuş sanmasın. */
+        setDragOrder(null);
+      }
+    });
+  }, [ordered, startReorder]);
 
   const hasUncat = (counts.cat[UNCAT] ?? 0) > 0;
   // Giriş ekranı: kategori seçilmemiş VE arama yapılmıyorsa kutucuklar.
@@ -637,129 +699,28 @@ export function CollectionBrowser({ sheets, isAdmin, isOwner = false, seasons = 
                 {coverError}
               </p>
             )}
-            <div className="stagger-children grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
-              {filtered.map((s) => {
-                const cover = coverImage(s);
-                const sub = [s.product_code, s.product_kind].filter(Boolean).join(" · ");
-                return (
-                // Kart bir <div>: gezinme yayılmış (absolute inset-0) Link ile,
-                // Excel indirme linki onun ÜSTÜNDE kardeş olarak durur. <a>
-                // içinde <a> geçersiz HTML'dir ve hydration hatasıyla tüm
-                // sayfayı istemcide yeniden çizdiriyordu (donma şikâyeti).
-                <div
-                  key={s.id}
-                  /* SAĞ TIK → "Başka kategoriye gönder". Tarayıcının kendi menüsü
-                     bu kartta bir şey kazandırmıyor (bağlantıyı yeni sekmede
-                     açmak dışında — o da tıklamayla zaten mümkün). */
-                  onContextMenu={(e) => { e.preventDefault(); setMoving(s); }}
-                  /* KART: hover'da YALNIZ gölge derinleşir. Kenarlık da
-                     değişince kutu iki kanaldan birden oynuyor, ızgara fare
-                     gezdikçe titriyordu. */
-                  className="group relative flex flex-col overflow-hidden rounded-card border border-line bg-surface shadow-card transition-shadow duration-[180ms] ease-standard hover:shadow-card-hover"
-                >
-                  <Link
-                    href={`/production/${s.id}`}
-                    aria-label={s.title}
-                    className="absolute inset-0 z-[1] rounded-card"
-                  />
-                  <div className="aspect-[3/4] w-full overflow-hidden bg-surface-muted">
-                    {cover ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={cover} alt="" loading="lazy" className="h-full w-full object-cover" />
-                    ) : (
-                      /* Görselsiz ürün düzeni bozmaz: aynı oran, nötr yüzey,
-                         küçük ikon. */
-                      <div className="grid h-full w-full place-items-center text-subtle">
-                        <ImageIcon size={22} strokeWidth={1.5} aria-hidden />
-                      </div>
-                    )}
-                  </div>
-                  {/* Kart eylemleri — görselin köşesinde, kart linkinin ÜSTÜNDE.
-                      Farede hover'da belirir (görsel temiz kalsın); parmakta
-                      hover olmadığı için HER ZAMAN görünür — hover-only işlev
-                      telefonda erişilemezdi. Yazdır önce: föyü üreticiye
-                      vermenin ana yolu tek sayfalık kâğıt. */}
-                  <div className="absolute right-2 top-2 z-[2] flex items-center gap-1 transition-opacity duration-150 pointer-fine:opacity-0 pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100">
-                    {/* KAPAK — karar ızgaraya bakarken verilir, föyün içinde
-                        değil (2026-08-30). Föyü açmadan tek tıkla değiştirilir. */}
-                    <CoverImageButton
-                      sheetId={s.id}
-                      title={s.title}
-                      images={Array.isArray(s.photo_refs) ? s.photo_refs : []}
-                      onError={setCoverError}
+            <DndContext
+              sensors={dragSensors}
+              collisionDetection={closestCenter}
+              onDragEnd={onDragEnd}
+            >
+              <SortableContext items={ordered.map((s) => s.id)} strategy={rectSortingStrategy}>
+                <div className="stagger-children grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+                  {ordered.map((s) => (
+                    <SheetCard
+                      key={s.id}
+                      sheet={s}
+                      canReorder={canReorder}
+                      isAdmin={isAdmin}
+                      isDeleting={isDeleting}
+                      onMove={setMoving}
+                      onDelete={removeSheet}
+                      onCoverError={setCoverError}
                     />
-                    {/* İNDİRME ONAYI: dosya sistemin dışına çıkıyor ve
-                        günlüğe yazılıyor (2026-08-29). */}
-                    <DownloadLink
-                      href={`/production/${s.id}/print`}
-                      what={`“${s.title}” föyünün çıktısı`}
-                      label="Çıktı al"
-                      title="Tek sayfa çıktı — yazdır veya PDF"
-                      className={downloadIconCls}
-                    >
-                      <Printer size={13} aria-hidden />
-                      <span className="sr-only">Çıktı al</span>
-                    </DownloadLink>
-                    <DownloadLink
-                      href={`/production/${s.id}/export`}
-                      what={`“${s.title}” föyünün Excel dosyası`}
-                      title="Föyü Excel olarak indir"
-                      className={downloadIconCls}
-                    >
-                      <FileDown size={13} aria-hidden />
-                      <span className="sr-only">Excel indir</span>
-                    </DownloadLink>
-                    {/* SİLME katalogda da var: föyü silmek için tek tek açmak
-                        gerekiyordu (2026-08-29: "föy düzenleme silme gibi
-                        olması gereken ne varsa olmalı"). Onay penceresi
-                        çıkmadan hiçbir şey silinmez. */}
-                    {/* TAŞI — sağ tıkı bilmeyen için görünür kapı. */}
-                    <button
-                      type="button"
-                      onClick={() => setMoving(s)}
-                      className={downloadIconCls}
-                      title="Başka kategoriye gönder (ör. Upcycle)"
-                      aria-label={`${s.title} ürününü başka kategoriye gönder`}
-                    >
-                      <FolderInput size={13} aria-hidden />
-                    </button>
-                    {isAdmin && (
-                      <button
-                        type="button"
-                        onClick={() => removeSheet(s)}
-                        disabled={isDeleting}
-                        className={cn(downloadIconCls, "hover:text-danger disabled:pointer-events-none disabled:opacity-50")}
-                        title="Föyü sil"
-                        aria-label={`${s.title} föyünü sil`}
-                      >
-                        <Trash2 size={13} aria-hidden />
-                      </button>
-                    )}
-                  </div>
-                  {/* KONFİRME dışında rozet yok.
-                      Kart eskiden üç durumdan birini gösteriyordu: "Konfirme" /
-                      "N eksik" / "Hazır". Aslı Hanım (2026-08-24): "tamamlandı,
-                      tamamlanmadı, eksik kaldı, geç kaldı… Öyle bir şey
-                      istemiyoruz ki." Katalog ekranı ürünü göstermek içindir,
-                      föyün ne kadar dolduğunu değil. */}
-                  {s.confirmed_at && (
-                    <Badge className="absolute left-2 top-2 z-[2] bg-success text-white shadow-card">
-                      <ShieldCheck size={12} aria-hidden /> Konfirme
-                    </Badge>
-                  )}
-                  {/* Ad birincil; kod ve cins tek satırda, sessiz. */}
-                  <div className="border-t border-hairline px-3 py-2.5">
-                    <h3 className="truncate text-[13.5px] font-medium tracking-tight text-ink transition-colors duration-150 group-hover:text-brand-strong" title={s.title}>
-                      {s.title}
-                    </h3>
-                    {sub && (
-                      <p className="mt-0.5 truncate text-[12px] text-subtle">{sub}</p>
-                    )}
-                  </div>
+                  ))}
                 </div>
-                );
-              })}
-            </div>
+              </SortableContext>
+            </DndContext>
             </>
           )}
         </div>
@@ -785,5 +746,185 @@ function SubChip({
     >
       {children}
     </button>
+  );
+}
+
+/**
+ * SÜRÜKLENEBİLİR ÜRÜN KARTI.
+ *
+ * Sıraç (2026-09-17): "Bu sayfadakileri de sürükle bırakla yer değiştirebilir
+ * miyiz? Bu sıraya göre değil, bizim istediğimiz şekilde olsun."
+ *
+ * TUTAMAÇ AYRI. Kanban'da kartın tamamı tutamaçtır ama burada kartın üstünde
+ * tüm yüzeyi kaplayan gizli bir bağlantı var (föyü açan) — sürükleme
+ * dinleyicileri onun altında kalır ve hiç tetiklenmez. Bağlantıyı kaldırıp
+ * `router.push`'a geçmek sağ tıkla "yeni sekmede aç"ı ve orta tık ile açmayı
+ * öldürürdü. Bu yüzden sol üst köşede GÖRÜNÜR bir tutamaç duruyor: ne
+ * sürükleneceği tahmin edilmiyor, gösteriliyor.
+ *
+ * Tutamaç yalnız sıralama yetkisi olana çizilir; üye için kart eskisi gibi
+ * sade kalır.
+ */
+function SheetCard({
+  sheet: s,
+  canReorder,
+  isAdmin,
+  isDeleting,
+  onMove,
+  onDelete,
+  onCoverError,
+}: {
+  sheet: CollectionItem;
+  canReorder: boolean;
+  isAdmin: boolean;
+  isDeleting: boolean;
+  onMove: (_s: CollectionItem) => void;
+  onDelete: (_s: CollectionItem) => void;
+  onCoverError: (_m: string | null) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: s.id,
+    disabled: !canReorder,
+  });
+  const cover = coverImage(s);
+  const sub = [s.product_code, s.product_kind].filter(Boolean).join(" · ");
+
+  return (
+    // Kart bir <div>: gezinme yayılmış (absolute inset-0) Link ile, Excel
+    // indirme linki onun ÜSTÜNDE kardeş olarak durur. <a> içinde <a> geçersiz
+    // HTML'dir ve hydration hatasıyla tüm sayfayı istemcide yeniden
+    // çizdiriyordu (donma şikâyeti).
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      /* SAĞ TIK → "Başka kategoriye gönder". Tarayıcının kendi menüsü bu
+         kartta bir şey kazandırmıyor. */
+      onContextMenu={(e) => { e.preventDefault(); onMove(s); }}
+      /* KART: hover'da YALNIZ gölge derinleşir. Kenarlık da değişince kutu iki
+         kanaldan birden oynuyor, ızgara fare gezdikçe titriyordu. */
+      className={cn(
+        "group relative flex flex-col overflow-hidden rounded-card border border-line bg-surface shadow-card transition-shadow duration-[180ms] ease-standard hover:shadow-card-hover",
+        isDragging && "z-[4] opacity-60 shadow-drawer",
+      )}
+    >
+      <Link href={`/production/${s.id}`} aria-label={s.title} className="absolute inset-0 z-[1] rounded-card" />
+      <div className="aspect-[3/4] w-full overflow-hidden bg-surface-muted">
+        {cover ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={cover} alt="" loading="lazy" className="h-full w-full object-cover" />
+        ) : (
+          /* Görselsiz ürün düzeni bozmaz: aynı oran, nötr yüzey, küçük ikon. */
+          <div className="grid h-full w-full place-items-center text-subtle">
+            <ImageIcon size={22} strokeWidth={1.5} aria-hidden />
+          </div>
+        )}
+      </div>
+
+      {/* TUTAMAÇ — sol üstte, bağlantının üstünde. `touch-none`: parmakla
+          sürüklerken sayfa kaymasın. */}
+      {canReorder && (
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          aria-label={`${s.title} — sırasını değiştir`}
+          title="Sürükleyip bırakarak sırasını değiştir"
+          className={cn(
+            "tap-target absolute left-2 top-2 z-[3] grid size-8 touch-none place-items-center rounded-control border border-line bg-surface text-muted shadow-card",
+            "transition-[background-color,border-color,color] duration-150 hover:border-line-strong hover:bg-surface-muted hover:text-ink",
+            isDragging ? "cursor-grabbing" : "cursor-grab",
+          )}
+        >
+          <GripVertical size={17} aria-hidden />
+        </button>
+      )}
+
+      {/* Kart eylemleri — TEK DÜĞME, ETİKETLİ MENÜ.
+          Sıraç (2026-09-17): "Şu taşıma silme ikonları çok küçük ve anlaşılır
+          değil, o yüzden görünmüyor." Eskiden beş adet 13 piksellik simge yan
+          yana dururdu ve yalnız farede belirirdi; yazıcı / indirme oku /
+          klasör oku / çöp kutusunu ayırt etmek tahmin işiydi. Artık işaret HER
+          ZAMAN görünür (telefonda da) ve içindeki satırlar okunuyor. */}
+      <SheetCardMenu label={s.title}>
+        {/* KAPAK — karar ızgaraya bakarken verilir, föyün içinde değil
+            (2026-08-30). Föyü açmadan değiştirilir. */}
+        <CoverImageButton
+          sheetId={s.id}
+          title={s.title}
+          images={Array.isArray(s.photo_refs) ? s.photo_refs : []}
+          onError={onCoverError}
+          className={menuItemCls}
+          label="Kapak görseli"
+        />
+        {/* İNDİRME ONAYI: dosya sistemin dışına çıkıyor ve günlüğe yazılıyor
+            (2026-08-29). */}
+        <DownloadLink
+          href={`/production/${s.id}/print`}
+          what={`“${s.title}” föyünün çıktısı`}
+          label="Çıktı al"
+          title="Tek sayfa çıktı — yazdır veya PDF"
+          className={menuItemCls}
+        >
+          <Printer aria-hidden />
+          <span>Çıktı al</span>
+        </DownloadLink>
+        <DownloadLink
+          href={`/production/${s.id}/export`}
+          what={`“${s.title}” föyünün Excel dosyası`}
+          title="Föyü Excel olarak indir"
+          className={menuItemCls}
+        >
+          <FileDown aria-hidden />
+          <span>Excel indir</span>
+        </DownloadLink>
+        {/* TAŞI — sağ tıkı bilmeyen için görünür kapı. */}
+        <button
+          type="button"
+          onClick={() => onMove(s)}
+          className={menuItemCls}
+          aria-label={`${s.title} ürününü başka kategoriye gönder`}
+        >
+          <FolderInput aria-hidden />
+          <span>Kategoriye gönder</span>
+        </button>
+        {/* SİLME katalogda da var: föyü silmek için tek tek açmak gerekiyordu
+            (2026-08-29: "föy düzenleme silme gibi olması gereken ne varsa
+            olmalı"). Onay penceresi çıkmadan hiçbir şey silinmez.
+            Ayırıcının ALTINDA: geri dönüşü olmayan tek satır. */}
+        {isAdmin && (
+          <>
+            <div className="my-1 h-px bg-hairline" aria-hidden />
+            <button
+              type="button"
+              onClick={() => onDelete(s)}
+              disabled={isDeleting}
+              className={menuItemDangerCls}
+              aria-label={`${s.title} föyünü sil`}
+            >
+              <Trash2 aria-hidden />
+              <span>Föyü sil</span>
+            </button>
+          </>
+        )}
+      </SheetCardMenu>
+
+      {/* KONFİRME dışında rozet yok.
+          Kart eskiden üç durumdan birini gösteriyordu: "Konfirme" / "N eksik" /
+          "Hazır". Aslı Hanım (2026-08-24): "tamamlandı, tamamlanmadı, eksik
+          kaldı, geç kaldı… Öyle bir şey istemiyoruz ki."
+          SOL ALTA TAŞINDI: sol üst köşe artık sürükleme tutamacının. */}
+      {s.confirmed_at && (
+        <Badge className="absolute bottom-[54px] left-2 z-[2] bg-success text-white shadow-card">
+          <ShieldCheck size={12} aria-hidden /> Konfirme
+        </Badge>
+      )}
+      {/* Ad birincil; kod ve cins tek satırda, sessiz. */}
+      <div className="border-t border-hairline px-3 py-2.5">
+        <h3 className="truncate text-[13.5px] font-medium tracking-tight text-ink transition-colors duration-150 group-hover:text-brand-strong" title={s.title}>
+          {s.title}
+        </h3>
+        {sub && <p className="mt-0.5 truncate text-[12px] text-subtle">{sub}</p>}
+      </div>
+    </div>
   );
 }
