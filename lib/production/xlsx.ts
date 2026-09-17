@@ -91,6 +91,29 @@ function fitBox(
   return { w, h, dx: Math.round((boxW - w) / 2), dy: Math.round((boxH - h) / 2) };
 }
 
+/**
+ * "Ready to Wear › Jackets & Vests" gibi okunur kategori yolu.
+ *
+ * `labelOf` BURADA KULLANILMAZ: taksonomi düzenlenebilir (Kilims ve Chests
+ * 2026-09-17'de ekranda açıldı) ve kodda gömülü ağaçta bulunmayan anahtara
+ * "Kategorisiz" diyor — föyün kategorisi VARKEN yanlış bilgi basmak, hiç
+ * basmamaktan kötüdür. Ağaçta yoksa anahtarın kendisi okunur hale getirilir;
+ * anahtarlar site sluglarından türediği için sonuç doğru okunuyor
+ * ("kilims" → "Kilims", "2026_dekupe" → "2026 Dekupe").
+ */
+function humanizeKey(key: string): string {
+  return key.replace(/[_-]+/g, " ").replace(/\S+/g, (w) => w.charAt(0).toLocaleUpperCase("tr-TR") + w.slice(1));
+}
+
+function categoryPath(category?: string | null, subcategory?: string | null): string {
+  if (!category) return "";
+  const node = COLLECTION_TAXONOMY.find((c) => c.key === category);
+  const top = node?.label ?? humanizeKey(category);
+  if (!subcategory) return top;
+  const sub = node?.subcategories?.find((s) => s.key === subcategory)?.label ?? humanizeKey(subcategory);
+  return `${top} › ${sub}`;
+}
+
 function newWorkbook(): ExcelJS.Workbook {
   const wb = new ExcelJS.Workbook();
   wb.creator = "Lospia — Aslı Filinta Operasyon";
@@ -153,13 +176,26 @@ async function addProductionSheet(
   };
 
   // ── 1. Başlık ──────────────────────────────────────────────────────────────
+  /* ÜRÜN ADI VE KATEGORİSİ BAŞLIKTA. Dosya tek başına dolaşıyor — üreticiye
+     e-postayla gidiyor, yazdırılıp atölyeye veriliyor. "ÜRETİM FÖYÜ" yazan bir
+     kâğıdın hangi ürün olduğu yalnız "ÜRÜNÜN AÇIKLAMASI" satırından
+     anlaşılıyordu, kategorisi ise hiçbir yerde yazmıyordu. */
   ws.mergeCells("A1:I1");
   const title = ws.getCell("A1");
-  title.value = "ÜRETİM FÖYÜ";
+  const where = categoryPath(sheet.category, sheet.subcategory);
+  const subtitle = [txt(sheet.title), where].filter(Boolean).join("  ·  ");
+  title.value = subtitle
+    ? {
+        richText: [
+          { text: "ÜRETİM FÖYÜ\n", font: { bold: true, size: 14, color: { argb: INK } } },
+          { text: subtitle, font: { size: 10.5, color: { argb: "FF6B7280" } } },
+        ],
+      }
+    : "ÜRETİM FÖYÜ";
   title.font = { bold: true, size: 14, color: { argb: INK } };
-  title.alignment = { vertical: "middle", horizontal: "center" };
+  title.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
   boxRow(1);
-  ws.getRow(1).height = 31;
+  ws.getRow(1).height = subtitle ? 40 : 31;
 
   // ── 2..5. Sipariş bilgisi — solda dört satır, sağda dört satır ─────────────
   const info: [string, string, string, string][] = [
@@ -328,7 +364,13 @@ async function addProductionSheet(
        uzun etiketler 26 karakterle hesaplanınca satıra sığmayıp bir alttakinin
        üstüne biniyordu. */
     const lines = Math.max(minLines, estimateLines(txt(value) || " ", 78), estimateLines(label, 20));
-    ws.getRow(r).height = Math.min(220, Math.max(20, lines * 12 + 6));
+    /* TAVAN 409: Excel'in izin verdiği en yüksek satır. Eskiden 220'de
+       kesiliyordu ve uzun metnin GERİSİ GÖRÜNMÜYORDU — "Size & Fit" bölümü
+       her beden için ayrı satır taşıdığı için (S/M/L/XL, bel + ön boy + yan
+       boy) 25 satırı aşıyor ve L bedenden sonrası kayboluyordu. Föy üreticiye
+       giden tek kâğıt; eksik ölçü, olmayan ölçüden kötüdür. Yazdırmada bir
+       satır ikinci sayfaya taşabilir, bilgi kaybından iyidir. */
+    ws.getRow(r).height = Math.min(409, Math.max(20, lines * 12 + 6));
     r++;
   };
 
@@ -342,6 +384,43 @@ async function addProductionSheet(
   textRow("KALITE KONTROL REVIZYON TARIHI :", sheet.qc_revision);
   textRow("REVIZYON NOTLARI :", sheet.revision_notes);
   textRow("ÜRETİM FİRE PAYI:", sheet.production_waste);
+
+  /* ── WEB SİTESİ BİLGİLERİ ────────────────────────────────────────────────
+     Aslı Hanım (2026-09-17, sesli): "Föye girdiğimizde bu web bilgilerini
+     gireceğimiz bir yer olsun — designer's note, size & fit… bizim
+     kullandığımız Excel formatında."
+
+     Föy editöründe Web sekmesi olarak yapıldı ama EXCEL'E GİRMİYORDU: dosya
+     üreticiye ya da atölyeye gittiğinde o üç metin kayboluyordu. İsteğin
+     ikinci yarısı ("Excel formatında") bu bölümle karşılanıyor.
+
+     ÜRETİM BİLGİSİ DEĞİL, o yüzden talimatların ALTINDA ve AYRI bir şerit
+     altında duruyor — dikişçi yukarıyı okur, siteye giren aşağıyı.
+     Hiçbiri yoksa bölüm hiç çizilmez; boş başlık föyü kirletir. */
+  const hasWeb = [sheet.designers_note, sheet.size_fit, sheet.details_care, sheet.web_url].some((v) => txt(v));
+  if (hasWeb) {
+    ws.mergeCells(r, 1, r, COLS);
+    const band = ws.getCell(r, 1);
+    band.value = "WEB SİTESİ BİLGİLERİ  ·  aslifilinta.com";
+    band.font = { bold: true, size: 10.5, color: { argb: INK } };
+    band.alignment = { vertical: "middle", indent: 1 };
+    band.fill = { type: "pattern", pattern: "solid", fgColor: { argb: TH } };
+    boxRow(r);
+    ws.getRow(r).height = 20;
+    r++;
+
+    /* ETİKETLER SİTEDEKİ YAZIMIYLA. Sıraç (2026-09-17): "Web sayfasında
+       İngilizce yazılmışsa bizim sistemde de o mantık olsun — biz siteye
+       benzeyeceğiz." Föyün geri kalanı Türkçe ve BÜYÜK HARF çünkü atölye
+       talimatı; bu üçü ise sitenin ürün sayfasındaki akordeon başlıklarının
+       birebir kendisi. Büyük harfe çevirmek ya da Türkçeleştirmek, siteyle
+       föyü karşılaştıran kişinin işini zorlaştırır. */
+    textRow("Designer’s Note", sheet.designers_note ?? null, 2);
+    textRow("Size & Fit", sheet.size_fit ?? null, 2);
+    textRow("Details & Care", sheet.details_care ?? null, 2);
+    if (txt(sheet.web_url)) textRow("Ürün sayfası", sheet.web_url ?? null);
+  }
+
   textRow("Fotoğraf Referansları :", null, 2);
 
   // ── Görseller ─────────────────────────────────────────────────────────────

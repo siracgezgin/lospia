@@ -32,7 +32,7 @@ export default async function CollectionPage({
 }: {
   searchParams: Promise<{ sezon?: string }>;
 }) {
-  const { supabase, user, workspaceId, isAdmin, gate } = await requireModuleMember();
+  const { supabase, user, workspaceId, isAdmin, role, gate } = await requireModuleMember();
   if (gate === "login") redirectToSignIn();
   if (gate !== "ok" || !workspaceId || !user) return <AccessDenied />;
 
@@ -107,5 +107,16 @@ export default async function CollectionPage({
      durumda boş açılmaz (bkz. lib/collection/category-tree.ts). */
   const categories = await getCategoryTree(supabase, workspaceId);
 
-  return <CollectionBrowser sheets={sheets} isAdmin={isAdmin} seasons={seasons} categories={categories} />;
+  /* isOwner AYRI GEÇİYOR: site ile alışveriş (çek / gönder) yalnız Sistem
+     Admini'nde (Sıraç, 2026-09-17). Koleksiyonun geri kalanı Yönetici'ye açık,
+     o yüzden isAdmin duruyor. */
+  return (
+    <CollectionBrowser
+      sheets={sheets}
+      isAdmin={isAdmin}
+      isOwner={role === "owner"}
+      seasons={seasons}
+      categories={categories}
+    />
+  );
 }

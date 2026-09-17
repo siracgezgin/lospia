@@ -20,6 +20,20 @@ import { logWorkspaceActivity } from "@/lib/activity/log-workspace-activity";
 
 const AUTH_REQUIRED = "Kimlik doğrulama gerekli.";
 
+/**
+ * SİTE İLE ALIŞVERİŞ YALNIZ SİSTEM ADMİNİNDE.
+ *
+ * Sıraç (2026-09-17): "Siteden çekme kısmını sadece admin yapabilsin,
+ * yönetici de yapamasın."
+ *
+ * Yönetici (admin) rolü koleksiyonun her yerinde yetkili — föy açar, siler,
+ * kategori düzenler, ürünü Upcycle'a gönderir. Ama bu iki düğme çalışma
+ * alanının DIŞINA bağlanıyor: biri tek tıkla 161 föyü birden yazıyor, öteki
+ * markanın canlı satış sitesine gidecek dosyayı üretiyor. Yanlış zamanda
+ * basılan bir düğmenin bedeli koleksiyonun tamamı; o yüzden kapı daraltıldı.
+ */
+const SYSTEM_ADMIN_ONLY = "Site ile alışveriş yalnız Sistem Admini'ne açık.";
+
 async function getCtx(supabase: Awaited<ReturnType<typeof createClient>>) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
@@ -87,9 +101,7 @@ export async function syncCollectionFromWebsite(): Promise<WebsiteSyncReport | {
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
-  if (ctx.role !== "owner" && ctx.role !== "admin") {
-    return { error: "Web sitesinden çekme yöneticiye açık." };
-  }
+  if (ctx.role !== "owner") return { error: SYSTEM_ADMIN_ONLY };
 
   let fetched: Awaited<ReturnType<typeof fetchWebsiteProducts>>;
   try {
@@ -257,9 +269,9 @@ export async function pendingWebEdits(): Promise<{ items: PendingWebEdit[] } | {
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
-  if (ctx.role !== "owner" && ctx.role !== "admin") {
-    return { error: "Siteye gönderme yöneticiye açık." };
-  }
+  /* Gönderim çekişten DAHA kritik: ürettiği dosya sitenin ürün sayfalarını
+     değiştiriyor. Aynı kapı. */
+  if (ctx.role !== "owner") return { error: SYSTEM_ADMIN_ONLY };
 
   const { data, error } = await supabase
     .from("production_sheets")

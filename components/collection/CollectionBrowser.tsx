@@ -46,6 +46,9 @@ export type CollectionItem = Pick<
 interface Props {
   sheets: CollectionItem[];
   isAdmin: boolean;
+  /** Site ile alışveriş (çek / gönder) yalnız Sistem Admini'nde — Yönetici
+   *  koleksiyonun geri kalanında yetkili ama bu iki düğmeyi görmez. */
+  isOwner?: boolean;
   /** Sezon bağlamı — boşsa seçici çizilmez (tablo migrate edilmemiş). */
   seasons?: SwitchSeason[];
   /** Düzenlenebilir kategori ağacı. Verilmezse kod varsayılanları. */
@@ -145,7 +148,7 @@ function coverImage(s: CollectionItem): string | null {
  * kişi kartlarıyla aynı dilde, tek tıklamayla veren kutucuklar taşıyor.
  * Alt kategoriler de ağaç değil, kategori içinde tek satır çip.
  */
-export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }: Props) {
+export function CollectionBrowser({ sheets, isAdmin, isOwner = false, seasons = [], categories }: Props) {
   const tree = categories && categories.length > 0 ? categories : COLLECTION_TAXONOMY;
   // Sezona bağlanmamış föyler — taşımada sezon metni boş olanlar.
   const [query, setQuery] = useState("");
@@ -383,7 +386,7 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
                 <FileSpreadsheet size={15} /> <span className="hidden sm:inline">Tümünü indir</span>
               </DownloadLink>
             )}
-            {isAdmin && (
+            {isOwner && (
               <Button
                 variant="secondary"
                 size="sm"
@@ -398,7 +401,7 @@ export function CollectionBrowser({ sheets, isAdmin, seasons = [], categories }:
             {/* Çekişin KARŞI YÖNÜ. İki düğme yan yana durur: biri siteyi föye
                 getirir, öteki föyde yazılanı siteye hazırlar. Gönderim CSV
                 üretir, siteye yazmaz — yükleme kullanıcının elinden geçer. */}
-            {isAdmin && (
+            {isOwner && (
               <Button
                 variant="secondary"
                 size="sm"
