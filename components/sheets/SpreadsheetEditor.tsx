@@ -76,6 +76,9 @@ const inSel = (s: Sel, r: number, c: number) => {
    kasıyor… aşağı inerken çok yavaş."
    Piksel cinsinden pay, satır ne kadar yüksek olursa olsun aynı kalır. */
 const OVERSCAN_PX = 240;
+/** Piksel payının üstüne EN AZ bu kadar satır. Uzun metinli satırlarda
+ *  (300px) piksel payı tek satırı bile kapsamıyor. */
+const ROW_OVERSCAN = 2;
 
 /** Bundan geniş bir seçimde (⌘A gibi) biçim yalnız DOLU hücrelere yazılır. */
 const WIDE_SELECTION = 20_000;
@@ -271,18 +274,49 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
   // ── Seçim ve gezinme ──────────────────────────────────────────────────────
   const active = { r: sel.r1, c: sel.c1 };
 
+  /* IZGARA ÖLÇÜLERİ REF'TE. `moveTo` gerçek satır/sütun konumlarını okumak
+     zorunda ama `rowTops`/`colLefts` bu satırın ALTINDA hesaplanıyor (çizim
+     penceresiyle birlikte). Ref, kaydırma matematiğini son çizimin
+     ölçülerine bağlar ve `moveTo`'yu her tuş vuruşunda yeniden kurmaktan
+     kurtarır. */
+  const metrics = useRef<{
+    rowTops: { tops: number[]; total: number };
+    colLefts: { lefts: number[]; total: number };
+  }>({ rowTops: { tops: [], total: 0 }, colLefts: { lefts: [], total: 0 } });
+
   const moveTo = useCallback((r: number, c: number, extend = false) => {
     const g = sheetRef.current;
     const rr = Math.max(0, Math.min(g.rows - 1, r));
     const cc = Math.max(0, Math.min(g.cols - 1, c));
     setSel((s) => (extend ? { ...s, r2: rr, c2: cc } : { r1: rr, c1: cc, r2: rr, c2: cc }));
     const el = scrollRef.current;
-    if (el) {
-      const top = rr * ROW_H;
-      if (top < el.scrollTop) el.scrollTop = top;
-      else if (top + ROW_H > el.scrollTop + el.clientHeight - HEAD_H) {
-        el.scrollTop = top + ROW_H - el.clientHeight + HEAD_H;
-      }
+    if (!el) return;
+
+    /* GERÇEK SATIR KONUMU, SABİT YÜKSEKLİK DEĞİL.
+       Sıraç (2026-09-17): "Tıklıyorum aşağı yukarı gidip gelmiyor, yani çok
+       esnek ve hızlı çalışmıyor."
+       Kaydırma `rr * ROW_H` ile hesaplanıyordu — her satır 30 piksel
+       varsayımı. Web metinlerinin (Size & Fit, Details & Care) olduğu
+       tabloda satırlar 300 pikseli aşıyor: 10. satırın gerçek yeri 2000
+       piksele düşerken hesap 300 diyordu. Sonuç: ok tuşu seçimi
+       değiştiriyor ama görünüm ya hiç kaymıyor ya da yanlış yere gidiyor;
+       kullanıcı hiçbir şey olmadığını görüyordu. Doğru konum, ızgaranın
+       kendi çiziminde kullandığı `rowTops` tablosunda duruyor. */
+    const top = metrics.current.rowTops.tops[rr] ?? rr * ROW_H;
+    const h = rowHeight(g, rr);
+    if (top < el.scrollTop) el.scrollTop = top;
+    else if (top + h > el.scrollTop + el.clientHeight - HEAD_H) {
+      el.scrollTop = top + h - el.clientHeight + HEAD_H;
+    }
+
+    /* YATAY KAYDIRMA HİÇ YOKTU: sağ/sol oka basınca seçim yürüyor ama sütun
+       görünüme girmiyordu. Geniş tabloda (K, L sütunları) imleç ekranın
+       dışında kalıyor, kullanıcı nerede olduğunu göremiyordu. */
+    const left = metrics.current.colLefts.lefts[cc] ?? 0;
+    const w = colWidth(g, cc);
+    if (left < el.scrollLeft) el.scrollLeft = left;
+    else if (left + w > el.scrollLeft + el.clientWidth - GUTTER_W) {
+      el.scrollLeft = left + w - el.clientWidth + GUTTER_W;
     }
   }, []);
 
@@ -805,14 +839,21 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
       const mid = (lo + hi) >> 1;
       if (rowTops.tops[mid] <= target) { out = mid; lo = mid + 1; } else hi = mid - 1;
     }
-    return Math.max(0, out);
+    /* PİKSEL PAYI YETMİYOR, SATIR PAYI DA ŞART.
+       Sıraç (2026-09-17): "Çok esnek ve hızlı çalışmıyor, bir sıkıntı var."
+       240 piksellik pay normal satırda (30px) sekiz satır eder ama web
+       metinlerinin olduğu tabloda satırlar 300 pikseli buluyor — pay TEK
+       satırı bile kapsamıyordu ve kaydırdıkça her karede yeni satır mount
+       ediliyordu. İki satırlık taban pay, satır ne kadar uzun olursa olsun
+       kaydırmanın önünde hazır içerik bırakır. */
+    return Math.max(0, out - ROW_OVERSCAN);
   }, [scrollTop, rowTops, sheet.rows]);
 
   const lastRow = useMemo(() => {
     const limit = scrollTop + viewH + OVERSCAN_PX;
     let r = firstRow;
     while (r < sheet.rows - 1 && rowTops.tops[r] < limit) r++;
-    return Math.min(sheet.rows - 1, r);
+    return Math.min(sheet.rows - 1, r + ROW_OVERSCAN);
   }, [firstRow, scrollTop, viewH, rowTops, sheet.rows]);
 
   const visibleRows: number[] = [];
@@ -904,6 +945,12 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
   for (let c = firstCol; c <= lastCol; c++) visibleCols.push(c);
   /* Soldaki çizilmeyen sütunların toplam genişliği — ızgara kaymasın diye
      onların yerine tek bir boşluk konur. */
+  /* Ölçüler değiştikçe ref yenilenir (satır yüksekliği, sütun genişliği,
+     satır/sütun ekleme). Effect içinde: render sırasında ref yazmak React
+     Compiler'ın uyardığı bir desen ve gerek yok — klavye olayı her zaman
+     bir sonraki boyamadan sonra geliyor. */
+  useEffect(() => { metrics.current = { rowTops, colLefts }; }, [rowTops, colLefts]);
+
   const colPadLeft = colLefts.lefts[firstCol] ?? 0;
 
   // ── Durum çubuğu ──────────────────────────────────────────────────────────
