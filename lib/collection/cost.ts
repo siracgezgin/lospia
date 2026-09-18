@@ -194,6 +194,33 @@ export const COST_ITEM_DEFS: {
  */
 export const GENEL_GIDER_DEFAULT = "1500";
 
+/**
+ * Fiyatın değişebildiği adet kademeleri (Aslı Hanım'ın saydığı sırayla).
+ * "Bizim adetlerimiz 50, 100, 150, 200 ve üstü."
+ */
+export const QTY_TIERS = ["50", "100", "150", "200"] as const;
+
+/**
+ * Bir kalemin VERİLEN adet için tutarı.
+ *
+ * Kademeler aşağıdan yukarı okunur: seçilen adede eşit ya da ondan KÜÇÜK en
+ * büyük dolu kademe geçerlidir; hiçbiri dolu değilse temel tutar. "Fiyat
+ * değişmiyorsa otomatik gider" kuralı budur — 150 için ayrı fiyat
+ * girilmemişse 100'ünki, o da yoksa temel tutar kullanılır.
+ */
+export function amountForQty(item: CostItem, qty: number): string {
+  const tiers = item.tiers;
+  if (!tiers || qty <= 0) return item.amount;
+  let best = item.amount;
+  for (const t of QTY_TIERS) {
+    const n = Number(t);
+    if (n > qty) break;
+    const v = (tiers[t] ?? "").trim();
+    if (v) best = v;
+  }
+  return best;
+}
+
 /** Toplam girilip adede bölünen kalemler. */
 export const DIVIDED_COST_KEYS: ReadonlySet<CostItemKey> = new Set(
   COST_ITEM_DEFS.filter((d) => d.dividedByQty).map((d) => d.key),
@@ -298,7 +325,10 @@ export function unitCostOf(
       // Reçeteden gelen kalem elle girilenin YERİNE geçer — iki kaynak
       // toplanırsa maliyet iki katına çıkardı.
       const bomVal = fromBom?.[it.key];
-      return acc + share(it.key, bomVal != null ? bomVal : parseMoney(it.amount));
+      /* Elle girilen tutar SEÇİLEN ADEDE göre okunur; reçeteden geleni
+         kademe etkilemez (o zaten metrajdan hesaplanıyor). */
+      const manual = parseMoney(amountForQty(it, qty ?? 0));
+      return acc + share(it.key, bomVal != null ? bomVal : manual);
     }, 0);
     if (sum > 0) return sum;
   }

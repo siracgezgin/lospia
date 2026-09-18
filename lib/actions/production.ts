@@ -70,6 +70,9 @@ const costItem = z.object({
   ]),
   label: z.string().max(120).optional(),
   amount: z.string().max(40).default(""),
+  /* Adet kademesine göre farklı tutar (18.09.2026). Yalnız DEĞİŞEN kademe
+     yazılır; boş kademe altındakine düşer (bkz. amountForQty). */
+  tiers: z.record(z.string().max(10), z.string().max(40)).optional(),
 });
 
 const pricing = z.object({

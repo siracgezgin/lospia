@@ -33,7 +33,7 @@ import { flattenSubs } from "@/lib/collection/taxonomy";
 import {
   totalQuantity, parseMoney, formatMoney, STANDARD_SIZES, normalizeToStandardSizes,
   DEFAULT_SIZE_GROUPS, emptyCostItems, costItemLabel, bomCostByKey,
-  productionQtyOf, DIVIDED_COST_KEYS,
+  productionQtyOf, DIVIDED_COST_KEYS, QTY_TIERS, amountForQty,
 } from "@/lib/collection/cost";
 import type {
   ProductionSheet, MeasurementRow, DeliveredItemRow, SizeDistribution, ProductionCategory,
@@ -1246,11 +1246,6 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
       </>)}
 
       {tab === "maliyet" && (<>
-        {/* REÇETE (BOM) — maliyetin KAYNAĞI, o yüzden maliyet tablosunun
-            ÜSTÜNDE. Nedensel sıra: reçete → maliyet. */}
-        <Section title="Reçete — Bu üründe ne kadar malzeme gidiyor">
-          <SheetBom sheetId={sheet?.id ?? null} rows={bom} materials={materials} canEdit={isAdmin} />
-        </Section>
 
         {/* MALİYET — kalem kalem. Aslı Hanım (2026-08-19):
             "Maliyet şöyle hesaplanıyor: kumaşın fiyatına ayrı giriyorsun,
@@ -1271,8 +1266,10 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
             // çıkardı. Reçetede olmayan kalemler (dikim, ütü/paket, kalıp,
             // genel gider) elle kalır — onlar malzeme değil.
             const fromBom = bom.length ? bomCostByKey(bom) : {};
+            /* Elle girilen tutar SEÇİLİ ADEDE göre okunur: 150 için ayrı
+               fiyat yazılmamışsa 100'ünki, o da yoksa temel tutar geçerli. */
             const rawOf = (it: CostItem) =>
-              fromBom[it.key] != null ? fromBom[it.key]! : parseMoney(it.amount);
+              fromBom[it.key] != null ? fromBom[it.key]! : parseMoney(amountForQty(it, prodQty));
             /* Kalıp ve numune TOPLAM girilir, birim maliyete payı düşer. */
             const amountOf = (it: CostItem) => {
               const raw = rawOf(it);
@@ -1282,6 +1279,19 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
             const setP = (patch: Partial<typeof p>) => set("pricing", { ...p, ...patch });
             const setItem = (i: number, patch: Partial<CostItem>) =>
               setP({ cost_items: items.map((it, ix) => (ix === i ? { ...it, ...patch } : it)) });
+            /* SERBEST SATIR. Aslı Hanım (18.09.2026): "Buraya diğer gider adı
+               yazmışsın ya, burayı artı şeklinde koy ki eğer bir ürünün ilave
+               bir masrafı varsa biz artı olarak ekleyelim… birkaç satır
+               ekleyebiliyor olalım."
+               Ses notundaki incelik de buradan çözülüyor: "tığ dikişinin el
+               işi ayrı, agrafın el işi ayrı, düğmenin el işi ayrı" — her
+               aksesuarın MONTESİ kendi satırını açar, sabit kalem listesi
+               şişmez ("çok komplike yapmadan"). */
+            const addRow = () =>
+              setP({ cost_items: [...items, { key: "diger" as const, label: "", amount: "" }] });
+            const removeRow = (i: number) =>
+              setP({ cost_items: items.filter((_, ix) => ix !== i) });
+            const freeRows = items.filter((it) => it.key === "diger").length;
             const sale = parseMoney(p.web_sale_price);
             const margin = sale > 0 && unitCost > 0 ? ((sale - unitCost) / sale) * 100 : null;
             return (
@@ -1330,11 +1340,32 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                 {/* Kalem ızgarası — Excel gibi çizgili, boş hücre bırakmaz. */}
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[380px] table-fixed border-collapse text-[13px]">
-                    <colgroup><col /><col className="w-36" /></colgroup>
+                    {/* DAR KOLONLAR, YAN YANA. Aslı Hanım (18.09.2026): "Bu
+                        kadar mesafeye gerek yok… bir tık daha konsantre
+                        getirelim, kumaşın yanına alalım fiyatı… 50 adet, 100
+                        adet, 150 adet, 200 adet toplam yan yana da
+                        gösterebilir." Kalem adı esner, dört kademe sabit ve
+                        dar kalır. */}
+                    <colgroup>
+                      <col />
+                      {QTY_TIERS.map((t) => <col key={t} className="w-[76px]" />)}
+                    </colgroup>
                     <thead>
                       <tr className="bg-surface-muted">
                         <th className={cn(TH_CLS, "text-left")}>Maliyet kalemi</th>
-                        <th className={cn(TH_CLS, "text-right")}>Tutar (₺)</th>
+                        {QTY_TIERS.map((t) => (
+                          <th
+                            key={t}
+                            className={cn(
+                              TH_CLS, "text-right",
+                              /* Seçili adedin kolonu vurgulanır: hesabın hangi
+                                 sütundan geldiği bir bakışta görünsün. */
+                              (p.production_qty ?? "") === t && "bg-brand-soft text-brand-strong",
+                            )}
+                          >
+                            {t}
+                          </th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
@@ -1342,12 +1373,28 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                         <tr key={`${it.key}-${i}`}>
                           <td className={cn("border border-line", it.key === "diger" ? "p-0" : "px-2 py-1.5")}>
                             {it.key === "diger" ? (
-                              <CellInput
-                                aria-label="Diğer gider adı"
-                                value={it.label ?? ""}
-                                onChange={(e) => setItem(i, { label: e.target.value })}
-                                placeholder="Diğer gider adı"
-                              />
+                              <span className="flex items-center">
+                                <CellInput
+                                  aria-label="Kalem adı"
+                                  value={it.label ?? ""}
+                                  onChange={(e) => setItem(i, { label: e.target.value })}
+                                  placeholder="Kalem adı — ör. düğme-ilik el işçiliği"
+                                  className="min-w-0 flex-1"
+                                />
+                                {/* Eklenen satır geri alınabilmeli; tek yönlü
+                                    ekleme, yanlış açılan satırı föyde bırakır. */}
+                                {freeRows > 1 && (
+                                  <IconButton
+                                    size="sm"
+                                    aria-label="Bu satırı sil"
+                                    title="Satırı sil"
+                                    onClick={() => removeRow(i)}
+                                    className="mr-1 shrink-0 hover:text-danger"
+                                  >
+                                    <Trash2 size={13} />
+                                  </IconButton>
+                                )}
+                              </span>
                             ) : (
                               <span className="block">
                                 <span className="font-medium text-ink">{costItemLabel(it)}</span>
@@ -1357,9 +1404,9 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                                 {DIVIDED_COST_KEYS.has(it.key) && (
                                   <span className="mt-0.5 block text-[11px] leading-snug text-subtle">
                                     Toplam tutar — {prodQty > 0 ? `${prodQty} adede bölünür` : "üretim adedi girilince bölünür"}
-                                    {prodQty > 0 && parseMoney(it.amount) > 0 && (
+                                    {prodQty > 0 && rawOf(it) > 0 && (
                                       <strong className="ml-1 font-semibold text-ink">
-                                        = {formatMoney(parseMoney(it.amount) / prodQty)}/adet
+                                        = {formatMoney(rawOf(it) / prodQty)}/adet
                                       </strong>
                                     )}
                                   </span>
@@ -1367,8 +1414,8 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                               </span>
                             )}
                           </td>
-                          <td className="border border-line p-0">
-                            {fromBom[it.key] != null ? (
+                          {fromBom[it.key] != null ? (
+                            <td className="border border-line p-0" colSpan={QTY_TIERS.length}>
                               <span
                                 className="flex h-8 items-center justify-end gap-1.5 px-2 text-right tabular-nums text-ink"
                                 title="Reçeteden hesaplanıyor — elle değiştirilemez"
@@ -1376,24 +1423,59 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                                 <Badge size="xs" className="bg-brand-soft text-brand-strong">reçete</Badge>
                                 {formatMoney(fromBom[it.key]!)}
                               </span>
-                            ) : (
-                              <CellInput
-                                className="text-right tabular-nums"
-                                aria-label={`${costItemLabel(it)} — birim tutar`}
-                                value={it.amount}
-                                onChange={(e) => setItem(i, { amount: e.target.value })}
-                                inputMode="decimal"
-                                placeholder="—"
-                              />
-                            )}
-                          </td>
+                            </td>
+                          ) : (
+                            QTY_TIERS.map((t, ti) => (
+                              <td key={t} className={cn("border border-line p-0", (p.production_qty ?? "") === t && "bg-brand-soft/40")}>
+                                <CellInput
+                                  className="text-right tabular-nums"
+                                  aria-label={`${costItemLabel(it)} — ${t} adet tutarı`}
+                                  /* İLK KOLON TEMEL TUTAR. Ötekiler yalnız
+                                     DEĞİŞEN kademeyi taşır; boş bırakılan
+                                     kademe altındakine düşer, yani "fiyat
+                                     değişmiyorsa otomatik gider". */
+                                  value={ti === 0 ? it.amount : (it.tiers?.[t] ?? "")}
+                                  onChange={(e) =>
+                                    ti === 0
+                                      ? setItem(i, { amount: e.target.value })
+                                      : setItem(i, { tiers: { ...(it.tiers ?? {}), [t]: e.target.value } })
+                                  }
+                                  placeholder={ti === 0 ? "" : "—"}
+                                  inputMode="decimal"
+                                />
+                              </td>
+                            ))
+                          )}
                         </tr>
                       ))}
+                      <tr>
+                        <td className="border border-line px-2 py-1" colSpan={QTY_TIERS.length + 1}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={addRow}
+                            className="-ml-2 text-brand hover:bg-surface-muted hover:text-brand-strong"
+                          >
+                            <Plus size={13} aria-hidden /> Satır ekle
+                          </Button>
+                        </td>
+                      </tr>
                       <tr className="bg-surface-muted">
                         <td className={cn("border border-line-strong px-2 py-1.5 text-ink", LABEL_CLS)}>
                           Birim maliyet
+                          {/* Aslı Hanım: "Birim maliyetin yanında slash üretim
+                              adedi mutlaka olmalı, çünkü birim maliyeti adede
+                              göre değişir." */}
+                          {prodQty > 0 && (
+                            <span className="ml-1 font-normal text-muted">/ {prodQty} adet</span>
+                          )}
                         </td>
-                        <td className="border border-line-strong px-2 py-1.5 text-right text-[13.5px] font-semibold tabular-nums text-ink">
+                        {/* Birim maliyet SEÇİLİ adede göre; hangi kolonun
+                            kullanıldığı başlıkta vurgulu. */}
+                        <td
+                          className="border border-line-strong px-2 py-1.5 text-right text-[13.5px] font-semibold tabular-nums text-ink"
+                          colSpan={QTY_TIERS.length}
+                        >
                           {formatMoney(unitCost)}
                         </td>
                       </tr>
@@ -1435,6 +1517,16 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               </div>
             );
           })()}
+        </Section>
+
+        {/* REÇETE AŞAĞIDA (Aslı Hanım, 18.09.2026): "Bu reçeteyi buradan
+            iptal edelim, aşağıya alalım. Burası direkt maliyet olsun."
+            Nedensel sıra (reçete → maliyet) doğruydu ama föyü açan önce
+            maliyeti görmek istiyor; reçete onu besleyen ayrıntı, sonuç değil.
+            Reçeteden gelen kalemler maliyet tablosunda "reçete" rozetiyle
+            zaten işaretli, yani bağ kopmuyor. */}
+        <Section title="Reçete — Bu üründe ne kadar malzeme gidiyor">
+          <SheetBom sheetId={sheet?.id ?? null} rows={bom} materials={materials} canEdit={isAdmin} />
         </Section>
       </>)}
 

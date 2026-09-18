@@ -466,8 +466,19 @@ export type CostItem = {
    * tutardır ve üretim adedine bölünür — Aslı Hanım (18.09.2026): "Kalıba
    * 4500 TL ödüyoruz; bu 50 tane üretileceği için 4500 TL 50 adete
    * bölünecek." Hangi kalemin bölüneceğini COST_ITEM_DEFS söyler.
+   *
+   * Bu alan TEMEL tutardır: adede göre fiyat değişmiyorsa tek yazılır.
    */
   amount: string;
+  /**
+   * Adet kademesine göre FARKLI tutar — yalnız değişenler yazılır.
+   *
+   * Aslı Hanım (18.09.2026): "Maliyet 50, maliyet 100, maliyet 150, maliyet
+   * 200. Eğer fiyat değişmiyorsa otomatik gider; fiyat değişiyorsa ayrı ayrı
+   * girer." Boş bırakılan kademe, altındaki dolu kademeye düşer; hiçbiri
+   * yoksa `amount` geçerlidir. Böylece dört kutuyu doldurmak zorunlu olmuyor.
+   */
+  tiers?: Record<string, string>;
 };
 
 /** Föy fiyat bilgisi — her föy tek ürün. Toplam adet beden dağılımından gelir. */
