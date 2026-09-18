@@ -178,7 +178,12 @@ export function PlanningDayList({
           const cell = byCell.get(`${iso}|${slot}`) ?? [];
           const meta = categoryMeta(band?.category ?? cell[0]?.category ?? "other");
           const title = cell.map((m) => m.title).filter(Boolean).join(" · ");
-          const content = cell.map((m) => m.content).filter(Boolean).join(" · ");
+          /* Haftalık ızgarayla AYNI kaynak: konuların notu + eskiden
+             toplantıya yazılmış metin (20240351). */
+          const content = [
+            ...cell.flatMap((m) => (m.topics ?? []).map((t) => t.note)),
+            ...cell.map((m) => m.content),
+          ].filter(Boolean).join("\n");
           const ids = [...new Set(cell.flatMap((m) => m.participant_ids ?? []))];
           /* SONUÇ — masaüstü ızgarasıyla aynı işaret (20240338). */
           /* BAŞLIK NÖTR. Sıraç (2026-09-10): "Aksayan da tamamlanan da konu

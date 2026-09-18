@@ -50,6 +50,8 @@ interface Props {
 type TopicDraft = {
   id?: string;
   text: string;
+  /** Konunun notu (20240351) — takvimde metin olarak çıkmaz. */
+  note: string;
   participant_ids: string[];   // SORUMLU
   collaborator_ids: string[];  // İŞ BİRLİĞİ (Aslı Hanım, 2026-08-19)
   due_date: string;      // "yyyy-MM-dd" | ""
@@ -132,7 +134,6 @@ export function MeetingEditor({
   const category: PlanningCategory = bandCategory ?? meeting?.category ?? "other";
   const [title, setTitle] = useState(meeting?.title ?? "");
   const [content, setContent] = useState(meeting?.content ?? "");
-  const [noteOpen, setNoteOpen] = useState(Boolean(meeting?.content));
   /* TOPLANTI DÜZEYİNDE KİŞİ SEÇİLMEZ. Aslı Hanım (2026-08-29): "İki defa kişi
      seçmek de çok saçma; altta konuya göre seçiliyor zaten ve orada mail de
      gidiyor sonuçta." Kişi KONUNUN sorumlusudur — görevi ve bildirimi o
@@ -143,7 +144,7 @@ export function MeetingEditor({
   const collaboratorIds = meeting?.collaborator_ids ?? [];
   const [topics, setTopics] = useState<TopicDraft[]>(() => {
     const existing: TopicDraft[] = (meeting?.topics ?? []).map((t) => ({
-      id: t.id, text: t.text ?? "", participant_ids: t.participant_ids ?? [],
+      id: t.id, text: t.text ?? "", note: t.note ?? "", participant_ids: t.participant_ids ?? [],
       collaborator_ids: t.collaborator_ids ?? [],
       due_date: t.due_date ?? "", task_id: t.task_id,
       done_at: t.done_at ?? null, missed_at: t.missed_at ?? null,
@@ -155,7 +156,7 @@ export function MeetingEditor({
        hücresi): pencere boş açılmasın diye o satıra kadar doldurulur. */
     const need = Math.max(3, typeof focusTopicIndex === "number" ? focusTopicIndex + 1 : 0);
     while (existing.length < need) {
-      existing.push({ text: "", participant_ids: [], collaborator_ids: [], due_date: "" });
+      existing.push({ text: "", note: "", participant_ids: [], collaborator_ids: [], due_date: "" });
     }
     return existing;
   });
@@ -233,7 +234,7 @@ export function MeetingEditor({
   const setTopic = (i: number, patch: Partial<TopicDraft>) =>
     setTopics((ts) => ts.map((t, idx) => (idx === i ? { ...t, ...patch } : t)));
   const addTopic = () =>
-    setTopics((ts) => [...ts, { text: "", participant_ids: [], collaborator_ids: [], due_date: "" }]);
+    setTopics((ts) => [...ts, { text: "", note: "", participant_ids: [], collaborator_ids: [], due_date: "" }]);
   /* KONU SİLME ARTIK SORAR. Aslı Hanım (2026-09-07) tek konuyu kaldırmak
      isterken gündemin tamamını kaybetti — Nisa: "Konuyu kaldırabilirsiniz Aslı
      Hanım, siz direkt hepsini siliyorsunuz." Çöp kutusu sessiz ve geri
@@ -279,7 +280,7 @@ export function MeetingEditor({
     const tRes = await saveMeetingTopics(
       id,
       topics.map((t, i) => ({
-        id: t.id, position: i, text: t.text, participant_ids: t.participant_ids,
+        id: t.id, position: i, text: t.text, note: t.note, participant_ids: t.participant_ids,
         /* Konunun teslim tarihi TOPLANTININ GÜNÜdür. Eskiden hücreden gelen
            sabit `day` yazılıyordu: pencerede gün değiştirilip kaydedilince
            toplantı taşınıyor ama konuların tarihi eski günde kalıyordu. */
@@ -537,7 +538,7 @@ export function MeetingEditor({
       JSON.stringify({
         dateIso, time, title, content, externalEmails,
         topics: topics.map((t) => ({
-          text: t.text, p: t.participant_ids, c: t.collaborator_ids, d: t.due_date,
+          text: t.text, note: t.note, p: t.participant_ids, c: t.collaborator_ids, d: t.due_date,
         })),
       }),
     [dateIso, time, title, content, externalEmails, topics],
@@ -920,6 +921,22 @@ export function MeetingEditor({
                     </p>
                   </div>
                 )}
+
+                {/* KONUNUN NOTU (20240351). Sıraç (18.09.2026): "Her konuya
+                    özel not girilecek."
+                    Satırın ALTINDA ve tam genişlikte: not çoğu zaman birkaç
+                    cümle, "Kim" ve tarih seçicileriyle aynı hizada dursa ikisi
+                    de daralırdı. Boşken tek satır yüksekliğinde bekler; takvim
+                    ızgarasında METİN olarak çıkmaz, yalnız varlığı işaretlenir
+                    (Aslı Hanım: "notları görmek istemiyorum"). */}
+                <TextArea
+                  rows={t.note && t.note.length > 60 ? 3 : 1}
+                  value={t.note ?? ""}
+                  onChange={(e) => setTopic(i, { note: e.target.value })}
+                  placeholder="Not — yalnız konu açılınca görünür"
+                  aria-label={`Konu ${i + 1} notu`}
+                  className="basis-full text-[12.5px]"
+                />
               </li>
             )))}
           </ol>
@@ -929,11 +946,10 @@ export function MeetingEditor({
                 <Plus size={13} aria-hidden /> Konu ekle
               </Button>
             )}
-            {!noteOpen && (
-              <Button variant="ghost" size="sm" onClick={() => setNoteOpen(true)}>
-                <Plus size={13} aria-hidden /> Not ekle
-              </Button>
-            )}
+            {/* "Not ekle" KALKTI: not artık toplantının değil KONUNUN alanı
+                (Sıraç, 18.09.2026: "Not başlığa değil konulara eklenmeli, her
+                konuya özel not girilecek, başlıkta not olmaz"). Her konu
+                satırının kendi not kutusu var. */}
           </div>
         </section>
 
@@ -1001,15 +1017,25 @@ export function MeetingEditor({
           </Field>
         )}
 
-        {/* 3 · Not — çoğu toplantıda boş kalıyordu; artık istenince açılır. */}
-        {noteOpen && (
-          <Field label="Not" className="anim-fade-down">
+        {/* ESKİ NOT — yalnız daha önce yazılmış toplantılarda görünür.
+            Not artık konulara yazılıyor; ama eskiden toplantıya yazılan
+            metinleri SİLMEK makinenin işi değil: AFCOM'un notu üç maddeydi,
+            konuları ise bambaşka üç satır — hangisinin hangi konuya ait
+            olduğunu ancak yazan kişi bilir. Metin burada duruyor, ilgili
+            konulara taşındıkça buradan temizlenir. */}
+        {content.trim() && (
+          <Field label="Eski not — konulara taşıyın" className="anim-fade-down">
             <TextArea
               rows={2}
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder="Not…"
             />
+            <p className="mt-1 text-[11.5px] leading-relaxed text-subtle">
+              Bu metin toplantının kendisine yazılmış. Notlar artık her konunun
+              kendi kutusunda; buradakini ilgili konulara taşıyıp bu alanı
+              boşaltabilirsiniz.
+            </p>
           </Field>
         )}
       </div>

@@ -542,7 +542,14 @@ function TitleCell({
      yalnız 12px'lik köşesinden tutuluyordu. */
   const setRef = (node: HTMLDivElement | null) => { dropRef(node); dragRef(node); };
 
-  const content = cell.map((m) => m.content).filter(Boolean).join(" · ");
+  /* NOT ARTIK KONUNUN (20240351). İşaret iki kaynaktan beslenir: konuların
+     kendi notları ve eskiden TOPLANTIYA yazılmış metin. İkincisi hâlâ
+     sayılıyor çünkü o metinler duruyor ve temizlenmeleri için önce fark
+     edilmeleri gerek — toplantı penceresinde "Eski not" olarak açılıyorlar. */
+  const content = [
+    ...cell.flatMap((m) => (m.topics ?? []).map((t) => t.note)),
+    ...cell.map((m) => m.content),
+  ].filter(Boolean).join("\n");
   /* TAMAMLANMA BAŞLIĞIN DEĞİL KONULARIN İŞİ (Sıraç, 2026-09-10: "Tamamlanan
      şey başlık değil konular olmalı, her konu ayrı ayrı kendi içinde").
      Toplantıyı elle "tamamlandı" işaretlemek yanıltıcıydı: üç konudan biri
@@ -706,26 +713,11 @@ function TitleCell({
                  hangi hücrede olduğunu göremiyordu. */
               className="w-full rounded-[4px] border border-brand-ring bg-surface px-1 py-0.5 text-[12.5px] font-bold tracking-tight text-ink"
             />
-            {single && (
-              <textarea
-                value={bodyDraft}
-                onChange={(e) => setBodyDraft(e.target.value)}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => e.stopPropagation()}
-                onKeyDown={(e) => {
-                  e.stopPropagation();
-                  /* Enter YENİ SATIR: gövde çoğu zaman numaralı liste
-                     ("1. … 2. …"). Kaydetmek ⌘/Ctrl+Enter ya da kutudan
-                     çıkmak. */
-                  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); void commit(); }
-                  if (e.key === "Escape") { e.preventDefault(); setBodyDraft(single.content ?? ""); setEditing(false); }
-                }}
-                rows={Math.min(8, Math.max(2, bodyDraft.split("\n").length + 1))}
-                aria-label="Toplantı notu"
-                placeholder="Gündem, not…  (⌘+Enter kaydeder)"
-                className="mt-1 block w-full resize-y rounded-[4px] border border-brand-ring bg-surface px-1 py-0.5 text-[12px] leading-snug text-ink"
-              />
-            )}
+            {/* TOPLANTI NOTU KUTUSU KALKTI (18.09.2026). Dün buraya
+                eklenmişti çünkü gövde düzenlenemiyordu; bir gün sonra isteğin
+                kendisi değişti: "Not başlığa değil konulara eklenmeli, başlıkta
+                not olmaz." Hücrede artık yalnız BAŞLIK düzenleniyor, notlar
+                konu satırlarının kendi kutusunda. */}
           </span>
         ) : cell.length > 1 ? (
           /* AYNI HÜCREDE İKİ TOPLANTI. Eskiden başlıklar "Celebrity ·

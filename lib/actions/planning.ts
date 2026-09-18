@@ -48,6 +48,9 @@ const TopicSchema = z.object({
   id: z.string().max(64).optional().nullable(),   // mevcut konu (upsert için)
   position: z.number().int().min(0).max(50),
   text: z.string().max(2000).optional().nullable(),
+  /* KONUNUN NOTU (20240351). Sıraç (18.09.2026): "Not başlığa değil konulara
+     eklenmeli." Toplantının `content` alanı yerini buraya bıraktı. */
+  note: z.string().max(4000).optional().nullable(),
   participant_ids: memberIds,
   collaborator_ids: memberIds,
   due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
@@ -242,6 +245,7 @@ export type MeetingSnapshot = {
   topics: {
     position: number;
     text: string | null;
+    note: string | null;
     kim: string | null;
     participant_ids: string[];
     collaborator_ids: string[];
@@ -317,6 +321,7 @@ export async function deleteMeeting(
       .map((t, i) => ({
         position: Number(t.position ?? i),
         text: (t.text as string | null) ?? null,
+        note: (t.note as string | null) ?? null,
         kim: (t.kim as string | null) ?? null,
         participant_ids: (t.participant_ids as string[] | null) ?? [],
         collaborator_ids: (t.collaborator_ids as string[] | null) ?? [],
@@ -443,6 +448,7 @@ export async function saveMeetingTopics(
       workspace_id: ctx.workspaceId,
       position: t.position,
       text: nn(t.text),
+      note: nn(t.note),
       participant_ids: t.participant_ids ?? [],
       collaborator_ids: t.collaborator_ids ?? [],
       due_date: t.due_date ?? null,

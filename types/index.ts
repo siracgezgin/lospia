@@ -529,6 +529,10 @@ export type PlanningTopic = {
   workspace_id: string;
   position: number;
   text: string | null;
+  /** Konunun notu (20240351). Takvimde METİN olarak yazılmaz — yalnız varlığı
+   *  işaretlenir; Aslı Hanım (18.09.2026): "Notları görmek istemiyorum, ancak
+   *  konunun üzerine tıklarsam şurada görmek istiyorum." */
+  note?: string | null;
   kim: string | null;              // eski serbest metin (geri uyum)
   participant_ids: string[];       // konu bazlı "Kim" — SORUMLU üye id'leri
   collaborator_ids?: string[];     // "İş birliği" — yanında çalışan kişiler (20240304)
