@@ -101,10 +101,14 @@ const SHEET_TABS: { id: SheetTabId; label: string; icon: typeof ClipboardList }[
 ];
 
 /** Hangi zorunlu alan hangi sekmede — sekme rozetleri buradan sayılır. */
+/* "Eksik alana götür" hangi sekmeyi açacağını buradan bilir — alan taşınınca
+   BURASI DA taşınmalı, yoksa şeritteki uyarı boş bir sekme açar (18.09.2026:
+   açıklama Malzeme'ye, teknik çizim Ölçü'ye geçti). */
 const CHECK_TAB: Record<string, SheetTabId> = {
-  title: "urun", category: "urun", subcategory: "urun", description: "urun",
-  producer: "urun", delivery_date: "urun", sewing_delivery_date: "urun", drawing: "urun",
-  sizes: "olcu", measurements: "olcu",
+  title: "urun", category: "urun", subcategory: "urun",
+  producer: "urun", delivery_date: "urun",
+  description: "malzeme",
+  drawing: "olcu", sizes: "olcu", measurements: "olcu",
 };
 
 // Beden kolonları artık her föyde sabit standart set (bkz. STANDARD_SIZES).
@@ -379,10 +383,18 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
        (2026-08-29). Kategori ızgarasından açıldıysa boş kalır ve "Kategori"
        alanı eksik olarak işaretlenir. */
     const blank = emptyState();
+    /* SEZON KENDİLİĞİNDEN GELİR. Form artık sezon sormuyor (Aslı Hanım,
+       18.09.2026: "Sezona gerek var mı? Biz hep resort çalışmıyor muyuz
+       zaten?") — ama föyün sezonu OLMALI, yoksa Koleksiyon'un sezon seçicisi
+       onu hiçbir sezonun içinde göstermez. Açık sezon varsayılan olarak
+       atanır; değiştirmek gerekirse Koleksiyon'daki seçiciden yapılır. */
+    const current = seasons.find((x) => x.is_current) ?? seasons[0];
     return {
       ...blank,
       category: (initialCategory as ProductionSheetInput["category"]) ?? blank.category,
       subcategory: initialSubcategory ?? blank.subcategory,
+      season_id: current?.id ?? blank.season_id,
+      season: current?.name ?? blank.season,
     };
   });
   const [error, setError] = useState<string | null>(null);
@@ -890,7 +902,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
         <div className="@container">
         <div className="grid grid-cols-1 gap-x-5 gap-y-2.5 rounded-card border border-line p-3 @[49rem]:grid-cols-2">
           <LabeledField checkKey="title" label="Föy başlığı *" value={form.title} onChange={(v) => set("title", v)} placeholder="Beyaz Dantel Etek" missing={missingKeys.has("title")} hint={hintOf.get("title")} />
-          <LabeledField label="Üretim tarihi" value={form.production_date ?? ""} onChange={(v) => set("production_date", v)} />
+          <LabeledField label="Üretim başlangıç tarihi" value={form.production_date ?? ""} onChange={(v) => set("production_date", v)} />
           <LabeledField label="Ürün kodu" value={form.product_code ?? ""} onChange={(v) => set("product_code", v)} />
           <LabeledField checkKey="delivery_date" label="Teslim tarihi" value={form.delivery_date ?? ""} onChange={(v) => set("delivery_date", v)} placeholder="21.07.2026" missing={missingKeys.has("delivery_date")} hint={hintOf.get("delivery_date")} />
           {/* `checkKey` YOK: "Ürün tanımı" denetimi hem burayı hem aşağıdaki
@@ -905,7 +917,11 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
           <LabeledField label="Renk" value={form.colorway ?? ""} onChange={(v) => set("colorway", v)} placeholder="Mavi" />
           {/* İkinci tarih — "Bir ürünlerin teslim tarihi, bir de dikim teslim
               tarihi lazım." */}
-          <LabeledField checkKey="sewing_delivery_date" label="Dikim teslim tarihi" value={form.sewing_delivery_date ?? ""} onChange={(v) => set("sewing_delivery_date", v)} placeholder="14.07.2026" missing={missingKeys.has("sewing_delivery_date")} hint={hintOf.get("sewing_delivery_date")} />
+          {/* DİKİM TESLİM TARİHİ KALKTI (Aslı Hanım, 18.09.2026): "Burada
+              birkaç tane teslim tarihi var, bunlardan birini iptal edelim —
+              bu dikim teslim tarihi buradan çıksın." Üretim başlangıç ve
+              teslim tarihi kaldı; üçüncü tarih hangisinin bağlayıcı olduğunu
+              belirsizleştiriyordu. Veri silinmedi, alan ekrandan kalktı. */}
           {/* ÜRETİCİ — artık serbest metin değil, gerçek usta kaydı.
               Aslı Hanım (2026-08-19): "Cihan Usta, Hakan Usta… ona gireceksin,
               hangi ürünler orada dikiliyor." Serbest metinken Ödeme Tablosu
@@ -936,29 +952,12 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
           ) : (
             <LabeledField label="Üretici" value={form.producer ?? ""} onChange={(v) => set("producer", v)} />
           )}
-          {/* SEZON — artık serbest metin değil, gerçek kayıt. Ürün ekranlarının
-              bağlamı bu (Zedonk `SS 21 - WW` deseni). Liste boşsa eski metin
-              alanına düşer. Yeni föy varsayılan olarak AKTİF sezonda açılır. */}
-          {seasons.length > 0 ? (
-            <FieldRow label="Sezon">
-              <SelectInput
-                value={form.season_id ?? ""}
-                onChange={(e) => {
-                  const id = e.target.value || null;
-                  const sn = seasons.find((x) => x.id === id);
-                  setDirty(true);
-                  setForm((f) => ({ ...f, season_id: id, season: sn?.name ?? "" }));
-                }}
-              >
-                <option value="">Seçiniz…</option>
-                {seasons.map((sn) => (
-                  <option key={sn.id} value={sn.id}>{sn.name}{sn.is_current ? " ·" : ""}</option>
-                ))}
-              </SelectInput>
-            </FieldRow>
-          ) : (
-            <LabeledField label="Sezon" value={form.season ?? ""} onChange={(v) => set("season", v)} placeholder="2026 RESORT" />
-          )}
+          {/* SEZON KALKTI (Aslı Hanım, 18.09.2026): "Sezonu kaldırın şu
+              anda, sezona gerek var mı? Biz hep resort çalışmıyor muyuz
+              zaten?" Föyde her ürün için tekrar tekrar seçilen bir alan
+              olmaktan çıktı. Sezon KAYDI duruyor — Koleksiyon'un üstündeki
+              sezon seçici ve föyün `season_id` alanı yerinde; yalnız bu form
+              artık sormuyor, yeni föy açık sezonu kendiliğinden alıyor. */}
           {/* Koleksiyon kategorisi — web nav yapısı (One-of-a-Kind / Ready to Wear …) */}
           <FieldRow checkKey="category" label="Kategori" missing={missingKeys.has("category")} hint={hintOf.get("category")}>
             <SelectInput
@@ -999,9 +998,12 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
             </SelectInput>
           </FieldRow>
           <LabeledField label="1 ürüne giden metraj" value={form.meterage ?? ""} onChange={(v) => set("meterage", v)} placeholder="1.60 CM" />
-          <FieldRow checkKey="description" label="Ürünün açıklaması" align="start" className="@[49rem]:col-span-2" missing={missingKeys.has("description")} hint={hintOf.get("description")}>
-            <TextArea value={form.description ?? ""} onChange={(v) => set("description", v)} rows={2} />
-          </FieldRow>
+          {/* ÜRÜNÜN AÇIKLAMASI BURADAN ÇIKTI (Aslı Hanım, 18.09.2026):
+              "Şimdi ürünün açıklaması burada olmamalı." Ürün sekmesi kimlik
+              bilgisi içindir — ad, kod, cins, renk, tarihler, kategori. Serbest
+              metin Malzeme sekmesine, öteki uzun metinlerin (yıkama talimatı,
+              kumaş bilgisi, dikiş talimatı) yanına taşındı. Alan SİLİNMEDİ;
+              dolu föyler metnini koruyor ve Excel çıktısındaki yeri değişmedi. */}
         </div>
         </div>
 
@@ -1015,14 +1017,26 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
             listelendiği kısımda her föyün kapağının üzerinde resim butonu
             olsun". Kapak bir föy alanı değil, katalog kararıdır — koleksiyona
             bakarken verilir. */}
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <Section checkKey="drawing" title="Teknik Çizim — Ön">
-            <ImageUploader sheetId={sheetId} section="technical_drawing_front" images={form.photo_refs} onChange={handleImagesChange} variant="drawing" />
-          </Section>
-          <Section title="Teknik Çizim — Arka">
-            <ImageUploader sheetId={sheetId} section="technical_drawing_back" images={form.photo_refs} onChange={handleImagesChange} variant="drawing" />
-          </Section>
-        </div>
+        {/* DEKUPE — TEK KARE. Aslı Hanım (18.09.2026): "Teknik çizim ön ve
+            teknik çizim arka… bence yukarıdaki ölçü ve bedene gelmeli. Buraya
+            da ürünün dekupesi girmeli. Tek bir kare. Ana sayfada görüneceği ve
+            web sitesinde görüneceği şekli gelmeli. Tek fotoğraf."
+            Ürün sekmesinin başında iki teknik çizim kutusu vardı; föyü açan
+            önce kalıp krokisini görüyordu. Ürünün kendisi ne olduğu ancak
+            aşağıda anlaşılıyordu. Çizimler ölçü sekmesine taşındı — orada
+            ölçünün yanında duruyorlar, zaten birlikte okunuyorlar. */}
+        <Section title="Dekupe">
+          <ImageUploader
+            sheetId={sheetId}
+            section="cover"
+            images={form.photo_refs}
+            onChange={handleImagesChange}
+            max={1}
+          />
+          <p className="mt-1 text-[11.5px] leading-relaxed text-subtle">
+            Koleksiyon kartında ve sitede görünen kare. Tek fotoğraf.
+          </p>
+        </Section>
       </div>
 
         {/* RENK VARYANTLARI — aynı modelin diğer renkleri. Zedonk'ta ürün
@@ -1040,6 +1054,19 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
       </>)}
 
       {tab === "olcu" && (<>
+        {/* TEKNİK ÇİZİM — ölçünün yanında (Aslı Hanım, 18.09.2026: "Teknik
+            çizim ön ve arka bence yukarıdaki ölçü ve bedene gelmeli").
+            Kalıpçı ölçüyü çizime bakarak okur; ikisi ayrı sekmelerdeyken
+            föyü açan iki kez gidip geliyordu. */}
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <Section checkKey="drawing" title="Teknik Çizim — Ön">
+            <ImageUploader sheetId={sheetId} section="technical_drawing_front" images={form.photo_refs} onChange={handleImagesChange} variant="drawing" />
+          </Section>
+          <Section title="Teknik Çizim — Arka">
+            <ImageUploader sheetId={sheetId} section="technical_drawing_back" images={form.photo_refs} onChange={handleImagesChange} variant="drawing" />
+          </Section>
+        </div>
+
         {/* ÖLÇÜLER — Excel gibi çizgili ızgara, numaralar OTOMATİK.
             Aslı Hanım (2026-08-19): "Bunların Excel gibi çizgi çizgi kare kare
             olması… hiçbir boş hücre kalmaması. Mesela üç numara niye boş?"
@@ -1434,6 +1461,13 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
       </>)}
 
       {tab === "malzeme" && (<>
+        {/* ÜRÜNÜN AÇIKLAMASI — ürün sekmesinden buraya taşındı (18.09.2026). */}
+        <Section title="Ürünün Açıklaması">
+          <FieldRow checkKey="description" label="Açıklama" align="start" missing={missingKeys.has("description")} hint={hintOf.get("description")}>
+            <TextArea value={form.description ?? ""} onChange={(v) => set("description", v)} rows={2} />
+          </FieldRow>
+        </Section>
+
         {/* YIKAMA TALİMATI */}
         <Section title="Yıkama Talimatı">
           <TextArea value={form.wash_instruction ?? ""} onChange={(v) => set("wash_instruction", v)} rows={2} placeholder="% 100 Polyester Dry Clean Only…" />

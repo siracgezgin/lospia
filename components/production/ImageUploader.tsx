@@ -23,10 +23,15 @@ interface Props {
   /** Teknik çizim için tek büyük alan; diğerleri küçük galeri. */
   variant?: "drawing" | "gallery";
   label?: string;
+  /** En fazla kaç görsel? Dolunca yükleme kapısı kapanır.
+   *  Dekupe için 1 (Aslı Hanım, 18.09.2026: "Tek bir kare… tek fotoğraf") —
+   *  kural yazıyla söylenip kodda serbest bırakılırsa ikinci kare eninde
+   *  sonunda giriyor ve koleksiyon kartı hangisini göstereceğini bilemiyor. */
+  max?: number;
 }
 
 export function ImageUploader({
-  sheetId, section, images, onChange, variant = "gallery", label,
+  sheetId, section, images, onChange, variant = "gallery", label, max,
 }: Props) {
   const { ask, dialog } = useConfirm();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -38,6 +43,7 @@ export function ImageUploader({
 
   // Bu bölüme ait görseller.
   const mine = images.filter((i) => i.section === section);
+  const full = typeof max === "number" && mine.length >= max;
 
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -143,9 +149,13 @@ export function ImageUploader({
                   </IconButton>
                 </div>
               ))}
-              <Button variant="ghost" size="sm" onClick={pick} loading={busy} className="-ml-2 text-brand hover:bg-surface-muted hover:text-brand-strong">
-                {busy ? "Yükleniyor…" : <><ImagePlus size={13} aria-hidden /> Başka görsel ekle</>}
-              </Button>
+              {/* Sınıra gelindiyse ekleme kapısı çizilmez — "tek fotoğraf"
+                  kuralı yazıyla değil, kapıyla korunur. */}
+              {!full && (
+                <Button variant="ghost" size="sm" onClick={pick} loading={busy} className="-ml-2 text-brand hover:bg-surface-muted hover:text-brand-strong">
+                  {busy ? "Yükleniyor…" : <><ImagePlus size={13} aria-hidden /> Başka görsel ekle</>}
+                </Button>
+              )}
             </div>
           ) : (
             <button
@@ -198,23 +208,25 @@ export function ImageUploader({
               </IconButton>
             </div>
           ))}
+          {!full && (
           <button
-            type="button"
-            onClick={pick}
-            disabled={busy}
-            className={cn(
-              "flex size-24 flex-col items-center justify-center gap-1 rounded-card border-2 border-dashed transition-[border-color,background-color,color] duration-150 ease-standard disabled:pointer-events-none",
-              dragOver
-                ? "border-brand bg-brand-soft/70 text-brand-strong"
-                : "border-line text-subtle hover:border-line-strong hover:bg-surface-hover hover:text-muted",
-              busy && "border-solid border-line bg-surface-sunken",
-            )}
-            title="Görsel ekle"
-            aria-label="Görsel ekle"
-          >
-            {busy ? <Loader2 size={18} className="animate-spin" aria-hidden /> : <ImagePlus size={18} aria-hidden />}
-            <span className="text-[12px] font-medium">{busy ? "Yükleniyor" : "Ekle"}</span>
-          </button>
+              type="button"
+              onClick={pick}
+              disabled={busy}
+              className={cn(
+                "flex size-24 flex-col items-center justify-center gap-1 rounded-card border-2 border-dashed transition-[border-color,background-color,color] duration-150 ease-standard disabled:pointer-events-none",
+                dragOver
+                  ? "border-brand bg-brand-soft/70 text-brand-strong"
+                  : "border-line text-subtle hover:border-line-strong hover:bg-surface-hover hover:text-muted",
+                busy && "border-solid border-line bg-surface-sunken",
+              )}
+              title="Görsel ekle"
+              aria-label="Görsel ekle"
+            >
+              {busy ? <Loader2 size={18} className="animate-spin" aria-hidden /> : <ImagePlus size={18} aria-hidden />}
+              <span className="text-[12px] font-medium">{busy ? "Yükleniyor" : "Ekle"}</span>
+            </button>
+          )}
         </div>
       )}
 
