@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 import {
-  ClipboardList, Plus, Trash2, Save, User, Clock, FileDown, Printer, AlertTriangle, CheckCircle2, Ruler, Wallet, Layers,
+  ClipboardList, Plus, Trash2, Save, User, Clock, FileDown, Printer, AlertTriangle, CheckCircle2, Ruler, Wallet, Layers, Truck,
   Globe, ExternalLink,
 } from "lucide-react";
 import {
@@ -25,6 +25,7 @@ import { BackLink } from "@/components/modules/BackLink";
 import { ImageUploader } from "./ImageUploader";
 import { SheetReadiness } from "./SheetReadiness";
 import { SheetBom, type PickableMaterial } from "./SheetBom";
+import { SheetSourcing } from "./SheetSourcing";
 import { SheetVariants, type SiblingSheet } from "./SheetVariants";
 import { checkSheet } from "@/lib/production/completeness";
 import { COLLECTION_TAXONOMY, type CategoryNode } from "@/lib/collection/taxonomy";
@@ -37,7 +38,7 @@ import {
 } from "@/lib/collection/cost";
 import type {
   ProductionSheet, MeasurementRow, DeliveredItemRow, SizeDistribution, ProductionCategory,
-  CostItem, Manufacturer, SheetMaterialWithMaterial,
+  CostItem, Manufacturer, SheetMaterialWithMaterial, Supplier,
 } from "@/types";
 
 /** Föydeki "Üretici" seçicisini besleyen sade usta kaydı. */
@@ -61,6 +62,8 @@ interface Props {
   seasons?: { id: string; name: string; is_current: boolean }[];
   /** Hammadde kütüphanesi — reçeteye eklenebilecekler. */
   materials?: PickableMaterial[];
+  /** Sourcing'de firma seçimi için kayıtlı tedarikçiler (20240352). */
+  suppliers?: Supplier[];
   /** Bu föyün reçetesi (BOM). Maliyetin malzeme kalemleri bundan hesaplanır. */
   bom?: SheetMaterialWithMaterial[];
   /** Aynı modelin diğer renkleri. */
@@ -88,12 +91,19 @@ interface Props {
  * aldığımda tek sayfa görüp kalıbın üstüne yapıştıracağım"); sekmeler yalnız
  * düzenleme ekranıdır.
  */
-type SheetTabId = "urun" | "olcu" | "maliyet" | "malzeme" | "web";
+type SheetTabId = "urun" | "olcu" | "maliyet" | "sourcing" | "malzeme" | "web";
 
 const SHEET_TABS: { id: SheetTabId; label: string; icon: typeof ClipboardList }[] = [
   { id: "urun",    label: "Ürün",             icon: ClipboardList },
   { id: "olcu",    label: "Ölçü & Beden",     icon: Ruler },
   { id: "maliyet", label: "Maliyet",          icon: Wallet },
+  /* SOURCING — Aslı Hanım (18.09.2026): "Benim buradaki üretim föyünde
+     ihtiyacım olan şey sourcing bölümü… Selen Hanım kumaşı source olarak
+     seçerse, nakış olarak nakışçıyı seçerse, üretici olarak Sabri Bey'i
+     seçerse biz aşağıda görürüz hangi üretici, nereden kumaş geliyor."
+     Maliyetin YANINDA değil ARDINDA: önce nereden alındığı, sonra kaça
+     mal olduğu. */
+  { id: "sourcing", label: "Sourcing", icon: Truck },
   { id: "malzeme", label: "Malzeme & Talimat", icon: Layers },
   /* WEB — Aslı Hanım (2026-09-17): "Buraya girdiğimiz zaman web sitesindeki
      bütün bilgileri gireceğimiz yer olsun. Çünkü ekip hâlâ Excel'de çalışıyor:
@@ -126,6 +136,7 @@ function emptyState(): ProductionSheetInput {
     description: "",
     season: "",
     season_id: null,
+    sourcing: [],
     production_date: "",
     delivery_date: "",
     sewing_delivery_date: "",
@@ -182,6 +193,7 @@ function fromSheet(s: ProductionSheet): ProductionSheetInput {
     description: s.description ?? "",
     season: s.season ?? "",
     season_id: s.season_id ?? null,
+    sourcing: Array.isArray(s.sourcing) ? s.sourcing : [],
     production_date: s.production_date ?? "",
     delivery_date: s.delivery_date ?? "",
     sewing_delivery_date: s.sewing_delivery_date ?? "",
@@ -374,7 +386,7 @@ function Section({ title, children, className, checkKey }: {
   );
 }
 
-export function ProductionSheetEditor({ sheet, initialCategory = null, initialSubcategory = null, memberNames, manufacturers = [], seasons = [], materials = [], bom = [], siblings = [], isAdmin, currentUserId, categories, portalLinks = [], portalNotes = [] }: Props) {
+export function ProductionSheetEditor({ sheet, initialCategory = null, initialSubcategory = null, memberNames, manufacturers = [], seasons = [], materials = [], suppliers = [], bom = [], siblings = [], isAdmin, currentUserId, categories, portalLinks = [], portalNotes = [] }: Props) {
   const tree = categories && categories.length > 0 ? categories : COLLECTION_TAXONOMY;
   const { ask, dialog } = useConfirm();
   const router = useRouter();
@@ -1527,6 +1539,22 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
             zaten işaretli, yani bağ kopmuyor. */}
         <Section title="Reçete — Bu üründe ne kadar malzeme gidiyor">
           <SheetBom sheetId={sheet?.id ?? null} rows={bom} materials={materials} canEdit={isAdmin} />
+        </Section>
+      </>)}
+
+      {tab === "sourcing" && (<>
+        {/* SOURCING — nereden geliyor. Aslı Hanım (18.09.2026): "Bu kumaş
+            için dört tane ayrı yerden kumaş önerisi geliyor, ama biz karıştık
+            çünkü nereden ne geldiğini bilmiyoruz." Her kaleme birden çok
+            öneri girilir, üretime gideni tik işaretler. */}
+        <Section title="Sourcing — Hangi kalem hangi firmadan">
+          <SheetSourcing
+            sheetId={sheetId}
+            rows={form.sourcing ?? []}
+            suppliers={suppliers}
+            canEdit={isAdmin}
+            onChange={(next) => set("sourcing", next)}
+          />
         </Section>
       </>)}
 

@@ -4,7 +4,7 @@ import { requireModuleMember } from "@/lib/modules/context";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { ProductionSheetEditor } from "@/components/production/ProductionSheetEditor";
 import { getCategoryTree } from "@/lib/collection/category-tree";
-import type { ProductionSheet, Manufacturer, SheetMaterialWithMaterial } from "@/types";
+import type { ProductionSheet, Manufacturer, SheetMaterialWithMaterial, Supplier } from "@/types";
 import type { PickableMaterial } from "@/components/production/SheetBom";
 import type { PortalLinkRow } from "@/components/production/ManufacturerAccess";
 
@@ -75,6 +75,17 @@ export default async function ProductionSheetPage({
     .order("name");
   const materials = (materialsResult.data ?? []) as PickableMaterial[];
 
+  /* TEDARİKÇİLER — Sourcing sekmesi (20240352) firmayı buradan seçiyor.
+     Kolon yoksa/boşsa liste boş gelir ve firma adı elle yazılır; ekran
+     hiçbir durumda kapanmaz. */
+  const suppliersResult = await supabase
+    .from("workspace_suppliers")
+    .select("id, workspace_id, name, city, country, currency, contact_name, phone, email, notes, is_active, position, created_at, updated_at")
+    .eq("workspace_id", workspaceId)
+    .eq("is_active", true)
+    .order("name");
+  const suppliers = (suppliersResult.data ?? []) as unknown as Supplier[];
+
   // "new" → boş föy oluşturma modu.
   if (id === "new") {
     return (
@@ -86,6 +97,7 @@ export default async function ProductionSheetPage({
         manufacturers={manufacturers}
         seasons={seasons}
         materials={materials}
+        suppliers={suppliers}
         bom={[]}
         isAdmin={isAdmin}
         currentUserId={user.id}
@@ -158,6 +170,7 @@ export default async function ProductionSheetPage({
       manufacturers={manufacturers}
       seasons={seasons}
       materials={materials}
+      suppliers={suppliers}
       bom={bom}
       siblings={siblings}
       isAdmin={isAdmin}

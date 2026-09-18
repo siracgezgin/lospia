@@ -119,6 +119,27 @@ const SheetSchema = z.object({
   delivered_items: z.array(deliveredItemRow).max(60).default([]),
   size_distribution: sizeDistribution.default({ sizes: [], rows: [] }),
   photo_refs: z.array(productionImage).max(60).default([]),
+  /* SOURCING (20240352) — hangi kalem hangi firmadan. Aslı Hanım: "Bu kumaş
+     için dört tane ayrı yerden kumaş önerisi geliyor." Bir kaleme birden çok
+     satır girilebildiği için üst sınır cömert. */
+  sourcing: z
+    .array(
+      z.object({
+        id: z.string().max(64),
+        kind: z.enum([
+          "kumas_numune", "kumas_uretim", "astar", "dikim", "nakis",
+          "el_isciligi", "dugme", "aksesuar", "fermuar", "etiket", "diger",
+        ]),
+        supplier_id: z.string().max(64).nullable().optional(),
+        supplier_name: z.string().max(200).default(""),
+        contact: z.string().max(300).optional(),
+        note: z.string().max(1000).optional(),
+        photo: z.object({ url: z.string().max(1000), path: z.string().max(500) }).nullable().optional(),
+        chosen: z.boolean().optional(),
+      }),
+    )
+    .max(80)
+    .default([]),
   wash_instruction: longText,
   fabric_lining: longText,
   fabric_info: longText,
@@ -192,6 +213,7 @@ function normalize(v: ProductionSheetInput) {
     delivered_items: v.delivered_items,
     size_distribution: v.size_distribution,
     photo_refs: v.photo_refs,
+    sourcing: v.sourcing,
     wash_instruction: nn(v.wash_instruction),
     fabric_lining: nn(v.fabric_lining),
     fabric_info: nn(v.fabric_info),

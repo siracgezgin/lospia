@@ -365,6 +365,38 @@ export type ProductionImage = {
   caption?: string;
 };
 
+/**
+ * SOURCING KALEMİ — Aslı Hanım'ın saydığı kaynak türleri (18.09.2026).
+ *
+ * "Sourcing'e dikim, nakış, kumaş, düğme, aksesuar… fermuar belki aksesuarın
+ *  altına girebilir… astar olması gerekir… etiket olur."
+ * Kumaş İKİYE ayrıldı: "Üretim kumaşıyla numune kumaşı farklı oluyor… numuneye
+ * beş ayrı kaynaktan kumaş gelebilir ama üretime bir tanesiyle gitmemiz
+ * gerekiyor."
+ */
+export type SourcingKind =
+  | "kumas_numune" | "kumas_uretim" | "astar" | "dikim" | "nakis"
+  | "el_isciligi" | "dugme" | "aksesuar" | "fermuar" | "etiket" | "diger";
+
+export type SourcingEntry = {
+  id: string;
+  kind: SourcingKind;
+  /** Kayıtlı tedarikçi (workspace_suppliers). Yoksa ad serbest yazılır. */
+  supplier_id?: string | null;
+  supplier_name: string;
+  /** Kişi / telefon / e-posta — "kontak bilgisi gerekecek". */
+  contact?: string;
+  /** Kartela ölçüsü, kompozisyon, fiyat notu — "kartelanın ölçüleri girecek". */
+  note?: string;
+  /** Kartela ya da numune fotoğrafı — "fotoğrafını girecek". */
+  photo?: { url: string; path: string } | null;
+  /**
+   * Üretime BUNUNLA gidiliyor mu? Aynı kaleme birden çok öneri girilir
+   * ("dört tane ayrı yerden kumaş önerisi geliyor"); seçilen bir tanedir.
+   */
+  chosen?: boolean;
+};
+
 export type ProductionSheet = {
   id: string;
   workspace_id: string;
@@ -429,6 +461,8 @@ export type ProductionSheet = {
   web_baseline?: Record<string, string> | null;
   /** Koleksiyon ızgarasındaki ELLE sıra (20240349), küçük önce. */
   sort_order?: number | null;
+  /** Kaynak listesi (20240352) — hangi kalem hangi firmadan. */
+  sourcing?: SourcingEntry[] | null;
 };
 
 /**
