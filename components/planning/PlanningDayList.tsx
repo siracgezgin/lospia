@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { format, parseISO } from "date-fns";
 import { tr } from "date-fns/locale";
-import { CalendarOff, CheckCircle2, Clock, Pencil, Plus, XCircle } from "lucide-react";
+import { CalendarOff, CheckCircle2, Clock, Pencil, Plus, StickyNote, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { IconButton } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -245,9 +245,16 @@ export function PlanningDayList({
                   {title || "—"}
                 </span>
                 <KimBadges ids={ids} kim={kim} collaboratorIds={collabIds} memberNames={memberNames} memberPhotos={memberPhotos} className="ml-0 mt-1" personHex={personHex} />
+                {/* NOT METNİ YAZILMAZ, VARLIĞI SÖYLENİR — haftalık ızgarayla
+                    aynı kural (Aslı Hanım, 18.09.2026: "Notları görmek
+                    istemiyorum, konunun üzerine tıklarsam şurada görmek
+                    istiyorum"). Gün görünümü de takvimin bir yüzü; aynı
+                    toplantı burada gündemi açıp orada açmazsa iki ekran iki
+                    şey söylemiş olurdu. Not toplantı penceresinde duruyor. */}
                 {content && (
-                  <span className={cn("mt-1 block whitespace-pre-line leading-snug text-ink/70", z.content)}>
-                    {content}
+                  <span className="mt-1 flex items-center gap-1 text-[11px] font-medium text-ink/45" title={content}>
+                    <StickyNote size={11} className="shrink-0" aria-hidden />
+                    Notu var
                   </span>
                 )}
               </span>

@@ -8,7 +8,7 @@ import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   useDraggable, useDroppable, type DragEndEvent, type DragStartEvent,
 } from "@dnd-kit/core";
-import { CheckCircle2, Plus, Pencil, X, Loader2, XCircle, Copy, Maximize2, AlertTriangle } from "lucide-react";
+import { CheckCircle2, Plus, Pencil, X, Loader2, XCircle, Copy, Maximize2, AlertTriangle, StickyNote } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { categoryMeta } from "@/lib/planning/categories";
 import { WEEKDAY_SHORT_EN, WEEKDAY_LONG_TR, type RuntimeBand } from "@/lib/planning/bands";
@@ -784,11 +784,25 @@ function TitleCell({
           </span>
         )}
         <KimBadges ids={ids} kim={kim} collaboratorIds={collabIds} memberNames={memberNames} memberPhotos={memberPhotos} personHex={personHex} />
-        {/* Düzenleme kutusu açıkken gövde AYRICA çizilmez: eskiden hem
-            input'un altında salt okunur duruyor hem de düzenlenemiyordu. */}
+        {/* NOT HÜCREDE YAZILMAZ — yalnız VAR OLDUĞU söylenir.
+            Aslı Hanım (18.09.2026, Nisa Hanım'ın videosuyla): "Ben notları
+            görmek istemiyorum. Ancak konunun üzerine tıklarsam şurada görmek
+            istiyorum."
+            Not metni hücrenin içinde açılıyordu ve haftalık ızgarada en çok
+            yeri o kaplıyordu: üç maddelik bir gündem hücreyi üç katına
+            çıkarıyor, yanındaki günler de onunla birlikte uzuyordu. Takvim
+            "bugün ne var" sorusuna bakılan ekran; gündemin kendisi bir tık
+            ötede durmalı.
+            İZ KALIR: notu olan toplantıda başlığın altında küçük bir işaret
+            var. Hiçbir iz bırakmamak, yazılan notun kaybolduğunu düşündürürdü
+            — hücreye tıklayan zaten notu düzenleme kutusunda buluyor. */}
         {content && !editing && (
-          <span className="mt-0.5 block whitespace-pre-line text-[12px] leading-snug text-ink/70">
-            {content}
+          <span
+            className="mt-0.5 flex items-center gap-1 text-[11px] font-medium text-ink/45"
+            title={content}
+          >
+            <StickyNote size={11} className="shrink-0" aria-hidden />
+            Notu var
           </span>
         )}
       </span>
