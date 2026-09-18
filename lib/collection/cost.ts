@@ -144,16 +144,60 @@ export const STANDARD_SIZES = [
  *
  * Sıra bilerek onun söylediği sıradır — ekranda tanıdık gelsin.
  */
-export const COST_ITEM_DEFS: { key: CostItemKey; label: string }[] = [
-  { key: "kumas",        label: "Kumaş" },
-  { key: "dikim",        label: "Dikim" },
-  { key: "fermuar",      label: "Fermuar" },
-  { key: "utu_paket",    label: "Ütü / Paket" },
-  { key: "kalip",        label: "Kalıp" },
-  { key: "aksesuar",     label: "Aksesuar" },
-  { key: "genel_gider",  label: "Genel Giderler" },
-  { key: "diger",        label: "Diğer" },
+/**
+ * Maliyet kalemleri — Aslı Hanım'ın SAYDIĞI sırayla (18.09.2026, sesli):
+ *   "Bu maliyet kaleminde astar ayrı yazılması lazım, kumaş ayrı yazılması
+ *    lazım, el işçiliği — tığ işi, baskı, ahşap baskı, nakış — ondan sonra
+ *    aksesuar çeşitlenmeli… aksesuar başka olmalı, etiket… maliyet kalite
+ *    kontrolü ekle."
+ *
+ * Eski listede kumaş ve dikim tek kalemdi; astar kumaşın içinde eriyordu,
+ * nakış ve tığ işinin yeri yoktu, etiketle kalite kontrolü "diğer"e
+ * yazılıyordu. Kalem adı faturadaki satırın adıdır: neyin ne kadar tuttuğu
+ * ancak kendi satırında görünür.
+ *
+ * ESKİ ANAHTARLAR DURUYOR. `fermuar` ve `utu_paket` dolu föylerde kayıtlı;
+ * listeden çıkarmak o rakamları ekrandan siler. Fermuar aksesuarın bir türü
+ * ("fermuar da aksesuardır") ama kendi satırı olan föyler var, bu yüzden
+ * aksesuarın hemen altında durur.
+ */
+export const COST_ITEM_DEFS: {
+  key: CostItemKey;
+  label: string;
+  /** TOPLAM tutar girilir, üretim adedine BÖLÜNÜR. Kalıp bir kez ödenir ve
+   *  bütün partiye yayılır; numune de öyle (3 numune × 1500 TL = 4500 TL). */
+  dividedByQty?: true;
+  /** Alanın altında görünen kısa açıklama. */
+  hint?: string;
+}[] = [
+  { key: "kumas",          label: "Kumaş" },
+  { key: "astar",          label: "Astar" },
+  { key: "dikim",          label: "Dikim" },
+  { key: "el_isciligi",    label: "El İşçiliği" },
+  { key: "aksesuar",       label: "Aksesuar" },
+  { key: "fermuar",        label: "Fermuar" },
+  { key: "etiket",         label: "Etiket" },
+  { key: "kalip", label: "Kalıp ve Seri", dividedByQty: true, hint: "Toplam tutar — üretim adedine bölünür" },
+  { key: "numune", label: "Numune", dividedByQty: true, hint: "Toplam tutar — üretim adedine bölünür" },
+  { key: "kalite_kontrol", label: "Kalite Kontrol" },
+  { key: "utu_paket",      label: "Ütü / Paket" },
+  { key: "genel_gider",    label: "Genel Giderler" },
+  { key: "diger",          label: "Diğer" },
 ];
+
+/**
+ * GENEL GİDER VARSAYILANI. Aslı Hanım (18.09.2026): "Genel giderlerimiz fix
+ * 500 TL… onun içinde gönderi çantası, kargo parası, etiket parası olmalı…
+ * belki 1500 TL koyman lazım."
+ * Her föyde elle yazılan sabit bir rakamın yeri varsayılandır; yanlışsa
+ * kullanıcı üzerine yazar, ama boş kalıp unutulmaz.
+ */
+export const GENEL_GIDER_DEFAULT = "1500";
+
+/** Toplam girilip adede bölünen kalemler. */
+export const DIVIDED_COST_KEYS: ReadonlySet<CostItemKey> = new Set(
+  COST_ITEM_DEFS.filter((d) => d.dividedByQty).map((d) => d.key),
+);
 
 const COST_ITEM_LABEL: Record<string, string> = Object.fromEntries(
   COST_ITEM_DEFS.map((d) => [d.key, d.label]),
@@ -165,7 +209,10 @@ export function costItemLabel(item: CostItem): string {
 
 /** Boş bir maliyet kalemi seti — her föy aynı iskeletle açılır. */
 export function emptyCostItems(): CostItem[] {
-  return COST_ITEM_DEFS.map((d) => ({ key: d.key, amount: "" }));
+  return COST_ITEM_DEFS.map((d) => ({
+    key: d.key,
+    amount: d.key === "genel_gider" ? GENEL_GIDER_DEFAULT : "",
+  }));
 }
 
 /**
@@ -228,15 +275,30 @@ export function unitCostOf(
   pricing: ProductionPricing | null | undefined,
   /** Reçete satırları. Verilirse malzeme kalemleri BURADAN hesaplanır. */
   bom?: SheetMaterialWithMaterial[],
+  /**
+   * Üretim adedi — KALIP ve NUMUNE bunun üstüne bölünür.
+   *
+   * Aslı Hanım (18.09.2026): "Kalıba 4500 TL ödüyoruz; bu 50 tane
+   * üretileceği için 4500 TL 50 adete bölünecek." Numune için de aynısı:
+   * "3 numune 1500 liradan, 4500 lira; gene 50'ye bölünmesi lazım."
+   *
+   * Verilmezse ya da 0 ise bölme YAPILMAZ: sıfıra bölmek sonsuz üretir ve
+   * ekranda "₺Infinity" yazardı. O durumda tutar olduğu gibi eklenir —
+   * adet girilene kadar maliyet olduğundan yüksek görünür, ki doğrusu da bu:
+   * eksik olan bilgi kullanıcıdan istenmeli, sessizce sıfırlanmamalı.
+   */
+  qty?: number,
 ): number {
   const fromBom = bom?.length ? bomCostByKey(bom) : null;
   const items = pricing?.cost_items;
+  const share = (key: CostItemKey, raw: number) =>
+    DIVIDED_COST_KEYS.has(key) && qty && qty > 0 ? raw / qty : raw;
   if (Array.isArray(items) && items.length) {
     const sum = items.reduce((acc, it) => {
       // Reçeteden gelen kalem elle girilenin YERİNE geçer — iki kaynak
       // toplanırsa maliyet iki katına çıkardı.
       const bomVal = fromBom?.[it.key];
-      return acc + (bomVal != null ? bomVal : parseMoney(it.amount));
+      return acc + share(it.key, bomVal != null ? bomVal : parseMoney(it.amount));
     }, 0);
     if (sum > 0) return sum;
   }
@@ -361,14 +423,31 @@ export type SheetCost = {
   currency: string;
 };
 
+/**
+ * Maliyetin bölüneceği ÜRETİM ADEDİ.
+ *
+ * Aslı Hanım (18.09.2026): "Maliyet hesaplamak için yukarıda toplam üretim
+ * adedini seçmeliyiz; bizim adetlerimiz 50, 100, 150, 200 ve üstü."
+ * Elle seçilen adet önce gelir; seçilmemişse beden dağılımının toplamına
+ * düşer — föyü doldururken iki yere aynı sayıyı yazmak gerekmesin.
+ */
+export function productionQtyOf(
+  pricing: ProductionPricing | null | undefined,
+  sd: SizeDistribution | null | undefined,
+): number {
+  const chosen = parseMoney(pricing?.production_qty);
+  if (chosen > 0) return chosen;
+  return totalQuantity(sd);
+}
+
 /** Bir föyün maliyet özeti. pricing + size_distribution'dan türetilir. */
 export function sheetCost(
   pricing: ProductionPricing | null | undefined,
   sd: SizeDistribution | null | undefined,
 ): SheetCost {
-  const qty = totalQuantity(sd);
-  // Birim = kalem kalem maliyetin toplamı (kalem yoksa eski tek rakama düşer).
-  const unitPrice = unitCostOf(pricing);
+  const qty = productionQtyOf(pricing, sd);
+  /* Birim = kalemlerin toplamı; kalıp ve numune adede BÖLÜNEREK girer. */
+  const unitPrice = unitCostOf(pricing, undefined, qty);
   return {
     qty,
     unitPrice,

@@ -54,6 +54,7 @@ function norm(s: string): string {
  *  ayrışırsa JSON.stringify karşılaştırması hep "değişmiş" der. */
 function pricingPayload(p: ProductionPricing) {
   return {
+    production_qty: p.production_qty ?? "",
     unit_price: p.unit_price ?? "",
     purchase_cost: p.purchase_cost ?? "",
     web_sale_price: p.web_sale_price ?? "",

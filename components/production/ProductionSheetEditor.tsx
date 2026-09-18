@@ -33,6 +33,7 @@ import { flattenSubs } from "@/lib/collection/taxonomy";
 import {
   totalQuantity, parseMoney, formatMoney, STANDARD_SIZES, normalizeToStandardSizes,
   DEFAULT_SIZE_GROUPS, emptyCostItems, costItemLabel, bomCostByKey,
+  productionQtyOf, DIVIDED_COST_KEYS,
 } from "@/lib/collection/cost";
 import type {
   ProductionSheet, MeasurementRow, DeliveredItemRow, SizeDistribution, ProductionCategory,
@@ -157,7 +158,7 @@ function emptyState(): ProductionSheetInput {
     category: null,
     subcategory: "",
     pricing: {
-      unit_price: "", purchase_cost: "", web_sale_price: "", currency: "TL", notes: "",
+      production_qty: "", unit_price: "", purchase_cost: "", web_sale_price: "", currency: "TL", notes: "",
       cost_items: emptyCostItems(), usta_unit_payment: "",
       invoice_no: "", invoice_amount: "",
     },
@@ -1256,18 +1257,27 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
              dikim fiyatına ayrı, fermuar fiyatına ayrı, ütü paketi ayrı,
              kalıba ayrı, genel giderleri ayrı. Maliyetin bir sürü kategorisi
              var. Öyle birim fiyat diye maliyet hesaplanmıyor." */}
-        <Section title="Maliyet (kalem kalem)">
+        <Section title="Maliyet">
           {(() => {
             const p = form.pricing;
             const qty = totalQuantity(form.size_distribution);
+            /* ÜRETİM ADEDİ maliyetin paydası: kalıp ve numune buna bölünür
+               (Aslı Hanım, 18.09.2026). Elle seçilmemişse beden dağılımının
+               toplamına düşer. */
+            const prodQty = productionQtyOf(p, form.size_distribution);
             const items = p.cost_items?.length ? p.cost_items : emptyCostItems();
             // Reçeteden gelen kalemler ELLE GİRİLEMEZ: tutar hesaplanır ve
             // elle girilenin YERİNE geçer. İkisi toplanırsa maliyet iki katına
             // çıkardı. Reçetede olmayan kalemler (dikim, ütü/paket, kalıp,
             // genel gider) elle kalır — onlar malzeme değil.
             const fromBom = bom.length ? bomCostByKey(bom) : {};
-            const amountOf = (it: CostItem) =>
+            const rawOf = (it: CostItem) =>
               fromBom[it.key] != null ? fromBom[it.key]! : parseMoney(it.amount);
+            /* Kalıp ve numune TOPLAM girilir, birim maliyete payı düşer. */
+            const amountOf = (it: CostItem) => {
+              const raw = rawOf(it);
+              return DIVIDED_COST_KEYS.has(it.key) && prodQty > 0 ? raw / prodQty : raw;
+            };
             const unitCost = items.reduce((a, it) => a + amountOf(it), 0);
             const setP = (patch: Partial<typeof p>) => set("pricing", { ...p, ...patch });
             const setItem = (i: number, patch: Partial<CostItem>) =>
@@ -1276,6 +1286,47 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
             const margin = sale > 0 && unitCost > 0 ? ((sale - unitCost) / sale) * 100 : null;
             return (
               <div className="space-y-3">
+                {/* ÜRETİM ADEDİ EN ÜSTTE. Aslı Hanım (18.09.2026): "Maliyet
+                    hesaplamak için yukarıda toplam üretim adedini seçmeliyiz;
+                    bizim adetlerimiz 50, 100, 150, 200 ve üstü." Kalıp ve
+                    numune bu sayıya bölündüğü için birim maliyet adetten ÖNCE
+                    okunamaz — paydayı tablonun altına koymak, sonucu sebebin
+                    önüne koymak olurdu. */}
+                <div className="flex flex-wrap items-center gap-2 rounded-card border border-line bg-surface-muted/50 px-3 py-2">
+                  <span className="text-[12.5px] font-semibold text-ink">Toplam üretim adedi</span>
+                  <span className="flex flex-wrap items-center gap-1">
+                    {["50", "100", "150", "200"].map((n) => {
+                      const on = (p.production_qty ?? "") === n;
+                      return (
+                        <button
+                          key={n}
+                          type="button"
+                          aria-pressed={on}
+                          onClick={() => setP({ production_qty: on ? "" : n })}
+                          className={cn(
+                            "tap-target h-8 rounded-full px-3 text-[12.5px] font-medium transition-colors duration-150",
+                            on ? "bg-brand-soft text-brand-strong ring-1 ring-brand-ring" : "bg-surface text-muted hover:bg-surface-hover hover:text-ink",
+                          )}
+                        >
+                          {n}
+                        </button>
+                      );
+                    })}
+                  </span>
+                  <CellInput
+                    aria-label="Üretim adedi — serbest"
+                    value={p.production_qty ?? ""}
+                    onChange={(e) => setP({ production_qty: e.target.value })}
+                    placeholder="veya yaz"
+                    className="h-8 w-24 rounded-control border border-line bg-surface px-2 text-[12.5px]"
+                  />
+                  {!p.production_qty && qty > 0 && (
+                    <span className="text-[11.5px] text-subtle">
+                      Seçilmedi — beden dağılımındaki {qty} adet kullanılıyor
+                    </span>
+                  )}
+                </div>
+
                 {/* Kalem ızgarası — Excel gibi çizgili, boş hücre bırakmaz. */}
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[380px] table-fixed border-collapse text-[13px]">
@@ -1283,7 +1334,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                     <thead>
                       <tr className="bg-surface-muted">
                         <th className={cn(TH_CLS, "text-left")}>Maliyet kalemi</th>
-                        <th className={cn(TH_CLS, "text-right")}>Birim (₺)</th>
+                        <th className={cn(TH_CLS, "text-right")}>Tutar (₺)</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1298,7 +1349,22 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                                 placeholder="Diğer gider adı"
                               />
                             ) : (
-                              <span className="font-medium text-ink">{costItemLabel(it)}</span>
+                              <span className="block">
+                                <span className="font-medium text-ink">{costItemLabel(it)}</span>
+                                {/* BÖLÜNEN KALEM AÇIKÇA SÖYLENİR. Kalıp ve numune
+                                    kutusuna TOPLAM yazılır; okuyan bunu bilmezse
+                                    4500'ü birim sanıp maliyeti 50 katına çıkarır. */}
+                                {DIVIDED_COST_KEYS.has(it.key) && (
+                                  <span className="mt-0.5 block text-[11px] leading-snug text-subtle">
+                                    Toplam tutar — {prodQty > 0 ? `${prodQty} adede bölünür` : "üretim adedi girilince bölünür"}
+                                    {prodQty > 0 && parseMoney(it.amount) > 0 && (
+                                      <strong className="ml-1 font-semibold text-ink">
+                                        = {formatMoney(parseMoney(it.amount) / prodQty)}/adet
+                                      </strong>
+                                    )}
+                                  </span>
+                                )}
+                              </span>
                             )}
                           </td>
                           <td className="border border-line p-0">

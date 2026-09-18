@@ -363,7 +363,7 @@ export function CostBreakdownTable({ rows, seasons = [], bomBySheet = {} }: Prop
       </p>
 
       {rows.length === 0 ? (
-        <EmptyState icon={Wallet} className="anim-fade-up" title="Henüz ürün yok." description="Collection’a föy ekleyin; maliyet burada kalem kalem girilir." />
+        <EmptyState icon={Wallet} className="anim-fade-up" title="Henüz ürün yok." description="Collection’a föy ekleyin; maliyet burada girilir." />
       ) : visibleRows.length === 0 ? (
         <EmptyState
           icon={Search}

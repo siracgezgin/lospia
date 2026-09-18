@@ -451,19 +451,33 @@ export type ProductionCategory = string;
  *    Maliyetin bir sürü kategorisi var."
  */
 export type CostItemKey =
-  | "kumas" | "dikim" | "fermuar" | "utu_paket" | "kalip" | "aksesuar"
+  | "kumas" | "astar" | "dikim" | "el_isciligi" | "aksesuar" | "fermuar"
+  | "etiket" | "kalip" | "numune" | "kalite_kontrol" | "utu_paket"
   | "genel_gider" | "diger";
 
 export type CostItem = {
   key: CostItemKey;
   /** Serbest ad — "diger" kaleminde kullanıcı yazar. */
   label?: string;
-  /** Birim başına tutar (serbest metin; parseMoney ile sayıya çevrilir). */
+  /**
+   * Tutar (serbest metin; parseMoney ile sayıya çevrilir).
+   *
+   * Çoğu kalemde BİRİM başına. Kalıp ve numune kalemlerinde ise TOPLAM
+   * tutardır ve üretim adedine bölünür — Aslı Hanım (18.09.2026): "Kalıba
+   * 4500 TL ödüyoruz; bu 50 tane üretileceği için 4500 TL 50 adete
+   * bölünecek." Hangi kalemin bölüneceğini COST_ITEM_DEFS söyler.
+   */
   amount: string;
 };
 
 /** Föy fiyat bilgisi — her föy tek ürün. Toplam adet beden dağılımından gelir. */
 export type ProductionPricing = {
+  /**
+   * Maliyetin bölüneceği üretim adedi (serbest metin: "50", "100"…).
+   * Aslı Hanım (18.09.2026): "Yukarıda toplam üretim adedini seçmeliyiz."
+   * Boşsa beden dağılımının toplamı kullanılır.
+   */
+  production_qty?: string;
   /** Birim ÜRETİM maliyeti — artık cost_items toplamından türetilir. */
   unit_price?: string;
   purchase_cost?: string;   // satın alma / malzeme maliyeti (geri uyum)

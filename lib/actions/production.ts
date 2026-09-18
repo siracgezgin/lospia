@@ -61,12 +61,24 @@ const longText = z.string().max(8000).optional().nullable();
 const shortText = z.string().max(500).optional().nullable();
 
 const costItem = z.object({
-  key: z.enum(["kumas", "dikim", "fermuar", "utu_paket", "kalip", "aksesuar", "genel_gider", "diger"]),
+  /* Kalem listesi 18.09.2026'da Aslı Hanım'ın saydığı kalemlerle genişledi
+     (astar, el işçiliği, etiket, kalite kontrol). Eski anahtarlar DURUYOR:
+     dolu föylerde kayıtlılar ve listeden çıkarmak o rakamları düşürürdü. */
+  key: z.enum([
+    "kumas", "astar", "dikim", "el_isciligi", "aksesuar", "fermuar",
+    "etiket", "kalip", "numune", "kalite_kontrol", "utu_paket", "genel_gider", "diger",
+  ]),
   label: z.string().max(120).optional(),
   amount: z.string().max(40).default(""),
 });
 
 const pricing = z.object({
+  /* Maliyetin bölüneceği üretim adedi (18.09.2026). Kalıp ve numune toplam
+     girilip buna bölünür. */
+  /* `.default()` YOK: varsayılan vermek çıkışta alanı ZORUNLU yapıyor ve
+     pricing nesnesi kuran her çağrıyı kırıyordu. Boş bırakılabilir — o zaman
+     adet beden dağılımından okunur (bkz. productionQtyOf). */
+  production_qty: z.string().max(20).optional(),
   unit_price: z.string().max(40).optional().default(""),
   purchase_cost: z.string().max(40).optional().default(""),
   web_sale_price: z.string().max(40).optional().default(""),
