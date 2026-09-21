@@ -87,7 +87,7 @@ export default async function PaymentPage({
   // düşer (geri uyum).
   const mResult = await supabase
     .from("workspace_manufacturers")
-    .select("id, name, photo_url, city, country, currency, lead_time_days, min_order_qty, is_active")
+    .select("id, name, photo_url, city, country, currency, lead_time_days, min_order_qty, is_active, role")
     .eq("workspace_id", workspaceId);
   const manufacturers = (mResult.data ?? []) as Pick<
     Manufacturer,

@@ -94,7 +94,11 @@ export function SheetBom({ sheetId, rows, materials, canEdit }: Props) {
       </p>
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[680px] table-fixed border-collapse text-[13px]">
+        {/* Üst sınır: malzeme adı kolonu geniş ekranda tutarları sağ kenara
+            itiyordu — okuyan gözü satır boyunca taşımak zorunda kalıyordu. */}
+        <table
+          className="w-full min-w-[680px] max-w-[800px] table-fixed border-collapse text-[13px]"
+        >
           <colgroup>
             <col /><col className="w-24" /><col className="w-24" /><col className="w-20" />
             <col className="w-28" /><col className="w-9" />

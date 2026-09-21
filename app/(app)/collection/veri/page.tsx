@@ -79,7 +79,7 @@ export default async function CollectionDataPage({
     // Hammadde kütüphanesi — föy reçetelerinin kaynağı (20240310).
     supabase
       .from("workspace_materials")
-      .select("id, code, name, category, supplier_id, composition, width_cm, unit, unit_price, currency, notes, is_active, role")
+      .select("id, code, name, category, supplier_id, composition, width_cm, unit, unit_price, currency, notes, is_active")
       .eq("workspace_id", workspaceId)
       .order("is_active", { ascending: false })
       .order("category")

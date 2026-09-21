@@ -8,6 +8,10 @@ import { createSheetVariant } from "@/lib/actions/production";
 import { Button } from "@/components/ui/Button";
 import { TextInput } from "@/components/ui/Field";
 
+const COPY_NOTE =
+  "Yeni renk bu föyün ölçülerini, talimatlarını, beden dağılımını ve reçetesini kopyalar. " +
+  "Teknik çizim korunur; kumaş ve detay fotoğrafları renge özgü olduğu için kopyalanmaz.";
+
 export type SiblingSheet = {
   id: string;
   title: string;
@@ -21,6 +25,11 @@ interface Props {
   /** Aynı modelin diğer renkleri (bu föy hariç). */
   siblings: SiblingSheet[];
   canEdit: boolean;
+  /** "Renk / Kumaş Varyantları" bölümünün İÇİNDE, ikincil satır olarak.
+   *  Kendi başlığı, kendi açıklama paragrafı ve kendi renk çipi yok —
+   *  onlar üstteki asıl listede zaten var, tekrarı iki ayrı bölüm izlenimi
+   *  veriyordu. */
+  compact?: boolean;
 }
 
 /**
@@ -34,7 +43,7 @@ interface Props {
  * çizim modele ait olduğu için korunur). Föyler sonrasında bağımsızdır —
  * renkler arası küçük ölçü farkları olağandır.
  */
-export function SheetVariants({ sheetId, colorway, siblings, canEdit }: Props) {
+export function SheetVariants({ sheetId, colorway, siblings, canEdit, compact = false }: Props) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
@@ -43,8 +52,8 @@ export function SheetVariants({ sheetId, colorway, siblings, canEdit }: Props) {
 
   if (!sheetId) {
     return (
-      <p className="rounded-control border border-line bg-surface-muted px-3 py-2 text-[13px] text-muted">
-        Renk varyantı, föy kaydedildikten sonra eklenebilir.
+      <p className="text-[12px] text-subtle">
+        Ayrı föy, bu föy kaydedildikten sonra açılabilir.
       </p>
     );
   }
@@ -70,13 +79,22 @@ export function SheetVariants({ sheetId, colorway, siblings, canEdit }: Props) {
         </p>
       )}
 
+      {compact && (
+        <p className="text-[11.5px] font-semibold uppercase tracking-[0.06em] text-subtle">
+          Ayrı föy olarak açılmış renkler
+        </p>
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
         {/* Bu föyün rengi — seçili çip; diğer renkler bağlantı çipi. Hepsi
-            aynı boyda (h-8) ki satır düz dursun. */}
-        <span className="inline-flex h-8 items-center gap-1.5 rounded-control border border-brand-ring bg-brand-soft px-2.5 text-[13px] font-semibold text-brand-strong" aria-current="true">
-          <Palette size={13} aria-hidden />
-          {colorway?.trim() || "Renk girilmedi"}
-        </span>
+            aynı boyda (h-8) ki satır düz dursun. Kompakt kipte SUSAR: renk
+            zaten yukarıdaki "Renk" alanında ve kumaş listesinde yazıyor. */}
+        {!compact && (
+          <span className="inline-flex h-8 items-center gap-1.5 rounded-control border border-brand-ring bg-brand-soft px-2.5 text-[13px] font-semibold text-brand-strong" aria-current="true">
+            <Palette size={13} aria-hidden />
+            {colorway?.trim() || "Renk girilmedi"}
+          </span>
+        )}
 
         {siblings.map((s) => (
           <Link
@@ -91,8 +109,16 @@ export function SheetVariants({ sheetId, colorway, siblings, canEdit }: Props) {
         ))}
 
         {canEdit && !adding && (
-          <Button variant="secondary" size="sm" onClick={() => setAdding(true)} className="border-dashed">
-            <Plus size={13} aria-hidden /> Renk ekle
+          <Button
+            variant={compact ? "ghost" : "secondary"}
+            size="sm"
+            onClick={() => setAdding(true)}
+            /* Kompaktta açıklama paragraf değil ipucu: satır iki alan
+               boyunda bir metin bloğuna dönüşmesin. */
+            title={compact ? COPY_NOTE : undefined}
+            className={compact ? "-ml-2 text-brand hover:bg-surface-muted hover:text-brand-strong" : "border-dashed"}
+          >
+            <Plus size={13} aria-hidden /> {compact ? "Ayrı föy aç" : "Renk ekle"}
           </Button>
         )}
 
@@ -121,10 +147,7 @@ export function SheetVariants({ sheetId, colorway, siblings, canEdit }: Props) {
         )}
       </div>
 
-      <p className="text-[12px] text-subtle">
-        Yeni renk bu föyün ölçülerini, talimatlarını, beden dağılımını ve reçetesini kopyalar.
-        Teknik çizim korunur; kumaş ve detay fotoğrafları renge özgü olduğu için kopyalanmaz.
-      </p>
+      {!compact && <p className="text-[12px] text-subtle">{COPY_NOTE}</p>}
     </div>
   );
 }
