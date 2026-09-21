@@ -1305,7 +1305,14 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
             </p>
           )}
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[420px] table-fixed border-collapse text-[13px]">
+            {/* Genişlik içerikle büyür: tek sütunlu ölçü tablosu ekranın
+                yarısını boş bırakmasın (Aslı Hanım: "şurada çok fazla
+                boşluklarımız var… boşluk görmesek daha doğru sonuca
+                gidebiliriz"). */}
+            <table
+              className="w-full min-w-[380px] table-fixed border-collapse text-[13px]"
+              style={{ maxWidth: 360 + measureSizes.length * 78 }}
+            >
               <colgroup>
                 <col className="w-7" />
                 <col className="w-10" />
@@ -1451,8 +1458,16 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
             Aslı Hanım (2026-08-19): "Teslim edilen ürünler yukarıda olmaz.
             Önce siparişi görmemiz lazım." Numaralar otomatik: boş hücre yok. */}
         <Section title="Teslim Edilen Ürünler">
+          {/* ADET ÜRÜNÜN YANINDA (Aslı Hanım, 21.09.2026): "Şu adetleri
+              ürünlerin yanına kaydır… bu kadar göz kayarken adet yanlış
+              yapılıyor. Marka etiketi hemen yanına girsin adet. Böyle arada
+              tren gibi uzun ray verme."
+              Tablo tam genişlikteydi: ürün adı sütunu bütün boşluğu alıyor,
+              adet ekranın öbür ucunda kalıyordu. Geniş ekranda göz iki sütun
+              arasında kayıyor ve adet yanlış satıra yazılıyordu. Tablo artık
+              içeriği kadar geniş. */}
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[420px] table-fixed border-collapse text-[13px]">
+            <table className="w-full min-w-[380px] max-w-[560px] table-fixed border-collapse text-[13px]">
               <colgroup>
                 <col className="w-10" />
                 <col />
