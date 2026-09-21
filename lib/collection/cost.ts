@@ -145,21 +145,20 @@ export const STANDARD_SIZES = [
  * Sıra bilerek onun söylediği sıradır — ekranda tanıdık gelsin.
  */
 /**
- * Maliyet kalemleri — Aslı Hanım'ın SAYDIĞI sırayla (18.09.2026, sesli):
- *   "Bu maliyet kaleminde astar ayrı yazılması lazım, kumaş ayrı yazılması
- *    lazım, el işçiliği — tığ işi, baskı, ahşap baskı, nakış — ondan sonra
- *    aksesuar çeşitlenmeli… aksesuar başka olmalı, etiket… maliyet kalite
- *    kontrolü ekle."
+ * Maliyet kalemleri.
  *
- * Eski listede kumaş ve dikim tek kalemdi; astar kumaşın içinde eriyordu,
- * nakış ve tığ işinin yeri yoktu, etiketle kalite kontrolü "diğer"e
- * yazılıyordu. Kalem adı faturadaki satırın adıdır: neyin ne kadar tuttuğu
- * ancak kendi satırında görünür.
+ * 18.09.2026'da Aslı Hanım'ın saydıklarıyla kuruldu; 21.09.2026'da kullanırken
+ * sadeleşti:
+ *   • "Selen, dikim fiyatının içinde ütü paket var… o yüzden sıfır koyacaksın
+ *      ütü paketi, ütü paketi dikimin altına koyabilirsin, çünkü genelde ikisi
+ *      tek fiyat oluyor."  → ütü/paket dikimin ALTINA indi.
+ *   • "Kalite kontrol de bu dikim fiyatının içinde."  → ayrı kalem değil.
+ *   • "Fermuar yok. Etiket genel gidere giriyor, ayrı ilave bir etiketi varsa
+ *      başka. Astarı yok."  → fermuar ve astar listeden çıktı.
  *
- * ESKİ ANAHTARLAR DURUYOR. `fermuar` ve `utu_paket` dolu föylerde kayıtlı;
- * listeden çıkarmak o rakamları ekrandan siler. Fermuar aksesuarın bir türü
- * ("fermuar da aksesuardır") ama kendi satırı olan föyler var, bu yüzden
- * aksesuarın hemen altında durur.
+ * ÇIKAN KALEM SİLİNMEZ, GİZLENİR: dolu bir föyde o satır hâlâ çizilir
+ * (bkz. mergeCostItems). Listeden çıkarmak, girilmiş rakamı ekrandan silmek
+ * anlamına gelemez.
  */
 export const COST_ITEM_DEFS: {
   key: CostItemKey;
@@ -170,19 +169,16 @@ export const COST_ITEM_DEFS: {
   /** Alanın altında görünen kısa açıklama. */
   hint?: string;
 }[] = [
-  { key: "kumas",          label: "Kumaş" },
-  { key: "astar",          label: "Astar" },
-  { key: "dikim",          label: "Dikim" },
-  { key: "el_isciligi",    label: "El İşçiliği" },
-  { key: "aksesuar",       label: "Aksesuar" },
-  { key: "fermuar",        label: "Fermuar" },
-  { key: "etiket",         label: "Etiket" },
+  { key: "kumas", label: "Kumaş" },
+  { key: "dikim", label: "Dikim", hint: "Ütü/paket ve kalite kontrol bu fiyatın içinde" },
+  { key: "utu_paket", label: "Ütü / Paket", hint: "Genelde dikime dahil — ayrı ücret yoksa boş bırakın" },
+  { key: "el_isciligi", label: "El İşçiliği" },
+  { key: "aksesuar", label: "Aksesuar" },
+  { key: "etiket", label: "Etiket", hint: "Genel gidere dahil — yalnız ilave etiket varsa yazın" },
   { key: "kalip", label: "Kalıp ve Seri", dividedByQty: true, hint: "Toplam tutar — üretim adedine bölünür" },
   { key: "numune", label: "Numune", dividedByQty: true, hint: "Toplam tutar — üretim adedine bölünür" },
-  { key: "kalite_kontrol", label: "Kalite Kontrol" },
-  { key: "utu_paket",      label: "Ütü / Paket" },
-  { key: "genel_gider",    label: "Genel Giderler" },
-  { key: "diger",          label: "Diğer" },
+  { key: "genel_gider", label: "Genel Giderler" },
+  { key: "diger", label: "Diğer" },
 ];
 
 /**
@@ -195,10 +191,16 @@ export const COST_ITEM_DEFS: {
 export const GENEL_GIDER_DEFAULT = "1500";
 
 /**
- * Fiyatın değişebildiği adet kademeleri (Aslı Hanım'ın saydığı sırayla).
- * "Bizim adetlerimiz 50, 100, 150, 200 ve üstü."
+ * Fiyatın değişebildiği adet kademeleri.
+ *
+ * Aslı Hanım (18.09.2026): "Bizim adetlerimiz 50, 100, 150, 200 ve üstü."
+ * 21.09.2026'da başa BİR ADET eklendi: "Sıraç, bu başa bir de bir adet yazman
+ * gerekiyor. Bir. Bizim numune maliyetimizi belirliyor, çünkü bir tane
+ * numunenin dikim fiyatı da farklı." Kalıp ve numune gibi bölünen kalemler bu
+ * sütunda tam tutarıyla görünür — "kalıp ve seri 50 tane için değil, o bir
+ * adet girecek."
  */
-export const QTY_TIERS = ["50", "100", "150", "200"] as const;
+export const QTY_TIERS = ["1", "50", "100", "150", "200"] as const;
 
 /**
  * Bir kalemin VERİLEN adet için tutarı.
@@ -230,8 +232,54 @@ const COST_ITEM_LABEL: Record<string, string> = Object.fromEntries(
   COST_ITEM_DEFS.map((d) => [d.key, d.label]),
 );
 
+/** Kalemin altında görünen kısa açıklama (varsa). */
+export function costItemHint(key: CostItemKey): string | null {
+  return COST_ITEM_DEFS.find((d) => d.key === key)?.hint ?? null;
+}
+
 export function costItemLabel(item: CostItem): string {
   return (item.label ?? "").trim() || COST_ITEM_LABEL[item.key] || "Kalem";
+}
+
+/**
+ * Föydeki kayıtlı kalemleri GÜNCEL listeyle birleştirir.
+ *
+ * İki yönlü koruma:
+ *  • Listeye SONRADAN eklenen kalem (numune, el işçiliği…) eski föylerde de
+ *    görünür. Eskiden föy yalnız kendi kayıtlı dizisini çizdiği için, kalem
+ *    eklendiği gün açılmış föyler o satırı hiç görmüyordu.
+ *  • Listeden ÇIKARILAN kalem (astar, fermuar, kalite kontrol) DOLUYSA yine
+ *    çizilir, sona alınır. Aslı Hanım onları "yok" diye eledi ama girilmiş bir
+ *    rakamı ekrandan silmek başka şey; kullanıcı görsün ve kendisi boşaltsın.
+ *
+ * "diger" satırları serbesttir ve kaç tane olursa olsun korunur.
+ */
+export function mergeCostItems(existing?: CostItem[] | null): CostItem[] {
+  const rows = Array.isArray(existing) ? existing : [];
+  if (!rows.length) return emptyCostItems();
+
+  const byKey = new Map<string, CostItem>();
+  const free: CostItem[] = [];
+  for (const it of rows) {
+    if (it.key === "diger") { free.push(it); continue; }
+    if (!byKey.has(it.key)) byKey.set(it.key, it);
+  }
+
+  const known = new Set(COST_ITEM_DEFS.map((d) => d.key));
+  const out: CostItem[] = COST_ITEM_DEFS
+    .filter((d) => d.key !== "diger")
+    .map((d) => byKey.get(d.key) ?? {
+      key: d.key,
+      amount: d.key === "genel_gider" ? GENEL_GIDER_DEFAULT : "",
+    });
+
+  /* Artık listede olmayan ama DOLU kalemler — sonda, kaybolmadan. */
+  for (const [key, it] of byKey) {
+    if (!known.has(key as CostItemKey) && (it.amount ?? "").trim()) out.push(it);
+  }
+
+  out.push(...(free.length ? free : [{ key: "diger" as const, amount: "" }]));
+  return out;
 }
 
 /** Boş bir maliyet kalemi seti — her föy aynı iskeletle açılır. */

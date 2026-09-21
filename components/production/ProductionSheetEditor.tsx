@@ -34,7 +34,7 @@ import { flattenSubs } from "@/lib/collection/taxonomy";
 import {
   totalQuantity, parseMoney, formatMoney, STANDARD_SIZES, normalizeToStandardSizes,
   DEFAULT_SIZE_GROUPS, emptyCostItems, costItemLabel, bomCostByKey,
-  productionQtyOf, DIVIDED_COST_KEYS, QTY_TIERS, amountForQty,
+  productionQtyOf, DIVIDED_COST_KEYS, QTY_TIERS, amountForQty, mergeCostItems, costItemHint,
 } from "@/lib/collection/cost";
 import type {
   ProductionSheet, MeasurementRow, DeliveredItemRow, SizeDistribution, ProductionCategory,
@@ -585,6 +585,39 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
     if (t) groups[size] = t; else delete groups[size];
     set("size_distribution", { ...sd, groups });
   };
+
+  /**
+   * OTOMATİK KAYDETME (21.09.2026).
+   *
+   * Aslı Hanım toplantıda iki şeyi birden işaret etti: "Bir saniye, bu otomatik
+   * kaydetmiyor değil mi?" ve ürün kodunun tutmadığını — "Biz buranın
+   * kaydediyoruz ikidir ürün kodunu… bir şekilde eski modele dönüyor. Bak geri
+   * döndü ama."
+   *
+   * Kod yolunda hata yoktu: yazılan değer Kaydet'e basılmadan sekme
+   * değiştirilince ya da sayfa yenilenince kayboluyordu. AF Teamwork'ün Word'ü
+   * ve tablosu yıllardır kendiliğinden kaydediyor; föy kaydetmiyordu ve ikisi
+   * aynı panelde yan yana duruyordu.
+   *
+   * YENİ FÖYDE ÇALIŞMAZ: otomatik kayıt orada boş bir föy yaratırdı. Yeni föy
+   * ilk kez elle kaydedilir, sonrası kendiliğinden gider.
+   */
+  useEffect(() => {
+    if (!dirty || isNew || !sheet?.id || isSaving) return;
+    if (!form.title.trim()) return;      // başlıksız föy kaydedilemez
+    const t = window.setTimeout(() => {
+      startSave(async () => {
+        const res = await updateProductionSheet(sheet.id, form);
+        if ("error" in res) { setError(res.error); return; }
+        setDirty(false);
+        setSaved(true);
+        window.setTimeout(() => setSaved(false), 2000);
+      });
+    }, 1200);
+    return () => window.clearTimeout(t);
+    // `form` her tuşta değişiyor; zamanlayıcı sıfırlanır ve yazım bitince yazar.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form, dirty, isNew, sheet?.id]);
 
   function handleSave() {
     setError(null);
@@ -1272,7 +1305,9 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                (Aslı Hanım, 18.09.2026). Elle seçilmemişse beden dağılımının
                toplamına düşer. */
             const prodQty = productionQtyOf(p, form.size_distribution);
-            const items = p.cost_items?.length ? p.cost_items : emptyCostItems();
+            /* Kayıtlı kalemler GÜNCEL listeyle birleştirilir: sonradan eklenen
+               kalem eski föyde de görünür, listeden çıkan dolu kalem kaybolmaz. */
+            const items = mergeCostItems(p.cost_items);
             // Reçeteden gelen kalemler ELLE GİRİLEMEZ: tutar hesaplanır ve
             // elle girilenin YERİNE geçer. İkisi toplanırsa maliyet iki katına
             // çıkardı. Reçetede olmayan kalemler (dikim, ütü/paket, kalıp,
@@ -1288,6 +1323,18 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               return DIVIDED_COST_KEYS.has(it.key) && prodQty > 0 ? raw / prodQty : raw;
             };
             const unitCost = items.reduce((a, it) => a + amountOf(it), 0);
+            /* HER KADEMENİN KENDİ BİRİM MALİYETİ. Aslı Hanım (21.09.2026):
+               "Burada adetlerde toplam adet mesela elli ya — onun altında
+               toplamının yazması gerekiyor, yani maliyetteki gibi, karşısında."
+               Tek bir birim rakamı, dört sütunlu tablonun altında hangi adede
+               ait olduğunu söylemiyordu. */
+            const unitAt = (tier: string) => {
+              const q = Number(tier) || 0;
+              return items.reduce((a, it) => {
+                const raw = fromBom[it.key] != null ? fromBom[it.key]! : parseMoney(amountForQty(it, q));
+                return a + (DIVIDED_COST_KEYS.has(it.key) && q > 0 ? raw / q : raw);
+              }, 0);
+            };
             const setP = (patch: Partial<typeof p>) => set("pricing", { ...p, ...patch });
             const setItem = (i: number, patch: Partial<CostItem>) =>
               setP({ cost_items: items.map((it, ix) => (ix === i ? { ...it, ...patch } : it)) });
@@ -1413,7 +1460,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                                 {/* BÖLÜNEN KALEM AÇIKÇA SÖYLENİR. Kalıp ve numune
                                     kutusuna TOPLAM yazılır; okuyan bunu bilmezse
                                     4500'ü birim sanıp maliyeti 50 katına çıkarır. */}
-                                {DIVIDED_COST_KEYS.has(it.key) && (
+                                {DIVIDED_COST_KEYS.has(it.key) ? (
                                   <span className="mt-0.5 block text-[11px] leading-snug text-subtle">
                                     Toplam tutar — {prodQty > 0 ? `${prodQty} adede bölünür` : "üretim adedi girilince bölünür"}
                                     {prodQty > 0 && rawOf(it) > 0 && (
@@ -1422,7 +1469,16 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                                       </strong>
                                     )}
                                   </span>
-                                )}
+                                ) : costItemHint(it.key) ? (
+                                  /* Aslı Hanım'ın kuralı satırın altında yazar:
+                                     "dikim fiyatının içinde ütü paket var",
+                                     "etiket genel gidere giriyor". Kural yalnız
+                                     toplantıda söylenirse föyü dolduran onu
+                                     bilemez ve aynı bedeli iki kez yazar. */
+                                  <span className="mt-0.5 block text-[11px] leading-snug text-subtle">
+                                    {costItemHint(it.key)}
+                                  </span>
+                                ) : null}
                               </span>
                             )}
                           </td>
@@ -1482,14 +1538,34 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                             <span className="ml-1 font-normal text-muted">/ {prodQty} adet</span>
                           )}
                         </td>
-                        {/* Birim maliyet SEÇİLİ adede göre; hangi kolonun
-                            kullanıldığı başlıkta vurgulu. */}
-                        <td
-                          className="border border-line-strong px-2 py-1.5 text-right text-[13.5px] font-semibold tabular-nums text-ink"
-                          colSpan={QTY_TIERS.length}
-                        >
-                          {formatMoney(unitCost)}
+                        {QTY_TIERS.map((t) => (
+                          <td
+                            key={t}
+                            className={cn(
+                              "border border-line-strong px-2 py-1.5 text-right text-[13px] font-semibold tabular-nums text-ink",
+                              (p.production_qty ?? "") === t && "bg-brand-soft/60",
+                            )}
+                          >
+                            {formatMoney(unitAt(t))}
+                          </td>
+                        ))}
+                      </tr>
+                      {/* TOPLAM — her adedin KARŞISINDA. */}
+                      <tr className="bg-surface-muted">
+                        <td className={cn("border border-line-strong px-2 py-1.5 text-ink", LABEL_CLS)}>
+                          Toplam maliyet
                         </td>
+                        {QTY_TIERS.map((t) => (
+                          <td
+                            key={t}
+                            className={cn(
+                              "border border-line-strong px-2 py-1.5 text-right text-[13px] font-semibold tabular-nums text-ink",
+                              (p.production_qty ?? "") === t && "bg-brand-soft/60",
+                            )}
+                          >
+                            {formatMoney(unitAt(t) * (Number(t) || 0))}
+                          </td>
+                        ))}
                       </tr>
                     </tbody>
                   </table>
@@ -1504,7 +1580,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
 
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-control border border-line bg-surface-muted px-3 py-2 text-[13.5px]">
                   <span className="text-muted">
-                    Toplam adet: <span className="font-semibold tabular-nums text-ink">{qty || "—"}</span>
+                    Toplam adet: <span className="font-semibold tabular-nums text-ink">{prodQty || "—"}</span>
                     <span className="mx-1.5 text-subtle">×</span>
                     Birim maliyet: <span className="font-semibold tabular-nums text-ink">{formatMoney(unitCost)}</span>
                   </span>
@@ -1517,7 +1593,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                       </span>
                     )}
                     <span className="font-semibold tabular-nums text-ink">
-                      Toplam maliyet: {formatMoney(qty * unitCost)}
+                      Toplam maliyet: {formatMoney(prodQty * unitCost)}
                     </span>
                   </span>
                 </div>
