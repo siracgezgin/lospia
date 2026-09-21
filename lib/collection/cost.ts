@@ -283,10 +283,21 @@ export function mergeCostItems(existing?: CostItem[] | null): CostItem[] {
 }
 
 /** Boş bir maliyet kalemi seti — her föy aynı iskeletle açılır. */
+/**
+ * Yeni föyün kalem iskeleti — iki kalem DOLU başlar.
+ *
+ * Genel gider: "Genel giderlerimiz fix 500 TL… belki 1500 TL koyman lazım."
+ * Ütü/paket: "Dikim fiyatının içinde ütü paket var… o yüzden SIFIR koyacaksın
+ * ütü paketi." Sıfır burada boşluktan farklıdır: boş hücre "girilmedi" der,
+ * sıfır "ayrıca ödenmiyor" der — ikisi föyü okuyan için ayrı bilgi.
+ */
 export function emptyCostItems(): CostItem[] {
   return COST_ITEM_DEFS.map((d) => ({
     key: d.key,
-    amount: d.key === "genel_gider" ? GENEL_GIDER_DEFAULT : "",
+    amount:
+      d.key === "genel_gider" ? GENEL_GIDER_DEFAULT
+      : d.key === "utu_paket" ? "0"
+      : "",
   }));
 }
 

@@ -25,7 +25,12 @@ const BOXES = [
     hint: "Koleksiyonun zaman bağlamı",
   },
   {
-    key: "usta", label: "Üreticiler", icon: Hammer, hex: "#465610", unit: "usta",
+    /* FİHRİST (Aslı Hanım, 21.09.2026): "Bizim üretici için bize ayrı bir
+       fihrist, yani fihrist derken outsource dediğimiz… nakışçı bilgileri,
+       üretici bilgileri, cep telefonları, adresleri, e-mailleri."
+       Defter zaten buradaydı ama adı yalnız "Üreticiler"di; kalıpçı ve
+       nakışçı da aynı yerde tutulduğu için ad onları dışarıda bırakıyordu. */
+    key: "usta", label: "Fihrist", icon: Hammer, hex: "#465610", unit: "kayıt",
     hint: "Föydeki üretici ve ödeme tablosu",
   },
   {

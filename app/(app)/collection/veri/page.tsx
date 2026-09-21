@@ -55,7 +55,7 @@ export default async function CollectionDataPage({
     // orada dikiliyor." Tablo migrate edilmemişse bölüm sessizce gizlenir.
     supabase
       .from("workspace_manufacturers")
-      .select("id, name, photo_url, city, country, currency, lead_time_days, min_order_qty, contact_name, phone, email, notes, is_active")
+      .select("id, name, photo_url, city, country, currency, lead_time_days, min_order_qty, contact_name, phone, email, notes, is_active, role")
       .eq("workspace_id", workspaceId)
       .order("is_active", { ascending: false })
       .order("name"),
@@ -79,7 +79,7 @@ export default async function CollectionDataPage({
     // Hammadde kütüphanesi — föy reçetelerinin kaynağı (20240310).
     supabase
       .from("workspace_materials")
-      .select("id, code, name, category, supplier_id, composition, width_cm, unit, unit_price, currency, notes, is_active")
+      .select("id, code, name, category, supplier_id, composition, width_cm, unit, unit_price, currency, notes, is_active, role")
       .eq("workspace_id", workspaceId)
       .order("is_active", { ascending: false })
       .order("category")
@@ -162,9 +162,9 @@ export default async function CollectionDataPage({
 
         {box === "usta" && manufacturersAvailable && (
           <SettingsSection
-            title="Üreticiler (Ustalar)"
-            description="Föydeki “Üretici” alanı ve Ödeme Tablosu buradan beslenir. Teslim süresi ve minimum adet sipariş verirken lazım olur."
-            aside={<CountChip n={manufacturers.length} birim="usta" />}
+            title="Fihrist — Üretici, Kalıpçı, Nakışçı"
+            description="Dışarıdan çalıştığımız herkesin defteri: ad, rol, cep telefonu, adres ve e-posta. Föydeki “Üretici”, “Kalıpçı” ve “Nakışçı” seçicileri ile Ödeme Tablosu buradan beslenir."
+            aside={<CountChip n={manufacturers.length} birim="kayıt" />}
           >
             <ManufacturersManager
               manufacturers={manufacturers}
