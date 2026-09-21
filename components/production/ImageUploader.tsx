@@ -20,8 +20,15 @@ interface Props {
   section: ProductionImageSection;
   images: ProductionImage[];
   onChange: (_next: ProductionImage[]) => void;
-  /** Teknik çizim için tek büyük alan; diğerleri küçük galeri. */
-  variant?: "drawing" | "gallery";
+  /**
+   * "drawing": teknik çizim için tek büyük alan (oranı korunur, contain).
+   * "gallery": küçük kareler.
+   * "portrait": DEKUPE — dikey dikdörtgen, sitedeki ürün oranı (3/4), kare
+   *   kırpma yok. Aslı Hanım (21.09.2026): "Dekupe'nin imajını böyle dikdörtgen
+   *   değil, web sitemizdeki gibi aşağı doğru dikdörtgen şeklinde planla.
+   *   Burada büyük gözüksün… sadece dekupesi gözüksün."
+   */
+  variant?: "drawing" | "gallery" | "portrait";
   label?: string;
   /** En fazla kaç görsel? Dolunca yükleme kapısı kapanır.
    *  Dekupe için 1 (Aslı Hanım, 18.09.2026: "Tek bir kare… tek fotoğraf") —
@@ -117,7 +124,50 @@ export function ImageUploader({
         <span className="mb-1.5 block text-[12px] font-semibold uppercase tracking-[0.06em] text-muted">{label}</span>
       )}
 
-      {variant === "drawing" ? (
+      {variant === "portrait" ? (
+        /* DEKUPE — tek dikey kare. Sitedeki ürün fotoğrafı oranı (3/4) burada
+           da korunur ki föye bakan, koleksiyon kartında ve sitede ne
+           görüneceğini aynen görsün. */
+        <div className="w-full max-w-[280px]">
+          {mine.length > 0 ? (
+            <div className="group relative overflow-hidden rounded-card border border-line bg-surface-muted">
+              <button
+                type="button"
+                onClick={() => setLightbox(mine[0]!.url)}
+                className="block w-full cursor-zoom-in"
+                aria-label="Görseli büyüt"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={mine[0]!.url} alt="" className="aspect-[3/4] w-full object-cover" />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleRemove(mine[0]!)}
+                aria-label="Görseli sil"
+                className="absolute right-1.5 top-1.5 grid size-7 place-items-center rounded-full border border-line bg-surface/90 text-subtle shadow-card transition-colors duration-150 hover:text-danger"
+              >
+                <Trash2 size={14} aria-hidden />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={pick}
+              disabled={busy}
+              className={cn(
+                "flex aspect-[3/4] w-full flex-col items-center justify-center gap-2 rounded-card border-2 border-dashed transition-[border-color,background-color,color] duration-150 ease-standard disabled:pointer-events-none",
+                dragOver
+                  ? "border-brand bg-brand-soft/70 text-brand-strong"
+                  : "border-line bg-surface-muted/40 text-subtle hover:border-line-strong hover:bg-surface-hover hover:text-muted",
+                busy && "border-solid border-line bg-surface-sunken",
+              )}
+            >
+              {busy ? <Loader2 size={22} className="animate-spin" aria-hidden /> : <ImagePlus size={22} aria-hidden />}
+              <span className="text-[12.5px] font-medium">{busy ? "Yükleniyor…" : "Dekupe ekle"}</span>
+            </button>
+          )}
+        </div>
+      ) : variant === "drawing" ? (
         // Teknik çizim: tek büyük alan.
         <div>
           {mine.length > 0 ? (

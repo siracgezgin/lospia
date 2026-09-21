@@ -948,7 +948,6 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
         <div className="@container">
         <div className="grid grid-cols-1 gap-x-5 gap-y-2.5 rounded-card border border-line p-3 @[49rem]:grid-cols-2">
           <LabeledField checkKey="title" label="Föy başlığı *" value={form.title} onChange={(v) => set("title", v)} placeholder="Beyaz Dantel Etek" missing={missingKeys.has("title")} hint={hintOf.get("title")} />
-          <LabeledField label="Üretim başlangıç tarihi" value={form.production_date ?? ""} onChange={(v) => set("production_date", v)} />
           <LabeledField label="Ürün kodu" value={form.product_code ?? ""} onChange={(v) => set("product_code", v)} />
           <LabeledField checkKey="delivery_date" label="Teslim tarihi" value={form.delivery_date ?? ""} onChange={(v) => set("delivery_date", v)} placeholder="21.07.2026" missing={missingKeys.has("delivery_date")} hint={hintOf.get("delivery_date")} />
           {/* `checkKey` YOK: "Ürün tanımı" denetimi hem burayı hem aşağıdaki
@@ -998,51 +997,63 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
           ) : (
             <LabeledField label="Üretici" value={form.producer ?? ""} onChange={(v) => set("producer", v)} />
           )}
+          {/* ÜRETİCİ SOLDA, TARİH YANINDA (Aslı Hanım, 21.09.2026): "Üretici
+              kalsın solda, üretim başlangıç tarihini oraya alabilirsin."
+              Tarih eskiden föy başlığının yanındaydı; ürünün adıyla üretimin
+              ne zaman başladığı aynı satırda okunmuyordu. */}
+          <LabeledField label="Üretim başlangıç tarihi" value={form.production_date ?? ""} onChange={(v) => set("production_date", v)} />
           {/* SEZON KALKTI (Aslı Hanım, 18.09.2026): "Sezonu kaldırın şu
               anda, sezona gerek var mı? Biz hep resort çalışmıyor muyuz
               zaten?" Föyde her ürün için tekrar tekrar seçilen bir alan
               olmaktan çıktı. Sezon KAYDI duruyor — Koleksiyon'un üstündeki
               sezon seçici ve föyün `season_id` alanı yerinde; yalnız bu form
               artık sormuyor, yeni föy açık sezonu kendiliğinden alıyor. */}
+          {/* KATEGORİ VE ALT KATEGORİ ALT ALTA (Aslı Hanım, 21.09.2026):
+              "Kategoriyi altına almalısın alt kategoriyi. Ayrı ayrı yerlere
+              yazarsan kafamız karışıyor." İki sütunlu ızgarada ardışık iki alan
+              YAN YANA düşüyordu; ikisi tek hücreye alındı, ilişkileri yerleşimden
+              okunuyor. */}
+          <div className="flex flex-col gap-2.5">
           {/* Koleksiyon kategorisi — web nav yapısı (One-of-a-Kind / Ready to Wear …) */}
-          <FieldRow checkKey="category" label="Kategori" missing={missingKeys.has("category")} hint={hintOf.get("category")}>
-            <SelectInput
-              value={form.category ?? ""}
-              onChange={(e) => {
-                const next = (e.target.value || null) as ProductionCategory | null;
-                // Kategori değişince geçersiz alt kategoriyi temizle.
-                const validSubs = subsOf(tree, next).map((s) => s.key);
-                setDirty(true);
-                setForm((f) => ({
-                  ...f,
-                  category: next,
-                  subcategory: validSubs.includes(f.subcategory ?? "") ? f.subcategory : "",
-                }));
-              }}
-            >
-              <option value="">Seçiniz…</option>
-              {tree.map((c) => (
-                <option key={c.key} value={c.key}>{c.label}</option>
-              ))}
-            </SelectInput>
-          </FieldRow>
-          <FieldRow checkKey="subcategory" label="Alt kategori" missing={missingKeys.has("subcategory")} hint={hintOf.get("subcategory")}>
-            <SelectInput
-              value={form.subcategory ?? ""}
-              onChange={(e) => set("subcategory", e.target.value)}
-              disabled={subsOf(tree, form.category).length === 0}
-            >
-              <option value="">{subsOf(tree, form.category).length === 0 ? "—" : "Seçiniz…"}</option>
-              {/* ÜÇ KADEME (Accessories › Hats › Bucket Hat): alt dallar
-                  girintiyle listelenir — ayrı bir ikinci seçici açmak formu
-                  uzatırdı ve föyde alt kategori TEK alandır. */}
-              {flattenSubs(subsOf(tree, form.category)).map(({ node, depth }) => (
-                <option key={node.key} value={node.key}>
-                  {depth > 0 ? `${"\u00A0\u00A0".repeat(depth)}↳ ${node.label}` : node.label}
-                </option>
-              ))}
-            </SelectInput>
-          </FieldRow>
+            <FieldRow checkKey="category" label="Kategori" missing={missingKeys.has("category")} hint={hintOf.get("category")}>
+              <SelectInput
+                value={form.category ?? ""}
+                onChange={(e) => {
+                  const next = (e.target.value || null) as ProductionCategory | null;
+                  // Kategori değişince geçersiz alt kategoriyi temizle.
+                  const validSubs = subsOf(tree, next).map((s) => s.key);
+                  setDirty(true);
+                  setForm((f) => ({
+                    ...f,
+                    category: next,
+                    subcategory: validSubs.includes(f.subcategory ?? "") ? f.subcategory : "",
+                  }));
+                }}
+              >
+                <option value="">Seçiniz…</option>
+                {tree.map((c) => (
+                  <option key={c.key} value={c.key}>{c.label}</option>
+                ))}
+              </SelectInput>
+            </FieldRow>
+            <FieldRow checkKey="subcategory" label="Alt kategori" missing={missingKeys.has("subcategory")} hint={hintOf.get("subcategory")}>
+              <SelectInput
+                value={form.subcategory ?? ""}
+                onChange={(e) => set("subcategory", e.target.value)}
+                disabled={subsOf(tree, form.category).length === 0}
+              >
+                <option value="">{subsOf(tree, form.category).length === 0 ? "—" : "Seçiniz…"}</option>
+                {/* ÜÇ KADEME (Accessories › Hats › Bucket Hat): alt dallar
+                    girintiyle listelenir — ayrı bir ikinci seçici açmak formu
+                    uzatırdı ve föyde alt kategori TEK alandır. */}
+                {flattenSubs(subsOf(tree, form.category)).map(({ node, depth }) => (
+                  <option key={node.key} value={node.key}>
+                    {depth > 0 ? `${"\u00A0\u00A0".repeat(depth)}↳ ${node.label}` : node.label}
+                  </option>
+                ))}
+              </SelectInput>
+            </FieldRow>
+          </div>
           <LabeledField label="1 ürüne giden metraj" value={form.meterage ?? ""} onChange={(v) => set("meterage", v)} placeholder="1.60 CM" />
           {/* ÜRÜNÜN AÇIKLAMASI BURADAN ÇIKTI (Aslı Hanım, 18.09.2026):
               "Şimdi ürünün açıklaması burada olmamalı." Ürün sekmesi kimlik
@@ -1077,10 +1088,11 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
             section="cover"
             images={form.photo_refs}
             onChange={handleImagesChange}
+            variant="portrait"
             max={1}
           />
           <p className="mt-1 text-[11.5px] leading-relaxed text-subtle">
-            Koleksiyon kartında ve sitede görünen kare. Tek fotoğraf.
+            Koleksiyon kartında ve sitede görünen dikey kare. Tek fotoğraf.
           </p>
         </Section>
       </div>
