@@ -26,6 +26,7 @@ import { ImageUploader } from "./ImageUploader";
 import { SheetReadiness } from "./SheetReadiness";
 import { SheetBom, type PickableMaterial } from "./SheetBom";
 import { SheetSourcing } from "./SheetSourcing";
+import { SortableRows, SortableTableRow, arrayMove } from "./SortableRow";
 import { SheetVariants, type SiblingSheet } from "./SheetVariants";
 import { checkSheet } from "@/lib/production/completeness";
 import { COLLECTION_TAXONOMY, type CategoryNode } from "@/lib/collection/taxonomy";
@@ -1221,6 +1222,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
           <div className="overflow-x-auto">
             <table className="w-full min-w-[420px] table-fixed border-collapse text-[13px]">
               <colgroup>
+                <col className="w-7" />
                 <col className="w-10" />
                 <col />
                 {measureSizes.map((sz) => <col key={sz} className="w-[78px]" />)}
@@ -1228,6 +1230,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               </colgroup>
               <thead>
                 <tr className="bg-surface-muted">
+                  <th className="w-7" />
                   <th className={cn(TH_CLS, "px-1 text-center")}>No</th>
                   <th className={cn(TH_CLS, "text-left")}>Ölçü</th>
                   {measureSizes.map((sz) => (
@@ -1236,9 +1239,13 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                   <th className="w-9" />
                 </tr>
               </thead>
+              <SortableRows
+                ids={form.measurements.map((_, i) => `m${i}`)}
+                onReorder={(from, to) => set("measurements", arrayMove(form.measurements, from, to))}
+              >
               <tbody>
                 {form.measurements.map((row, i) => (
-                  <tr key={i}>
+                  <SortableTableRow key={i} id={`m${i}`}>
                     <td className="border border-line bg-surface-muted/60 px-1 py-1.5 text-center text-[12px] font-semibold tabular-nums text-muted">
                       {i + 1}
                     </td>
@@ -1259,9 +1266,10 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                     <td className="text-center align-middle">
                       <RowDelete onClick={() => removeMeasurement(i)} label={`${i + 1}. ölçü satırını sil`} />
                     </td>
-                  </tr>
+                  </SortableTableRow>
                 ))}
               </tbody>
+              </SortableRows>
             </table>
           </div>
           <Button variant="ghost" size="sm" onClick={addMeasurement} className="mt-2 -ml-2 text-brand hover:bg-surface-muted hover:text-brand-strong">
@@ -1516,11 +1524,13 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                         gösterebilir." Kalem adı esner, dört kademe sabit ve
                         dar kalır. */}
                     <colgroup>
+                      <col className="w-7" />
                       <col />
                       {QTY_TIERS.map((t) => <col key={t} className="w-[76px]" />)}
                     </colgroup>
                     <thead>
                       <tr className="bg-surface-muted">
+                        <th className="w-7" />
                         <th className={cn(TH_CLS, "text-left")}>Maliyet kalemi</th>
                         {QTY_TIERS.map((t) => (
                           <th
@@ -1537,9 +1547,13 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                         ))}
                       </tr>
                     </thead>
+                    <SortableRows
+                      ids={items.map((it, i) => `c${i}-${it.key}`)}
+                      onReorder={(from, to) => setP({ cost_items: arrayMove(items, from, to) })}
+                    >
                     <tbody>
                       {items.map((it, i) => (
-                        <tr key={`${it.key}-${i}`}>
+                        <SortableTableRow key={`${it.key}-${i}`} id={`c${i}-${it.key}`}>
                           <td className={cn("border border-line", it.key === "diger" ? "p-0" : "px-2 py-1.5")}>
                             {it.key === "diger" ? (
                               <span className="flex items-center">
@@ -1624,10 +1638,10 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                               </td>
                             ))
                           )}
-                        </tr>
+                        </SortableTableRow>
                       ))}
                       <tr>
-                        <td className="border border-line px-2 py-1" colSpan={QTY_TIERS.length + 1}>
+                        <td className="border border-line px-2 py-1" colSpan={QTY_TIERS.length + 2}>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -1639,6 +1653,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                         </td>
                       </tr>
                       <tr className="bg-surface-muted">
+                        <td className="border border-line-strong bg-surface-muted" />
                         <td className={cn("border border-line-strong px-2 py-1.5 text-ink", LABEL_CLS)}>
                           Birim maliyet
                           {/* Aslı Hanım: "Birim maliyetin yanında slash üretim
@@ -1662,6 +1677,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                       </tr>
                       {/* TOPLAM — her adedin KARŞISINDA. */}
                       <tr className="bg-surface-muted">
+                        <td className="border border-line-strong bg-surface-muted" />
                         <td className={cn("border border-line-strong px-2 py-1.5 text-ink", LABEL_CLS)}>
                           Toplam maliyet
                         </td>
@@ -1678,6 +1694,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                         ))}
                       </tr>
                     </tbody>
+                    </SortableRows>
                   </table>
                 </div>
 
