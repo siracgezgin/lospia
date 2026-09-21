@@ -304,10 +304,17 @@ export type Season = {
  * lead_time_days / min_order_qty / currency alanları Zedonk incelemesinden
  * geldi (Manufacturers sekmesi: Lead Time, Minimums, Currency).
  */
+/** Fihristteki rol (20240353). Üretici, kalıpçı ve nakışçı aynı defterde. */
+export type ManufacturerRole = "uretici" | "kalipci" | "nakisci" | "diger";
+
 export type Manufacturer = {
   id: string;
   workspace_id: string;
   name: string;
+  /** Fihrist rolü — üründe her rol ayrı seçilir. */
+  role?: ManufacturerRole;
+  /** Açık adres (20240353) — "adresleri… girmesi gerekiyor". */
+  address?: string | null;
   photo_url: string | null;
   city: string | null;
   country: string | null;
@@ -409,6 +416,29 @@ export type SourcingEntry = {
   chosen?: boolean;
 };
 
+/**
+ * RENK / KUMAŞ VARYANTI (20240353).
+ *
+ * Aslı Hanım (21.09.2026): "Bir elbise kalıbı için çalıştığımız farklı
+ * kumaşlarımız oluyor — beyaz, denim, pembe, yeşil. Onların farklı fiyatları,
+ * farklı içerikleri oluyor… Renk, fiyat, içerik." Ve: "Kumaşa göre asgari
+ * sipariş adedi de değişiyor."
+ */
+export type ColorVariant = {
+  id: string;
+  color: string;
+  /** Kumaş adı/kodu — "poplin", "denim". */
+  fabric?: string;
+  /** Kumaş birim fiyatı (serbest metin). */
+  price?: string;
+  currency?: string;
+  /** İçerik / kompozisyon — "%100 pamuk". */
+  composition?: string;
+  /** Asgari sipariş adedi — kumaşa göre değişir. */
+  moq?: string;
+  note?: string;
+};
+
 export type ProductionSheet = {
   id: string;
   workspace_id: string;
@@ -475,6 +505,11 @@ export type ProductionSheet = {
   sort_order?: number | null;
   /** Kaynak listesi (20240352) — hangi kalem hangi firmadan. */
   sourcing?: SourcingEntry[] | null;
+  /** Aynı kalıbın renk/kumaş varyantları (20240353). */
+  color_variants?: ColorVariant[] | null;
+  /** Fihristten seçilen kalıpçı ve nakışçı (20240353). */
+  pattern_maker_id?: string | null;
+  embroiderer_id?: string | null;
 };
 
 /**

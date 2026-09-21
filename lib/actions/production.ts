@@ -143,6 +143,24 @@ const SheetSchema = z.object({
     )
     .max(80)
     .default([]),
+  /* RENK / KUMAŞ VARYANTLARI (20240353) — aynı kalıbın farklı kumaşları.
+     Aslı Hanım: "Renk, fiyat, içerik… kumaşa göre asgari sipariş adedi de
+     değişiyor." */
+  color_variants: z
+    .array(
+      z.object({
+        id: z.string().max(64),
+        color: z.string().max(120).default(""),
+        fabric: z.string().max(160).optional(),
+        price: z.string().max(40).optional(),
+        currency: z.string().max(10).optional(),
+        composition: z.string().max(400).optional(),
+        moq: z.string().max(20).optional(),
+        note: z.string().max(400).optional(),
+      }),
+    )
+    .max(40)
+    .default([]),
   wash_instruction: longText,
   fabric_lining: longText,
   fabric_info: longText,
@@ -217,6 +235,7 @@ function normalize(v: ProductionSheetInput) {
     size_distribution: v.size_distribution,
     photo_refs: v.photo_refs,
     sourcing: v.sourcing,
+    color_variants: v.color_variants,
     wash_instruction: nn(v.wash_instruction),
     fabric_lining: nn(v.fabric_lining),
     fabric_info: nn(v.fabric_info),

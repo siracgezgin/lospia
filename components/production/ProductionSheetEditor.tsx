@@ -27,6 +27,7 @@ import { SheetReadiness } from "./SheetReadiness";
 import { SheetBom, type PickableMaterial } from "./SheetBom";
 import { SheetSourcing } from "./SheetSourcing";
 import { SortableRows, SortableTableRow, arrayMove } from "./SortableRow";
+import { SheetColorVariants } from "./SheetColorVariants";
 import { SheetVariants, type SiblingSheet } from "./SheetVariants";
 import { checkSheet } from "@/lib/production/completeness";
 import { COLLECTION_TAXONOMY, type CategoryNode } from "@/lib/collection/taxonomy";
@@ -138,6 +139,7 @@ function emptyState(): ProductionSheetInput {
     season: "",
     season_id: null,
     sourcing: [],
+    color_variants: [],
     production_date: "",
     delivery_date: "",
     sewing_delivery_date: "",
@@ -195,6 +197,7 @@ function fromSheet(s: ProductionSheet): ProductionSheetInput {
     season: s.season ?? "",
     season_id: s.season_id ?? null,
     sourcing: Array.isArray(s.sourcing) ? s.sourcing : [],
+    color_variants: Array.isArray(s.color_variants) ? s.color_variants : [],
     production_date: s.production_date ?? "",
     delivery_date: s.delivery_date ?? "",
     sewing_delivery_date: s.sewing_delivery_date ?? "",
@@ -1012,7 +1015,33 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
           {/* RENK — föy kimliğinin üçüncü parçası (model | kumaş | renk),
               Zedonk deseni. Aynı modelin başka rengi için aşağıdaki varyant
               şeridinden "Renk ekle" kullanılır. */}
-          <LabeledField label="Renk" value={form.colorway ?? ""} onChange={(v) => set("colorway", v)} placeholder="Mavi" />
+          {/* RENKLER KUTUCUK OLARAK (Aslı Hanım, 21.09.2026): "Aşağıda renk
+              varyantını birkaç tane eklediğimizde yukarıda yan yana çıkmalı,
+              bir kutucuk içinde. Ama bir renk başlığının altında beş tane kutu
+              eklemeyelim." ve "Aşağıda biz beş renk girdiğimizde yukarıda
+              sadece beyaz yazmamalı."
+              Tek satırlık "Renk" alanı duruyor ama artık YEDEK: varyant
+              girilmişse onların adları okunur, girilmemişse eski alan yazılır. */}
+          <FieldRow label="Renk">
+            {(form.color_variants ?? []).some((v) => v.color.trim()) ? (
+              <span className="flex min-h-9 flex-wrap items-center gap-1">
+                {(form.color_variants ?? [])
+                  .filter((v) => v.color.trim())
+                  .map((v) => (
+                    <span
+                      key={v.id}
+                      title={[v.fabric, v.composition].filter(Boolean).join(" · ") || undefined}
+                      className="rounded-full bg-brand-soft px-2.5 py-0.5 text-[12px] font-medium text-brand-strong"
+                    >
+                      {v.color}
+                    </span>
+                  ))}
+                <span className="text-[11.5px] text-subtle">· aşağıdan düzenlenir</span>
+              </span>
+            ) : (
+              <TextInput value={form.colorway ?? ""} onChange={(e) => set("colorway", e.target.value)} placeholder="Mavi" />
+            )}
+          </FieldRow>
           {/* İkinci tarih — "Bir ürünlerin teslim tarihi, bir de dikim teslim
               tarihi lazım." */}
           {/* DİKİM TESLİM TARİHİ KALKTI (Aslı Hanım, 18.09.2026): "Burada
@@ -1171,11 +1200,22 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
         </Section>
       </div>
 
+        {/* RENK / KUMAŞ VARYANTLARI — aynı kalıbın farklı kumaşları, TEK
+            föyün içinde. Aşağıdaki "aynı modelin diğer föyleri" bölümünden
+            farklı: orada her renk ayrı föydür, burada tek föyün kumaş listesi. */}
+        <Section title="Renk / Kumaş Varyantları">
+          <SheetColorVariants
+            rows={form.color_variants ?? []}
+            canEdit={isAdmin}
+            onChange={(next) => set("color_variants", next)}
+          />
+        </Section>
+
         {/* RENK VARYANTLARI — aynı modelin diğer renkleri. Zedonk'ta ürün
             kimliği model × kumaş × renktir; bizde her renk ayrı föy olduğu için
             ölçüler, talimatlar ve reçete üç kez yazılıyordu. Tam genişlik:
             yukarıdaki iki sütunlu ızgaranın DIŞINDA durur. */}
-        <Section title="Renk Varyantları">
+        <Section title="Aynı Modelin Diğer Föyleri">
           <SheetVariants
             sheetId={sheet?.id ?? null}
             colorway={form.colorway ?? null}
