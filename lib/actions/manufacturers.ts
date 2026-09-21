@@ -27,6 +27,11 @@ const nInt = (v?: string | number | null) => {
 
 const ManufacturerSchema = z.object({
   name: z.string().min(1, "Usta adı gerekli.").max(200),
+  /* FİHRİST ROLÜ (20240353). Aslı Hanım (21.09.2026): "Oradan üretici,
+     kalıpçı, nakışçı seçmemiz gerekiyor." Aynı defterde üç rol. */
+  role: z.enum(["uretici", "kalipci", "nakisci", "diger"]).default("uretici"),
+  /* Açık adres — fihristte "adresleri" isteniyor; tabloda şehir/ülke vardı. */
+  address: z.string().max(500).optional().nullable(),
   photo_url: z.string().max(2000).optional().nullable(),
   city: z.string().max(120).optional().nullable(),
   country: z.string().max(120).optional().nullable(),
@@ -59,6 +64,8 @@ const isAdmin = (r: AppRole) => r === "owner" || r === "admin";
 function payloadOf(v: ManufacturerInput) {
   return {
     name: v.name.trim(),
+    role: v.role,
+    address: nn(v.address),
     photo_url: nn(v.photo_url),
     city: nn(v.city),
     country: nn(v.country),
@@ -192,5 +199,5 @@ export async function ensureManufacturer(
     .maybeSingle();
   if (existing) return { id: (existing as { id: string }).id };
 
-  return createManufacturer({ name: clean, currency: "TL", is_active: true });
+  return createManufacturer({ name: clean, role: "uretici", currency: "TL", is_active: true });
 }

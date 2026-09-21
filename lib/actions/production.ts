@@ -122,6 +122,10 @@ const SheetSchema = z.object({
   delivered_items: z.array(deliveredItemRow).max(60).default([]),
   size_distribution: sizeDistribution.default({ sizes: [], rows: [] }),
   photo_refs: z.array(productionImage).max(60).default([]),
+  /* Fihristten seçilen kalıpçı ve nakışçı (20240353). Üretici zaten
+     `manufacturer_id` alanında. */
+  pattern_maker_id: z.string().max(64).nullable().optional(),
+  embroiderer_id: z.string().max(64).nullable().optional(),
   /* SOURCING (20240352) — hangi kalem hangi firmadan. Aslı Hanım: "Bu kumaş
      için dört tane ayrı yerden kumaş önerisi geliyor." Bir kaleme birden çok
      satır girilebildiği için üst sınır cömert. */
@@ -236,6 +240,8 @@ function normalize(v: ProductionSheetInput) {
     photo_refs: v.photo_refs,
     sourcing: v.sourcing,
     color_variants: v.color_variants,
+    pattern_maker_id: v.pattern_maker_id ?? null,
+    embroiderer_id: v.embroiderer_id ?? null,
     wash_instruction: nn(v.wash_instruction),
     fabric_lining: nn(v.fabric_lining),
     fabric_info: nn(v.fabric_info),

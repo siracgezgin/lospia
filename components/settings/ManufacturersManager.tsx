@@ -12,7 +12,7 @@ import { assignPersonTones } from "@/lib/design/person-colors";
 import { PersonAvatar } from "@/components/ui/PersonAvatar";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import { Field, FieldGrid, TextInput } from "@/components/ui/Field";
+import { Field, FieldGrid, TextInput, SelectInput } from "@/components/ui/Field";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useConfirm } from "@/components/ui/useConfirm";
 import type { Manufacturer } from "@/types";
@@ -21,6 +21,7 @@ export type ManagerManufacturer = Pick<
   Manufacturer,
   "id" | "name" | "photo_url" | "city" | "country" | "currency"
   | "lead_time_days" | "min_order_qty" | "contact_name" | "phone" | "email" | "notes" | "is_active"
+  | "role" | "address"
 >;
 
 interface Props {
@@ -41,7 +42,7 @@ function norm(s: string): string {
 
 function emptyDraft(): ManufacturerInput {
   return {
-    name: "", photo_url: "", city: "", country: "", currency: "TL",
+    name: "", role: "uretici" as const, address: "", photo_url: "", city: "", country: "", currency: "TL",
     lead_time_days: "", min_order_qty: "",
     contact_name: "", phone: "", email: "", notes: "", is_active: true,
   };
@@ -51,6 +52,8 @@ function draftOf(m: ManagerManufacturer): ManufacturerInput {
   return {
     name: m.name,
     photo_url: m.photo_url ?? "",
+    role: m.role ?? "uretici",
+    address: m.address ?? "",
     city: m.city ?? "",
     country: m.country ?? "",
     currency: m.currency ?? "TL",
@@ -133,6 +136,23 @@ export function ManufacturersManager({ manufacturers, sheetCounts, canManage }: 
       <FieldGrid>
         <Field label="Usta adı" required className="sm:col-span-2">
           <TextInput value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Usta ya da atölye adı" autoFocus />
+        </Field>
+        {/* ROL — fihrist üç iş kolunu birden tutuyor (Aslı Hanım, 21.09.2026:
+            "oradan üretici, kalıpçı, nakışçı seçmemiz gerekiyor"). Föydeki üç
+            seçici bu alana göre süzülür. */}
+        <Field label="Rolü">
+          <SelectInput
+            value={draft.role ?? "uretici"}
+            onChange={(e) => setDraft({ ...draft, role: e.target.value as typeof draft.role })}
+          >
+            <option value="uretici">Üretici</option>
+            <option value="kalipci">Kalıpçı</option>
+            <option value="nakisci">Nakışçı</option>
+            <option value="diger">Diğer</option>
+          </SelectInput>
+        </Field>
+        <Field label="Adres">
+          <TextInput value={draft.address ?? ""} onChange={(e) => setDraft({ ...draft, address: e.target.value })} placeholder="Mahalle, cadde, no" />
         </Field>
         <Field label="Fotoğraf bağlantısı" className="sm:col-span-2">
           <TextInput value={draft.photo_url ?? ""} onChange={(e) => setDraft({ ...draft, photo_url: e.target.value })} placeholder="https://…" />

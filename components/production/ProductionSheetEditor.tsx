@@ -47,6 +47,9 @@ import type {
 export type SheetManufacturer = Pick<
   Manufacturer, "id" | "name" | "is_active" | "lead_time_days" | "min_order_qty" | "currency" | "city"
 > & {
+  /** Fihrist rolü (20240353) — üretici / kalıpçı / nakışçı. Eski kayıtlarda
+   *  boş olabilir; o zaman her rolün listesinde görünür. */
+  role?: Manufacturer["role"];
   /** Föyü maille göndermek için (2026-08-28). Yoksa gönderirken elle yazılır. */
   email?: string | null;
 };
@@ -140,6 +143,8 @@ function emptyState(): ProductionSheetInput {
     season_id: null,
     sourcing: [],
     color_variants: [],
+    pattern_maker_id: null,
+    embroiderer_id: null,
     production_date: "",
     delivery_date: "",
     sewing_delivery_date: "",
@@ -198,6 +203,8 @@ function fromSheet(s: ProductionSheet): ProductionSheetInput {
     season_id: s.season_id ?? null,
     sourcing: Array.isArray(s.sourcing) ? s.sourcing : [],
     color_variants: Array.isArray(s.color_variants) ? s.color_variants : [],
+    pattern_maker_id: s.pattern_maker_id ?? null,
+    embroiderer_id: s.embroiderer_id ?? null,
     production_date: s.production_date ?? "",
     delivery_date: s.delivery_date ?? "",
     sewing_delivery_date: s.sewing_delivery_date ?? "",
@@ -1078,6 +1085,44 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
             </FieldRow>
           ) : (
             <LabeledField label="Üretici" value={form.producer ?? ""} onChange={(v) => set("producer", v)} />
+          )}
+          {/* KALIPÇI VE NAKIŞÇI — fihristten (Aslı Hanım, 21.09.2026):
+              "Bu mesela üretici bilgisi Sabri Bey olacak. Ama bunun nakışçısı
+              da var, kalıpçısı da var. Şimdi bu durumda bir fihriste
+              ihtiyacımız var — oradan üretici, kalıpçı, nakışçı seçmemiz
+              gerekiyor."
+              Üçü de aynı defterden (workspace_manufacturers) okunuyor; liste
+              role göre süzülür ama rol girilmemiş eski kayıtlar da görünür,
+              yoksa fihrist bir gecede boşalmış gibi olurdu. */}
+          {manufacturers.length > 0 && (
+            <>
+              <FieldRow label="Kalıpçı">
+                <SelectInput
+                  value={form.pattern_maker_id ?? ""}
+                  onChange={(e) => set("pattern_maker_id", e.target.value || null)}
+                >
+                  <option value="">Seçiniz…</option>
+                  {manufacturers
+                    .filter((m) => !m.role || m.role === "kalipci" || m.role === "diger")
+                    .map((m) => (
+                      <option key={m.id} value={m.id}>{m.name}{m.is_active ? "" : " (pasif)"}</option>
+                    ))}
+                </SelectInput>
+              </FieldRow>
+              <FieldRow label="Nakışçı">
+                <SelectInput
+                  value={form.embroiderer_id ?? ""}
+                  onChange={(e) => set("embroiderer_id", e.target.value || null)}
+                >
+                  <option value="">Seçiniz…</option>
+                  {manufacturers
+                    .filter((m) => !m.role || m.role === "nakisci" || m.role === "diger")
+                    .map((m) => (
+                      <option key={m.id} value={m.id}>{m.name}{m.is_active ? "" : " (pasif)"}</option>
+                    ))}
+                </SelectInput>
+              </FieldRow>
+            </>
           )}
           {/* ÜRETİCİ SOLDA, TARİH YANINDA (Aslı Hanım, 21.09.2026): "Üretici
               kalsın solda, üretim başlangıç tarihini oraya alabilirsin."
