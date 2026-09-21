@@ -332,7 +332,19 @@ export type Manufacturer = {
 export type ProductionSheetStatus = "draft" | "active" | "archived";
 
 /** ÖLÇÜLER tablosunun bir satırı. */
-export type MeasurementRow = { no: string; label: string; value: string };
+export type MeasurementRow = {
+  no: string;
+  label: string;
+  /** Tek değer — bedensiz ölçü ya da "One Size". Geriye uyum için duruyor. */
+  value: string;
+  /**
+   * BEDEN BAŞINA ölçü (20240353 sonrası). Aslı Hanım (21.09.2026): "Ölçüler
+   * santim diye vermiş — neyin ölçüsü bu? Small mı, medium mu, one size mı?
+   * Bunu seçtirmen gerekiyor." Anahtar beden adıdır ("M", "One Size"); yalnız
+   * ürünün üretileceği bedenler yazılır.
+   */
+  values?: Record<string, string>;
+};
 /** TESLİM EDİLEN ÜRÜNLER tablosunun bir satırı. */
 export type DeliveredItemRow = { no: string; label: string; qty: string };
 /** BEDEN DAĞILIMI ızgarası — beden başlıkları + varyant satırları. */

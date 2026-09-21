@@ -24,6 +24,9 @@ const measurementRow = z.object({
   no: z.string().max(20).default(""),
   label: z.string().max(300).default(""),
   value: z.string().max(120).default(""),
+  /* BEDEN BAŞINA ölçü (21.09.2026). Aslı Hanım: "Ölçüler santim diye vermiş —
+     neyin ölçüsü bu? Small mı, medium mu?" Anahtar beden adı, değer santim. */
+  values: z.record(z.string().max(20), z.string().max(120)).optional(),
 });
 const deliveredItemRow = z.object({
   no: z.string().max(20).default(""),

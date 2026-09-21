@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
@@ -32,7 +32,7 @@ import { COLLECTION_TAXONOMY, type CategoryNode } from "@/lib/collection/taxonom
 import { subsOf } from "@/lib/collection/category-tree";
 import { flattenSubs } from "@/lib/collection/taxonomy";
 import {
-  totalQuantity, parseMoney, formatMoney, STANDARD_SIZES, normalizeToStandardSizes,
+  totalQuantity, parseMoney, formatMoney, STANDARD_SIZES, normalizeToStandardSizes, quantityBySize, orderSizes,
   DEFAULT_SIZE_GROUPS, emptyCostItems, costItemLabel, bomCostByKey,
   productionQtyOf, DIVIDED_COST_KEYS, QTY_TIERS, amountForQty, mergeCostItems, costItemHint,
 } from "@/lib/collection/cost";
@@ -547,6 +547,58 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
     rows.map((r, i) => (r.no === String(i + 1) ? r : { ...r, no: String(i + 1) }));
 
   // ── Ölçüler ──
+  /**
+   * ÖLÇÜ TABLOSUNUN BEDEN SÜTUNLARI.
+   *
+   * Kaynak beden dağılımıdır: adet girilmiş bedenler ürünün üretileceği
+   * bedenlerdir (Aslı Hanım, 21.09.2026: "Bu ürün hangi bedenlerde üretileceği
+   * burada yazması gerekiyor"). İkinci bir liste tutmak iki yerde iki doğru
+   * üretirdi.
+   *
+   * Hiç adet girilmemişse tek sütun ("cm") kalır — eski föyler ve tek bedenli
+   * ürünler aynen okunur.
+   */
+  const measureSizes = useMemo(() => {
+    const byQty = quantityBySize(form.size_distribution);
+    const active = orderSizes(Object.keys(byQty).filter((sz) => (byQty[sz] ?? 0) > 0));
+    return active.length ? active : ["cm"];
+  }, [form.size_distribution]);
+
+  /** Tek sütunlu eski kayıt `value`da; bedenli kayıt `values` içinde. */
+  const measureValue = (row: MeasurementRow, size: string) =>
+    (size === "cm" ? row.value : row.values?.[size] ?? "") ?? "";
+
+  /**
+   * BİR BEDEN GİRİLİNCE ÖTEKİLER DOLAR.
+   *
+   * Aslı Hanım (21.09.2026): "Burada seçtiği üründe ölçüde otomatik girmesi
+   * gerekiyor, çünkü sen bir bedene girdiğin zaman öbür bedenler otomatik
+   * ikişer dörder artarak ilerler."
+   *
+   * YALNIZ BOŞ HÜCRELER doldurulur: elle yazılmış bir ölçünün üzerine
+   * yazmak, kalıpçının kararını silmek olurdu. Adım 2 cm — beden aralığı
+   * ölçüye göre değişiyor ("ikişer dörder"), tahminin yanlış olanı kullanıcı
+   * düzeltir; hiç doldurmamak ise her hücreyi elle yazdırırdı.
+   */
+  const setMeasureValue = (i: number, size: string, raw: string) => {
+    const row = form.measurements[i];
+    if (!row) return;
+    if (size === "cm") { updateMeasurement(i, { value: raw }); return; }
+
+    const next: Record<string, string> = { ...(row.values ?? {}), [size]: raw };
+    const base = parseFloat(raw.replace(",", "."));
+    if (Number.isFinite(base)) {
+      const from = measureSizes.indexOf(size);
+      measureSizes.forEach((sz, ix) => {
+        if (ix === from) return;
+        if ((next[sz] ?? "").trim()) return;          // elle yazılan korunur
+        const step = (ix - from) * 2;
+        next[sz] = String(Math.round((base + step) * 10) / 10);
+      });
+    }
+    updateMeasurement(i, { values: next });
+  };
+
   const updateMeasurement = (i: number, patch: Partial<MeasurementRow>) =>
     set("measurements", form.measurements.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
   const addMeasurement = () =>
@@ -1055,6 +1107,27 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
             </FieldRow>
           </div>
           <LabeledField label="1 ürüne giden metraj" value={form.meterage ?? ""} onChange={(v) => set("meterage", v)} placeholder="1.60 CM" />
+          {/* ÜRETİLECEK BEDENLER — ilk sayfada. Aslı Hanım (21.09.2026):
+              "Burada bu ürün hangi bedenlerde üretileceği burada yazması
+              gerekiyor. One size bu ürün." ve "Bu elbisenin beden önerileri en
+              öndeki dosyada olmalı."
+              Alan SORULMAZ, beden dağılımından okunur: iki yere iki ayrı beden
+              listesi yazılırsa hangisinin doğru olduğu belirsizleşir. */}
+          <FieldRow label="Üretilecek bedenler">
+            <span className="flex min-h-9 flex-wrap items-center gap-1">
+              {measureSizes[0] === "cm" ? (
+                <span className="text-[12.5px] text-subtle">
+                  Beden Dağılımı’na adet girilince burada görünür.
+                </span>
+              ) : (
+                measureSizes.map((sz) => (
+                  <span key={sz} className="rounded-full bg-brand-soft px-2.5 py-0.5 text-[12px] font-medium text-brand-strong">
+                    {sz}
+                  </span>
+                ))
+              )}
+            </span>
+          </FieldRow>
           {/* ÜRÜNÜN AÇIKLAMASI BURADAN ÇIKTI (Aslı Hanım, 18.09.2026):
               "Şimdi ürünün açıklaması burada olmamalı." Ürün sekmesi kimlik
               bilgisi içindir — ad, kod, cins, renk, tarihler, kategori. Serbest
@@ -1130,19 +1203,36 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
             olması… hiçbir boş hücre kalmaması. Mesela üç numara niye boş?"
             Sıra numarası artık elle yazılmıyor → hiçbir numara boş kalamaz. */}
         <Section checkKey="measurements" title="Ölçüler (cm)">
+          {/* ÖLÇÜ HANGİ BEDENİN? Aslı Hanım (21.09.2026): "Ölçüler santim diye
+              vermiş. Neyin ölçüsü bu? Bu small mı, medium mu, one size mı?
+              Ölçü dediğin şeyin hangi ölçü olduğunu burada vermen gerekiyor…
+              bunu seçtirmen gerekiyor."
+
+              Sütunlar ürünün ÜRETİLECEĞİ bedenlerdir — beden dağılımında adet
+              girilmiş olanlar. Böylece ikinci bir yerde "hangi bedenler" diye
+              sorulmuyor; tek kaynak beden dağılımı. Hiç adet girilmemişse tek
+              sütun kalır ve eski föyler olduğu gibi okunur. */}
+          {measureSizes.length > 1 && (
+            <p className="mb-2 text-[12px] leading-relaxed text-subtle">
+              Sütunlar ürünün üretileceği bedenler. Bir bedeni yazınca boş kalanlar
+              ikişer artarak dolar — yanlışsa üzerine yazın.
+            </p>
+          )}
           <div className="overflow-x-auto">
             <table className="w-full min-w-[420px] table-fixed border-collapse text-[13px]">
               <colgroup>
                 <col className="w-10" />
                 <col />
-                <col className="w-24" />
+                {measureSizes.map((sz) => <col key={sz} className="w-[78px]" />)}
                 <col className="w-9" />
               </colgroup>
               <thead>
                 <tr className="bg-surface-muted">
                   <th className={cn(TH_CLS, "px-1 text-center")}>No</th>
                   <th className={cn(TH_CLS, "text-left")}>Ölçü</th>
-                  <th className={cn(TH_CLS, "px-1 text-center")}>cm</th>
+                  {measureSizes.map((sz) => (
+                    <th key={sz} className={cn(TH_CLS, "px-1 text-center")}>{sz}</th>
+                  ))}
                   <th className="w-9" />
                 </tr>
               </thead>
@@ -1155,9 +1245,17 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                     <td className="border border-line p-0">
                       <CellInput aria-label={`${i + 1}. ölçü adı`} value={row.label} onChange={(e) => updateMeasurement(i, { label: e.target.value })} placeholder="Ölçü adı" />
                     </td>
-                    <td className="border border-line p-0">
-                      <CellInput aria-label={`${i + 1}. ölçü (cm)`} className="px-1 text-right tabular-nums" value={row.value} onChange={(e) => updateMeasurement(i, { value: e.target.value })} inputMode="decimal" />
-                    </td>
+                    {measureSizes.map((sz) => (
+                      <td key={sz} className="border border-line p-0">
+                        <CellInput
+                          aria-label={`${i + 1}. ölçü — ${sz}`}
+                          className="px-1 text-right tabular-nums"
+                          value={measureValue(row, sz)}
+                          onChange={(e) => setMeasureValue(i, sz, e.target.value)}
+                          inputMode="decimal"
+                        />
+                      </td>
+                    ))}
                     <td className="text-center align-middle">
                       <RowDelete onClick={() => removeMeasurement(i)} label={`${i + 1}. ölçü satırını sil`} />
                     </td>
