@@ -247,8 +247,6 @@ export function PlanningWeekGrid({
             isToday={iso === todayIso}
             isAdmin={isAdmin}
             draggable={mounted && isAdmin}
-            memberNames={memberNames} memberPhotos={memberPhotos}
-            personHex={personHex}
             onOpen={() => onOpen(iso, slot, i, ti)}
             onSaved={() => router.refresh()}
           />
@@ -618,9 +616,29 @@ function TitleCell({
     }
   }
   const keyOpen = keyboardOpen(isAdmin && !canDrag, onOpen);
-  const ids = [...new Set(cell.flatMap((m) => m.participant_ids ?? []))];
-  const kim = cell.map((m) => m.kim).filter(Boolean).join(", ");
-  const collabIds = [...new Set(cell.flatMap((m) => m.collaborator_ids ?? []))];
+  /* KİŞİLER BAŞLIK SATIRINDA. Aslı Hanım (22.09.2026): "İsimlerin
+     işaretlediğim yerde görünmesini istiyor, konularda değil."
+
+     Kişi ataması KONUYA yapılıyor; başlık hücresi yalnız toplantının kendi
+     `participant_ids`'ini okuduğu için boş kalıyordu ve rozetler aşağıda,
+     konu metinlerinin arasına dağılıyordu. Artık başlık o toplantının bütün
+     konularındaki kişilerin BİRLEŞİMİNİ gösteriyor: bir sütuna bakan "bu
+     toplantıda kimler var" sorusunu tek satırda yanıtlıyor.
+     Atama yeri değişmedi — konu kartı açıldığında kişi yine orada seçilir. */
+  const uniq = (xs: (string | null | undefined)[]) =>
+    [...new Set(xs.filter((x): x is string => !!x))];
+  const ids = uniq(cell.flatMap((m) => [
+    ...(m.participant_ids ?? []),
+    ...(m.topics ?? []).flatMap((t) => t.participant_ids ?? []),
+  ]));
+  const kim = uniq(cell.flatMap((m) => [
+    m.kim,
+    ...(m.topics ?? []).map((t) => t.kim),
+  ])).join(", ");
+  const collabIds = uniq(cell.flatMap((m) => [
+    ...(m.collaborator_ids ?? []),
+    ...(m.topics ?? []).flatMap((t) => t.collaborator_ids ?? []),
+  ]));
 
   return (
     <div
@@ -828,17 +846,16 @@ function TitleCell({
  * Konu başka bir güne/saate ya da aynı saatin başka bir "Konu N" satırına
  * taşınabilir; hedef hücrede toplantı yoksa sunucu sessizce açar.
  */
+/* Kişi rozetleri başlık satırına taşındığı için (Aslı Hanım, 22.09.2026)
+   konu hücresinin artık üye adına, fotoğrafına ve rengine ihtiyacı yok. */
 function TopicCell({
-  cellId, topic, isToday, isAdmin, draggable, memberNames, memberPhotos = {}, personHex, onOpen,
+  cellId, topic, isToday, isAdmin, draggable, onOpen,
 }: {
   cellId: string;
   topic: PlanningTopic | null;
   isToday: boolean;
   isAdmin: boolean;
   draggable: boolean;
-  memberNames: Record<string, string>;
-  memberPhotos?: Record<string, string | null>;
-  personHex: Record<string, string>;
   onOpen: () => void;
   onSaved: () => void;
 }) {
@@ -888,15 +905,10 @@ function TopicCell({
       )}>
         {topic?.text}
       </span>
-      {topic && (
-        <KimBadges
-          ids={topic.participant_ids}
-          kim={topic.kim}
-          collaboratorIds={topic.collaborator_ids}
-          memberNames={memberNames} memberPhotos={memberPhotos}
-          personHex={personHex}
-        />
-      )}
+      {/* ROZET YOK — kişiler yukarıda, toplantı başlığının yanında toplanıyor
+          (Aslı Hanım, 22.09.2026). Her konunun sonuna iki üç yuvarlak eklemek
+          konu metnini ikinci plana itiyordu; kim olduğu sütun başında bir kez
+          okunuyor, hangi konunun kimde olduğu konu açılınca görülüyor. */}
       {/* Tarih YALNIZ hücrenin gününden FARKLIYSA yazılır. Konu bir güne
           eklendiği için teslim tarihi varsayılan olarak o gündür; her satıra
           sütunun tarihini tekrar basmak gürültüydü (Aslı Hanım, 2026-08-29:
