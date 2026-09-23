@@ -13,6 +13,7 @@ import {
 } from "@tanstack/react-table";
 import { Plus, Search, Users, Pencil, Trash2, ExternalLink, Eye, UserPlus, AlertCircle, ChevronLeft } from "lucide-react";
 import { deleteCrmContact } from "@/lib/actions/crm";
+import { isFihristRow } from "@/lib/crm/constants";
 import {
   CRM_SEGMENTS,
   crmCategory,
@@ -301,6 +302,21 @@ export function CrmView({
               header: "",
               cell: (info) => (
                 <div className="flex items-center justify-end gap-0.5">
+                  {/* FİHRİST SATIRI CRM'DEN DÜZENLENMEZ. Kayıt
+                      `workspace_manufacturers`'ta yaşıyor ve föylerdeki
+                      üretici/kalıpçı/nakışçı bağları ona işaret ediyor; CRM'den
+                      silinmesi o bağları koparırdı. Düzenleme tek yerde:
+                      Fihrist. */}
+                  {isFihristRow(info.row.original.id) ? (
+                    <Link
+                      href="/collection/veri?k=usta"
+                      title="Fihrist'te düzenle"
+                      className="inline-flex h-8 items-center gap-1 rounded-control px-2 text-[12.5px] font-medium text-brand transition-colors duration-150 hover:bg-surface-muted hover:text-brand-strong"
+                    >
+                      Fihrist
+                    </Link>
+                  ) : (
+                  <>
                   <IconButton size="sm" aria-label="Düzenle" title="Düzenle" onClick={() => openEdit(info.row.original)}>
                     <Pencil size={14} />
                   </IconButton>
@@ -314,6 +330,8 @@ export function CrmView({
                   >
                     <Trash2 size={14} />
                   </IconButton>
+                  </>
+                  )}
                 </div>
               ),
             }),
@@ -544,7 +562,17 @@ export function CrmView({
                   )}
                 </div>
 
-                {isAdmin && (
+                {isAdmin && isFihristRow(c.id) && (
+                  <div className="mt-2 flex items-center justify-end border-t border-hairline pt-2">
+                    <Link
+                      href="/collection/veri?k=usta"
+                      className="text-[12.5px] font-medium text-brand underline-offset-2 hover:underline"
+                    >
+                      Fihrist&apos;te düzenle
+                    </Link>
+                  </div>
+                )}
+                {isAdmin && !isFihristRow(c.id) && (
                   <div className="mt-2 flex items-center justify-end gap-0.5 border-t border-hairline pt-2">
                     <IconButton size="sm" aria-label="Düzenle" title="Düzenle" onClick={() => openEdit(c)}>
                       <Pencil size={14} />

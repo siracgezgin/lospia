@@ -162,3 +162,24 @@ export function crmCategory(key: string | null | undefined): CrmCategory | null 
 export function crmCategoryOfSegment(segment: string | null | undefined): CrmCategory {
   return (segment && CATEGORY_OF_SEGMENT.get(segment)) || CATEGORY_BY_KEY.get("diger")!;
 }
+
+/**
+ * Fihrist satırlarının CRM içindeki kimlik öneki.
+ *
+ * CRM listesi iki kaynaktan besleniyor: `workspace_contacts` (kendi kayıtları)
+ * ve `workspace_manufacturers` (Fihrist). Kopya satır yazmak yerine fihrist
+ * OKUNUYOR; bu önek hangi satırın nereden geldiğini söyler. Önekli satırlarda
+ * CRM'in düzenleme ve silme düğmeleri kapanır — kayıt Fihrist'te düzenlenir,
+ * yoksa CRM'den silinen bir usta föylerdeki bağları koparırdı.
+ */
+export const FIHRIST_ID_PREFIX = "fihrist:";
+
+/** Bir CRM satırı Fihrist'ten mi geliyor? */
+export function isFihristRow(id: string): boolean {
+  return id.startsWith(FIHRIST_ID_PREFIX);
+}
+
+/** Önekli kimlikten gerçek fihrist kaydının id'si. */
+export function fihristIdOf(id: string): string {
+  return id.slice(FIHRIST_ID_PREFIX.length);
+}

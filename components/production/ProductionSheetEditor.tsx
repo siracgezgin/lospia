@@ -23,6 +23,7 @@ import { SendToManufacturer } from "./SendToManufacturer";
 import { ManufacturerAccess, type PortalLinkRow } from "./ManufacturerAccess";
 import Link from "next/link";
 import { BackLink } from "@/components/modules/BackLink";
+import { ManufacturerPicker } from "./ManufacturerPicker";
 import { ImageUploader } from "./ImageUploader";
 import { SheetReadiness } from "./SheetReadiness";
 import { SheetBom, type PickableMaterial } from "./SheetBom";
@@ -40,8 +41,7 @@ import {
   productionQtyOf, DIVIDED_COST_KEYS, QTY_TIERS, amountForQty, mergeCostItems, costItemHint,
 } from "@/lib/collection/cost";
 import type {
-  ProductionSheet, MeasurementRow, DeliveredItemRow, SizeDistribution, ProductionCategory,
-  CostItem, Manufacturer, SheetMaterialWithMaterial, Supplier,
+  CostItem, DeliveredItemRow, Manufacturer, ManufacturerRole, MeasurementRow, ProductionCategory, ProductionSheet, SheetMaterialWithMaterial, SizeDistribution, Supplier,
 } from "@/types";
 
 /** Föydeki "Üretici" seçicisini besleyen sade usta kaydı. */
@@ -429,6 +429,23 @@ function SubHead({ n, title, hint }: { n: number; title: string; hint?: string }
 }
 
 export function ProductionSheetEditor({ sheet, initialCategory = null, initialSubcategory = null, memberNames, manufacturers = [], seasons = [], materials = [], suppliers = [], bom = [], siblings = [], isAdmin, currentUserId, categories, portalLinks = [], portalNotes = [], backHref }: Props) {
+  /* FİHRİSTE FÖYDEN EKLENENLER. Föyden açılan usta sayfa yenilenmeden
+     seçilebilir olmalı; sunucudan gelen `manufacturers` ancak bir sonraki
+     gezinmede tazelenir.
+
+     Sunucu listesini yerel duruma KOPYALAMIYORUZ: kopyayı effect'le güncel
+     tutmak, her sunucu tazelemesinde fazladan bir render turu demekti.
+     Yalnız bu oturumda açılanlar tutuluyor, liste ikisinden TÜRETİLİYOR.
+     Sunucu aynı kaydı getirmeye başlayınca yerel olanı kimliğe göre eleniyor. */
+  const [addedPeople, setAddedPeople] = useState<SheetManufacturer[]>([]);
+  const people = useMemo(() => {
+    const known = new Set(manufacturers.map((m) => m.id));
+    return [...manufacturers, ...addedPeople.filter((a) => !known.has(a.id))];
+  }, [manufacturers, addedPeople]);
+  const addPerson = (p: { id: string; name: string; role?: ManufacturerRole | null }) =>
+    setAddedPeople((xs) =>
+      xs.some((x) => x.id === p.id) ? xs : [...xs, { ...p, is_active: true } as SheetManufacturer],
+    );
   const tree = categories && categories.length > 0 ? categories : COLLECTION_TAXONOMY;
   const { ask, dialog } = useConfirm();
   const router = useRouter();
@@ -1101,37 +1118,29 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               "Hakan Günaydın" ile "Hakan usta"yı iki ayrı usta sayıyordu.
               Liste boşsa (tablo migrate edilmemiş) eski metin alanına düşer —
               föy her hâlükârda açılır. */}
-          {manufacturers.length > 0 ? (
-            <FieldRow checkKey="producer" label="Üretici" missing={missingKeys.has("producer")} hint={hintOf.get("producer")}>
-              <SelectInput
-                value={form.manufacturer_id ?? ""}
-                onChange={(e) => {
-                  const id = e.target.value || null;
-                  const m = manufacturers.find((x) => x.id === id);
-                  // producer metnini de senkron tut: eski föyler, Excel çıktısı
-                  // ve migrate edilmemiş ortamlar hâlâ onu okuyor.
-                  setDirty(true);
-                  setForm((f) => ({ ...f, manufacturer_id: id, producer: m?.name ?? "" }));
-                }}
-              >
-                <option value="">Seçiniz…</option>
-                {/* ÜRETİCİ LİSTESİ ROLE GÖRE SÜZÜLÜR. Fihrist 20240355 ile
-                    kumaşçı ve aksesuarcıyı da taşıyor; süzgeç olmasaydı kumaş
-                    firmaları "Üretici" kutusunda çıkardı. Rolü girilmemiş eski
-                    kayıtlar görünmeye devam eder — yoksa fihrist bir gecede
-                    boşalmış gibi olurdu. */}
-                {manufacturers
-                  .filter((m) => !m.role || m.role === "uretici" || m.role === "diger")
-                  .map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}{m.is_active ? "" : " (pasif)"}
-                    </option>
-                  ))}
-              </SelectInput>
-            </FieldRow>
-          ) : (
-            <LabeledField label="Üretici" value={form.producer ?? ""} onChange={(v) => set("producer", v)} />
-          )}
+          {/* ÜÇ SEÇİCİ DE KENDİ KAYDINI AÇABİLİR (Sıraç, 23.09.2026: "direkt o
+              sekmede ekle butonuna basıp ekleyebilelim"). Liste role göre
+              süzülür — fihrist 20240355'ten beri kumaşçı ve aksesuarcıyı da
+              taşıyor, süzgeç olmasa kumaş firmaları "Üretici" kutusunda
+              çıkardı. Listenin BOŞ olması artık eski metin alanına düşürmüyor:
+              boşsa zaten artıdan ilk kayıt açılıyor. */}
+          <FieldRow checkKey="producer" label="Üretici" missing={missingKeys.has("producer")} hint={hintOf.get("producer")}>
+            <ManufacturerPicker
+              label="Üretici"
+              role="uretici"
+              people={people}
+              canEdit={isAdmin}
+              value={form.manufacturer_id ?? null}
+              onCreated={addPerson}
+              onSelect={(id) => {
+                const m = [...people].find((x) => x.id === id);
+                /* `producer` metni de senkron tutulur: eski föyler, Excel
+                   çıktısı ve migrate edilmemiş ortamlar hâlâ onu okuyor. */
+                setDirty(true);
+                setForm((f) => ({ ...f, manufacturer_id: id, producer: m?.name ?? f.producer ?? "" }));
+              }}
+            />
+          </FieldRow>
           {/* KALIPÇI VE NAKIŞÇI — fihristten (Aslı Hanım, 21.09.2026):
               "Bu mesela üretici bilgisi Sabri Bey olacak. Ama bunun nakışçısı
               da var, kalıpçısı da var. Şimdi bu durumda bir fihriste
@@ -1140,36 +1149,28 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               Üçü de aynı defterden (workspace_manufacturers) okunuyor; liste
               role göre süzülür ama rol girilmemiş eski kayıtlar da görünür,
               yoksa fihrist bir gecede boşalmış gibi olurdu. */}
-          {manufacturers.length > 0 && (
-            <>
-              <FieldRow label="Kalıpçı">
-                <SelectInput
-                  value={form.pattern_maker_id ?? ""}
-                  onChange={(e) => set("pattern_maker_id", e.target.value || null)}
-                >
-                  <option value="">Seçiniz…</option>
-                  {manufacturers
-                    .filter((m) => !m.role || m.role === "kalipci" || m.role === "diger")
-                    .map((m) => (
-                      <option key={m.id} value={m.id}>{m.name}{m.is_active ? "" : " (pasif)"}</option>
-                    ))}
-                </SelectInput>
-              </FieldRow>
-              <FieldRow label="Nakışçı">
-                <SelectInput
-                  value={form.embroiderer_id ?? ""}
-                  onChange={(e) => set("embroiderer_id", e.target.value || null)}
-                >
-                  <option value="">Seçiniz…</option>
-                  {manufacturers
-                    .filter((m) => !m.role || m.role === "nakisci" || m.role === "diger")
-                    .map((m) => (
-                      <option key={m.id} value={m.id}>{m.name}{m.is_active ? "" : " (pasif)"}</option>
-                    ))}
-                </SelectInput>
-              </FieldRow>
-            </>
-          )}
+          <FieldRow label="Kalıpçı">
+            <ManufacturerPicker
+              label="Kalıpçı"
+              role="kalipci"
+              people={people}
+              canEdit={isAdmin}
+              value={form.pattern_maker_id ?? null}
+              onCreated={addPerson}
+              onSelect={(id) => set("pattern_maker_id", id)}
+            />
+          </FieldRow>
+          <FieldRow label="Nakışçı">
+            <ManufacturerPicker
+              label="Nakışçı"
+              role="nakisci"
+              people={people}
+              canEdit={isAdmin}
+              value={form.embroiderer_id ?? null}
+              onCreated={addPerson}
+              onSelect={(id) => set("embroiderer_id", id)}
+            />
+          </FieldRow>
           {/* LİSTE NEREDEN DOLUYOR? Sıraç (23.09.2026): "Üretici ve nakışçı
               nereden ekleniyor?" Üçü de tek defterden (Fihrist) okunuyor ama
               föyde o deftere giden hiçbir kapı yoktu: seçici boşsa kullanıcı
@@ -2008,7 +2009,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
             sheetId={sheetId}
             rows={form.sourcing ?? []}
             suppliers={[
-              ...manufacturers
+              ...people
                 .filter((m) => m.is_active !== false)
                 .filter((m) => m.role === "kumasci" || m.role === "aksesuarci" || m.role === "nakisci")
                 .map((m) => ({

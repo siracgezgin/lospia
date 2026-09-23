@@ -191,6 +191,54 @@ export async function deleteManufacturer(
 }
 
 /**
+ * FÖYDEN HIZLI EKLEME. Sıraç (23.09.2026): "Nakışçı, üretici nereden nasıl
+ * ekleniyor — onları direkt o sekmede ekle butonuna basıp ekleyebilelim."
+ *
+ * Föyü dolduran kişi Sabri Bey'i seçmek isteyip listede bulamayınca işi bırakıp
+ * Fihrist'e gitmek, kaydı açmak ve föye dönmek zorundaydı; arada yazdıkları da
+ * kayboluyordu. Burası aynı kaydı ROLÜYLE birlikte açar ve id'sini döner, föy
+ * de onu anında seçer.
+ *
+ * AYNI AD İKİ KEZ AÇILMAZ: ad zaten varsa mevcut kayıt döner. Böylece Ödeme
+ * Tablosu ve Sourcing aynı ustayı iki satırda göstermez. Var olan kaydın rolü
+ * EZİLMEZ — biri "Sabri Bey"i üretici diye kaydettiyse, nakışçı kutusundan
+ * eklemek onu nakışçıya çevirmemeli.
+ */
+export async function quickAddManufacturer(input: {
+  name: string;
+  role: ManufacturerInput["role"];
+  phone?: string;
+}): Promise<{ id: string; name: string; role: ManufacturerInput["role"] } | { error: string }> {
+  const clean = input.name.trim();
+  if (!clean) return { error: "Ad gerekli." };
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+  if (!isAdmin(ctx.role)) return { error: ADMIN_ONLY };
+
+  const { data: existing } = await supabase
+    .from("workspace_manufacturers")
+    .select("id, name, role")
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("name", clean)
+    .maybeSingle();
+  if (existing) {
+    const e = existing as { id: string; name: string; role: ManufacturerInput["role"] };
+    return { id: e.id, name: e.name, role: e.role };
+  }
+
+  const created = await createManufacturer({
+    name: clean,
+    role: input.role,
+    phone: input.phone ?? "",
+    currency: "TL",
+    is_active: true,
+  });
+  if ("error" in created) return created;
+  return { id: created.id, name: clean, role: input.role };
+}
+
+/**
  * Föy düzenleyicisindeki "yeni usta" kısayolu: ad verilir, varsa mevcut kayıt
  * döner, yoksa oluşturulur. Ödeme Tablosu'nun aynı ustayı iki kez göstermesini
  * engelleyen tek nokta burasıdır.

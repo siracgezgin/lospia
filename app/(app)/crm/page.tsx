@@ -10,6 +10,7 @@ import { Contact } from "lucide-react";
 import { contactDescriptor, taskMatchesPerson, type PersonMatchTask } from "@/lib/utils/task-person-match";
 import { maybeDatabaseSetupRequired } from "@/lib/utils/supabase-errors";
 import type { WorkspaceContact, Profile } from "@/types";
+import { FIHRIST_ID_PREFIX } from "@/lib/crm/constants";
 
 export const dynamic = "force-dynamic";
 // Sekme adı uygulama çubuğuyla aynı (PAGE_TITLES ↔ registry).
@@ -40,7 +41,7 @@ export default async function CrmPage({
   if (gate === "login") redirectToSignIn();
   if (gate !== "ok" || !workspaceId) return <AccessDenied />;
 
-  const [contactsResult, membersResult, tasksResult, probeResult] = await Promise.all([
+  const [contactsResult, membersResult, tasksResult, probeResult, fihristResult] = await Promise.all([
     // Base contacts always load with select("*") — resilient even when the CRM
     // migration hasn't been applied yet (missing columns are simply absent).
     supabase
@@ -78,11 +79,57 @@ export default async function CrmPage({
       .select("id, crm_status, segment, user_id")
       .eq("workspace_id", workspaceId)
       .limit(1),
+    /* FİHRİST CRM'İN İÇİNDE. Sıraç (23.09.2026): "Nakışçı, üretici… direkt o
+       sekmede ekle butonuna basıp ekleyebilelim, sonra onlar CRM'e
+       kaydedilsin. Aradaki ilişki entegrasyonu iyi kur."
+
+       CRM'de zaten "Outsource" segmenti vardı ama üretici/kalıpçı/nakışçı
+       kayıtları başka bir tabloda (`workspace_manufacturers`) duruyordu; CRM'e
+       bakan onları hiç göremiyordu. İki tabloya İKİ KOPYA yazmak yerine —
+       kopyalar zamanla birbirinden ayrışırdı — fihrist burada OKUNUYOR ve
+       listeye katılıyor. Kayıt tek yerde kalır, düzenleme Fihrist'te yapılır.
+
+       Tablo migrate edilmemişse hata yutulur, CRM eskisi gibi çalışır. */
+    supabase
+      .from("workspace_manufacturers")
+      .select("id, name, role, phone, email, city, notes, is_active, address")
+      .eq("workspace_id", workspaceId)
+      .order("name"),
   ]);
 
   const setup = maybeDatabaseSetupRequired(probeResult.error);
 
-  const contacts = (contactsResult.data ?? []) as WorkspaceContact[];
+  const baseContacts = (contactsResult.data ?? []) as WorkspaceContact[];
+
+  /* Fihrist satırları CRM kişisi KILIĞINDA. `id` öneki bilerek konuluyor:
+     CrmView bu satırların düzenleme/silme düğmelerini kapatıp Fihrist'e
+     yönlendiriyor — yanlışlıkla CRM'den silinip üretimdeki bağların kopması
+     mümkün olmasın. Segment "outsource": Aslı Hanım'ın CRM'i sayarken
+     kullandığı başlık (2026-09-07). */
+  type FihristRow = {
+    id: string; name: string; role: string | null; phone: string | null;
+    email: string | null; city: string | null; notes: string | null;
+    is_active: boolean | null; address: string | null;
+  };
+  const ROLE_TR: Record<string, string> = {
+    uretici: "Üretici", kalipci: "Kalıpçı", nakisci: "Nakışçı",
+    kumasci: "Kumaşçı", aksesuarci: "Aksesuarcı", diger: "Diğer",
+  };
+  const fihristContacts: WorkspaceContact[] = ((fihristResult.data ?? []) as FihristRow[])
+    .filter((m) => m.is_active !== false)
+    .map((m) => ({
+      id: `${FIHRIST_ID_PREFIX}${m.id}`,
+      workspace_id: workspaceId,
+      name: m.name,
+      email: m.email,
+      phone: m.phone,
+      organization: [m.city, m.address].filter(Boolean).join(" · ") || null,
+      role_label: ROLE_TR[m.role ?? "uretici"] ?? "Üretici",
+      segment: "outsource",
+      notes: m.notes,
+    }) as unknown as WorkspaceContact);
+
+  const contacts = [...baseContacts, ...fihristContacts];
 
   type ProfileLite = Pick<Profile, "id" | "full_name" | "email" | "avatar_url">;
   type MemberRow = { user_id: string; role: string; profiles: ProfileLite | ProfileLite[] | null };
