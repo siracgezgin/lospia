@@ -214,10 +214,18 @@ export function amountForQty(item: CostItem, qty: number): string {
   const tiers = item.tiers;
   if (!tiers || qty <= 0) return item.amount;
   let best = item.amount;
-  for (const t of QTY_TIERS) {
-    const n = Number(t);
+  /* KADEMELER SABİT LİSTEDEN DEĞİL, KAYDIN KENDİSİNDEN okunur. Sıraç
+     (23.09.2026): "Burada 'veya yaz' kısmı var ama yazınca hiçbir şey
+     değişmiyor." Standart dışı bir adet (ör. 12) yazıldığında o adet de bir
+     kademe oluyor; yalnız QTY_TIERS taransa o kutuya yazılan fiyat hiç
+     okunmuyordu. Sayısal olmayan anahtar yok sayılır, sıra artan. */
+  const steps = Object.keys(tiers)
+    .map((k) => ({ k, n: Number(k) }))
+    .filter((x) => Number.isFinite(x.n) && x.n > 0)
+    .sort((a, b) => a.n - b.n);
+  for (const { k, n } of steps) {
     if (n > qty) break;
-    const v = (tiers[t] ?? "").trim();
+    const v = (tiers[k] ?? "").trim();
     if (v) best = v;
   }
   return best;

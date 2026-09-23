@@ -16,10 +16,11 @@ export default async function ProductionSheetPage({
   params: Promise<{ id: string }>;
   /* Yeni föy KATEGORİSİYLE açılır: Koleksiyon'da bir kategorinin içindeyken
      "Yeni föy"e basınca o kategori taşınır (2026-08-29). */
-  searchParams: Promise<{ kategori?: string; alt?: string }>;
+  searchParams: Promise<{ kategori?: string; alt?: string; from?: string }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
+  const from = sp.from ?? null;
   const { supabase, user, workspaceId, isAdmin, gate } = await requireModuleMember();
   if (gate === "login") redirectToSignIn();
   if (gate !== "ok" || !workspaceId || !user) return <AccessDenied />;
@@ -176,6 +177,11 @@ export default async function ProductionSheetPage({
       isAdmin={isAdmin}
       currentUserId={user.id}
       categories={categories}
+      /* AÇIK YÖNLENDİRME OLMASIN: yalnız tek eğik çizgiyle başlayan İÇ yol
+         kabul edilir; "//site" ve "https://" protokolsüz dış adres sayılır. */
+      backHref={
+        from && from.startsWith("/") && !from.startsWith("//") ? from : undefined
+      }
     />
   );
 }

@@ -167,6 +167,12 @@ export function CollectionBrowser({ sheets, isAdmin, isOwner = false, seasons = 
   const [catEditor, setCatEditor] = useState<CategoryNode | "new" | null>(null);
   const router = useRouter();
   const params = useSearchParams();
+  /* GERİ DÖNÜŞ ADRESİ. Sıraç (23.09.2026): "Üretim föyündeyim, bir önceki
+     kısma geri gelemiyorum, direkt en başa atıyor beni."
+     Doğruydu: föydeki zincir yalnız yoldan türüyordu ve "/collection" diyordu.
+     Kategori/alt kategori/arama zaten ADRESTE (bkz. setSelection); föye
+     giderken o adres `?from=` ile taşınıyor, geri dönüş oraya iniyor. */
+  const backTo = `/collection${params.toString() ? `?${params.toString()}` : ""}`;
   /* Toplu indirme EKRANDAKİ sezonu izler: ekran süzülüyken tüm sezonları
      indirmek "listeyle dosya tutmuyor" demekti (Maliyet indirmesiyle aynı
      kural). */
@@ -745,6 +751,7 @@ export function CollectionBrowser({ sheets, isAdmin, isOwner = false, seasons = 
                       onMove={setMoving}
                       onDelete={removeSheet}
                       onCoverError={setCoverError}
+                      backTo={backTo}
                     />
                   ))}
                 </div>
@@ -802,8 +809,11 @@ function SheetCard({
   onMove,
   onDelete,
   onCoverError,
+  backTo,
 }: {
   sheet: CollectionItem;
+  /** Föyden dönülecek adres — bulunulan kategori/arama korunur. */
+  backTo: string;
   canReorder: boolean;
   isAdmin: boolean;
   isDeleting: boolean;
@@ -836,7 +846,11 @@ function SheetCard({
         isDragging && "z-[4] opacity-60 shadow-drawer",
       )}
     >
-      <Link href={`/production/${s.id}`} aria-label={s.title} className="absolute inset-0 z-[1] rounded-card" />
+      <Link
+        href={`/production/${s.id}?from=${encodeURIComponent(backTo)}`}
+        aria-label={s.title}
+        className="absolute inset-0 z-[1] rounded-card"
+      />
       <div className="aspect-[3/4] w-full overflow-hidden bg-surface-muted">
         {cover ? (
           // eslint-disable-next-line @next/next/no-img-element

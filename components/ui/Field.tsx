@@ -46,6 +46,32 @@ export const TextInput = forwardRef<HTMLInputElement, React.InputHTMLAttributes<
   },
 );
 
+/**
+ * Para alanı — birim simgesi KUTUNUN İÇİNDE.
+ *
+ * Sıraç (23.09.2026): "Burada neden TL alt satırda ve neden burası uyumsuz,
+ * yazı başka yerde kutucuk başka yerde." Sebep: simge etikete yazılıyordu
+ * ("Ustaya birim ödeme (₺)") ve 144px'lik etiket sütununda satır kırılıyor,
+ * iki satıra çıkan etiketin hizası tek satırlık komşusundan kayıyordu.
+ * Simge alanın birimidir, adının parçası değil — yeri kutunun içi.
+ */
+export const MoneyInput = forwardRef<
+  HTMLInputElement,
+  React.InputHTMLAttributes<HTMLInputElement> & Invalid & { currency?: string }
+>(function MoneyInput({ className, currency = "₺", ...props }, ref) {
+  return (
+    <span className="relative block w-full">
+      <TextInput ref={ref} inputMode="decimal" className={cn("pr-8", className)} {...props} />
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-[13px] font-medium text-subtle"
+      >
+        {currency}
+      </span>
+    </span>
+  );
+});
+
 export const TextArea = forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement> & Invalid>(
   function TextArea({ className, rows = 3, invalid, ...props }, ref) {
     return (

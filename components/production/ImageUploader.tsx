@@ -128,7 +128,11 @@ export function ImageUploader({
         /* DEKUPE — tek dikey kare. Sitedeki ürün fotoğrafı oranı (3/4) burada
            da korunur ki föye bakan, koleksiyon kartında ve sitede ne
            görüneceğini aynen görsün. */
-        <div className="w-full max-w-[280px]">
+        /* KUTU KARTI DOLDURUR. Sıraç (23.09.2026): "Dekupe ve kutucuk boyu
+           neden aynı değil?" 280px'lik üst sınır, 400px'lik sütunda kutunun
+           sağında ~96px ölü alan bırakıyordu: kesikli çerçeve kartın içinde
+           yamuk duruyordu. Genişliği kabı belirler, oranı 3/4 sabit. */
+        <div className="w-full">
           {mine.length > 0 ? (
             <div className="group relative overflow-hidden rounded-card border border-line bg-surface-muted">
               <button

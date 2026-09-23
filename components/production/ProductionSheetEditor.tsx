@@ -17,10 +17,11 @@ import { cn } from "@/lib/utils/cn";
 import { useConfirm } from "@/components/ui/useConfirm";
 import { DownloadLink } from "@/components/ui/DownloadLink";
 import { Button, IconButton } from "@/components/ui/Button";
-import { TextInput, TextArea as UiTextArea, SelectInput } from "@/components/ui/Field";
+import { MoneyInput, SelectInput, TextArea as UiTextArea, TextInput } from "@/components/ui/Field";
 import { Badge } from "@/components/ui/Badge";
 import { SendToManufacturer } from "./SendToManufacturer";
 import { ManufacturerAccess, type PortalLinkRow } from "./ManufacturerAccess";
+import Link from "next/link";
 import { BackLink } from "@/components/modules/BackLink";
 import { ImageUploader } from "./ImageUploader";
 import { SheetReadiness } from "./SheetReadiness";
@@ -82,6 +83,9 @@ interface Props {
   portalLinks?: PortalLinkRow[];
   /** Üreticinin panelden ilettiği detaylar — föyü değiştirmez, ekip okur. */
   portalNotes?: { id: string; body: string; author_name: string | null; created_at: string }[];
+  /** Geri dönülecek adres (`?from=`) — Koleksiyon'daki kategori/arama korunur.
+   *  Verilmezse zincir yoldan türer ve Koleksiyon köküne iner. */
+  backHref?: string;
 }
 
 /**
@@ -420,7 +424,7 @@ function SubHead({ n, title, hint }: { n: number; title: string; hint?: string }
   );
 }
 
-export function ProductionSheetEditor({ sheet, initialCategory = null, initialSubcategory = null, memberNames, manufacturers = [], seasons = [], materials = [], suppliers = [], bom = [], siblings = [], isAdmin, currentUserId, categories, portalLinks = [], portalNotes = [] }: Props) {
+export function ProductionSheetEditor({ sheet, initialCategory = null, initialSubcategory = null, memberNames, manufacturers = [], seasons = [], materials = [], suppliers = [], bom = [], siblings = [], isAdmin, currentUserId, categories, portalLinks = [], portalNotes = [], backHref }: Props) {
   const tree = categories && categories.length > 0 ? categories : COLLECTION_TAXONOMY;
   const { ask, dialog } = useConfirm();
   const router = useRouter();
@@ -781,7 +785,11 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               direkt Collection var"). Ortak bileşen "← Geri" der, dokunma hedefi
               parmağa göredir ve hedefi hiyerarşiden türetir (föy → Koleksiyon). */}
           <div className="mb-1">
-            <BackLink />
+            {/* Geldiği yere döner: Koleksiyon'da açık olan kategori ve arama
+                `?from=` ile taşınır (Sıraç, 23.09.2026: "direkt en başa
+                atıyor beni"). Doğrudan bağlantıyla gelindiyse `from` yoktur ve
+                zincir yine yoldan türer. */}
+            <BackLink href={backHref} />
           </div>
           {!isNew && sheet && (
             <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[12px] text-subtle">
@@ -1150,6 +1158,22 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                 </SelectInput>
               </FieldRow>
             </>
+          )}
+          {/* LİSTE NEREDEN DOLUYOR? Sıraç (23.09.2026): "Üretici ve nakışçı
+              nereden ekleniyor?" Üçü de tek defterden (Fihrist) okunuyor ama
+              föyde o deftere giden hiçbir kapı yoktu: seçici boşsa kullanıcı
+              "Seçiniz…" ile baş başa kalıyordu.
+              Satırı tek başına doldurur — yanında boş hücre bırakmaz. */}
+          {isAdmin && (
+            <span className="text-[12px] leading-relaxed text-subtle @[49rem]:col-span-2">
+              Listede yoksa deftere ekleyin —{" "}
+              <Link
+                href="/collection/veri?k=usta"
+                className="font-medium text-brand underline-offset-2 hover:underline"
+              >
+                Fihrist: Üretici · Kalıpçı · Nakışçı
+              </Link>
+            </span>
           )}
           {/* ÜRETİCİ SOLDA, TARİH YANINDA (Aslı Hanım, 21.09.2026): "Üretici
               kalsın solda, üretim başlangıç tarihini oraya alabilirsin."
@@ -1624,6 +1648,22 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                 return a + (DIVIDED_COST_KEYS.has(it.key) && q > 0 ? raw / q : raw);
               }, 0);
             };
+            /* SERBEST ADET GERÇEK BİR KOLON. Sıraç (23.09.2026): "Burada
+               'veya yaz' kısmı var ama yazınca hiçbir şey değişmiyor."
+               Doğruydu: yazılan sayı yalnız en alttaki özet satırını
+               değiştiriyor, bakılan tabloda hiçbir karşılığı olmuyordu.
+               Artık standart dışı adet kademelerin arasına SIRALI giriyor ve
+               seçili kolon gibi vurgulanıyor — birim ve toplam maliyeti
+               karşısında okunuyor (Aslı Hanım: "karşısında yazması gerekiyor").
+               1 her zaman ilk kolon: temel tutar orada. */
+            const customQty = (p.production_qty ?? "").trim();
+            const isCustomTier =
+              customQty !== ""
+              && Number(customQty) > 1
+              && !(QTY_TIERS as readonly string[]).includes(customQty);
+            const tierCols: string[] = isCustomTier
+              ? [...QTY_TIERS, customQty].sort((a, b) => Number(a) - Number(b))
+              : [...QTY_TIERS];
             const setP = (patch: Partial<typeof p>) => set("pricing", { ...p, ...patch });
             const setItem = (i: number, patch: Partial<CostItem>) =>
               setP({ cost_items: items.map((it, ix) => (ix === i ? { ...it, ...patch } : it)) });
@@ -1693,7 +1733,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                       ikisini yan yana tutar. */}
                   <table
                     className="w-full min-w-[380px] table-fixed border-collapse text-[13px]"
-                    style={{ maxWidth: 430 + QTY_TIERS.length * 76 }}
+                    style={{ maxWidth: 430 + tierCols.length * 76 }}
                   >
                     {/* DAR KOLONLAR, YAN YANA. Aslı Hanım (18.09.2026): "Bu
                         kadar mesafeye gerek yok… bir tık daha konsantre
@@ -1704,13 +1744,13 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                     <colgroup>
                       <col className="w-7" />
                       <col />
-                      {QTY_TIERS.map((t) => <col key={t} className="w-[76px]" />)}
+                      {tierCols.map((t) => <col key={t} className="w-[76px]" />)}
                     </colgroup>
                     <thead>
                       <tr className="bg-surface-muted">
                         <th className="w-7" />
                         <th className={cn(TH_CLS, "text-left")}>Maliyet kalemi</th>
-                        {QTY_TIERS.map((t) => (
+                        {tierCols.map((t) => (
                           <th
                             key={t}
                             className={cn(
@@ -1785,7 +1825,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                             )}
                           </td>
                           {fromBom[it.key] != null ? (
-                            <td className="border border-line p-0" colSpan={QTY_TIERS.length}>
+                            <td className="border border-line p-0" colSpan={tierCols.length}>
                               <span
                                 className="flex h-8 items-center justify-end gap-1.5 px-2 text-right tabular-nums text-ink"
                                 title="Reçeteden hesaplanıyor — elle değiştirilemez"
@@ -1795,7 +1835,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                               </span>
                             </td>
                           ) : (
-                            QTY_TIERS.map((t, ti) => (
+                            tierCols.map((t, ti) => (
                               <td key={t} className={cn("border border-line p-0", (p.production_qty ?? "") === t && "bg-brand-soft/40")}>
                                 <CellInput
                                   className="text-right tabular-nums"
@@ -1819,7 +1859,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                         </SortableTableRow>
                       ))}
                       <tr>
-                        <td className="border border-line px-2 py-1" colSpan={QTY_TIERS.length + 2}>
+                        <td className="border border-line px-2 py-1" colSpan={tierCols.length + 2}>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -1841,7 +1881,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                             <span className="ml-1 font-normal text-muted">/ {prodQty} adet</span>
                           )}
                         </td>
-                        {QTY_TIERS.map((t) => (
+                        {tierCols.map((t) => (
                           <td
                             key={t}
                             className={cn(
@@ -1859,7 +1899,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                         <td className={cn("border border-line-strong px-2 py-1.5 text-ink", LABEL_CLS)}>
                           Toplam maliyet
                         </td>
-                        {QTY_TIERS.map((t) => (
+                        {tierCols.map((t) => (
                           <td
                             key={t}
                             className={cn(
@@ -1878,8 +1918,24 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
 
                 {/* Satış fiyatı + ustaya ödeme — maliyetten AYRI iki kalem. */}
                 <div className="grid grid-cols-1 gap-x-5 gap-y-2 sm:grid-cols-2">
-                  <LabeledField label="Web satış fiyatı (₺)" value={p.web_sale_price ?? ""} onChange={(v) => setP({ web_sale_price: v })} placeholder="sitedeki satış fiyatı" />
-                  <LabeledField label="Ustaya birim ödeme (₺)" value={p.usta_unit_payment ?? ""} onChange={(v) => setP({ usta_unit_payment: v })} placeholder="Ödeme Tablosu’na girer" />
+                  {/* ₺ ETİKETTE DEĞİL KUTUDA. "Ustaya birim ödeme (₺)"
+                      144px'lik etiket sütununda kırılıp "(₺)"yi alt satıra
+                      atıyor, iki satırlık etiket tek satırlık komşusuyla
+                      hizasını kaybediyordu (Sıraç, 23.09.2026). */}
+                  <FieldRow label="Web satış fiyatı">
+                    <MoneyInput
+                      value={p.web_sale_price ?? ""}
+                      onChange={(e) => setP({ web_sale_price: e.target.value })}
+                      placeholder="sitedeki satış fiyatı"
+                    />
+                  </FieldRow>
+                  <FieldRow label="Ustaya birim ödeme">
+                    <MoneyInput
+                      value={p.usta_unit_payment ?? ""}
+                      onChange={(e) => setP({ usta_unit_payment: e.target.value })}
+                      placeholder="Ödeme Tablosu’na girer"
+                    />
+                  </FieldRow>
                   {/* Üç alan iki sütuna sığmaz: "Not" tek başına kalıp
                       yanında delik bırakıyordu. Satırı kendi başına doldurur —
                       zaten en uzun metni alan da bu. */}
