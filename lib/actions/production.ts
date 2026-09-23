@@ -118,6 +118,26 @@ const SheetSchema = z.object({
   delivery_date: shortText,
   sewing_delivery_date: shortText,
   meterage: shortText,
+  /* GÖNDERİLMEYEN ALAN YAZILMAZ. Sıraç (23.09.2026): "Her güncellemede Aslı
+     Hanım'ların yaptıkları silinmemeli, ya da başka birinin — çünkü bunlar
+     güncelleme, iyileştirme."
+
+     SONRADAN EKLENEN alanlar (`sourcing`, `color_variants`) `.default([])`
+     taşıyordu ve tehlikesi şuydu: yeni sürüm
+     yayınlandığında AÇIK KALMIŞ bir sekme hâlâ eski kodu çalıştırır; o form
+     sonradan eklenen alanı (renk varyantları, sourcing) hiç tanımadığı için
+     göndermez, zod boşluğu `[]` ile doldurur ve kaydetme gerçek veriyi
+     EZERDİ. `.optional()` ile gönderilmeyen alan `undefined` kalır ve
+     `normalize` onu payload'a hiç koymaz — sütuna dokunulmaz.
+
+     Alanı gerçekten boşaltmak hâlâ mümkün: istemci açıkça `[]` gönderir,
+     o da `undefined` değildir. Yeni föyde de sorun yok, sütunların hepsi
+     `not null default '[]'`/`'{}'` taşıyor.
+
+     KURAL: bundan sonra föye eklenen HER yeni alan `.optional()` olur ve
+     `normalize` içinde yayılmayla yazılır. Föyün ilk gününden beri var olan
+     alanlar (`measurements`, `photo_refs`, `pricing`…) `.default()` kalabilir:
+     onları göndermeyen bir istemci sürümü hiç var olmadı. */
   measurements: z.array(measurementRow).max(60).default([]),
   delivered_items: z.array(deliveredItemRow).max(60).default([]),
   size_distribution: sizeDistribution.default({ sizes: [], rows: [] }),
@@ -146,7 +166,7 @@ const SheetSchema = z.object({
       }),
     )
     .max(80)
-    .default([]),
+    .optional(),
   /* RENK / KUMAŞ VARYANTLARI (20240353) — aynı kalıbın farklı kumaşları.
      Aslı Hanım: "Renk, fiyat, içerik… kumaşa göre asgari sipariş adedi de
      değişiyor." */
@@ -164,7 +184,7 @@ const SheetSchema = z.object({
       }),
     )
     .max(40)
-    .default([]),
+    .optional(),
   wash_instruction: longText,
   fabric_lining: longText,
   fabric_info: longText,
@@ -234,14 +254,17 @@ function normalize(v: ProductionSheetInput) {
     delivery_date: nn(v.delivery_date),
     sewing_delivery_date: nn(v.sewing_delivery_date),
     meterage: nn(v.meterage),
+    /* Yayılma (spread) ile: değer `undefined` ise anahtar hiç doğmaz ve
+       Supabase o sütunu güncellemez. `?? null` yazmak, gönderilmemiş alanı
+       "boşalt" diye yorumlamak olurdu. */
     measurements: v.measurements,
     delivered_items: v.delivered_items,
     size_distribution: v.size_distribution,
     photo_refs: v.photo_refs,
-    sourcing: v.sourcing,
-    color_variants: v.color_variants,
-    pattern_maker_id: v.pattern_maker_id ?? null,
-    embroiderer_id: v.embroiderer_id ?? null,
+    ...(v.sourcing !== undefined ? { sourcing: v.sourcing } : {}),
+    ...(v.color_variants !== undefined ? { color_variants: v.color_variants } : {}),
+    ...(v.pattern_maker_id !== undefined ? { pattern_maker_id: v.pattern_maker_id || null } : {}),
+    ...(v.embroiderer_id !== undefined ? { embroiderer_id: v.embroiderer_id || null } : {}),
     wash_instruction: nn(v.wash_instruction),
     fabric_lining: nn(v.fabric_lining),
     fabric_info: nn(v.fabric_info),
@@ -257,7 +280,7 @@ function normalize(v: ProductionSheetInput) {
     designers_note: nn(v.designers_note),
     size_fit: nn(v.size_fit),
     details_care: nn(v.details_care),
-    pricing: v.pricing ?? {},
+    pricing: v.pricing,
   };
 }
 
