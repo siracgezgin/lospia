@@ -1,33 +1,53 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Plus, X } from "lucide-react";
-import { quickAddManufacturer } from "@/lib/actions/manufacturers";
+import { Plus } from "lucide-react";
+import { createManufacturer, type ManufacturerInput } from "@/lib/actions/manufacturers";
 import { Button, IconButton } from "@/components/ui/Button";
-import { SelectInput, TextInput } from "@/components/ui/Field";
+import { Field, FieldGrid, SelectInput, TextArea, TextInput } from "@/components/ui/Field";
+import { Overlay } from "@/components/ui/Overlay";
 import type { ManufacturerRole } from "@/types";
 
 /**
  * Fihrist seçicisi — SEÇ ya da ORADA AÇ.
  *
  * Sıraç (23.09.2026): "Nakışçı, üretici nereden nasıl ekleniyor? Onları direkt
- * o sekmede ekle butonuna basıp ekleyebilelim, sonra onlar CRM'e kaydedilsin.
- * Aradaki ilişki entegrasyonu iyi kur."
+ * o sekmede ekle butonuna basıp ekleyebilelim, sonra onlar CRM'e kaydedilsin."
+ * Ve (24.09.2026): "Artıya basınca bir popup çıksın, alınması gereken bilgiler
+ * alınıp bu hem CRM'e hem product kısmında da kaydedilsin. Tüm bilgileri
+ * içeren bir popup olsun, her birine ayrı ayrı tabi. Bilgilerde zorunlu olan
+ * isim soyisim olsun, diğer kısımlar isteğe bağlı."
  *
- * Eskiden föyü dolduran kişi listede olmayan ustayı seçemiyordu: Fihrist'e
- * gidip kaydı açmak ve föye dönmek gerekiyordu — arada yazılanlar da
- * kayboluyordu. Artık kutunun yanındaki artı, satırın altında iki alanlık bir
- * kayıt açar (ad + telefon), kaydı fihriste yazar ve seçili hâle getirir.
+ * Bu yüzden artı satır içinde iki kutu değil, TAM KAYIT penceresi açar: ad,
+ * telefon, e-posta, adres, şehir, teslim süresi, asgari adet, not. Yalnız ad
+ * zorunlu — geri kalanı sonradan Fihrist'ten tamamlanabilir.
  *
- * AÇILAN KAYIT TEK YERE DÜŞER: `workspace_manufacturers`. Fihrist sayfası,
- * Ödeme Tablosu, Sourcing ve CRM'in "Fihrist" bölümü hepsi aynı satırı okur —
- * ikinci bir kopya oluşmaz, aralarında ayrışma olmaz.
+ * TEK KAYIT, İKİ YÜZEY: yazılan satır `workspace_manufacturers`'a gider.
+ * Föydeki seçiciler, Ödeme Tablosu, Sourcing ve CRM'in Outsource listesi hepsi
+ * aynı satırı okur — ikinci bir kopya oluşmaz, aralarında ayrışma olmaz.
  */
 export interface PickerPerson {
   id: string;
   name: string;
   is_active?: boolean | null;
   role?: ManufacturerRole | null;
+}
+
+const ROLE_LABEL: Record<ManufacturerRole, string> = {
+  uretici: "Üretici",
+  kalipci: "Kalıpçı",
+  nakisci: "Nakışçı",
+  kumasci: "Kumaşçı",
+  aksesuarci: "Aksesuarcı",
+  diger: "Diğer",
+};
+
+function emptyDraft(role: ManufacturerRole): ManufacturerInput {
+  return {
+    name: "", role, address: "", photo_url: "", city: "", country: "", currency: "TL",
+    lead_time_days: "", min_order_qty: "",
+    contact_name: "", phone: "", email: "", notes: "", is_active: true,
+  };
 }
 
 export function ManufacturerPicker({
@@ -44,15 +64,14 @@ export function ManufacturerPicker({
   role: ManufacturerRole;
   people: PickerPerson[];
   canEdit: boolean;
-  /** Erişilebilirlik metni: "Üretici", "Kalıpçı", "Nakışçı". */
+  /** Erişilebilirlik ve pencere başlığı: "Üretici", "Kalıpçı", "Nakışçı". */
   label: string;
   onSelect: (_id: string | null) => void;
   /** Yeni kayıt açıldı — föy listesine eklenmesi için. */
   onCreated: (_p: PickerPerson) => void;
 }) {
-  const [adding, setAdding] = useState(false);
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<ManufacturerInput>(() => emptyDraft(role));
   const [error, setError] = useState<string | null>(null);
   const [busy, start] = useTransition();
 
@@ -60,25 +79,26 @@ export function ManufacturerPicker({
      açılmış ustalar bir gecede kaybolmuş gibi olmamalı. */
   const options = people.filter((p) => !p.role || p.role === role || p.role === "diger");
 
-  function close() {
-    setAdding(false);
-    setName("");
-    setPhone("");
+  function openDialog() {
+    setDraft(emptyDraft(role));
     setError(null);
+    setOpen(true);
   }
 
-  function create() {
-    const clean = name.trim();
-    if (!clean) return;
+  function save() {
+    const clean = draft.name.trim();
+    if (!clean) { setError("İsim soyisim gerekli."); return; }
     setError(null);
     start(async () => {
-      const res = await quickAddManufacturer({ name: clean, role, phone: phone.trim() });
+      const res = await createManufacturer({ ...draft, name: clean, role });
       if ("error" in res) { setError(res.error); return; }
-      onCreated({ id: res.id, name: res.name, role: res.role, is_active: true });
+      onCreated({ id: res.id, name: clean, role, is_active: true });
       onSelect(res.id);
-      close();
+      setOpen(false);
     });
   }
+
+  const set = (patch: Partial<ManufacturerInput>) => setDraft({ ...draft, ...patch });
 
   return (
     <span className="block">
@@ -97,12 +117,12 @@ export function ManufacturerPicker({
             </option>
           ))}
         </SelectInput>
-        {canEdit && !adding && (
+        {canEdit && (
           <IconButton
             size="sm"
-            onClick={() => setAdding(true)}
+            onClick={openDialog}
             aria-label={`${label} ekle`}
-            title={`Listede yoksa buradan ekleyin — fihriste kaydedilir`}
+            title={`Listede yoksa buradan ekleyin — Fihrist'e ve CRM'e kaydedilir`}
             className="shrink-0 text-brand hover:bg-surface-muted hover:text-brand-strong"
           >
             <Plus size={15} aria-hidden />
@@ -110,53 +130,87 @@ export function ManufacturerPicker({
         )}
       </span>
 
-      {adding && (
-        <span className="anim-fade-down mt-1.5 block rounded-card border border-line bg-surface-muted/50 p-2">
-          <span className="flex flex-wrap items-center gap-1.5">
+      <Overlay
+        open={open}
+        onClose={() => setOpen(false)}
+        title={`${label} ekle`}
+        hint="Fihrist'e kaydedilir ve CRM › Outsource listesinde görünür. Yalnız isim zorunlu."
+        /* Uzun form: boşluğa tıklayınca kapanıp yazılanların uçması
+           istenmiyor (uygulamanın veri girilen tüm pencerelerinde aynı kural). */
+        dismissOnBackdrop={false}
+        size="md"
+        footer={
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>Vazgeç</Button>
+            <Button size="sm" onClick={save} loading={busy} disabled={!draft.name.trim()}>
+              Kaydet
+            </Button>
+          </div>
+        }
+      >
+        {error && (
+          <p role="alert" className="anim-fade-down mb-3 rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] font-medium text-danger">
+            {error}
+          </p>
+        )}
+        <FieldGrid>
+          <Field label="İsim soyisim" required className="sm:col-span-2">
             <TextInput
               autoFocus
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") { e.preventDefault(); create(); }
-                if (e.key === "Escape") close();
-              }}
-              placeholder={`${label} adı`}
-              aria-label={`Yeni ${label.toLowerCase()} adı`}
-              className="h-8 min-w-[130px] flex-1 basis-[130px] text-[13px]"
+              value={draft.name}
+              onChange={(e) => set({ name: e.target.value })}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); save(); } }}
+              placeholder="Sabri Yılmaz"
             />
-            {/* TELEFON BURADA: Aslı Hanım'ın fihrist tarifinde ad ile telefon
-                yan yana geçiyor ("Emin Bey telefonu, adı"). Adres, e-posta ve
-                kartela gibi geri kalanı Fihrist sayfasında doldurulur —
-                föyün ortasında tam bir kayıt formu açmak akışı keserdi. */}
-            <TextInput
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") { e.preventDefault(); create(); }
-                if (e.key === "Escape") close();
-              }}
-              placeholder="Telefon"
-              aria-label="Telefon"
-              inputMode="tel"
-              className="h-8 w-[130px] shrink-0 text-[13px]"
-            />
-            <Button size="sm" variant="secondary" onClick={create} loading={busy} disabled={!name.trim()}>
-              Ekle
-            </Button>
-            <IconButton size="sm" onClick={close} aria-label="Vazgeç" title="Vazgeç" className="shrink-0">
-              <X size={14} aria-hidden />
-            </IconButton>
-          </span>
-          {error ? (
-            <span role="alert" className="mt-1 block text-[12px] font-medium text-danger">{error}</span>
-          ) : (
-            <span className="mt-1 block text-[11.5px] text-subtle">
-              Fihriste kaydedilir; adres, e-posta ve kartelalar oradan eklenir.
-            </span>
-          )}
-        </span>
-      )}
+          </Field>
+          {/* ROL SABİT DEĞİL AMA HAZIR GELİR: artıya hangi kutudan basıldıysa
+              o rol seçili açılır. Yanlış kutudan girilen kaydı düzeltmek için
+              yine de değiştirilebilir. */}
+          <Field label="Rolü">
+            <SelectInput
+              value={draft.role ?? role}
+              onChange={(e) => set({ role: e.target.value as ManufacturerRole })}
+            >
+              {(Object.keys(ROLE_LABEL) as ManufacturerRole[]).map((k) => (
+                <option key={k} value={k}>{ROLE_LABEL[k]}</option>
+              ))}
+            </SelectInput>
+          </Field>
+          <Field label="Telefon">
+            <TextInput value={draft.phone ?? ""} onChange={(e) => set({ phone: e.target.value })} placeholder="0532 000 00 00" inputMode="tel" />
+          </Field>
+          <Field label="E-posta">
+            <TextInput value={draft.email ?? ""} onChange={(e) => set({ email: e.target.value })} placeholder="ad@firma.com" inputMode="email" />
+          </Field>
+          <Field label="İlgili kişi">
+            <TextInput value={draft.contact_name ?? ""} onChange={(e) => set({ contact_name: e.target.value })} placeholder="Firma ise yetkilinin adı" />
+          </Field>
+          <Field label="Adres" className="sm:col-span-2">
+            <TextInput value={draft.address ?? ""} onChange={(e) => set({ address: e.target.value })} placeholder="Mahalle, cadde, no" />
+          </Field>
+          <Field label="Şehir">
+            <TextInput value={draft.city ?? ""} onChange={(e) => set({ city: e.target.value })} placeholder="İstanbul" />
+          </Field>
+          <Field label="Teslim süresi (gün)">
+            <TextInput value={String(draft.lead_time_days ?? "")} onChange={(e) => set({ lead_time_days: e.target.value })} placeholder="30" inputMode="numeric" className="tabular-nums" />
+          </Field>
+          <Field label="Asgari adet">
+            <TextInput value={String(draft.min_order_qty ?? "")} onChange={(e) => set({ min_order_qty: e.target.value })} placeholder="50" inputMode="numeric" className="tabular-nums" />
+          </Field>
+          <Field label="Para birimi">
+            <TextInput value={draft.currency ?? "TL"} onChange={(e) => set({ currency: e.target.value })} placeholder="TL" />
+          </Field>
+          <Field label="Not" className="sm:col-span-2">
+            <TextArea rows={2} value={draft.notes ?? ""} onChange={(e) => set({ notes: e.target.value })} placeholder="Çalışma koşulları, ödeme vadesi…" />
+          </Field>
+        </FieldGrid>
+        {/* Kartelalar burada DEĞİL: dosya yükleme penceresi açık bir formda
+            yarım kalmış kayıt bırakma riski taşıyor. Kayıt açıldıktan sonra
+            Fihrist'ten eklenir. */}
+        <p className="mt-3 text-[12px] text-subtle">
+          Kartela fotoğrafları kayıt açıldıktan sonra Fihrist&apos;ten eklenir.
+        </p>
+      </Overlay>
     </span>
   );
 }

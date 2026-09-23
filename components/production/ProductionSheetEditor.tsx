@@ -279,6 +279,12 @@ const LABEL_CLS = "text-[12px] font-semibold uppercase tracking-[0.06em]";
 const CELL_CLS =
   "h-8 rounded-none border-0 bg-transparent px-2 shadow-none " +
   "hover:border-0 focus:border-0 focus:bg-surface focus:ring-2 focus:ring-inset focus:ring-brand-ring";
+/** Renk satırı kimliği — SheetColorVariants ile aynı desen. Modül kapsamında
+ *  durur: React derleyicisi bileşen gövdesinde saf olmayan çağrı istemiyor. */
+function newVariantId(): string {
+  return `cv_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
 function CellInput({ className, ...props }: React.ComponentProps<typeof TextInput>) {
   return <TextInput {...props} className={cn(CELL_CLS, className)} />;
 }
@@ -330,16 +336,23 @@ function FieldRow({
     >
       <span
         className={cn(
-          "flex flex-col gap-1 @[23rem]:flex-row @[23rem]:gap-2",
-          align === "start" ? "@[23rem]:items-start" : "@[23rem]:items-center",
+          /* TEK SATIRA SIĞAN ŞEY İKİNCİ SATIRA KAYMAZ. Sıraç (24.09.2026):
+             "Tek satırda yazabileceğin şeyleri ikinci satıra kaydırmandan
+             nefret ediyorum." Etiket sütunu 144px'ti; "ÜRETİM BAŞLANGIÇ
+             TARİHİ", "1 ÜRÜNE GİDEN METRAJ", "USTAYA BİRİM ÖDEME" oraya
+             sığmayıp kırılıyordu. Sütun en uzun etikete göre 176px oldu ve
+             eşik 26rem'e çıktı: 23rem'de 176px etiket kutunun yarısını yerdi.
+             Dar kapta etiket zaten ÜSTTE durur, orada kırılma olmaz. */
+          "flex flex-col gap-1 @[26rem]:flex-row @[26rem]:gap-2",
+          align === "start" ? "@[26rem]:items-start" : "@[26rem]:items-center",
         )}
       >
         <span
           className={cn(
-            "inline-flex items-center gap-1 @[23rem]:w-36 @[23rem]:shrink-0",
+            "inline-flex items-center gap-1 @[26rem]:w-44 @[26rem]:shrink-0 @[26rem]:whitespace-nowrap",
             LABEL_CLS,
             missing ? "text-warning" : "text-muted",
-            align === "start" && "@[23rem]:pt-2.5",
+            align === "start" && "@[26rem]:pt-2.5",
           )}
         >
           {label}
@@ -407,26 +420,6 @@ function Section({ title, children, className, checkKey }: {
     </section>
   );
 }
-/**
- * Kart İÇİ adım başlığı. Bir kartta birden çok tablo varsa ("Bedenler ve
- * Ölçüler") ikisi tek yığın gibi görünüyordu; numara hangi adımın önce
- * geldiğini söyler. Kartın kendi başlığından küçük ve ince — bölüm başlığıyla
- * yarışmaz.
- */
-function SubHead({ n, title, hint }: { n: number; title: string; hint?: string }) {
-  return (
-    <div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-      <span
-        aria-hidden
-        className="relative top-[2px] flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-full bg-brand-soft text-[10.5px] font-semibold tabular-nums text-brand-strong"
-      >
-        {n}
-      </span>
-      <h3 className={cn(LABEL_CLS, "text-ink")}>{title}</h3>
-      {hint && <span className="text-[12px] text-subtle">— {hint}</span>}
-    </div>
-  );
-}
 
 export function ProductionSheetEditor({ sheet, initialCategory = null, initialSubcategory = null, memberNames, manufacturers = [], seasons = [], materials = [], suppliers = [], bom = [], siblings = [], isAdmin, currentUserId, categories, portalLinks = [], portalNotes = [], backHref }: Props) {
   /* FİHRİSTE FÖYDEN EKLENENLER. Föyden açılan usta sayfa yenilenmeden
@@ -442,6 +435,19 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
     const known = new Set(manufacturers.map((m) => m.id));
     return [...manufacturers, ...addedPeople.filter((a) => !known.has(a.id))];
   }, [manufacturers, addedPeople]);
+  /* RENK EKLE — üstteki alandan da, aşağıdaki listeden de aynı yere yazar.
+     Yeni satır açıldıktan sonra kumaş listesine kaydırılır: kutucuk üstte
+     görünüyor ama renk adı aşağıda yazılıyor, kullanıcı nereye yazacağını
+     aramasın. */
+  const addColorVariant = () => {
+    set("color_variants", [...(form.color_variants ?? []), { id: newVariantId(), color: "" }]);
+    requestAnimationFrame(() => {
+      document
+        .querySelector<HTMLElement>('[data-check="color-variants"]')
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  };
+
   const addPerson = (p: { id: string; name: string; role?: ManufacturerRole | null }) =>
     setAddedPeople((xs) =>
       xs.some((x) => x.id === p.id) ? xs : [...xs, { ...p, is_active: true } as SheetManufacturer],
@@ -617,11 +623,15 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
    * Hiç adet girilmemişse tek sütun ("cm") kalır — eski föyler ve tek bedenli
    * ürünler aynen okunur.
    */
-  const measureSizes = useMemo(() => {
+  /* `useMemo` KALDIRILDI: React derleyicisi bu kancayı koruyamadığını
+     söyleyip bileşenin tamamını derlemeyi atlıyordu (lint hatası). Hesap üç
+     satır ve derleyici zaten kendisi ezberliyor — elle ezberlemek burada
+     kazanç değil, engel. */
+  const measureSizes = (() => {
     const byQty = quantityBySize(form.size_distribution);
     const active = orderSizes(Object.keys(byQty).filter((sz) => (byQty[sz] ?? 0) > 0));
     return active.length ? active : ["cm"];
-  }, [form.size_distribution]);
+  })();
 
   /** Tek sütunlu eski kayıt `value`da; bedenli kayıt `values` içinde. */
   const measureValue = (row: MeasurementRow, size: string) =>
@@ -1085,25 +1095,40 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               sadece beyaz yazmamalı."
               Tek satırlık "Renk" alanı duruyor ama artık YEDEK: varyant
               girilmişse onların adları okunur, girilmemişse eski alan yazılır. */}
+          {/* RENK TEK İŞLEM. Sıraç (24.09.2026): "Renkler iki yerde geçmesindeki
+              amaç ne? Üstteki renklerin de yanına diğerleri gibi + koy."
+              Üstte renkler okunuyordu ama eklemek için aşağıdaki bölüme inmek
+              gerekiyordu; artı o gidiş dönüşü kaldırıyor — aynı kumaş listesine
+              boş bir satır açar ve oraya götürür. Liste TEK yerde tutuluyor
+              (`color_variants`), iki ayrı kayıt yok. */}
           <FieldRow label="Renk">
-            {(form.color_variants ?? []).some((v) => v.color.trim()) ? (
-              <span className="flex min-h-9 flex-wrap items-center gap-1">
-                {(form.color_variants ?? [])
-                  .filter((v) => v.color.trim())
-                  .map((v) => (
-                    <span
-                      key={v.id}
-                      title={[v.fabric, v.composition].filter(Boolean).join(" · ") || undefined}
-                      className="rounded-full bg-brand-soft px-2.5 py-0.5 text-[12px] font-medium text-brand-strong"
-                    >
-                      {v.color}
-                    </span>
-                  ))}
-                <span className="text-[11.5px] text-subtle">· aşağıdan düzenlenir</span>
-              </span>
-            ) : (
-              <TextInput value={form.colorway ?? ""} onChange={(e) => set("colorway", e.target.value)} placeholder="Mavi" />
-            )}
+            <span className="flex min-h-9 flex-wrap items-center gap-1">
+              {(form.color_variants ?? [])
+                .filter((v) => v.color.trim())
+                .map((v) => (
+                  <span
+                    key={v.id}
+                    title={[v.fabric, v.composition].filter(Boolean).join(" · ") || undefined}
+                    className="rounded-full bg-brand-soft px-2.5 py-0.5 text-[12px] font-medium text-brand-strong"
+                  >
+                    {v.color}
+                  </span>
+                ))}
+              {!(form.color_variants ?? []).some((v) => v.color.trim()) && (
+                <span className="text-[12.5px] text-subtle">Renk eklenmedi</span>
+              )}
+              {isAdmin && (
+                <IconButton
+                  size="sm"
+                  aria-label="Renk ekle"
+                  title="Renk / kumaş ekle"
+                  onClick={addColorVariant}
+                  className="shrink-0 text-brand hover:bg-surface-muted hover:text-brand-strong"
+                >
+                  <Plus size={15} aria-hidden />
+                </IconButton>
+              )}
+            </span>
           </FieldRow>
           {/* İkinci tarih — "Bir ürünlerin teslim tarihi, bir de dikim teslim
               tarihi lazım." */}
@@ -1298,19 +1323,35 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
             hemen altında ve form genişliğinde. Dekupe kutusunun yanındaki boş
             alanı dolduruyor. */}
         <Section title="Renk / Kumaş Varyantları">
-          <SheetColorVariants
-            rows={form.color_variants ?? []}
-            canEdit={isAdmin}
-            onChange={(next) => set("color_variants", next)}
-          />
-          {(siblings.length > 0 || (isAdmin && sheet?.id)) && (
+          <div data-check="color-variants" className="scroll-mt-24">
+            <SheetColorVariants
+              rows={form.color_variants ?? []}
+              canEdit={isAdmin}
+              onChange={(next) => set("color_variants", next)}
+            />
+          </div>
+          {/* "AYRI FÖY AÇ" KALKTI. Sıraç (24.09.2026): "Ayrı föy olarak aç
+              kısmı da anlaşılır değil… bunu da renklerle bir et, tek işlem
+              olsun, neden zahmet ve eziyet veriyorsun."
+
+              Haklı, üstelik istenen de bu değildi: 21.09 kararı renklerin TEK
+              föyün içinde durması (`21_operasyon-paneli.md` B2.4 — "aşağıda
+              beş renk girilince yukarıda beşi birden kutucuk olarak yan yana
+              görünecek"). Ayrı föy açmak 21.09 ÖNCESİNİN modeliydi ve iki ayrı
+              yol iki ayrı şeymiş gibi duruyordu.
+
+              Eylem kalktı, VERİ DURUYOR: geçmişte ayrı föy olarak açılmış
+              renkler (sitede her renk ayrı ürün olduğu için gerçekten varlar)
+              aşağıda salt-okur bağlantı satırı olarak görünmeye devam eder.
+              Silmek onlara giden tek yolu kapatırdı. */}
+          {siblings.length > 0 && (
             <>
               <div aria-hidden className="my-3 border-t border-hairline" />
               <SheetVariants
                 sheetId={sheet?.id ?? null}
                 colorway={form.colorway ?? null}
                 siblings={siblings}
-                canEdit={isAdmin}
+                canEdit={false}
                 compact
               />
             </>
@@ -1364,201 +1405,227 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
           </Section>
         </div>
 
-        {/* BEDENLER VE ÖLÇÜLER — TEK KART, İKİ ADIM.
-            Sıraç (22.09.2026): "Beden dağılımı ve ölçüler aynı yerde olsun,
-            aşağı in yukarı çık yapılmasın, profesyonelce birleştir."
+        {/* BEDENLER VE ÖLÇÜLER — TEK TABLO.
+            Sıraç (24.09.2026): "Ben sana demiştim ki beden ve ölçüler yan yana
+            olsun, sen yine alt alta farklı şeymiş gibi yazmışsın, bu şekilde
+            anlaşılmıyor. Sonuçta bedenin içinde ölçü olacak, ona göre onunla
+            entegre edip birleştirebilirsin."
 
-            İkisi zaten tek işin iki yarısı: ölçü tablosunun SÜTUNLARI beden
-            dağılımında adet girilmiş bedenlerden türüyor. Ayrı kartlarda
-            dururken adet aşağıya yazılıp sütunları görmek için yukarı çıkmak
-            gerekiyordu. Sıra da düzeldi — ÖNCE hangi bedenler üretiliyor,
-            SONRA o bedenlerin santimleri: veri yukarıdan aşağı akıyor.
+            Önceki tur ikisini aynı KARTA almıştı ama yine iki ayrı tabloydu;
+            istenen bu değildi. Şimdi tek ızgara: SÜTUNLAR bedenler, satırlar
+            önce adet sonra ölçü. Ölçünün hangi bedene ait olduğu artık
+            yazılmıyor, SÜTUNUNDAN okunuyor.
 
-            `data-check` kartta değil, iki adımın kendi kabında: eksiksizlik
-            şeridinden "Beden dağılımı"na basan doğrudan o tabloya iner. */}
+            ÜRETİLMEYEN BEDENİN ÖLÇÜSÜ İSTENMEZ: adet girilmemiş sütunun ölçü
+            hücreleri kapalı ve soluk. Aslı Hanım'ın kuralı ("hiçbir boş hücre
+            kalmasın") on iki bedenin hepsini ölçü sormakla çelişirdi; kapalı
+            hücre boş hücre değil, "bu beden üretilmiyor" demek.
+
+            TEK BEDEN SÜTUNU: eski föyler ölçüyü bedensiz tek değerde tutuyordu
+            (`row.value`). O veri kaybolmasın diye, adet hiç girilmemişse ya da
+            eski değer doluysa sona "Tek beden" sütunu eklenir. */}
         <Section title="Bedenler ve Ölçüler">
-          <div data-check="sizes" className="rounded-card scroll-mt-24">
-            <SubHead n={1} title="Beden dağılımı" hint="hangi bedenden kaç adet" />
-            <p className="mb-2.5 text-[12px] text-subtle">
-              Tüm bedenler her zaman burada; yalnızca ürünün olan bedenlerine adet girin.
-              <br />
-              <b className="font-semibold text-muted">Grup</b> satırı ikili bedenleri
-              eşler: XS-S <b>1</b>, M-L <b>2</b>, XL-XXL <b>3</b>, tek beden <b>OS</b>.
-              Hücreye yazarak değiştirebilirsiniz.
-              {/* Dar ekranda tablo kendi kabında yana kayar; kaydırılabildiği
-                  söylenmezse kolonların bittiği sanılıyordu. */}
-              <span className="mt-1 block sm:hidden">Tablo yana kaydırılabilir →</span>
-            </p>
-            {/* Hizalı, çizgili ızgara — sabit başlıklar + eşit genişlikte kutucuklar */}
-            <div className="overflow-x-auto">
-              {/* GENİŞLİK İÇERİĞİ KADAR. Sıraç (22.09.2026): "Aradaki boşluk
-                  olmamalı… tüm her yerde boşluklar olmamalı." `w-full` tek
-                  başına tabloyu ekranın sonuna kadar geriyor ve 12 beden
-                  kolonu birbirinden kopuyordu. Üst sınır sütun sayısından
-                  hesaplanır; dar ekranda `min-w` devreye girip yana kaydırır. */}
-              <table
-                className="w-full min-w-[720px] table-fixed border-collapse text-[13px]"
-                style={{ maxWidth: 260 + sd.sizes.length * 68 }}
-              >
-                <colgroup>
-                  <col className="w-36" />
-                  {sd.sizes.map((_, i) => <col key={i} />)}
-                  {/* 64px başlığı taşırıyordu: "TOPLAM" versal + harf aralığıyla
-                      60px istiyor, yanına nefes kalmıyordu. */}
-                  <col className="w-[78px]" />
-                  <col className="w-9" />
-                </colgroup>
-                <thead>
-                  <tr className="bg-surface-muted">
-                    <th className={cn(TH_CLS, "text-left")}>Satır</th>
-                    {sd.sizes.map((s, i) => (
-                      <th key={i} className="border border-line-strong px-1 py-1.5 text-center text-[12.5px] font-semibold text-ink">
-                        {s}
-                      </th>
-                    ))}
-                    <th className={cn(TH_CLS, "px-1 text-center")}>Toplam</th>
-                    <th className="w-9 bg-surface" />
-                  </tr>
-                  {/* BEDEN GRUBU — Aslı Hanım (2026-08-19): "Bedenlerin altına
-                      o ürünün gibi bir sıra daha açacaksın. XSmall'la small'a 1,
-                      medium'le large'a 2, XXlarge'a 3 diyeceksin. Bir de
-                      hepsinin işaretli olduğu one size." Hücreler düzenlenebilir:
-                      grubu değiştirmek tek tık. */}
-                  <tr className="bg-surface-sunken">
-                    <th className={cn(TH_CLS, "py-1 text-left")}>
-                      Grup
-                    </th>
-                    {sd.sizes.map((size, i) => (
-                      <th key={i} className="border border-line-strong p-0">
-                        <CellInput
-                          className="px-1 text-center font-semibold tabular-nums text-brand-strong"
-                          value={sd.groups?.[size] ?? ""}
-                          onChange={(e) => setSizeGroup(size, e.target.value)}
-                          placeholder="—"
-                          maxLength={8}
-                          title={`${size} bedeninin grubu`}
-                          aria-label={`${size} bedeninin grubu`}
-                        />
-                      </th>
-                    ))}
-                    <th className="border border-line-strong" />
-                    <th className="w-9 bg-surface" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {sd.rows.map((row, ri) => (
-                    <tr key={ri}>
-                      <td className="border border-line p-0">
-                        <CellInput className="font-medium" aria-label={`${ri + 1}. satır adı`} value={row.label} onChange={(e) => setDistLabel(ri, e.target.value)} placeholder="Satır adı" />
-                      </td>
-                      {sd.sizes.map((size, ci) => (
-                        <td key={ci} className="border border-line p-0">
-                          <CellInput className="px-1 text-center tabular-nums" aria-label={`${row.label || `${ri + 1}. satır`} — ${size}`} value={row.values[ci] ?? ""} onChange={(e) => setDistCell(ri, ci, e.target.value)} inputMode="numeric" />
-                        </td>
+          {(() => {
+            const qtyBy = quantityBySize(form.size_distribution);
+            const produced = (sz: string) => (qtyBy[sz] ?? 0) > 0;
+            const hasLegacy = form.measurements.some((r) => (r.value ?? "").trim());
+            /* "cm" sütunu YALNIZ gerekliyse: hiç adet yokken ölçü girilebilsin
+               diye, ya da eski kayıt doluyken görünsün diye. */
+            const showCm = measureSizes[0] === "cm" || hasLegacy;
+            const cols: string[] = [...sd.sizes, ...(showCm ? ["cm"] : [])];
+            /* 62px'te "One Size" başlığı iki satıra kırılıyordu — tek satıra
+               sığan hiçbir şey kırılmaz (Sıraç, 24.09.2026). */
+            const colWidth = 68;
+            const maxWidth = 176 + cols.length * colWidth + 78 + 36;
+
+            return (
+              <>
+                <p className="mb-2.5 text-[12px] leading-relaxed text-subtle">
+                  Önce üretilecek bedenlere <b className="font-semibold text-muted">adet</b> girin;
+                  ölçü hücreleri o bedenler için açılır. Bir bedenin ölçüsünü yazınca
+                  boş kalanlar ikişer artarak dolar — yanlışsa üzerine yazın.
+                  <span className="mt-1 block sm:hidden">Tablo yana kaydırılabilir →</span>
+                </p>
+
+                <div className="overflow-x-auto">
+                  <table
+                    className="w-full min-w-[760px] table-fixed border-collapse text-[13px]"
+                    style={{ maxWidth }}
+                  >
+                    <colgroup>
+                      <col className="w-44" />
+                      {cols.map((c) => <col key={c} className="w-[68px]" />)}
+                      <col className="w-[78px]" />
+                      <col className="w-9" />
+                    </colgroup>
+
+                    <thead>
+                      <tr className="bg-surface-muted">
+                        <th className={cn(TH_CLS, "text-left")}>Beden</th>
+                        {cols.map((c) => (
+                          <th
+                            key={c}
+                            className={cn(
+                              "border border-line-strong px-1 py-1.5 text-center text-[12.5px] font-semibold",
+                              c === "cm" ? "text-subtle" : produced(c) ? "text-ink" : "text-subtle/70",
+                            )}
+                          >
+                            {c === "cm" ? "Tek beden" : c}
+                          </th>
+                        ))}
+                        <th className={cn(TH_CLS, "px-1 text-center")}>Toplam</th>
+                        <th className="w-9 bg-surface" />
+                      </tr>
+
+                      {/* BEDEN GRUBU — Aslı Hanım (2026-08-19): "XSmall'la
+                          small'a 1, medium'le large'a 2, XXlarge'a 3
+                          diyeceksin. Bir de hepsinin işaretli olduğu one
+                          size." Hücreler düzenlenebilir. */}
+                      <tr className="bg-surface-sunken">
+                        <th className={cn(TH_CLS, "py-1 text-left")}>Grup</th>
+                        {cols.map((c) => (
+                          <th key={c} className="border border-line-strong p-0">
+                            {c === "cm" ? (
+                              <span className="block h-8" />
+                            ) : (
+                              <CellInput
+                                className="px-1 text-center font-semibold tabular-nums text-brand-strong"
+                                value={sd.groups?.[c] ?? ""}
+                                onChange={(e) => setSizeGroup(c, e.target.value)}
+                                placeholder="—"
+                                maxLength={8}
+                                title={`${c} bedeninin grubu`}
+                                aria-label={`${c} bedeninin grubu`}
+                              />
+                            )}
+                          </th>
+                        ))}
+                        <th className="border border-line-strong" />
+                        <th className="w-9 bg-surface" />
+                      </tr>
+                    </thead>
+
+                    {/* ── 1 · ADET ────────────────────────────────────────── */}
+                    <tbody>
+                      {sd.rows.map((row, ri) => (
+                        <tr key={`q${ri}`}>
+                          <td className="border border-line p-0">
+                            <CellInput
+                              className="font-medium"
+                              aria-label={`${ri + 1}. satır adı`}
+                              value={row.label}
+                              onChange={(e) => setDistLabel(ri, e.target.value)}
+                              placeholder="Üretim adeti"
+                            />
+                          </td>
+                          {cols.map((c, ci) => (
+                            <td key={c} className="border border-line p-0">
+                              {c === "cm" ? (
+                                <span className="block h-8 bg-surface-sunken/40" />
+                              ) : (
+                                <CellInput
+                                  className="px-1 text-center tabular-nums"
+                                  aria-label={`${row.label || `${ri + 1}. satır`} — ${c}`}
+                                  value={row.values[ci] ?? ""}
+                                  onChange={(e) => setDistCell(ri, ci, e.target.value)}
+                                  inputMode="numeric"
+                                />
+                              )}
+                            </td>
+                          ))}
+                          <td className="border border-line p-0">
+                            <CellInput
+                              className="px-1 text-center font-semibold tabular-nums"
+                              aria-label={`${row.label || `${ri + 1}. satır`} — toplam`}
+                              value={row.total}
+                              onChange={(e) => setDistTotal(ri, e.target.value)}
+                              placeholder="—"
+                              inputMode="numeric"
+                            />
+                          </td>
+                          <td className="text-center align-middle">
+                            <RowDelete onClick={() => removeDistRow(ri)} label={`${row.label || `${ri + 1}. satır`} satırını sil`} />
+                          </td>
+                        </tr>
                       ))}
-                      <td className="border border-line p-0">
-                        <CellInput className="px-1 text-center font-semibold tabular-nums" aria-label={`${row.label || `${ri + 1}. satır`} — toplam`} value={row.total} onChange={(e) => setDistTotal(ri, e.target.value)} placeholder="—" inputMode="numeric" />
-                      </td>
-                      <td className="text-center align-middle">
-                        <RowDelete onClick={() => removeDistRow(ri)} label={`${row.label || `${ri + 1}. satır`} satırını sil`} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <Button variant="ghost" size="sm" onClick={addDistRow} className="mt-2 -ml-2 text-brand hover:bg-surface-muted hover:text-brand-strong">
-              <Plus size={13} aria-hidden /> Satır ekle
-            </Button>
-          </div>
-
-          {/* Tek kart, ama iki adım — ince çizgi sınırı söyler. */}
-          <div aria-hidden className="my-3.5 border-t border-hairline" />
-
-          <div data-check="measurements" className="rounded-card scroll-mt-24">
-            <SubHead
-              n={2}
-              title="Ölçüler (cm)"
-              hint={measureSizes.length > 1 ? "yukarıda adet girilen her bedenin santimi" : "ürünün santimleri"}
-            />
-            {/* ÖLÇÜ HANGİ BEDENİN? Aslı Hanım (21.09.2026): "Ölçüler santim diye
-                vermiş. Neyin ölçüsü bu? Bu small mı, medium mu, one size mı?
-                Ölçü dediğin şeyin hangi ölçü olduğunu burada vermen gerekiyor…
-                bunu seçtirmen gerekiyor."
-
-                Sütunlar ürünün ÜRETİLECEĞİ bedenlerdir — beden dağılımında adet
-                girilmiş olanlar. Böylece ikinci bir yerde "hangi bedenler" diye
-                sorulmuyor; tek kaynak beden dağılımı. Hiç adet girilmemişse tek
-                sütun kalır ve eski föyler olduğu gibi okunur. */}
-            {measureSizes.length > 1 && (
-              <p className="mb-2 text-[12px] leading-relaxed text-subtle">
-                Bir bedeni yazınca boş kalanlar ikişer artarak dolar — yanlışsa üzerine yazın.
-              </p>
-            )}
-            <div className="overflow-x-auto">
-              {/* Genişlik içerikle büyür: tek sütunlu ölçü tablosu ekranın
-                  yarısını boş bırakmasın (Aslı Hanım: "şurada çok fazla
-                  boşluklarımız var… boşluk görmesek daha doğru sonuca
-                  gidebiliriz"). */}
-              <table
-                className="w-full min-w-[380px] table-fixed border-collapse text-[13px]"
-                style={{ maxWidth: 360 + measureSizes.length * 78 }}
-              >
-                <colgroup>
-                  <col className="w-7" />
-                  <col className="w-10" />
-                  <col />
-                  {measureSizes.map((sz) => <col key={sz} className="w-[78px]" />)}
-                  <col className="w-9" />
-                </colgroup>
-                <thead>
-                  <tr className="bg-surface-muted">
-                    <th className="w-7" />
-                    <th className={cn(TH_CLS, "px-1 text-center")}>No</th>
-                    <th className={cn(TH_CLS, "text-left")}>Ölçü</th>
-                    {measureSizes.map((sz) => (
-                      <th key={sz} className={cn(TH_CLS, "px-1 text-center")}>{sz}</th>
-                    ))}
-                    <th className="w-9 bg-surface" />
-                  </tr>
-                </thead>
-                <SortableRows
-                  ids={form.measurements.map((_, i) => `m${i}`)}
-                  onReorder={(from, to) => set("measurements", arrayMove(form.measurements, from, to))}
-                >
-                <tbody>
-                  {form.measurements.map((row, i) => (
-                    <SortableTableRow key={i} id={`m${i}`}>
-                      <td className="border border-line bg-surface-muted/60 px-1 py-1.5 text-center text-[12px] font-semibold tabular-nums text-muted">
-                        {i + 1}
-                      </td>
-                      <td className="border border-line p-0">
-                        <CellInput aria-label={`${i + 1}. ölçü adı`} value={row.label} onChange={(e) => updateMeasurement(i, { label: e.target.value })} placeholder="Ölçü adı" />
-                      </td>
-                      {measureSizes.map((sz) => (
-                        <td key={sz} className="border border-line p-0">
-                          <CellInput
-                            aria-label={`${i + 1}. ölçü — ${sz}`}
-                            className="px-1 text-right tabular-nums"
-                            value={measureValue(row, sz)}
-                            onChange={(e) => setMeasureValue(i, sz, e.target.value)}
-                            inputMode="decimal"
-                          />
+                      <tr>
+                        <td className="border border-line px-2 py-1" colSpan={cols.length + 3}>
+                          <Button variant="ghost" size="sm" onClick={addDistRow} className="-ml-2 text-brand hover:bg-surface-muted hover:text-brand-strong">
+                            <Plus size={13} aria-hidden /> Adet satırı ekle
+                          </Button>
                         </td>
+                      </tr>
+                    </tbody>
+
+                    {/* ── 2 · ÖLÇÜ ────────────────────────────────────────── */}
+                    <tbody>
+                      <tr className="bg-surface-muted">
+                        <td className={cn(TH_CLS, "text-left")} colSpan={cols.length + 3}>
+                          Ölçüler (cm)
+                        </td>
+                      </tr>
+                      {form.measurements.map((row, i) => (
+                        <tr key={`m${i}`}>
+                          <td className="border border-line p-0">
+                            <span className="flex items-center">
+                              <span className="w-7 shrink-0 text-center text-[12px] font-semibold tabular-nums text-muted">
+                                {i + 1}
+                              </span>
+                              <CellInput
+                                aria-label={`${i + 1}. ölçü adı`}
+                                value={row.label}
+                                onChange={(e) => updateMeasurement(i, { label: e.target.value })}
+                                placeholder="Ölçü adı"
+                                className="min-w-0 flex-1"
+                              />
+                            </span>
+                          </td>
+                          {cols.map((c) => {
+                            const open = c === "cm" || produced(c);
+                            return (
+                              <td
+                                key={c}
+                                className={cn("border border-line p-0", !open && "bg-surface-sunken/40")}
+                              >
+                                {open ? (
+                                  <CellInput
+                                    aria-label={`${row.label || `${i + 1}. ölçü`} — ${c === "cm" ? "tek beden" : c}`}
+                                    className="px-1 text-right tabular-nums"
+                                    value={measureValue(row, c)}
+                                    onChange={(e) => setMeasureValue(i, c, e.target.value)}
+                                    inputMode="decimal"
+                                  />
+                                ) : (
+                                  /* Kapalı hücre BOŞ değil: o beden üretilmiyor.
+                                     Başlık da soluk, ikisi birlikte okunuyor. */
+                                  <span className="block h-8" title={`${c} bedenine adet girilmedi`} />
+                                )}
+                              </td>
+                            );
+                          })}
+                          <td className="border border-line bg-surface-sunken/40" />
+                          <td className="text-center align-middle">
+                            <RowDelete onClick={() => removeMeasurement(i)} label={`${i + 1}. ölçü satırını sil`} />
+                          </td>
+                        </tr>
                       ))}
-                      <td className="text-center align-middle">
-                        <RowDelete onClick={() => removeMeasurement(i)} label={`${i + 1}. ölçü satırını sil`} />
-                      </td>
-                    </SortableTableRow>
-                  ))}
-                </tbody>
-                </SortableRows>
-              </table>
-            </div>
-            <Button variant="ghost" size="sm" onClick={addMeasurement} className="mt-2 -ml-2 text-brand hover:bg-surface-muted hover:text-brand-strong">
-              <Plus size={13} aria-hidden /> Satır ekle
-            </Button>
-          </div>
+                      <tr>
+                        <td className="border border-line px-2 py-1" colSpan={cols.length + 3}>
+                          <Button variant="ghost" size="sm" onClick={addMeasurement} className="-ml-2 text-brand hover:bg-surface-muted hover:text-brand-strong">
+                            <Plus size={13} aria-hidden /> Ölçü satırı ekle
+                          </Button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Eksiksizlik şeridi bu iki kaleme buradan iner. */}
+                <span data-check="sizes" className="sr-only">Beden dağılımı</span>
+                <span data-check="measurements" className="sr-only">Ölçüler</span>
+              </>
+            );
+          })()}
         </Section>
 
         {/* TESLİM EDİLEN ÜRÜNLER — siparişin ALTINDA.
@@ -1737,8 +1804,17 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                   )}
                 </div>
 
-                {/* Kalem ızgarası — Excel gibi çizgili, boş hücre bırakmaz. */}
-                <div className="overflow-x-auto">
+                {/* TABLO SOLDA, FİYATLAR SAĞDA. Sıraç (24.09.2026): "Sağ taraf
+                    neden boş kalmış? Web satış fiyatı, ustaya birim ödeme, not
+                    bilgilerini sağa kutucuk olarak al daha iyi olur. Boş yer
+                    görmek istemiyorum."
+
+                    Maliyet tablosu içeriği kadar geniş (kalem adı ile rakamlar
+                    yan yana dursun diye); geniş ekranda sağında kalan yer boş
+                    duruyordu. Fiyat alanları oraya taşındı — tabloya bakarken
+                    okunan iki rakam zaten bunlar. Dar ekranda alt alta düşer. */}
+                <div className="grid items-start gap-3 xl:grid-cols-[auto_minmax(260px,1fr)]">
+                <div className="min-w-0 overflow-x-auto">
                   {/* Kalem adı ile ilk adet kolonu arasındaki boşluk buradan
                       geliyordu: esneyen kalem kolonu geniş ekranda tüm artığı
                       yutuyor, rakamlar sağ kenara sürgün oluyordu. Üst sınır
@@ -1928,8 +2004,10 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                   </table>
                 </div>
 
-                {/* Satış fiyatı + ustaya ödeme — maliyetten AYRI iki kalem. */}
-                <div className="grid grid-cols-1 gap-x-5 gap-y-2 sm:grid-cols-2">
+                {/* Satış fiyatı + ustaya ödeme — maliyetten AYRI iki kalem,
+                    o yüzden tablonun İÇİNDE değil yanında kendi kutusunda. */}
+                <div className="@container rounded-card border border-line bg-surface-muted/30 p-3">
+                <div className="grid grid-cols-1 gap-x-5 gap-y-2.5">
                   {/* ₺ ETİKETTE DEĞİL KUTUDA. "Ustaya birim ödeme (₺)"
                       144px'lik etiket sütununda kırılıp "(₺)"yi alt satıra
                       atıyor, iki satırlık etiket tek satırlık komşusuyla
@@ -1948,10 +2026,9 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                       placeholder="Ödeme Tablosu’na girer"
                     />
                   </FieldRow>
-                  {/* Üç alan iki sütuna sığmaz: "Not" tek başına kalıp
-                      yanında delik bırakıyordu. Satırı kendi başına doldurur —
-                      zaten en uzun metni alan da bu. */}
-                  <LabeledField label="Not" className="sm:col-span-2" value={p.notes ?? ""} onChange={(v) => setP({ notes: v })} placeholder="KDV hariç, kargo vb." />
+                  <LabeledField label="Not" value={p.notes ?? ""} onChange={(v) => setP({ notes: v })} placeholder="KDV hariç, kargo vb." />
+                </div>
+                </div>
                 </div>
 
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-control border border-line bg-surface-muted px-3 py-2 text-[13.5px]">

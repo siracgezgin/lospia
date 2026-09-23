@@ -70,8 +70,22 @@ export function SortableTableRow({
   return (
     <tr
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={cn(isDragging && "relative z-10 bg-surface shadow-card", className)}
+      /* SATIR NEDEN OYNAMIYORDU. Sıraç (24.09.2026): "Kaydırmalar çalışmıyor,
+         anlık olmuyor."
+         `transform` bir `<tr>`ye ancak eleman KONUMLANDIRILMIŞSA uygulanıyor.
+         `relative` yalnız sürüklenen satıra veriliyordu; geri kalan satırlar
+         `static` kaldığı için yer açmıyor, liste kıpırdamıyordu — sürüklenen
+         kart boşlukta geziyor gibi görünüyordu. Artık her satır konumlu.
+
+         `Translate`, `Transform` değil: ikincisi ölçek de basıyor ve tablo
+         satırında hücre kenarlıklarını bulanıklaştırıyor. */
+      style={{
+        position: "relative",
+        transform: CSS.Translate.toString(transform),
+        transition,
+        zIndex: isDragging ? 10 : undefined,
+      }}
+      className={cn(isDragging && "bg-surface shadow-card", className)}
     >
       <td className="border border-line bg-surface-muted/60 p-0 text-center align-middle">
         <button
