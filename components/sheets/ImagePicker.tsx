@@ -135,7 +135,10 @@ export function ImagePicker({ open, onClose, onPick }: Props) {
                     className={cn(
                       "group w-full overflow-hidden rounded-card border border-line bg-surface text-left",
                       "transition-colors duration-150 hover:border-line-strong hover:bg-surface-hover",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
+                      /* Odak halkası uygulamanın TEK belirtecinden: `ring-brand` marka dolgusu,
+                         odak rengi `ring-brand-ring`. İkisi farklı ton — kutucuk odakta
+                         diğer ekranlardan başka bir renkle çerçeveleniyordu. */
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring",
                     )}
                   >
                     <span className="flex aspect-square items-center justify-center overflow-hidden bg-surface-sunken">

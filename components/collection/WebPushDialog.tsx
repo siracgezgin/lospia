@@ -139,8 +139,14 @@ export function WebPushDialog({ onClose }: { onClose: () => void }) {
     const a = document.createElement("a");
     a.href = url;
     a.download = `af-koleksiyon-${kind}-${stamp}.csv`;
+    /* Bağlantı BELGEYE EKLENİR, iptal bir sonraki tick'e ERTELENİR: Safari ve
+       Firefox indirmeyi senkron başlatmadığı için belgede olmayan, hemen iptal
+       edilen blob adresinde düğme hiçbir şey yapmamış görünüyordu (AF
+       Teamwork'teki Word indirmesiyle aynı çözüm). */
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   return (

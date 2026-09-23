@@ -15,6 +15,7 @@ import { buildCells } from "@/lib/planning/cells";
 import { CalendarToolbar } from "./CalendarToolbar";
 import { PlanningDayView } from "./PlanningDayView";
 import { MeetingEditor } from "./MeetingEditor";
+import { MeetingUndoBar, type DeletedMeeting } from "./MeetingUndoBar";
 import type { Member } from "./MemberMultiSelect";
 import type { PlanningMeetingWithTopics } from "@/types";
 import { CELL_INTERACTIVE } from "./cell-style";
@@ -79,8 +80,26 @@ export function PlanningMonthView({
     return out;
   }, [meetings]);
 
+  /* ÇAKIŞMA UYARISI AY GÖRÜNÜMÜNDE DE VAR. Düzenleyici "bu gün ve saatte
+     zaten bir toplantı var" uyarısını `weekMeetings`ten okuyor; ay görünümü
+     bunu hiç vermiyordu, yani aynı pencere hafta ölçeğinde uyarıyor, ay
+     ölçeğinde susuyordu. Veri zaten elde (ayın tamamı yüklü). */
+  const monthMeetingIndex = useMemo(
+    () => meetings.map((m) => ({
+      id: m.id,
+      date: String(m.meeting_date).slice(0, 10),
+      slot: m.time_slot,
+      title: m.title ?? "",
+    })),
+    [meetings],
+  );
+
   /* GÜN KARTI YERİNDE AÇILIR — adres değişmez, ay kaybolmaz. */
   const [openDay, setOpenDay] = useState<string | null>(null);
+  /* Silinen toplantı — "Geri al" şeridi ve Ctrl+Z bunun üzerinden çalışır.
+     Hafta görünümünde vardı, ayda YOKTU: aynı pencereden yapılan aynı silme
+     bir ekranda geri alınabiliyor, diğerinde kalıcı oluyordu. */
+  const [deleted, setDeleted] = useState<DeletedMeeting | null>(null);
   const [editor, setEditor] = useState<
     { meeting: PlanningMeetingWithTopics | null; day: string; slot: string; dayLabel: string;
       bandCategory?: RuntimeBand["category"]; bandLabel?: string; topicIndex?: number | null } | null
@@ -107,6 +126,19 @@ export function PlanningMonthView({
   const gotoMonth = (delta: number) =>
     router.push(`/planning?v=ay&d=${format(addMonths(month, delta), "yyyy-MM-01")}`);
   const isCurrentMonth = isSameMonth(month, parseISO(todayIso));
+
+  /* GÜN KARTI YÜKLÜ AYIN DIŞINA ÇIKAMAZ.
+     Kart, ayın hücre haritasından (`byCell`) besleniyor; ◀ ▶ ve "Bugün" ise
+     serbestçe gün değiştiriyordu. Izgaranın son gününde ▶'e basınca kart
+     haritada karşılığı OLMAYAN bir güne geçiyor ve o günde toplantı olsa bile
+     BOŞ açılıyordu — sessiz ve yanlış. Artık dışarı çıkan gün, kendi ayını
+     yükletiyor: ekran doğru veriye gider, boş kart göstermez. */
+  const gridFirst = gridDays[0];
+  const gridLast = gridDays[gridDays.length - 1];
+  const goToDay = (iso: string) => {
+    if (iso >= gridFirst && iso <= gridLast) { setOpenDay(iso); return; }
+    router.push(`/planning?v=ay&d=${iso}`);
+  };
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
@@ -221,7 +253,7 @@ export function PlanningMonthView({
           isAdmin={isAdmin}
           bands={bands}
           todayIso={todayIso}
-          onDayChange={(iso) => setOpenDay(iso)}
+          onDayChange={goToDay}
           onOpenSlot={(iso, slot, topicIndex) => openEditor(iso, slot, { topicIndex })}
           onAddMeeting={(iso, slot) => openEditor(iso, slot, { blank: true })}
           onClose={() => setOpenDay(null)}
@@ -239,11 +271,14 @@ export function PlanningMonthView({
           focusTopicIndex={editor.topicIndex ?? null}
           members={members}
           personHex={personHex}
+          weekMeetings={monthMeetingIndex}
           onClose={() => setEditor(null)}
           onSaved={() => { setEditor(null); router.refresh(); }}
-          onDeleted={() => { setEditor(null); router.refresh(); }}
+          onDeleted={(snap) => { setEditor(null); setDeleted(snap); router.refresh(); }}
         />
       )}
+
+      <MeetingUndoBar deleted={deleted} onClear={() => setDeleted(null)} />
     </div>
   );
 }

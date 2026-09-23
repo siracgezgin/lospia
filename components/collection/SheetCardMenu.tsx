@@ -64,8 +64,15 @@ export function SheetCardMenu({
 
   return (
     /* z-[3]: kartın tamamını kaplayan gizli bağlantı z-[1], rozetler z-[2].
-       Menü onların üstünde olmalı, yoksa tıklama föyü açar. */
-    <div ref={box} className="absolute right-2 top-2 z-[3]">
+       Menü onların üstünde olmalı, yoksa tıklama föyü açar.
+
+       SARMALAYICI KARTIN GENİŞLİĞİNCE (inset-x-2). Menü 208 piksel sabitti ve
+       düğmenin SOLUNA doğru açılıyordu; telefonda kart 165 piksel olduğu için
+       panel kartın dışına, hatta ekranın dışına taşıyordu. Artık genişlik
+       karttan miras alınıyor (max-w-full) — panel her boyutta tam görünür.
+       `pointer-events-none`: şerit boydan boya olduğu için üstündeki tıklama
+       föyü açan bağlantıya geçmeli; yalnız düğme ve panel tıklama alır. */
+    <div ref={box} className="pointer-events-none absolute inset-x-2 top-2 z-[3] flex justify-end">
       <button
         type="button"
         aria-haspopup="menu"
@@ -73,7 +80,7 @@ export function SheetCardMenu({
         aria-label={`${label} işlemleri`}
         onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen((v) => !v); }}
         className={cn(
-          "tap-target grid size-8 place-items-center rounded-control border bg-surface text-muted shadow-card",
+          "pointer-events-auto tap-target grid size-8 place-items-center rounded-control border bg-surface text-muted shadow-card",
           "transition-[background-color,border-color,color] duration-150",
           open ? "border-line-strong bg-surface-muted text-ink" : "border-line hover:border-line-strong hover:bg-surface-muted hover:text-ink",
         )}
@@ -88,7 +95,7 @@ export function SheetCardMenu({
           /* Tıklanan satır işini yapar ve menü kapanır; her satıra tek tek
              kapatma bağlamak yerine kapsayıcı dinler. */
           onClick={() => setOpen(false)}
-          className="anim-fade-down absolute right-0 top-9 w-[208px] rounded-card border border-line bg-surface p-1 shadow-pop"
+          className="pointer-events-auto anim-fade-down absolute right-0 top-9 w-[208px] max-w-full rounded-card border border-line bg-surface p-1 shadow-pop"
         >
           {children}
         </div>

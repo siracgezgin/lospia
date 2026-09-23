@@ -11,7 +11,6 @@ import { MaterialsManager, type ManagerMaterial } from "@/components/settings/Ma
 import { ProductDataTiles } from "@/components/collection/ProductDataTiles";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
-import { BackLink } from "@/components/modules/BackLink";
 
 /** Fihrist sorgusu — `photos` kolonu olmadan da çalışabilsin diye tek yerde. */
 function manufacturersQuery(
@@ -142,13 +141,13 @@ export default async function CollectionDataPage({
 
   return (
     <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
-      {/* Başlık uygulama çubuğunda; hiyerarşi satırı kardeş sekmelerle AYNI
-          yerde ve aynı biçimde ("Collection › Product Data"). Eskiden burada
-          hiçbir şey yoktu: Maliyet ve Ödeme sekmelerinde satır varken bu
-          sekmeye geçince kayboluyordu (Sıraç, 12.09.2026: "bazısında var
-          bazısında yok"). */}
+      {/* Başlık uygulama çubuğunda; ekran sekme şeridiyle başlar.
+          "Collection › Product Data" zinciri KALDIRILDI: kardeş sekmelerin
+          (Production Sheets · Cost · Payment Table) hiçbirinde yok, dolayısıyla
+          bu sekmeye geçildiğinde şerit bir satır aşağı kayıyordu — sekme
+          satırının her sekmede aynı yerde durması bu ekranın kuralıydı. Üst
+          kategoriye dönüş zaten sekmelerin kendisi. */}
       <h1 className="sr-only">Product Data</h1>
-      <BackLink />
       <CollectionTabs active="veri" />
 
       {/* GİRİŞ = KUTULAR */}
@@ -162,10 +161,15 @@ export default async function CollectionDataPage({
         />
       )}
 
+      {/* GERİ DÖNÜŞ HER EKRANDA AYNI DÜĞME. Koleksiyon'da "Kategoriler",
+          Ödeme Tablosu'nda "Ustalar" ikincil düğmeyle dönüyor; burası tek
+          başına soluk bir metin bağlantısıydı — aynı iş, üçüncü bir görünüm.
+          `Button` primitifi bir <button> çizdiği için sınıfları taşınıyor
+          (bağlantı olmalı: sunucu bileşeni, yeni sekmede de açılabilsin). */}
       {box && (
         <Link
           href="/collection/veri"
-          className="-ml-1 mb-2 inline-flex items-center gap-1 text-[13px] font-medium text-muted transition-colors duration-150 hover:text-ink"
+          className="mb-3 inline-flex h-8 items-center gap-1.5 rounded-control border border-line bg-surface px-3 text-[13px] font-medium text-ink shadow-card transition-[background-color,border-color,color] duration-150 ease-standard hover:border-line-strong hover:bg-surface-muted active:scale-[0.98] pointer-coarse:h-10"
         >
           <ChevronLeft size={15} aria-hidden /> Ürün verisi
         </Link>

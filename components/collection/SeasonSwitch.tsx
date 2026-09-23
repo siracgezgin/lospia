@@ -25,12 +25,16 @@ export function SeasonSwitch({ seasons }: { seasons: SwitchSeason[] }) {
   const params = useSearchParams();
   if (seasons.length === 0) return null;
 
-  const current = params.get("sezon") ?? seasons.find((s) => s.is_current)?.id ?? ALL_SEASONS;
+  /* ADRESTEKİ DEĞER DOĞRULANIR — sunucu da aynı kuralı uyguluyor
+     (resolveSeasonId): silinmiş ya da elle yazılmış bir sezon kimliğinde kutu
+     boş bir seçimde kalıyor, ekran ise aktif sezonu gösteriyordu. */
+  const raw = params.get("sezon");
+  const known = raw === ALL_SEASONS || (!!raw && seasons.some((s) => s.id === raw));
+  const current = known ? raw! : seasons.find((s) => s.is_current)?.id ?? ALL_SEASONS;
 
   function go(next: string) {
     const q = new URLSearchParams(params.toString());
-    if (next === ALL_SEASONS) q.set("sezon", ALL_SEASONS);
-    else q.set("sezon", next);
+    q.set("sezon", next);
     const qs = q.toString();
     router.push(qs ? `${pathname}?${qs}` : pathname);
   }
@@ -43,7 +47,10 @@ export function SeasonSwitch({ seasons }: { seasons: SwitchSeason[] }) {
        halkası ortak alanlarla AYNI (h-9, rounded-control); select'in kendi
        çerçevesi sıfırlanır, halka sarmalayıcıda (focus-within) yaşar. */
     <label
-      className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-control border border-line bg-surface pl-2.5 text-[13.5px] transition-[border-color,box-shadow] duration-150 hover:border-line-strong focus-within:border-brand-ring focus-within:ring-2 focus-within:ring-brand-ring/40"
+      /* Boy dokunmatikte düğmelerle AYNI kademede büyür: araç çubuğunda
+         yanındaki Button ve indirme düğmesi 44px'e çıkarken bu kutu 36px'te
+         kalıyor, satır kademeli görünüyordu. */
+      className="inline-flex h-9 pointer-coarse:h-11 shrink-0 items-center gap-1.5 rounded-control border border-line bg-surface pl-2.5 text-[13.5px] transition-[border-color,box-shadow] duration-150 hover:border-line-strong focus-within:border-brand-ring focus-within:ring-2 focus-within:ring-brand-ring/40"
       title="Koleksiyon, Maliyet ve Ödeme Tablosu seçili sezonu gösterir"
     >
       <CalendarClock size={14} className="shrink-0 text-muted" aria-hidden />

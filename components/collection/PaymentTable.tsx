@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Wallet, ClipboardList, Check, Loader2, HandCoins, ChevronLeft, Scissors, Boxes,
   MapPin, Clock3, Package, Search,
@@ -9,7 +10,7 @@ import {
 import { cn } from "@/lib/utils/cn";
 import { updateProductionSheetPricing } from "@/lib/actions/production";
 import {
-  totalQuantity, formatMoney, ustaUnitPaymentOf, parseMoney,
+  productionQtyOf, formatMoney, ustaUnitPaymentOf, parseMoney,
 } from "@/lib/collection/cost";
 import { assignPersonTones } from "@/lib/design/person-colors";
 import { getPersonInitials } from "@/lib/utils/person-display";
@@ -73,10 +74,30 @@ const thSticky = "sticky top-0 z-10 border-b border-line-strong bg-surface py-2.
 const tfSticky = "sticky bottom-0 z-10 border-t border-line-strong bg-surface-muted px-2 py-2";
 const groupSep = "border-l border-hairline";
 
-/** Tablo hücresi girdisi — ortak TextInput'un kompakt hâli (h-8, sağa yaslı,
- *  hizalı rakam). Çerçeve dinlenirken görünür: hücrenin yazılabilir olduğu
- *  belli olsun. */
-const priceInput = "h-8 px-2 text-right tabular-nums";
+/**
+ * TABLO HÜCRESİ GİRDİSİ — Maliyet ve Ödeme tablolarında AYNI.
+ *
+ * Ortak TextInput'un sessiz hâli: dinlenirken çerçevesiz, hover'da çerçeve
+ * belirir, odakta yüzey beyazlanır. İki tablo aynı işi (satır içinde para
+ * yazmak) iki ayrı görünüşle yapıyordu — biri çerçeveli kutu, öbürü çerçevesiz
+ * hücre; sekme değiştiren kullanıcı aynı tablonun iki tasarımını görüyordu.
+ * Tek yerde durur, iki ekran da buradan okur.
+ */
+export const cellInput =
+  "h-8 border-transparent bg-transparent px-1.5 text-right tabular-nums hover:border-line focus:bg-surface";
+
+/**
+ * İkincil düğme görünümü SINIF olarak — `DownloadLink` kendi <button>'ını
+ * çizdiği için Button primitifi kullanılamıyor. Koleksiyon araç çubuğundaki
+ * "Tümünü indir" ile Maliyet'teki "Excel indir" ayrı ayrı yazılmıştı ve geçiş
+ * listeleri birbirini tutmuyordu.
+ */
+export const secondaryBtnCls =
+  /* Dokunmatikte bir kademe iri (`pointer-coarse:h-11`) — yanındaki Button
+     primitifi de öyle; ikisi yan yana duran araç çubuğunda 36px ve 44px
+     düğmeler kademeli bir satır oluşturuyordu. */
+  "inline-flex h-9 pointer-coarse:h-11 shrink-0 items-center gap-1.5 rounded-control border border-line bg-surface px-3.5 text-[13.5px] font-medium text-ink shadow-card " +
+  "transition-[background-color,border-color,color,transform] duration-150 ease-standard hover:border-line-strong hover:bg-surface-muted active:scale-[0.98]";
 
 /**
  * Ödeme Tablosu — usta başına ödeme.
@@ -98,13 +119,29 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
     for (const r of rows) m[r.id] = { ...(r.pricing ?? {}) };
     return m;
   });
-  const [openUsta, setOpenUsta] = useState<string | null>(null);
   /* ARAMA İSTEMCİDE. Ekran iki katmanlı: usta kartları ve o ustanın ürünleri.
      Kutu HANGİ KATMANDAYSAK onu süzer — kart ızgarasında ustayı, ustanın
      sayfasında ürünü. Katman değişince temizlenir; yoksa "Cihan" araması
      ustanın içindeki tüm ürünleri eleyip ekranı boş bırakıyordu. */
   const [query, setQuery] = useState("");
-  const openUstaPage = (key: string | null) => { setOpenUsta(key); setQuery(""); };
+  /* AÇIK USTA ADRESTE (?usta=). Yalnız bileşen durumundayken üç şey
+     çalışmıyordu (Koleksiyon'da `?kat=` ile çözülen aynı sorun): sayfa
+     yenilenince kullanıcı kart ızgarasına düşüyor, bir ustanın sayfası
+     paylaşılamıyor ve bir ürüne girip geri dönünce açık usta kayboluyordu. */
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const openUstaPage = (key: string | null) => {
+    const next = new URLSearchParams(params.toString());
+    if (key) next.set("usta", key); else next.delete("usta");
+    const qs = next.toString();
+    /* scroll:false — usta açmak sayfanın başına atmasın. */
+    router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    setQuery("");
+  };
+  /* Föye giderken taşınan geri dönüş adresi: ürün sayfasından dönen kişi
+     listeye değil, çıktığı ustanın sayfasına iner. */
+  const backTo = `/collection/odeme${params.toString() ? `?${params.toString()}` : ""}`;
   const [savingId, setSavingId] = useState<string | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
   /* KAYDETME HATASI GÖRÜNÜR. Hata sessizce yutuluyordu: yazdığınız tutar
@@ -125,8 +162,19 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
   const savedSnapshots = useRef<Record<string, string>>(initialSnapshots);
 
   const unitPaymentOf = (id: string) => ustaUnitPaymentOf(pricing[id]);
-  const qtyOf = (r: Row) => totalQuantity(r.size_distribution);
+  /* ADET FÖYDEKİ İLE AYNI: föyde "toplam üretim adedi" seçilmişse o geçerlidir,
+     yoksa beden dağılımının toplamı. Yalnız beden dağılımına bakılıyordu; adedi
+     yukarıdan seçip bedenleri doldurmamış föyler ödeme tablosunda "0 adet"
+     görünüyor ve ustanın hesabı olduğundan az çıkıyordu. */
+  const qtyOf = (r: Row) => productionQtyOf(pricing[r.id], r.size_distribution);
   const lineTotal = (r: Row) => qtyOf(r) * unitPaymentOf(r.id);
+  /** Satırın para birimi — föy USD ile çalışıyorsa ekranda ₺ yazmasın. */
+  const currencyOf = (id: string) => (pricing[id]?.currency || "TL").trim() || "TL";
+  /** Listenin ortak para birimi; karışıksa sembolsüz varsayılan. */
+  const commonCurrency = (rs: Row[]) => {
+    const set = new Set(rs.map((r) => currencyOf(r.id)));
+    return set.size === 1 ? [...set][0]! : "TL";
+  };
   /** Faturalanan tutar toplamı — ödenen toplamla karşılaştırmak için.
    *  Tutar ayrıştırma TEK yerden (parseMoney): burada ayrı bir çevirici vardı
    *  ve "1.800,50" gibi Türkçe biçimi NaN'a düşürüp fatura toplamını sessizce
@@ -206,7 +254,10 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
     });
   }
 
-  const active = openUsta ? ustalar.find((u) => u.key === openUsta) ?? null : null;
+  /* ADRESTEKİ DEĞER DOĞRULANIR: elle yazılmış ya da artık var olmayan bir usta
+     anahtarında ekran boş bir sayfa göstermek yerine kart ızgarasına döner. */
+  const rawUsta = params.get("usta");
+  const active = rawUsta ? ustalar.find((u) => u.key === rawUsta) ?? null : null;
 
   /* Süzme ucuz (dizi taraması) — useMemo yerine düz hesap; `active` her
      karede yeniden bulunduğu için bağımlılık listesi zaten tutmuyordu. */
@@ -225,6 +276,9 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
      "Aramadaki toplam" ile aynı kural). */
   const activeQty = activeRows.reduce((a, r) => a + qtyOf(r), 0);
   const activeTotal = activeRows.reduce((a, r) => a + lineTotal(r), 0);
+  /* Fatura toplamı bir kez hesaplanır — dip satırında iki kez çağrılıyordu. */
+  const activeInvoice = invoiceTotal(activeRows);
+  const activeCurrency = commonCurrency(activeRows);
   const visibleGrandTotal = q ? visibleUstalar.reduce((a, u) => a + u.total, 0) : grandTotal;
 
   /* ARAMA KUTUSU — sekme satırının sağında, Maliyet ekranıyla aynı yerde. */
@@ -287,13 +341,14 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
                   </span>
                 )}
                 {!active.rec && active.name !== UNKNOWN && (
-                  <span className="block text-[12px] text-warning">Kayıtlı usta değil — Product Data’dan ekleyin</span>
+                  /* "Product Data'dan ekleyin" tarifi kalktı: eksiğin kendisi
+                     bilgi, yol tarifi satırı gereksiz. */
+                  <span className="block text-[12px] text-warning">Kayıtlı usta değil</span>
                 )}
               </span>
             </span>
-            <span className="ml-auto text-[13px] tabular-nums text-muted">
-              {activeQty} adet · <b className="font-semibold text-ink">{formatMoney(activeTotal)}</b>
-            </span>
+            {/* Adet ve toplam BİR kez yazılır: aynı iki sayı hemen altındaki
+                dip satırında (sticky, hep görünür) zaten duruyordu. */}
           </div>
 
           {activeRows.length === 0 ? (
@@ -304,7 +359,12 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
               description="Aramayı değiştirin."
             />
           ) : (
-          <div className="overflow-hidden rounded-card border border-line bg-surface shadow-card">
+          /* Tablo sütunlarının ölçüsü kadar geniştir; `w-full` geniş monitörde
+             yedi sütunu boydan boya gerip sayıları birbirinden koparıyordu. */
+          <div
+            className="overflow-hidden rounded-card border border-line bg-surface shadow-card"
+            style={{ maxWidth: 928 }}
+          >
             <div className="max-h-[70vh] overflow-auto">
               <table className="w-full min-w-[820px] border-separate border-spacing-0 text-sm">
                 <thead>
@@ -313,20 +373,25 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
                   <tr className="text-[12px] font-semibold uppercase tracking-[0.06em] text-muted">
                     {/* Ürün sütunu yatayda da sabit — telefonda fatura
                         sütunlarına kayarken satırın kimliği kaybolmasın. */}
-                    <th className={cn(thSticky, "sticky left-0 z-20 min-w-[168px] border-r border-hairline px-3 text-left sm:min-w-[220px]")}>Ürün</th>
-                    <th className={cn(thSticky, "px-2 text-right")}>Adet</th>
+                    {/* Sütun ölçüleri Maliyet tablosuyla aynı ailede: adet 88,
+                        toplam 140, kaydetme işareti 44 piksel. */}
+                    <th className={cn(thSticky, "sticky left-0 z-20 min-w-[200px] border-r border-hairline px-3 text-left sm:min-w-[240px]")}>Ürün</th>
+                    <th className={cn(thSticky, "w-[88px] px-2 text-right")}>Adet</th>
                     <th className={cn(thSticky, "w-36 px-2 text-right")}>Birim ödeme</th>
-                    <th className={cn(thSticky, "min-w-[120px] px-3 text-right")}>Toplam</th>
+                    <th className={cn(thSticky, "w-[140px] px-3 text-right")}>Toplam</th>
                     <th className={cn(thSticky, groupSep, "w-32 px-2 text-left")}>Fatura no</th>
                     <th className={cn(thSticky, "w-36 px-2 text-right")}>Fatura tutarı</th>
-                    <th className={cn(thSticky, "w-8 px-2")} />
+                    <th className={cn(thSticky, "w-11 px-2")} />
                   </tr>
                 </thead>
                 <tbody className="[&>tr:last-child>td]:border-b-0 [&>tr>td]:border-b [&>tr>td]:border-b-hairline">
                   {activeRows.map((r) => (
                     <tr key={r.id} className="group/row transition-colors duration-150 hover:bg-surface-hover">
                       <td className="sticky left-0 z-[1] border-r border-hairline bg-surface px-3 py-1.5 transition-colors duration-150 group-hover/row:bg-surface-hover">
-                        <Link href={`/production/${r.id}`} className="font-medium text-ink transition-colors duration-150 hover:text-brand-strong">
+                        <Link
+                          href={`/production/${r.id}?from=${encodeURIComponent(backTo)}`}
+                          className="font-medium text-ink transition-colors duration-150 hover:text-brand-strong"
+                        >
                           {r.title}
                         </Link>
                         {r.product_kind && <span className="ml-2 text-[12px] text-subtle">{r.product_kind}</span>}
@@ -336,7 +401,7 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
                       </td>
                       <td className="px-2 py-1">
                         <TextInput
-                          className={priceInput}
+                          className={cellInput}
                           aria-label={`${r.title} — birim ödeme`}
                           value={pricing[r.id]?.usta_unit_payment ?? ""}
                           onChange={(e) => setPayment(r.id, e.target.value)}
@@ -346,11 +411,11 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
                         />
                       </td>
                       <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-ink">
-                        {lineTotal(r) ? formatMoney(lineTotal(r)) : "—"}
+                        {lineTotal(r) ? formatMoney(lineTotal(r), currencyOf(r.id)) : "—"}
                       </td>
                       <td className={cn(groupSep, "px-2 py-1")}>
                         <TextInput
-                          className={cn(priceInput, "text-left")}
+                          className={cn(cellInput, "text-left")}
                           aria-label={`${r.title} — fatura no`}
                           value={pricing[r.id]?.invoice_no ?? ""}
                           onChange={(e) => setInvoiceNo(r.id, e.target.value)}
@@ -361,7 +426,7 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
                       </td>
                       <td className="px-2 py-1">
                         <TextInput
-                          className={priceInput}
+                          className={cellInput}
                           aria-label={`${r.title} — fatura tutarı`}
                           value={pricing[r.id]?.invoice_amount ?? ""}
                           onChange={(e) => setInvoiceAmount(r.id, e.target.value)}
@@ -385,12 +450,14 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
                     <td className={cn(tfSticky, "sticky left-0 z-20 border-r border-hairline px-3 text-ink")}>
                       {q ? "Aramadaki toplam" : "Toplam"}
                     </td>
-                    <td className={cn(tfSticky, "px-2 text-right tabular-nums text-ink")}>{activeQty}</td>
+                    <td className={cn(tfSticky, "px-2 text-right tabular-nums text-ink")}>{activeQty || ""}</td>
                     <td className={tfSticky} />
-                    <td className={cn(tfSticky, "px-3 text-right tabular-nums text-ink")}>{formatMoney(activeTotal)}</td>
+                    <td className={cn(tfSticky, "px-3 text-right tabular-nums text-ink")}>
+                      {formatMoney(activeTotal, activeCurrency)}
+                    </td>
                     <td className={cn(tfSticky, groupSep)} />
                     <td className={cn(tfSticky, "px-2 text-right tabular-nums text-ink")}>
-                      {invoiceTotal(activeRows) ? formatMoney(invoiceTotal(activeRows)) : "—"}
+                      {activeInvoice ? formatMoney(activeInvoice, activeCurrency) : "—"}
                     </td>
                     <td className={tfSticky} />
                   </tr>
@@ -410,9 +477,11 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
                 Bir ustaya tıklayın — hangi ürünler orada dikiliyor ve ne kadar ödenecek.
               </p>
             </div>
-            <span className="text-[13px] tabular-nums text-muted">
+            <span className="whitespace-nowrap text-[13px] tabular-nums text-muted">
               {q ? "Aramadaki toplam" : "Genel toplam"}:{" "}
-              <b className="font-semibold text-ink">{formatMoney(visibleGrandTotal)}</b>
+              <b className="font-semibold text-ink">
+                {formatMoney(visibleGrandTotal, commonCurrency(visibleUstalar.flatMap((u) => u.rows)))}
+              </b>
             </span>
           </div>
 
@@ -445,7 +514,7 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
                   metaNode={
                     <>
                       <span className={cn("font-semibold tabular-nums", u.total > 0 ? "text-ink" : "text-subtle")}>
-                        {formatMoney(u.total)}
+                        {formatMoney(u.total, commonCurrency(u.rows))}
                       </span>
                       <span className="text-subtle"> · {u.rows.length} ürün</span>
                     </>

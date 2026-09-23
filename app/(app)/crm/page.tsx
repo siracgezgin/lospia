@@ -5,12 +5,11 @@ import { AccessDenied } from "@/components/modules/AccessDenied";
 import { CrmView } from "@/components/crm/CrmView";
 import { CrmCategoryGrid } from "@/components/crm/CrmCategoryGrid";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
-import { crmCategoryOfSegment } from "@/lib/crm/constants";
+import { crmCategoryOfSegment, FIHRIST_ID_PREFIX } from "@/lib/crm/constants";
 import { Contact } from "lucide-react";
 import { contactDescriptor, taskMatchesPerson, type PersonMatchTask } from "@/lib/utils/task-person-match";
 import { maybeDatabaseSetupRequired } from "@/lib/utils/supabase-errors";
 import type { WorkspaceContact, Profile } from "@/types";
-import { FIHRIST_ID_PREFIX } from "@/lib/crm/constants";
 
 export const dynamic = "force-dynamic";
 // Sekme adı uygulama çubuğuyla aynı (PAGE_TITLES ↔ registry).
@@ -146,7 +145,14 @@ export default async function CrmPage({
   // İlgili görev sayısı — count with the shared matcher so the number matches
   // exactly what /list?person=<contactId> will display.
   const tasks = (tasksResult.data ?? []) as PersonMatchTask[];
-  const descriptors = contacts.map((c) => ({ id: c.id, d: contactDescriptor(c) }));
+  /* FİHRİST SATIRI SAYILMAZ. Sayı hesaplanınca hücrede "Görevleri aç"
+     bağlantısı çıkıyordu; bağlantı `/list?person=fihrist:<id>`e gidiyor ve
+     liste o kimliği HİÇBİR kayıtla eşleştiremiyordu (usta `workspace_contacts`
+     tablosunda yok) — kullanıcı her seferinde boş bir listede kalıyordu.
+     Ölü bağlantı yerine hücre boş kalır. */
+  const descriptors = contacts
+    .filter((c) => !c.id.startsWith(FIHRIST_ID_PREFIX))
+    .map((c) => ({ id: c.id, d: contactDescriptor(c) }));
   const taskCounts: Record<string, number> = {};
   for (const { id, d } of descriptors) {
     let n = 0;

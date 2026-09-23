@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarToolbar } from "./CalendarToolbar";
 import {
@@ -43,7 +43,15 @@ const DOW = ["P", "S", "Ç", "P", "C", "C", "P"];
  */
 export function CalendarYearView({ loadByDay, initialYear, viewSwitch }: Props) {
   const router = useRouter();
-  const [year, setYear] = useState(initialYear);
+  /* YIL SUNUCUDAN GELİR, YEREL DURUMDAN DEĞİL.
+     `useState` ile tutuluyordu: ◀ ▶ yalnız ekrandaki sayıyı değiştiriyor, yük
+     haritası (`loadByDay`) ise sunucunun çektiği TEK yıla ait kalıyordu.
+     Sonuç: başka bir yıla geçildiğinde bütün günler boş, üstteki özet de
+     "0 toplantı · 0 görev" çıkıyordu — dolu bir yıl bomboş görünüyordu.
+     Artık yıl adreste (`?v=yil&d=<yıl>-01-01`); veri onunla birlikte gelir. */
+  const year = initialYear;
+  const goYear = (next: number) => router.push(`/planning?v=yil&d=${next}-01-01`);
+  const thisYear = new Date().getFullYear();
 
   /* HER AY SABİT 6 HAFTA (42 gün).
      Ayın kendi hafta sayısı 5 ya da 6 olabiliyor; ızgara satırındaki kartlar
@@ -90,7 +98,7 @@ export function CalendarYearView({ loadByDay, initialYear, viewSwitch }: Props) 
         <div className="inline-flex h-9 items-stretch overflow-hidden rounded-control border border-line bg-surface pointer-coarse:h-11">
           <button
             type="button"
-            onClick={() => setYear((y) => y - 1)}
+            onClick={() => goYear(year - 1)}
             className="tap-target inline-flex w-9 items-center justify-center text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
             aria-label="Önceki yıl"
           >
@@ -101,7 +109,7 @@ export function CalendarYearView({ loadByDay, initialYear, viewSwitch }: Props) 
           </span>
           <button
             type="button"
-            onClick={() => setYear((y) => y + 1)}
+            onClick={() => goYear(year + 1)}
             className="tap-target inline-flex w-9 items-center justify-center text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
             aria-label="Sonraki yıl"
           >
@@ -111,9 +119,10 @@ export function CalendarYearView({ loadByDay, initialYear, viewSwitch }: Props) 
         {/* İkincil kontrol — ızgara ana yüzey; "Bu yıl" onunla yarışmaz. */}
         <Button
           variant="secondary"
-          onClick={() => setYear(new Date().getFullYear())}
-          aria-pressed={year === new Date().getFullYear()}
-          className={cn(year === new Date().getFullYear() && "border-line-strong bg-surface-muted")}
+          onClick={() => goYear(thisYear)}
+          aria-pressed={year === thisYear}
+          disabled={year === thisYear}
+          className={cn(year === thisYear && "border-line-strong bg-surface-muted")}
         >
           Bu yıl
         </Button>

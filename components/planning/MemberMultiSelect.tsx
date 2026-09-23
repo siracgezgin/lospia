@@ -166,7 +166,11 @@ export function MemberMultiSelect({
             List'teki süzgeç baloncuklarıyla AYNI dil — yuvarlak avatar,
             fotoğraf varsa fotoğraf, yoksa kişinin renginde baş harf — ve hafif
             üst üste binerek (-space-x) tek satırda kalır. Dördü aşınca "+N". */}
-        <span className="flex min-w-0 items-center">
+        {/* `overflow-hidden`: rozet şeridi `shrink-0` olduğu için tetikleyici
+            dar kaldığında (takvim penceresindeki "Kim" sütunu) taşıp SAĞDAKİ
+            oka biniyordu — üç kişi seçilince yüzler ile ok üst üste geliyordu.
+            Taşma artık kırpılır, ok her zaman kendi yerinde durur. */}
+        <span className="flex min-w-0 items-center overflow-hidden">
           {selectedMembers.length === 0 ? (
             <span className="truncate text-subtle">{placeholder}</span>
           ) : (

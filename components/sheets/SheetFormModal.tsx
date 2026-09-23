@@ -23,7 +23,7 @@ type SheetMeta = Pick<
 interface Props {
   onClose: () => void;
   /** Create → navigates to the new sheet; edit → refresh the caller. */
-  onSaved: (id?: string) => void;
+  onSaved: (_id?: string) => void;
   departments: Pick<WorkspaceDepartment, "id" | "name">[];
   tasks: { id: string; title: string }[];
   contacts: { id: string; name: string }[];

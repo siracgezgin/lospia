@@ -949,9 +949,15 @@ export function DocEditor({
             </div>
           )}
 
+          {/* GEREKÇE DOĞRU OLMALI. Cümle "yazıyı ekleyen kişiye başvurun"
+              diyordu; oysa sahiplik şartı 20240346 ile kalktı — yazıyı gören
+              herkes düzenliyor. Salt okunurluğun TEK sebebi arşivlenmiş
+              olması (app/(app)/documents/[id]/page.tsx: canEdit). Kullanıcı
+              yanlış kişiye yönlendiriliyordu. Aynı düzeltme tabloda da
+              yapılmıştı (SheetDetailView). */}
           {readOnly && (
             <p className="border-t border-hairline bg-surface-muted px-3 py-2 text-[12.5px] text-muted">
-              Bu yazı salt okunur. Düzenlemek için yazıyı ekleyen kişiye ya da yöneticiye başvurun.
+              Bu yazı arşivlendi — içerik salt okunur. Yeniden düzenlemek için bir yöneticinin yazıyı arşivden çıkarması gerekir.
             </p>
           )}
         </div>
@@ -995,16 +1001,19 @@ export function DocEditor({
               değiştiğinde de yerinde kalır. */}
           <span className="ml-auto inline-flex flex-wrap items-center justify-end gap-x-2 gap-y-0.5" aria-live="polite">
             <span className="inline-flex items-center gap-1.5">
+              {/* Cümle başı BÜYÜK harf ve tablo ekranıyla AYNI sözcükler
+                  (SheetDetailView → SaveStatus): aynı durum iki ekranda iki
+                  ayrı dille yazılıyordu ("kaydediliyor" · "Kaydediliyor…"). */}
               {saving ? (
-                <><Loader2 size={13} className="animate-spin" aria-hidden /> kaydediliyor</>
+                <><Loader2 size={13} className="animate-spin" aria-hidden /> Kaydediliyor…</>
               ) : saved ? (
-                <><Check size={13} className="text-success" aria-hidden /> kaydedildi</>
+                <><Check size={13} className="text-success" aria-hidden /> Kaydedildi</>
               ) : dirty ? (
-                "kaydedilmedi"
+                "Kaydedilmedi"
               ) : readOnly ? (
-                "salt okunur"
+                "Salt okunur"
               ) : (
-                "tüm değişiklikler kayıtlı"
+                "Tüm değişiklikler kayıtlı"
               )}
             </span>
             {savedTo && (

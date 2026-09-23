@@ -74,7 +74,14 @@ export function PlanningDayList({
     slotAway:big ? "text-[13px]" : "text-[12px]",
     band:    big ? "text-[13px]" : "text-[12px]",
     title:   big ? "text-[17px]" : "text-[13.5px]",
-    content: big ? "text-[14px]" : "text-[12.5px]",
+    /* KONU SATIRI DA BÜYÜR. Yukarıdaki not "başlık ve konu satırları büyür"
+       diyordu ama konu satırı 13.5px'e sabitlenmişti: gün kartında 17px'lik
+       bir başlığın altına minicik konular diziliyordu — aynı kartın içinde iki
+       ayrı ölçek. (Eski `content` anahtarı kaldırıldı; not metni artık
+       yazılmıyor, o ölçü hiçbir yerde okunmuyordu.) */
+    topic:   big ? "text-[15px]" : "text-[13.5px]",
+    topicNo: big ? "text-[13px]" : "text-[12px]",
+    topicPad:big ? "px-4 py-2.5" : "px-3 py-2",
     pad:     big ? "px-4 py-3.5" : "px-3 py-2",
     gap:     big ? "space-y-3" : "space-y-2.5",
   };
@@ -185,10 +192,21 @@ export function PlanningDayList({
             ...cell.map((m) => m.content),
           ].filter(Boolean).join("\n");
           const ids = [...new Set(cell.flatMap((m) => m.participant_ids ?? []))];
-          /* SONUÇ — masaüstü ızgarasıyla aynı işaret (20240338). */
-          /* BAŞLIK NÖTR. Sıraç (2026-09-10): "Aksayan da tamamlanan da konu
-             başlığı değil KONULAR olmalı." Sonuç konu satırlarında okunur. */
-          const outcome: "done" | "missed" | null = null;
+          /* SONUÇ, masaüstü ızgarasıyla BİREBİR AYNI hesap (bkz. TitleCell).
+             Buradaki değer `null` sabitiydi: tik/çarpı hiç çizilmiyor, yeşil
+             zemin hiç açılmıyordu. Yani aynı toplantı haftada "tamamlandı"
+             görünürken gün kartında nötr duruyordu — iki ekran aynı şeye iki
+             farklı cevap veriyordu.
+             Yeşil TÜRETİLİR (bütün konular bitmişse), kırmızı elle işaretlenen
+             "aksadı" durumudur; konu satırları kendi işaretlerini ayrıca
+             taşımaya devam eder. */
+          const cellTopics = cell.flatMap((m) => m.topics ?? []).filter((t) => (t.text ?? "").trim());
+          const outcome: "done" | "missed" | null =
+            cell.some((m) => m.status === "missed")
+              ? "missed"
+              : cellTopics.length > 0 && cellTopics.every((t) => !!t.done_at)
+                ? "done"
+                : null;
           const kim = cell.map((m) => m.kim).filter(Boolean).join(", ");
           const collabIds = [...new Set(cell.flatMap((m) => m.collaborator_ids ?? []))];
           const topics = (topicRows.get(`${iso}|${slot}`) ?? []).filter(Boolean) as PlanningTopic[];
@@ -236,8 +254,12 @@ export function PlanningDayList({
                 <XCircle size={22} strokeWidth={2.5} className="mt-px shrink-0 text-danger" aria-label="Aksadı — sonraki güne eklenmeli" />
               )}
               <span className="min-w-0 flex-1">
+                {/* `??` DEĞİL `||`: adı boş bırakılmış bir şerit (ad alanı
+                    isteğe bağlı) `??` ile boş dize döndürüyor ve başlığın
+                    üstünde BOŞ bir satır bırakıyordu. Aynı dosyadaki kalem
+                    düğmesi zaten `||` kullanıyor — iki yerde iki kural vardı. */}
                 <span className={cn("block font-semibold uppercase tracking-[0.08em] opacity-70", z.band, meta.title)}>
-                  {band?.label ?? meta.label}
+                  {band?.label || meta.label}
                 </span>
                 {/* Tamamlanan toplantı YEŞİL + ÜSTÜ ÇİZİLİ — masaüstü
                     ızgarasıyla aynı dil (Sıraç, 2026-09-08). */}
@@ -312,11 +334,11 @@ export function PlanningDayList({
                        tek konu tek konudur. */
                     const body = (
                       <>
-                        <span className="mt-px shrink-0 text-[12px] font-semibold tabular-nums text-subtle">
+                        <span className={cn("mt-px shrink-0 font-semibold tabular-nums text-subtle", z.topicNo)}>
                           {i + 1}.
                         </span>
                         <span className={cn(
-                          "min-w-0 flex-1 text-[13.5px] leading-snug",
+                          "min-w-0 flex-1 leading-snug", z.topic,
                           t.done_at ? "text-success/90 line-through decoration-success/40"
                           : t.missed_at ? "text-danger"
                           : "text-ink/90",
@@ -342,12 +364,12 @@ export function PlanningDayList({
                             type="button"
                             onClick={() => onOpen(iso, slot, dayIdx, t.position ?? i)}
                             title="Yalnız bu konuyu aç"
-                            className="flex w-full items-start gap-2 px-3 py-2 text-left transition-colors duration-150 hover:bg-surface-hover active:bg-ink/[0.04]"
+                            className={cn("flex w-full items-start gap-2 text-left transition-colors duration-150 hover:bg-surface-hover active:bg-ink/[0.04]", z.topicPad)}
                           >
                             {body}
                           </button>
                         ) : (
-                          <div className="flex items-start gap-2 px-3 py-2">{body}</div>
+                          <div className={cn("flex items-start gap-2", z.topicPad)}>{body}</div>
                         )}
                       </li>
                     );

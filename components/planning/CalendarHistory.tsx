@@ -3,10 +3,11 @@
 import { useCallback, useState } from "react";
 import {
   History, Plus, Pencil, Trash2, CopyPlus, Send, CheckCircle2, XCircle, Lock,
-  MoveRight, Loader2, type LucideIcon,
+  MoveRight, Loader2, AlertTriangle, type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Overlay } from "@/components/ui/Overlay";
+import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { fetchCalendarActivity, type CalendarActivityResult } from "@/lib/actions/planning-activity";
 
@@ -67,6 +68,11 @@ export function CalendarHistory() {
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<CalendarActivityResult | null>(null);
   const [loading, setLoading] = useState(false);
+  /* İSTEK PATLARSA SÖYLENİR. `.catch` yoktu: bağlantı koptuğunda `data` null
+     kalıyor ve pencere "Henüz kayıt yok" yazıyordu — yani sistem, yüklenemeyen
+     bir listeyi BOŞ liste diye gösteriyordu. Bu dosyanın kendi kuralı bunun
+     tersi: "sessiz yalan, hatadan kötüdür." */
+  const [failed, setFailed] = useState(false);
 
   /* VERİ AÇILIŞTA ÇEKİLİR — ama ETKİ İÇİNDEN DEĞİL.
      Önceki hâli `useEffect` içinde `setLoading(true)` çağırıyordu; React
@@ -75,8 +81,10 @@ export function CalendarHistory() {
      açan ZATEN bir olaydır; yükleme de o olayda başlar. */
   const load = useCallback(() => {
     setLoading(true);
+    setFailed(false);
     fetchCalendarActivity()
       .then(setData)
+      .catch(() => setFailed(true))
       .finally(() => setLoading(false));
   }, []);
 
@@ -86,6 +94,9 @@ export function CalendarHistory() {
        isteyen sayfayı yeniler — geçmiş saniyelik bir veri değil. */
     if (data === null && !loading) load();
   }, [data, loading, load]);
+
+  /* Yeniden denemek pencereyi kapatmayı gerektirmesin. */
+  const retry = useCallback(() => { if (!loading) load(); }, [loading, load]);
 
   return (
     <>
@@ -111,6 +122,13 @@ export function CalendarHistory() {
             <div className="flex items-center justify-center gap-2 py-10 text-[13px] text-muted">
               <Loader2 size={15} className="animate-spin" aria-hidden /> Yükleniyor…
             </div>
+          ) : failed ? (
+            <EmptyState
+              icon={AlertTriangle}
+              title="Geçmiş yüklenemedi."
+              description="Bağlantı kurulamadı. Tekrar deneyin."
+              action={<Button variant="secondary" size="sm" onClick={retry} loading={loading}>Tekrar dene</Button>}
+            />
           ) : data && !data.allowed ? (
             /* YETKİ YOK ≠ KAYIT YOK. Günlüğü okumak yönetici yetkisi ister
                (RLS `wal_select`); bunu "henüz kayıt yok" diye göstermek üyeye

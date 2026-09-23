@@ -117,6 +117,21 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
   const [viewH, setViewH] = useState(600);
   const [viewW, setViewW] = useState(1200);
   const [dragging, setDragging] = useState(false);
+  /* SÜRÜKLEME PENCEREDE BİTER. Bırakma yalnız ızgaranın kendi `onMouseUp`'ında
+     dinleniyordu: fare araç çubuğunun, sayfa sekmelerinin ya da pencerenin
+     DIŞINDA bırakılınca `dragging` true kalıyor ve kullanıcı bir daha herhangi
+     bir hücrenin üstünden geçtiğinde seçim düğmeye basmadan büyümeye devam
+     ediyordu. Doldurma tutamağı bu sorunu zaten pencere seviyesinde çözmüştü;
+     seçim sürüklemesi aynı çözümü almamıştı. */
+  useEffect(() => {
+    const stop = () => setDragging(false);
+    window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
+    return () => {
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
+    };
+  }, []);
   /** Doldurma tutamacı sürükleniyorsa hedef aralık. */
   const [fillTo, setFillTo] = useState<{ r: number; c: number } | null>(null);
   /* Sürükleme durumu ref'te de tutulur: bırakma (mouseup) pencere seviyesinde
@@ -463,9 +478,19 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
     if (meta && e.key.toLowerCase() === "z") { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
     if (meta && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); return; }
     if (meta && e.key.toLowerCase() === "a") { e.preventDefault(); setSel({ r1: 0, c1: 0, r2: sheet.rows - 1, c2: sheet.cols - 1 }); return; }
-    if (meta && e.key.toLowerCase() === "b") { e.preventDefault(); applyStyle({ b: !activeStyle.b }); return; }
-    if (meta && e.key.toLowerCase() === "i") { e.preventDefault(); applyStyle({ i: !activeStyle.i }); return; }
-    if (meta && e.key.toLowerCase() === "u") { e.preventDefault(); applyStyle({ u: !activeStyle.u }); return; }
+    /* BİÇİM O ANKİ HÜCREDEN OKUNUR, kapanıştan değil. `activeStyle` render
+       sırasında türetiliyor ama bu geri çağırımın bağımlılıklarında YOK
+       (yukarıdaki eslint-disable); biçim değiştikten sonra kapanış eski
+       değeri görüyor ve ⌘B ikinci kez basıldığında yine `true` hesaplıyordu —
+       kalın bir daha KAPANMIYORDU. Araç çubuğundaki aynı düğme çalışıyordu:
+       aynı iş, iki ayrı sonuç. `sheetRef` her zaman günceldir. */
+    if (meta && "biu".includes(e.key.toLowerCase())) {
+      e.preventDefault();
+      const cur = getCell(sheetRef.current, active.r, active.c)?.s ?? {};
+      const k = e.key.toLowerCase() as "b" | "i" | "u";
+      applyStyle({ [k]: !cur[k] });
+      return;
+    }
 
     /* Shift+ok seçimi UCUNDAN büyütür.
        Hareket her zaman `active`ten (seçimin çıpası) hesaplanıyordu; bu yüzden
@@ -579,6 +604,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
   function pasteText(text: string) {
     const rows = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
     if (rows.length && rows[rows.length - 1] === "") rows.pop();
+    if (rows.length === 0) return;   // Math.max(...[]) = -Infinity → bozuk seçim
     let g = sheetRef.current;
     const needRows = active.r + rows.length;
     const needCols = active.c + Math.max(...rows.map((r) => r.split("\t").length));
@@ -673,25 +699,15 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
       return d;
     };
 
-    if (down) {
-      for (let c = n.c1; c <= n.c2; c++) {
-        const col = [];
-        for (let r = n.r1; r <= n.r2; r++) col.push(parseNumber(getCell(g0, r, c)?.v ?? ""));
-        const step = stepOf(col);
-        for (let r = n.r2 + 1; r <= to.r; r++) {
-          const srcR = n.r1 + ((r - n.r1) % srcH);
-          const src = getCell(g0, srcR, c);
-          if (step !== null) {
-            const base = col[col.length - 1] as number;
-            g = writeCell(g, r, c, String(base + step * (r - n.r2)));
-          } else if (src?.f) {
-            g = setCell(g, r, c, { ...src, f: shiftFormula(src.f, r - srcR, 0) });
-          } else {
-            g = setCell(g, r, c, src ? { ...src } : undefined);
-          }
-        }
-      }
-    }
+    /* ÖNCE SAĞA, SONRA AŞAĞI — sırası ÖNEMLİ.
+       Eskiden iki döngü birbirinden bağımsızdı: "aşağı" yalnız kaynak
+       sütunları, "sağa" yalnız kaynak satırları dolduruyordu. Tutamak hem
+       aşağı hem sağa çekilince SAĞ ALT DÖRTGEN hiçbirine girmiyor, boş
+       kalıyordu — üstelik ekran o alanı doldurulmuş gibi vurguluyor ve
+       sonunda seçiyordu. Kullanıcı "doldu" görüp delikli veri alıyordu.
+       Sağa uzatma önce yapılınca kaynak satırlar `to.c`ye kadar uzar;
+       ardından aşağı döngüsü o GENİŞLEMİŞ aralığı temel alır ve köşe de
+       kendiliğinden dolar. */
     if (right) {
       for (let r = n.r1; r <= n.r2; r++) {
         const row = [];
@@ -705,6 +721,26 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
             g = writeCell(g, r, c, String(base + step * (c - n.c2)));
           } else if (src?.f) {
             g = setCell(g, r, c, { ...src, f: shiftFormula(src.f, 0, c - srcC) });
+          } else {
+            g = setCell(g, r, c, src ? { ...src } : undefined);
+          }
+        }
+      }
+    }
+    if (down) {
+      const lastCol = right ? to.c : n.c2;
+      for (let c = n.c1; c <= lastCol; c++) {
+        const col = [];
+        for (let r = n.r1; r <= n.r2; r++) col.push(parseNumber(getCell(g, r, c)?.v ?? ""));
+        const step = stepOf(col);
+        for (let r = n.r2 + 1; r <= to.r; r++) {
+          const srcR = n.r1 + ((r - n.r1) % srcH);
+          const src = getCell(g, srcR, c);
+          if (step !== null) {
+            const base = col[col.length - 1] as number;
+            g = writeCell(g, r, c, String(base + step * (r - n.r2)));
+          } else if (src?.f) {
+            g = setCell(g, r, c, { ...src, f: shiftFormula(src.f, r - srcR, 0) });
           } else {
             g = setCell(g, r, c, src ? { ...src } : undefined);
           }
@@ -776,7 +812,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
     const name = w.sheets[index].name;
     if (!(await ask({
       title: "Sayfa silinsin mi?",
-      message: `"${name}" sayfası ve İÇİNDEKİ TÜM VERİLER kalıcı olarak silinir.`,
+      message: `"${name}" sayfası ve içindeki tüm veriler kalıcı olarak silinir. Bu işlem geri alınamaz.`,
     }))) return;
     const sheets = w.sheets.filter((_, i) => i !== index);
     commitWb({ engine: "wb", sheets, active: Math.max(0, Math.min(sheets.length - 1, index > 0 ? index - 1 : 0)) });
@@ -801,6 +837,12 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
   // ── Sütun genişliği / satır yüksekliği sürükleme ──────────────────────────
   const resizeRef = useRef<{ kind: "col" | "row"; i: number; start: number; startSize: number } | null>(null);
   useEffect(() => {
+    /* SALT OKUNUR TABLO BOYUTLANDIRILAMAZ. Diğer bütün değişiklikler
+       `commitWb` üzerinden geçiyor ve orada `if (readOnly) return` var; bu
+       efekt ise doğrudan `setWb` çağırıp ardından `onDirty` tetikliyordu —
+       kilitli/arşivli bir tabloda sütun çekilince kitap değişiyor, kaydetme
+       başlıyor ve sunucu haklı olarak reddedip ekrana hata basıyordu. */
+    if (readOnly) return;
     // POINTER: boyutlandırma çubukları da telefonda çalışsın (bkz. doldurma).
     function onMove(e: PointerEvent) {
       const st = resizeRef.current;
@@ -822,7 +864,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
     };
-  }, [onDirty]);
+  }, [onDirty, readOnly]);
 
   // ── Yerleşim hesapları ────────────────────────────────────────────────────
   const rowTops = useMemo(() => {
@@ -1031,15 +1073,13 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                   { v: "r", label: "Sağ" },
                   { v: "", label: "Kenarlığı kaldır" },
                 ].map((o) => (
-                  <button
-                    key={o.label}
-                    type="button"
-                    role="menuitem"
-                    onClick={() => applyStyle({ bd: o.v })}
-                    className="block w-full rounded-control px-2 py-1.5 text-left text-[13.5px] text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
-                  >
+                  /* Ortak `MenuItem` — aynı dosyadaki sağ tık menüsüyle AYNI
+                     dolgu ve AYNI dinlenme rengi. Elle yazılan sürüm `px-2` ve
+                     `text-muted` taşıyordu: tek araç çubuğunda iki ayrı menü
+                     görünümü vardı. */
+                  <MenuItem key={o.label} onClick={() => applyStyle({ bd: o.v })}>
                     {o.label}
-                  </button>
+                  </MenuItem>
                 ))}
               </div>
             )}
@@ -1063,7 +1103,13 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
           <SelectInput
             value={activeStyle.n ?? "auto"}
             onChange={(e) => applyStyle({ n: e.target.value as NumberFormat })}
-            className="h-8 w-auto py-0 pl-2 pr-7 text-[12.5px] text-muted"
+            /* `pr-8` ŞART: ok globals.css'te 1.9rem sağ pay ayırıyor, `pr-7`
+               (28px) onun altında kalıp son harfin üstüne biniyordu (bkz.
+               ui/Field notu). `max-md:pointer-coarse:h-8` de ŞART: ortak
+               CONTROL dokunmatikte h-11 veriyor ve `h-8` başka bir varyant
+               grubunda olduğu için onu EZMİYOR — telefonda 44px'lik bu kutu
+               32px'lik düğmelerin arasından dışarı taşıyordu. */
+            className="h-8 max-md:pointer-coarse:h-8 w-auto py-0 pl-2 pr-8 text-[12.5px] text-muted"
             aria-label="Sayı biçimi"
           >
             {NUMBER_FORMAT_LABELS.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
@@ -1076,8 +1122,10 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
 
       {/* ── Formül çubuğu ────────────────────────────────────────────────── */}
       <div className="flex items-center gap-0 border-b border-hairline">
-        <span className="grid h-8 shrink-0 place-items-center border-r border-hairline px-2 text-[12.5px] font-semibold tabular-nums text-muted" style={{ width: GUTTER_W + 24 }}>
-          {selLabel}
+        {/* Kutu SABİT genişlikte (76px) ama etiket "A1:CV5000" kadar uzayabilir;
+            kırpılmayınca yandaki "fx" hücresinin üstüne taşıyordu. */}
+        <span className="grid h-8 shrink-0 place-items-center overflow-hidden border-r border-hairline px-2 text-[12.5px] font-semibold tabular-nums text-muted" style={{ width: GUTTER_W + 24 }}>
+          <span className="w-full truncate text-center" title={selLabel}>{selLabel}</span>
         </span>
         <span aria-hidden className="grid h-8 w-7 shrink-0 place-items-center border-r border-hairline text-[13px] font-medium italic text-subtle">fx</span>
         {/* onBlur ŞART: odak kaybında düzenleme kapanmazsa onKeyDown'daki
@@ -1134,12 +1182,16 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                 title={`${colName(c)} sütunu — sağ tık: ekle / sil`}
               >
                 {colName(c)}
+                {/* Tutamak yalnız düzenlenebilir tabloda: çizilip hiçbir şey
+                    yapmayan bir kontrol "bozuk" diye okunur. */}
+                {!readOnly && (
                 <span
                   onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); resizeRef.current = { kind: "col", i: c, start: e.clientX, startSize: colWidth(sheetRef.current, c) }; }}
                   style={{ touchAction: "none" }}
                   title={`${colName(c)} sütun genişliği`}
                   className="absolute right-0 top-0 h-full w-2.5 cursor-col-resize hover:bg-brand/40"
                 />
+                )}
               </div>
             ))}
           </div>
@@ -1162,18 +1214,41 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                   title="Sağ tık: satır ekle / sil"
                 >
                   {r + 1}
+                  {!readOnly && (
                   <span
                     onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); resizeRef.current = { kind: "row", i: r, start: e.clientY, startSize: rowHeight(sheetRef.current, r) }; }}
                     style={{ touchAction: "none" }}
                     title={`${r + 1}. satır yüksekliği`}
                     className="absolute bottom-0 left-0 h-2.5 w-full cursor-row-resize hover:bg-brand/40"
                   />
+                  )}
                 </div>
 
                 {colPadLeft > 0 && <div aria-hidden className="shrink-0" style={{ width: colPadLeft }} />}
                 {visibleCols.map((c) => {
                   const mg = mergeAt(sheet, r, c);
-                  if (mg && !mg.anchor) return null;         // birleşmenin gövdesi çizilmez
+                  if (mg && !mg.anchor) {
+                    /* ÇAPA SATIRI: genişliği çapa hücresi taşıyor (aşağıdaki
+                       `w`), bu yüzden hiçbir şey çizilmez — yatay birleşme
+                       böyle çalışıyor.
+
+                       ALT SATIRLAR: burada da `null` dönülüyordu ve SATIR BİR
+                       FLEX KUTUSU olduğu için birleşmenin altındaki her satırda
+                       sağdaki bütün sütunlar birleşme genişliği kadar SOLA
+                       KAYIYORDU — iki satırı aşan her birleşme ızgarayı boydan
+                       boya hizasız bırakıyordu. Yer tutucu saydamdır ve
+                       tıklamayı geçirir: çapa hücresinin taşan gövdesi altından
+                       görünmeye devam eder, yalnız genişlik korunur. */
+                    if (r === mg.rect.r1) return null;
+                    return (
+                      <div
+                        key={c}
+                        aria-hidden
+                        className="pointer-events-none shrink-0"
+                        style={{ width: colWidth(sheet, c), height: rh }}
+                      />
+                    );
+                  }
 
                   const w = mg
                     ? Array.from({ length: mg.rect.c2 - mg.rect.c1 + 1 }, (_, i) => colWidth(sheet, mg.rect.c1 + i)).reduce((a, b) => a + b, 0)
@@ -1365,7 +1440,14 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                              büyütür (görsel boyut aynı kalır). */
                           style={{ touchAction: "none" }}
                           title="Aşağı ya da sağa çekerek doldur"
-                          className="tap-target absolute -bottom-[3px] -right-[3px] z-30 h-2 w-2 cursor-crosshair rounded-[1px] bg-brand ring-1 ring-surface"
+                          /* Tutamak hücrenin İÇİNDE durur. Eskiden
+                             `-bottom-[3px] -right-[3px]` ile 8px'lik kutunun
+                             3px'i dışarı taşıyordu; hücre `overflow-hidden`
+                             olduğu için taşan kısım ve `ring` halkası
+                             kırpılıyor, geriye köşeye yapışmış 5px'lik bir
+                             kırıntı kalıyordu — hem görünmüyor hem
+                             tutulamıyordu. */
+                          className="tap-target absolute bottom-0 right-0 z-30 h-2.5 w-2.5 cursor-crosshair rounded-[1px] bg-brand ring-1 ring-surface"
                         />
                       )}
                     </div>
@@ -1504,13 +1586,17 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
           <MenuItem onClick={() => { toggleMerge(); setMenu(null); }}>Hücreleri birleştir / çöz</MenuItem>
           <MenuSep />
           <MenuItem onClick={() => { setPickerOpen(true); setMenu(null); }}>Görsel ekle…</MenuItem>
+          {/* Üçü de GÖRSEL VARKEN çıkar. "Görseli kaldır" koşulun DIŞINDA
+              kalmıştı: görseli olmayan bir hücrede de listede duruyor,
+              basılınca hiçbir şey olmuyordu. Araç çubuğundaki karşılığı
+              zaten doğru şekilde gizleniyor. */}
           {getCell(sheet, active.r, active.c)?.img && (
             <>
               <MenuItem onClick={() => { resizeImage(1); setMenu(null); }}>Görseli büyüt</MenuItem>
               <MenuItem onClick={() => { resizeImage(-1); setMenu(null); }}>Görseli küçült</MenuItem>
+              <MenuItem onClick={() => { clearImages(); setMenu(null); }}>Görseli kaldır</MenuItem>
             </>
           )}
-          <MenuItem onClick={() => { clearImages(); setMenu(null); }}>Görseli kaldır</MenuItem>
           <MenuSep />
           <MenuItem onClick={() => { clearRange(norm(sel), true); setMenu(null); }} danger>İçeriği ve biçimi temizle</MenuItem>
         </div>

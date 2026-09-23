@@ -415,15 +415,21 @@ export function DriveBrowser({
      yenileme, geri/ileri ve bağlantı paylaşımı kendiliğinden çalışıyor. */
   const searchParams = useSearchParams();
   const cwd = searchParams.get("f");
-  const setCwd = useCallback((id: string | null) => {
-    const next = new URLSearchParams(searchParams.toString());
-    if (id) next.set("f", id);
-    else next.delete("f");
-    const qs = next.toString();
+  /* TEK YAZICI. Kutu ve klasör AYNI adres satırında yaşıyor; ikisini iki ayrı
+     `router.push` ile yazmak olmuyor — her ikisi de aynı `searchParams`
+     anlık görüntüsünden türediği için İKİNCİSİ BİRİNCİYİ EZİYOR. Kutudan
+     çıkarken (kök halkası) hem `b` hem `f` silinmeliydi; iki çağrıyla yalnız
+     biri siliniyordu. */
+  const navigate = useCallback((next: { bucket?: BucketKey | null; folder?: string | null }) => {
+    const p = new URLSearchParams(searchParams.toString());
+    if ("bucket" in next) { if (next.bucket) p.set("b", next.bucket); else p.delete("b"); }
+    if ("folder" in next) { if (next.folder) p.set("f", next.folder); else p.delete("f"); }
+    const qs = p.toString();
     /* scroll:false — klasör değiştirmek sayfanın başına atmasın; Drive'da da
        liste yerinde kalır. */
     router.push(qs ? `?${qs}` : "?", { scroll: false });
   }, [router, searchParams]);
+  const setCwd = useCallback((id: string | null) => navigate({ folder: id }), [navigate]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   /** Yeni klasörün adı yazılıyor — kart, klasörlerin başında yerinde açılır. */
@@ -459,21 +465,26 @@ export function DriveBrowser({
      RESİMLER İÇİN DE AYRI BİR BÖLÜM, onlar da kendi içinde klasörleşmiş
      olabilir. HER ŞEY KENDİ YERİNDE OLSUN."
      null = giriş (kutular). Bir kutu seçilince yalnız o türün klasörleri ve
-     dosyaları görünür; klasör gezinmesi kutunun içinde sürer. */
-  const [bucket, setBucket] = useState<BucketKey | null>(null);
-  /* İÇERİK EKRANI mı, KUTU SEÇİCİ mi?
-     `cwd` ADRESTE (?f=<id>), `bucket` ise bileşen DURUMUNDA yaşıyor. İkisi
-     ayrışabiliyordu: bir klasörün içindeyken sayfa yenilenince (ya da ?f=
-     bağlantısı doğrudan açılınca) cwd geri gelir ama bucket sıfırlanır —
-     ekran klasörün içeriğini değil KUTU SEÇİCİYİ çizerdi.
+     dosyaları görünür; klasör gezinmesi kutunun içinde sürer.
 
+     KUTU DA ADRESTE (?b=<anahtar>). Klasör `?f=` ile adrese taşınmıştı ama
+     kutu bileşen DURUMUNDA kalmıştı ve ikisi ayrışıyordu: "Excel" kutusundayken
+     sayfayı yenileyen (ya da bağlantıyı paylaşan) kullanıcı kutu seçiciye
+     düşüyor, tarayıcının "geri" düğmesi de kutudan çıkarmıyordu. Proje kuralı
+     net: görünüm derinliği adreste yaşar.
+
+     Adresten gelen değer DIŞARIDAN gelir — elle yazılmış ya da eski bir
+     bağlantıdan gelmiş olabilir. Tanınmayan anahtar YOK SAYILIR ve giriş
+     ekranına düşülür; yoksa ekran boş listeyi "burası boş" diye gösterip
+     yalan söylerdi. */
+  const rawBucket = searchParams.get("b");
+  const bucket: BucketKey | null =
+    rawBucket && BUCKET_BY_KEY.has(rawBucket as BucketKey) ? (rawBucket as BucketKey) : null;
+  /* İÇERİK EKRANI mı, KUTU SEÇİCİ mi?
      Şeyda Nisa (12.09.2026): "Rapor klasörünü açtığımda tike tıklıyorum,
      klasör oluşuyor ama klasör gelmiyor." Kayıt açılıyordu; ekran yanlış
-     bölümü çiziyordu. Kökte klasör açınca içine girme davranışı da tam bu
-     duruma düşüyordu (cwd doldu, bucket boş).
-
-     Kural artık tek: İÇERİDEYSEK içerik çizilir — kutu seçili olsun ya da
-     olmasın. */
+     bölümü çiziyordu. Kural tek: İÇERİDEYSEK içerik çizilir — kutu seçili
+     olsun ya da olmasın. */
   const inFolderOrBucket = bucket !== null || !!cwd;
   const [upload, setUpload] = useState<UploadState | null>(null);
   const [preview, setPreview] = useState<PreviewState | null>(null);
@@ -1005,7 +1016,7 @@ export function DriveBrowser({
   /** Görünürlük satırı — klasör, yazı, tablo ve dosyada AYNI cümle. */
   const visibilityAction = (
     it: DriveItem,
-    apply: (next: "all" | "admin") => Promise<{ error?: string } | unknown>,
+    apply: (_next: "all" | "admin") => Promise<{ error?: string } | unknown>,
     key: string,
   ): MenuAction => ({
     label: it.restricted ? "Tüm üyelere göster" : "Yalnız yöneticiye kapat",
@@ -1317,7 +1328,7 @@ export function DriveBrowser({
       <Breadcrumbs
         ariaLabel="Klasör yolu"
         items={[
-          { label: rootLabel, onSelect: () => { setBucket(null); setCwd(null); setQuery(""); } },
+          { label: rootLabel, onSelect: () => { navigate({ bucket: null, folder: null }); setQuery(""); } },
           ...(bucket
             ? [{ label: BUCKET_BY_KEY.get(bucket)?.label ?? "", onSelect: () => setCwd(null) }]
             : []),
@@ -1569,7 +1580,7 @@ export function DriveBrowser({
               return (
                 <Tile
                   key={b.key}
-                  onClick={() => { setBucket(b.key); setCwd(null); setQuery(""); setTypeFilter("all"); }}
+                  onClick={() => { navigate({ bucket: b.key, folder: null }); setQuery(""); setTypeFilter("all"); }}
                   title={b.label}
                   meta={n > 0 ? `${n} dosya` : b.hint}
                   icon={id.icon}
@@ -2229,7 +2240,10 @@ function DriveGrid({
           <div
             key={it.key}
             onContextMenu={openMenuOnContext}
-            className={cn("relative min-w-0", actions && "[&>a]:pr-11 [&>button]:pr-11")}
+            /* `[&>div]:pr-11` de ŞART: adresi olmayan bir bağlantı kaydında
+               `Tile` ne <a> ne <button>, düz bir <div> çiziyor — o satırda ⋯
+               menüsü başlığın ÜSTÜNE biniyordu. */
+            className={cn("relative min-w-0", actions && "[&>a]:pr-11 [&>button]:pr-11 [&>div]:pr-11")}
           >
             <Tile
               layout="row"

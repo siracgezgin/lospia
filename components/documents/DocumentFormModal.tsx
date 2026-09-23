@@ -117,7 +117,11 @@ export function DocumentFormModal({
       title: form.title,
       description: form.description,
       document_type: form.document_type,
-      url: form.url,
+      /* DOĞRULANAN DEĞER KAYDEDİLİR. Kontrol `url` (kırpılmış) üzerinde
+         yapılıyor ama kayda `form.url` (ham) gidiyordu: kopyala-yapıştırla
+         gelen baştaki/sondaki boşluk adrese yazılıyor ve bağlantı tıklanınca
+         404 dönüyordu. */
+      url,
       status: form.status as "draft" | "in_review" | "approved" | "archived",
       department_id: form.department_id,
       related_task_id: form.related_task_id,

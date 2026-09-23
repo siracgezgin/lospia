@@ -21,7 +21,9 @@ import { Button, IconButton } from "@/components/ui/Button";
 import { TextInput } from "@/components/ui/Field";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { CollectionTabs } from "./PaymentTable";
+/* Sekme şeridi ve ikincil düğme görünümü ortak: Koleksiyon, Maliyet ve Ödeme
+   aynı araç çubuğunu çizsin (sınıf iki dosyada ayrı ayrı yazılıyordu). */
+import { CollectionTabs, secondaryBtnCls } from "./PaymentTable";
 import { SeasonSwitch, type SwitchSeason } from "./SeasonSwitch";
 import { Tile, TileGrid } from "@/components/ui/TileGrid";
 import { COLLECTION_TAXONOMY, type CategoryNode } from "@/lib/collection/taxonomy";
@@ -99,13 +101,6 @@ function FALLBACK_IDENTITY(key: string): { hex: string; icon: typeof Shirt } {
   // Kullanıcının açtığı kategori: kumaş kartelası — nötr ama moda dilinde.
   return { hex: NEW_CATEGORY_HUES[h % NEW_CATEGORY_HUES.length]!, icon: SwatchBook };
 }
-
-/** DownloadLink kendi <button>'ını çizer; Button primitifinin `secondary`
- *  görünümü buraya sınıf olarak taşınır ki araç çubuğundaki düğmeler aynı
- *  boyda ve aynı çerçevede dursun. */
-const secondaryBtnCls =
-  "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-control border border-line bg-surface px-3.5 text-[13.5px] font-medium text-ink shadow-card " +
-  "transition-[background-color,border-color,color,transform] duration-150 ease-standard hover:border-line-strong hover:bg-surface-muted active:scale-[0.98]";
 
 function norm(s: string): string {
   return (s ?? "")
@@ -349,7 +344,10 @@ export function CollectionBrowser({ sheets, isAdmin, isOwner = false, seasons = 
   const resetOrder = (sheet: CollectionItem) => {
     startResetOrder(async () => {
       const res = await resetCollectionSheetOrder(sheet.id);
-      if (res && "error" in res) { setCoverError(res.error); return; }
+      /* Hata KART EYLEMİ kanalına düşer: kapak yükleme satırı yalnız ürün
+         ızgarası çizilirken görünüyor ve sıralama hatası sessizce kayboluyordu. */
+      if (res && "error" in res) { setActionError(`“${sheet.title}” sitedeki sıraya döndürülemedi: ${res.error}`); return; }
+      setActionError(null);
       router.refresh();
     });
   };
@@ -511,7 +509,8 @@ export function CollectionBrowser({ sheets, isAdmin, isOwner = false, seasons = 
             {selCat && selCat !== UNCAT && (
               <Link
                 href={`/production/new?kategori=${selCat}${selSub ? `&alt=${selSub}` : ""}`}
-                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-control bg-brand px-3.5 text-[13.5px] font-medium text-white shadow-card transition-[background-color,transform] duration-150 ease-standard hover:bg-brand-strong active:scale-[0.98]"
+                /* Boy Button primitifiyle aynı — dokunmatikte de (h-11). */
+                className="inline-flex h-9 pointer-coarse:h-11 shrink-0 items-center gap-1.5 rounded-control bg-brand px-3.5 text-[13.5px] font-medium text-white shadow-card transition-[background-color,transform] duration-150 ease-standard hover:bg-brand-strong active:scale-[0.98]"
               >
                 {/* Sadece "Yeni föy". Kategori adı zaten başlıkta yazıyor;
                     düğmeye de eklemek ("One-of-a-Kind'a Yeni föy") satırı
@@ -859,8 +858,13 @@ function SheetCard({
       onContextMenu={(e) => { e.preventDefault(); onMove(s); }}
       /* KART: hover'da YALNIZ gölge derinleşir. Kenarlık da değişince kutu iki
          kanaldan birden oynuyor, ızgara fare gezdikçe titriyordu. */
+      /* KART ARTIK KIRPMIYOR. `overflow-hidden` kartın üstündeydi ve içindeki
+         eylem menüsünü (208px genişliğinde, ~7 satır) KESİYORDU: telefonda
+         kart 165 piksel olduğu için menünün sol kenarı ve son satırları —
+         "Kategoriye gönder", "Föyü sil" — hiç görünmüyordu. Kırpma artık
+         yalnız görselin kendi kutusunda; köşe yuvarlaklığı oraya taşındı. */
       className={cn(
-        "group relative flex flex-col overflow-hidden rounded-card border border-line bg-surface shadow-card transition-shadow duration-[180ms] ease-standard hover:shadow-card-hover",
+        "group relative flex flex-col rounded-card border border-line bg-surface shadow-card transition-shadow duration-[180ms] ease-standard hover:shadow-card-hover",
         isDragging && "z-[4] opacity-60 shadow-drawer",
       )}
     >
@@ -869,7 +873,11 @@ function SheetCard({
         aria-label={s.title}
         className="absolute inset-0 z-[1] rounded-card"
       />
-      <div className="aspect-[3/4] w-full overflow-hidden bg-surface-muted">
+      {/* Rozet GÖRSELİN İÇİNDE konumlanır: alt bilgi satırının yüksekliğine
+          göre hesaplanmış sabit bir uzaklık (bottom-54px) kullanılıyordu ve
+          ürün kodu/cinsi olmayan kartta satır kısaldığı için rozet ADIN
+          ÜSTÜNE biniyordu. */}
+      <div className="relative aspect-[3/4] w-full overflow-hidden rounded-t-card bg-surface-muted">
         {cover ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={cover} alt="" loading="lazy" className="h-full w-full object-cover" />
@@ -878,6 +886,18 @@ function SheetCard({
           <div className="grid h-full w-full place-items-center text-subtle">
             <ImageIcon size={22} strokeWidth={1.5} aria-hidden />
           </div>
+        )}
+        {/* KONFİRME dışında rozet yok.
+            Kart eskiden üç durumdan birini gösteriyordu: "Konfirme" /
+            "N eksik" / "Hazır". Aslı Hanım (2026-08-24): "tamamlandı,
+            tamamlanmadı, eksik kaldı, geç kaldı… Öyle bir şey istemiyoruz ki."
+            Sol ALTTA: sol üst köşe sürükleme tutamacının. */}
+        {s.confirmed_at && (
+          /* `pointer-events-none`: rozet bir süs, tıklamayı yutmasın — altındaki
+             yayılmış bağlantı kartın her noktasında föyü açmalı. */
+          <Badge className="pointer-events-none absolute bottom-2 left-2 z-[2] bg-success text-white shadow-card">
+            <ShieldCheck size={12} aria-hidden /> Konfirme
+          </Badge>
         )}
       </div>
 
@@ -1003,18 +1023,12 @@ function SheetCard({
         )}
       </SheetCardMenu>
 
-      {/* KONFİRME dışında rozet yok.
-          Kart eskiden üç durumdan birini gösteriyordu: "Konfirme" / "N eksik" /
-          "Hazır". Aslı Hanım (2026-08-24): "tamamlandı, tamamlanmadı, eksik
-          kaldı, geç kaldı… Öyle bir şey istemiyoruz ki."
-          SOL ALTA TAŞINDI: sol üst köşe artık sürükleme tutamacının. */}
-      {s.confirmed_at && (
-        <Badge className="absolute bottom-[54px] left-2 z-[2] bg-success text-white shadow-card">
-          <ShieldCheck size={12} aria-hidden /> Konfirme
-        </Badge>
-      )}
-      {/* Ad birincil; kod ve cins tek satırda, sessiz. */}
-      <div className="border-t border-hairline px-3 py-2.5">
+      {/* Ad birincil; kod ve cins tek satırda, sessiz.
+          `flex-1`: ızgara satırındaki kartlar en uzun karta göre gerilir;
+          kod/cins satırı olmayan kartta artan yükseklik alt bilgi kutusunun
+          ALTINDA boş bir şerit bırakıyordu. Fazlalığı kutu yutar, yazı yine
+          üstte hizalı durur. */}
+      <div className="flex-1 border-t border-hairline px-3 py-2.5">
         <h3 className="truncate text-[13.5px] font-medium tracking-tight text-ink transition-colors duration-150 group-hover:text-brand-strong" title={s.title}>
           {s.title}
         </h3>

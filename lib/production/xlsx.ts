@@ -8,8 +8,7 @@ import type { ProductionSheet, MaterialCategory, CostItemKey } from "@/types";
 import { COLLECTION_TAXONOMY, type CategoryNode } from "@/lib/collection/taxonomy";
 import { labelOf, subLabelOf } from "@/lib/collection/category-tree";
 import {
-  totalQuantity, quantityBySize, orderSizes, canonicalSize,
-  STANDARD_SIZES, COST_ITEM_DEFS, MATERIAL_COST_KEY, parseMoney,
+  COST_ITEM_DEFS, DIVIDED_COST_KEYS, MATERIAL_COST_KEY, STANDARD_SIZES, amountForQty, canonicalSize, mergeCostItems, orderSizes, parseMoney, productionQtyOf, quantityBySize, totalQuantity,
 } from "@/lib/collection/cost";
 
 const COLS = 9; // A–I
@@ -591,22 +590,38 @@ function computeRows(
   bomBySheet: Record<string, CostBomLite[]>,
 ): ComputedCostRow[] {
   return rows.map((row) => {
-    const bom = bomAmountsOf(bomBySheet[row.id]);
-    const items = row.pricing?.cost_items ?? [];
+    /* EKRANLA AYNI HESAP. Excel'in kendi formülü vardı ve üç yerde ekrandan
+       ayrılıyordu: (1) kademeli fiyatı (`amountForQty`) hiç okumuyordu,
+       (2) KALIP ve NUMUNE'yi adede bölmüyor, toplam tutarı birim maliyete
+       ekliyordu — Aslı Hanım'ın "4500 TL kalıp 50 adete bölünecek" kuralı
+       yalnız föyde işliyordu, (3) paydayı `totalQuantity` ile alıyordu, oysa
+       föy `productionQtyOf` kullanıyor (üstten seçilen adet).
+       Sonuç: indirilen dosya ekrandakinden başka bir birim maliyet yazıyordu.
+       Artık tek kaynak: lib/collection/cost.ts. */
+    const bomRows = bomBySheet[row.id];
+    const bom = bomAmountsOf(bomRows);
+    const qty = productionQtyOf(row.pricing, row.size_distribution);
+    const items = mergeCostItems(row.pricing?.cost_items);
     const amounts = {} as Record<CostItemKey, number>;
     for (const d of COST_ITEM_DEFS) {
       if (bom[d.key] != null) {
         amounts[d.key] = bom[d.key]!;
-      } else {
-        const it = items.find((x) => x.key === d.key);
-        amounts[d.key] = it ? parseMoney(it.amount) : 0;
+        continue;
       }
+      const it = items.find((x) => x.key === d.key);
+      const raw = it ? parseMoney(amountForQty(it, qty)) : 0;
+      /* Kalem sütunu da BİRİM tutarı yazar: bölünen kalemde toplam yazmak,
+         satırların toplamı ile birim maliyeti birbirinden ayırırdı. */
+      amounts[d.key] = DIVIDED_COST_KEYS.has(d.key) && qty > 0 ? raw / qty : raw;
     }
+    /* `unitCostOf` ÇAĞRILMIYOR: o tam reçete satırlarını istiyor, Excel ise
+       hafif bir şekil taşıyor (CostBomLite). `amounts` yukarıda aynı kuralları
+       uyguladığı için toplamı zaten o fonksiyonun sonucudur — tipi zorlamak
+       yerine hesabın kendisi tekrarlanmadan toplanıyor. */
     const itemSum = COST_ITEM_DEFS.reduce((a, d) => a + amounts[d.key], 0);
     const unit = itemSum > 0 ? itemSum : parseMoney(row.pricing?.unit_price);
     return {
-      row, amounts, itemSum, unit,
-      qty: totalQuantity(row.size_distribution),
+      row, amounts, itemSum, unit, qty,
       currency: (row.pricing?.currency ?? "TL").trim() || "TL",
     };
   });

@@ -290,8 +290,13 @@ export default async function HomePage() {
         kimMatches(t.kim, viewerName),
     );
   const shown = meetings.filter(inMeeting);
-  const todayMeetings = shown.filter((m) => m.meeting_date === todayIso);
-  const laterMeetings = shown.filter((m) => m.meeting_date > todayIso);
+  /* Gün karşılaştırması HER YERDE `slice(0, 10)` üzerinden. `meeting_date` bir
+     DATE kolonu ama satır bazı kurulumlarda saat ekiyle dönebiliyor; eşitlik
+     testi o durumda sessizce false kalıyor ve "Bugün" paneli boş açılıyordu.
+     `MeetingRow` zaten aynı kırpmayı yapıyor — iki yerde iki kural olmasın. */
+  const dayOf = (m: HomeMeeting) => String(m.meeting_date).slice(0, 10);
+  const todayMeetings = shown.filter((m) => dayOf(m) === todayIso);
+  const laterMeetings = shown.filter((m) => dayOf(m) > todayIso);
 
   const fullName = viewerName;
   const firstName = fullName?.trim().split(/\s+/)[0] ?? null;
@@ -305,7 +310,12 @@ export default async function HomePage() {
     ...(buckets.find((b) => b.key === "later")?.items ?? []),
     ...(buckets.find((b) => b.key === "undated")?.items ?? []),
   ];
-  const nothingAtAll = !tasksError && myTasks.length === 0 && meetings.length === 0;
+  /* "Masanız temiz" EKRANDA NE VARSA ONA BAKAR. Ölçü `meetings` (haftanın
+     bütün toplantıları) idi, oysa sayfa yalnız KİŞİNİN toplantılarını yazıyor:
+     ekip toplantı doluyken ama bakan kişi hiçbirinde yokken boş ekran yerine
+     içi "Bugün katıldığın toplantı yok" + "Bugün teslim edilecek iş yok"
+     yazan yarım dolu bir kart açılıyordu — sayfanın yarısı boş duruyordu. */
+  const nothingAtAll = !tasksError && myTasks.length === 0 && shown.length === 0;
 
   /* İkincil kutular TEK listede: hangisinin dolu olduğuna göre ızgaraya
      sırayla dizilirler. Böylece "bu hafta boş" diye sayfanın yarısı

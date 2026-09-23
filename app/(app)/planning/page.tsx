@@ -26,6 +26,48 @@ import type {
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Calendar" };
 
+type ProfileLite = Pick<Profile, "id" | "full_name" | "email" | "avatar_url">;
+type MemberRow = {
+  id: string; user_id: string; role: string;
+  color_key: string | null; icon_key: string | null;
+  profiles: ProfileLite | ProfileLite[] | null;
+};
+
+/**
+ * Üye satırları → ekranın kullandığı dört sözlük.
+ *
+ * Sayfanın gövdesinde duruyordu ve bu yüzden üye sorgusu, hangi ölçek açılırsa
+ * açılsın, DİĞER sorgulardan ÖNCE tek başına bekleniyordu. Kod buraya alınınca
+ * her ölçek kendi sorgularını `Promise.all` ile birlikte bekleyebiliyor.
+ *
+ * Rozetler FOTOĞRAF taşır (List'teki süzgeç baloncuklarıyla aynı dil); renk
+ * panodakiyle AYNI kaynaktan gelir (ekip geneli atama + yöneticinin seçimi) —
+ * Aslı Hanım (2026-08-24): "Kişilerin isimleri kendi renklerinde olsun."
+ */
+function buildMemberIndex(rows: MemberRow[]) {
+  const members: { id: string; name: string; photoUrl?: string | null }[] = [];
+  const memberNames: Record<string, string> = {};
+  const memberPhotos: Record<string, string | null> = {};
+  for (const m of rows) {
+    const p = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
+    if (!p) continue;
+    const name = p.full_name || p.email || "—";
+    members.push({ id: m.user_id, name, photoUrl: p.avatar_url ?? null });
+    memberNames[m.user_id] = name;
+    memberPhotos[m.user_id] = p.avatar_url ?? null;
+  }
+
+  const personHex: Record<string, string> = {};
+  const choices = Object.fromEntries(
+    rows.map((m) => [m.user_id, { colorKey: m.color_key, iconKey: m.icon_key }]),
+  );
+  for (const [id, tone] of Object.entries(assignPersonTones(rows.map((m) => m.user_id), choices))) {
+    personHex[id] = tone.hex;
+  }
+
+  return { members, memberNames, memberPhotos, personHex };
+}
+
 /**
  * Calendar — TEK takvim.
  *
@@ -46,50 +88,17 @@ export default async function CalendarPage({
   const sp = await searchParams;
   const scale = asCalendarScale(sp.v);
 
-  /* Sistemdeki üyeler — her ölçekte lazım (Kim rozetleri, kişi seçimi).
-     Sorgu burada BAŞLATILIR ama beklenmez: aşağıdaki toplantı sorgusuyla
-     paralel gitsin diye promise olarak tutuluyor. */
-  const membersPromise = supabase
+  /* Sistemdeki üyeler — Kim rozetleri ve kişi seçimi için.
+     Sorgu burada yalnız KURULUR, çalışmaz: PostgREST kurucusu ancak `await`
+     edilince istek atar. Yorum "beklenmez" diyordu ama hemen alt satırda
+     bekleniyordu — hafta görünümü üç sorguyu SIRAYLA yapıyordu (üye → şerit →
+     toplantı) ve yıl görünümü hiç kullanmadığı üyeleri de çekiyordu.
+     Artık her ölçek gerekli sorguları TEK turda, birlikte bekliyor; Yıl bu
+     sorguyu hiç çalıştırmıyor. */
+  const membersQuery = supabase
     .from("workspace_members")
     .select("id, user_id, role, color_key, icon_key, profiles(id, full_name, email, avatar_url)")
     .eq("workspace_id", workspaceId);
-  const membersRes = await membersPromise;
-  type ProfileLite = Pick<Profile, "id" | "full_name" | "email" | "avatar_url">;
-  type MemberRow = { id: string; user_id: string; role: string; color_key: string | null; icon_key: string | null; profiles: ProfileLite | ProfileLite[] | null };
-  const memberRowsData = (membersRes.data ?? []) as unknown as MemberRow[];
-  /* Kişi seçicideki rozetler artık FOTOĞRAF taşıyor (List'teki süzgeç
-     baloncuklarıyla aynı dil), o yüzden avatar da toplanır. Renk aşağıda
-     `personHex` ile aynı kaynaktan gelir — kişi her ekranda aynı görünür. */
-  const members: { id: string; name: string; photoUrl?: string | null }[] = [];
-  const memberNames: Record<string, string> = {};
-  /** profiles.id → fotoğraf. Kişi rozetleri artık YUVARLAK KART: fotoğrafı
-   *  olanın fotoğrafı, olmayanın kendi renginde baş harfi (Sıraç, 2026-08-30:
-   *  "isimler her yerde kart olmalı, harf olarak değil"). */
-  const memberPhotos: Record<string, string | null> = {};
-  for (const m of memberRowsData) {
-    const p = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
-    if (p) {
-      const name = p.full_name || p.email || "—";
-      members.push({ id: m.user_id, name, photoUrl: p.avatar_url ?? null });
-      memberNames[m.user_id] = name;
-      memberPhotos[m.user_id] = p.avatar_url ?? null;
-    }
-  }
-
-  /* Kişi renkleri — takvimdeki baş harf rozetleri (SE, GÖ, AF) herkeste aynı
-     marka rengindeydi; kimin olduğu ancak okunarak anlaşılıyordu. Aslı Hanım
-     (2026-08-24): "Kişilerin isimleri kendi renklerinde olsun."
-     Hesap panodakiyle AYNI kaynaktan: ekip geneli atama + yöneticinin seçimi. */
-  const personHex: Record<string, string> = {};
-  {
-    const seeds = memberRowsData.map((m) => m.user_id);
-    const choices = Object.fromEntries(
-      memberRowsData.map((m) => [m.user_id, { colorKey: m.color_key, iconKey: m.icon_key }]),
-    );
-    for (const [id, tone] of Object.entries(assignPersonTones(seeds, choices))) {
-      personHex[id] = tone.hex;
-    }
-  }
 
   /* Ölçek seçici (Hafta/Ay/Yıl) BU BAŞLIKTA DEĞİL: her görünüm onu kendi araç
      çubuğunun sağ ucunda çiziyor. Burada dururken hafta görünümünde sağda,
@@ -106,8 +115,10 @@ export default async function CalendarPage({
             ? "Haftalık toplantı ızgarası — gün, saat, konu ve sorumlular."
             : "Haftalık toplantı ızgarası — takvimi yöneticiler düzenler; size atanan işler Board’da görünür.")
           : scale === "ay"
-            ? "Ay görünümü — görevler teslim tarihine göre."
-            : "Yıl görünümü — 12 ay bir arada; bir güne tıklayınca o gün açılır."
+            /* Ay ölçeği 2026-09-10'da görev ızgarasından TOPLANTI takvimine
+               döndü; açıklama eski hâlinde kalmıştı. */
+            ? "Ay görünümü — toplantılar gününe göre."
+            : "Yıl görünümü — 12 ay bir arada; bir güne tıklayınca o ay açılır."
       }
       icon={CalendarRange}
     />
@@ -124,7 +135,8 @@ export default async function CalendarPage({
       const gridFrom = format(startOfWeek(startOfMonth(anchor), { weekStartsOn: 1 }), "yyyy-MM-dd");
       const gridTo = format(endOfWeek(endOfMonth(anchor), { weekStartsOn: 1 }), "yyyy-MM-dd");
 
-      const [monthRes, monthBandsRes] = await Promise.all([
+      const [membersRes, monthRes, monthBandsRes] = await Promise.all([
+        membersQuery,
         supabase
           .from("planning_meetings")
           .select("*, planning_topics(*)")
@@ -139,6 +151,8 @@ export default async function CalendarPage({
           .eq("workspace_id", workspaceId)
           .order("position"),
       ]);
+      const { members, memberNames, memberPhotos, personHex } =
+        buildMemberIndex((membersRes.data ?? []) as unknown as MemberRow[]);
 
       type MonthRow = PlanningMeeting & { planning_topics?: PlanningTopic[] | null };
       const monthMeetings: PlanningMeetingWithTopics[] =
@@ -189,20 +203,26 @@ export default async function CalendarPage({
       .is("archived_at", null)
       .is("deleted_at", null);
     if (!isAdmin) tasksQuery.eq("visibility", "workspace");
-    const tasksResult = await tasksQuery.or("due_date.not.is.null,start_date.not.is.null");
-    const tasks = (tasksResult.data ?? []) as Pick<
-      Task, "id" | "title" | "status" | "priority" | "due_date" | "start_date" | "department_id" | "visibility"
-    >[];
 
     const focusYear = sp.d && isValid(parseISO(sp.d)) ? parseISO(sp.d).getFullYear() : new Date().getFullYear();
     const yearStart = format(startOfYear(new Date(focusYear, 0, 1)), "yyyy-MM-dd");
     const yearEnd = format(endOfYear(new Date(focusYear, 0, 1)), "yyyy-MM-dd");
-    const meetingDaysRes = await supabase
-      .from("planning_meetings")
-      .select("meeting_date")
-      .eq("workspace_id", workspaceId)
-      .gte("meeting_date", yearStart)
-      .lte("meeting_date", yearEnd);
+
+    /* İki sorgu BİRBİRİNİ BEKLEMEZ: görevler ve toplantı günleri aynı haritayı
+       besliyor ama biri diğerinin sonucunu kullanmıyordu — yine de sırayla
+       bekleniyorlardı. Yıl görünümü zaten yılın tamamını okuyan en ağır ölçek. */
+    const [tasksResult, meetingDaysRes] = await Promise.all([
+      tasksQuery.or("due_date.not.is.null,start_date.not.is.null"),
+      supabase
+        .from("planning_meetings")
+        .select("meeting_date")
+        .eq("workspace_id", workspaceId)
+        .gte("meeting_date", yearStart)
+        .lte("meeting_date", yearEnd),
+    ]);
+    const tasks = (tasksResult.data ?? []) as Pick<
+      Task, "id" | "title" | "status" | "priority" | "due_date" | "start_date" | "department_id" | "visibility"
+    >[];
 
     const loadByDay: Record<string, YearDayLoad> = {};
     const bump = (iso: string, key: keyof YearDayLoad) => {
@@ -229,31 +249,6 @@ export default async function CalendarPage({
   }
 
   // ── Hafta (varsayılan) — haftalık toplantı ızgarası ────────────────────────
-  /* Sol sütun (şerit adı · saat · konu satırı) artık VERİ — Aslı Hanım
-     (2026-08-28): "Buraya neden müdahale edemiyorum?" Tablo boşsa ya da henüz
-     migrate edilmediyse kod varsayılanlarına düşülür; takvim her hâlükârda
-     açılır. */
-  const bandsRes = await supabase
-    .from("planning_bands")
-    .select("id, slot, category, label, topic_rows, columns")
-    .eq("workspace_id", workspaceId)
-    .order("position");
-  type BandRow = {
-    id: string; slot: string; category: string; label: string;
-    topic_rows: number; columns: unknown;
-  };
-  const bandRows = (bandsRes.error ? [] : (bandsRes.data ?? [])) as unknown as BandRow[];
-  const bands: RuntimeBand[] = bandRows.length
-    ? bandRows.map((b) => ({
-        id: b.id,
-        slot: b.slot,
-        category: b.category as RuntimeBand["category"],
-        label: b.label,
-        topicRows: b.topic_rows ?? 3,
-        columns: Array.isArray(b.columns) ? (b.columns as string[]) : [],
-      }))
-    : defaultRuntimeBands();
-
   /* GÜN — AYRI SAYFA DEĞİL, haftanın üstünde bir KART.
      Sıraç (2026-08-30): "Gün pop-up'ı hafta kısmında kart olarak açılsın,
      başka sayfa değil." Bu yüzden `?v=gun` kendi veri yolunu açmaz: hafta
@@ -296,7 +291,42 @@ export default async function CalendarPage({
       .order("time_slot", { ascending: true })
       .order("position", { ascending: true });
 
-  let meetingsRes = await weekQuery();
+  /* ÜYE · ŞERİT · TOPLANTI — ÜÇÜ BİRDEN. Üçü de yalnız `workspaceId` ve
+     haftanın sınırlarına bağlı; hiçbiri diğerinin sonucunu kullanmıyor. Yine de
+     sırayla bekleniyorlardı: takvim her açılışta üç gidiş-dönüş sürüyordu. */
+  const [membersRes, bandsRes, firstMeetingsRes] = await Promise.all([
+    membersQuery,
+    supabase
+      .from("planning_bands")
+      .select("id, slot, category, label, topic_rows, columns")
+      .eq("workspace_id", workspaceId)
+      .order("position"),
+    weekQuery(),
+  ]);
+  const { members, memberNames, memberPhotos, personHex } =
+    buildMemberIndex((membersRes.data ?? []) as unknown as MemberRow[]);
+
+  /* Sol sütun (şerit adı · saat · konu satırı) artık VERİ — Aslı Hanım
+     (2026-08-28): "Buraya neden müdahale edemiyorum?" Tablo boşsa ya da henüz
+     migrate edilmediyse kod varsayılanlarına düşülür; takvim her hâlükârda
+     açılır. */
+  type BandRow = {
+    id: string; slot: string; category: string; label: string;
+    topic_rows: number; columns: unknown;
+  };
+  const bandRows = (bandsRes.error ? [] : (bandsRes.data ?? [])) as unknown as BandRow[];
+  const bands: RuntimeBand[] = bandRows.length
+    ? bandRows.map((b) => ({
+        id: b.id,
+        slot: b.slot,
+        category: b.category as RuntimeBand["category"],
+        label: b.label,
+        topicRows: b.topic_rows ?? 3,
+        columns: Array.isArray(b.columns) ? (b.columns as string[]) : [],
+      }))
+    : defaultRuntimeBands();
+
+  let meetingsRes = firstMeetingsRes;
 
   // Her hafta AYNI iskeletle açılır — boşsa sessizce kurulur.
   // (Aslı Hanım, 2026-08-20: "Ben tek tek uğraşmayayım.")

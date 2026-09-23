@@ -567,13 +567,20 @@ export function MeetingEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snapshot]);
 
+  /* Otomatik kayıt, KENDİ DIŞINDAKİ bir kayıt sürerken hiç başlamaz.
+     `busy` yalnız kaydet/sil/çoğalt'ı sayıyordu; oysa "Davet gönder",
+     "Dışarıdan katılımcı ekle" ve "Konuyu çoğalt" da işe `persist()` ile
+     başlıyor. Zamanlayıcı tam o sırada dolduğunda aynı toplantıya iki eşzamanlı
+     kayıt gidiyor ve ikisi de konu id'lerini state'e geri yazıyordu. */
+  const persistInFlight = busy || isInviting || isAddingGuest || isDupTopic;
+
   useEffect(() => {
     if (isNew) return;                       // ilk kayıt elle
-    if (busy) return;                        // elle kayıt/silme/çoğaltma sürüyor
+    if (persistInFlight) return;             // başka bir kayıt sürüyor
     if (snapshot === savedSnapshot.current) return;
     const id = window.setTimeout(() => { void runAutoSave(); }, 1200);
     return () => window.clearTimeout(id);
-  }, [snapshot, isNew, busy, runAutoSave]);
+  }, [snapshot, isNew, persistInFlight, runAutoSave]);
 
   return (
     <Overlay
@@ -831,7 +838,10 @@ export function MeetingEditor({
                   placeholder={`Konu ${i + 1}`}
                   aria-label={`Konu ${i + 1}`}
                 />
-                <div className="w-[88px] shrink-0">
+                {/* 88px'te üç yüz sığmıyordu (24px rozet + iki bindirme + ok):
+                    seçimler okun üstüne taşıyordu. 112px dört yüzü de alır ve
+                    metin alanından yalnız 24px götürür. */}
+                <div className="w-[112px] shrink-0">
                   <MemberMultiSelect members={members} selected={t.participant_ids} onChange={(ids) => setTopic(i, { participant_ids: ids })} placeholder="Kim" compact personHex={personHex} />
                 </div>
                 {/* KİMİN YANINDAKİ ARTI. Aslı Hanım (2026-09-07): "Kim, yani

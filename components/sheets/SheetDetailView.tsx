@@ -488,7 +488,11 @@ export function SheetDetailView({
             label: f.name,
             href: `/documents?f=${f.id}`,
           })),
-          { label: metaTitle || sheet.title },
+          /* SON HALKA CANLI ADI GÖSTERİR. `metaTitle` yalnız künye penceresi
+             AÇILIRKEN dolduruluyor; satır içi ad kutusunda yazılan yeni ad
+             kaydedilip sayfa tazelenene kadar kırıntı yolu ESKİ adı yazmaya
+             devam ediyordu — aynı ekranda üstte bir ad, altta başka bir ad. */
+          { label: title || sheet.title },
         ]}
         rightSlot={
           <>
@@ -660,8 +664,9 @@ export function SheetDetailView({
              çubuğu zaten düzenleyicinin içinde; buraya başka bir şey koymak
              kazanılan yeri geri vermek olurdu. */
           <div className="flex shrink-0 items-center justify-between gap-2 px-1">
+            {/* Tam ekranda da CANLI ad (bkz. kırıntı yolundaki aynı not). */}
             <span className="min-w-0 truncate text-[14px] font-semibold tracking-tight text-ink">
-              {metaTitle || sheet.title}
+              {title || sheet.title}
             </span>
             <span className="flex shrink-0 items-center gap-2">
               <PresenceBar channelKey={`sheet:${sheet.id}`} me={me} />

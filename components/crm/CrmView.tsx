@@ -17,6 +17,7 @@ import { isFihristRow } from "@/lib/crm/constants";
 import {
   CRM_SEGMENTS,
   crmCategory,
+  crmCategoryOfSegment,
   segmentLabel,
   statusLabel,
   SEGMENT_TONE,
@@ -73,6 +74,28 @@ function norm(s: string): string {
 }
 
 const columnHelper = createColumnHelper<WorkspaceContact>();
+
+/**
+ * FİHRİST SATIRININ "DÜZENLE"Sİ — kalem ikonu, tıpkı diğer satırlardaki gibi.
+ *
+ * Eylem sütununda normal kayıtlar iki KARE ikon düğmesi taşıyor; fihrist
+ * satırında ise "Fihrist" yazan bir metin bağlantısı duruyordu. Aynı sütunda
+ * iki ayrı dil vardı: satırlar birbirine göre kayıyor, sütun genişliği
+ * satırdan satıra değişiyordu. Aynı işi yapan şey aynı görünmeli — kutu
+ * ölçüsü ve hover dili IconButton ile birebir aynı, farkı `title` söyler.
+ */
+function IconLink({ href, label, children }: { href: string; label: string; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      aria-label={label}
+      title={label}
+      className="tap-target inline-flex size-8 shrink-0 select-none items-center justify-center rounded-control text-muted transition-[background-color,color] duration-150 ease-standard hover:bg-surface-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring pointer-coarse:size-10"
+    >
+      {children}
+    </Link>
+  );
+}
 
 /**
  * SEEDING ADIM GÖSTERGESİ — yedi küçük çentik + "4/7 · Kargo".
@@ -151,10 +174,6 @@ export function CrmView({
   /* Açık kutu — başlık, geri bağlantısı ve segment süzgecinin kapsamı bundan
      türer. Tanınmayan anahtar geldiğinde kutu yokmuş gibi davranılır. */
   const category = useMemo(() => crmCategory(categoryKey), [categoryKey]);
-  const scopeSegments = useMemo(
-    () => (category ? new Set(category.segments) : null),
-    [category],
-  );
   /* Kutu içindeyken açılır kutuda YALNIZ o kutunun anahtarları listelenir:
      "Celebrity"nin içinde "Toptan" seçeneği sunmak kullanıcıyı boş bir listeye
      götürüyordu. Tek anahtarlı kutuda süzgeç hiç çizilmez — seçecek bir şey
@@ -164,12 +183,28 @@ export function CrmView({
     [category],
   );
 
+  /* EŞLEŞTİRME YALNIZ CRM KAYITLARINDA. Fihrist satırları
+     `workspace_manufacturers`'tan geliyor ve kimliği "fihrist:" önekli; panele
+     verilince iki şey birden bozuluyordu: (1) hiçbirinin `user_id`'si
+     olamayacağı için "12/40 eşleşti" sayacı hep düşük okunuyordu, (2) satırdaki
+     "Eşleştir" düğmesi olmayan bir CRM kişisine yazmaya çalışıyordu — düğme
+     basılıyor, hata dönüyordu. Usta kaydının sistem hesabı zaten yok. */
+  const matchableContacts = useMemo(
+    () => contacts.filter((c) => !isFihristRow(c.id)),
+    [contacts],
+  );
+
   const filtered = useMemo(() => {
     const q = norm(query.trim());
     return contacts.filter((c) => {
-      /* Kutunun kapsamı: kayıtta segment yoksa "Diğer" kutusuna düşer —
-         hiçbir kayıt görünmez olmaz. */
-      if (scopeSegments && !scopeSegments.has(c.segment ?? "diger")) return false;
+      /* Kutunun kapsamı KUTUCUK IZGARASIYLA AYNI KURALDAN okunur.
+         Önce ham anahtar kümesine bakılıyordu (`scopeSegments.has(...)`);
+         TANINMAYAN bir segment ("pr_eski" gibi elle girilmiş bir değer)
+         hiçbir kutunun listesinde olmadığı için HİÇBİR kutuda görünmüyordu.
+         Oysa giriş ızgarası aynı kaydı `crmCategoryOfSegment` ile "Diğer"de
+         SAYIYORDU: kutu "3 kişi" yazıyor, içine girince liste boş çıkıyordu.
+         İki ekran artık tek fonksiyona bakıyor — sayı ile liste ayrışamaz. */
+      if (category && crmCategoryOfSegment(c.segment).key !== category.key) return false;
       if (segment && c.segment !== segment) return false;
       if (!q) return true;
       const hay = norm(
@@ -179,7 +214,7 @@ export function CrmView({
       );
       return hay.includes(q);
     });
-  }, [contacts, query, segment, scopeSegments]);
+  }, [contacts, query, segment, category]);
 
   function openNew() {
     setEditing(null);
@@ -308,13 +343,9 @@ export function CrmView({
                       silinmesi o bağları koparırdı. Düzenleme tek yerde:
                       Fihrist. */}
                   {isFihristRow(info.row.original.id) ? (
-                    <Link
-                      href="/collection/veri?k=usta"
-                      title="Fihrist'te düzenle"
-                      className="inline-flex h-8 items-center gap-1 rounded-control px-2 text-[12.5px] font-medium text-brand transition-colors duration-150 hover:bg-surface-muted hover:text-brand-strong"
-                    >
-                      Fihrist
-                    </Link>
+                    <IconLink href="/collection/veri?k=usta" label="Fihrist'te düzenle">
+                      <Pencil size={14} aria-hidden />
+                    </IconLink>
                   ) : (
                   <>
                   <IconButton size="sm" aria-label="Düzenle" title="Düzenle" onClick={() => openEdit(info.row.original)}>
@@ -411,7 +442,11 @@ export function CrmView({
 
       {/* Araç çubuğu — arama ve süzgeç aynı yükseklikte (h-9). */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[200px] flex-1">
+        {/* ARAMA KUTUSU KAPAKLI. `flex-1` tek başınayken kutu satırın tamamına
+            yayılıyordu: aynı arama alanı kutucuk ızgarasında ve AF Teamwork'te
+            `max-w-xs` ile duruyor, listede ekran boyunca esniyordu — aynı iş,
+            üç ayrı genişlik. Kapak konunca üçü de aynı görünür. */}
+        <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
           <Search size={15} className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-subtle" aria-hidden />
           <TextInput
             value={query}
@@ -439,6 +474,10 @@ export function CrmView({
         {isAdmin && !setupRequired && (
           <Button
             variant="secondary"
+            /* Eylem SAĞA yaslı — AF Teamwork'ün araç çubuğuyla aynı düzen:
+               solda süzgeçler, sağda eylem. Arama kapaklandıktan sonra düğme
+               süzgecin dibinde kalıp satırın sağında boşluk bırakıyordu. */
+            className="sm:ml-auto"
             onClick={() => setShowMatching((v) => !v)}
             aria-expanded={showMatching}
             aria-controls="crm-matching-panel"
@@ -463,7 +502,7 @@ export function CrmView({
 
       {isAdmin && showMatching && !setupRequired && (
         <div id="crm-matching-panel">
-          <ContactMatchingPanel contacts={contacts} members={members} />
+          <ContactMatchingPanel contacts={matchableContacts} members={members} />
         </div>
       )}
 
@@ -562,14 +601,13 @@ export function CrmView({
                   )}
                 </div>
 
+                {/* Telefonda da AYNI dil: kalem ikonu, aynı kutu ölçüsü.
+                    Metin bağlantısı satırın hizasını bozuyordu. */}
                 {isAdmin && isFihristRow(c.id) && (
-                  <div className="mt-2 flex items-center justify-end border-t border-hairline pt-2">
-                    <Link
-                      href="/collection/veri?k=usta"
-                      className="text-[12.5px] font-medium text-brand underline-offset-2 hover:underline"
-                    >
-                      Fihrist&apos;te düzenle
-                    </Link>
+                  <div className="mt-2 flex items-center justify-end gap-0.5 border-t border-hairline pt-2">
+                    <IconLink href="/collection/veri?k=usta" label="Fihrist'te düzenle">
+                      <Pencil size={14} aria-hidden />
+                    </IconLink>
                   </div>
                 )}
                 {isAdmin && !isFihristRow(c.id) && (

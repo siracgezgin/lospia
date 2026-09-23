@@ -1660,14 +1660,26 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                                     inputMode="decimal"
                                   />
                                 ) : (
-                                  /* Kapalı hücre BOŞ değil: o beden üretilmiyor.
-                                     Başlık da soluk, ikisi birlikte okunuyor. */
-                                  <span className="block h-8" title={`${c} bedenine adet girilmedi`} />
+                                  /* KAPALI HÜCRE BOZUK GÖRÜNMESİN. Sıraç
+                                     (24.09.2026): "Kutularda sorun var, eşit
+                                     değiller, kimisi tıklanıyor kimisi
+                                     tıklanmıyor." Kapalı olması kasıtlı — o
+                                     bedene adet girilmedi — ama hücre bomboş
+                                     kalınca eksik çizilmiş gibi duruyordu.
+                                     Soluk bir tire "burası kapalı" diyor,
+                                     üstüne gelince sebebi yazıyor. */
+                                  <span
+                                    className="flex h-8 items-center justify-center text-[13px] text-subtle/45"
+                                    title={`${c} bedenine adet girilmedi — ölçü istenmiyor`}
+                                  >
+                                    –
+                                  </span>
                                 )}
                               </td>
                             );
                           })}
-                          <td className="border border-line bg-surface-sunken/40" />
+                          {/* Ölçünün toplamı olmaz — kapalı hücreyle aynı dil. */}
+                          <td className="border border-line bg-surface-sunken/40 text-center text-[13px] text-subtle/45">–</td>
                           <td className="text-center align-middle">
                             <RowDelete onClick={() => removeMeasurement(i)} label={`${i + 1}. ölçü satırını sil`} />
                           </td>

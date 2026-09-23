@@ -51,13 +51,21 @@ function slotMinutes(slot: string): number {
   return m ? +m[1] * 60 + +m[2] : 24 * 60 + 1;
 }
 
-/** Sürüklenemeyen ama tıklanabilen hücre klavyeden de açılsın: Enter/Boşluk.
- *  Sürüklenebilir hücrede rol ve tabIndex'i dnd-kit'in `attributes`ı verir. */
-function keyboardOpen(enabled: boolean, onOpen: () => void) {
+/** Tıklanabilir hücre KLAVYEDEN DE açılır: Enter/Boşluk.
+ *
+ *  `withRole` yalnız SÜRÜKLENEMEYEN hücrede true'dur; sürüklenebilir hücrede
+ *  rolü ve tabIndex'i dnd-kit'in `attributes`ı verir, ikinci kez yazmak onu
+ *  eziyor.
+ *
+ *  Tuş dinleyicisi ise HER İKİ durumda da gerekli: sürüklenebilir hücre
+ *  dnd-kit sayesinde odak alıyordu ama Enter hiçbir şey yapmıyordu (yalnız
+ *  PointerSensor kurulu, KeyboardSensor yok). Yani üzerinde toplantı olan bir
+ *  hücre klavyeyle odaklanıp AÇILAMIYORDU — faresiz kullanıcı için kapalı
+ *  kapı. */
+function keyboardOpen(enabled: boolean, onOpen: () => void, withRole = true) {
   if (!enabled) return {};
   return {
-    role: "button" as const,
-    tabIndex: 0,
+    ...(withRole ? { role: "button" as const, tabIndex: 0 } : {}),
     onKeyDown: (e: React.KeyboardEvent) => {
       if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); }
     },
@@ -160,6 +168,14 @@ export function PlanningWeekGrid({
     const [meeting_date, time_slot] = cellPart.split("|");
     if (!meeting_date || !time_slot) return;
 
+    /* BAŞLIK KENDİ HÜCRESİNE BIRAKILDIYSA İŞ YOK. Başlığın kimliği "gün|saat",
+       konu satırınınki "gün|saat#N" — bir başlığı kendi saatinin "Konu 2"
+       hücresine sürüklemek `overId !== from` olduğu için taşıma sayılıyor ve
+       sunucuya "aynı yere taşı" isteği gidiyordu: ekranda boşuna "Taşınıyor…"
+       şeridi çıkıyor, geçmiş bir toplantıda ise AYNI HÜCREYE ikinci bir kopya
+       düşüyordu. */
+    if (!activeId.startsWith("topic:") && cellPart === from) return;
+
     /* TAKVİM BİR ARŞİVDİR. Aslı Hanım (2026-09-07), pazartesinin toplantısını
        çarşambaya sürükleyip: "Bu pazartesiyi buraya ALDI. Hâlbuki ben bunun
        alsın istemiyorum. Ben dönüp HANGİ TARİHTE HANGİ TOPLANTIYI yaptığımız
@@ -248,7 +264,6 @@ export function PlanningWeekGrid({
             isAdmin={isAdmin}
             draggable={mounted && isAdmin}
             onOpen={() => onOpen(iso, slot, i, ti)}
-            onSaved={() => router.refresh()}
           />
         ))}
       </div>
@@ -580,42 +595,44 @@ function TitleCell({
   const canRename = isAdmin && (cell.length === 0 || !!single);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(title);
-  /* GÖVDE DE DÜZENLENİR (Sıraç, 2026-09-17). Başlığın altındaki metin
-     düzenleme kutusunun dışında kalıyordu: hücreye tıklayınca yalnız başlık
-     değişebiliyor, "1. Nihal hocadan gelen kısa göynekler…" satırı salt
-     okunur duruyordu. Tek toplantılı hücrede iki alan birlikte açılır;
-     çakışmada (iki toplantı) gövde birleşik metin olduğu için kapalı kalır. */
-  const [bodyDraft, setBodyDraft] = useState(single?.content ?? "");
   const [saving, setSaving] = useState(false);
 
   function startEdit() {
     setDraft(title);
-    setBodyDraft(single?.content ?? "");
     setEditing(true);
   }
 
   async function commit() {
     const next = draft.trim();
-    const nextBody = bodyDraft.trim();
-    const bodyChanged = !!single && nextBody !== (single.content ?? "").trim();
     setEditing(false);
-    if (next === (title ?? "").trim() && !bodyChanged) return;
+    if (next === (title ?? "").trim()) return;
     if (!next && !single) return;              // boş hücreye boş başlık: iş yok
     setSaving(true);
     try {
       const [meeting_date, time_slot] = cellId.split("|");
+      /* GÖVDE GÖNDERİLMEZ (üçüncü argüman yok = "dokunma").
+         Hücrede bir zamanlar gövde kutusu da vardı; 18.09.2026'da kalktı ama
+         taslağı ve gönderimi kodda kaldı. Kutusu olmayan bir alanı her
+         yeniden adlandırmada sunucuya yazmak, notun kırpılmış hâlini geri
+         kaydetme riskinden başka bir şey getirmiyordu. Not artık konularda. */
       await setMeetingTitle(
         single ? { meetingId: single.id } : { meeting_date, time_slot },
         next,
-        /* Tek toplantı yoksa gövde gönderilmez — undefined "dokunma" demek. */
-        single ? nextBody : undefined,
       );
       onSaved();
     } finally {
       setSaving(false);
     }
   }
-  const keyOpen = keyboardOpen(isAdmin && !canDrag, onOpen);
+  /* Hücrenin klavye davranışı TIKLAMAYLA AYNI olmalı: adı yerinde
+     değiştirilebiliyorsa Enter de onu açar, değilse pencereyi. Eskiden Enter
+     her durumda pencereyi açıyordu (üstelik sürüklenebilir hücrede hiç
+     çalışmıyordu) — aynı hücre fareyle başka, klavyeyle başka davranıyordu. */
+  const keyOpen = keyboardOpen(
+    isAdmin,
+    () => { if (canRename) startEdit(); else onOpen(); },
+    !canDrag,
+  );
   /* KİŞİLER BAŞLIK SATIRINDA. Aslı Hanım (22.09.2026): "İsimlerin
      işaretlediğim yerde görünmesini istiyor, konularda değil."
 
@@ -856,8 +873,10 @@ function TopicCell({
   isToday: boolean;
   isAdmin: boolean;
   draggable: boolean;
+  /* `onSaved` YOK: hücre yalnız DURUM GÖSTERİR, hiçbir şey kaydetmez
+     (işaretleme ve silme konunun kendi penceresinde). Tanımlı ama hiç
+     okunmayan bir geri çağrı, "burada bir kayıt var" diye yanıltıyordu. */
   onOpen: () => void;
-  onSaved: () => void;
 }) {
   const { setNodeRef: dropRef, isOver } = useDroppable({ id: cellId, disabled: !draggable });
   const canDrag = draggable && !!topic?.text;
