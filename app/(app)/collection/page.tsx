@@ -60,7 +60,11 @@ export default async function CollectionPage({
        dokunmak onu listenin başına taşımamalı. `nullsFirst: false` — sırası
        verilmemiş föy (migration'dan sonra açılmış olabilir) sona düşer, kendi
        içinde en yeni önce. */
-    if (manualOrder) q.order("sort_order", { ascending: true, nullsFirst: false });
+    /* SIRA: elle taşıma > sitedeki sıra > eski sort_order. Üçü tek bir
+       üretilmiş kolonda toplanıyor (20240354 `list_order`), böylece sorgu ve
+       dizin tek kalıyor. `nullsFirst: false` — sırası hiç olmayan föy sona
+       düşer, kendi içinde en yeni önce. */
+    if (manualOrder) q.order("list_order", { ascending: true, nullsFirst: false });
     q.order("updated_at", { ascending: false });
     if (seasonId) q.or(`season_id.eq.${seasonId},season_id.is.null`);
     return q;
@@ -79,7 +83,7 @@ export default async function CollectionPage({
      bağımsız uygulanabilir, o yüzden kademe kademe geriye düşülür. Her
      kademede yalnız o özellik kaybolur, ekran ayakta kalır. */
   const attempts: [columns: string, manualOrder: boolean][] = [
-    [`${LIST_COLUMNS}, web_images, web_url, web_product_id, sort_order`, true],
+    [`${LIST_COLUMNS}, web_images, web_url, web_product_id, list_order, manual_order`, true],
     [`${LIST_COLUMNS}, web_images, web_url, web_product_id`, false],
     [LIST_COLUMNS, false],
   ];

@@ -32,6 +32,16 @@ export interface WebProduct {
   subcategory: string | null;
   /** Sitedeki kategori adları — eşlenemeyen ürünü raporlarken okunur. */
   webCategories: string[];
+  /**
+   * SİTEDEKİ VİTRİN SIRASI — `menu_order` sıralamasındaki yeri (0'dan başlar).
+   *
+   * Aslı Hanım (23.09.2026): "Sitedeki gibi sıralansın ürünler." Sıra bir
+   * merchandising kararı ve o karar sitede veriliyor; panel kendi sırasını
+   * uydurmamalı. Küresel liste `orderby=menu_order&order=asc` ile çekiliyor
+   * ve bu sıra her kategorinin kendi sayfasındaki sırayı da koruyor — ürün
+   * başına tek bir sayı yetiyor (23.09.2026'da 163 ürünle doğrulandı).
+   */
+  order: number;
 }
 
 /* ── HTML → düz metin ─────────────────────────────────────────────────────
@@ -175,12 +185,13 @@ function pick(sections: Record<string, string>, ...keys: string[]): string {
  * koymuşsa koleksiyonda da orada durur. Birincil liste bir ALT kategoriye
  * götürmüyorsa sorgu üyelikleriyle tamamlanır.
  */
-export function toWebProduct(p: StoreProduct, memberSlugs: string[] = []): WebProduct {
+export function toWebProduct(p: StoreProduct, memberSlugs: string[] = [], order = 0): WebProduct {
   const sections = parseSections(p.description);
   const own = (p.categories ?? []).map((c) => c.slug);
   const primary = mapCategory(own);
   const mapped = primary?.subcategory ? primary : (mapCategory([...own, ...memberSlugs]) ?? primary);
   return {
+    order,
     id: p.id,
     name: decodeEntities(p.name ?? "").trim(),
     url: p.permalink,
@@ -256,7 +267,10 @@ export async function fetchCategorySlugsByName(): Promise<Map<string, string>> {
  *  alınamazsa o ürünler yalnız kendi (birincil) kategorisiyle eşlenir, çekiş
  *  durmaz — sonuç raporunda sayılır. */
 export async function fetchWebsiteProducts(): Promise<{ products: WebProduct[]; membershipFailures: number }> {
-  const products = await paged<StoreProduct>(`${STORE_API}/products`);
+  /* SIRA SİTEDEN GELİR. `orderby=menu_order&order=asc` mağazanın kendi
+     vitrin sırasıdır; dizideki indeks doğrudan o sıradır. Varsayılan
+     (tarih) sırayla çekilseydi panel siteyi hiçbir zaman tutturamazdı. */
+  const products = await paged<StoreProduct>(`${STORE_API}/products?orderby=menu_order&order=asc`);
   const categories = await paged<{ id: number; slug: string }>(`${STORE_API}/products/categories`);
 
   const wanted = new Set(CATEGORY_MAP.map(([slug]) => slug));
@@ -276,7 +290,7 @@ export async function fetchWebsiteProducts(): Promise<{ products: WebProduct[]; 
   });
 
   return {
-    products: products.map((p) => toWebProduct(p, members.get(p.id) ?? [])),
+    products: products.map((p, i) => toWebProduct(p, members.get(p.id) ?? [], i)),
     membershipFailures,
   };
 }

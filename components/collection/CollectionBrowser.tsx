@@ -10,10 +10,7 @@ import { CSS } from "@dnd-kit/utilities";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  Boxes, Plus, Search, ChevronLeft, FileDown, Printer, Shirt, Scissors,
-  Footprints, Handbag, FileSpreadsheet, ClipboardList, ShieldCheck,
-  Pencil, FolderPlus, SwatchBook, Trash2, Image as ImageIcon, X,
-  FolderInput, Globe, Loader2, Upload, GripVertical, ExternalLink,
+  Boxes, ChevronLeft, ClipboardList, ExternalLink, FileDown, FileSpreadsheet, FolderInput, FolderPlus, Footprints, Globe, GripVertical, Handbag, Image as ImageIcon, Loader2, Pencil, Plus, Printer, RotateCcw, Scissors, Search, ShieldCheck, Shirt, SwatchBook, Trash2, Upload, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { deleteProductionSheet } from "@/lib/actions/production";
@@ -35,7 +32,7 @@ import { MoveSheetDialog } from "./MoveSheetDialog";
 import { WebPushDialog } from "./WebPushDialog";
 import { SheetCardMenu, menuItemCls, menuItemDangerCls } from "./SheetCardMenu";
 import { syncCollectionFromWebsite } from "@/lib/actions/collection-web";
-import { reorderCollectionSheet } from "@/lib/actions/collection-order";
+import { reorderCollectionSheet, resetCollectionSheetOrder } from "@/lib/actions/collection-order";
 import type { ProductionSheet } from "@/types";
 
 /** Tarayıcı yalnızca meta + kategori + fiyat + beden dağılımı taşır. */
@@ -51,7 +48,15 @@ export type CollectionItem = Pick<
   | "web_images"
   /** Ürünün sitedeki adresi ve kimliği — karttan doğrudan açmak için. */
   | "web_url" | "web_product_id"
->;
+> & {
+  /**
+   * Elle sürüklenip bırakılmış mı (20240354). Doluysa kart sitedeki sırayı
+   * İZLEMİYOR demektir; kart menüsü "Sitedeki sıraya dön" satırını yalnız o
+   * zaman gösterir — hiç taşınmamış kartta bu satır bir şey ifade etmez.
+   * Migration uygulanmadan önce alan hiç gelmez, `undefined` olur.
+   */
+  manual_order?: number | null;
+};
 
 interface Props {
   sheets: CollectionItem[];
@@ -338,6 +343,16 @@ export function CollectionBrowser({ sheets, isAdmin, isOwner = false, seasons = 
      doğru yere atlardı. */
   const [dragOrder, setDragOrder] = useState<string[] | null>(null);
   const [, startReorder] = useTransition();
+  const [, startResetOrder] = useTransition();
+  /* Kartı sitedeki sırasına geri bırakır — `manual_order` boşalınca `list_order`
+     kendiliğinden `web_order`'a düşer (20240354). */
+  const resetOrder = (sheet: CollectionItem) => {
+    startResetOrder(async () => {
+      const res = await resetCollectionSheetOrder(sheet.id);
+      if (res && "error" in res) { setCoverError(res.error); return; }
+      router.refresh();
+    });
+  };
   const canReorder = isAdmin;
 
   const ordered = useMemo(() => {
@@ -751,6 +766,7 @@ export function CollectionBrowser({ sheets, isAdmin, isOwner = false, seasons = 
                       onMove={setMoving}
                       onDelete={removeSheet}
                       onCoverError={setCoverError}
+                      onResetOrder={resetOrder}
                       backTo={backTo}
                     />
                   ))}
@@ -809,6 +825,7 @@ function SheetCard({
   onMove,
   onDelete,
   onCoverError,
+  onResetOrder,
   backTo,
 }: {
   sheet: CollectionItem;
@@ -820,6 +837,7 @@ function SheetCard({
   onMove: (_s: CollectionItem) => void;
   onDelete: (_s: CollectionItem) => void;
   onCoverError: (_m: string | null) => void;
+  onResetOrder: (_s: CollectionItem) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: s.id,
@@ -937,6 +955,22 @@ function SheetCard({
             <ExternalLink aria-hidden />
             <span>Sitede aç</span>
           </a>
+        )}
+        {/* SİTEDEKİ SIRAYA DÖN — yalnız elle taşınmış kartta.
+            Sıraç (23.09.2026): site varsayılan sıra, elle taşıma kalıcı.
+            Kalıcı olanın geri alınabilir bir yolu olmalı; yoksa bir kez
+            sürüklenen kart sitedeki sırayı bir daha hiç izleyemezdi. */}
+        {isAdmin && s.manual_order != null && (
+          <button
+            type="button"
+            onClick={() => onResetOrder(s)}
+            className={menuItemCls}
+            title="Bu kart elle taşınmış — sitedeki sırasına geri dönsün"
+            aria-label={`${s.title} kartını sitedeki sıraya döndür`}
+          >
+            <RotateCcw aria-hidden />
+            <span>Sitedeki sıraya dön</span>
+          </button>
         )}
         {/* TAŞI — sağ tıkı bilmeyen için görünür kapı. */}
         <button

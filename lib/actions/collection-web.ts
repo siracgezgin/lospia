@@ -124,6 +124,17 @@ export async function syncCollectionFromWebsite(): Promise<WebsiteSyncReport | {
   type Row = { id: string; web_product_id: number; web_baseline: unknown } & Record<WebTextField, string | null>;
   const sheetByWeb = new Map(((existing ?? []) as Row[]).map((r) => [Number(r.web_product_id), r]));
 
+  /* SIRA KOLONU VAR MI? Migration'ı kullanıcı elle uyguluyor; kolon yokken
+     `web_order` yazan her güncelleme sessizce reddedilir ve çekiş "hiçbir şey
+     güncellenmedi" derdi. Bir kez sorulur; yoksa sıra bu turda yazılmaz ve
+     çekişin geri kalanı çalışmaya devam eder. */
+  const orderProbe = await supabase
+    .from("production_sheets")
+    .select("web_order")
+    .eq("workspace_id", ctx.workspaceId)
+    .limit(1);
+  const canOrder = !(orderProbe.error && isMissingSchemaError(orderProbe.error));
+
   const now = new Date().toISOString();
   const report: WebsiteSyncReport = {
     created: 0, updated: 0, skipped: 0, skippedNames: [],
@@ -154,6 +165,11 @@ export async function syncCollectionFromWebsite(): Promise<WebsiteSyncReport | {
       web_images: p.images,
       web_synced_at: now,
       updated_by: ctx.userId,
+      /* VİTRİN SIRASI SİTENİN. Aslı Hanım (23.09.2026): "Sitedeki gibi
+         sıralansın ürünler." Her çekişte tazelenir — sitede sıra değişince
+         panel de değişir. Elle sürüklenmiş kart `manual_order` taşır ve bu
+         değerden ETKİLENMEZ (bkz. 20240354). */
+      ...(canOrder ? { web_order: p.order } : {}),
     };
 
     const row = sheetByWeb.get(p.id);

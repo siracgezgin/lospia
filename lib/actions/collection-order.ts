@@ -46,16 +46,19 @@ export async function reorderCollectionSheet(
   if (neighbours.length) {
     const { data, error } = await supabase
       .from("production_sheets")
-      .select("id, sort_order")
+      /* Komşunun YERİ okunur, elle verilmiş değeri değil: kart sitedeki
+         sırada duruyor olabilir. `list_order` üçünü birleştiren üretilmiş
+         kolondur (20240354). */
+      .select("id, list_order")
       .eq("workspace_id", workspaceId)
       .in("id", neighbours);
     if (error) {
       if (isMissingSchemaError(error)) {
-        return { error: "Veritabanı güncellemesi bekleniyor (20240349). Yönetici `supabase db push` çalıştırmalı." };
+        return { error: "Veritabanı güncellemesi bekleniyor (20240354). Yönetici `supabase db push` çalıştırmalı." };
       }
       return { error: toActionErrorMessage(error) };
     }
-    const byId = new Map((data ?? []).map((r) => [r.id as string, r.sort_order as number | null]));
+    const byId = new Map((data ?? []).map((r) => [r.id as string, r.list_order as number | null]));
     prevOrder = prevId ? byId.get(prevId) ?? null : null;
     nextOrder = nextId ? byId.get(nextId) ?? null : null;
   }
@@ -79,18 +82,61 @@ export async function reorderCollectionSheet(
 
   const { error: upErr } = await supabase
     .from("production_sheets")
-    .update({ sort_order: target })
+    /* YAZILAN KOLON `manual_order`. Siteden çekiş yalnız `web_order`'a
+       dokunur; böylece elle verilen sıra çekişten SAĞ çıkar (Sıraç,
+       23.09.2026: "elle taşıma kalıcı"). */
+    .update({ manual_order: target })
     .eq("id", sheetId)
     .eq("workspace_id", workspaceId);
   if (upErr) {
     if (isMissingSchemaError(upErr)) {
-      return { error: "Veritabanı güncellemesi bekleniyor (20240349). Yönetici `supabase db push` çalıştırmalı." };
+      return { error: "Veritabanı güncellemesi bekleniyor (20240354). Yönetici `supabase db push` çalıştırmalı." };
     }
     return { error: toActionErrorMessage(upErr) };
   }
 
   /* `updated_at` BİLEREK DOKUNULMADI: sıralamak föyü düzenlemek değil. Föy
      listelerindeki "son güncelleme" sütunu kartı sürükleyince değişmemeli. */
+  revalidatePath("/collection");
+  return { ok: true };
+}
+
+/**
+ * "Sitedeki sıraya dön" — kartın elle verilmiş sırasını siler.
+ *
+ * Sıraç (23.09.2026): site varsayılan sıra, elle taşıma kalıcı. Kalıcı olan
+ * şeyin geri alınabilir bir yolu olmalı; yoksa bir kez sürüklenen kart
+ * sitedeki sırayı bir daha hiç izleyemezdi. `manual_order` boşalınca
+ * `list_order` kendiliğinden `web_order`'a düşer (20240354).
+ */
+export async function resetCollectionSheetOrder(
+  sheetId: string,
+): Promise<{ ok: true } | { error: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Kimlik doğrulama gerekli." };
+  const { data: member } = await supabase
+    .from("workspace_members")
+    .select("workspace_id, role")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!member) return { error: "Kimlik doğrulama gerekli." };
+  const role = member.role as string;
+  if (role !== "owner" && role !== "admin") {
+    return { error: "Sıralama yöneticiye açık." };
+  }
+
+  const { error } = await supabase
+    .from("production_sheets")
+    .update({ manual_order: null })
+    .eq("id", sheetId)
+    .eq("workspace_id", member.workspace_id as string);
+  if (error) {
+    if (isMissingSchemaError(error)) {
+      return { error: "Veritabanı güncellemesi bekleniyor (20240354). Yönetici `supabase db push` çalıştırmalı." };
+    }
+    return { error: toActionErrorMessage(error) };
+  }
   revalidatePath("/collection");
   return { ok: true };
 }
