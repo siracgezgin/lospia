@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, Loader2, Info } from "lucide-react";
+import { Plus, Trash2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { addSheetMaterial, updateSheetMaterial, removeSheetMaterial } from "@/lib/actions/materials";
 import { Button, IconButton } from "@/components/ui/Button";
@@ -85,12 +85,12 @@ export function SheetBom({ sheetId, rows, materials, canEdit }: Props) {
         </p>
       )}
 
-      <p className="flex items-start gap-2 rounded-control border border-line bg-surface-muted px-3 py-2 text-[12.5px] text-muted">
-        <Info size={14} className="mt-px shrink-0 text-subtle" aria-hidden />
-        <span>
-          Buraya girilen malzemelerin tutarı maliyet tablosuna <b className="font-semibold text-ink">otomatik</b> yazılır
-          (tüketim × birim fiyat × fire). Malzeme fiyatı Product Data’da değişince tüm föyler güncellenir.
-        </span>
+      {/* AÇIKLAMA KUTUSU KÜÇÜLDÜ: çerçeveli bir uyarı bloğu tablodan önce göz
+          alıyor ve iki satır yer yiyordu. Kuralın kendisi zaten sütun
+          başlıklarında yazıyor (Tüketim · Fire % · Tutar); burada yalnız
+          sütunlardan okunamayan tek şey kalıyor. */}
+      <p className="text-[12px] text-subtle">
+        Tutar maliyet tablosuna otomatik yazılır. Birim fiyat Product Data’da değişince tüm föyler güncellenir.
       </p>
 
       <div className="overflow-x-auto">

@@ -266,28 +266,34 @@ export function mergeCostItems(existing?: CostItem[] | null): CostItem[] {
   const rows = Array.isArray(existing) ? existing : [];
   if (!rows.length) return emptyCostItems();
 
-  const byKey = new Map<string, CostItem>();
+  /* KAYITLI SIRA KORUNUR. Sıraç (24.09.2026): "Numuneyi kalıp serinin üzerine
+     alıyorum gitmiyor ama kaydedildi diyor, yeniledim hâlâ aynı."
+
+     Sebep buydu: liste her okunuşta COST_ITEM_DEFS sırasına göre yeniden
+     kuruluyordu, yani sürükleyip bırakılan sıra kaydediliyor ama bir sonraki
+     render'da eziliyordu. Aslı Hanım satırları elle taşıyabilmeyi istemişti
+     (21_operasyon-paneli.md B1.7: "elimizle taşıyabilelim yukarı"), o yüzden
+     kanonik sıra artık yalnız HİÇ KAYIT YOKKEN ve sonradan eklenen kalemleri
+     yerleştirirken kullanılıyor. */
+  const fixed: CostItem[] = [];
   const free: CostItem[] = [];
+  const seen = new Set<string>();
   for (const it of rows) {
     if (it.key === "diger") { free.push(it); continue; }
-    if (!byKey.has(it.key)) byKey.set(it.key, it);
+    if (seen.has(it.key)) continue;              // aynı kalem iki kez yazılmaz
+    seen.add(it.key);
+    fixed.push(it);
   }
 
-  const known = new Set(COST_ITEM_DEFS.map((d) => d.key));
-  const out: CostItem[] = COST_ITEM_DEFS
-    .filter((d) => d.key !== "diger")
-    .map((d) => byKey.get(d.key) ?? {
-      key: d.key,
-      amount: d.key === "genel_gider" ? GENEL_GIDER_DEFAULT : "",
-    });
-
-  /* Artık listede olmayan ama DOLU kalemler — sonda, kaybolmadan. */
-  for (const [key, it] of byKey) {
-    if (!known.has(key as CostItemKey) && (it.amount ?? "").trim()) out.push(it);
+  /* Föy kaydedildikten SONRA listeye eklenen kalemler (ör. yeni bir maliyet
+     satırı tanımlandı) eski föyde de görünsün — sabit blokun sonuna. */
+  for (const d of COST_ITEM_DEFS) {
+    if (d.key === "diger" || seen.has(d.key)) continue;
+    fixed.push({ key: d.key, amount: d.key === "genel_gider" ? GENEL_GIDER_DEFAULT : "" });
   }
 
-  out.push(...(free.length ? free : [{ key: "diger" as const, amount: "" }]));
-  return out;
+  /* Serbest satır her zaman en az bir tane. */
+  return [...fixed, ...(free.length ? free : [{ key: "diger" as const, amount: "" }])];
 }
 
 /** Boş bir maliyet kalemi seti — her föy aynı iskeletle açılır. */

@@ -85,6 +85,9 @@ const pricing = z.object({
      pricing nesnesi kuran her çağrıyı kırıyordu. Boş bırakılabilir — o zaman
      adet beden dağılımından okunur (bkz. productionQtyOf). */
   production_qty: z.string().max(20).optional(),
+  /* Sonradan eklenen alan → `.optional()` + yayılma (bkz. 23.09 veri kuralı):
+     eski bir sekmeden kaydetmek elle açılan kademeleri silemez. */
+  qty_tiers: z.array(z.string().max(20)).max(12).optional(),
   unit_price: z.string().max(40).optional().default(""),
   purchase_cost: z.string().max(40).optional().default(""),
   web_sale_price: z.string().max(40).optional().default(""),

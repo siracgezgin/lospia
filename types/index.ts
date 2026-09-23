@@ -574,6 +574,13 @@ export type ProductionPricing = {
    * Boşsa beden dağılımının toplamı kullanılır.
    */
   production_qty?: string;
+  /**
+   * ELLE AÇILAN ADET KADEMELERİ. Sıraç (24.09.2026): "Burada 'veya yaz'
+   * yerine + olsun, oraya girilen sayıya göre sütun oluşsun."
+   * Sabit 50/100/150/200'ün dışında çalışılan adetler (ör. 12, 30) burada
+   * durur ve maliyet tablosunda kendi sütununu açar.
+   */
+  qty_tiers?: string[];
   /** Birim ÜRETİM maliyeti — artık cost_items toplamından türetilir. */
   unit_price?: string;
   purchase_cost?: string;   // satın alma / malzeme maliyeti (geri uyum)

@@ -5,8 +5,7 @@ import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 import {
-  ClipboardList, Plus, Trash2, Save, User, Clock, FileDown, Printer, AlertTriangle, CheckCircle2, Ruler, Wallet, Layers, Truck,
-  Globe, ExternalLink,
+  AlertTriangle, CheckCircle2, ClipboardList, Clock, ExternalLink, FileDown, Globe, Layers, Plus, Printer, Ruler, Save, Trash2, Truck, User, Wallet, X,
 } from "lucide-react";
 import {
   createProductionSheet, updateProductionSheet, updateProductionSheetImages,
@@ -439,6 +438,21 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
      Yeni satır açıldıktan sonra kumaş listesine kaydırılır: kutucuk üstte
      görünüyor ama renk adı aşağıda yazılıyor, kullanıcı nereye yazacağını
      aramasın. */
+  /* Yeni adet kademesi kutusu — açıkken çip satırının yerine geçer. */
+  const [addingTier, setAddingTier] = useState(false);
+  const [tierDraft, setTierDraft] = useState("");
+  const commitTier = () => {
+    const n = tierDraft.replace(/[^\d]/g, "");
+    if (!n || Number(n) <= 1) { setAddingTier(false); setTierDraft(""); return; }
+    const pr = form.pricing ?? {};
+    const next = [...new Set([...(pr.qty_tiers ?? []), n])];
+    /* Eklenen kademe AYNI ANDA seçilir: kullanıcı sayıyı hesap yapmak için
+       giriyor, bir de üstüne tıklatmak fazladan adım olurdu. */
+    set("pricing", { ...pr, qty_tiers: next, production_qty: n });
+    setAddingTier(false);
+    setTierDraft("");
+  };
+
   const addColorVariant = () => {
     set("color_variants", [...(form.color_variants ?? []), { id: newVariantId(), color: "" }]);
     requestAnimationFrame(() => {
@@ -685,12 +699,32 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
 
   // ── Beden dağılımı ── (kolonlar sabit standart set; başlıklar düzenlenmez)
   const sd = form.size_distribution;
+  /* TOPLAM ELLE YAZILMAZ, HESAPLANIR. Sıraç (24.09.2026): "Bedenler girilmiş
+     ama toplam yok… bu değerler değişince kendisi doğru biçimde değişsin."
+     `total` serbest metin bir alandı; kimse yazmadığı için hep boş kalıyordu
+     ve `totalQuantity()` de onu okumaya çalışıyordu. Artık hücre değişince
+     satır toplamı da yazılıyor — ekranda görünen sayı ile maliyetin kullandığı
+     sayı aynı kaynaktan geliyor.
+     Hiç adet girilmemişse eski elle yazılmış değere DOKUNULMUYOR. */
   const setDistCell = (rowIdx: number, colIdx: number, v: string) =>
     set("size_distribution", {
       ...sd,
-      rows: sd.rows.map((r, ri) =>
-        ri === rowIdx ? { ...r, values: r.values.map((val, ci) => (ci === colIdx ? v : val)) } : r),
+      rows: sd.rows.map((r, ri) => {
+        if (ri !== rowIdx) return r;
+        const values = r.values.map((val, ci) => (ci === colIdx ? v : val));
+        const sum = values.reduce((a, x) => a + (parseInt(String(x ?? "").replace(/[^\d-]/g, ""), 10) || 0), 0);
+        const anyFilled = values.some((x) => String(x ?? "").trim());
+        return { ...r, values, total: anyFilled ? String(sum) : r.total };
+      }),
     });
+
+  /** Satırın ekranda gösterilecek toplamı — dolu hücrelerin toplamı, yoksa
+   *  kayıtlı değer (eski föyler bedensiz tek toplam taşıyor). */
+  const rowTotalOf = (r: { values: string[]; total: string }) => {
+    const anyFilled = r.values.some((x) => String(x ?? "").trim());
+    if (!anyFilled) return r.total ?? "";
+    return String(r.values.reduce((a, x) => a + (parseInt(String(x ?? "").replace(/[^\d-]/g, ""), 10) || 0), 0));
+  };
   const setDistLabel = (rowIdx: number, v: string) =>
     set("size_distribution", { ...sd, rows: sd.rows.map((r, ri) => (ri === rowIdx ? { ...r, label: v } : r)) });
   const setDistTotal = (rowIdx: number, v: string) =>
@@ -1102,21 +1136,28 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               boş bir satır açar ve oraya götürür. Liste TEK yerde tutuluyor
               (`color_variants`), iki ayrı kayıt yok. */}
           <FieldRow label="Renk">
-            <span className="flex min-h-9 flex-wrap items-center gap-1">
-              {(form.color_variants ?? [])
-                .filter((v) => v.color.trim())
-                .map((v) => (
-                  <span
-                    key={v.id}
-                    title={[v.fabric, v.composition].filter(Boolean).join(" · ") || undefined}
-                    className="rounded-full bg-brand-soft px-2.5 py-0.5 text-[12px] font-medium text-brand-strong"
-                  >
-                    {v.color}
-                  </span>
-                ))}
-              {!(form.color_variants ?? []).some((v) => v.color.trim()) && (
-                <span className="text-[12.5px] text-subtle">Renk eklenmedi</span>
-              )}
+            {/* KUTU, DİĞERLERİYLE AYNI. Sıraç (24.09.2026): "Renkler kısmı
+                neden diğerlerinden farklı, kutucuğu yok." Çipler çıplak
+                duruyordu; komşu satırların hepsi çerçeveli bir kontrol
+                gösterirken bu satır hizadan düşüyordu. Artık aynı çerçeve,
+                aynı yükseklik, sağında aynı artı. */}
+            <span className="flex items-center gap-1.5">
+              <span className="flex min-h-9 min-w-0 flex-1 flex-wrap items-center gap-1 rounded-control border border-line bg-surface px-2 py-1">
+                {(form.color_variants ?? [])
+                  .filter((v) => v.color.trim())
+                  .map((v) => (
+                    <span
+                      key={v.id}
+                      title={[v.fabric, v.composition].filter(Boolean).join(" · ") || undefined}
+                      className="rounded-full bg-brand-soft px-2.5 py-0.5 text-[12px] font-medium text-brand-strong"
+                    >
+                      {v.color}
+                    </span>
+                  ))}
+                {!(form.color_variants ?? []).some((v) => v.color.trim()) && (
+                  <span className="px-1 text-[13.5px] text-subtle">Renk eklenmedi</span>
+                )}
+              </span>
               {isAdmin && (
                 <IconButton
                   size="sm"
@@ -1196,22 +1237,6 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               onSelect={(id) => set("embroiderer_id", id)}
             />
           </FieldRow>
-          {/* LİSTE NEREDEN DOLUYOR? Sıraç (23.09.2026): "Üretici ve nakışçı
-              nereden ekleniyor?" Üçü de tek defterden (Fihrist) okunuyor ama
-              föyde o deftere giden hiçbir kapı yoktu: seçici boşsa kullanıcı
-              "Seçiniz…" ile baş başa kalıyordu.
-              Satırı tek başına doldurur — yanında boş hücre bırakmaz. */}
-          {isAdmin && (
-            <span className="text-[12px] leading-relaxed text-subtle @[49rem]:col-span-2">
-              Listede yoksa deftere ekleyin —{" "}
-              <Link
-                href="/collection/veri?k=usta"
-                className="font-medium text-brand underline-offset-2 hover:underline"
-              >
-                Fihrist: Üretici · Kalıpçı · Nakışçı
-              </Link>
-            </span>
-          )}
           {/* ÜRETİCİ SOLDA, TARİH YANINDA (Aslı Hanım, 21.09.2026): "Üretici
               kalsın solda, üretim başlangıç tarihini oraya alabilirsin."
               Tarih eskiden föy başlığının yanındaydı; ürünün adıyla üretimin
@@ -1533,15 +1558,16 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                               )}
                             </td>
                           ))}
-                          <td className="border border-line p-0">
-                            <CellInput
-                              className="px-1 text-center font-semibold tabular-nums"
+                          {/* SALT OKUR: hücreler değişince kendiliğinden
+                              güncellenir, elle yazılan bir toplam ile ekranın
+                              söylediği sayı ayrışmasın. */}
+                          <td className="border border-line bg-surface-muted/50 p-0">
+                            <span
+                              className="flex h-8 items-center justify-center px-1 text-[13px] font-semibold tabular-nums text-ink"
                               aria-label={`${row.label || `${ri + 1}. satır`} — toplam`}
-                              value={row.total}
-                              onChange={(e) => setDistTotal(ri, e.target.value)}
-                              placeholder="—"
-                              inputMode="numeric"
-                            />
+                            >
+                              {rowTotalOf(row) || "—"}
+                            </span>
                           </td>
                           <td className="text-center align-middle">
                             <RowDelete onClick={() => removeDistRow(ri)} label={`${row.label || `${ri + 1}. satır`} satırını sil`} />
@@ -1554,6 +1580,44 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                             <Plus size={13} aria-hidden /> Adet satırı ekle
                           </Button>
                         </td>
+                      </tr>
+                      {/* SÜTUN TOPLAMLARI + SAĞ ALTTA GENEL TOPLAM. Sıraç
+                          (24.09.2026): "Sadece satır sonunda toplam var,
+                          sütunun da sonunda olmalı, yani sağ en altta genel
+                          toplam kısmı yok." Beden başına kaç adet üretileceği
+                          birden çok satıra bölünebiliyor (ör. iki ayrı parti);
+                          sütun toplamı olmadan "M bedeninden toplam kaç?"
+                          sorusu elle toplanıyordu. */}
+                      <tr className="bg-surface-muted">
+                        <td className={cn("border border-line-strong px-2 py-1.5 text-ink", LABEL_CLS)}>
+                          Toplam
+                        </td>
+                        {cols.map((c, ci) => {
+                          const colSum = c === "cm"
+                            ? 0
+                            : sd.rows.reduce(
+                                (a, r) => a + (parseInt(String(r.values[ci] ?? "").replace(/[^\d-]/g, ""), 10) || 0),
+                                0,
+                              );
+                          return (
+                            <td
+                              key={c}
+                              className={cn(
+                                "border border-line-strong px-1 py-1.5 text-center text-[13px] font-semibold tabular-nums",
+                                colSum > 0 ? "text-ink" : "text-subtle/60",
+                              )}
+                            >
+                              {c === "cm" ? "" : colSum || "—"}
+                            </td>
+                          );
+                        })}
+                        <td className="border border-line-strong bg-brand-soft/50 px-1 py-1.5 text-center text-[13px] font-bold tabular-nums text-brand-strong">
+                          {sd.rows.reduce(
+                            (a, r) => a + (parseInt(rowTotalOf(r).replace(/[^\d-]/g, ""), 10) || 0),
+                            0,
+                          ) || "—"}
+                        </td>
+                        <td className="w-9 bg-surface" />
                       </tr>
                     </tbody>
 
@@ -1735,14 +1799,11 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                seçili kolon gibi vurgulanıyor — birim ve toplam maliyeti
                karşısında okunuyor (Aslı Hanım: "karşısında yazması gerekiyor").
                1 her zaman ilk kolon: temel tutar orada. */
-            const customQty = (p.production_qty ?? "").trim();
-            const isCustomTier =
-              customQty !== ""
-              && Number(customQty) > 1
-              && !(QTY_TIERS as readonly string[]).includes(customQty);
-            const tierCols: string[] = isCustomTier
-              ? [...QTY_TIERS, customQty].sort((a, b) => Number(a) - Number(b))
-              : [...QTY_TIERS];
+            const extra = (p.qty_tiers ?? [])
+              .map((t) => String(t).trim())
+              .filter((t) => t !== "" && Number(t) > 1 && !(QTY_TIERS as readonly string[]).includes(t));
+            const tierCols: string[] = [...new Set([...QTY_TIERS, ...extra])]
+              .sort((a, b) => Number(a) - Number(b));
             const setP = (patch: Partial<typeof p>) => set("pricing", { ...p, ...patch });
             const setItem = (i: number, patch: Partial<CostItem>) =>
               setP({ cost_items: items.map((it, ix) => (ix === i ? { ...it, ...patch } : it)) });
@@ -1771,32 +1832,83 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                     önüne koymak olurdu. */}
                 <div className="flex flex-wrap items-center gap-2 rounded-card border border-line bg-surface-muted/50 px-3 py-2">
                   <span className="text-[12.5px] font-semibold text-ink">Toplam üretim adedi</span>
+                  {/* ÇİP = KADEME. Sabit dördü + elle açılanlar aynı dilde
+                      durur; seçili olan tabloda vurgulanan sütundur. */}
                   <span className="flex flex-wrap items-center gap-1">
-                    {["50", "100", "150", "200"].map((n) => {
+                    {tierCols.filter((t) => t !== "1").map((n) => {
                       const on = (p.production_qty ?? "") === n;
+                      const custom = !(QTY_TIERS as readonly string[]).includes(n);
                       return (
-                        <button
-                          key={n}
-                          type="button"
-                          aria-pressed={on}
-                          onClick={() => setP({ production_qty: on ? "" : n })}
-                          className={cn(
-                            "tap-target h-8 rounded-full px-3 text-[12.5px] font-medium transition-colors duration-150",
-                            on ? "bg-brand-soft text-brand-strong ring-1 ring-brand-ring" : "bg-surface text-muted hover:bg-surface-hover hover:text-ink",
+                        <span key={n} className="relative inline-flex">
+                          <button
+                            type="button"
+                            aria-pressed={on}
+                            onClick={() => setP({ production_qty: on ? "" : n })}
+                            className={cn(
+                              "tap-target h-8 rounded-full text-[12.5px] font-medium transition-colors duration-150",
+                              custom ? "pl-3 pr-6" : "px-3",
+                              on ? "bg-brand-soft text-brand-strong ring-1 ring-brand-ring" : "bg-surface text-muted hover:bg-surface-hover hover:text-ink",
+                            )}
+                          >
+                            {n}
+                          </button>
+                          {/* Elle açılan kademe geri alınabilir; sabit dördü
+                              kaldırılamaz — onlar markanın standart adetleri
+                              (Aslı Hanım, 18.09.2026). */}
+                          {custom && (
+                            <button
+                              type="button"
+                              aria-label={`${n} adet kademesini kaldır`}
+                              title="Kademeyi kaldır"
+                              onClick={() => setP({
+                                qty_tiers: (p.qty_tiers ?? []).filter((x) => x !== n),
+                                production_qty: (p.production_qty ?? "") === n ? "" : p.production_qty,
+                              })}
+                              className="absolute right-1 top-1/2 grid size-4 -translate-y-1/2 place-items-center rounded-full text-subtle transition-colors duration-150 hover:bg-danger/10 hover:text-danger"
+                            >
+                              <X size={11} aria-hidden />
+                            </button>
                           )}
-                        >
-                          {n}
-                        </button>
+                        </span>
                       );
                     })}
                   </span>
-                  <CellInput
-                    aria-label="Üretim adedi — serbest"
-                    value={p.production_qty ?? ""}
-                    onChange={(e) => setP({ production_qty: e.target.value })}
-                    placeholder="veya yaz"
-                    className="h-8 w-24 rounded-control border border-line bg-surface px-2 text-[12.5px]"
-                  />
+                  {/* "VEYA YAZ" YERİNE ARTI. Sıraç (24.09.2026): "Burada 'veya
+                      yaz' yerine + olsun, oraya girilen sayıya göre sütun
+                      oluşsun." Serbest kutu yazdıkça tek bir değeri
+                      değiştiriyordu; artık her sayı KALICI bir kademe açıyor ve
+                      tabloda kendi sütununu alıyor. */}
+                  {addingTier ? (
+                    <span className="inline-flex items-center gap-1">
+                      <CellInput
+                        autoFocus
+                        aria-label="Yeni adet kademesi"
+                        value={tierDraft}
+                        onChange={(e) => setTierDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") { e.preventDefault(); commitTier(); }
+                          if (e.key === "Escape") { setAddingTier(false); setTierDraft(""); }
+                        }}
+                        placeholder="ör. 12"
+                        inputMode="numeric"
+                        className="h-8 w-20 rounded-control border border-line bg-surface px-2 text-[12.5px]"
+                      />
+                      <Button size="sm" variant="secondary" onClick={commitTier} disabled={!tierDraft.trim()}>Ekle</Button>
+                      <IconButton size="sm" aria-label="Vazgeç" onClick={() => { setAddingTier(false); setTierDraft(""); }}>
+                        <X size={13} aria-hidden />
+                      </IconButton>
+                    </span>
+                  ) : (
+                    <IconButton
+                      size="sm"
+                      aria-label="Adet kademesi ekle"
+                      title="Başka bir adet için sütun aç"
+                      onClick={() => setAddingTier(true)}
+                      className="text-brand hover:bg-surface hover:text-brand-strong"
+                    >
+                      <Plus size={15} aria-hidden />
+                    </IconButton>
+                  )}
                   {!p.production_qty && qty > 0 && (
                     <span className="text-[11.5px] text-subtle">
                       Seçilmedi — beden dağılımındaki {qty} adet kullanılıyor
@@ -2016,7 +2128,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                     <MoneyInput
                       value={p.web_sale_price ?? ""}
                       onChange={(e) => setP({ web_sale_price: e.target.value })}
-                      placeholder="sitedeki satış fiyatı"
+                      placeholder="Sitedeki satış fiyatı"
                     />
                   </FieldRow>
                   <FieldRow label="Ustaya birim ödeme">
@@ -2195,9 +2307,19 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
       {tab === "malzeme" && (<>
         {/* ÜRÜNÜN AÇIKLAMASI — ürün sekmesinden buraya taşındı (18.09.2026). */}
         <Section title="Ürünün Açıklaması">
-          <FieldRow checkKey="description" label="Açıklama" align="start" missing={missingKeys.has("description")} hint={hintOf.get("description")}>
-            <TextArea value={form.description ?? ""} onChange={(v) => set("description", v)} rows={2} />
-          </FieldRow>
+          {/* İÇ ETİKET YOK: başlık zaten "Ürünün Açıklaması" diyor, altına bir
+              daha "Açıklama" yazmak tekrardı (Sıraç, 24.09.2026). Komşu
+              bölümler — Yıkama Talimatı, Dikiş Talimatı — de iç etiket
+              kullanmıyor; aynı işi yapan alan aynı görünmeli.
+              `data-check` sarmalayıcıda kalıyor, eksiksizlik şeridi yine
+              buraya iniyor. */}
+          <div
+            data-check="description"
+            className={cn("scroll-mt-24 rounded-control", missingKeys.has("description") && "ring-1 ring-warning")}
+            title={hintOf.get("description")}
+          >
+            <TextArea value={form.description ?? ""} onChange={(v) => set("description", v)} rows={2} placeholder="Ürünü bir iki cümleyle anlatın" />
+          </div>
         </Section>
 
         {/* YIKAMA TALİMATI */}
