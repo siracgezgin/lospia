@@ -29,10 +29,23 @@ const ManufacturerSchema = z.object({
   name: z.string().min(1, "Usta adı gerekli.").max(200),
   /* FİHRİST ROLÜ (20240353). Aslı Hanım (21.09.2026): "Oradan üretici,
      kalıpçı, nakışçı seçmemiz gerekiyor." Aynı defterde üç rol. */
-  role: z.enum(["uretici", "kalipci", "nakisci", "diger"]).default("uretici"),
+  role: z.enum(["uretici", "kalipci", "nakisci", "kumasci", "aksesuarci", "diger"]).default("uretici"),
   /* Açık adres — fihristte "adresleri" isteniyor; tabloda şehir/ülke vardı. */
   address: z.string().max(500).optional().nullable(),
   photo_url: z.string().max(2000).optional().nullable(),
+  /* KARTELA ALBÜMÜ (20240355). Aslı Hanım (23.09.2026): "Hangi kumaşları
+     olduğunun fotoğrafları… onun kartelaları." Kumaş seçimi bu karelere
+     bakılarak yapılıyor, tek kapak görseli yetmiyor.
+     `.optional()` — gönderilmeyen alan yazılmaz (bkz. feedback kuralı,
+     23.09.2026): eski bir sekmeden kaydetmek albümü silemez. */
+  photos: z
+    .array(z.object({
+      url: z.string().max(1000),
+      path: z.string().max(500),
+      caption: z.string().max(200).optional(),
+    }))
+    .max(40)
+    .optional(),
   city: z.string().max(120).optional().nullable(),
   country: z.string().max(120).optional().nullable(),
   currency: z.string().max(10).default("TL"),
@@ -67,6 +80,7 @@ function payloadOf(v: ManufacturerInput) {
     role: v.role,
     address: nn(v.address),
     photo_url: nn(v.photo_url),
+    ...(v.photos !== undefined ? { photos: v.photos } : {}),
     city: nn(v.city),
     country: nn(v.country),
     currency: (v.currency || "TL").trim(),
@@ -200,4 +214,50 @@ export async function ensureManufacturer(
   if (existing) return { id: (existing as { id: string }).id };
 
   return createManufacturer({ name: clean, role: "uretici", currency: "TL", is_active: true });
+}
+
+/* ── KARTELA FOTOĞRAFLARI ──────────────────────────────────────────────────
+   Föy görselleriyle AYNI kovayı kullanır (`production-sheets`); ayrı kova
+   açmak ikinci bir RLS ve ikinci bir temizlik kuralı demekti. Yol
+   `{workspace_id}/fihrist/{uuid}` — föylerin altına karışmaz. */
+
+const FIHRIST_BUCKET = "production-sheets";
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+const ALLOWED_PHOTO_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif"];
+
+export async function uploadManufacturerPhoto(
+  formData: FormData,
+): Promise<{ url: string; path: string } | { error: string }> {
+  const file = formData.get("file");
+  if (!(file instanceof File)) return { error: "Dosya bulunamadı." };
+  if (file.size > MAX_PHOTO_BYTES) return { error: "Görsel 5 MB sınırını aşıyor." };
+  if (!ALLOWED_PHOTO_TYPES.includes(file.type)) {
+    return { error: "Yalnızca görsel dosyaları (PNG, JPG, WEBP) yüklenebilir." };
+  }
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+  if (!isAdmin(ctx.role)) return { error: ADMIN_ONLY };
+
+  const path = `${ctx.workspaceId}/fihrist/${crypto.randomUUID()}`;
+  const { error } = await supabase.storage
+    .from(FIHRIST_BUCKET)
+    .upload(path, file, { contentType: file.type, upsert: false });
+  if (error) return { error: error.message };
+  const { data: { publicUrl } } = supabase.storage.from(FIHRIST_BUCKET).getPublicUrl(path);
+  return { url: publicUrl, path };
+}
+
+export async function deleteManufacturerPhoto(
+  path: string,
+): Promise<{ ok: true } | { error: string }> {
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+  if (!isAdmin(ctx.role)) return { error: ADMIN_ONLY };
+  /* Yol her zaman kendi çalışma alanıyla başlar — başkasının dosyası silinemez. */
+  if (!path.startsWith(`${ctx.workspaceId}/`)) return { error: ADMIN_ONLY };
+  const { error } = await supabase.storage.from(FIHRIST_BUCKET).remove([path]);
+  if (error) return { error: toActionErrorMessage(error) };
+  return { ok: true };
 }

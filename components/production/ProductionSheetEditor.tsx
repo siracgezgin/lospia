@@ -53,6 +53,10 @@ export type SheetManufacturer = Pick<
   role?: Manufacturer["role"];
   /** Föyü maille göndermek için (2026-08-28). Yoksa gönderirken elle yazılır. */
   email?: string | null;
+  /** Sourcing satırında firma seçilince "İletişim" kutusunu doldurur
+   *  (20240355 — fihrist kumaşçı/aksesuarcıyı da taşıyor). */
+  contact_name?: string | null;
+  phone?: string | null;
 };
 
 interface Props {
@@ -1111,11 +1115,18 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                 }}
               >
                 <option value="">Seçiniz…</option>
-                {manufacturers.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}{m.is_active ? "" : " (pasif)"}
-                  </option>
-                ))}
+                {/* ÜRETİCİ LİSTESİ ROLE GÖRE SÜZÜLÜR. Fihrist 20240355 ile
+                    kumaşçı ve aksesuarcıyı da taşıyor; süzgeç olmasaydı kumaş
+                    firmaları "Üretici" kutusunda çıkardı. Rolü girilmemiş eski
+                    kayıtlar görünmeye devam eder — yoksa fihrist bir gecede
+                    boşalmış gibi olurdu. */}
+                {manufacturers
+                  .filter((m) => !m.role || m.role === "uretici" || m.role === "diger")
+                  .map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}{m.is_active ? "" : " (pasif)"}
+                    </option>
+                  ))}
               </SelectInput>
             </FieldRow>
           ) : (
@@ -1988,10 +1999,27 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
             çünkü nereden ne geldiğini bilmiyoruz." Her kaleme birden çok
             öneri girilir, üretime gideni tik işaretler. */}
         <Section title="Sourcing — Hangi kalem hangi firmadan">
+          {/* SOURCING FİHRİSTTEN BESLENİR. Aslı Hanım (23.09.2026): "Selen
+              Hanım'ın sourcing dosyasına girip bilgi seçmesi lazım… Emin Bey
+              telefonu, adı, hangi kumaşları olduğunun fotoğrafları."
+              Eski `workspace_suppliers` kayıtları listede KALIYOR: onlara
+              bağlanmış satırlar var, listeden çıkarmak o bağları koparırdı. */}
           <SheetSourcing
             sheetId={sheetId}
             rows={form.sourcing ?? []}
-            suppliers={suppliers}
+            suppliers={[
+              ...manufacturers
+                .filter((m) => m.is_active !== false)
+                .filter((m) => m.role === "kumasci" || m.role === "aksesuarci" || m.role === "nakisci")
+                .map((m) => ({
+                  id: m.id,
+                  name: m.name,
+                  contact_name: m.contact_name ?? null,
+                  phone: m.phone ?? null,
+                  email: m.email ?? null,
+                })),
+              ...suppliers,
+            ]}
             canEdit={isAdmin}
             onChange={(next) => set("sourcing", next)}
           />

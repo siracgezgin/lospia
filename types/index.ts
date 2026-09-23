@@ -305,7 +305,11 @@ export type Season = {
  * geldi (Manufacturers sekmesi: Lead Time, Minimums, Currency).
  */
 /** Fihristteki rol (20240353). Üretici, kalıpçı ve nakışçı aynı defterde. */
-export type ManufacturerRole = "uretici" | "kalipci" | "nakisci" | "diger";
+/** Fihristteki iş kolu. Kumaşçı ve aksesuarcı 20240355 ile eklendi —
+ *  Aslı Hanım (23.09.2026): "Kumaş sourcing, aksesuar sourcing, nakışçı,
+ *  kalıpçı — fihrist dediğimiz yer." */
+export type ManufacturerRole =
+  | "uretici" | "kalipci" | "nakisci" | "kumasci" | "aksesuarci" | "diger";
 
 export type Manufacturer = {
   id: string;

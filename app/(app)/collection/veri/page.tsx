@@ -1,6 +1,7 @@
 
 import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { requireModuleMember } from "@/lib/modules/context";
+import { isMissingSchemaError } from "@/lib/utils/supabase-errors";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { CollectionTabs } from "@/components/collection/PaymentTable";
 import { SettingsSection, CountChip } from "@/components/settings/SettingsSection";
@@ -11,6 +12,21 @@ import { ProductDataTiles } from "@/components/collection/ProductDataTiles";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { BackLink } from "@/components/modules/BackLink";
+
+/** Fihrist sorgusu — `photos` kolonu olmadan da çalışabilsin diye tek yerde. */
+function manufacturersQuery(
+  supabase: Awaited<ReturnType<typeof requireModuleMember>>["supabase"],
+  workspaceId: string,
+  withPhotos: boolean,
+) {
+  const base = "id, name, photo_url, city, country, currency, lead_time_days, min_order_qty, contact_name, phone, email, notes, is_active, role, address";
+  return supabase
+    .from("workspace_manufacturers")
+    .select(withPhotos ? `${base}, photos` : base)
+    .eq("workspace_id", workspaceId)
+    .order("is_active", { ascending: false })
+    .order("name");
+}
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Product Data" };
@@ -53,12 +69,7 @@ export default async function CollectionDataPage({
   ] = await Promise.all([
     // Üretici (Usta) — "Cihan Usta, o ustaları da öyle açacağız… hangi ürünler
     // orada dikiliyor." Tablo migrate edilmemişse bölüm sessizce gizlenir.
-    supabase
-      .from("workspace_manufacturers")
-      .select("id, name, photo_url, city, country, currency, lead_time_days, min_order_qty, contact_name, phone, email, notes, is_active, role")
-      .eq("workspace_id", workspaceId)
-      .order("is_active", { ascending: false })
-      .order("name"),
+    manufacturersQuery(supabase, workspaceId, true),
     supabase
       .from("production_sheets")
       .select("manufacturer_id")
@@ -96,8 +107,19 @@ export default async function CollectionDataPage({
       .order("name"),
   ]);
 
-  const manufacturers = (manufacturersResult.data ?? []) as ManagerManufacturer[];
-  const manufacturersAvailable = !manufacturersResult.error;
+  /* KARTELA KOLONU YOKSA BÖLÜM KAYBOLMASIN. `photos` 20240355 ile geldi ve
+     migration'ı kullanıcı elle uyguluyor; kolon yokken PostgREST sorguyu
+     komple reddediyor ve Fihrist sessizce gizleniyordu (aynı tuzağa
+     `workspace_materials.role` ile bir kez düşülmüştü, 23.09.2026).
+     Kolonsuz bir kez daha denenir; o durumda yalnız kartelalar görünmez. */
+  let mRes = manufacturersResult;
+  if (mRes.error && isMissingSchemaError(mRes.error)) {
+    mRes = await manufacturersQuery(supabase, workspaceId, false);
+  }
+  /* Sütun listesi koşullu olduğu için PostgREST'in tip çıkarımı kapanıyor;
+     şekli biz biliyoruz. */
+  const manufacturers = (mRes.data ?? []) as unknown as ManagerManufacturer[];
+  const manufacturersAvailable = !mRes.error;
   const sheetCounts: Record<string, number> = {};
   for (const r of (sheetProducerResult.data ?? []) as { manufacturer_id: string | null }[]) {
     if (r.manufacturer_id) sheetCounts[r.manufacturer_id] = (sheetCounts[r.manufacturer_id] ?? 0) + 1;

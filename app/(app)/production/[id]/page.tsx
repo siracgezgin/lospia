@@ -44,7 +44,8 @@ export default async function ProductionSheetPage({
   const manufacturersResult = await supabase
     .from("workspace_manufacturers")
     // email: föyü ustaya maille göndermek için (2026-08-28).
-    .select("id, name, is_active, lead_time_days, min_order_qty, currency, city, email, role")
+    // contact_name/phone: Sourcing'de firma seçilince iletişim kutusunu doldurur (20240355).
+    .select("id, name, is_active, lead_time_days, min_order_qty, currency, city, email, role, contact_name, phone")
     .eq("workspace_id", workspaceId)
     .order("is_active", { ascending: false })
     .order("name", { ascending: true });

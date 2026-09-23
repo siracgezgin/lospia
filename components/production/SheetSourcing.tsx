@@ -60,7 +60,11 @@ export function SheetSourcing({
 }: {
   sheetId: string;
   rows: SourcingEntry[];
-  suppliers: Supplier[];
+  /* Liste iki kaynaktan geliyor: fihrist (kumaşçı · aksesuarcı · nakışçı,
+     20240355) ve eski `workspace_suppliers` kayıtları. Ortak alanlar kadarı
+     isteniyor; iletişim bilgisi seçilince "İletişim" kutusunu doldurur. */
+  suppliers: (Pick<Supplier, "id" | "name">
+    & Partial<Pick<Supplier, "contact_name" | "phone" | "email">>)[];
   canEdit: boolean;
   onChange: (_next: SourcingEntry[]) => void;
 }) {
