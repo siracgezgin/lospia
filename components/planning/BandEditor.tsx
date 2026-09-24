@@ -56,9 +56,17 @@ export function BandEditor({
   /** Aynı saatte başka bir şerit var mı? (`takenSlots` düzenlenen şeridi
    *  İÇERMEZ — dışlamayı çağıran yapar.) */
   const duplicateSlot = takenSlots.some((s) => normalizeSlot(s) === normalizeSlot(slot));
+  const [confirmSlot, setConfirmSlot] = useState(false);
+
+  /* SAAT DEĞİŞİYORSA ÖNCE SORULUR. Şeridin saatini kaydırmak bu haftayı değil,
+     BÜTÜN ileri haftaları etkiliyor (şerit çalışma alanı düzeyinde) ve o
+     saatteki toplantılar da birlikte taşınıyor. Onaysız yapmak, tek bir alanı
+     değiştirdiğini sanan kişinin takvimini habersiz değiştirmek olurdu. */
+  const slotChanged = normalizeSlot(slot) !== normalizeSlot(band.slot);
 
   function save() {
     setError(null);
+    if (slotChanged && !confirmSlot) { setConfirmSlot(true); return; }
     start(async () => {
       const res = await savePlanningBand(band.id, { label, slot, category, topicRows });
       if ("error" in res) { setError(res.error); return; }
@@ -162,7 +170,18 @@ export function BandEditor({
           {error}
         </p>
       )}
-      {!error && duplicateSlot && (
+      {/* SAAT DEĞİŞİKLİĞİ NE YAPACAĞINI SÖYLER. Şeyda Nisa Hanım (24.09.2026)
+          tek toplantıyı sürükleyip "diğer haftalar değişmedi" dedi — istenen
+          şeridin kendisini kaydırmaktı. Kaydet'e ilk basışta bu satır çıkar,
+          ikinci basışta uygulanır. */}
+      {!error && confirmSlot && (
+        <p className="basis-full rounded-control border border-warning/40 bg-warning/10 px-2.5 py-1.5 text-[12px] font-medium text-ink">
+          {normalizeSlot(band.slot)} → {normalizeSlot(slot)}: bu şerit <b className="font-semibold">bütün haftalarda</b> yeni
+          saate geçer ve bugünden itibaren o saatteki toplantılar da birlikte taşınır.
+          Geçmiş haftalara dokunulmaz. Onaylamak için Kaydet&apos;e bir daha basın.
+        </p>
+      )}
+      {!error && !confirmSlot && duplicateSlot && (
         <p className="basis-full rounded-control border border-warning/40 bg-warning/10 px-2.5 py-1.5 text-[12px] font-medium text-ink">
           {normalizeSlot(slot)} saatinde zaten bir şerit var — ızgarada iki ayrı satır olarak görünürler.
         </p>

@@ -96,7 +96,10 @@ function revalidate() {
 export async function savePlanningBand(
   bandId: string | null,
   input: BandInput,
-): Promise<{ ok: true } | { error: string }> {
+  /* `moved`: saat değiştiyse yeni saate taşınan toplantı sayısı. Ekran bunu
+     yazar — sessizce taşımak, kullanıcının haberi olmadan takvimi değiştirmek
+     olurdu. */
+): Promise<{ ok: true; moved?: number } | { error: string }> {
   const parsed = BandSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
@@ -119,6 +122,28 @@ export async function savePlanningBand(
   };
 
   if (bandId) {
+    /* SAATİ DEĞİŞEN ŞERİT TOPLANTILARINI DA GÖTÜRÜR.
+       Şeyda Nisa Hanım (24.09.2026): "Sürükle bırak yaptığımda diğer haftalar
+       değişmedi… Aslı Hanım sabah 09:00'ların şimdilik boş olmasını rica etti."
+
+       Sürükle-bırak TEK toplantıyı taşır; istenen ise saat şeridinin kendisini
+       ileriye dönük kaydırmak. Şerit zaten çalışma alanı düzeyinde ve saati
+       değiştirilebiliyordu — ama toplantılar `time_slot` ile eşlendiği için
+       şerit 10:00'a alınınca 09:00'daki kayıtlar şeridin DIŞINDA kalıyor,
+       başlıksız bir "ek saat" bloğuna düşüyordu. Ekranda hiçbir şey
+       değişmemiş gibi görünmesinin sebebi buydu.
+
+       GEÇMİŞE DOKUNULMAZ: yalnız BUGÜN ve sonrası taşınır. Geçen haftaların
+       kaydı toplantının gerçekte kaçta yapıldığını söyler; onu geriye dönük
+       düzeltmek tutanağı değiştirmek olurdu. */
+    const { data: before } = await supabase
+      .from("planning_bands")
+      .select("slot")
+      .eq("id", bandId)
+      .eq("workspace_id", ctx.workspaceId)
+      .maybeSingle();
+    const oldSlot = (before as { slot: string } | null)?.slot ?? null;
+
     const { error, count } = await supabase
       .from("planning_bands")
       .update(payload, { count: "exact" })
@@ -126,8 +151,26 @@ export async function savePlanningBand(
       .eq("workspace_id", ctx.workspaceId);
     if (error) return { error: toActionErrorMessage(error) };
     if (count === 0) return { error: NOT_FOUND };
+
+    let moved = 0;
+    if (oldSlot && oldSlot !== payload.slot) {
+      const today = new Date().toISOString().slice(0, 10);
+      const { data: movedRows, error: moveErr } = await supabase
+        .from("planning_meetings")
+        .update({ time_slot: payload.slot, updated_by: ctx.userId })
+        .eq("workspace_id", ctx.workspaceId)
+        .eq("time_slot", oldSlot)
+        .gte("meeting_date", today)
+        .select("id");
+      /* Taşıma başarısız olursa şeridin saati yine de değişmiş olur; bunu
+         SESSİZ geçmek, kullanıcıya "oldu" deyip toplantıları geride bırakmak
+         olurdu. Sayı geri dönüyor, ekran ne olduğunu yazıyor. */
+      if (moveErr) return { error: toActionErrorMessage(moveErr) };
+      moved = (movedRows ?? []).length;
+    }
+
     revalidate();
-    return { ok: true };
+    return { ok: true, moved };
   }
 
   // Yeni şerit en sona.
