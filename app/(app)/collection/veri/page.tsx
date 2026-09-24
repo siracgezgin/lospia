@@ -192,10 +192,14 @@ export default async function CollectionDataPage({
             description="Dışarıdan çalıştığımız herkesin defteri: ad, rol, cep telefonu, adres ve e-posta. Föydeki “Üretici”, “Kalıpçı” ve “Nakışçı” seçicileri ile Ödeme Tablosu buradan beslenir."
             aside={<CountChip n={manufacturers.length} birim="kayıt" />}
           >
+            {/* Ekleme/düzeltme ÜYEYE açık (20240356) — föyü dolduran kişi
+                listede olmayan ustayı buradan da açabilmeli. Silme
+                yöneticide: usta birden çok föye bağlı olabiliyor. */}
             <ManufacturersManager
               manufacturers={manufacturers}
               sheetCounts={sheetCounts}
-              canManage={isAdmin}
+              canManage
+              canDelete={isAdmin}
             />
           </SettingsSection>
         )}
