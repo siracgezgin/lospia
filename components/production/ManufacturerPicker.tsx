@@ -55,6 +55,7 @@ export function ManufacturerPicker({
   role,
   people,
   canEdit,
+  canAdd,
   label,
   onSelect,
   onCreated,
@@ -63,7 +64,12 @@ export function ManufacturerPicker({
   /** Bu kutunun iş kolu — açılan yeni kayıt bu rolle doğar. */
   role: ManufacturerRole;
   people: PickerPerson[];
+  /** Kutudan SEÇEBİLİR mi — föyün kendi alanı, üyeye açık. */
   canEdit: boolean;
+  /** Fihriste YENİ KAYIT açabilir mi — ayrı yetki. `workspace_manufacturers`
+   *  yazması RLS'te yöneticiye kısıtlı; artıyı üyeye göstermek, basınca
+   *  "yetkiniz yok" diyen bir düğme koymak olurdu. */
+  canAdd: boolean;
   /** Erişilebilirlik ve pencere başlığı: "Üretici", "Kalıpçı", "Nakışçı". */
   label: string;
   onSelect: (_id: string | null) => void;
@@ -117,7 +123,7 @@ export function ManufacturerPicker({
             </option>
           ))}
         </SelectInput>
-        {canEdit && (
+        {canAdd && (
           <IconButton
             size="sm"
             onClick={openDialog}

@@ -501,6 +501,21 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
   const isNew = sheet === null;
   const sheetId = sheet?.id ?? "new";
   // Silme: admin her föyü; üye kendi oluşturduğu föyü siler (RLS de bunu uygular).
+  /* ÜYE DE FÖY DOLDURUR. Sıraç (24.09.2026): "Üyeler de düzenleme
+     yapabilmeli." Ekran alanları yöneticiye kilitliyordu ama VERİTABANI zaten
+     üyeye izin veriyor — 20240212'deki politikanın kendi yorumu şöyle:
+     "işbirlikçi — herhangi bir üye herhangi bir föyü düzenleyebilir (Aslı'nın
+     'önce Gül girer, sonra Selen girer' akışı)". Yani kilit yalnız ekrandaydı
+     ve tasarımın kendisiyle çelişiyordu.
+
+     AÇILMAYANLAR, çünkü sunucu onları gerçekten reddediyor:
+       · durum / arşiv geçişleri (updateProductionSheet üyenin statüsünü
+         mevcut değerde sabitliyor),
+       · reçete satırları (addSheetMaterial → ADMIN_ONLY),
+       · fihriste yeni kayıt (createManufacturer → ADMIN_ONLY).
+     Bunları ekranda açmak, basınca "yetkiniz yok" diyen düğmeler koymak
+     olurdu. */
+  const canEditSheet = true;
   const canDelete = !isNew && !!sheet && (isAdmin || sheet.created_by === currentUserId);
   /**
    * Eksik kalemden ALANA git.
@@ -1158,7 +1173,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                   <span className="px-1 text-[13.5px] text-subtle">Renk eklenmedi</span>
                 )}
               </span>
-              {isAdmin && (
+              {canEditSheet && (
                 <IconButton
                   size="sm"
                   aria-label="Renk ekle"
@@ -1195,7 +1210,8 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               label="Üretici"
               role="uretici"
               people={people}
-              canEdit={isAdmin}
+              canEdit={canEditSheet}
+              canAdd={isAdmin}
               value={form.manufacturer_id ?? null}
               onCreated={addPerson}
               onSelect={(id) => {
@@ -1220,7 +1236,8 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               label="Kalıpçı"
               role="kalipci"
               people={people}
-              canEdit={isAdmin}
+              canEdit={canEditSheet}
+              canAdd={isAdmin}
               value={form.pattern_maker_id ?? null}
               onCreated={addPerson}
               onSelect={(id) => set("pattern_maker_id", id)}
@@ -1231,7 +1248,8 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               label="Nakışçı"
               role="nakisci"
               people={people}
-              canEdit={isAdmin}
+              canEdit={canEditSheet}
+              canAdd={isAdmin}
               value={form.embroiderer_id ?? null}
               onCreated={addPerson}
               onSelect={(id) => set("embroiderer_id", id)}
@@ -1351,7 +1369,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
           <div data-check="color-variants" className="scroll-mt-24">
             <SheetColorVariants
               rows={form.color_variants ?? []}
-              canEdit={isAdmin}
+              canEdit={canEditSheet}
               onChange={(next) => set("color_variants", next)}
             />
           </div>
@@ -2222,7 +2240,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                 })),
               ...suppliers,
             ]}
-            canEdit={isAdmin}
+            canEdit={canEditSheet}
             onChange={(next) => set("sourcing", next)}
           />
         </Section>
