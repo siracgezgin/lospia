@@ -43,7 +43,11 @@ interface Props {
   manufacturers: ManagerManufacturer[];
   /** Föy sayısı — usta başına, "kaç ürün orada dikiliyor" bilgisi. */
   sheetCounts: Record<string, number>;
+  /** Kayıt ekleyip düzeltebilir mi — üyeye açık (20240356). */
   canManage: boolean;
+  /** Kayıt SİLEBİLİR mi — yöneticide. Bir usta birden çok föye bağlı
+   *  olabiliyor; silmek başkasının verisindeki bağı koparır. */
+  canDelete: boolean;
 }
 
 /** Türkçe duyarsız arama normalizasyonu — uygulamadaki her arama kutusuyla
@@ -98,7 +102,7 @@ function draftOf(m: ManagerManufacturer): ManufacturerInput {
  * satırlar; rengi rozet taşır. Form ham input yerine Field primitifleri.
  * Silme onaysız gidiyordu — artık sorulur.
  */
-export function ManufacturersManager({ manufacturers, sheetCounts, canManage }: Props) {
+export function ManufacturersManager({ manufacturers, sheetCounts, canManage, canDelete }: Props) {
   const router = useRouter();
   const { ask, dialog } = useConfirm();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -342,16 +346,18 @@ export function ManufacturersManager({ manufacturers, sheetCounts, canManage }: 
                     <IconButton size="sm" onClick={() => openEdit(m)} aria-label={`${m.name} — düzenle`} title="Düzenle">
                       <Pencil size={14} />
                     </IconButton>
-                    <IconButton
-                      size="sm"
-                      onClick={() => remove(m)}
-                      disabled={busy}
-                      aria-label={`${m.name} — sil`}
-                      title={count > 0 ? "Föye bağlı — silmek yerine pasif yapın" : "Sil"}
-                      className="hover:bg-danger/10 hover:text-danger"
-                    >
-                      <Trash2 size={14} />
-                    </IconButton>
+                    {canDelete && (
+                      <IconButton
+                        size="sm"
+                        onClick={() => remove(m)}
+                        disabled={busy}
+                        aria-label={`${m.name} — sil`}
+                        title={count > 0 ? "Föye bağlı — silmek yerine pasif yapın" : "Sil"}
+                        className="hover:bg-danger/10 hover:text-danger"
+                      >
+                        <Trash2 size={14} />
+                      </IconButton>
+                    )}
                   </span>
                 )}
               </li>

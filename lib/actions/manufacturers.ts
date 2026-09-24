@@ -11,7 +11,7 @@ import { toActionErrorMessage } from "@/lib/utils/supabase-errors";
 // aynı model; burada da guard var — savunma iki katmanlı).
 
 const AUTH_REQUIRED = "Kimlik doğrulama gerekli.";
-const ADMIN_ONLY = "Üretici listesini yalnız yöneticiler düzenleyebilir.";
+const ADMIN_ONLY = "Kayıt silmeyi yalnız yöneticiler yapabilir.";
 const NOT_FOUND = "Üretici bulunamadı.";
 
 const nn = (v?: string | null) => {
@@ -110,7 +110,8 @@ export async function createManufacturer(
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
-  if (!isAdmin(ctx.role)) return { error: ADMIN_ONLY };
+  /* ÜYE DE EKLER/DÜZELTİR (20240356): föyü dolduran kişi listede
+     olmayan ustayı açabilmeli. Silme yöneticide kalıyor. */
 
   const { data, error } = await supabase
     .from("workspace_manufacturers")
@@ -140,7 +141,8 @@ export async function updateManufacturer(
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
-  if (!isAdmin(ctx.role)) return { error: ADMIN_ONLY };
+  /* ÜYE DE EKLER/DÜZELTİR (20240356): föyü dolduran kişi listede
+     olmayan ustayı açabilmeli. Silme yöneticide kalıyor. */
 
   const { error, count } = await supabase
     .from("workspace_manufacturers")
@@ -214,7 +216,8 @@ export async function quickAddManufacturer(input: {
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
-  if (!isAdmin(ctx.role)) return { error: ADMIN_ONLY };
+  /* ÜYE DE EKLER/DÜZELTİR (20240356): föyü dolduran kişi listede
+     olmayan ustayı açabilmeli. Silme yöneticide kalıyor. */
 
   const { data: existing } = await supabase
     .from("workspace_manufacturers")
@@ -251,7 +254,8 @@ export async function ensureManufacturer(
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
-  if (!isAdmin(ctx.role)) return { error: ADMIN_ONLY };
+  /* Föydeki kısayolun sunucu tarafı — `quickAddManufacturer` ile aynı
+     yetki (20240356). */
 
   const { data: existing } = await supabase
     .from("workspace_manufacturers")
@@ -285,7 +289,8 @@ export async function uploadManufacturerPhoto(
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
-  if (!isAdmin(ctx.role)) return { error: ADMIN_ONLY };
+  /* ÜYE DE EKLER/DÜZELTİR (20240356): föyü dolduran kişi listede
+     olmayan ustayı açabilmeli. Silme yöneticide kalıyor. */
 
   const path = `${ctx.workspaceId}/fihrist/${crypto.randomUUID()}`;
   const { error } = await supabase.storage
@@ -302,7 +307,8 @@ export async function deleteManufacturerPhoto(
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
-  if (!isAdmin(ctx.role)) return { error: ADMIN_ONLY };
+  /* ÜYE DE EKLER/DÜZELTİR (20240356): föyü dolduran kişi listede
+     olmayan ustayı açabilmeli. Silme yöneticide kalıyor. */
   /* Yol her zaman kendi çalışma alanıyla başlar — başkasının dosyası silinemez. */
   if (!path.startsWith(`${ctx.workspaceId}/`)) return { error: ADMIN_ONLY };
   const { error } = await supabase.storage.from(FIHRIST_BUCKET).remove([path]);

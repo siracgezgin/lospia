@@ -508,13 +508,14 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
      'önce Gül girer, sonra Selen girer' akışı)". Yani kilit yalnız ekrandaydı
      ve tasarımın kendisiyle çelişiyordu.
 
-     AÇILMAYANLAR, çünkü sunucu onları gerçekten reddediyor:
-       · durum / arşiv geçişleri (updateProductionSheet üyenin statüsünü
-         mevcut değerde sabitliyor),
-       · reçete satırları (addSheetMaterial → ADMIN_ONLY),
-       · fihriste yeni kayıt (createManufacturer → ADMIN_ONLY).
-     Bunları ekranda açmak, basınca "yetkiniz yok" diyen düğmeler koymak
-     olurdu. */
+     24.09.2026'da reçete, fihrist kaydı ve arşivleme de açıldı (20240356):
+     RLS politikaları ve sunucu kapıları birlikte gevşetildi, yani ekranda
+     açık olan her düğmenin sunucuda karşılığı var.
+
+     YÖNETİCİDE KALAN TEK ŞEY SİLME: föyü silmek ve fihristten bir ustayı
+     silmek geri alınamaz, üstelik usta birden çok föye bağlı olabiliyor
+     (Hakan Usta'ya bağlı 12 föy vardı). Arşivlemek silmek değildir — kayıt
+     duruyor, Arşiv ekranından geri alınıyor. */
   const canEditSheet = true;
   const canDelete = !isNew && !!sheet && (isAdmin || sheet.created_by === currentUserId);
   /**
@@ -903,7 +904,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               altında bir bölüm olarak duruyordu ve föyün bir parçasıymış gibi
               okunuyordu. Yetenek kaybolmadı: künye bilgisi künyenin yanına,
               üst çubuğa alındı. */}
-          {isAdmin && !isNew && (
+          {canEditSheet && !isNew && (
             /* DURUM okunur değildi: kutuda yalnız "Aktif" yazıyordu, neyin
                durumu olduğu ve seçeneklerin ne anlama geldiği belirsizdi
                (2026-08-29: "şurada da Aktif/Taslak/Arşiv, anlamadım").
@@ -1211,7 +1212,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               role="uretici"
               people={people}
               canEdit={canEditSheet}
-              canAdd={isAdmin}
+              canAdd={canEditSheet}
               value={form.manufacturer_id ?? null}
               onCreated={addPerson}
               onSelect={(id) => {
@@ -1237,7 +1238,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               role="kalipci"
               people={people}
               canEdit={canEditSheet}
-              canAdd={isAdmin}
+              canAdd={canEditSheet}
               value={form.pattern_maker_id ?? null}
               onCreated={addPerson}
               onSelect={(id) => set("pattern_maker_id", id)}
@@ -1249,7 +1250,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               role="nakisci"
               people={people}
               canEdit={canEditSheet}
-              canAdd={isAdmin}
+              canAdd={canEditSheet}
               value={form.embroiderer_id ?? null}
               onCreated={addPerson}
               onSelect={(id) => set("embroiderer_id", id)}
@@ -2209,7 +2210,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
             Reçeteden gelen kalemler maliyet tablosunda "reçete" rozetiyle
             zaten işaretli, yani bağ kopmuyor. */}
         <Section title="Reçete — Bu üründe ne kadar malzeme gidiyor">
-          <SheetBom sheetId={sheet?.id ?? null} rows={bom} materials={materials} canEdit={isAdmin} />
+          <SheetBom sheetId={sheet?.id ?? null} rows={bom} materials={materials} canEdit={canEditSheet} />
         </Section>
       </>)}
 

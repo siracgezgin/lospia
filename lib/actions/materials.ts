@@ -239,7 +239,8 @@ export async function addSheetMaterial(
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
-  if (!isAdmin(ctx.role)) return { error: ADMIN_ONLY };
+  /* ÜYE DE DOLDURUR (20240356): reçete föyün verisi, föyün kendisi
+     zaten işbirlikçi. Selen Hanım föyü doldururken kumaşı ekleyemiyordu. */
 
   const { error } = await supabase.from("production_sheet_materials").insert({
     workspace_id: ctx.workspaceId,
@@ -264,7 +265,8 @@ export async function updateSheetMaterial(
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
-  if (!isAdmin(ctx.role)) return { error: ADMIN_ONLY };
+  /* ÜYE DE DOLDURUR (20240356): reçete föyün verisi, föyün kendisi
+     zaten işbirlikçi. Selen Hanım föyü doldururken kumaşı ekleyemiyordu. */
 
   const payload: Record<string, unknown> = {};
   if (patch.consumption !== undefined) payload.consumption = nNum(patch.consumption) ?? 0;
@@ -286,7 +288,8 @@ export async function removeSheetMaterial(id: string): Promise<{ ok: true } | { 
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
-  if (!isAdmin(ctx.role)) return { error: ADMIN_ONLY };
+  /* ÜYE DE SİLER (20240356): satır tek föye ait. Silmeyi kapatmak
+     tutarsız olurdu — üye tüketimi zaten 0 yazabiliyor. */
 
   const { data } = await supabase
     .from("production_sheet_materials")

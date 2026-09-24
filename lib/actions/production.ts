@@ -343,7 +343,9 @@ export async function updateProductionSheet(
   const data = normalize(parsed.data);
   // Statü/arşiv geçişleri yalnızca admin'e; üye içerik günceller ama statüyü
   // olduğu gibi bırakır.
-  if (!isAdmin(ctx)) data.status = existing.status as ProductionSheetInput["status"];
+  /* DURUMU ÜYE DE DEĞİŞTİRİR (20240356). Eskiden üyenin gönderdiği statü
+     mevcut değerde sabitleniyordu; arşivleme üyeye açılınca bu satır aynı işi
+     ters yönden engelliyordu — arşivden çıkarmak yine yöneticiyi bekletirdi. */
 
   const { error } = await supabase
     .from("production_sheets")
@@ -578,7 +580,10 @@ export async function archiveProductionSheet(
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
-  if (!isAdmin(ctx)) return { error: PERM_DENIED };
+  /* ÜYE DE ARŞİVLER (Sıraç, 24.09.2026). Arşivlemek SİLMEK değil: kayıt
+     duruyor, Arşiv ekranından geri alınabiliyor. Föyü dolduran kişi işi
+     bitince kaldırabilmeli; yöneticiyi beklemek akışı durduruyordu.
+     Föy SİLME ayrı kaldı — o geri alınamaz. */
 
   const { error } = await supabase
     .from("production_sheets")
