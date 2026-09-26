@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { canManageContacts, type AppRole } from "@/lib/auth/permissions";
 import { toActionErrorMessage } from "@/lib/utils/supabase-errors";
 import { logWorkspaceActivity, WORKSPACE_ACTIONS } from "@/lib/activity/log-workspace-activity";
+import { CRM_EDITABLE_FIELDS, FIHRIST_ID_PREFIX, type CrmFieldKey } from "@/lib/crm/constants";
 
 // CRM v0 builds on the existing workspace_contacts table (used for task
 // responsible/contact mapping). These actions only touch the additive columns
@@ -127,6 +128,69 @@ export async function updateCrmContact(
   const { data: updated, error } = await supabase
     .from("workspace_contacts")
     .update(clean(parsed.data))
+    .eq("id", contactId)
+    .eq("workspace_id", ctx.workspaceId)
+    .select("id");
+
+  if (error) return { error: toActionErrorMessage(error) };
+  if (!updated || updated.length === 0) return { error: NOT_FOUND };
+  revalidatePath("/crm");
+  revalidatePath("/settings");
+  return { ok: true };
+}
+
+/* ── HÜCRE GÜNCELLEME — Excel ızgarasının yazma kapısı ────────────────────────
+   `updateCrmContact` TÜM alanları birden yazar (`clean()` her sütunu döndürür).
+   Izgarada bir hücre değiştiğinde onu çağırmak, o satırın DOKUNULMAYAN her
+   alanını null'a çekerdi: tek bir telefon düzeltmesi notu, segmenti ve takip
+   tarihini silerdi. Üstelik iki kişi aynı anda farklı hücrelere yazınca,
+   sonra kaydeden diğerinin yazdığını ezerdi.
+
+   Bu yüzden ızgara TEK SÜTUN yazar. Alan adı istemciden geliyor, yani
+   doğrudan sorguya konamaz: önce ızgaranın sütun listesiyle karşılaştırılıyor
+   (CRM_GRID_COLUMNS — tek kaynak), sonra o alanın kendi kuralıyla
+   doğrulanıyor. Listede olmayan bir ad hiç sorguya ulaşmıyor. */
+const FIELD_SCHEMAS: Record<CrmFieldKey, z.ZodTypeAny> = {
+  name: z.string().min(1, "İsim gerekli").max(200),
+  organization: nullableText(200),
+  role_label: nullableText(100),
+  segment: nullableText(40),
+  crm_status: nullableText(40),
+  seeding_stage: nullableText(20),
+  source_channel: nullableText(60),
+  owner_id: hexUuid("Geçersiz sorumlu").optional().nullable(),
+  phone: nullableText(60),
+  email: z.string().email("Geçersiz e-posta").optional().nullable(),
+  last_contact_at: dateOrNull,
+  next_follow_up_at: dateOrNull,
+  notes: nullableText(4000),
+};
+
+export async function updateCrmContactField(
+  contactId: string,
+  field: string,
+  rawValue: string,
+): Promise<{ ok: true } | { error: string }> {
+  /* Fihrist satırları `workspace_manufacturers`'ta yaşıyor; CRM'de salt
+     okunur görünürler. Kimlikleri "fihrist:" önekli, UUID değil. */
+  if (contactId.startsWith(FIHRIST_ID_PREFIX)) {
+    return { error: "Fihrist kaydı buradan düzenlenmez — Fihrist'ten değiştirin." };
+  }
+  if (!CRM_EDITABLE_FIELDS.includes(field as CrmFieldKey)) {
+    return { error: "Bu alan düzenlenemez." };
+  }
+
+  const trimmed = (rawValue ?? "").trim();
+  const parsed = FIELD_SCHEMAS[field as CrmFieldKey].safeParse(trimmed.length ? trimmed : null);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const supabase = await createClient();
+  const ctx = await requireContactAdmin(supabase);
+  if ("error" in ctx) return { error: ctx.error };
+
+  const { data: updated, error } = await supabase
+    .from("workspace_contacts")
+    .update({ [field]: parsed.data ?? null })
     .eq("id", contactId)
     .eq("workspace_id", ctx.workspaceId)
     .select("id");

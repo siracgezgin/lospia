@@ -1,27 +1,20 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import {
-  useReactTable,
-  getCoreRowModel,
-  getSortedRowModel,
-  flexRender,
-  createColumnHelper,
-  type SortingState,
-} from "@tanstack/react-table";
-import { Plus, Search, Users, Pencil, Trash2, ExternalLink, Eye, UserPlus, AlertCircle, ChevronLeft } from "lucide-react";
-import { deleteCrmContact } from "@/lib/actions/crm";
+import { Search, Users, Trash2, ExternalLink, Eye, UserPlus, AlertCircle, ChevronLeft, Pencil, CornerDownLeft } from "lucide-react";
+import { deleteCrmContact, createCrmContact, updateCrmContactField } from "@/lib/actions/crm";
 import { isFihristRow } from "@/lib/crm/constants";
 import {
   CRM_SEGMENTS,
+  CRM_GRID_COLUMNS,
   crmCategory,
   crmCategoryOfSegment,
   segmentLabel,
   statusLabel,
-  SEGMENT_TONE,
-  STATUS_TONE,
+  sourceLabel,
+  type CrmFieldKey,
 } from "@/lib/crm/constants";
 import { formatDateOnlyTR } from "@/lib/utils/format-date";
 import { cn } from "@/lib/utils/cn";
@@ -31,11 +24,11 @@ import { SelectInput, TextInput } from "@/components/ui/Field";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { seedingStep, nextSeedingStep, SEEDING_TOTAL } from "@/lib/crm/seeding";
+import { seedingStep } from "@/lib/crm/seeding";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { SetupRequiredNotice } from "@/components/modules/SetupRequiredNotice";
 import { PersonAvatar } from "@/components/ui/PersonAvatar";
-import { CrmContactModal } from "./CrmContactModal";
+import { CrmCell, focusCell } from "./CrmGridCells";
 import { ContactMatchingPanel } from "./ContactMatchingPanel";
 import type { WorkspaceContact } from "@/types";
 import { istanbulTodayISO } from "@/lib/utils/today";
@@ -73,157 +66,152 @@ function norm(s: string): string {
     .replace(/İ/g, "i");
 }
 
-const columnHelper = createColumnHelper<WorkspaceContact>();
+/** Boş metin → null. Sunucu "" kaydetmez, tarih alanları ise "" ile patlar. */
+const nz = (s: string | null | undefined) => {
+  const t = (s ?? "").trim();
+  return t.length ? t : null;
+};
 
-/**
- * FİHRİST SATIRININ "DÜZENLE"Sİ — kalem ikonu, tıpkı diğer satırlardaki gibi.
- *
- * Eylem sütununda normal kayıtlar iki KARE ikon düğmesi taşıyor; fihrist
- * satırında ise "Fihrist" yazan bir metin bağlantısı duruyordu. Aynı sütunda
- * iki ayrı dil vardı: satırlar birbirine göre kayıyor, sütun genişliği
- * satırdan satıra değişiyordu. Aynı işi yapan şey aynı görünmeli — kutu
- * ölçüsü ve hover dili IconButton ile birebir aynı, farkı `title` söyler.
- */
-function IconLink({ href, label, children }: { href: string; label: string; children: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
-      aria-label={label}
-      title={label}
-      className="tap-target inline-flex size-8 shrink-0 select-none items-center justify-center rounded-control text-muted transition-[background-color,color] duration-150 ease-standard hover:bg-surface-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring pointer-coarse:size-10"
-    >
-      {children}
-    </Link>
-  );
-}
+type Draft = Record<CrmFieldKey, string>;
+const emptyDraft = (segment: string): Draft =>
+  Object.fromEntries(CRM_GRID_COLUMNS.map((c) => [c.key, c.key === "segment" ? segment : ""])) as Draft;
 
-/**
- * SEEDING ADIM GÖSTERGESİ — yedi küçük çentik + "4/7 · Kargo".
- *
- * Önce ince bir ilerleme çubuğuydu: yüzde gibi okunuyordu ve dolu kısım
- * "ne kadar iyi gidiyor" hissi veriyordu. Oysa süreç yedi AYRIK adımdır —
- * kaçıncı adımda olunduğu sayılabilmeli. Çentikler adımı sayar, etiket
- * adı söyler; renk tek başına anlam taşımaz (metin her zaman yanında).
- */
-function SeedingSteps({ stage, className }: { stage: string | null | undefined; className?: string }) {
-  const st = seedingStep(stage);
-  if (!st) return <span className="text-subtle">—</span>;
-  const next = nextSeedingStep(st.key);
-  return (
-    <span
-      className={cn("inline-flex items-center gap-2", className)}
-      title={next ? `${st.note}\nSıradaki: ${next.label}` : st.note}
-    >
-      <span className="inline-flex shrink-0 items-center gap-[3px]" aria-hidden>
-        {Array.from({ length: SEEDING_TOTAL }).map((_, i) => (
-          <span
-            key={i}
-            className={cn(
-              "h-1.5 w-2 rounded-[2px]",
-              i < st.order ? "bg-brand" : "bg-surface-sunken",
-            )}
-          />
-        ))}
-      </span>
-      <span className="whitespace-nowrap text-[12.5px] tabular-nums text-muted">
-        {st.order}/{SEEDING_TOTAL} · {st.label}
-      </span>
-    </span>
-  );
+/** Izgarada okunabilir metin — sıralama ve fihrist satırları için. */
+function displayOf(c: WorkspaceContact, key: CrmFieldKey, memberName: Map<string, string>): string {
+  const raw = (c as unknown as Record<string, string | null>)[key] ?? "";
+  if (!raw) return "";
+  switch (key) {
+    case "segment": return segmentLabel(raw) ?? raw;
+    case "crm_status": return statusLabel(raw) ?? raw;
+    case "source_channel": return sourceLabel(raw) ?? raw;
+    case "seeding_stage": {
+      const st = seedingStep(raw);
+      return st ? `${st.order}/7 · ${st.label}` : raw;
+    }
+    case "owner_id": return memberName.get(raw) ?? "";
+    case "last_contact_at":
+    case "next_follow_up_at": return formatDateOnlyTR(raw) ?? raw;
+    default: return raw;
+  }
 }
 
 export function CrmView({
-  contacts,
-  members,
-  taskCounts,
-  isAdmin,
-  initialSegment,
-  categoryKey = null,
-  setupRequired = false,
-  setupMessage,
-  setupTechnicalDetail,
+  contacts, members, taskCounts, isAdmin, initialSegment,
+  categoryKey = null, setupRequired = false, setupMessage = null, setupTechnicalDetail = null,
 }: Props) {
-  const { ask, dialog } = useConfirm();
   const router = useRouter();
+  const { ask, dialog } = useConfirm();
   const [query, setQuery] = useState("");
   const [segment, setSegment] = useState(initialSegment);
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState<WorkspaceContact | null>(null);
+  const [sort, setSort] = useState<{ key: CrmFieldKey; dir: "asc" | "desc" } | null>(null);
   const [isDeleting, startDelete] = useTransition();
-  /* Silme hatası GÖRÜNÜR olmalı: `deleteCrmContact` sonucu hiç okunmuyordu,
-     yetki/RLS hatasında ekran hiçbir şey söylemeden aynı kalıyordu. */
+  const [isAdding, startAdd] = useTransition();
+  /* Silme / kaydetme hatası GÖRÜNÜR olmalı: sonuç okunmazsa ekran
+     "kaydedildi" der ama hiçbir şey değişmemiştir. */
   const [error, setError] = useState<string | null>(null);
-  /* Kişi eşleştirme paneli — 2026-08-29 tasarım turunda görünürlüğü sağlayan
-     düğmeyle birlikte düşmüştü ve bileşen ERİŞİLEMEZ kalmıştı. Liste sakin
-     kalsın diye kapalı başlar, yönetici açar. */
   const [showMatching, setShowMatching] = useState(false);
 
-  const memberName = useMemo(
-    () => new Map(members.map((m) => [m.userId, m.name])),
-    [members],
-  );
-  const memberPhoto = useMemo(
-    () => new Map(members.map((m) => [m.userId, m.photoUrl ?? null])),
-    [members],
-  );
-  /* Kişi kartı — Pano/Takvim ile AYNI dil: fotoğraf varsa fotoğraf, yoksa
-     baş harf. Sistem hesabına bağlıysa o kişinin fotoğrafı kullanılır. */
-  const photoOf = (c: WorkspaceContact) => (c.user_id ? memberPhoto.get(c.user_id) ?? null : null);
-
-  /* Açık kutu — başlık, geri bağlantısı ve segment süzgecinin kapsamı bundan
-     türer. Tanınmayan anahtar geldiğinde kutu yokmuş gibi davranılır. */
   const category = useMemo(() => crmCategory(categoryKey), [categoryKey]);
-  /* Kutu içindeyken açılır kutuda YALNIZ o kutunun anahtarları listelenir:
-     "Celebrity"nin içinde "Toptan" seçeneği sunmak kullanıcıyı boş bir listeye
-     götürüyordu. Tek anahtarlı kutuda süzgeç hiç çizilmez — seçecek bir şey
-     yok (süzgeç kuralı: başlık · tür · departman, fazlası satırın içinde). */
+
+  /* Yeni satır, İÇİNDE BULUNULAN kutunun altında doğar — tekrar segment
+     seçtirmek gereksiz (2026-09-07: "Şurada bir artı olursa Berna'yı hemen
+     kaydederiz"). */
+  const defaultSegment = category?.primary ?? "";
+  const [draft, setDraft] = useState<Draft>(() => emptyDraft(defaultSegment));
+
+  const memberName = useMemo(() => new Map(members.map((m) => [m.userId, m.name])), [members]);
+  const memberPhoto = useMemo(() => new Map(members.map((m) => [m.userId, m.photoUrl ?? null])), [members]);
+  const photoOf = (c: WorkspaceContact) => (c.user_id ? memberPhoto.get(c.user_id) ?? null : null);
+  /* Hücrelerin sorumlu listesi — CrmCell yalnız id+ad ister. */
+  const cellMembers = useMemo(() => members.map((m) => ({ userId: m.userId, name: m.name })), [members]);
+
   const segmentOptions = useMemo(
     () => (category ? CRM_SEGMENTS.filter((sg) => category.segments.includes(sg.key)) : [...CRM_SEGMENTS]),
     [category],
   );
 
-  /* EŞLEŞTİRME YALNIZ CRM KAYITLARINDA. Fihrist satırları
-     `workspace_manufacturers`'tan geliyor ve kimliği "fihrist:" önekli; panele
-     verilince iki şey birden bozuluyordu: (1) hiçbirinin `user_id`'si
-     olamayacağı için "12/40 eşleşti" sayacı hep düşük okunuyordu, (2) satırdaki
-     "Eşleştir" düğmesi olmayan bir CRM kişisine yazmaya çalışıyordu — düğme
-     basılıyor, hata dönüyordu. Usta kaydının sistem hesabı zaten yok. */
-  const matchableContacts = useMemo(
-    () => contacts.filter((c) => !isFihristRow(c.id)),
-    [contacts],
-  );
+  /* EŞLEŞTİRME YALNIZ CRM KAYITLARINDA — fihrist satırlarının sistem hesabı
+     olamaz, panele verilince sayaç yanlış okunur ve düğme boşa basar. */
+  const matchableContacts = useMemo(() => contacts.filter((c) => !isFihristRow(c.id)), [contacts]);
 
   const filtered = useMemo(() => {
     const q = norm(query.trim());
     return contacts.filter((c) => {
-      /* Kutunun kapsamı KUTUCUK IZGARASIYLA AYNI KURALDAN okunur.
-         Önce ham anahtar kümesine bakılıyordu (`scopeSegments.has(...)`);
-         TANINMAYAN bir segment ("pr_eski" gibi elle girilmiş bir değer)
-         hiçbir kutunun listesinde olmadığı için HİÇBİR kutuda görünmüyordu.
-         Oysa giriş ızgarası aynı kaydı `crmCategoryOfSegment` ile "Diğer"de
-         SAYIYORDU: kutu "3 kişi" yazıyor, içine girince liste boş çıkıyordu.
-         İki ekran artık tek fonksiyona bakıyor — sayı ile liste ayrışamaz. */
+      /* Kutunun kapsamı KUTUCUK IZGARASIYLA AYNI KURALDAN okunur — sayı ile
+         liste ayrışamasın (tanınmayan segment ikisinde de "Diğer"e düşer). */
       if (category && crmCategoryOfSegment(c.segment).key !== category.key) return false;
       if (segment && c.segment !== segment) return false;
       if (!q) return true;
-      const hay = norm(
-        [c.name, c.organization, c.email, c.phone, c.role_label, c.notes]
-          .filter(Boolean)
-          .join(" "),
-      );
+      const hay = norm([c.name, c.organization, c.email, c.phone, c.role_label, c.notes].filter(Boolean).join(" "));
       return hay.includes(q);
     });
   }, [contacts, query, segment, category]);
 
-  function openNew() {
-    setEditing(null);
-    setModalOpen(true);
+  const rows = useMemo(() => {
+    if (!sort) return filtered;
+    const dir = sort.dir === "asc" ? 1 : -1;
+    return [...filtered].sort((a, b) => {
+      const av = displayOf(a, sort.key, memberName);
+      const bv = displayOf(b, sort.key, memberName);
+      /* Boş hücreler her zaman SONDA — yön değişince "boşlar" başa çıkıp
+         dolu satırları aşağı itmesin. */
+      if (!av && !bv) return 0;
+      if (!av) return 1;
+      if (!bv) return -1;
+      return av.localeCompare(bv, "tr") * dir;
+    });
+  }, [filtered, sort, memberName]);
+
+  function toggleSort(key: CrmFieldKey) {
+    setSort((s) => (s && s.key === key ? (s.dir === "asc" ? { key, dir: "desc" } : null) : { key, dir: "asc" }));
   }
-  function openEdit(c: WorkspaceContact) {
-    setEditing(c);
-    setModalOpen(true);
+
+  /** Tek hücre kaydeder — satırın geri kalanına DOKUNMAZ. */
+  async function commitCell(id: string, field: CrmFieldKey, next: string): Promise<string | null> {
+    const res = await updateCrmContactField(id, field, next);
+    if ("error" in res) { setError(res.error); return res.error; }
+    setError(null);
+    router.refresh();
+    return null;
   }
+
+  /* ÇİFT KAYIT KALKANI. Taslak satır hem `onBlur` hem Enter hem de "Ekle" ile
+     kaydediyor; ikisi aynı tikte tetiklenirse `isAdding` daha dönmemiş olur ve
+     aynı kişi iki kez açılırdı. Ref anında değişir. */
+  const adding = useRef(false);
+
+  /** Taslak satır kaydı açar ve imleci yeni boş satıra taşır. */
+  function commitDraft() {
+    if (!draft.name.trim() || adding.current) return;
+    adding.current = true;
+    setError(null);
+    startAdd(async () => {
+      const res = await createCrmContact({
+        name: draft.name.trim(),
+        kind: "external",
+        organization: nz(draft.organization),
+        role_label: nz(draft.role_label),
+        segment: nz(draft.segment) ?? nz(defaultSegment),
+        crm_status: nz(draft.crm_status),
+        seeding_stage: nz(draft.seeding_stage),
+        source_channel: nz(draft.source_channel),
+        owner_id: nz(draft.owner_id),
+        phone: nz(draft.phone),
+        email: nz(draft.email),
+        last_contact_at: nz(draft.last_contact_at),
+        next_follow_up_at: nz(draft.next_follow_up_at),
+        notes: nz(draft.notes),
+      });
+      adding.current = false;
+      if ("error" in res) { setError(res.error); return; }
+      setDraft(emptyDraft(defaultSegment));
+      router.refresh();
+      /* "Sırasıyla ekleye ekleye ilerleyebilelim" — imleç yeni boş satırın
+         ilk hücresine döner, elin klavyeden kalkmaz. */
+      if (typeof window !== "undefined") requestAnimationFrame(() => focusCell("name", -1));
+    });
+  }
+
   async function handleDelete(c: WorkspaceContact) {
     if (!(await ask({
       title: "İlişki kaydı silinsin mi?",
@@ -237,148 +225,8 @@ export function CrmView({
     });
   }
 
-  const columns = useMemo(() => [
-      columnHelper.accessor("name", {
-        header: "İlişki",
-        cell: (info) => {
-          const c = info.row.original;
-          /* Ad birincil; kurum ve rol ikincil tek satırda. */
-          const sub = [c.organization, c.role_label].filter(Boolean).join(" · ");
-          return (
-            <div className="flex min-w-0 items-center gap-2.5">
-              <PersonAvatar name={c.name} photoUrl={photoOf(c)} size="sm" title={c.name} />
-              <div className="min-w-0">
-                <div className="truncate text-[13.5px] font-medium text-ink">{c.name}</div>
-                {sub && <div className="truncate text-[12.5px] text-subtle">{sub}</div>}
-              </div>
-            </div>
-          );
-        },
-      }),
-      columnHelper.accessor("segment", {
-        header: "Segment",
-        cell: (info) => {
-          const seg = info.getValue();
-          if (!seg) return <span className="text-subtle">—</span>;
-          return (
-            <Badge className={SEGMENT_TONE[seg] ?? "bg-surface-sunken text-muted"}>
-              {segmentLabel(seg)}
-            </Badge>
-          );
-        },
-      }),
-      columnHelper.accessor("crm_status", {
-        header: "Durum",
-        cell: (info) => {
-          const st = info.getValue();
-          if (!st) return <span className="text-subtle">—</span>;
-          return (
-            <Badge className={STATUS_TONE[st] ?? "bg-surface-sunken text-muted"}>
-              {statusLabel(st)}
-            </Badge>
-          );
-        },
-      }),
-      /* SEEDING — Aslı Hanım'ın yedi adımı (2026-08-28). Sütun bir SAYAÇ
-         değil, sürecin neresinde olunduğunun tarifi: "4/7 · Kargo". Adım
-         girilmemiş kişide boş kalır, listeyi kalabalıklaştırmaz. */
-      columnHelper.accessor("seeding_stage", {
-        header: "Seeding",
-        cell: (info) => <SeedingSteps stage={info.getValue()} />,
-      }),
-      columnHelper.accessor("owner_id", {
-        header: "Sorumlu",
-        cell: (info) => {
-          const owner = info.getValue();
-          return <span className="text-[13px] text-muted">{owner ? memberName.get(owner) ?? "—" : "—"}</span>;
-        },
-      }),
-      columnHelper.accessor("next_follow_up_at", {
-        header: "Sonraki takip",
-        cell: (info) => {
-          const d = info.getValue();
-          if (!d) return <span className="text-subtle">—</span>;
-          const overdue = d < istanbulTodayISO();
-          return (
-            <span
-              className={cn("whitespace-nowrap text-[13px] tabular-nums", overdue ? "font-medium text-danger" : "text-muted")}
-              title={overdue ? "Takip tarihi geçti" : undefined}
-            >
-              {/* Renk tek başına sinyal olmasın — ekran okuyucuya da söylenir. */}
-              {overdue && <span className="sr-only">Gecikti: </span>}
-              {formatDateOnlyTR(d)}
-            </span>
-          );
-        },
-      }),
-      /* GÖREVLER — sayı yok. "4 ilişkili görev" bir kişiyi sayıyla anlatıyordu
-         (sadelik kuralı: kişi başına N görev puanlamadır). Hücre yalnız bir
-         KAPI: ilişkili iş varsa listeye giden bağlantı, yoksa boş. */
-      columnHelper.display({
-        id: "tasks",
-        header: "Görevler",
-        cell: (info) => {
-          const n = taskCounts[info.row.original.id] ?? 0;
-          if (!n) return <span className="text-subtle">—</span>;
-          return (
-            <Link
-              href={`/list?person=${info.row.original.id}`}
-              className="tap-target inline-flex items-center gap-1 whitespace-nowrap text-[13px] font-medium text-brand transition-colors duration-150 hover:text-brand-strong"
-            >
-              Görevleri aç <ExternalLink size={12} aria-hidden />
-            </Link>
-          );
-        },
-      }),
-      ...(isAdmin
-        ? [
-            columnHelper.display({
-              id: "actions",
-              header: "",
-              cell: (info) => (
-                <div className="flex items-center justify-end gap-0.5">
-                  {/* FİHRİST SATIRI CRM'DEN DÜZENLENMEZ. Kayıt
-                      `workspace_manufacturers`'ta yaşıyor ve föylerdeki
-                      üretici/kalıpçı/nakışçı bağları ona işaret ediyor; CRM'den
-                      silinmesi o bağları koparırdı. Düzenleme tek yerde:
-                      Fihrist. */}
-                  {isFihristRow(info.row.original.id) ? (
-                    <IconLink href="/collection/veri?k=usta" label="Fihrist'te düzenle">
-                      <Pencil size={14} aria-hidden />
-                    </IconLink>
-                  ) : (
-                  <>
-                  <IconButton size="sm" aria-label="Düzenle" title="Düzenle" onClick={() => openEdit(info.row.original)}>
-                    <Pencil size={14} />
-                  </IconButton>
-                  <IconButton
-                    size="sm"
-                    aria-label="Sil"
-                    title="Sil"
-                    disabled={isDeleting}
-                    onClick={() => handleDelete(info.row.original)}
-                    className="hover:bg-danger/10 hover:text-danger"
-                  >
-                    <Trash2 size={14} />
-                  </IconButton>
-                  </>
-                  )}
-                </div>
-              ),
-            }),
-          ]
-        : []),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    ], [isAdmin, isDeleting, memberName, memberPhoto, taskCounts]);
-
-  const table = useReactTable({
-    data: filtered,
-    columns,
-    state: { sorting },
-    onSortingChange: setSorting,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-  });
+  const canWrite = isAdmin && !setupRequired;
+  const segmentScope = category ? category.segments : null;
 
   const emptyState = (
     <EmptyState
@@ -387,16 +235,17 @@ export function CrmView({
       title={contacts.length === 0 ? "Henüz ilişki kaydı yok." : "Aramaya uyan kayıt yok."}
       description={
         contacts.length === 0
-          ? (isAdmin ? "İlk kaydı “Yeni ilişki ekle” ile açın." : undefined)
+          ? (canWrite ? "Alttaki boş satıra yazmaya başlayın." : undefined)
           : "Aramayı ya da segment süzgecini değiştirin."
       }
     />
   );
 
+  /* Toplam sütun sayısı — boş durum satırının kaç hücreyi kaplayacağı. */
+  const colCount = CRM_GRID_COLUMNS.length + 1 + (canWrite ? 1 : 0);
+
   return (
     <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
-      {/* GERİ — kutucuk girişine dönüş. Aslı Hanım'ın istediği akış "önce
-          kutular, sonra içerik"; içeriden çıkış yolu görünür olmalı. */}
       {category && (
         <Link
           href="/crm"
@@ -409,17 +258,13 @@ export function CrmView({
         title={category ? `CRM · ${category.label}` : "CRM"}
         rightSlot={
           isAdmin ? (
-            <Button
-              onClick={openNew}
-              disabled={setupRequired}
-              title={setupRequired ? "Yeni ilişki ekleme için veritabanı güncellemesi bekleniyor." : undefined}
-            >
-              <Plus size={15} aria-hidden />
-              Yeni ilişki ekle
-            </Button>
+            /* "Yeni ilişki ekle" DÜĞMESİ YOK: kayıt açmanın yeri artık tablonun
+               en altındaki boş satır. Düğme, kalkan pencereyi geri çağırırdı. */
+            <Badge className="bg-surface-muted text-muted">
+              <CornerDownLeft size={13} aria-hidden />
+              Alttaki boş satıra yazın
+            </Badge>
           ) : (
-            /* Üye için düzenleme yok; düğmenin yerinde neden olmadığını söyleyen
-               sakin bir etiket durur. */
             <Badge className="bg-surface-muted text-muted">
               <Eye size={13} aria-hidden />
               Salt görüntüleme
@@ -442,10 +287,6 @@ export function CrmView({
 
       {/* Araç çubuğu — arama ve süzgeç aynı yükseklikte (h-9). */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        {/* ARAMA KUTUSU KAPAKLI. `flex-1` tek başınayken kutu satırın tamamına
-            yayılıyordu: aynı arama alanı kutucuk ızgarasında ve AF Teamwork'te
-            `max-w-xs` ile duruyor, listede ekran boyunca esniyordu — aynı iş,
-            üç ayrı genişlik. Kapak konunca üçü de aynı görünür. */}
         <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
           <Search size={15} className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-subtle" aria-hidden />
           <TextInput
@@ -469,14 +310,9 @@ export function CrmView({
             ))}
           </SelectInput>
         )}
-        {/* Süzgeç kuralı gereği araç çubuğunda üçüncü bir SELECT yok: eşleştirme
-            ayrı bir eylemdir, açılıp kapanan bir panel olarak yaşar. */}
-        {isAdmin && !setupRequired && (
+        {canWrite && (
           <Button
             variant="secondary"
-            /* Eylem SAĞA yaslı — AF Teamwork'ün araç çubuğuyla aynı düzen:
-               solda süzgeçler, sağda eylem. Arama kapaklandıktan sonra düğme
-               süzgecin dibinde kalıp satırın sağında boşluk bırakıyordu. */
             className="sm:ml-auto"
             onClick={() => setShowMatching((v) => !v)}
             aria-expanded={showMatching}
@@ -489,7 +325,6 @@ export function CrmView({
         )}
       </div>
 
-      {/* Silme / eşleştirme hatası — sessizce yutulmaz. */}
       {error && (
         <div
           role="alert"
@@ -500,157 +335,328 @@ export function CrmView({
         </div>
       )}
 
-      {isAdmin && showMatching && !setupRequired && (
+      {canWrite && showMatching && (
         <div id="crm-matching-panel">
           <ContactMatchingPanel contacts={matchableContacts} members={members} />
         </div>
       )}
 
-      {/* Geniş ekran: tablo. Dar ekran: kart listesi (aşağıda). */}
+      {/* ── EXCEL IZGARASI ────────────────────────────────────────────────
+          On üç alanın hepsi sütun. İlk sütun YAPIŞIK: yatay kaydırırken
+          kimin satırında olduğunuz görünür kalsın. `border-separate` +
+          `border-spacing-0`, yapışık sütunun çizgisi kaydırırken kaybolmasın
+          diye (collapse'ta kenarlık hücreye ait olmuyor). */}
       <div className="anim-fade-up hidden overflow-x-auto rounded-card border border-line bg-surface shadow-card lg:block">
-        <table className="w-full min-w-[720px] text-sm">
+        <table className="w-max min-w-full border-separate border-spacing-0 text-sm">
+          <colgroup>
+            {CRM_GRID_COLUMNS.map((c) => <col key={c.key} style={{ width: c.width }} />)}
+            <col style={{ width: 120 }} />
+            {canWrite && <col style={{ width: 52 }} />}
+          </colgroup>
           <thead>
-            {table.getHeaderGroups().map((hg) => (
-              <tr key={hg.id} className="select-none border-b border-line bg-surface-muted">
-                {hg.headers.map((header) => {
-                  const canSort = header.column.getCanSort();
-                  return (
-                    <th
-                      key={header.id}
-                      className="whitespace-nowrap px-3 py-2.5 text-left text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle"
-                    >
-                      {header.isPlaceholder ? null : canSort ? (
-                        /* Ortak başlık: sıralanmamışken soluk çift ok, sıralıyken
-                           yön oku. Burada yalnız çift ok vardı; hangi sütuna göre
-                           sıralandığı görünmüyordu. */
-                        <SortHeader
-                          active={!!header.column.getIsSorted()}
-                          dir={header.column.getIsSorted() === "desc" ? "desc" : "asc"}
-                          onSort={() => header.column.toggleSorting()}
-                        >
-                          {flexRender(header.column.columnDef.header, header.getContext())}
-                        </SortHeader>
-                      ) : (
-                        flexRender(header.column.columnDef.header, header.getContext())
-                      )}
-                    </th>
-                  );
-                })}
-              </tr>
-            ))}
+            <tr className="select-none">
+              {CRM_GRID_COLUMNS.map((c, i) => (
+                <th
+                  key={c.key}
+                  scope="col"
+                  className={cn(
+                    "whitespace-nowrap border-b border-line bg-surface-muted px-2 py-2 text-left text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle",
+                    i === 0 && "sticky left-0 z-20 border-r border-line",
+                  )}
+                >
+                  <SortHeader
+                    active={sort?.key === c.key}
+                    dir={sort?.key === c.key && sort.dir === "desc" ? "desc" : "asc"}
+                    onSort={() => toggleSort(c.key)}
+                  >
+                    {c.label}
+                  </SortHeader>
+                </th>
+              ))}
+              <th scope="col" className="whitespace-nowrap border-b border-line bg-surface-muted px-2 py-2 text-left text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle">
+                Görevler
+              </th>
+              {canWrite && <th className="border-b border-line bg-surface-muted px-2 py-2" />}
+            </tr>
           </thead>
-          <tbody className="divide-y divide-hairline">
-            {table.getRowModel().rows.length === 0 ? (
+          <tbody>
+            {rows.length === 0 && (
               <tr>
-                <td colSpan={columns.length}>{emptyState}</td>
+                <td colSpan={colCount}>{emptyState}</td>
               </tr>
-            ) : (
-              table.getRowModel().rows.map((row) => (
-                <tr key={row.id} className="transition-colors duration-150 ease-standard hover:bg-surface-hover">
-                  {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="px-3 py-2.5 align-middle">
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+            )}
+            {rows.map((c, rowIndex) => {
+              /* FİHRİST SATIRI SALT OKUNUR: kayıt `workspace_manufacturers`'ta
+                 yaşıyor ve föylerdeki üretici/kalıpçı/nakışçı bağları ona
+                 işaret ediyor. Buradan yazmak o bağları koparırdı. */
+              const fihrist = isFihristRow(c.id);
+              const n = taskCounts[c.id] ?? 0;
+              return (
+                <tr key={c.id} className="group transition-colors duration-150 ease-standard hover:bg-surface-hover">
+                  {CRM_GRID_COLUMNS.map((col, i) => (
+                    <td
+                      key={col.key}
+                      className={cn(
+                        "border-b border-hairline px-1 py-0.5 align-middle",
+                        i === 0 && "sticky left-0 z-10 border-r border-line bg-surface group-hover:bg-surface-hover",
+                      )}
+                    >
+                      {i === 0 ? (
+                        /* Ad hücresi kimliği taşır: fotoğraf solda, yazılan ad
+                           sağda — aynı insan her ekranda aynı görünür. */
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          <PersonAvatar name={c.name} photoUrl={photoOf(c)} size="sm" title={c.name} />
+                          {fihrist ? (
+                            <span className="min-w-0 flex-1 truncate px-2 text-[13px] text-ink" title={c.name}>{c.name}</span>
+                          ) : (
+                            <CrmCell
+                              column={col}
+                              row={rowIndex}
+                              value={(c as unknown as Record<string, string | null>)[col.key] ?? ""}
+                              disabled={!canWrite}
+                              members={cellMembers}
+                              segmentScope={segmentScope}
+                              onCommit={(next) => commitCell(c.id, col.key, next)}
+                              className="font-medium"
+                            />
+                          )}
+                        </div>
+                      ) : fihrist ? (
+                        <span className="block truncate px-2 text-[13px] text-subtle" title={displayOf(c, col.key, memberName)}>
+                          {displayOf(c, col.key, memberName) || "—"}
+                        </span>
+                      ) : (
+                        <CrmCell
+                          column={col}
+                          row={rowIndex}
+                          value={(c as unknown as Record<string, string | null>)[col.key] ?? ""}
+                          disabled={!canWrite}
+                          members={cellMembers}
+                          segmentScope={segmentScope}
+                          onCommit={(next) => commitCell(c.id, col.key, next)}
+                          className={cn(
+                            col.key === "next_follow_up_at" &&
+                              c.next_follow_up_at &&
+                              c.next_follow_up_at < istanbulTodayISO() &&
+                              "font-medium text-danger",
+                          )}
+                        />
+                      )}
                     </td>
                   ))}
+                  <td className="whitespace-nowrap border-b border-hairline px-2 py-0.5 align-middle">
+                    {n > 0 ? (
+                      <Link
+                        href={`/list?person=${c.id}`}
+                        className="tap-target inline-flex items-center gap-1 whitespace-nowrap text-[13px] font-medium text-brand transition-colors duration-150 hover:text-brand-strong"
+                      >
+                        Görevleri aç <ExternalLink size={12} aria-hidden />
+                      </Link>
+                    ) : (
+                      <span className="text-subtle">—</span>
+                    )}
+                  </td>
+                  {canWrite && (
+                    <td className="border-b border-hairline px-1 py-0.5 text-right align-middle">
+                      {fihrist ? (
+                        <Link
+                          href="/collection/veri?k=usta"
+                          aria-label="Fihrist'te düzenle"
+                          title="Fihrist'te düzenle"
+                          className="tap-target inline-flex size-8 items-center justify-center rounded-control text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
+                        >
+                          <Pencil size={14} aria-hidden />
+                        </Link>
+                      ) : (
+                        <IconButton
+                          size="sm"
+                          aria-label="Sil"
+                          title="Satırı sil"
+                          disabled={isDeleting}
+                          onClick={() => handleDelete(c)}
+                          className="hover:bg-danger/10 hover:text-danger"
+                        >
+                          <Trash2 size={14} />
+                        </IconButton>
+                      )}
+                    </td>
+                  )}
                 </tr>
-              ))
+              );
+            })}
+
+            {/* ── BOŞ SATIR — kayıt açmanın TEK yeri ──────────────────────
+                Excel'in son satırı gibi hep orada durur. Ad yazılıp Enter'a
+                basıldığında kayıt açılır ve imleç yeni boş satıra iner. */}
+            {canWrite && (
+              <tr
+                className="bg-surface-muted"
+                onBlur={(e) => {
+                  /* Satırdan TAMAMEN çıkıldıysa yazılanı kaydet — yarım
+                     doldurulmuş bir satır sekme değiştirince kaybolmasın. */
+                  if (!e.currentTarget.contains(e.relatedTarget as Node | null)) commitDraft();
+                }}
+              >
+                {CRM_GRID_COLUMNS.map((col, i) => (
+                  <td
+                    key={col.key}
+                    className={cn(
+                      "border-b border-hairline px-1 py-0.5 align-middle",
+                      i === 0 && "sticky left-0 z-10 border-r border-line bg-surface-muted",
+                    )}
+                  >
+                    <CrmCell
+                      column={col}
+                      row={-1}
+                      value={draft[col.key]}
+                      members={cellMembers}
+                      segmentScope={segmentScope}
+                      placeholder={i === 0 ? "Yeni kayıt — ad yazın…" : undefined}
+                      onDraftChange={(next) => setDraft((d) => ({ ...d, [col.key]: next }))}
+                      onEnter={commitDraft}
+                      onCommit={async () => null}
+                      className={i === 0 ? "font-medium" : undefined}
+                    />
+                  </td>
+                ))}
+                <td className="border-b border-hairline px-2 py-0.5 align-middle" colSpan={2}>
+                  <Button size="sm" variant="secondary" onClick={commitDraft} loading={isAdding} disabled={!draft.name.trim()}>
+                    Ekle
+                  </Button>
+                </td>
+              </tr>
             )}
           </tbody>
         </table>
       </div>
 
-      {/* Kart listesi — dar ekranda tablo 720px yatay kaydırma demekti.
-          Aynı veri, satır yerine kart. Kart başına TEK rozet: yaşam döngüsü
-          durumu (Aktif / Takipte…). Segment metin olarak alt satırda yazar. */}
+      {/* ── DAR EKRAN ────────────────────────────────────────────────────
+          Telefonda on üç sütunluk ızgara okunmuyor; aynı hücreler alt alta
+          etiketli alanlar olarak çizilir. Davranış AYNI bileşenden geldiği
+          için iki görünüm birbirinden ayrışamaz. */}
       <div className="space-y-2 lg:hidden">
-        {filtered.length === 0 ? (
+        {rows.length === 0 ? (
           <div className="anim-fade-up rounded-card border border-line bg-surface shadow-card">{emptyState}</div>
         ) : (
-          filtered.map((c) => {
-            const overdue = !!c.next_follow_up_at && c.next_follow_up_at < istanbulTodayISO();
-            const sub = [c.organization, c.role_label, segmentLabel(c.segment)].filter(Boolean).join(" · ");
+          rows.map((c, rowIndex) => {
+            const fihrist = isFihristRow(c.id);
             return (
-              <div key={c.id} className="anim-fade-up rounded-card border border-line bg-surface p-3.5 shadow-card">
-                <div className="flex items-start justify-between gap-3">
+              <div key={c.id} className="anim-fade-up rounded-card border border-line bg-surface p-3 shadow-card">
+                <div className="mb-2 flex items-center gap-2 border-b border-hairline pb-2">
                   <PersonAvatar name={c.name} photoUrl={photoOf(c)} size="sm" title={c.name} />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-[13.5px] font-medium text-ink">{c.name}</div>
-                    {sub && <div className="truncate text-[12.5px] text-subtle">{sub}</div>}
-                  </div>
-                  {c.crm_status && (
-                    <Badge className={cn("shrink-0", STATUS_TONE[c.crm_status] ?? "bg-surface-sunken text-muted")}>
-                      {statusLabel(c.crm_status)}
-                    </Badge>
+                  {/* Ad KART BAŞLIĞIDIR; aşağıdaki alan listesinde tekrar
+                      edilmez (aynı şeyi iki kez yazmak satır kazandırmıyor,
+                      yalnız kartı uzatıyordu). Başlık yine de yazılabilir. */}
+                  {fihrist ? (
+                    <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-ink">{c.name || "—"}</span>
+                  ) : (
+                    <CrmCell
+                      column={CRM_GRID_COLUMNS[0]}
+                      row={rowIndex}
+                      value={c.name ?? ""}
+                      disabled={!canWrite}
+                      members={cellMembers}
+                      segmentScope={segmentScope}
+                      onCommit={(next) => commitCell(c.id, "name", next)}
+                      className="flex-1 text-[13.5px] font-medium"
+                    />
                   )}
-                </div>
-
-                {c.seeding_stage && <SeedingSteps stage={c.seeding_stage} className="mt-2.5" />}
-
-                <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12.5px] text-subtle">
-                  {c.owner_id && <span>{memberName.get(c.owner_id) ?? "—"}</span>}
-                  {c.next_follow_up_at && (
-                    <span className={cn("tabular-nums", overdue && "font-medium text-danger")}>
-                      {overdue ? "Takip gecikti: " : "Takip: "}
-                      {formatDateOnlyTR(c.next_follow_up_at)}
-                    </span>
-                  )}
-                  {(taskCounts[c.id] ?? 0) > 0 && (
-                    <Link href={`/list?person=${c.id}`} className="tap-target inline-flex items-center gap-1 font-medium text-brand">
-                      Görevleri aç <ExternalLink size={11} aria-hidden />
-                    </Link>
-                  )}
-                </div>
-
-                {/* Telefonda da AYNI dil: kalem ikonu, aynı kutu ölçüsü.
-                    Metin bağlantısı satırın hizasını bozuyordu. */}
-                {isAdmin && isFihristRow(c.id) && (
-                  <div className="mt-2 flex items-center justify-end gap-0.5 border-t border-hairline pt-2">
-                    <IconLink href="/collection/veri?k=usta" label="Fihrist'te düzenle">
+                  {canWrite && (fihrist ? (
+                    <Link
+                      href="/collection/veri?k=usta"
+                      aria-label="Fihrist'te düzenle"
+                      title="Fihrist'te düzenle"
+                      className="tap-target inline-flex size-8 shrink-0 items-center justify-center rounded-control text-muted"
+                    >
                       <Pencil size={14} aria-hidden />
-                    </IconLink>
-                  </div>
-                )}
-                {isAdmin && !isFihristRow(c.id) && (
-                  <div className="mt-2 flex items-center justify-end gap-0.5 border-t border-hairline pt-2">
-                    <IconButton size="sm" aria-label="Düzenle" title="Düzenle" onClick={() => openEdit(c)}>
-                      <Pencil size={14} />
-                    </IconButton>
+                    </Link>
+                  ) : (
                     <IconButton
                       size="sm"
                       aria-label="Sil"
-                      title="Sil"
+                      title="Kaydı sil"
                       disabled={isDeleting}
                       onClick={() => handleDelete(c)}
-                      className="hover:bg-danger/10 hover:text-danger"
+                      className="shrink-0 hover:bg-danger/10 hover:text-danger"
                     >
                       <Trash2 size={14} />
                     </IconButton>
-                  </div>
+                  ))}
+                </div>
+                <dl className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-x-2 gap-y-0.5">
+                  {CRM_GRID_COLUMNS.filter((col) => col.key !== "name").map((col) => (
+                    <div key={col.key} className="contents">
+                      <dt className="truncate text-[12px] text-subtle">{col.label}</dt>
+                      <dd className="min-w-0">
+                        {fihrist ? (
+                          <span className="block truncate px-2 py-1.5 text-[13px] text-subtle">
+                            {displayOf(c, col.key, memberName) || "—"}
+                          </span>
+                        ) : (
+                          <CrmCell
+                            column={col}
+                            row={rowIndex}
+                            value={(c as unknown as Record<string, string | null>)[col.key] ?? ""}
+                            disabled={!canWrite}
+                            members={cellMembers}
+                            segmentScope={segmentScope}
+                            onCommit={(next) => commitCell(c.id, col.key, next)}
+                          />
+                        )}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+                {(taskCounts[c.id] ?? 0) > 0 && (
+                  <Link href={`/list?person=${c.id}`} className="tap-target mt-2 inline-flex items-center gap-1 text-[12.5px] font-medium text-brand">
+                    Görevleri aç <ExternalLink size={11} aria-hidden />
+                  </Link>
                 )}
               </div>
             );
           })
         )}
+
+        {canWrite && (
+          <div
+            className="anim-fade-up rounded-card border border-dashed border-line bg-surface-muted p-3"
+            onBlur={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) commitDraft();
+            }}
+          >
+            <p className="mb-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle">Yeni kayıt</p>
+            <dl className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-x-2 gap-y-0.5">
+              {CRM_GRID_COLUMNS.map((col, i) => (
+                <div key={col.key} className="contents">
+                  <dt className="truncate text-[12px] text-subtle">{col.label}</dt>
+                  <dd className="min-w-0">
+                    <CrmCell
+                      column={col}
+                      row={-1}
+                      value={draft[col.key]}
+                      members={cellMembers}
+                      segmentScope={segmentScope}
+                      placeholder={i === 0 ? "Ad yazın…" : undefined}
+                      onDraftChange={(next) => setDraft((d) => ({ ...d, [col.key]: next }))}
+                      onEnter={commitDraft}
+                      onCommit={async () => null}
+                    />
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            <Button size="sm" className="mt-2.5 w-full" onClick={commitDraft} loading={isAdding} disabled={!draft.name.trim()}>
+              Ekle
+            </Button>
+          </div>
+        )}
       </div>
 
-      {/* Kaç kayıt görüldüğünü söyleyen satır — LİSTEYİ TARİF EDER, kimseyi
-          puanlamaz. Sıfırken boş durum zaten aynı şeyi yazıyor. */}
-      {filtered.length > 0 && (
-        <p className="mt-2 px-1 text-[12px] tabular-nums text-subtle">{filtered.length} kayıt gösteriliyor</p>
+      {/* Kaç kayıt görüldüğünü söyleyen satır — LİSTEYİ TARİF EDER. */}
+      {rows.length > 0 && (
+        <p className="mt-2 px-1 text-[12px] tabular-nums text-subtle">{rows.length} kayıt gösteriliyor</p>
       )}
 
-      {modalOpen && (
-        <CrmContactModal
-          members={members}
-          contact={editing}
-          defaultSegment={category?.primary ?? null}
-          onClose={() => setModalOpen(false)}
-          onSaved={() => {
-            setModalOpen(false);
-            router.refresh();
-          }}
-        />
-      )}
       {dialog}
     </div>
   );

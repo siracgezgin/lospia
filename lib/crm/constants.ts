@@ -172,6 +172,52 @@ export function crmCategoryOfSegment(segment: string | null | undefined): CrmCat
  * CRM'in düzenleme ve silme düğmeleri kapanır — kayıt Fihrist'te düzenlenir,
  * yoksa CRM'den silinen bir usta föylerdeki bağları koparırdı.
  */
+/* ── EXCEL IZGARASI ────────────────────────────────────────────────────────
+   Sıraç (26.09.2026): "Her yer pop-up olarak açılıp ekletiyor ya, onun yerine
+   sabit bir excel olsun; sırasıyla ekleye ekleye ilerleyebilelim, her biri
+   için. Hiç popup vs gerekmeden excel mantığındaki gibi." Ve: "CRM listesi
+   dediğim CRM'deki TÜM kısımlarda."
+
+   Bu yüzden kayıt açma/düzenleme penceresi kalktı: alanların hepsi tablonun
+   kendi hücreleri. Sütun listesi TEK KAYNAK — hem ızgara hem de sunucudaki
+   hücre güncellemesi (updateCrmContactField) buradan okur, yani ekranda
+   yazılabilen bir alan sunucuda reddedilemez.
+
+   Sıra bilinçli: kim → nerede çalışıyor → hangi grupta → süreç → iletişim →
+   tarihler → not. Yani soldan sağa "kimliği" önce, "işi" sonra. */
+export interface CrmGridColumn {
+  key: CrmFieldKey;
+  label: string;
+  /** Hücrenin türü — ızgara buna göre kutu çizer. */
+  type: "text" | "email" | "tel" | "date" | "segment" | "status" | "seeding" | "source" | "owner";
+  /** Sütun genişliği (px). Tek satırda kalmalı — ikinci satıra kaydırma yok. */
+  width: number;
+}
+
+export type CrmFieldKey =
+  | "name" | "organization" | "role_label" | "segment" | "crm_status"
+  | "seeding_stage" | "source_channel" | "owner_id" | "phone" | "email"
+  | "last_contact_at" | "next_follow_up_at" | "notes";
+
+export const CRM_GRID_COLUMNS: CrmGridColumn[] = [
+  { key: "name",              label: "Ad",            type: "text",    width: 200 },
+  { key: "organization",      label: "Kurum",         type: "text",    width: 170 },
+  { key: "role_label",        label: "Rol",           type: "text",    width: 150 },
+  { key: "segment",           label: "Segment",       type: "segment", width: 150 },
+  { key: "crm_status",        label: "Durum",         type: "status",  width: 130 },
+  { key: "seeding_stage",     label: "Seeding",       type: "seeding", width: 160 },
+  { key: "source_channel",    label: "Kaynak",        type: "source",  width: 130 },
+  { key: "owner_id",          label: "Sorumlu",       type: "owner",   width: 160 },
+  { key: "phone",             label: "Telefon",       type: "tel",     width: 150 },
+  { key: "email",             label: "E-posta",       type: "email",   width: 200 },
+  { key: "last_contact_at",   label: "Son temas",     type: "date",    width: 140 },
+  { key: "next_follow_up_at", label: "Sonraki takip", type: "date",    width: 140 },
+  { key: "notes",             label: "Not",           type: "text",    width: 240 },
+];
+
+/** Sunucunun yazmaya izin verdiği sütunlar — ızgaranınkiyle birebir aynı. */
+export const CRM_EDITABLE_FIELDS: readonly CrmFieldKey[] = CRM_GRID_COLUMNS.map((c) => c.key);
+
 export const FIHRIST_ID_PREFIX = "fihrist:";
 
 /** Bir CRM satırı Fihrist'ten mi geliyor? */
