@@ -29,11 +29,14 @@ import {
   type FileKind,
 } from "@/lib/office/file-kind";
 import {
-  saveFolder, deleteFolder, uploadDocumentFile, moveDocument,
+  saveFolder, deleteFolder, prepareDocumentUpload, registerDocumentFile, moveDocument,
   getDocumentDownloadUrl, deleteDocumentFile, sendDocumentByEmail,
   importUploadedSheet, importUploadedDoc,
   type ShareItemType,
 } from "@/lib/actions/document-files";
+/* Dosyanın baytları Server Action'dan GEÇMİYOR (bkz. prepareDocumentUpload):
+   tarayıcı kendi oturumuyla doğrudan Storage'a yazıyor, RLS aynen devrede. */
+import { createClient as createBrowserSupabase } from "@/lib/supabase/client";
 import { createTeamworkDoc, deleteOperationDocument, setOperationDocumentVisibility } from "@/lib/actions/documents";
 import {
   createSheetInFolder, deleteOperationSpreadsheet, renameOperationSpreadsheet,
@@ -225,8 +228,9 @@ type PreviewState = {
   error: string | null;
 };
 
-/** Sunucudaki sınırın aynısı (lib/actions/document-files.ts). Burada da
- *  bakılır ki 40 MB'lık dosya ağa hiç çıkmadan uyarı alsın. */
+/** `documents` kovasının sınırının aynısı (20240312). Burada da bakılır ki
+ *  40 MB'lık dosya ağa hiç çıkmadan uyarı alsın — ama asıl sınırı Storage
+ *  uyguluyor, çünkü baytlar artık doğrudan oraya gidiyor. */
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
 /**
@@ -956,6 +960,7 @@ export function DriveBrowser({
       }
       cancelUpload.current = false;
       setCancelling(false);
+      const supabase = createBrowserSupabase();
       const target = cwd;
       let done = 0;
       setUpload({ total: queue.length, done, name: queue[0].name, errors: [...errors], finished: false });
@@ -966,11 +971,35 @@ export function DriveBrowser({
         }
         setUpload({ total: queue.length, done, name: file.name, errors: [...errors], finished: false });
         try {
-          const fd = new FormData();
-          fd.append("file", file);
-          if (target) fd.append("folder_id", target);
-          fd.append("section", section);
-          const res = await uploadDocumentFile(fd);
+          /* 1) Sunucu yolu üretir (çalışma alanı + klasör + uuid). */
+          const prep = await prepareDocumentUpload(file.name, target);
+          if ("error" in prep) {
+            errors.push(`${file.name}: ${prep.error}`);
+            done += 1;
+            continue;
+          }
+          /* 2) Baytlar tarayıcıdan DOĞRUDAN depoya. Server Action gövdesinden
+                geçseydi Vercel'in 4,5 MB'lık istek sınırına takılırdı. */
+          const { error: upErr } = await supabase.storage
+            .from(prep.bucket)
+            .upload(prep.path, file, {
+              contentType: file.type || "application/octet-stream",
+              upsert: false,
+            });
+          if (upErr) {
+            errors.push(`${file.name}: ${upErr.message}`);
+            done += 1;
+            continue;
+          }
+          /* 3) Dosya yerinde — kaydı aç. */
+          const res = await registerDocumentFile({
+            path: prep.path,
+            name: file.name,
+            size: file.size,
+            mime: file.type || null,
+            folder_id: target,
+            section,
+          });
           if ("error" in res) errors.push(`${file.name}: ${res.error}`);
         } catch (e) {
           errors.push(`${file.name}: ${e instanceof Error ? e.message : "yüklenemedi."}`);

@@ -24,7 +24,9 @@ import { getDisplayNotificationEmail } from "@/lib/utils/notification-email";
 // URL ile — föy görsellerinden (public bucket) bilinçli olarak farklı.
 
 const BUCKET = "documents";
-const MAX_BYTES = 25 * 1024 * 1024; // 25 MB — bkz. migration notu
+/* Gerçek sınır artık KOVANIN sınırı (25 MB, 20240312). Sunucu tarafında ayrı
+   bir bayt kontrolü yok: dosya buradan geçmiyor, doğrudan Storage'a gidiyor ve
+   sınırı Storage uyguluyor. İstemcideki kontrol yalnız erken uyarı içindir. */
 const AUTH_REQUIRED = "Kimlik doğrulama gerekli.";
 const ADMIN_ONLY = "Klasörleri yalnız yöneticiler düzenleyebilir.";
 const PERM_DENIED = "Bu işlem için yetkiniz yok.";
@@ -167,50 +169,76 @@ export async function deleteFolder(id: string): Promise<{ ok: true } | { error: 
 // ── Dosya ───────────────────────────────────────────────────────────────────
 
 /**
- * Dosya yükler ve karşılığında bir doküman kaydı oluşturur.
+ * Dosya yükleme İKİ AŞAMALI — ve dosyanın kendisi sunucudan GEÇMEZ.
+ *
+ * Sıraç (26.09.2026): AF Teamwork › Excel'e bir .xlsx yüklenirken
+ * "An unexpected response was received from the server." Hata Supabase'den
+ * değil Next.js'ten geliyordu: dosya bir Server Action'ın GÖVDESİNDE
+ * taşınıyordu ve gövde tavana çarpıyordu.
+ *
+ * Üç ayrı sınır vardı ve hiçbiri diğerini bilmiyordu:
+ *   · tarayıcı kontrolü     25 MB  (DriveBrowser)
+ *   · Server Action gövdesi  8 MB  (next.config.ts)
+ *   · Vercel istek gövdesi  4,5 MB (platform sabiti — next.config EZEMEZ)
+ * Aradaki her dosya istemci kontrolünü geçip sunucuda reddediliyordu; geriye
+ * Next'in ham hata metni kalıyordu. Tavanı yükseltmek çözüm değil — 4,5 MB
+ * Vercel'in kendi sabiti, ayarla aşılmıyor.
+ *
+ * Bu yüzden bayt akışı tarayıcıdan doğrudan Storage'a gidiyor. Sunucu yalnız
+ * iki küçük iş yapıyor: yolu ÜRETMEK ve kaydı AÇMAK. Gerçek sınır artık
+ * kovanın kendi sınırı (25 MB) ve dosya yolun sahibi olan çalışma alanına
+ * yazılıyor — RLS aynen devrede, servis anahtarı kullanılmıyor.
  *
  * Yol: documents/{workspace_id}/{folder_id|kok}/{uuid}-{ad}
  * workspace_id önde olduğu için silme yetkisi yol üzerinden doğrulanabiliyor.
  */
-export async function uploadDocumentFile(
-  formData: FormData,
-): Promise<{ id: string } | { error: string }> {
-  const file = formData.get("file");
-  const folderId = (formData.get("folder_id") as string | null) || null;
-  /* Bölüm (20240327): kayıt hangi ekranda açıldıysa orada yaşar. Klasörsüz
-     yüklemede tek ayırt edici bu — yoksa Kütüphane köküne atılan dosya AF
-     Teamwork'te beliriyordu. */
-  const section = (formData.get("section") as string | null) === "library" ? "library" : "teamwork";
-  if (!(file instanceof File)) return { error: "Dosya bulunamadı." };
-  if (file.size === 0) return { error: "Dosya boş." };
-  if (file.size > MAX_BYTES) {
-    return { error: `Dosya 25 MB sınırını aşıyor (${(file.size / 1024 / 1024).toFixed(1)} MB).` };
-  }
-
+export async function prepareDocumentUpload(
+  fileName: string,
+  folderId: string | null,
+): Promise<{ path: string; bucket: string } | { error: string }> {
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
 
   // Dosya adı yolda kullanılacak — tehlikeli karakterleri temizle.
-  const safeName = file.name.replace(/[^\w.\-() ğüşıöçĞÜŞİÖÇ]/g, "_").slice(0, 120);
+  const safeName = String(fileName).replace(/[^\w.\-() ğüşıöçĞÜŞİÖÇ]/g, "_").slice(0, 120);
   const path = `${ctx.workspaceId}/${folderId ?? "kok"}/${crypto.randomUUID()}-${safeName}`;
+  return { path, bucket: BUCKET };
+}
 
-  const { error: upErr } = await supabase.storage
-    .from(BUCKET)
-    .upload(path, file, { contentType: file.type || "application/octet-stream", upsert: false });
-  if (upErr) return { error: upErr.message };
+/**
+ * Yükleme bitti — kaydı aç. Dosya zaten depoda; burada yalnız satır yazılıyor.
+ *
+ * Yol DOĞRULANIYOR: `prepareDocumentUpload`'ın ürettiği yol istemciden geri
+ * geliyor, yani körü körüne güvenilemez. Kendi çalışma alanıyla başlamayan bir
+ * yol reddediliyor — başkasının klasörüne kayıt iliştirilemesin.
+ */
+export async function registerDocumentFile(input: {
+  path: string;
+  name: string;
+  size: number;
+  mime: string | null;
+  folder_id: string | null;
+  section: string;
+}): Promise<{ id: string } | { error: string }> {
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
 
+  if (!input.path.startsWith(`${ctx.workspaceId}/`)) return { error: PERM_DENIED };
+
+  const section = input.section === "library" ? "library" : "teamwork";
   const { data, error } = await supabase
     .from("operation_documents")
     .insert({
       workspace_id: ctx.workspaceId,
-      title: file.name.slice(0, 300),
+      title: input.name.slice(0, 300),
       document_type: "file",
-      folder_id: folderId,
-      file_path: path,
-      file_name: file.name.slice(0, 300),
-      file_size: file.size,
-      file_mime: file.type || null,
+      folder_id: input.folder_id,
+      file_path: input.path,
+      file_name: input.name.slice(0, 300),
+      file_size: input.size,
+      file_mime: input.mime || null,
       section,
       status: "approved",
       owner_id: ctx.userId,
@@ -219,7 +247,7 @@ export async function uploadDocumentFile(
     .select("id").single();
   if (error) {
     // Kayıt açılamadıysa yüklenen dosyayı bırakma — depoda öksüz kalmasın.
-    await supabase.storage.from(BUCKET).remove([path]);
+    await supabase.storage.from(BUCKET).remove([input.path]);
     return { error: toActionErrorMessage(error) };
   }
 

@@ -9,6 +9,10 @@ import {
   uploadManufacturerPhoto, deleteManufacturerPhoto,
   type ManufacturerInput,
 } from "@/lib/actions/manufacturers";
+/* Kartela telefonla çekiliyor — ham dosya 4–6 MB olabiliyor ve Server Action
+   gövdesi Vercel'de 4,5 MB'ta kesiliyor. Föy görselleriyle AYNI sıkıştırma
+   (ImageUploader, SheetSourcing): 1600 px / 0,72 → tipik 150–400 KB. */
+import { compressImage } from "@/lib/utils/compress-image";
 import { assignPersonTones } from "@/lib/design/person-colors";
 import { PersonAvatar } from "@/components/ui/PersonAvatar";
 import { Button, IconButton } from "@/components/ui/Button";
@@ -407,8 +411,14 @@ function KartelaAlbum({
     try {
       const next = [...photos];
       for (const file of Array.from(files).slice(0, 12)) {
+        // Yüklemeden ÖNCE tarayıcıda küçült. Hata olursa orijinalle dener.
+        let toUpload: File = file;
+        try {
+          toUpload = await compressImage(file, { maxDim: 1600, quality: 0.72 });
+        } catch { /* sıkıştırma başarısız → orijinal */ }
+
         const fd = new FormData();
-        fd.append("file", file);
+        fd.append("file", toUpload);
         const res = await uploadManufacturerPhoto(fd);
         if ("error" in res) { setErr(res.error); break; }
         next.push({ url: res.url, path: res.path });
