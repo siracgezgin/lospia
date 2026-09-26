@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Printer, Tag, TagIcon } from "lucide-react";
 import {
   formatMoney, orderSizes, quantityBySize, totalQuantity, unitCostOf,
-  bomLineCost, parseMoney,
+  bomLineCost, parseMoney, productionQtyOf,
 } from "@/lib/collection/cost";
 import type {
   ProductionSheet, ProductionImage, SheetMaterialWithMaterial,
@@ -215,7 +215,10 @@ export function SheetPrintSheet({
   const sizes = orderSizes(sd?.sizes ?? []);
   const bySize = quantityBySize(sd);
   const total = totalQuantity(sd);
-  const unit = unitCostOf(sheet.pricing, bom);
+  /* ADET DE VERİLİR: kalıp ve numune adede BÖLÜNEREK girer (Aslı Hanım,
+     18.09.2026). Adetsiz çağrı bölmeyi atlıyordu, yani kâğıda basılan birim
+     maliyet ekrandakinden yüksek çıkıyordu. */
+  const unit = unitCostOf(sheet.pricing, bom, productionQtyOf(sheet.pricing, sd));
   const web = parseMoney(sheet.pricing?.web_sale_price);
 
   return (

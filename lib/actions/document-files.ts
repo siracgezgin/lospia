@@ -5,12 +5,12 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import type { AppRole } from "@/lib/auth/permissions";
-import { toActionErrorMessage, isMissingSchemaError } from "@/lib/utils/supabase-errors";
+import { toActionErrorMessage, isMissingSchemaError, type DbLikeError } from "@/lib/utils/supabase-errors";
 import { sendEmail } from "@/lib/email/send-email";
 import { documentShareEmail } from "@/lib/email/templates/document-share";
 /* Tür etiketi UI'daki ikonla AYNI kaynaktan gelir (file-kind.ts). Mailde
    "Sunum" yazarken ekranda "PPTX" görünmesin — tek terminoloji kuralı. */
-import { fileKindOf } from "@/lib/office/file-kind";
+import { fileKindOf, humanSize } from "@/lib/office/file-kind";
 import { getDisplayNotificationEmail } from "@/lib/utils/notification-email";
 
 // Dokümanlar — klasör ağacı + gerçek dosya yükleme (20240312).
@@ -31,6 +31,62 @@ const AUTH_REQUIRED = "Kimlik doğrulama gerekli.";
 const ADMIN_ONLY = "Klasörleri yalnız yöneticiler düzenleyebilir.";
 const PERM_DENIED = "Bu işlem için yetkiniz yok.";
 const NOT_FOUND = "Kayıt bulunamadı.";
+
+/* ── DEPO ANAHTARI ASCII'DİR ─────────────────────────────────────────────────
+   "Ürün Föyü.xlsx" AF Teamwork'e yüklenmiyordu: Storage nesne anahtarını ASCII
+   kümesiyle doğruluyor, Türkçe harf taşıyan yol `Invalid key` ile geri
+   dönüyordu ve baytlar 26.09'da tarayıcıya taşındığı için kullanıcı ham
+   İngilizce hatayı görüyordu. Üstelik Finder'dan seçilen adlar ayrıştırılmış
+   (NFD) geldiği için bir kısmı hata vermeden "Siparis_ Listesi.docx" diye
+   BOZULUYORDU — "bazen oluyor bazen olmuyor" hissinin kaynağı buydu.
+   Görünen ad kayıttaki `file_name` alanında durduğu için hiçbir şey kaybolmaz;
+   yalnız yol sadeleşir. */
+const ASCII_TR: Record<string, string> = {
+  ğ: "g", Ğ: "G", ı: "i", İ: "I", ş: "s", Ş: "S",
+  ü: "u", Ü: "U", ö: "o", Ö: "O", ç: "c", Ç: "C",
+};
+
+function storageSafeName(fileName: string): string {
+  const folded = String(fileName).replace(/[ğĞıİşŞüÜöÖçÇ]/g, (c) => ASCII_TR[c] ?? c);
+  /* NFD + birleşen işaretleri at: é→e, â→a … `ı` ayrışmadığı için yukarıda
+     elle eşlendi. Geriye kalan ASCII dışı her şey `_` olur. */
+  const ascii = folded.normalize("NFD").replace(/[̀-ͯ]/g, "");
+  return ascii.replace(/[^\w.\-() ]/g, "_").slice(0, 120).trim() || "dosya";
+}
+
+/* ── TÜR (MIME) TARAYICIDAN GELDİĞİ GİBİ YAZILAMAZ ───────────────────────────
+   İşletim sisteminin tanımadığı uzantılarda (.avif, .heic, uzantısız dosya)
+   tarayıcı türü ya BOŞ ya da "application/octet-stream" olarak yolluyor.
+   Sonraki bütün kararlar yalnız bu alana bakıyor — önizleme, kart ikonu, kapak
+   imzalama ve tablodaki görsel seçicinin SQL süzgeci — yani tür kaybolunca
+   görsel hiçbir yerde görsel sayılmıyor. Genel değer de BOŞ sayılmalı: dolu
+   olduğu için `||` ona takılıp uzantıya hiç düşmezdi. */
+const MIME_BY_EXT: Record<string, string> = {
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif",
+  webp: "image/webp", avif: "image/avif", heic: "image/heic", heif: "image/heif",
+  bmp: "image/bmp", tif: "image/tiff", tiff: "image/tiff", svg: "image/svg+xml",
+  pdf: "application/pdf",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  xlsm: "application/vnd.ms-excel.sheet.macroEnabled.12", xls: "application/vnd.ms-excel",
+  csv: "text/csv",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  doc: "application/msword",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ppt: "application/vnd.ms-powerpoint",
+  txt: "text/plain", md: "text/markdown", zip: "application/zip",
+  mp4: "video/mp4", mov: "video/quicktime", webm: "video/webm",
+  mp3: "audio/mpeg", wav: "audio/wav", m4a: "audio/mp4",
+};
+
+const GENERIC_MIME = /^(application\/(octet-stream|binary)|binary\/octet-stream)$/i;
+
+/** Tür boş YA DA genelse uzantıdan türet; ikisi de tutmazsa geleni bırak. */
+function resolveFileMime(mime: string | null | undefined, name: string): string | null {
+  const m = (mime ?? "").trim().toLowerCase();
+  if (m && !GENERIC_MIME.test(m)) return m;
+  const ext = name.toLowerCase().split(".").pop() ?? "";
+  return MIME_BY_EXT[ext] ?? (m || null);
+}
 
 async function getCtx(supabase: Awaited<ReturnType<typeof createClient>>) {
   const { data: { user } } = await supabase.auth.getUser();
@@ -189,21 +245,44 @@ export async function deleteFolder(id: string): Promise<{ ok: true } | { error: 
  * kovanın kendi sınırı (25 MB) ve dosya yolun sahibi olan çalışma alanına
  * yazılıyor — RLS aynen devrede, servis anahtarı kullanılmıyor.
  *
- * Yol: documents/{workspace_id}/{folder_id|kok}/{uuid}-{ad}
+ * Yol: documents/{workspace_id}/{folder_id|kok}/{uuid}-{ad}  — ad ASCII'ye
+ * indirilir (Storage anahtarı Türkçe harf kabul etmiyor; bkz. storageSafeName).
  * workspace_id önde olduğu için silme yetkisi yol üzerinden doğrulanabiliyor.
  */
 export async function prepareDocumentUpload(
   fileName: string,
   folderId: string | null,
-): Promise<{ path: string; bucket: string } | { error: string }> {
+  mime?: string | null,
+): Promise<{ path: string; bucket: string; contentType: string } | { error: string }> {
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
 
-  // Dosya adı yolda kullanılacak — tehlikeli karakterleri temizle.
-  const safeName = String(fileName).replace(/[^\w.\-() ğüşıöçĞÜŞİÖÇ]/g, "_").slice(0, 120);
-  const path = `${ctx.workspaceId}/${folderId ?? "kok"}/${crypto.randomUUID()}-${safeName}`;
-  return { path, bucket: BUCKET };
+  /* Ad da klasör de yola giriyor; ikisi de ASCII'ye indirilir (bkz.
+     storageSafeName). Klasör kimliği uuid olduğu için orada hiçbir şey
+     değişmez — istemciden gelen bozuk bir değer yolu kırmasın diye var. */
+  const folder = String(folderId ?? "kok").replace(/[^\w-]/g, "") || "kok";
+  const path = `${ctx.workspaceId}/${folder}/${crypto.randomUUID()}-${storageSafeName(fileName)}`;
+  /* Depodaki nesnenin türünü de sunucu söyler: tarayıcı "octet-stream" yazarsa
+     imzalı adres PDF'i önizlemek yerine indirtir. */
+  return { path, bucket: BUCKET, contentType: resolveFileMime(mime, fileName) ?? "application/octet-stream" };
+}
+
+/** Klasörün görünürlüğü. Okunamazsa 'all': kapalı olduğunu bilmediğimiz bir
+ *  klasör yüzünden yüklemeyi reddetmek, çalışan bir akışı durdurmak olurdu —
+ *  okuma tarafında RLS zaten zincire bakıyor (20240358). */
+async function folderVisibility(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  workspaceId: string,
+  folderId: string,
+): Promise<"all" | "admin"> {
+  const { data } = await supabase
+    .from("document_folders")
+    .select("visibility")
+    .eq("id", folderId)
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+  return (data as { visibility?: string | null } | null)?.visibility === "admin" ? "admin" : "all";
 }
 
 /**
@@ -228,6 +307,13 @@ export async function registerDocumentFile(input: {
   if (!input.path.startsWith(`${ctx.workspaceId}/`)) return { error: PERM_DENIED };
 
   const section = input.section === "library" ? "library" : "teamwork";
+  /* GÖRÜNÜRLÜK KLASÖRDEN MİRAS ALINIR. Satır kendi değerini hiç yazmıyordu,
+     veritabanı varsayılanı 'all' ile açılıyordu: yöneticiye kapatılmış bir
+     klasöre yüklenen dosyanın kaydında "herkese açık" yazıyordu. Sızıntı
+     20240358'den beri RLS'te kapalı (zincire bakılıyor), ama VERİ ekranın
+     söylediğiyle aynı olmalı — klasör başka bir yere taşındığında ya da
+     kayıt köke çıktığında gizlilik kaydın kendisinde de duruyor olsun. */
+  const visibility = input.folder_id ? await folderVisibility(supabase, ctx.workspaceId, input.folder_id) : "all";
   const { data, error } = await supabase
     .from("operation_documents")
     .insert({
@@ -238,7 +324,8 @@ export async function registerDocumentFile(input: {
       file_path: input.path,
       file_name: input.name.slice(0, 300),
       file_size: input.size,
-      file_mime: input.mime || null,
+      file_mime: resolveFileMime(input.mime, input.name),
+      visibility,
       section,
       status: "approved",
       owner_id: ctx.userId,
@@ -584,6 +671,57 @@ export async function sendDocumentByEmail(
  *  Aşılırsa kullanıcıya SÖYLENİR; orijinal dosya zaten Drive'da duruyor. */
 const IMPORT_IMAGE_LIMIT = 300;
 
+/* AKTARIM BOYUT TAVANI — YALNIZ AĞIR BİÇİMLER (xlsx · docx). O boyda bir zip'i
+   sunucuda belleğe açmak fonksiyonu süre aşımına ya da bellek tükenmesine
+   götürüyor ve o iki durumda aşağıdaki `catch` HİÇ ÇALIŞMAZ: istek ölür,
+   kullanıcı uzun bir beklemenin sonunda anlamsız bir hata görür, sunucuda da iz
+   kalmaz. Bu yüzden karar işe GİRİŞMEDEN ÖNCE verilir. */
+const IMPORT_SIZE_LIMIT = 20 * 1024 * 1024;
+/** Kovanın kendi sınırı (20240312). CSV bu tavana kadar denenir: metin okunup
+ *  satıra bölünüyor, ağır zip çözücü hiç çalışmıyor — 20 MB'da kesmek bugüne
+ *  kadar sorunsuz açılan dosyaları denemeden reddetmek olurdu. */
+const BUCKET_SIZE_LIMIT = 25 * 1024 * 1024;
+
+/** Aktarım hatasını kullanıcının BİR ŞEY YAPABİLECEĞİ cümleye çevirir.
+ *  Hepsi tek genel cümleye inince aynı sorun defalarca bildiriliyordu. */
+function importFailureMessage(err: unknown, kind: "sheet" | "doc"): string {
+  const m = err instanceof Error ? err.message : String(err ?? "");
+  const app = kind === "sheet" ? "Excel'de" : "Word'de";
+  /* Parola korumalı dosya da bozuk arşiv de zip çözücüde patlar; ikisini
+     ayıramıyoruz ama kullanıcıya deneyebileceği iki yolu birden söyleriz. */
+  if (/zip|central directory|signature|corrupt|end of data|encrypted|password/i.test(m)) {
+    return `Dosya okunamadı: parola korumalı ya da bozuk olabilir. Parolayı kaldırıp yeniden yükleyin, ya da indirip ${app} açın.`;
+  }
+  if (/heap|memory|allocation|timeout|aborted/i.test(m)) {
+    return `Bu dosya sistemde açılamayacak kadar ağır. İndirip ${app} açabilirsiniz.`;
+  }
+  return kind === "sheet"
+    ? "Bu dosya tabloya aktarılamadı; indirerek Excel'de açabilirsiniz."
+    : "Bu dosya yazıya aktarılamadı; indirerek Word'de açabilirsiniz.";
+}
+
+/** Kaydı EN GENİŞ kolon kümesiyle açmayı dener; şema geride kaldıysa bir adım
+ *  daraltıp yeniden dener. Hangi göçün uygulandığını bilmiyoruz ve aktarımın
+ *  tamamını bir kolon yüzünden reddetmek, çalışan bir özelliği durdurmak
+ *  olurdu. Her adımın bedeli yalnız bir BİLGİ kaybı: önce uyarı notu, sonra
+ *  dosya bağı (o da "her tıkta yeni kopya" demek). Şema DIŞI bir hatada —
+ *  yetki, kısıt, ağ — ilk turda durur; orada denemeyi sürdürmek hatayı
+ *  gizlemek olurdu. */
+async function insertWidestFirst(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  table: "operation_spreadsheets" | "operation_documents",
+  attempts: Record<string, unknown>[],
+): Promise<{ id: string } | { error: string }> {
+  let last: DbLikeError | null = null;
+  for (const payload of attempts) {
+    const { data, error } = await supabase.from(table).insert(payload).select("id").single();
+    if (!error) return { id: (data as { id: string }).id };
+    last = error;
+    if (!isMissingSchemaError(error)) break;
+  }
+  return { error: toActionErrorMessage(last) };
+}
+
 /** Aktarılan görseller için alt klasör — varsa bulur, yoksa açar.
  *  Yüzlerce fotoğrafı föyün yanına dökmek Drive'ı okunmaz hâle getirirdi.
  *  Klasör AÇILAMAZSA null döner ve görseller köke düşer: aktarımın tamamını
@@ -659,27 +797,35 @@ export async function importUploadedSheet(
      kullanıcı açısından dosya "açılıyor".
      Kolon henüz migrate edilmemişse sorgu hata verir; o durumda eski davranışa
      (her seferinde yeni kopya) düşülür, ekran çalışmaya devam eder. */
-  const existing = await supabase
-    .from("operation_spreadsheets")
-    .select("id")
-    .eq("workspace_id", ctx.workspaceId)
-    .eq("source_document_id", documentId)
-    .neq("status", "archived")
-    .limit(1)
-    .maybeSingle();
+  const lookup = (cols: string) =>
+    supabase
+      .from("operation_spreadsheets")
+      .select(cols)
+      .eq("workspace_id", ctx.workspaceId)
+      .eq("source_document_id", documentId)
+      .neq("status", "archived")
+      .limit(1)
+      .maybeSingle();
+  /* UYARILAR KAYITTA DURUR. İkinci tıkta aktarım tekrarlanmadığı için "3 görsel
+     aktarılamadı" cümlesi bir daha ÜRETİLEMİYORDU: kısa devre boş liste
+     döndürüyor, ilk açılışta okunmayan uyarı sonsuza dek kayboluyordu.
+     `import_notes` migrate edilmemişse eski davranışa (yalnız id) düşülür. */
+  let existing = await lookup("id, import_notes");
+  if (existing.error && isMissingSchemaError(existing.error)) existing = await lookup("id");
   if (!existing.error && existing.data) {
-    return { id: (existing.data as { id: string }).id, warnings: [], reused: true };
+    const prev = existing.data as unknown as { id: string; import_notes?: string[] | null };
+    return { id: prev.id, warnings: prev.import_notes ?? [], reused: true };
   }
 
   const { data: row } = await supabase
     .from("operation_documents")
-    .select("file_path, file_name, title, folder_id, section")
+    .select("file_path, file_name, title, folder_id, section, file_size")
     .eq("id", documentId)
     .eq("workspace_id", ctx.workspaceId)
     .maybeSingle();
   const rec = row as {
     file_path: string | null; file_name: string | null; title: string;
-    folder_id: string | null; section: string | null;
+    folder_id: string | null; section: string | null; file_size: number | null;
   } | null;
   if (!rec?.file_path) return { error: NOT_FOUND };
 
@@ -690,6 +836,9 @@ export async function importUploadedSheet(
     return { error: "Eski .xls biçimi aktarılamıyor. Dosyayı Excel'de açıp .xlsx olarak kaydedip yeniden yükleyin." };
   }
   const isCsv = /\.csv$/i.test(name);
+  if ((rec.file_size ?? 0) > (isCsv ? BUCKET_SIZE_LIMIT : IMPORT_SIZE_LIMIT)) {
+    return { error: `Bu dosya tabloya aktarılamayacak kadar büyük (${humanSize(rec.file_size)}). İndirerek Excel'de açabilirsiniz.` };
+  }
 
   const { data: blob, error: dlErr } = await supabase.storage.from(BUCKET).download(rec.file_path);
   if (dlErr || !blob) return { error: "Dosya okunamadı." };
@@ -798,7 +947,11 @@ export async function importUploadedSheet(
                ait olduğu sorusunun doğru cevabı yok, ve klasör başına
                kopyalamak tam da kaçındığımız şey olurdu. */
             const sha = createHash("sha256").update(media.buffer).digest("hex");
-            const fileName = `${(media.name ?? `gorsel-${mediaId + 1}`).replace(/[^\w.\-() ]/g, "_")}.${ext}`;
+            /* GÖRÜNEN AD HAM KALIR: depo yolu aşağıda `{sha}.{ext}`, yani ada
+               dokunmanın hiçbir karşılığı yok. Eski temizleyici "Ürün.png"i
+               "_r_n.png" yapıyor, hem başlığı hem dosya adını bozuyordu —
+               kural: ANAHTAR ascii, GÖRÜNEN AD ham (bkz. storageSafeName). */
+            const fileName = `${(media.name ?? `gorsel-${mediaId + 1}`).slice(0, 200)}.${ext}`;
             const path = `${ctx.workspaceId}/aktarilan-gorseller/${sha}.${ext}`;
 
             /* Bu içerik daha önce aktarıldıysa kaydı yeniden kullan. */
@@ -870,55 +1023,34 @@ export async function importUploadedSheet(
       }
       if (failed > 0) warnings.push(`${failed} görsel aktarılamadı.`);
     }
-  } catch {
-    return { error: "Bu dosya tabloya aktarılamadı; indirerek Excel'de açabilirsiniz." };
+  } catch (err) {
+    /* HATA ARTIK YUTULMUYOR. Parola korumalı dosya, bozuk arşiv ve ExcelJS'in
+       tanımadığı yapı aynı tek cümleye iniyor, hiçbir yere de yazılmıyordu —
+       sebep anlaşılamadığı için aynı sorun tekrar tekrar bildiriliyordu. */
+    console.error("[teamwork] Excel aktarımı başarısız", { documentId, name, size: rec.file_size, err });
+    return { error: importFailureMessage(err, "sheet") };
   }
 
-  const { data: created, error } = await supabase
-    .from("operation_spreadsheets")
-    .insert({
-      workspace_id: ctx.workspaceId,
-      created_by: ctx.userId,
-      owner_id: ctx.userId,
-      title,
-      sheet_type: "freeform",
-      status: "active",
-      folder_id: rec.folder_id,
-      section: rec.section ?? "teamwork",
-      snapshot,
-      source_document_id: documentId,
-    })
-    .select("id")
-    .single();
-  if (error) {
-    /* Kolon migrate edilmemişse bağ olmadan yeniden denenir: aktarımın
-       tamamını bir kolon yüzünden reddetmek, çalışan bir özelliği durdurmak
-       olurdu (tek bedeli, her tıkta yeni kopya). */
-    if (isMissingSchemaError(error)) {
-      const retry = await supabase
-        .from("operation_spreadsheets")
-        .insert({
-          workspace_id: ctx.workspaceId,
-          created_by: ctx.userId,
-          owner_id: ctx.userId,
-          title,
-          sheet_type: "freeform",
-          status: "active",
-          folder_id: rec.folder_id,
-          section: rec.section ?? "teamwork",
-          snapshot,
-        })
-        .select("id")
-        .single();
-      if (retry.error) return { error: toActionErrorMessage(retry.error) };
-      revalidatePath("/documents");
-      return { id: (retry.data as { id: string }).id, warnings };
-    }
-    return { error: toActionErrorMessage(error) };
-  }
+  const base = {
+    workspace_id: ctx.workspaceId,
+    created_by: ctx.userId,
+    owner_id: ctx.userId,
+    title,
+    sheet_type: "freeform",
+    status: "active",
+    folder_id: rec.folder_id,
+    section: rec.section ?? "teamwork",
+    snapshot,
+  };
+  const created = await insertWidestFirst(supabase, "operation_spreadsheets", [
+    { ...base, source_document_id: documentId, import_notes: warnings },
+    { ...base, source_document_id: documentId },
+    base,
+  ]);
+  if ("error" in created) return created;
 
   revalidatePath("/documents");
-  return { id: (created as { id: string }).id, warnings };
+  return { id: created.id, warnings };
 }
 
 /**
@@ -942,28 +1074,33 @@ export async function importUploadedDoc(
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
 
-  const existing = await supabase
-    .from("operation_documents")
-    .select("id")
-    .eq("workspace_id", ctx.workspaceId)
-    .eq("source_document_id", documentId)
-    .eq("document_type", "doc")
-    .neq("status", "archived")
-    .limit(1)
-    .maybeSingle();
+  const lookup = (cols: string) =>
+    supabase
+      .from("operation_documents")
+      .select(cols)
+      .eq("workspace_id", ctx.workspaceId)
+      .eq("source_document_id", documentId)
+      .eq("document_type", "doc")
+      .neq("status", "archived")
+      .limit(1)
+      .maybeSingle();
+  /* Excel tarafıyla aynı gerekçe: uyarı kayıtta durur, ikinci açılışta da okunur. */
+  let existing = await lookup("id, import_notes");
+  if (existing.error && isMissingSchemaError(existing.error)) existing = await lookup("id");
   if (!existing.error && existing.data) {
-    return { id: (existing.data as { id: string }).id, warnings: [], reused: true };
+    const prev = existing.data as unknown as { id: string; import_notes?: string[] | null };
+    return { id: prev.id, warnings: prev.import_notes ?? [], reused: true };
   }
 
   const { data: row } = await supabase
     .from("operation_documents")
-    .select("file_path, file_name, title, folder_id, section")
+    .select("file_path, file_name, title, folder_id, section, file_size")
     .eq("id", documentId)
     .eq("workspace_id", ctx.workspaceId)
     .maybeSingle();
   const rec = row as {
     file_path: string | null; file_name: string | null; title: string;
-    folder_id: string | null; section: string | null;
+    folder_id: string | null; section: string | null; file_size: number | null;
   } | null;
   if (!rec?.file_path) return { error: NOT_FOUND };
 
@@ -971,6 +1108,9 @@ export async function importUploadedDoc(
   /* .doc ESKİ İKİLİ BİÇİM — mammoth yalnız .docx okur. */
   if (/\.doc$/i.test(name)) {
     return { error: "Eski .doc biçimi aktarılamıyor. Dosyayı Word'de açıp .docx olarak kaydedip yeniden yükleyin." };
+  }
+  if ((rec.file_size ?? 0) > IMPORT_SIZE_LIMIT) {
+    return { error: `Bu dosya yazıya aktarılamayacak kadar büyük (${humanSize(rec.file_size)}). İndirerek Word'de açabilirsiniz.` };
   }
 
   const { data: blob, error: dlErr } = await supabase.storage.from(BUCKET).download(rec.file_path);
@@ -1009,8 +1149,10 @@ export async function importUploadedDoc(
     );
     html = result.value;
     if (imageFailed > 0) warnings.push(`${imageFailed} görsel aktarılamadı.`);
-  } catch {
-    return { error: "Bu dosya yazıya aktarılamadı; indirerek Word'de açabilirsiniz." };
+  } catch (err) {
+    /* Excel tarafıyla aynı gerekçe: sebep yazılmazsa aynı sorun tekrar gelir. */
+    console.error("[teamwork] Word aktarımı başarısız", { documentId, name, size: rec.file_size, err });
+    return { error: importFailureMessage(err, "doc") };
   }
 
   /* Gövde HER ZAMAN temizleyiciden geçer: mammoth'un ürettiği HTML güvenilir
@@ -1032,23 +1174,13 @@ export async function importUploadedDoc(
     body,
   };
 
-  const { data: created, error } = await supabase
-    .from("operation_documents")
-    .insert({ ...payload, source_document_id: documentId })
-    .select("id")
-    .single();
-  if (error) {
-    /* Kolon migrate edilmemişse bağ olmadan devam — tek bedeli, her tıkta
-       yeni kopya. Çalışan bir özelliği bir kolon yüzünden durdurmayız. */
-    if (isMissingSchemaError(error)) {
-      const retry = await supabase.from("operation_documents").insert(payload).select("id").single();
-      if (retry.error) return { error: toActionErrorMessage(retry.error) };
-      revalidatePath("/documents");
-      return { id: (retry.data as { id: string }).id, warnings };
-    }
-    return { error: toActionErrorMessage(error) };
-  }
+  const created = await insertWidestFirst(supabase, "operation_documents", [
+    { ...payload, source_document_id: documentId, import_notes: warnings },
+    { ...payload, source_document_id: documentId },
+    payload,
+  ]);
+  if ("error" in created) return created;
 
   revalidatePath("/documents");
-  return { id: (created as { id: string }).id, warnings };
+  return { id: created.id, warnings };
 }

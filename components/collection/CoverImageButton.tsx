@@ -8,7 +8,7 @@ import {
   updateProductionSheetImages,
   deleteProductionSheetImage,
 } from "@/lib/actions/production";
-import { compressImage } from "@/lib/utils/compress-image";
+import { prepareImageUpload, SHEET_IMAGE_TYPES, SHEET_IMAGE_ACCEPT } from "@/lib/utils/compress-image";
 import { cn } from "@/lib/utils/cn";
 import { downloadIconCls } from "@/components/ui/DownloadLink";
 import type { ProductionImage } from "@/types";
@@ -61,17 +61,16 @@ export function CoverImageButton({
     onError(null);
     setBusy(true);
     try {
-      /* Tarayıcıda sıkıştır: depoda yer kaplamasın ve Server Action gövde
-         sınırına takılmasın (föy yükleyicisiyle AYNI ayarlar). */
-      let toUpload: File = file;
-      try {
-        toUpload = await compressImage(file, { maxDim: 1600, quality: 0.72 });
-      } catch {
-        /* sıkıştırma başarısız → orijinal dosyayla dene */
-      }
+      /* Föy yükleyicisiyle AYNI kapı (prepareImageUpload): önce küçült, sonra
+         ölç. Tek başına `compressImage` çeviremediği dosyayı (HEIC, animasyonlu
+         GIF) sessizce olduğu gibi geçiriyordu; baytlar Vercel'in 4,5 MB'lık sert
+         gövde sınırında kesiliyor ve ekrana Türkçe uyarı yerine İngilizce bir ağ
+         hatası düşüyordu. */
+      const prep = await prepareImageUpload(file, { accept: SHEET_IMAGE_TYPES, maxDim: 1600, quality: 0.72 });
+      if ("error" in prep) { onError(prep.error); return; }
 
       const fd = new FormData();
-      fd.append("file", toUpload);
+      fd.append("file", prep.file);
       const up = await uploadProductionSheetImage(sheetId, fd);
       if ("error" in up) {
         onError(up.error);
@@ -126,7 +125,7 @@ export function CoverImageButton({
       <input
         ref={inputRef}
         type="file"
-        accept="image/*"
+        accept={SHEET_IMAGE_ACCEPT}
         className="hidden"
         onChange={(e) => handleFile(e.target.files?.[0])}
       />

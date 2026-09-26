@@ -114,7 +114,7 @@ type DriveItem = {
   type: ItemType;
   kind: FileKind;
   name: string;
-  /** Kartın/satırın ikinci satırı için ek not (klasörde "3 öğe · yalnız yönetici"). */
+  /** Kartın/satırın ikinci satırı için ek not (klasörde "3 öğe"). */
   note?: string;
   ownerId: string | null;
   date: string | null;
@@ -129,6 +129,10 @@ type DriveItem = {
   path?: string;
   /** Yerinde önizlenebilir mi (görsel · PDF)? */
   previewable?: boolean;
+  /** Tıklanınca uygulamanın kendi düzenleyicisinde açılan YÜKLENMİŞ dosya —
+   *  ilk açılışta bir tablo/yazı kaydına aktarılır. ⋯ menüsü bu eylemi ADIYLA
+   *  yazar ki tıklamanın ne yapacağı tıklamadan ÖNCE bilinsin. */
+  opensAs?: "sheet" | "doc";
   /** Yalnız yöneticiye açık — kartta kilit simgesiyle gösterilir. */
   restricted?: boolean;
   folder?: DocFolder;
@@ -175,17 +179,25 @@ export function bucketOfKind(type: DriveItem["type"], kindLabel: string): Bucket
   return "file";
 }
 
+/* "Dosyalar" bir ÜST KÜME adıydı ama artık-kalan kutusunu adlandırıyordu:
+   Excel'ini nereye koyacağını arayan kişi haklı olarak oraya bakıyordu. Kutu
+   adı kapsamını söylemeli — içinde PDF, sunum ve sınıflanmayan yüklemeler var.
+
+   `unit` sayacın kelimesidir. Beş kutuda da "N dosya" yazıyordu; "Bağlantılar ·
+   4 dosya" ekranda YANLIŞ bir cümledir. */
 const BUCKETS: {
   key: BucketKey;
   label: string;
   hint: string;
+  /** Sayacın adı — "3 tablo", "4 bağlantı". */
+  unit: string;
   match: (_i: DriveItem) => boolean;
 }[] = [
-  { key: "sheet", label: "Excel", hint: "Tablolar ve yüklenen Excel dosyaları", match: (i) => bucketOfKind(i.type, i.kind.label) === "sheet" },
-  { key: "doc", label: "Word", hint: "Yazılar ve yüklenen Word dosyaları", match: (i) => bucketOfKind(i.type, i.kind.label) === "doc" },
-  { key: "image", label: "Görseller", hint: "Fotoğraf ve çizimler", match: (i) => bucketOfKind(i.type, i.kind.label) === "image" },
-  { key: "file", label: "Dosyalar", hint: "PDF, sunum, diğer yüklemeler", match: (i) => bucketOfKind(i.type, i.kind.label) === "file" },
-  { key: "link", label: "Bağlantılar", hint: "Drive, Canva, Figma…", match: (i) => bucketOfKind(i.type, i.kind.label) === "link" },
+  { key: "sheet", label: "Excel", hint: "Tablolar ve yüklenen Excel dosyaları", unit: "tablo", match: (i) => bucketOfKind(i.type, i.kind.label) === "sheet" },
+  { key: "doc", label: "Word", hint: "Yazılar ve yüklenen Word dosyaları", unit: "yazı", match: (i) => bucketOfKind(i.type, i.kind.label) === "doc" },
+  { key: "image", label: "Görseller", hint: "Fotoğraf ve çizimler", unit: "görsel", match: (i) => bucketOfKind(i.type, i.kind.label) === "image" },
+  { key: "file", label: "Diğer dosyalar", hint: "PDF, sunum ve diğer yüklemeler", unit: "dosya", match: (i) => bucketOfKind(i.type, i.kind.label) === "file" },
+  { key: "link", label: "Bağlantılar", hint: "Drive, Canva, Figma…", unit: "bağlantı", match: (i) => bucketOfKind(i.type, i.kind.label) === "link" },
 ];
 
 const BUCKET_BY_KEY = new Map(BUCKETS.map((b) => [b.key, b]));
@@ -226,6 +238,8 @@ type PreviewState = {
   url: string | null;
   loading: boolean;
   error: string | null;
+  /** Süresi dolmuş imza BİR KEZ tazelenir; ikinci hatada döngüye girmesin. */
+  resigned?: boolean;
 };
 
 /** `documents` kovasının sınırının aynısı (20240312). Burada da bakılır ki
@@ -252,13 +266,26 @@ const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 const LINK_HEX = linkKindOf(null).hex;
 const UPLOAD_HEX = fileKindOf("image/png", null).hex;
 
-const TYPE_FILTERS: { key: "all" | ItemType; label: string }[] = [
+/**
+ * TÜR SÜZGECİ — KUTULARIN SÖZLÜĞÜ, KUTULARIN ÖLÇÜTÜ.
+ *
+ * Süzgeçte "Yazı (Word)" yazıyordu ama ölçütü `i.type === "doc"` idi: yüklenen
+ * bir .docx'in `type`'ı `"file"` olduğu için, parantezinde "(Word)" vaat eden
+ * seçenek tam da WORD DOSYALARINI ELİYORDU. "Tablo (Excel)" aynı şekilde
+ * .xlsx'leri gizliyordu. Aynı anda ekranda dört ayrı ad dolaşıyordu: kutu
+ * "Word", tür sütunu "Yazı", düğme "Yeni yazı", süzgeç "Yazı (Word)".
+ *
+ * Artık seçenekler KUTU tanımından türer (tek terminoloji) ve süzgeç de
+ * kutunun ölçütünü — `bucketOfKind` — kullanır. "Word" süzgeci hem uygulamada
+ * yazılan yazıyı hem yüklenmiş .docx'i gösterir; kutuya girince görülen ne ise
+ * süzgeçte kalan da odur.
+ */
+type FilterKey = "all" | "folder" | BucketKey;
+
+const TYPE_FILTERS: { key: FilterKey; label: string }[] = [
   { key: "all", label: "Tüm türler" },
   { key: "folder", label: "Klasör" },
-  { key: "doc", label: "Yazı (Word)" },
-  { key: "sheet", label: "Tablo (Excel)" },
-  { key: "link", label: "Bağlantı" },
-  { key: "file", label: "Yüklenen dosya" },
+  ...BUCKETS.map((b) => ({ key: b.key as FilterKey, label: b.label })),
 ];
 
 /** Yüklenen dosya bir HESAP TABLOSU mu? Uzantıya da bakılır: bazı tarayıcılar
@@ -267,6 +294,14 @@ const TYPE_FILTERS: { key: "all" | ItemType; label: string }[] = [
 function isSpreadsheetFile(mime: string | null, name: string | null): boolean {
   const m = (mime ?? "").toLowerCase();
   const n = (name ?? "").toLowerCase();
+  /* ESKİ .xls AKTARILAMIYOR — o yüzden AÇILMAYA HİÇ KALKIŞILMAZ. Tarayıcı bir
+     .xls'e `application/vnd.ms-excel` diyor, bu da dosyayı aktarım yoluna
+     sokuyordu; sunucu "Dosyayı .xlsx olarak kaydedip yeniden yükleyin" diye
+     reddediyor ve kullanıcı dosyayı BOZUK sanıyordu. Ada bakıp yolu kapatınca
+     tıklama doğal olarak indirmeye düşer, dosya Excel'de açılır.
+     Word tarafında doğrusu zaten yapılmış: `isWordFile` `application/msword`u
+     kasıtlı olarak listelemiyor, .doc bu yüzden indirmeye düşüyor. */
+  if (n.endsWith(".xls")) return false;
   return (
     m.includes("spreadsheetml") || m === "application/vnd.ms-excel" || m === "text/csv" ||
     n.endsWith(".xlsx") || n.endsWith(".xlsm") || n.endsWith(".csv")
@@ -278,6 +313,44 @@ function isWordFile(mime: string | null, name: string | null): boolean {
   const m = (mime ?? "").toLowerCase();
   const n = (name ?? "").toLowerCase();
   return m.includes("wordprocessingml") || n.endsWith(".docx");
+}
+
+/**
+ * DEPO HATASI → TÜRKÇE.
+ *
+ * Baytlar tarayıcıdan DOĞRUDAN Storage'a gidiyor (Vercel'in 4,5 MB'lık gövde
+ * sınırı yüzünden); dolayısıyla hata da doğrudan `@supabase/storage-js`ten
+ * geliyor ve sunucudaki `toActionErrorMessage` bu yolda devrede değil. Panelde
+ * "Failed to fetch", "HTTP 504 error", "Invalid JWT" gibi ham İngilizce
+ * cümleler çıkıyordu: kullanıcı ne olduğunu da ne yapacağını da bilmiyordu.
+ *
+ * Tanımadığımız hatayı GİZLEMİYORUZ — ne yapılacağını söyleyen cümlenin
+ * arkasına olduğu gibi ekliyoruz; yoksa destek isteyen kişinin elinde hiçbir
+ * iz kalmaz. Dönen metin "dosya.xlsx: …" satırının devamı olarak okunur.
+ */
+function uploadErrorText(err: unknown): string {
+  const raw = err instanceof Error ? err.message : typeof err === "string" ? err : "";
+  if (!raw.trim()) return "yüklenemedi.";
+  const m = raw.toLowerCase();
+  if (m.includes("failed to fetch") || m.includes("networkerror") || m.includes("load failed") || m.includes("network request failed"))
+    return "bağlantı koptu, yüklenemedi. Tekrar deneyin.";
+  if (m.includes("abort")) return "yükleme yarıda kesildi. Tekrar deneyin.";
+  if (m.includes("exceeded the maximum allowed size") || m.includes("payload too large") || m.includes("413"))
+    return "25 MB sınırını aşıyor.";
+  if (m.includes("row-level security") || m.includes("unauthorized") || m.includes("403"))
+    return "bu klasöre yükleme yetkiniz yok.";
+  if (m.includes("jwt") || m.includes("401")) return "oturumunuzun süresi dolmuş. Sayfayı yenileyip tekrar deneyin.";
+  if (m.includes("already exists") || m.includes("duplicate")) return "aynı adla bir dosya zaten var. Adını değiştirip tekrar deneyin.";
+  if (m.includes("timeout") || m.includes("timed out") || /\b5\d\d\b/.test(raw))
+    return "depo şu an yanıt vermiyor, birkaç dakika sonra tekrar deneyin.";
+  return `yüklenemedi (${raw}).`;
+}
+
+/** Türkçe liste: "klasör, yazı ya da tablo". Boş durum metni ekrandaki
+ *  düğmelerden türetildiği için sayı önceden bilinmiyor. */
+function joinTr(parts: string[]): string {
+  if (parts.length <= 1) return parts.join("");
+  return `${parts.slice(0, -1).join(", ")} ya da ${parts[parts.length - 1]}`;
 }
 
 /** Dosya PENCEREDE açılabiliyor mu? Yalnız görsel ve PDF — onlarda
@@ -418,7 +491,14 @@ export function DriveBrowser({
      paylaşılamıyordu (Sıraç, 2026-09-06). Adres tek doğruluk kaynağı olunca
      yenileme, geri/ileri ve bağlantı paylaşımı kendiliğinden çalışıyor. */
   const searchParams = useSearchParams();
-  const cwd = searchParams.get("f");
+  /* ADRESTEN GELEN DEĞER DIŞARIDAN GELİR: silinmiş, taşınmış ya da kişinin
+     göremediği bir klasörün kimliği elle yazılmış olabilir. Eskiden olduğu
+     gibi kabul ediliyordu ve ekran yalan söylüyordu — liste boş çıkıyor,
+     kırıntı çubuğu kimliği çözemediği için yalnız "AF Teamwork" yazıyordu,
+     yani kullanıcı kökte sanıyor ama kökün içeriğini görmüyordu. Kutu
+     anahtarı (`b=`) nasıl yok sayılıyorsa bu da yok sayılır: köke düşülür. */
+  const rawFolder = searchParams.get("f");
+  const cwd = rawFolder && folders.some((f) => f.id === rawFolder) ? rawFolder : null;
   /* TEK YAZICI. Kutu ve klasör AYNI adres satırında yaşıyor; ikisini iki ayrı
      `router.push` ile yazmak olmuyor — her ikisi de aynı `searchParams`
      anlık görüntüsünden türediği için İKİNCİSİ BİRİNCİYİ EZİYOR. Kutudan
@@ -461,7 +541,7 @@ export function DriveBrowser({
   );
   /** Arama kutusu — boş değilse TÜM ağaçta arar (Drive gibi). */
   const [query, setQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"all" | ItemType>("all");
+  const [typeFilter, setTypeFilter] = useState<FilterKey>("all");
   /* TÜR KUTULARI — AF Teamwork'ün girişi.
      Aslı Hanım (2026-09-07): "Her tasarım aynı ve KART şeklinde olmalı. Mesela
      AF Teamwork'e girdim, orada EXCEL YAZILI KUTU OLSUN, içine girince excel
@@ -545,7 +625,10 @@ export function DriveBrowser({
       }
       paths.set(start.id, [rootLabel, ...parts].join(" / "));
     }
-    return (id: string | null): string => (id ? paths.get(id) ?? rootLabel : rootLabel);
+    /* ÇÖZÜLEMEYEN KLASÖR KÖK DEĞİLDİR. Bilinmeyen bir kimlik `rootLabel`a
+       düşüyordu: arama sonucundaki satır, aslında göremediğimiz bir klasörün
+       içindeyken "AF Teamwork" kökünde duruyormuş gibi yazıyordu. */
+    return (id: string | null): string => (id ? paths.get(id) ?? "Bilinmeyen klasör" : rootLabel);
   }, [folders, rootLabel]);
 
   /** İmzalı adres alır; hem indirme hem önizleme aynı kapıdan geçer. */
@@ -588,11 +671,35 @@ export function DriveBrowser({
             ? await importUploadedSheet(id)
             : await importUploadedDoc(id);
           if ("error" in res) { setError(res.error); return; }
-          /* Kayıp VARSA söylenir ama yol KESİLMEZ: kullanıcı dosyayı açmak
-             istedi, uyarı yüzünden ekranda tutmak amacı engellerdi. Uyarı
-             Drive'da kalır, kullanıcı geri döndüğünde orada durur. */
-          if (res.warnings.length > 0) setError(res.warnings.join(" "));
-          router.push(kind === "sheet" ? `/sheets/${res.id}` : `/documents/${res.id}`);
+          /* KAYIP, KULLANICI GÖRMEDEN GEÇİLMEZ. Uyarı `setError` ile Drive'ın
+             şeridine yazılıyor, hemen ardından `router.push` çalışıyordu:
+             gezinme bu bileşeni söküyor, şerit de onunla gidiyordu — cümle
+             ekranda bir kare bile durmuyordu. Geri dönüp tekrar tıklamak da
+             kurtarmıyor; ikinci tıkta aktarım yeniden yapılmadığı için uyarı
+             listesi boş dönüyor, yani o bilgi BİR DAHA ASLA görülemiyordu.
+             Uyarı artık gezinmeden ÖNCE söylenir. Yol yine kesilmiyor: onay
+             penceresinin ana düğmesi dosyayı açar. */
+          const href = kind === "sheet" ? `/sheets/${res.id}` : `/documents/${res.id}`;
+          /* ONAY YALNIZ İLK AKTARIMDA. Uyarılar kayda yazıldığı için ikinci
+             tıkta da geliyor (`reused`); pencereyi ona da açmak, bir kez
+             görseli düşmüş her dosyayı SONSUZA DEK iki tıka çıkarırdı —
+             üstelik o tıklarda başlık yalan söylerdi, çünkü o an bir aktarım
+             yapılmıyor. Kayıttaki uyarı kaybolmuyor: tablo/yazı ekranında
+             gösterilmek üzere `import_notes` alanında duruyor. */
+          if (res.warnings.length > 0 && !res.reused) {
+            setBusy(null);
+            const go = await ask({
+              /* "Dosya açıldı" diyordu ama o anda hiçbir şey açılmamıştı:
+                 altındaki düğmeler "Tabloyu aç" / "Burada kal". Yapılan iş
+                 AKTARIMDIR; başlık onu söyler. */
+              title: "Dosya aktarıldı — bir kısmı taşınamadı",
+              message: `${res.warnings.join(" ")}\n\nYüklediğiniz dosya olduğu gibi duruyor; satırın ⋯ menüsünden indirebilirsiniz.`,
+              confirmLabel: kind === "sheet" ? "Tabloyu aç" : "Yazıyı aç",
+              cancelLabel: "Burada kal",
+            });
+            if (!go) return;
+          }
+          router.push(href);
         } catch (e) {
           setError(e instanceof Error ? e.message : "Dosya açılamadı.");
         } finally {
@@ -600,7 +707,7 @@ export function DriveBrowser({
         }
       });
     },
-    [startWork, router],
+    [startWork, router, ask],
   );
 
   /** Görsel/PDF'i YERİNDE açar. Görselin imzalı adresi sunucudan hazır gelir
@@ -701,6 +808,10 @@ export function DriveBrowser({
            pencereye girmediği için o dizide yer almaz. */
         previewable: mode !== null,
         restricted: d.visibility === "admin",
+        /* Tıklamanın ne yapacağı ⋯ menüsünde de YAZAR. Menüde dosyayı AÇAN
+           hiçbir satır yoktu ("İndir" vardı); kullanıcı .xlsx'e tıklıyor,
+           ekran bir anda tam ekran tablo düzenleyicisine geçiyordu. */
+        opensAs: sheetFile ? ("sheet" as const) : wordFile ? ("doc" as const) : undefined,
         /* NE OLARAK EKLENDİYSE ÖYLE AÇILIR (Sıraç, 2026-09-16: "Excel olarak
            eklediğimiz dosyalar nasıl eklendiyse öyle açılmalı ve kullanılmalı,
            yarım ekran değil Excel gibi tam ekran").
@@ -776,9 +887,14 @@ export function DriveBrowser({
       }
     }
 
+    /* Süzgeç KUTU ÖLÇÜTÜYLE aynı: "Word" seçilince uygulamada yazılan yazı da
+       yüklenmiş .docx de kalır. Eskiden ölçüt depolama türüydü (`i.type`) ve
+       "Yazı (Word)" seçeneği yüklenen bütün Word dosyalarını eliyordu. */
     if (typeFilter !== "all") {
       folderOut = typeFilter === "folder" ? folderOut : [];
-      fileOut = fileOut.filter((i) => i.type === typeFilter);
+      fileOut = typeFilter === "folder"
+        ? []
+        : fileOut.filter((i) => bucketOfKind(i.type, i.kind.label) === typeFilter);
     }
     if (needle) {
       const hit = (i: DriveItem) => i.name.toLocaleLowerCase("tr").includes(needle);
@@ -847,6 +963,19 @@ export function DriveBrowser({
     }
     return out;
   }, [docs, sheets, links, files]);
+  /* BOŞ DURUM METNİ EKRANDAKİ DÜĞMELERDEN TÜRER. Sabit cümle beş düğmeyi
+     birden sayıyordu ("klasör, yazı ya da tablo oluşturun; bağlantı
+     ekleyin…"); oysa üretim düğmeleri kutuya göre çiziliyor — "Görseller"
+     kutusunda yazı da tablo da bağlantı da YOK. Kullanıcı olmayan düğmeyi
+     arıyordu. Koşullar aşağıdaki düğmelerin koşullarıyla BİREBİR aynı. */
+  const createNames = useMemo(() => {
+    const out = ["klasör"];
+    if (bucket === null || bucket === "doc") out.push("yazı");
+    if (bucket === null || bucket === "sheet") out.push("tablo");
+    if (onNewLink && (bucket === null || bucket === "link")) out.push("bağlantı");
+    return out;
+  }, [bucket, onNewLink]);
+
   /** Ağaçta hiç içerik yoksa arama satırı gereksiz gürültüdür. */
   const hasAnything = folders.length + docs.length + sheets.length + links.length + files.length > 0;
 
@@ -971,8 +1100,13 @@ export function DriveBrowser({
         }
         setUpload({ total: queue.length, done, name: file.name, errors: [...errors], finished: false });
         try {
-          /* 1) Sunucu yolu üretir (çalışma alanı + klasör + uuid). */
-          const prep = await prepareDocumentUpload(file.name, target);
+          /* 1) Sunucu yolu ÜRETİR — depodaki nesnenin TÜRÜNÜ de o söyler.
+                Tarayıcı .xlsx/.docx'te `file.type`ı boş ya da "octet-stream"
+                bırakıyor; imzalı adres o türle servis edilince PDF önizleme
+                penceresi belgeyi çizmek yerine indirme başlatıyordu. Türetme
+                tek yerde kalsın diye uzantıdan çıkarmayı sunucu yapıyor
+                (resolveFileMime). */
+          const prep = await prepareDocumentUpload(file.name, target, file.type);
           if ("error" in prep) {
             errors.push(`${file.name}: ${prep.error}`);
             done += 1;
@@ -983,11 +1117,11 @@ export function DriveBrowser({
           const { error: upErr } = await supabase.storage
             .from(prep.bucket)
             .upload(prep.path, file, {
-              contentType: file.type || "application/octet-stream",
+              contentType: prep.contentType,
               upsert: false,
             });
           if (upErr) {
-            errors.push(`${file.name}: ${upErr.message}`);
+            errors.push(`${file.name}: ${uploadErrorText(upErr)}`);
             done += 1;
             continue;
           }
@@ -1002,7 +1136,7 @@ export function DriveBrowser({
           });
           if ("error" in res) errors.push(`${file.name}: ${res.error}`);
         } catch (e) {
-          errors.push(`${file.name}: ${e instanceof Error ? e.message : "yüklenemedi."}`);
+          errors.push(`${file.name}: ${uploadErrorText(e)}`);
         }
         done += 1;
       }
@@ -1042,13 +1176,34 @@ export function DriveBrowser({
   const canManage = (it: DriveItem) =>
     isAdmin || (!!currentUserId && !!it.ownerId && it.ownerId === currentUserId);
 
-  /** Görünürlük satırı — klasör, yazı, tablo ve dosyada AYNI cümle. */
+  /**
+   * GÖRÜNÜRLÜK SATIRI — klasör, yazı, tablo, bağlantı ve dosyada AYNI cümle.
+   *
+   * "Yalnız yöneticiye kapat" Türkçede TERS okunuyordu: "X'e kapatmak" X'in
+   * erişimini KESMEK demektir, oysa satırın yaptığı tam tersi — kaydı yalnız
+   * yöneticiye açık hâle getirmek (Sıraç: "yöneticiye göster gizle kısmı çok
+   * anlaşılmıyor"). Üstelik iki etiket iki ayrı gramerdeydi: biri hedef durumu
+   * ("Tüm üyelere göster"), diğeri bir fiili söylüyordu.
+   *
+   * İki satır artık tek kalıpta ve tek fiil çiftinde: aç / gizle. Yönü
+   * ÜYELER belirliyor (uygulamanın geri kalanının sözlüğü de bu —
+   * lib/utils/visibility.ts: "Tüm üyeler"), böylece cümle hangi tarafın
+   * göreceğini tersine çevirmeden söylüyor. Kaydın ŞU ANKİ durumu menüde
+   * değil, satırın kendisinde yazıyor: ikonun köşesindeki kilit (bkz.
+   * ItemName) artık liste, arama ve kart — her yerde çiziliyor.
+   */
   const visibilityAction = (
     it: DriveItem,
     apply: (_next: "all" | "admin") => Promise<{ error?: string } | unknown>,
     key: string,
   ): MenuAction => ({
-    label: it.restricted ? "Tüm üyelere göster" : "Yalnız yöneticiye kapat",
+    /* KLASÖRDE CÜMLE FARKLI: gizlemek artık İÇİNDEKİLERİ de kapatıyor
+       (20240358 — kapalı klasörün içi de kapalıdır). Menü bunu söylemezse
+       yönetici davranışın değiştiğini bilmez. Ters yön aynı kalır: klasörü
+       açmak, kendi görünürlüğü zaten "tüm üyeler" olan içeriği geri getirir. */
+    label: it.restricted
+      ? "Tüm üyelere aç"
+      : it.type === "folder" ? "Klasörü ve içini gizle" : "Üyelerden gizle",
     icon: it.restricted ? Users : Lock,
     onSelect: () => run(key, () => apply(it.restricted ? "all" : "admin")),
   });
@@ -1151,19 +1306,20 @@ export function DriveBrowser({
           onSelect: () => (renameInPlace ? setRenaming(f.id) : setRenameTarget(it)),
         },
         moveAction(it),
-        {
-          label: f.visibility === "admin" ? "Tüm üyelere göster" : "Yalnız yöneticiye kapat",
-          icon: f.visibility === "admin" ? Users : Lock,
-          onSelect: () =>
-            run(`f-${f.id}`, () =>
-              saveFolder(f.id, {
-                name: f.name,
-                parent_id: f.parent_id,
-                visibility: f.visibility === "admin" ? "all" : "admin",
-                section: f.section ?? section,
-              }),
-            ),
-        },
+        /* Cümle burada ELLE KOPYALANMIŞTI ve düzeltme iki yerde yapılmak
+           zorundaydı. Klasör de aynı kapıdan geçer; yalnız uygulayan çağrı
+           farklı (klasörün görünürlüğü `saveFolder` ile yazılıyor). */
+        visibilityAction(
+          it,
+          (next) =>
+            saveFolder(f.id, {
+              name: f.name,
+              parent_id: f.parent_id,
+              visibility: next,
+              section: f.section ?? section,
+            }),
+          `f-${f.id}`,
+        ),
         /* ONAY ŞART. Klasör tek tıkla siliniyordu — geri alınamaz bir işlem
            için hiçbir soru sorulmuyordu (2026-08-29). */
         {
@@ -1184,7 +1340,26 @@ export function DriveBrowser({
     if (it.type === "file") {
       const out: MenuAction[] = [...locate];
       if (it.previewable) out.push({ label: "Önizle", icon: Eye, onSelect: () => it.onOpen?.() });
-      out.push({ label: "İndir", icon: Download, onSelect: () => download(id) });
+      /* AÇMA EYLEMİ ADIYLA DURUR. Yüklenen bir Excel/Word'e tıklamak ekranı
+         tam ekran düzenleyiciye götürüyor ama menüde bunu söyleyen tek satır
+         yoktu — kullanıcı tıklamadan önce ne olacağını bilmiyordu. */
+      if (it.opensAs) {
+        out.push({
+          label: it.opensAs === "sheet" ? "Tablo olarak aç" : "Yazı olarak aç",
+          icon: it.opensAs === "sheet" ? Table2 : FileText,
+          onSelect: () => it.onOpen?.(),
+        });
+      }
+      /* HANGİ İNDİRME? Aktarılabilen bir dosyanın (xlsx/docx) iki hâli var:
+         geldiği günkü ORİJİNAL ve üstünde çalışılan tablo/yazı kaydı. Bu satır
+         hep orijinali veriyordu ama adı bunu söylemiyordu; kullanıcı güncel
+         hâli indirdiğini sanıyordu. Güncel hâlin indirmesi kendi satırındadır
+         (tablo öğesinin ⋯ menüsü). */
+      out.push({
+        label: it.opensAs ? "Orijinali indir" : "İndir",
+        icon: Download,
+        onSelect: () => download(id),
+      });
       out.push(shareAction);
       if (!canManage(it)) return out;
       out.push(moveAction(it));
@@ -1202,9 +1377,19 @@ export function DriveBrowser({
     }
 
     if (it.type === "link") {
-      if (!canManage(it)) return [...locate, shareAction];
-      const out: MenuAction[] = [...locate, shareAction];
-      if (onEditLink) out.push({ label: "Düzenle", icon: Pencil, onSelect: () => onEditLink(id) });
+      /* AYRINTILAR HERKESE AÇIK. Bağlantının açıklaması, notu, ilgili görevi ve
+         departmanı YALNIZ "Düzenle" penceresinde yazıyor; o satır da
+         yönetemeyene hiç çizilmediği için üye, arkadaşının eklediği bağlantıda
+         ne yazdığını hiçbir yoldan göremiyordu — satıra tıklamak doğrudan dış
+         siteye götürüyor. Pencere yetkisiz kişide zaten SALT OKUNUR açılıyor
+         (DocumentsView), yani kapıyı açmak bir yetki genişletmesi değil. */
+      const detail: MenuAction[] = onEditLink
+        ? [canManage(it)
+            ? { label: "Düzenle", icon: Pencil, onSelect: () => onEditLink(id) }
+            : { label: "Ayrıntılar", icon: Eye, onSelect: () => onEditLink(id) }]
+        : [];
+      if (!canManage(it)) return [...locate, ...detail, shareAction];
+      const out: MenuAction[] = [...locate, shareAction, ...detail];
       out.push(moveAction(it));
       out.push(visibilityAction(it, (next) => setOperationDocumentVisibility(id, next), `v-${id}`));
       out.push({
@@ -1214,6 +1399,43 @@ export function DriveBrowser({
         onSelect: async () => {
           if (!(await ask({ message: `"${it.name}" bağlantısı silinsin mi?` }))) return;
           run(`lk-${id}`, () => deleteOperationDocument(id));
+        },
+      });
+      return out;
+    }
+
+    if (it.type === "sheet") {
+      /* İNDİRME EKSİKTİ. Yüklenen Excel bir tabloya aktarıldıktan sonra
+         ÜSTÜNDE ÇALIŞILAN hâl hiçbir yerden dışarı çıkmıyordu: klasördeki tek
+         indirme kapısı dosya satırıydı, o da geldiği günkü orijinali veriyor.
+         Rota zaten vardı (/sheets/[id]/export), menüde karşılığı yoktu.
+         Görebilen indirir — "yönetebilen" şartı üyeyi kendi tablosunu dışarı
+         almaktan alıkoyardı; erişimi RLS zaten süzüyor. */
+      const out: MenuAction[] = [
+        ...locate,
+        {
+          label: "İndir (.xlsx)",
+          icon: Download,
+          /* Ad zaten ".xlsx" ile bitiyor olabilir (yüklenen dosyadan aktarılan
+             tablo adını dosyadan alır) — iki uzantı yazmayalım. */
+          onSelect: () => saveAs(`/sheets/${id}/export?format=xlsx`, `${it.name.replace(/\.xlsx?$/i, "")}.xlsx`),
+        },
+        shareAction,
+      ];
+      if (!canManage(it)) return out;
+      /* Tabloda "Taşı" YOK: `operation_spreadsheets.folder_id`'yi güncelleyen
+         bir sunucu aksiyonu henüz yazılmadı; olmayan bir eylemi menüye
+         koymaktansa hiç göstermemek doğru. Ad ise değişebilir
+         (renameOperationSpreadsheet) — Drive'ın gerisiyle aynı satır. */
+      out.push({ label: "Yeniden adlandır", icon: Pencil, onSelect: () => setRenameTarget(it) });
+      out.push(visibilityAction(it, (next) => setOperationSpreadsheetVisibility(id, next), `v-${id}`));
+      out.push({
+        label: "Sil",
+        icon: Trash2,
+        danger: true,
+        onSelect: async () => {
+          if (!(await ask({ message: `"${it.name}" tablosu kalıcı olarak silinsin mi?` }))) return;
+          run(`sh-${id}`, () => deleteOperationSpreadsheet(id));
         },
       });
       return out;
@@ -1236,27 +1458,6 @@ export function DriveBrowser({
           onSelect: async () => {
             if (!(await ask({ message: `"${it.name}" yazısı kalıcı olarak silinsin mi?` }))) return;
             run(`doc-${id}`, () => deleteOperationDocument(id));
-          },
-        },
-      ];
-    }
-    if (it.type === "sheet") {
-      /* Tabloda "Taşı" YOK: `operation_spreadsheets.folder_id`'yi güncelleyen
-         bir sunucu aksiyonu henüz yazılmadı; olmayan bir eylemi menüye
-         koymaktansa hiç göstermemek doğru. Ad ise değişebilir
-         (renameOperationSpreadsheet) — Drive'ın gerisiyle aynı satır. */
-      return [
-        ...locate,
-        shareAction,
-        { label: "Yeniden adlandır", icon: Pencil, onSelect: () => setRenameTarget(it) },
-        visibilityAction(it, (next) => setOperationSpreadsheetVisibility(id, next), `v-${id}`),
-        {
-          label: "Sil",
-          icon: Trash2,
-          danger: true,
-          onSelect: async () => {
-            if (!(await ask({ message: `"${it.name}" tablosu kalıcı olarak silinsin mi?` }))) return;
-            run(`sh-${id}`, () => deleteOperationSpreadsheet(id));
           },
         },
       ];
@@ -1408,7 +1609,7 @@ export function DriveBrowser({
 
           <SelectInput
             value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value as "all" | ItemType)}
+            onChange={(e) => setTypeFilter(e.target.value as FilterKey)}
             aria-label="Tür süzgeci"
             className="h-9 w-[8.5rem] shrink-0 text-[13px] pointer-coarse:h-11"
           >
@@ -1417,13 +1618,19 @@ export function DriveBrowser({
             ))}
           </SelectInput>
 
-          {/* Görünüm — Drive'daki gibi kart / liste. Aramada sonuç zaten tek
-              liste olduğu için düğmeler pasif kalır.
+          {/* Görünüm — Drive'daki gibi kart / liste.
               GİRİŞTE ÇİZİLMEZ (Sıraç, 2026-09-10: "/documents ana sayfasında
               kart ve liste görünümü seçeneği olmasın; Excel'e filan girince
               olabilir tabi"). Girişte zaten liste yok — seçecek bir görünüm
-              olmadan duran bir kontrol, çalışmıyor sanılıyordu. */}
-          {(inFolderOrBucket || searching) && (
+              olmadan duran bir kontrol, çalışmıyor sanılıyordu.
+
+              ARAMADA DA ÇİZİLMEZ. Düğmeler `disabled={searching}` ile kapalı
+              duruyor, gerekçe yalnız fare balonunda yazıyordu — telefonda
+              okunmuyor. Üstelik kökte bu grup normalde HİÇ YOK: arama kutusuna
+              yazılan ilk harfle iki düğme GRİ DOĞARAK beliriyordu. Arama
+              sonucu tek liste; seçilecek bir görünüm olmadığına göre kontrol
+              de olmamalı. Gerekçe sonucun başlığında yazıyor. */}
+          {inFolderOrBucket && !searching && (
           <div
             role="group"
             aria-label="Görünüm"
@@ -1438,12 +1645,11 @@ export function DriveBrowser({
             <button
               type="button"
               onClick={() => setView("grid")}
-              title={searching ? "Arama sonucu tek listede gösterilir" : "Kart görünümü"}
+              title="Kart görünümü"
               aria-label="Kart görünümü"
               aria-pressed={view === "grid"}
-              disabled={searching}
               className={cn(
-                "inline-flex h-full items-center rounded-[6px] px-2.5 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring disabled:cursor-not-allowed disabled:opacity-50",
+                "inline-flex h-full items-center rounded-[6px] px-2.5 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring",
                 view === "grid" ? "bg-surface-sunken text-ink" : "text-subtle hover:text-ink",
               )}
             >
@@ -1452,12 +1658,11 @@ export function DriveBrowser({
             <button
               type="button"
               onClick={() => setView("list")}
-              title={searching ? "Arama sonucu tek listede gösterilir" : "Liste görünümü"}
+              title="Liste görünümü"
               aria-label="Liste görünümü"
               aria-pressed={view === "list"}
-              disabled={searching}
               className={cn(
-                "inline-flex h-full items-center rounded-[6px] px-2.5 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring disabled:cursor-not-allowed disabled:opacity-50",
+                "inline-flex h-full items-center rounded-[6px] px-2.5 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring",
                 view === "list" ? "bg-surface-sunken text-ink" : "text-subtle hover:text-ink",
               )}
             >
@@ -1473,7 +1678,13 @@ export function DriveBrowser({
               olsun ve anlaşılır olsun. Klasör sarımsı, Excel yeşil, Word mavi."
               Renkler uydurulmadı: listedeki dosya ikonlarının rengiyle AYNI
               kaynaktan (lib/office/file-kind.ts) geliyor.
-              Dar ekranda yazılar gizlenir, ikon kalır.
+
+              TELEFONDA DA YAZI VAR. Etiketler `sm` altında gizleniyordu ve
+              geriye üstü artı rozetli beş renkli ikon kalıyordu; dokunmatik
+              cihazda `title` balonu açılmadığı için hangisinin ne yaptığını
+              okumanın YOLU YOKTU. Adlar da tek kalıba çekildi: ikisi eylem
+              ("Yeni yazı"), ikisi isim-only ("Klasör", "Bağlantı") idi ve
+              isim-only olanlar bir tür başlığı gibi okunuyordu.
 
               KENDİ SATIRINDAN BU SATIRA TAŞINDI (12.09.2026). Eskiden kırıntı
               yolunun satırındaydılar; kökte kırıntı yolu hiç çizilmediği için o
@@ -1483,12 +1694,15 @@ export function DriveBrowser({
               kalkar"). Artık arama ve süzgeçle aynı hizada, sağa yaslı.
               `ml-auto`: görünüm düğmeleri girişte çizilmiyor, o yüzden sağa
               yaslamayı bu grup kendi üstlenmeli. */}
-          <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          {/* `flex-wrap`: etiketler telefonda da yazıldığı için beş düğme tek
+              satıra sığmıyor; sığmayan alta iner, ekrandan taşmaz. */}
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
             {/* KLASÖR herkese açık: üye de kendi çalışma alanını kurabilmeli.
                 Açtığı klasörü yalnız kendisi yönetir (canManage + RLS 20240334). */}
             <CreateButton
               icon={FolderPlus}
-              label="Klasör"
+              label="Yeni klasör"
+              short="Klasör"
               hex={KIND_FOLDER.hex}
               /* KÖKTE DE AÇIK (Sıraç, 12.09.2026: "yeni klasör oluşturulamıyor,
                  yönetici olmasına rağmen; oluştur diyince gri bir imge oluyor").
@@ -1518,6 +1732,7 @@ export function DriveBrowser({
             <CreateButton
               icon={FileText}
               label="Yeni yazı"
+              short="Yazı"
               title="Boş bir Word yazısı oluştur"
               hex={KIND_DOC.hex}
               busy={busy === "newdoc"}
@@ -1535,6 +1750,7 @@ export function DriveBrowser({
             <CreateButton
               icon={Table2}
               label="Yeni tablo"
+              short="Tablo"
               title="Boş bir Excel tablosu oluştur"
               hex={KIND_SHEET.hex}
               busy={busy === "newsheet"}
@@ -1551,7 +1767,8 @@ export function DriveBrowser({
             {onNewLink && (bucket === null || bucket === "link") && (
               <CreateButton
                 icon={LinkIcon}
-                label="Bağlantı"
+                label="Yeni bağlantı"
+              short="Bağlantı"
                 title="Dış bağlantı ekle (Drive, Canva, Figma…)"
                 /* Renk ELLE YAZILMAZ: listedeki bağlantı ikonunun rengiyle aynı
                    kaynaktan gelir (lib/office/file-kind.ts). */
@@ -1577,6 +1794,12 @@ export function DriveBrowser({
             <CreateButton
               icon={Upload}
               label="Dosya yükle"
+              short="Yükle"
+              /* ARTI ROZETİ YOK: bu düğme yeni bir şey ÜRETMEZ, var olanı
+                 koyar. Telefonda yazı da olmayınca diğer dördüyle aynı dili
+                 konuşuyordu — 2026-09-16'daki "Excel'e basıp boş tablo
+                 üretme" kazasının telefondaki karşılığı tam olarak budur. */
+              badge={false}
               title="Bilgisayarındaki dosyayı yükle — Excel, Word, PDF, görsel… birden fazla seçebilir ya da sürükleyip bırakabilirsin"
               hex={UPLOAD_HEX}
               busy={uploading}
@@ -1611,7 +1834,22 @@ export function DriveBrowser({
                   key={b.key}
                   onClick={() => { navigate({ bucket: b.key, folder: null }); setQuery(""); setTypeFilter("all"); }}
                   title={b.label}
-                  meta={n > 0 ? `${n} dosya` : b.hint}
+                  /* İPUCU HER ZAMAN ALTTA. Tek `meta` satırı hem sayacı hem
+                     ipucunu taşıyamıyordu: kutuya ilk dosya girer girmez
+                     "PDF, sunum…" gidip yerine "12 dosya" geliyordu — yani
+                     kutu kullanılmaya başlandığı anda ne olduğunu söylemeyi
+                     bırakıyordu. İkisini tek satırda birleştirmek de olmaz;
+                     telefonda iki sütuna düşen kutucukta metin kırpılır. */
+                  metaNode={
+                    <>
+                      {/* Kırpılan ipucu fareyle üzerine gelince tam okunur —
+                          `meta` string olsaydı Tile bunu kendi yapıyordu. */}
+                      <span className="block truncate" title={b.hint}>{b.hint}</span>
+                      <span className="block truncate text-subtle">
+                        {n > 0 ? `${n} ${b.unit}` : "boş"}
+                      </span>
+                    </>
+                  }
                   icon={id.icon}
                   colorHex={id.hex}
                 />
@@ -1730,8 +1968,14 @@ export function DriveBrowser({
         ) : (
           <EmptyState
             icon={FolderOpen}
-            title={cwd ? "Bu klasör boş." : "Henüz dosya yok."}
-            description="Üstteki düğmelerle klasör, yazı ya da tablo oluşturun; bağlantı ekleyin ya da dosyayı buraya sürükleyip bırakın."
+            /* Kutu kökünde `cwd` null olduğu için başlık "Henüz dosya yok."
+               çıkıyordu — diğer kutular doluyken bile. Boş olan KUTUDUR. */
+            title={
+              cwd ? "Bu klasör boş."
+              : bucket ? `"${BUCKET_BY_KEY.get(bucket)?.label}" kutusu boş.`
+              : "Henüz dosya yok."
+            }
+            description={`Üstteki düğmelerle ${joinTr(createNames)} oluşturun; dosyayı buraya sürükleyip bırakın ya da "Dosya yükle"ye basın.`}
             action={
               <Button size="sm" variant="secondary" onClick={openFilePicker} loading={uploading}>
                 <Upload size={14} aria-hidden /> Dosya yükle
@@ -1745,7 +1989,9 @@ export function DriveBrowser({
           {namingTile && <TileGrid row>{namingTile}</TileGrid>}
           {searching && (
             <p className="text-[12.5px] text-muted">
-              <span className="tabular-nums">{resultCount}</span> sonuç — tüm klasörlerde arandı.
+              {/* Kart/liste düğmelerinin aramada neden ortadan kalktığı BURADA
+                  yazar — fare balonunda değil; telefonda balon açılmıyor. */}
+              <span className="tabular-nums">{resultCount}</span> sonuç — tüm klasörlerde arandı, tek liste olarak gösteriliyor.
             </p>
           )}
           {listItems.length > 0 && (
@@ -1934,6 +2180,36 @@ export function DriveBrowser({
                 src={preview.url}
                 alt={preview.name}
                 className="max-h-[60vh] max-w-full object-contain"
+                /* İMZA BİR SAATLİK, PENCERE DAHA UZUN AÇIK KALABİLİYOR.
+                   Görselin adresi sayfa sunucuda çizilirken üretiliyor; sekme
+                   bir saatten fazla açık/atıl kalınca Storage 400 dönüyor ve
+                   `<img>` sessizce kırılıyordu — ne resim ne hata, kullanıcı
+                   "kaydedilmemiş" sanıyordu. Taze imza zaten bir çağrı uzakta
+                   (getDocumentDownloadUrl); bir kez istenir, ikinci hatada
+                   döngüye girmemek için durum yazılır. */
+                onError={() => {
+                  const id = preview.id;
+                  if (preview.resigned) {
+                    setPreview((p) => (p && p.id === id
+                      ? { ...p, error: "Önizleme adresinin süresi dolmuş. Sayfayı yenileyin ya da \"İndir\"e basın." }
+                      : p));
+                    return;
+                  }
+                  setPreview((p) => (p && p.id === id ? { ...p, loading: true, resigned: true } : p));
+                  void (async () => {
+                    try {
+                      const res = await getDocumentDownloadUrl(id);
+                      setPreview((p) => {
+                        if (!p || p.id !== id) return p;
+                        if ("error" in res) return { ...p, loading: false, error: res.error };
+                        return { ...p, loading: false, url: res.url };
+                      });
+                    } catch (e) {
+                      const message = e instanceof Error ? e.message : "Önizleme yenilenemedi.";
+                      setPreview((p) => (p && p.id === id ? { ...p, loading: false, error: message } : p));
+                    }
+                  })();
+                }}
               />
             </div>
           ) : preview.url ? (
@@ -2051,8 +2327,17 @@ function ItemMenu({ label, actions, busy }: { label: string; actions: MenuAction
  * ortak çerçevede kalır.
  */
 function CreateButton({
-  icon: Icon, label, title, hex, busy, disabled, onPick,
-}: { icon: LucideIcon; label: string; title?: string; hex: string; busy?: boolean; disabled?: boolean; onPick: () => void }) {
+  icon: Icon, label, short, title, hex, busy, disabled, badge = true, onPick,
+}: {
+  icon: LucideIcon; label: string;
+  /** Dar ekranda yazılan kısa ad (bkz. aşağıdaki iki span). */
+  short?: string;
+  title?: string; hex: string;
+  busy?: boolean; disabled?: boolean;
+  /** Artı rozeti — YALNIZ yeni bir kayıt üreten düğmelerde. */
+  badge?: boolean;
+  onPick: () => void;
+}) {
   const name = title ?? `Yeni ${label.toLocaleLowerCase("tr")}`;
   return (
     <button
@@ -2074,15 +2359,23 @@ function CreateButton({
         >
           {busy ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Icon size={14} strokeWidth={2} aria-hidden />}
         </span>
-        <span
-          aria-hidden
-          className="absolute -bottom-1 -right-1 grid size-3.5 place-items-center rounded-full text-white ring-2 ring-surface"
-          style={{ backgroundColor: hex }}
-        >
-          <Plus size={9} strokeWidth={3.5} />
-        </span>
+        {badge && (
+          <span
+            aria-hidden
+            className="absolute -bottom-1 -right-1 grid size-3.5 place-items-center rounded-full text-white ring-2 ring-surface"
+            style={{ backgroundColor: hex }}
+          >
+            <Plus size={9} strokeWidth={3.5} />
+          </span>
+        )}
       </span>
-      <span className="hidden sm:inline">{label}</span>
+      {/* DAR EKRANDA KISA AD. Etiketler telefonda da yazılıyor — ikon tek
+          başına okunmuyordu — ama beş uzun ad 360px'te satır başına ikiye
+          düşüyor, yani üç satır ≈ 145px: içerik görünmeden ekranın büyük
+          kısmı doluyordu. Kısa ad aynı işi bir satırda görür; tam cümle
+          `title`/`aria-label`de olduğu gibi duruyor, bilgi kaybolmuyor. */}
+      <span className="whitespace-nowrap sm:hidden">{short ?? label}</span>
+      <span className="hidden whitespace-nowrap sm:inline">{label}</span>
     </button>
   );
 }
@@ -2101,17 +2394,55 @@ function metaOf(it: DriveItem): string {
  *  olarak yazar ki telefonda da dosyanın ne olduğu görünsün. */
 function ItemName({ item }: { item: DriveItem }) {
   const Icon = item.kind.icon;
+  /* KIRILAN KÜÇÜK GÖRSEL İZ BIRAKMIYORDU. Önizleme adresi sunucuda bir
+     saatlik imzayla üretiliyor; sekme o kadar açık kalınca adres ölüyor ve
+     `alt=""` olduğu için kutucuk SESSİZCE boşalıyordu — ne resim ne hata.
+     Adres ölünce türün ikonu çizilir, satır hiçbir zaman boş kalmaz. */
+  /* KIRILAN ADRESİ TUTUYORUZ, BAYRAK DEĞİL. Bayrak bir daha sıfırlanmıyordu:
+     satırlar `key={it.key}` ile sabit olduğu için `router.refresh()` sunucudan
+     TAZE imza getirse bile aynı ItemName örneği ayakta kalıyor, görsel geri
+     gelmiyordu — ancak F5 ya da klasör değiştirmek kurtarıyordu. Adres
+     değişince koşul kendiliğinden yeniden doğru olur. */
+  const [brokenThumb, setBrokenThumb] = useState<string | null>(null);
   const inner = (
     <>
-      <span
-        className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-[6px]"
-        style={{ backgroundColor: item.kind.hex + "1A", color: item.kind.hex }}
-      >
-        {item.thumbUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={item.thumbUrl} alt="" className="h-full w-full object-cover" />
-        ) : (
-          <Icon size={15} strokeWidth={1.9} aria-hidden />
+      {/* Kilit rozeti kabın DIŞINDA: ikon kutusu `overflow-hidden` ve köşeye
+          binen rozet orada kırpılırdı. */}
+      <span className="relative shrink-0">
+        <span
+          className="grid size-8 place-items-center overflow-hidden rounded-[6px]"
+          style={{ backgroundColor: item.kind.hex + "1A", color: item.kind.hex }}
+        >
+          {item.thumbUrl && brokenThumb !== item.thumbUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={item.thumbUrl}
+              alt=""
+              /* `lazy`: önizleme adresi bugün ORİJİNAL dosyayı gösteriyor
+                 (thumb_path henüz yazılmıyor), yani ekranda olmayan satırların
+                 görselleri de tam boyutuyla iniyordu. */
+              loading="lazy"
+              decoding="async"
+              className="h-full w-full object-cover"
+              onError={() => setBrokenThumb(item.thumbUrl ?? null)}
+            />
+          ) : (
+            <Icon size={15} strokeWidth={1.9} aria-hidden />
+          )}
+        </span>
+        {/* GÖRÜNÜRLÜK HER EKRANDA. Kilit yalnız KART görünümündeki klasör
+            kutucuğunda çiziliyordu; dosya, yazı, tablo ve bağlantı her zaman bu
+            listeden geçtiği için "yalnız yönetici" olduğu HİÇBİR yerde
+            yazmıyordu — anlamanın tek yolu ⋯ menüsünü açıp cümlenin yönüne
+            bakmaktı. Liste görünümü ve arama klasörleri de buraya düşürüyor.
+            Rozet karttakiyle birebir aynı (Tile'ın iconBadge'i). */}
+        {item.restricted && (
+          <span
+            title="Yalnız yönetici görebilir"
+            className="absolute -bottom-1 -right-1 grid place-items-center rounded-full bg-surface p-0.5 shadow-sm ring-1 ring-line"
+          >
+            <Lock size={10} strokeWidth={2.4} className="text-warning" aria-label="Yalnız yönetici görebilir" />
+          </span>
         )}
       </span>
       <span className="min-w-0">

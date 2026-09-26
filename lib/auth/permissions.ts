@@ -21,6 +21,21 @@ export function canManageContacts(role: AppRole): boolean {
   return ADMIN_ROLES.includes(role);
 }
 
+/**
+ * CRM ilişkisine (kind='external') YAZMA — üye de doldurur.
+ *
+ * Sıraç (26.09.2026): "onu da aç." Ayrı bir kapı, çünkü `canManageContacts`
+ * aynı zamanda `lib/actions/contacts.ts`'i yani Pano'da ATANABİLİR EKİP
+ * kayıtlarını koruyor; onu gevşetmek CRM'le birlikte ekip listesini de açardı.
+ *
+ * Silme ve kişi↔sistem hesabı eşleştirmesi `canManageContacts`'ta, yani
+ * yöneticide kalır: bir CRM kaydı birden çok göreve `responsible_contact_id`
+ * ile bağlı olabiliyor ve silinince o bağ sessizce kopuyor (bkz. 20240357).
+ */
+export function canWriteCrmContacts(role: AppRole): boolean {
+  return WRITE_ROLES.includes(role);
+}
+
 export function canCreateTask(role: AppRole): boolean {
   return WRITE_ROLES.includes(role);
 }

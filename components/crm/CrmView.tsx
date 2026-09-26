@@ -46,7 +46,12 @@ interface Props {
   contacts: WorkspaceContact[];
   members: Member[];
   taskCounts: Record<string, number>;
+  /** Yönetici mi — SİLME ve kişi↔hesap eşleştirmesi buna bağlı. */
   isAdmin: boolean;
+  /** Hücrelere YAZABİLİR mi — üye de yazar (26.09.2026, bkz. 20240357).
+   *  Yazma ile silme bilinçli olarak ayrı: bir CRM kaydı birden çok göreve
+   *  bağlı olabiliyor ve silinince o bağ sessizce kopuyor. */
+  canEdit: boolean;
   initialSegment: string;
   /** Hangi KUTUnun içindeyiz (Celebrity, Basın, Outsource…). Boşsa liste tüm
    *  kayıtları gösterir — kutucuk girişi ayrı bir ekranda (CrmCategoryGrid). */
@@ -96,7 +101,7 @@ function displayOf(c: WorkspaceContact, key: CrmFieldKey, memberName: Map<string
 }
 
 export function CrmView({
-  contacts, members, taskCounts, isAdmin, initialSegment,
+  contacts, members, taskCounts, isAdmin, canEdit, initialSegment,
   categoryKey = null, setupRequired = false, setupMessage = null, setupTechnicalDetail = null,
 }: Props) {
   const router = useRouter();
@@ -225,7 +230,7 @@ export function CrmView({
     });
   }
 
-  const canWrite = isAdmin && !setupRequired;
+  const canWrite = canEdit && !setupRequired;
   const segmentScope = category ? category.segments : null;
 
   const emptyState = (
@@ -257,7 +262,7 @@ export function CrmView({
       <ModulePageHeader
         title={category ? `CRM · ${category.label}` : "CRM"}
         rightSlot={
-          isAdmin ? (
+          canWrite ? (
             /* "Yeni ilişki ekle" DÜĞMESİ YOK: kayıt açmanın yeri artık tablonun
                en altındaki boş satır. Düğme, kalkan pencereyi geri çağırırdı. */
             <Badge className="bg-surface-muted text-muted">
@@ -310,7 +315,9 @@ export function CrmView({
             ))}
           </SelectInput>
         )}
-        {canWrite && (
+        {/* EŞLEŞTİRME YÖNETİCİDE: bir CRM kişisinin hangi sistem hesabı
+            olduğuna karar vermek kimlik kararıdır, veri girişi değil. */}
+        {isAdmin && !setupRequired && (
           <Button
             variant="secondary"
             className="sm:ml-auto"
@@ -335,7 +342,7 @@ export function CrmView({
         </div>
       )}
 
-      {canWrite && showMatching && (
+      {isAdmin && showMatching && !setupRequired && (
         <div id="crm-matching-panel">
           <ContactMatchingPanel contacts={matchableContacts} members={members} />
         </div>
@@ -458,6 +465,11 @@ export function CrmView({
                   </td>
                   {canWrite && (
                     <td className="border-b border-hairline px-1 py-0.5 text-right align-middle">
+                      {/* SİLME YÖNETİCİDE (20240357): üye hücreleri doldurur
+                          ama kaydı kaldıramaz — bir CRM kişisi birden çok
+                          göreve bağlı olabiliyor ve silinince o görevlerin
+                          "sorumlu" alanı sessizce boşalıyor. Üyeye gri bir
+                          çöp kutusu göstermek yerine hücre boş kalır. */}
                       {fihrist ? (
                         <Link
                           href="/collection/veri?k=usta"
@@ -467,7 +479,7 @@ export function CrmView({
                         >
                           <Pencil size={14} aria-hidden />
                         </Link>
-                      ) : (
+                      ) : isAdmin ? (
                         <IconButton
                           size="sm"
                           aria-label="Sil"
@@ -478,7 +490,7 @@ export function CrmView({
                         >
                           <Trash2 size={14} />
                         </IconButton>
-                      )}
+                      ) : null}
                     </td>
                   )}
                 </tr>
@@ -561,7 +573,7 @@ export function CrmView({
                       className="flex-1 text-[13.5px] font-medium"
                     />
                   )}
-                  {canWrite && (fihrist ? (
+                  {canWrite && fihrist ? (
                     <Link
                       href="/collection/veri?k=usta"
                       aria-label="Fihrist'te düzenle"
@@ -570,7 +582,7 @@ export function CrmView({
                     >
                       <Pencil size={14} aria-hidden />
                     </Link>
-                  ) : (
+                  ) : isAdmin && !fihrist ? (
                     <IconButton
                       size="sm"
                       aria-label="Sil"
@@ -581,7 +593,7 @@ export function CrmView({
                     >
                       <Trash2 size={14} />
                     </IconButton>
-                  ))}
+                  ) : null}
                 </div>
                 <dl className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-x-2 gap-y-0.5">
                   {CRM_GRID_COLUMNS.filter((col) => col.key !== "name").map((col) => (

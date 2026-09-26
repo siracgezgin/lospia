@@ -80,11 +80,17 @@ export function TaskParticipantsPanel({
   const mine = currentMemberId ? participants.find((p) => p.memberId === currentMemberId) : undefined;
   const hasAnyResponsible = participants.length > 0 || !!responsibleContact;
 
-  function run(action: () => Promise<{ ok?: true; success?: true } | { error: string }>) {
+  function run(
+    action: () => Promise<{ ok?: true; success?: true; warning?: string } | { error: string }>,
+  ) {
     setError(null);
     startTransition(async () => {
       const res = await action();
-      if (res && "error" in res) setError(res.error || "İşlem tamamlanamadı.");
+      if (res && "error" in res) { setError(res.error || "İşlem tamamlanamadı."); return; }
+      /* KISMİ BAŞARI: asıl kayıt tuttu, ikincil yazma tutmadı. Sessizce
+         yutmak, kullanıcının "Bana atanan görevler"de eksik gördüğü satırı
+         açıklamasız bırakırdı. */
+      if (res && "warning" in res && res.warning) setError(res.warning);
     });
   }
 

@@ -94,5 +94,12 @@ export default async function PaymentPage({
     "id" | "name" | "photo_url" | "city" | "country" | "currency" | "lead_time_days" | "min_order_qty" | "is_active"
   >[];
 
-  return <PaymentTable rows={rows} manufacturers={manufacturers} seasons={seasons} />;
+  /* SEZON DEĞİŞİNCE BİLEŞEN YENİDEN MONTE OLUR.
+     Tablo `pricing`/`sizeDist` durumlarını YALNIZ ilk mount'ta prop'tan
+     tohumluyor. SeasonSwitch aynı rotada yalnız `?sezon=` parametresini
+     değiştirdiği için React aynı tipteki bileşeni yerinde koruyor: sunucu yeni
+     sezonun satırlarını gönderse de durum eski sezonunki kalıyor, yeni föyler
+     için hücreler boş görünüyordu ve o boş hâlden kaydetmek diskteki fiyatı
+     siliyordu. `key` sezona bağlanınca durum yeni satırlarla tazeleniyor. */
+  return <PaymentTable key={seasonId ?? "tum"} rows={rows} manufacturers={manufacturers} seasons={seasons} />;
 }

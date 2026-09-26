@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import type { AppRole } from "@/lib/auth/permissions";
 import { toActionErrorMessage } from "@/lib/utils/supabase-errors";
+import { MAX_UPLOAD_BYTES } from "@/lib/utils/compress-image";
 
 // Üretici (Usta) — Aslı Hanım'ın "Cihan Usta, Hakan Usta" isteğinin veri
 // karşılığı. Okuma tüm üyelere açık, yazma yalnız yönetici (RLS 20240307 ile
@@ -274,7 +275,6 @@ export async function ensureManufacturer(
    `{workspace_id}/fihrist/{uuid}` — föylerin altına karışmaz. */
 
 const FIHRIST_BUCKET = "production-sheets";
-const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 const ALLOWED_PHOTO_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif"];
 
 export async function uploadManufacturerPhoto(
@@ -282,7 +282,10 @@ export async function uploadManufacturerPhoto(
 ): Promise<{ url: string; path: string } | { error: string }> {
   const file = formData.get("file");
   if (!(file instanceof File)) return { error: "Dosya bulunamadı." };
-  if (file.size > MAX_PHOTO_BYTES) return { error: "Görsel 5 MB sınırını aşıyor." };
+  /* Tavan istemciyle TEK KAYNAKTAN gelir (4 MB). Burada 5 MB yazıyordu ve
+     Vercel'in 4,5 MB'lık SERT gövde sınırının üstünde kaldığı için bu kontrol
+     canlıda hiç ateşlenemiyordu: istek taşıma katmanında kesiliyordu. */
+  if (file.size > MAX_UPLOAD_BYTES) return { error: `Görsel ${MAX_UPLOAD_BYTES / 1024 / 1024} MB sınırını aşıyor.` };
   if (!ALLOWED_PHOTO_TYPES.includes(file.type)) {
     return { error: "Yalnızca görsel dosyaları (PNG, JPG, WEBP) yüklenebilir." };
   }

@@ -63,15 +63,30 @@ export async function reorderCollectionSheet(
     nextOrder = nextId ? byId.get(nextId) ?? null : null;
   }
 
-  /* Komşunun sırası boş olabilir (föy migration'dan sonra açıldıysa). O
-     durumda listenin ucuna yazmak, kartı kullanıcının bıraktığı yerden
-     kopartmaktan iyidir; bir sonraki sürükleme düzeltir. */
+  /* Komşunun sırası boş olabilir (föy migration'dan sonra açıldıysa, yani
+     siteden hiç çekilmemiş ve elle hiç taşınmamışsa). */
   const STEP = 1024;
   let target: number;
   if (prevOrder !== null && nextOrder !== null) target = (prevOrder + nextOrder) / 2;
   else if (prevOrder !== null) target = prevOrder + STEP;
   else if (nextOrder !== null) target = nextOrder - STEP;
-  else target = 0;
+  else {
+    /* İKİ KOMŞU DA BOŞ. Burada `0` yazılıyordu ve yorum "listenin ucuna"
+       diyordu — ama `0` listenin SONU değil BAŞIdır: sırası olmayan föyler
+       listenin dibinde kümelendiği için, oraya bırakılan kart görünürde en
+       üste fırlıyordu. Kullanıcı "kartı bıraktığım yerde durmuyor" diyordu.
+       Sona yazmak kartı hiç değilse bırakıldığı bölgede tutar; bir sonraki
+       sürükleme dolu bir komşu bulunca tam yerine oturur. */
+    const { data: last } = await supabase
+      .from("production_sheets")
+      .select("list_order")
+      .eq("workspace_id", workspaceId)
+      .not("list_order", "is", null)
+      .order("list_order", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    target = ((last?.list_order as number | null) ?? 0) + STEP;
+  }
 
   /* İki komşu birbirine o kadar yakınsa ki arada temsil edilebilir bir sayı
      kalmadıysa (float tükendi), yazma SESSİZCE yanlış yere düşerdi. Böyle bir

@@ -6,7 +6,6 @@ import { buildCostWorkbook, type CostBomLite } from "@/lib/production/xlsx";
 import { getCategoryTree } from "@/lib/collection/category-tree";
 import { resolveSeasonId } from "@/lib/collection/season";
 import type { ProductionSheet } from "@/types";
-import { istanbulTodayISO } from "@/lib/utils/today";
 
 export const dynamic = "force-dynamic";
 
@@ -70,12 +69,16 @@ export async function GET(req: Request) {
 
   const buffer = await buildCostWorkbook(rows, { bomBySheet, categories, seasonName });
 
-  /* Dosya adındaki tarih de İstanbul günü olmalı: sunucu UTC'de
-     çalıştığı için gece yarısından sonra dün tarihli dosya üretiyordu. */
-  const today = istanbulTodayISO();
+  /* Dosya adında GÜN VE SAAT. Tarih İstanbul günüdür (sunucu UTC'de çalışıyor,
+     gece yarısından sonra dün tarihli dosya üretiyordu); saat 26.09.2026'da
+     eklendi: gün içindeki ikinci indirme aynı adı taşıdığı için tarayıcı
+     "… (1).xlsx" diye kaydediyor, kullanıcı İndirilenler klasöründe eski
+     kopyayı açıp "dosya güncel değil" diyordu. ":" Windows'ta yasak. */
+  const stamp = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Istanbul", dateStyle: "short", timeStyle: "short" })
+    .format(new Date()).replace(":", ".");
   const suffix = seasonName ? ` ${seasonName}` : "";
-  const asciiBase = `Maliyet${suffix}-${today}`.replace(/[^\x20-\x7E]/g, "_").replace(/[\\/:*?"<>|]+/g, "-");
-  const utf8Name = encodeURIComponent(`Maliyet${suffix} ${today}.xlsx`);
+  const asciiBase = `Maliyet${suffix} ${stamp}`.replace(/[^\x20-\x7E]/g, "_").replace(/[\\/:*?"<>|]+/g, "-");
+  const utf8Name = encodeURIComponent(`Maliyet${suffix} ${stamp}.xlsx`);
 
   return new NextResponse(new Uint8Array(buffer), {
     status: 200,

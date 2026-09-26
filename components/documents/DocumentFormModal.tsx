@@ -86,8 +86,21 @@ export function DocumentFormModal({
 
   /* DURUM HERKESE AÇIK (20240344). Eskiden üyeye yalnız taslak/incelemede
      gösteriliyordu çünkü taslak aynı zamanda GİZLEME aracıydı; artık kimin
-     göreceğini yalnız görünürlük söylüyor ve durum bir iş etiketi. */
-  const statusOptions = OFFICE_STATUSES;
+     göreceğini yalnız görünürlük söylüyor ve durum bir iş etiketi.
+
+     "ARŞİVLENDİ" BU KUTUDA YOK. Taslak/Onayda/Onaylandı birer iş etiketi —
+     seçilir, vazgeçilir. Arşiv ise TEK YÖNLÜ bir kapıydı: kaydedildiği an
+     bağlantı Drive listesinden düşüyor, arada bir "arşivdekiler" süzgeci
+     olmadığı ve arşivli kayıt düzenlemeye de kapandığı için kullanıcı durumu
+     geri çeviremiyordu — "kaydettim ama kayboldu". Uyarısız sıradan bir
+     açılır kutu, geri alınamayan bir kayıp üretmemeli; arşivlemenin yeri
+     onay soran ayrı bir eylemdir.
+     Zaten arşivlenmiş bir kayıt (buraya normalde hiç gelmez) kendi değerini
+     görsün diye seçenek o durumda listede kalır; aksi hâlde kutu boş
+     görünür ve kullanıcı kaydı farkında olmadan başka bir duruma çevirirdi. */
+  const statusOptions = OFFICE_STATUSES.filter(
+    (s) => s.key !== "archived" || doc?.status === "archived",
+  );
 
   const titleMissing = errorField === "title";
 

@@ -100,15 +100,66 @@ export function getFriendlyDatabaseSetupMessage(error: AnyError): string | null 
   return SETUP_MESSAGES[detectTopic(error)];
 }
 
+/* ── ŞEMA DIŞI HATALAR DA TÜRKÇEDİR ─────────────────────────────────────────
+   Migration hataları çevriliyordu, geri kalanında Postgres/PostgREST/Storage'ın
+   ham İNGİLİZCE metni doğrudan ekrana düşüyordu: "new row violates row-level
+   security policy for table …" gibi bir cümle kullanıcıya hiçbir şey
+   söylemiyor, üstelik yapabileceği bir şey olduğu hâlde (yetki iste, oturumu
+   tazele, adı değiştir) onu söylemiyor.
+
+   Eşleme KULLANICININ YAPABİLECEĞİ ŞEYE göre yazılır, hatanın adına göre
+   değil. Eşleşmeyen hatada ham metin PARANTEZ İÇİNDE kalır: cümle Türkçe olur
+   ama destek için iz kaybolmaz. */
+const OPERATIONAL_BY_CODE: Record<string, string> = {
+  "23505": "Aynı kayıt zaten var.",
+  "23503": "Bu kayıt başka kayıtlara bağlı; önce onları kaldırmanız gerekiyor.",
+  "23502": "Zorunlu bir alan boş bırakılmış.",
+  "23514": "Girilen değer bu alan için geçerli değil.",
+  "22001": "Girilen metin bu alan için çok uzun.",
+  "22P02": "Girilen değerin biçimi hatalı.",
+  "42501": "Bu işlem için yetkiniz yok.",
+  "57014": "İşlem çok uzun sürdü ve durduruldu. Daha dar bir aralık deneyin.",
+  PGRST116: "Kayıt bulunamadı ya da görme yetkiniz yok.",
+  PGRST301: "Oturumunuzun süresi dolmuş. Sayfayı yenileyip tekrar deneyin.",
+};
+
+const OPERATIONAL_PATTERNS: [RegExp, string][] = [
+  [/row-level security|permission denied|insufficient privilege|not authorized|forbidden|\b403\b/i,
+    "Bu işlem için yetkiniz yok."],
+  [/jwt|invalid token|token .*expire|\b401\b/i,
+    "Oturumunuzun süresi dolmuş. Sayfayı yenileyip tekrar deneyin."],
+  [/failed to fetch|fetch failed|network|econnrefused|enotfound|socket hang up/i,
+    "Bağlantı kurulamadı. Tekrar deneyin."],
+  [/exceeded the maximum allowed size|payload too large|\b413\b/i,
+    "Dosya boyut sınırını aşıyor."],
+  [/already exists|duplicate/i,
+    "Aynı adla bir kayıt zaten var. Adını değiştirip tekrar deneyin."],
+  /* Yalnız gerçek sunucu kodları (50x): geniş `5\d\d` kalıbı "character
+     varying(500)" gibi cümlelere de takılıp yanlış cevap veriyordu. */
+  [/timeout|timed out|service unavailable|\b50[0-4]\b/i,
+    "Sunucu şu an yanıt vermiyor; birkaç dakika sonra tekrar deneyin."],
+];
+
+/** Şema dışı bir hatanın Türkçe karşılığı — eşleşme yoksa ham metni parantezde
+ *  taşıyan genel cümle. Asla boş ya da İngilizce dönmez. */
+function toOperationalMessage(error: AnyError): string {
+  if (error?.code && OPERATIONAL_BY_CODE[error.code]) return OPERATIONAL_BY_CODE[error.code];
+  const msg = messageOf(error);
+  for (const [re, tr] of OPERATIONAL_PATTERNS) if (re.test(msg)) return tr;
+  const raw = (error?.message ?? "").trim();
+  return raw ? `Beklenmeyen bir hata oluştu (${raw})` : "Beklenmeyen bir hata oluştu.";
+}
+
 /**
  * Convenience for server actions: returns the friendly Turkish setup message
- * when the error is a missing-schema one, otherwise the provided fallback (the
- * raw message by default). Ensures a raw English "Could not find…" never leaks.
+ * when the error is a missing-schema one, otherwise the caller's own fallback,
+ * otherwise a Turkish sentence for the actual failure. A raw English message
+ * never reaches the user on its own.
  */
 export function toActionErrorMessage(error: AnyError, fallback?: string): string {
   const friendly = getFriendlyDatabaseSetupMessage(error);
   if (friendly) return friendly;
-  return fallback ?? error?.message ?? "Beklenmeyen bir hata oluştu.";
+  return fallback ?? toOperationalMessage(error);
 }
 
 /**

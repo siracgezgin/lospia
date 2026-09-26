@@ -93,8 +93,10 @@ export function withSizeQty(
   size: string,
   value: string,
 ): SizeDistribution {
+  /* `...sd` önce gelir: `groups` ve ileride eklenecek alanlar korunsun
+     (bkz. normalizeToStandardSizes'daki aynı not). */
   const base: SizeDistribution = sd && Array.isArray(sd.sizes)
-    ? { sizes: [...sd.sizes], rows: sd.rows.map((r) => ({ ...r, values: [...(r.values ?? [])] })) }
+    ? { ...sd, sizes: [...sd.sizes], rows: sd.rows.map((r) => ({ ...r, values: [...(r.values ?? [])] })) }
     : { sizes: [], rows: [] };
 
   const target = canonicalSize(size);
@@ -364,12 +366,69 @@ export function bomTotal(rows: SheetMaterialWithMaterial[]): number {
   return rows.reduce((a, r) => a + bomLineCost(r), 0);
 }
 
+/** Bir föyün hesaplanmış kalem tutarları (bkz. costAmountsOf). */
+export type CostAmounts = {
+  /** Kalem anahtarı → BİRİM tutar. Yalnız DOLU anahtarlar durur. */
+  byKey: Partial<Record<CostItemKey, number>>;
+  /** Adı yazılmış serbest ("Diğer") satırlar — ayrı ayrı okunabilsinler diye
+   *  `byKey.diger`in DIŞINDA durur; toplama iki kez girmezler. */
+  freeRows: { label: string; amount: number }[];
+  /** Birim maliyet: byKey + freeRows. */
+  total: number;
+};
+
 /**
- * Ürünün BİRİM maliyeti = kalemlerin toplamı./**
- * Ürünün BİRİM maliyeti = kalemlerin toplamı.
+ * Bir föyün kalem tutarları — TEK HESAP.
  *
- * Kalem yoksa eski `unit_price` alanına düşer (geri uyum): mevcut föylerde
- * girilmiş tek rakam kaybolmasın.
+ * Aynı kural üç yerde ayrı yazılıydı (föy editörü, maliyet tablosu, Excel) ve
+ * üçü farklı sayı veriyordu: kimi reçetedeki tutarı her satıra ayrı ekliyor,
+ * kimi reçetede DOLU ama kalem satırı OLMAYAN anahtarı (21.09'dan sonra
+ * listeden çıkan "fermuar") sessizce düşürüyordu. Kural artık burada:
+ *
+ *  • Reçeteden gelen tutar elle girilenin YERİNE geçer — ikisi toplanırsa
+ *    maliyet iki katına çıkar.
+ *  • Reçete tutarı ANAHTAR BAŞINA BİR kez girer; aynı anahtardan iki satır
+ *    olması (iki "Diğer") onu iki kez saydırmaz.
+ *  • Kalem satırı olmayan reçete anahtarı da sayılır — föyde parası var.
+ *  • Bölünen kalemler (kalıp, numune) TOPLAM girilir, birim maliyete payı
+ *    düşer; adet yoksa bölme yapılmaz (sonsuz yerine olduğu gibi).
+ */
+export function costAmountsOf(
+  items: CostItem[] | null | undefined,
+  /** Reçeteden gelen kalem tutarları (bkz. bomCostByKey). */
+  bom: Partial<Record<CostItemKey, number>> | null | undefined,
+  /** Üretim adedi — bölünen kalemlerin paydası. 0 ise bölme yapılmaz. */
+  qty: number,
+): CostAmounts {
+  const share = (key: CostItemKey, raw: number) =>
+    DIVIDED_COST_KEYS.has(key) && qty > 0 ? raw / qty : raw;
+  const byKey: Partial<Record<CostItemKey, number>> = {};
+  const freeRows: { label: string; amount: number }[] = [];
+  for (const it of items ?? []) {
+    if (bom?.[it.key] != null) continue;   // reçete elle girilenin yerine geçer
+    /* Elle girilen tutar SEÇİLEN ADEDE göre okunur; reçeteden geleni kademe
+       etkilemez (o zaten metrajdan hesaplanıyor). */
+    const raw = parseMoney(amountForQty(it, qty));
+    if (!raw) continue;
+    const label = (it.label ?? "").trim();
+    if (it.key === "diger" && label) { freeRows.push({ label, amount: share(it.key, raw) }); continue; }
+    byKey[it.key] = (byKey[it.key] ?? 0) + share(it.key, raw);
+  }
+  for (const key of Object.keys(bom ?? {}) as CostItemKey[]) {
+    const v = bom?.[key];
+    if (v == null) continue;
+    byKey[key] = (byKey[key] ?? 0) + share(key, v);
+  }
+  const total = Object.values(byKey).reduce((a, v) => a + (v ?? 0), 0)
+    + freeRows.reduce((a, f) => a + f.amount, 0);
+  return { byKey, freeRows, total };
+}
+
+/**
+ * Ürünün BİRİM maliyeti = kalemlerin toplamı (bkz. costAmountsOf).
+ *
+ * Kalem de reçete de bir tutar vermiyorsa eski `unit_price` alanına düşer
+ * (geri uyum): mevcut föylerde girilmiş tek rakam kaybolmasın.
  */
 export function unitCostOf(
   pricing: ProductionPricing | null | undefined,
@@ -390,25 +449,18 @@ export function unitCostOf(
   qty?: number,
 ): number {
   const fromBom = bom?.length ? bomCostByKey(bom) : null;
-  const items = pricing?.cost_items;
-  const share = (key: CostItemKey, raw: number) =>
-    DIVIDED_COST_KEYS.has(key) && qty && qty > 0 ? raw / qty : raw;
-  if (Array.isArray(items) && items.length) {
-    const sum = items.reduce((acc, it) => {
-      // Reçeteden gelen kalem elle girilenin YERİNE geçer — iki kaynak
-      // toplanırsa maliyet iki katına çıkardı.
-      const bomVal = fromBom?.[it.key];
-      /* Elle girilen tutar SEÇİLEN ADEDE göre okunur; reçeteden geleni
-         kademe etkilemez (o zaten metrajdan hesaplanıyor). */
-      const manual = parseMoney(amountForQty(it, qty ?? 0));
-      return acc + share(it.key, bomVal != null ? bomVal : manual);
-    }, 0);
-    if (sum > 0) return sum;
-  }
-  if (fromBom) {
-    const sum = Object.values(fromBom).reduce((a, v) => a + (v ?? 0), 0);
-    if (sum > 0) return sum;
-  }
+  /* KALEMLER BURADA BİRLEŞTİRİLİR — çağırana bırakılmaz.
+     Aynı föy için üç ayrı sayı çıkıyordu, çünkü kimin ne verdiği farklıydı:
+     Maliyet tablosu ve föy düzenleyici durumlarını `mergeCostItems`'tan
+     geçirilmiş halde tutuyor, Excel (lib/production/xlsx.ts) da öyle
+     çağırıyordu; ama tek sayfa çıktı ve `sheetCost` HAM `cost_items` veriyordu.
+     `cost_items` hiç kaydedilmemiş bir föyde (içe aktarılan föylerin hepsi
+     böyle) birleştirme genel gideri varsayılan 1500 ile dolduruyor, ham hâl
+     doldurmuyordu — ekran bir şey, dosya başka bir şey yazıyordu.
+     `mergeCostItems` etkisizdir (anahtara göre tekilleştirip eksikleri ekler),
+     yani önceden birleştirmiş çağıranlar için sonuç değişmez. */
+  const { total } = costAmountsOf(mergeCostItems(pricing?.cost_items), fromBom, qty ?? 0);
+  if (total > 0) return total;
   return parseMoney(pricing?.unit_price);
 }
 
@@ -493,7 +545,16 @@ export function normalizeToStandardSizes(
       return fallback;
     }),
   }));
-  return { sizes: target, rows };
+  /* TAŞIMAYAN ALAN SİLİNİR. Dönüş nesnesi elle kurulduğu için `groups`
+     (beden grubu satırı — 1/2/3/OS) düşüyordu: föy her açılışta
+     ProductionSheetEditor'ın "grup yoksa varsayılanı ver" kapısına takılıyor,
+     ilk kayıtta varsayılan eşleme diskteki gerçek veriyi eziyordu. Kullanıcının
+     gördüğü şey "giriyorum ama geri dönüyor"du.
+
+     Bilinen alanı tek tek eklemek yerine `...sd` ile yayıyoruz: bu şekilde
+     SizeDistribution'a ileride eklenecek her alan da kendiliğinden korunur —
+     aynı tuzak ikinci kez kurulmasın. */
+  return { ...(sd ?? {}), sizes: target, rows };
 }
 
 /**

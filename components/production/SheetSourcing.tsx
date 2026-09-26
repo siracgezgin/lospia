@@ -5,7 +5,7 @@ import { Check, ImagePlus, Loader2, Plus, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Button, IconButton } from "@/components/ui/Button";
 import { TextInput, SelectInput } from "@/components/ui/Field";
-import { compressImage } from "@/lib/utils/compress-image";
+import { prepareImageUpload, SHEET_IMAGE_TYPES, SHEET_IMAGE_ACCEPT } from "@/lib/utils/compress-image";
 import { uploadProductionSheetImage } from "@/lib/actions/production";
 import type { SourcingEntry, SourcingKind, Supplier } from "@/types";
 
@@ -93,12 +93,13 @@ export function SheetSourcing({
     setError(null);
     setBusyId(id);
     try {
-      let toUpload: File = file;
-      try {
-        toUpload = await compressImage(file, { maxDim: 1600, quality: 0.72 });
-      } catch { /* sıkıştırma başarısızsa orijinali gönder */ }
+      /* Önce küçült, sonra ölç: sıkıştırılamayan dosya (HEIC, kocaman GIF)
+         Server Action gövdesine girerse Vercel 4,5 MB'ta kesiyor ve geriye
+         İngilizce bir taşıma hatası kalıyordu. */
+      const prep = await prepareImageUpload(file, { accept: SHEET_IMAGE_TYPES, maxDim: 1600, quality: 0.72 });
+      if ("error" in prep) { setError(prep.error); return; }
       const fd = new FormData();
-      fd.append("file", toUpload);
+      fd.append("file", prep.file);
       const up = await uploadProductionSheetImage(sheetId, fd);
       if ("error" in up) { setError(up.error); return; }
       patch(id, { photo: { url: up.url, path: up.path } });
@@ -127,7 +128,7 @@ export function SheetSourcing({
       <input
         ref={fileInput}
         type="file"
-        accept="image/*"
+        accept={SHEET_IMAGE_ACCEPT}
         className="sr-only"
         onChange={(e) => void handleFile(e.target.files?.[0])}
       />

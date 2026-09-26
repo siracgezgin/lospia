@@ -1,6 +1,7 @@
 
 import { redirectToSignIn } from "@/lib/auth/session-redirect";
 import { requireModuleMember } from "@/lib/modules/context";
+import { canWriteCrmContacts } from "@/lib/auth/permissions";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { CrmView } from "@/components/crm/CrmView";
 import { CrmCategoryGrid } from "@/components/crm/CrmCategoryGrid";
@@ -34,9 +35,12 @@ export default async function CrmPage({
         ? crmCategoryOfSegment(initialSegment).key
         : null;
 
-  // Herkes görür, yönetici düzenler — CrmView isAdmin=false iken tüm yazma
-  // aksiyonlarını gizler; RLS zaten üye okumasına izin veriyor.
-  const { supabase, workspaceId, isAdmin, gate } = await requireModuleMember();
+  /* HERKES YAZAR, YÖNETİCİ SİLER (26.09.2026, Sıraç: "onu da aç").
+     Üye CRM hücrelerini doldurur; silme ve kişi↔sistem hesabı eşleştirmesi
+     yöneticide kalır. Veritabanı karşılığı 20240357 — o migration'a kadar RLS
+     zaten üyeye tamamen açıktı, yani buradaki ayrım tek başına bir güvenlik
+     sınırı değil, onunla birlikte anlam kazanıyor. */
+  const { supabase, workspaceId, isAdmin, role, gate } = await requireModuleMember();
   if (gate === "login") redirectToSignIn();
   if (gate !== "ok" || !workspaceId) return <AccessDenied />;
 
@@ -177,6 +181,7 @@ export default async function CrmPage({
       members={members}
       taskCounts={taskCounts}
       isAdmin={isAdmin}
+      canEdit={canWriteCrmContacts(role)}
       initialSegment={initialSegment}
       categoryKey={categoryKey}
       setupRequired={setup.setupRequired}

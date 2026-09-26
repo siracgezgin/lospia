@@ -51,7 +51,10 @@ export function WebPushDialog({ onClose }: { onClose: () => void }) {
   const [fileError, setFileError] = useState<string | null>(null);
   const [reading, setReading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [savedCount, setSavedCount] = useState<number | null>(null);
+  /* Saklama sonucu İKİ SAYIDIR. Yalnız "kaç föye saklandı" gösterilirken
+     eksik bir sayı doğru görünüyordu: kısmi başarısızlıkta saklanamayan
+     föyler bir sonraki gönderimde yine dosya isteyecek. */
+  const [saveResult, setSaveResult] = useState<{ saved: number; failed: number } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   /* HEPSİ Mİ, YALNIZ DEĞİŞENLER Mİ.
@@ -98,7 +101,7 @@ export function WebPushDialog({ onClose }: { onClose: () => void }) {
         );
         setSaving(false);
         if ("error" in res) setFileError(res.error);
-        else setSavedCount(res.saved);
+        else setSaveResult({ saved: res.saved, failed: res.failed });
       }
     } catch {
       setFileError("Dosya okunamadı.");
@@ -264,7 +267,8 @@ export function WebPushDialog({ onClose }: { onClose: () => void }) {
               <span className="text-[12.5px] text-muted">
                 <Check size={13} className="mr-1 inline text-success" aria-hidden />
                 {fileName} · {raw?.size} ürün okundu
-                {savedCount !== null && ` · ${savedCount} föye saklandı`}
+                {saveResult && ` · ${saveResult.saved} föye saklandı`}
+                {saveResult?.failed ? <span className="text-warning"> · {saveResult.failed} föye saklanamadı</span> : null}
               </span>
             )}
           </div>

@@ -199,8 +199,9 @@ export function CollectionBrowser({ sheets, isAdmin, isOwner = false, seasons = 
   const [notice, setNotice] = useState<string | null>(null);
 
   /* WEB SİTESİNDEN ÇEK — yönetici. Sonuç SAYIYLA söylenir: kaç föy açıldı,
-     kaçı güncellendi, kaçı neden atlandı. "Tamamlandı" demek yetmez;
-     150 föyün sessizce açılması kimsenin görmediği bir değişiklik olurdu. */
+     kaçı güncellendi, kaçında föydeki metin korundu, kaçı neden atlandı ve
+     kaçı YAZILAMADI. "Tamamlandı" demek yetmez; 150 föyün sessizce açılması
+     kimsenin görmediği bir değişiklik olurdu. */
   const [syncing, startSync] = useTransition();
   function runSync() {
     setActionError(null);
@@ -211,9 +212,26 @@ export function CollectionBrowser({ sheets, isAdmin, isOwner = false, seasons = 
       const parts = [
         res.created ? `${res.created} yeni föy açıldı` : null,
         res.updated ? `${res.updated} föyün web bilgisi güncellendi` : null,
+        /* Korunan emek de sonucun parçası: o metinler sitede HENÜZ YOK, satır
+           "Siteye gönder" davetidir. Çakışanlarda site de değişmiş; hangisinin
+           doğru olduğuna makine karar veremediği için föydeki tutuldu ve adı
+           söyleniyor — kullanıcı o föyü açıp bakabilsin. */
+        res.kept ? `${res.kept} föyde elle yazılan metin korundu (“Siteye gönder” ile yollayın)` : null,
+        res.conflicts.length ? `${res.conflicts.length} föyde site metni de değişmiş, föydeki tutuldu: ${res.conflicts.slice(0, 3).join(", ")}${res.conflicts.length > 3 ? "…" : ""}` : null,
         res.skipped ? `${res.skipped} ürün atlandı (koleksiyonda karşılığı yok: ${res.skippedNames.slice(0, 3).join(", ")}${res.skippedNames.length > 3 ? "…" : ""})` : null,
       ].filter(Boolean);
       setNotice(parts.length ? `Web sitesinden çekildi — ${parts.join(" · ")}.` : "Web sitesinde yeni bir şey yok.");
+      /* KISMİ BAŞARISIZLIK YEŞİL SATIRA KARIŞMAZ. 100 föyün 40'ı yazılamadığında
+         ekran yalnız "60 föyün web bilgisi güncellendi" diyor, kullanıcı hepsi
+         oldu sanıyordu; yazılamayanlar eski web bilgisiyle kalıyor. Kırmızı
+         satır ayrı durur ki tekrar çekilmesi gerektiği görülsün. */
+      if (res.failed) {
+        setActionError(`${res.failed} föy yazılamadı${res.failedReasons[0] ? ` (${res.failedReasons[0]})` : ""} — tekrar çekmek güvenli, kopya oluşmaz.`);
+      }
+      /* ÇEKİŞTEN SONRA İYİMSER SIRA GEÇERSİZ. Yeni föyler sitedeki sırasına
+         göre araya girer; elde kalmış bir anlık görüntü hepsini listenin
+         sonuna iterdi. */
+      setDragOrder(null);
       router.refresh();
     });
   }
@@ -330,13 +348,21 @@ export function CollectionBrowser({ sheets, isAdmin, isOwner = false, seasons = 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, q, selCat, selSub]);
 
+  /** Ekrandaki listeyi belirleyen üçlü — sürükleme anlık görüntüsünün kimliği. */
+  const filterKey = `${selCat || ""}|${selSub || ""}|${q}`;
+
   /* ── ELLE SIRALAMA ────────────────────────────────────────────────────────
      Sıraç (2026-09-17): "Bu sıraya göre değil, bizim istediğimiz şekilde
      olsun." Sıra sunucuda `sort_order` kolonunda (20240349); burada yalnız
      İYİMSER görüntü tutulur — el bırakıldığı anda kart yeni yerinde durur,
      sunucu yanıtı beklenmez. Beklenseydi kart önce eski yerine zıplar, sonra
      doğru yere atlardı. */
-  const [dragOrder, setDragOrder] = useState<string[] | null>(null);
+  /* Anlık görüntü HANGİ SÜZGEÇTE alındığını da taşır. `onDragEnd` kimlikleri
+     o an EKRANDAKİ listeden okuyor: kullanıcı "Accessories › Hats" çipindeyken
+     ya da arama kutusu doluyken tek bir kart sürükleyip sonra "Tümü"ne
+     dönseydi, anlık görüntüde adı geçmeyen bütün föyler sona düşer ve
+     koleksiyon karışmış görünürdü. Süzgeç değişince görüntü YOK SAYILIR. */
+  const [dragOrder, setDragOrder] = useState<{ key: string; ids: string[] } | null>(null);
   const [, startReorder] = useTransition();
   const [, startResetOrder] = useTransition();
   /* Kartı sitedeki sırasına geri bırakır — `manual_order` boşalınca `list_order`
@@ -348,19 +374,22 @@ export function CollectionBrowser({ sheets, isAdmin, isOwner = false, seasons = 
          ızgarası çizilirken görünüyor ve sıralama hatası sessizce kayboluyordu. */
       if (res && "error" in res) { setActionError(`“${sheet.title}” sitedeki sıraya döndürülemedi: ${res.error}`); return; }
       setActionError(null);
+      /* Elle verilen sıra silindi: iyimser görüntünün anlattığı düzen artık
+         yok, taze liste beklenir. */
+      setDragOrder(null);
       router.refresh();
     });
   };
   const canReorder = isAdmin;
 
   const ordered = useMemo(() => {
-    if (!dragOrder) return filtered;
-    const rank = new Map(dragOrder.map((id, i) => [id, i]));
+    if (!dragOrder || dragOrder.key !== filterKey) return filtered;
+    const rank = new Map(dragOrder.ids.map((id, i) => [id, i]));
     /* Sırası bilinmeyen (yeni eklenmiş) föy sona düşer, kaybolmaz. */
     return [...filtered].sort(
       (a, b) => (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER),
     );
-  }, [filtered, dragOrder]);
+  }, [filtered, dragOrder, filterKey]);
 
   /* Fare 5 piksel, parmak 220 ms — Pano'daki eşiklerle AYNI. Daha kısası
      kartı açmak isteyen tıklamayı sürükleme sanıyor. */
@@ -378,7 +407,7 @@ export function CollectionBrowser({ sheets, isAdmin, isOwner = false, seasons = 
     if (from < 0 || to < 0) return;
 
     const next = arrayMove(ids, from, to);
-    setDragOrder(next);
+    setDragOrder({ key: filterKey, ids: next });
 
     /* Sunucuya KOMŞULAR gönderilir, sıra numarası değil: yeni değeri o
        hesaplar (bkz. lib/actions/collection-order.ts). */
@@ -393,9 +422,19 @@ export function CollectionBrowser({ sheets, isAdmin, isOwner = false, seasons = 
         /* Yazma başarısızsa iyimser sıra BIRAKILIR — ekran gerçeği göstersin,
            kullanıcı olmamış bir şeyi olmuş sanmasın. */
         setDragOrder(null);
+        return;
       }
+      /* BAŞARIDA DA BIRAKILIR. Anlık görüntünün ömrü yazma turuyla biter:
+         sunucu `revalidatePath("/collection")` çağırıyor ve sayfa zaten
+         `list_order`'a göre sıralı taze listeyi gönderiyor. Bırakılmadığında
+         donmuş sıra ekranı ele geçiriyordu: "Sitedeki sıraya dön" hiçbir şey
+         olmamış gibi görünüyor, siteden çekilen yeni föyler doğru yerine
+         değil hep listenin sonuna düşüyor — yani ekran bir kez
+         sürükledikten sonra sunucunun gerçek sırasını bir daha hiç
+         göstermiyordu. */
+      setDragOrder(null);
     });
-  }, [ordered, startReorder]);
+  }, [ordered, filterKey, startReorder]);
 
   /* Açık kategorinin düğümü — alt kategori ekleme penceresi bunu ister. */
   const selectedNode = selCat && selCat !== UNCAT ? tree.find((c) => c.key === selCat) ?? null : null;

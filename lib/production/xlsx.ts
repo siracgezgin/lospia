@@ -8,7 +8,7 @@ import type { ProductionSheet, MaterialCategory, CostItemKey } from "@/types";
 import { COLLECTION_TAXONOMY, type CategoryNode } from "@/lib/collection/taxonomy";
 import { labelOf, subLabelOf } from "@/lib/collection/category-tree";
 import {
-  COST_ITEM_DEFS, DIVIDED_COST_KEYS, MATERIAL_COST_KEY, STANDARD_SIZES, amountForQty, canonicalSize, mergeCostItems, orderSizes, parseMoney, productionQtyOf, quantityBySize, totalQuantity,
+  COST_ITEM_DEFS, MATERIAL_COST_KEY, STANDARD_SIZES, canonicalSize, costAmountsOf, formatMoney, mergeCostItems, orderSizes, parseMoney, productionQtyOf, quantityBySize,
 } from "@/lib/collection/cost";
 
 const COLS = 9; // A–I
@@ -541,6 +541,16 @@ type CostRow = Pick<
   "id" | "title" | "product_kind" | "category" | "subcategory" | "pricing" | "size_distribution"
 > & Partial<Pick<ProductionSheet, "product_code" | "producer">>;
 
+/**
+ * Kalem listesinden ÇIKARILMIŞ ama eski föylerde dolu olabilen kalemlerin
+ * başlığı. Aslı Hanım (21.09.2026): "Fermuar yok… Astarı yok", "kalite kontrol
+ * bu dikim fiyatının içinde." Föy ekranı o satırları çizmeye devam ediyor ve
+ * birim maliyete katıyor; dosyada sütunu olmayan tutar sessizce kaybolurdu.
+ */
+const LEGACY_COST_LABEL: Partial<Record<CostItemKey, string>> = {
+  astar: "Astar", fermuar: "Fermuar", kalite_kontrol: "Kalite Kontrol",
+};
+
 /** Maliyet dosyasının ihtiyaç duyduğu sade reçete satırı. */
 export type CostBomLite = {
   consumption: number;
@@ -575,7 +585,10 @@ function bomAmountsOf(list: CostBomLite[] | undefined): Partial<Record<CostItemK
  *  bir kez türetilir. */
 type ComputedCostRow = {
   row: CostRow;
-  amounts: Record<CostItemKey, number>;
+  /** Anahtar → BİRİM tutar. Yalnız DOLU anahtarlar durur (sabit liste değil). */
+  byKey: Partial<Record<CostItemKey, number>>;
+  /** Adı yazılmış serbest ("Diğer") satırlar — dosyada adlarıyla okunsunlar diye. */
+  freeRows: { label: string; amount: number }[];
   /** Kalemlerin toplamı (reçete + elle girilen). */
   itemSum: number;
   /** Birim maliyet: kalem varsa toplamı, yoksa eski tek rakam. */
@@ -585,43 +598,42 @@ type ComputedCostRow = {
   currency: string;
 };
 
+/** Maliyet sayfasının bir kalem sütunu. Sabit kalem listesi + veride dolu
+ *  duran listedışı kalemler + serbest satır ayrıntısı aynı şekle getirilir. */
+type CostCol = {
+  label: string;
+  width: number;
+  /** Para sütunu mu — ayrıntı sütunu metin taşır, biçimi ve hizası farklıdır. */
+  money: boolean;
+  valueOf: (_c: ComputedCostRow) => number | string | null;
+};
+
+/** Adı yazılmış serbest ("Diğer") satırların toplamı. */
+const freeSum = (c: ComputedCostRow) => c.freeRows.reduce((a, f) => a + f.amount, 0);
+
 function computeRows(
   rows: CostRow[],
   bomBySheet: Record<string, CostBomLite[]>,
 ): ComputedCostRow[] {
   return rows.map((row) => {
-    /* EKRANLA AYNI HESAP. Excel'in kendi formülü vardı ve üç yerde ekrandan
-       ayrılıyordu: (1) kademeli fiyatı (`amountForQty`) hiç okumuyordu,
-       (2) KALIP ve NUMUNE'yi adede bölmüyor, toplam tutarı birim maliyete
-       ekliyordu — Aslı Hanım'ın "4500 TL kalıp 50 adete bölünecek" kuralı
-       yalnız föyde işliyordu, (3) paydayı `totalQuantity` ile alıyordu, oysa
-       föy `productionQtyOf` kullanıyor (üstten seçilen adet).
-       Sonuç: indirilen dosya ekrandakinden başka bir birim maliyet yazıyordu.
-       Artık tek kaynak: lib/collection/cost.ts. */
-    const bomRows = bomBySheet[row.id];
-    const bom = bomAmountsOf(bomRows);
+    /* EKRANLA AYNI HESAP. Excel'in kendi formülü vardı ve ekrandan
+       ayrılıyordu: kademeli fiyatı (`amountForQty`) okumuyor, KALIP ve
+       NUMUNE'yi adede bölmüyor, paydayı `totalQuantity` ile alıyordu (föy
+       `productionQtyOf` kullanır). Sonra kural burada İKİNCİ KEZ yazıldı ve
+       yine ayrıştı: reçetede dolu ama kalem satırı olmayan anahtar (21.09'da
+       listeden çıkan "fermuar") ile aynı anahtarlı ikinci satır (iki "Diğer")
+       iki tarafta farklı toplanıyordu. Hesap artık TEK yerde:
+       lib/collection/cost.ts → costAmountsOf. */
+    const bom = bomAmountsOf(bomBySheet[row.id]);
     const qty = productionQtyOf(row.pricing, row.size_distribution);
+    /* Kayıtlı kalemler güncel listeyle birleştirilir: 21.09'da listeden çıkan
+       astar / fermuar / kalite kontrol eski föyde DOLU duruyor ve dosyaya
+       girmeli (aşağıda kendi sütununu açar). */
     const items = mergeCostItems(row.pricing?.cost_items);
-    const amounts = {} as Record<CostItemKey, number>;
-    for (const d of COST_ITEM_DEFS) {
-      if (bom[d.key] != null) {
-        amounts[d.key] = bom[d.key]!;
-        continue;
-      }
-      const it = items.find((x) => x.key === d.key);
-      const raw = it ? parseMoney(amountForQty(it, qty)) : 0;
-      /* Kalem sütunu da BİRİM tutarı yazar: bölünen kalemde toplam yazmak,
-         satırların toplamı ile birim maliyeti birbirinden ayırırdı. */
-      amounts[d.key] = DIVIDED_COST_KEYS.has(d.key) && qty > 0 ? raw / qty : raw;
-    }
-    /* `unitCostOf` ÇAĞRILMIYOR: o tam reçete satırlarını istiyor, Excel ise
-       hafif bir şekil taşıyor (CostBomLite). `amounts` yukarıda aynı kuralları
-       uyguladığı için toplamı zaten o fonksiyonun sonucudur — tipi zorlamak
-       yerine hesabın kendisi tekrarlanmadan toplanıyor. */
-    const itemSum = COST_ITEM_DEFS.reduce((a, d) => a + amounts[d.key], 0);
-    const unit = itemSum > 0 ? itemSum : parseMoney(row.pricing?.unit_price);
+    const { byKey, freeRows, total } = costAmountsOf(items, bom, qty);
+    const unit = total > 0 ? total : parseMoney(row.pricing?.unit_price);
     return {
-      row, amounts, itemSum, unit, qty,
+      row, byKey, freeRows, itemSum: total, unit, qty,
       currency: (row.pricing?.currency ?? "TL").trim() || "TL",
     };
   });
@@ -635,6 +647,36 @@ export async function buildCostWorkbook(
   const { bomBySheet = {}, seasonName = null } = options;
   const tree = options.categories?.length ? options.categories : COLLECTION_TAXONOMY;
   const computed = computeRows(rows, bomBySheet);
+  /* SÜTUNLAR sabit listeye EK olarak, veride dolu duran listedışı kalemleri de
+     taşır (astar / fermuar / kalite kontrol). Böylece "BİRİM MALİYET"
+     hücresindeki SUM formülü ile ekrandaki birim maliyet birbirini tutar. */
+  const defKeys = new Set<CostItemKey>(COST_ITEM_DEFS.map((d) => d.key));
+  const extraKeys = [...new Set(computed.flatMap((c) => Object.keys(c.byKey) as CostItemKey[]))]
+    .filter((k) => !defKeys.has(k) && computed.some((c) => (c.byKey[k] ?? 0) > 0));
+  /* SERBEST SATIRLARIN ADI DA DOSYADA. Föyde "tığ dikişi el işi" ile "agraf el
+     işi" ayrı satırlardır; dosyada tek "DİĞER" hücresinde toplanınca ayrı
+     yazılmış olmaları anlamsızlaşıyordu. Her ada ayrı sütun açmak ürün başına
+     değişen adlarla tabloyu boş sütun tarlasına çevirirdi — ad ve tutar bu
+     yüzden satırın KENDİ hücresinde yazar (sütun yalnız adlı satır varsa
+     açılır). Metin taşıdığı için SUM formülünü etkilemez. */
+  const hasFreeDetail = computed.some((c) => c.freeRows.length > 0);
+  const costCols: CostCol[] = [
+    ...COST_ITEM_DEFS.map((d) => ({
+      label: d.label, width: 13, money: true,
+      // "Diğer" sütunu adlı serbest satırları da toplar; adları yan hücrede.
+      valueOf: (c: ComputedCostRow) =>
+        ((d.key === "diger" ? (c.byKey.diger ?? 0) + freeSum(c) : c.byKey[d.key] ?? 0) || null),
+    })),
+    ...extraKeys.map((k) => ({
+      label: LEGACY_COST_LABEL[k] ?? humanizeKey(k), width: 13, money: true,
+      valueOf: (c: ComputedCostRow) => c.byKey[k] || null,
+    })),
+    ...(hasFreeDetail ? [{
+      label: "Diğer (ayrıntı)", width: 30, money: false,
+      valueOf: (c: ComputedCostRow) =>
+        c.freeRows.map((f) => `${f.label} ${formatMoney(f.amount, c.currency)}`).join(" · ") || null,
+    }] : []),
+  ];
   const wb = newWorkbook();
 
   /* ── 1. sayfa: MALİYET (kalem kalem) ─────────────────────────────────── */
@@ -650,15 +692,18 @@ export async function buildCostWorkbook(
   });
 
   const FIRST_ITEM = 4;                     // D sütunu — ilk maliyet kalemi
-  const unitCol = FIRST_ITEM + COST_ITEM_DEFS.length;
+  const unitCol = FIRST_ITEM + costCols.length;
   const qtyCol = unitCol + 1;
   const totalCol = qtyCol + 1;
   const nCols = totalCol;
   const L = (c: number) => ws.getColumn(c).letter;
+  /* Metin taşıyan kalem sütunu (ayrıntı) sola yaslanır — para sütunlarının
+     sağ hizası okunmaz bir blok yapıyordu. */
+  const textCols = new Set(costCols.map((d, i) => (d.money ? 0 : FIRST_ITEM + i)).filter(Boolean));
 
   ws.columns = [
     { width: 34 }, { width: 14 }, { width: 22 },
-    ...COST_ITEM_DEFS.map(() => ({ width: 13 })),
+    ...costCols.map((d) => ({ width: d.width })),
     { width: 15 }, { width: 9 }, { width: 17 },
   ];
 
@@ -686,7 +731,7 @@ export async function buildCostWorkbook(
   const headRow = r;
   const headers = [
     "ÜRÜN", "ÜRÜN KODU", "KATEGORİ",
-    ...COST_ITEM_DEFS.map((d) => d.label.toLocaleUpperCase("tr-TR")),
+    ...costCols.map((d) => d.label.toLocaleUpperCase("tr-TR")),
     "BİRİM MALİYET", "ADET", "TOPLAM",
   ];
   headers.forEach((h, i) => {
@@ -715,10 +760,10 @@ export async function buildCostWorkbook(
     ws.getCell(r, 2).value = row.product_code ?? "";
     ws.getCell(r, 3).value = [catLabel, subLabel].filter(Boolean).join(" › ");
 
-    COST_ITEM_DEFS.forEach((d, i) => {
+    costCols.forEach((d, i) => {
       const cell = ws.getCell(r, FIRST_ITEM + i);
-      cell.value = c.amounts[d.key] > 0 ? c.amounts[d.key] : null;
-      cell.numFmt = rowMoneyFmt;
+      cell.value = d.valueOf(c);
+      if (d.money) cell.numFmt = rowMoneyFmt;
     });
 
     const unitCell = ws.getCell(r, unitCol);
@@ -746,7 +791,9 @@ export async function buildCostWorkbook(
       const cell = ws.getCell(r, col);
       cell.border = border;
       cell.font = { size: 10.5, bold: col === totalCol };
-      cell.alignment = { vertical: "middle", horizontal: col <= 3 ? "left" : "right", indent: 1 };
+      cell.alignment = {
+        vertical: "middle", horizontal: col <= 3 || textCols.has(col) ? "left" : "right", indent: 1,
+      };
     }
     ws.getRow(r).height = 16;
     r++;

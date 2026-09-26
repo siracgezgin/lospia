@@ -12,7 +12,7 @@ import {
 /* Kartela telefonla çekiliyor — ham dosya 4–6 MB olabiliyor ve Server Action
    gövdesi Vercel'de 4,5 MB'ta kesiliyor. Föy görselleriyle AYNI sıkıştırma
    (ImageUploader, SheetSourcing): 1600 px / 0,72 → tipik 150–400 KB. */
-import { compressImage } from "@/lib/utils/compress-image";
+import { prepareImageUpload, SHEET_IMAGE_TYPES, SHEET_IMAGE_ACCEPT } from "@/lib/utils/compress-image";
 import { assignPersonTones } from "@/lib/design/person-colors";
 import { PersonAvatar } from "@/components/ui/PersonAvatar";
 import { Button, IconButton } from "@/components/ui/Button";
@@ -408,23 +408,28 @@ function KartelaAlbum({
     if (!files?.length) return;
     setErr(null);
     setBusy(true);
+    const next = [...photos];
     try {
-      const next = [...photos];
       for (const file of Array.from(files).slice(0, 12)) {
-        // Yüklemeden ÖNCE tarayıcıda küçült. Hata olursa orijinalle dener.
-        let toUpload: File = file;
-        try {
-          toUpload = await compressImage(file, { maxDim: 1600, quality: 0.72 });
-        } catch { /* sıkıştırma başarısız → orijinal */ }
+        /* Önce küçült, sonra ölç — kapı tek yerde (prepareImageUpload). */
+        const prep = await prepareImageUpload(file, { accept: SHEET_IMAGE_TYPES, maxDim: 1600, quality: 0.72 });
+        if ("error" in prep) { setErr(prep.error); break; }
 
         const fd = new FormData();
-        fd.append("file", toUpload);
+        fd.append("file", prep.file);
         const res = await uploadManufacturerPhoto(fd);
         if ("error" in res) { setErr(res.error); break; }
         next.push({ url: res.url, path: res.path });
       }
-      onChange(next);
+    } catch {
+      /* SESSİZ ÖLÜM YOK. Ağ koptuğunda, oturum düştüğünde ya da gövde sınırı
+         aşıldığında söz reddediliyor; `catch` olmadığı için düğme bir dönüp
+         duruyor, ne fotoğraf ne hata çıkıyordu ("kaydedilmiyor gibi"). */
+      setErr("Fotoğraf yüklenemedi. Tekrar deneyin.");
     } finally {
+      /* O ana kadar YÜKLENENLER KORUNUR: 5. dosyada kopan bir yükleme, önceki
+         dördünü de listeden düşürüp depoda öksüz bırakıyordu. */
+      onChange(next);
       setBusy(false);
       if (fileRef.current) fileRef.current.value = "";
     }
@@ -470,7 +475,7 @@ function KartelaAlbum({
           <input
             ref={fileRef}
             type="file"
-            accept="image/*"
+            accept={SHEET_IMAGE_ACCEPT}
             multiple
             hidden
             onChange={(e) => add(e.target.files)}

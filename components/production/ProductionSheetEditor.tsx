@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
@@ -20,7 +20,6 @@ import { MoneyInput, SelectInput, TextArea as UiTextArea, TextInput } from "@/co
 import { Badge } from "@/components/ui/Badge";
 import { SendToManufacturer } from "./SendToManufacturer";
 import { ManufacturerAccess, type PortalLinkRow } from "./ManufacturerAccess";
-import Link from "next/link";
 import { BackLink } from "@/components/modules/BackLink";
 import { ManufacturerPicker } from "./ManufacturerPicker";
 import { ImageUploader } from "./ImageUploader";
@@ -558,13 +557,24 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
      "Föye dön", mobil çekmece) HİÇ çalışmaz — kaybın en olası hâli buydu.
      Bağlantı tıklaması yakalama aşamasında kesilir, kullanıcı onaylarsa
      gezinme devam eder. */
+  /* Kirlilik bir de REF'te tutulur. "Excel indir"/"Tek sayfa çıktı" bekleyen
+     kaydı diske yazıp HEMEN `window.location` ile çıkıyor; React o arada
+     yeniden çizmediği için efektin kapanışı geç kalıyor ve tarayıcı boşuna
+     "sayfadan ayrılmak istiyor musunuz?" diye soruyordu. */
+  const dirtyRef = useRef(dirty);
+  /* Render sırasında ref YAZILMAZ (React Compiler kuralı: "Cannot access refs
+     during render") — eşitleme efekte alındı. `latestForm` ile aynı desen. */
+  useEffect(() => { dirtyRef.current = dirty; }, [dirty]);
+
   useEffect(() => {
     if (!dirty) return;
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!dirtyRef.current) return;
       e.preventDefault();
       e.returnValue = "";
     };
     const onClickCapture = (e: MouseEvent) => {
+      if (!dirtyRef.current) return;
       // Yeni sekmede açma / indirme / farklı düğme: sayfa yerinde kalır.
       if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       const target = e.target instanceof Element ? e.target : null;
@@ -773,22 +783,93 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
    * YENİ FÖYDE ÇALIŞMAZ: otomatik kayıt orada boş bir föy yaratırdı. Yeni föy
    * ilk kez elle kaydedilir, sonrası kendiliğinden gider.
    */
+  /* UÇUŞ SIRASINDA YAZILAN HARF KAYBOLMAZ (26.09.2026 denetimi).
+     Önceki hâlde iki kusur vardı ve birlikte sessiz veri kaybı üretiyordu:
+
+       1. `isSaving` erken çıkışta kullanılıyor ama BAĞIMLILIK LİSTESİNDE yoktu
+          (üstteki eslint-disable bunu da örtüyordu). Kayıt uçarken yazmaya
+          devam edilince efekt yeniden koşuyor, eski zamanlayıcıyı temizliyor,
+          `isSaving` true olduğu için çıkıyor ve YENİ ZAMANLAYICI KURMUYORDU.
+       2. Kayıt dönünce `setDirty(false)` KOŞULSUZ çalışıyordu — oysa `form` o
+          esnada değişmişti. Sonuç: ekranda "Kaydedildi" tiki, diskte eski hâl.
+
+     Çözüm, "kirli mi?" sorusunu KAYDEDİLEN ANLIK GÖRÜNTÜYE bağlamak: kayıt
+     dönünce o sırada ekranda ne varsa onunla karşılaştırılır. Fark varsa dirty
+     açık kalır, `isSaving` bağımlılıkta olduğu için efekt yeniden koşar ve yeni
+     hâli yazar. Böylece "Kaydedildi" yalnız gerçekten temizken görünür. */
+  const latestForm = useRef(form);
+  useEffect(() => { latestForm.current = form; }, [form]);
+  /** Diske yazılmış son hâl. */
+  const savedSnap = useRef<string>("");
+  /** Sunucunun reddettiği hâl — aynı içerikle sonsuz tur atılmasın. */
+  const failedSnap = useRef<string>("");
+  /** Bekleyen 1200 ms'lik zamanlayıcı — indirmeden önce iptal edilebilsin. */
+  const saveTimer = useRef<number | null>(null);
+  /* YAZMALAR SIRAYLA GİDER. İndirmeden önceki elle kayıt, uçmakta olan otomatik
+     kaydı geçerse eski hâl yeninin üstüne düşer. Zincir hem sırayı korur hem de
+     "bekleyen ne varsa bitsin" sorusunu tek `await`e indirir. */
+  const writes = useRef<Promise<unknown>>(Promise.resolve());
+  const queueWrite = useCallback((id: string, payload: ProductionSheetInput) => {
+    const p = writes.current.then(() => updateProductionSheet(id, payload));
+    writes.current = p.catch(() => undefined);
+    return p;
+  }, []);
+
   useEffect(() => {
     if (!dirty || isNew || !sheet?.id || isSaving) return;
     if (!form.title.trim()) return;      // başlıksız föy kaydedilemez
+    const snap = JSON.stringify(form);
+    /* Aynı içerik zaten diskte ya da az önce reddedildi: tur açma.
+       (İkincisi olmazsa `isSaving` bağımlılığı kalıcı hatada döngü kurardı.) */
+    if (snap === savedSnap.current || snap === failedSnap.current) return;
     const t = window.setTimeout(() => {
+      saveTimer.current = null;
       startSave(async () => {
-        const res = await updateProductionSheet(sheet.id, form);
-        if ("error" in res) { setError(res.error); return; }
-        setDirty(false);
+        const res = await queueWrite(sheet.id, form);
+        if ("error" in res) { setError(res.error); failedSnap.current = snap; return; }
+        savedSnap.current = snap;
+        failedSnap.current = "";
+        const halaKirli = JSON.stringify(latestForm.current) !== snap;
+        setDirty(halaKirli);
+        if (halaKirli) return;   // yazmaya devam ediliyor — "Kaydedildi" demek yanlış olur
         setSaved(true);
         window.setTimeout(() => setSaved(false), 2000);
       });
     }, 1200);
-    return () => window.clearTimeout(t);
+    saveTimer.current = t;
+    return () => { window.clearTimeout(t); if (saveTimer.current === t) saveTimer.current = null; };
     // `form` her tuşta değişiyor; zamanlayıcı sıfırlanır ve yazım bitince yazar.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form, dirty, isNew, sheet?.id]);
+  }, [form, dirty, isNew, sheet?.id, isSaving, queueWrite]);
+
+  /**
+   * İNDİRMEDEN ÖNCE BEKLEYEN KAYDI DİSKE YAZ.
+   *
+   * "Excel indir" ve "Tek sayfa çıktı" dosyayı SUNUCUDA, veritabanındaki hâlden
+   * üretiyor. Son tuştan 1200 ms geçmeden basılınca otomatik kayıt henüz
+   * yazmamış oluyordu: dosyanın İÇİ eski değeri taşıyordu ve `updated_at`
+   * değişmediği için dosyanın ADI da bir öncekiyle aynı çıkıyordu — tarayıcı
+   * "… (1).xlsx" diye kaydediyor, kullanıcı İndirilenler'de ilk kopyayı açıp
+   * "güncel şeklinde indirmiyor" diyordu.
+   *
+   * Hata fırlatır: DownloadLink indirmeyi iptal edip mesajı gösterir.
+   */
+  async function flushPendingSave() {
+    if (saveTimer.current !== null) { window.clearTimeout(saveTimer.current); saveTimer.current = null; }
+    if (isNew || !sheet?.id || !dirtyRef.current) return;
+    await writes.current;                 // uçmakta olan kayıt önce insin
+    const snap = JSON.stringify(latestForm.current);
+    if (snap === savedSnap.current) return;   // diskteki hâl zaten bu
+    const res = await queueWrite(sheet.id, latestForm.current);
+    /* Sebep föyün kendi hata şeridinde kalıcı durur; indirmeye basan kullanıcıya
+       da neden bir şey inmediği tek cümleyle söylenir. */
+    if ("error" in res) { setError(res.error); throw new Error("Kaydedilemediği için indirme durduruldu."); }
+    savedSnap.current = snap;
+    failedSnap.current = "";
+    /* Kayıt sırasında yazmaya devam edilmiş olabilir; "temiz" yalnız o zaman. */
+    const halaKirli = JSON.stringify(latestForm.current) !== snap;
+    dirtyRef.current = halaKirli;
+    setDirty(halaKirli);
+  }
 
   function handleSave() {
     setError(null);
@@ -800,12 +881,26 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
       return;
     }
     startSave(async () => {
-      const res = isNew ? await createProductionSheet(form) : await updateProductionSheet(sheet!.id, form);
+      // Elle kayıt da AYNI ZİNCİRDEN geçer: uçmakta olan otomatik kaydın
+      // üstüne düşerse eski hâl yeniyi ezerdi.
+      const res = isNew ? await createProductionSheet(form) : await queueWrite(sheet!.id, form);
       if ("error" in res) { setError(res.error); return; }
-      // Kaydedilmemiş değişiklik uyarısı kalksın: föy artık diskte.
-      setDirty(false);
+      const snap = JSON.stringify(form);
+      savedSnap.current = snap;
+      failedSnap.current = "";
+      /* ELLE KAYIT DA KOŞULSUZ TEMİZ İŞARETLEMEZ. Otomatik kayıtta kapatılan
+         tuzağın aynısı buradaydı: kullanıcı Kaydet'e basıp sunucu turu
+         sürerken yazmaya devam ederse, tur dönünce `dirty` sıfırlanıyor ve
+         efekt yeni zamanlayıcı kurmuyordu — o harfler diske hiç gitmiyordu.
+         Diske yazılan hâl ile ekrandaki hâl karşılaştırılır. */
+      const halaKirli = JSON.stringify(latestForm.current) !== snap;
+      dirtyRef.current = halaKirli;
+      setDirty(halaKirli);
       if (isNew && "id" in res) {
         router.replace(`/production/${res.id}`);
+      } else if (halaKirli) {
+        /* Yazmaya devam ediliyor — "Kaydedildi" demek yanlış olur; otomatik
+           kayıt kaldığı yerden devam edip yeni hâli yazacak. */
       } else {
         setSaved(true);
         window.setTimeout(() => setSaved(false), 2600);
@@ -941,6 +1036,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
           {!isNew && sheet && (
             <DownloadLink
               href={`/production/${sheet.id}/print`}
+              beforeDownload={flushPendingSave}
               what={`“${sheet.title}” föyünün çıktısı`}
               label="Çıktı al"
               title="Föyün tamamı tek A4 sayfada — yazdır veya PDF olarak kaydet"
@@ -979,6 +1075,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
           {!isNew && sheet && (
             <DownloadLink
               href={`/production/${sheet.id}/export`}
+              beforeDownload={flushPendingSave}
               what={`“${sheet.title}” föyünün Excel dosyası`}
               title="Föyü Excel (.xlsx) olarak indir"
               className={secondaryBtnCls}

@@ -5,15 +5,12 @@ import { ImagePlus, Loader2, Trash2 } from "lucide-react";
 import {
   uploadProductionSheetImage, deleteProductionSheetImage,
 } from "@/lib/actions/production";
-import { compressImage } from "@/lib/utils/compress-image";
+import { prepareImageUpload, SHEET_IMAGE_TYPES, SHEET_IMAGE_ACCEPT } from "@/lib/utils/compress-image";
 import { cn } from "@/lib/utils/cn";
 import { useConfirm } from "@/components/ui/useConfirm";
 import { Overlay } from "@/components/ui/Overlay";
 import { Button, IconButton } from "@/components/ui/Button";
 import type { ProductionImage, ProductionImageSection } from "@/types";
-
-// Orijinal (sıkıştırma öncesi) dosya için üst sınır. UI'de "maks 5 MB" yazıyor.
-const MAX_ORIGINAL_BYTES = 5 * 1024 * 1024;
 
 interface Props {
   sheetId: string; // "new" olabilir
@@ -59,29 +56,27 @@ export function ImageUploader({
     const added: ProductionImage[] = [];
     try {
       for (const file of Array.from(files)) {
-        // Orijinal dosya boyutu sınırı — sıkıştırma öncesi kontrol (10MB gibi
-        // büyük dosyalar reddedilsin).
-        if (file.size > MAX_ORIGINAL_BYTES) {
-          setErr(`"${file.name}" 5 MB sınırını aşıyor (${(file.size / 1024 / 1024).toFixed(1)} MB). Daha küçük bir görsel seçin.`);
-          continue;
-        }
-        // Yüklemeden ÖNCE tarayıcıda sıkıştır — depoda az yer kaplasın ve Server
-        // Action gövde limitine takılmasın. Hata olursa orijinal dosyayla dener.
-        let toUpload: File = file;
-        try {
-          toUpload = await compressImage(file, { maxDim: 1600, quality: 0.72 });
-        } catch { /* sıkıştırma başarısız → orijinal */ }
+        /* Önce KÜÇÜLT, sonra ölç. Eskiden sıra tersti: 6 MB'lık bir telefon
+           fotoğrafı, sıkışınca 300 KB olacakken, "5 MB sınırını aşıyor" diye
+           geri çevriliyordu. Çeviremediği dosyayı (HEIC) da kapı burada, ne
+           yapılacağını söyleyerek durdurur. */
+        const prep = await prepareImageUpload(file, { accept: SHEET_IMAGE_TYPES, maxDim: 1600, quality: 0.72 });
+        if ("error" in prep) { setErr(prep.error); continue; }
 
         const fd = new FormData();
-        fd.append("file", toUpload);
+        fd.append("file", prep.file);
         const res = await uploadProductionSheetImage(sheetId, fd);
         if ("error" in res) { setErr(res.error); continue; }
         added.push({ url: res.url, path: res.path, section });
       }
-      if (added.length) onChange([...images, ...added]);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Görsel yüklenemedi. Lütfen tekrar deneyin.");
     } finally {
+      /* BAŞARILI YÜKLEMELER HER HÂLÜKÂRDA FÖYE GİRER. Bu satır try'ın içindeyken
+         5 dosyalık bir seçimde 5.'si koparsa (ağ, oturum, dağıtım sonrası
+         "Failed to find Server Action") akış catch'e atlıyor, onChange hiç
+         çağrılmıyor ve depoya çıkmış ilk 4 fotoğraf öksüz kalıyordu. */
+      if (added.length) onChange([...images, ...added]);
       setBusy(false);
       if (inputRef.current) inputRef.current.value = "";
     }
@@ -230,7 +225,7 @@ export function ImageUploader({
             >
               {busy ? <Loader2 size={26} className="animate-spin" aria-hidden /> : <ImagePlus size={26} aria-hidden />}
               <span className="text-[13.5px] font-medium">{busy ? "Yükleniyor…" : "Teknik çizim / görsel yükle"}</span>
-              <span className="text-[12px]">PNG, JPG · maks 5 MB</span>
+              <span className="text-[12px]">PNG, JPG · fotoğraf otomatik küçültülür</span>
             </button>
           )}
         </div>
@@ -289,7 +284,7 @@ export function ImageUploader({
       <input
         ref={inputRef}
         type="file"
-        accept="image/*"
+        accept={SHEET_IMAGE_ACCEPT}
         multiple={variant === "gallery"}
         className="hidden"
         onChange={(e) => handleFiles(e.target.files)}

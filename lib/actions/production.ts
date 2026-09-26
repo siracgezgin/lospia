@@ -8,6 +8,7 @@ import { toActionErrorMessage } from "@/lib/utils/supabase-errors";
 import { logWorkspaceActivity, WORKSPACE_ACTIONS } from "@/lib/activity/log-workspace-activity";
 import { sendEmail } from "@/lib/email/send-email";
 import { buildSheetEmail } from "@/lib/production/sheet-email";
+import { MAX_UPLOAD_BYTES } from "@/lib/utils/compress-image";
 import type { ProductionSheet, SheetMaterialWithMaterial } from "@/types";
 
 // Üretim Föyü — yapısal üretim föyleri (production_sheets). Her ürün bir föy;
@@ -358,9 +359,26 @@ export async function updateProductionSheet(
     .eq("workspace_id", ctx.workspaceId);
 
   if (error) return { error: toActionErrorMessage(error) };
-  revalidatePath("/production");
-  revalidatePath("/collection");
-  revalidatePath(`/production/${sheetId}`);
+
+  /* revalidatePath BİLEREK ÇAĞRILMIYOR — tablo editöründeki kararın aynısı
+     (lib/actions/sheets.ts, updateOperationSpreadsheet).
+
+     Föy son tuştan 1,2 saniye sonra kendiliğinden kaydediyor. Sunucu
+     eyleminden yapılan HER revalidatePath, hangi yol verilirse verilsin,
+     "bu eylem tazeledi" bayrağını kaldırıyor: bakılan sayfa anında sunucuda
+     yeniden çiziliyor ve istemcinin gezinme önbelleği baştan siliniyor
+     (Next 16 belgesi: "Server Functions: Updates the UI immediately (if
+     viewing the affected path). Currently, it also causes all previously
+     visited pages to refresh"). Föy sayfası bir çizimde on bir ayrı Supabase
+     turu atıyor — yazarken her duraksamada hepsi boşuna tekrarlanıyor,
+     "Kaydedildi" rozeti gecikiyordu.
+
+     Kaybedilen bir şey yok: föyün doğruluk kaynağı zaten tarayıcıdaki form,
+     "Kaydet"e basan yol router.refresh() ile sayfayı kendisi tazeliyor ve
+     föyü GÖSTEREN yüzeyler — /collection ile /production/[id] — force-dynamic
+     olduğu için bir sonraki gezinmede zaten sunucudan taze geliyor. (/production
+     artık yalnız /collection'a yönlendiren bir ara duraktır; ona verilen
+     revalidatePath baştan beri boşa çalışıyordu.) */
   return { ok: true };
 }
 
@@ -670,7 +688,6 @@ export async function updateProductionSheetImages(
 // Yol: production-sheets/{workspace_id}/{sheet_id}/{uuid}. Public bucket → render
 // publicUrl ile. Yükleme/silme RLS ile workspace üyesine kısıtlı.
 const IMAGE_BUCKET = "production-sheets";
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
 const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif"];
 
 export async function uploadProductionSheetImage(
@@ -679,7 +696,11 @@ export async function uploadProductionSheetImage(
 ): Promise<{ url: string; path: string } | { error: string }> {
   const file = formData.get("file");
   if (!(file instanceof File)) return { error: "Dosya bulunamadı." };
-  if (file.size > MAX_IMAGE_BYTES) return { error: "Görsel 5 MB sınırını aşıyor." };
+  /* Tavan istemciyle TEK KAYNAKTAN gelir (4 MB). Burada 5 MB yazıyordu ve
+     Vercel'in 4,5 MB'lık SERT gövde sınırının üstünde kaldığı için bu kontrol
+     canlıda hiç ateşlenemiyordu: istek taşıma katmanında kesiliyor, kullanıcı
+     bu Türkçe cümle yerine İngilizce bir ağ hatası görüyordu. */
+  if (file.size > MAX_UPLOAD_BYTES) return { error: `Görsel ${MAX_UPLOAD_BYTES / 1024 / 1024} MB sınırını aşıyor.` };
   if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
     return { error: "Yalnızca görsel dosyaları (PNG, JPG, WEBP) yüklenebilir." };
   }

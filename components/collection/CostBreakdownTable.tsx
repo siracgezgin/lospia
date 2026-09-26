@@ -95,6 +95,13 @@ function pricingPayload(p: ProductionPricing) {
     /* Fatura alanları Ödeme Tablosu'nda yaşar ama AYNI `pricing` JSON'unda
        durur; sunucu bu alanı bütün olarak değiştirdiği için burada taşınmazsa
        maliyet hücresinden çıkıldığı anda fatura kaydı silinirdi. */
+    /* ADET KADEMELERİ de taşınır. Aynı tuzak: föyde elle açılan kademeler
+       (50 / 100 / 250) burada yazılmadığı için, Maliyet ya da Ödeme
+       tablosunda HERHANGİ bir hücreye girip çıkmak diskteki diziyi siliyordu.
+       Şemada `optional` olduğu için doğrulama da uyarmıyordu; parmak izi bu
+       eksik şekilden üretildiği için karşılaştırma da "değişti" demiyordu —
+       kayıp hiçbir yerde görünmüyordu. */
+    qty_tiers: p.qty_tiers,
     invoice_no: p.invoice_no ?? "",
     invoice_amount: p.invoice_amount ?? "",
   };
@@ -148,6 +155,16 @@ export function CostBreakdownTable({ rows, seasons = [], bomBySheet = {} }: Prop
     return m;
   });
   const savedSnapshots = useRef<Record<string, string>>(initialSnapshots);
+  /* UÇMAKTA OLAN YAZMALAR. "Excel indir" dosyayı sunucuda VERİTABANINDAN
+     üretiyor; hücreden yeni çıkılmışsa (blur ile açılan tur) o tutar henüz
+     diskte olmayabilir ve dosyaya eski değer girerdi. Zincir "bekleyen ne varsa
+     bitsin"i tek `await`e indirir; turlar birbirini beklemez, yalnız topluca
+     beklenir. Zincir asla reddetmez — hata mesajını zaten çağıran gösteriyor. */
+  const writes = useRef<Promise<unknown>>(Promise.resolve());
+  function trackWrite<T>(p: Promise<T>) {
+    writes.current = writes.current.then(() => p).catch(() => undefined);
+    return p;
+  }
   const params = useSearchParams();
   /* Excel indirmesi EKRANDAKİ sezonu izler: ekran süzülüyken tüm sezonları
      indirmek "tablo ile dosya tutmuyor" demekti. */
@@ -279,7 +296,7 @@ export function CostBreakdownTable({ rows, seasons = [], bomBySheet = {} }: Prop
     if (savedSnapshots.current[`qty:${id}`] === snapshot) return;
     setSavingId(id);
     startSave(async () => {
-      const res = await updateProductionSheetSizeDistribution(id, sd);
+      const res = await trackWrite(updateProductionSheetSizeDistribution(id, sd));
       setSavingId(null);
       if ("error" in res) setSaveError("Adet kaydedilemedi. İnternet bağlantınızı kontrol edip tekrar deneyin.");
       else {
@@ -342,13 +359,27 @@ export function CostBreakdownTable({ rows, seasons = [], bomBySheet = {} }: Prop
   }
 
   function save(id: string) {
-    const payload = pricingPayload(pricing[id] ?? {});
+    /* DURUMDA KARŞILIĞI OLMAYAN SATIRA YAZMA.
+       `pricing` yalnız ilk mount'ta prop'tan tohumlanıyor. Sezon değiştirmek
+       (SeasonSwitch → router.push(?sezon=…)) aynı rotada yalnız searchParams'ı
+       değiştirdiği için React bileşeni yeniden MONTE ETMİYOR: sunucu yeni
+       sezonun satırlarını gönderiyor, durum eskisinde kalıyor ve yeni föyler
+       için `pricing[id]` undefined oluyor. Bu hâldeyken `pricingPayload({})`
+       tamamen BOŞ bir gövde kurar; sunucu `pricing` JSON'unu bütün olarak
+       değiştirdiği için o föyün kumaş/dikim/kalıp tutarları, üretim adedi ve
+       fatura bilgisi tek bir hücreye girip çıkmakla silinirdi.
+       (Beden tarafı bu kapıyı zaten alıyordu — bkz. saveSizeDist.)
+       Kök neden ayrıca sayfada `key` ile kapatıldı: sezon değişince bileşen
+       yeniden monte olur ve durum tazelenir. Bu kapı ikinci emniyet. */
+    const cur = pricing[id];
+    if (!cur) return;
+    const payload = pricingPayload(cur);
     // Dokunulmamış hücreden çıkmak yazma turu açmasın (bkz. saveQty).
     const snapshot = JSON.stringify(payload);
     if (savedSnapshots.current[`price:${id}`] === snapshot) return;
     setSavingId(id);
     startSave(async () => {
-      const res = await updateProductionSheetPricing(id, payload);
+      const res = await trackWrite(updateProductionSheetPricing(id, payload));
       setSavingId(null);
       if ("error" in res) setSaveError("Maliyet kaydedilemedi. İnternet bağlantınızı kontrol edip tekrar deneyin.");
       else {
@@ -386,6 +417,7 @@ export function CostBreakdownTable({ rows, seasons = [], bomBySheet = {} }: Prop
                  maliyet dosyası sistemin dışına çıkıyor. */
               <DownloadLink
                 href={exportHref}
+                beforeDownload={() => writes.current}
                 what="Maliyet tablosu"
                 title="Maliyet tablosunu Excel olarak indir"
                 className={secondaryBtnCls}

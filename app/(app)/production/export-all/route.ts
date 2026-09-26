@@ -7,7 +7,6 @@ import { buildAllProductionSheetsWorkbook } from "@/lib/production/xlsx";
 import { logWorkspaceActivity, WORKSPACE_ACTIONS } from "@/lib/activity/log-workspace-activity";
 import { resolveSeasonId } from "@/lib/collection/season";
 import type { ProductionSheet } from "@/types";
-import { istanbulTodayISO } from "@/lib/utils/today";
 
 export const dynamic = "force-dynamic";
 
@@ -73,11 +72,15 @@ export async function GET(req: Request) {
 
   const buffer = await buildAllProductionSheetsWorkbook(sheets, memberNames);
 
-  /* Dosya adındaki tarih de İstanbul günü olmalı: sunucu UTC'de
-     çalıştığı için gece yarısından sonra dün tarihli dosya üretiyordu. */
-  const today = istanbulTodayISO();
-  const asciiName = `Uretim-Foyleri-${today}.xlsx`;
-  const utf8Name = encodeURIComponent(`Üretim Föyleri ${today}.xlsx`);
+  /* Dosya adında GÜN VE SAAT. Tarih İstanbul günüdür (sunucu UTC'de çalışıyor,
+     gece yarısından sonra dün tarihli dosya üretiyordu); saat 26.09.2026'da
+     eklendi: gün içindeki ikinci indirme aynı adı taşıdığı için tarayıcı
+     "… (1).xlsx" diye kaydediyor, kullanıcı İndirilenler klasöründe eski
+     kopyayı açıp "dosya güncel değil" diyordu. ":" Windows'ta yasak. */
+  const stamp = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Istanbul", dateStyle: "short", timeStyle: "short" })
+    .format(new Date()).replace(":", ".");
+  const asciiName = `Uretim-Foyleri ${stamp}.xlsx`;
+  const utf8Name = encodeURIComponent(`Üretim Föyleri ${stamp}.xlsx`);
 
   return new NextResponse(new Uint8Array(buffer), {
     status: 200,

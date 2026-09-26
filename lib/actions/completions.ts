@@ -18,6 +18,26 @@ const SAVE_FAILED =
   "Sorumlu kişiler kaydedilemedi. Lütfen tekrar deneyin; sorun sürerse yöneticinize bildirin.";
 const REMOVE_FAILED =
   "Sorumlu kişi çıkarılamadı. Lütfen tekrar deneyin; sorun sürerse yöneticinize bildirin.";
+/* YAZMANIN SONUCU OKUNUR. Supabase bir UPDATE hiç satıra dokunmasa da hata
+   döndürmez; dönen `error` de hiç okunmuyordu. Geçici bir Postgres/ağ
+   arızasında ya da satır araya silindiğinde kutu sessizce hiçbir şey yapmıyor,
+   buna karşılık görev geçmişine "tamamladı" satırı ve yöneticilere "kontrol
+   bekliyor" bildirimi yine de gidiyordu — günlük ile gerçek durum ayrışıyordu.
+   Kural aşağıda setTaskParticipants'ta zaten yazılı: yazma tutmadan günlüğe
+   yazma. */
+const COMPLETION_FAILED =
+  "Tamamlama kaydedilemedi. Lütfen tekrar deneyin; sorun sürerse yöneticinize bildirin.";
+const COMPLETION_GONE =
+  "Bu görevdeki sorumluluk kaydı bulunamadı — sayfayı yenileyip tekrar deneyin.";
+/* KISMİ BAŞARI KENDİ CÜMLESİNİ İSTER. Aşağıdaki iki durumda asıl kayıt
+   (katılımcı satırları / işaretleme) TUTTU, yalnız ardından gelen ikincil
+   yazma tutmadı. "Kaydedilemedi" demek ekranla çelişir: revalidatePath zaten
+   koştuğu için panel yeni hâli gösteriyor, kullanıcı doğru olanı görüp yanlış
+   olanı okuyordu. */
+const MIRROR_FAILED =
+  "Sorumlular kaydedildi; “Bana atanan görevler” listesi güncellenemedi — sayfayı yenileyin.";
+const REVIEW_MOVE_FAILED =
+  "İşaretleme kaydedildi; görevin durumu güncellenemedi — sayfayı yenileyip tekrar deneyin.";
 const ACTIVE_STATUSES = ["backlog", "ready", "in_progress", "blocked"];
 const isAdmin = (r: AppRole) => r === "owner" || r === "admin";
 
@@ -41,14 +61,21 @@ async function getCtx(sb: SB) {
  *  • all participants complete (and ≥1) → move active task to "review"
  *  • in review but no longer all complete → move back to "in_progress"
  * Auto-review notifies workspace admins. Done/approval stays admin-only elsewhere.
+ *
+ * DÖNÜŞ: durum yazılamadıysa kullanıcıya söylenecek cümle, yoksa null. Sessiz
+ * bir `return` yetmiyordu — işaret kaydediliyor ama görev "Kontrol"e geçmiyor
+ * ve bunu kimse görmüyordu. Çağıran, işaretlemeyi başarılı sayıp bu cümleyi
+ * uyarı olarak gösterir.
  */
-async function recomputeReview(sb: SB, taskId: string, workspaceId: string, actorId: string) {
+async function recomputeReview(
+  sb: SB, taskId: string, workspaceId: string, actorId: string,
+): Promise<string | null> {
   const { data: task } = await sb
     .from("tasks")
     .select("status, title")
     .eq("id", taskId)
     .maybeSingle();
-  if (!task) return;
+  if (!task) return null;
 
   const { data: comps } = await sb
     .from("task_member_completions")
@@ -58,7 +85,11 @@ async function recomputeReview(sb: SB, taskId: string, workspaceId: string, acto
   const done = (comps ?? []).filter((c) => c.completed_at).length;
 
   if (total > 0 && done === total && ACTIVE_STATUSES.includes(task.status as string)) {
-    await sb.from("tasks").update({ status: "review" }).eq("id", taskId);
+    const { error: upErr } = await sb.from("tasks").update({ status: "review" }).eq("id", taskId);
+    /* Durum yazılamadıysa geçmişe "kontrole alındı" yazmıyor, yöneticiyi de
+       çağırmıyoruz: olmamış bir taşımanın bildirimi işi geri getirmez. Hata
+       yutulmaz, çağırana taşınır. */
+    if (upErr) return REVIEW_MOVE_FAILED;
     await logTaskActivity(sb, {
       workspaceId, taskId, actorId, action: ACTIVITY_ACTIONS.AUTO_MOVED_TO_REVIEW,
       oldValue: task.status as string, newValue: "review",
@@ -74,12 +105,14 @@ async function recomputeReview(sb: SB, taskId: string, workspaceId: string, acto
       recipientUserIds: (admins ?? []).map((a) => a.user_id as string),
     });
   } else if (task.status === "review" && (total === 0 || done < total)) {
-    await sb.from("tasks").update({ status: "in_progress" }).eq("id", taskId);
+    const { error: backErr } = await sb.from("tasks").update({ status: "in_progress" }).eq("id", taskId);
+    if (backErr) return REVIEW_MOVE_FAILED;
     await logTaskActivity(sb, {
       workspaceId, taskId, actorId, action: ACTIVITY_ACTIONS.STATUS_CHANGED,
       oldValue: "review", newValue: "in_progress",
     });
   }
+  return null;
 }
 
 /** Current user toggles their own completion for a task. */
@@ -128,16 +161,26 @@ export async function toggleMyCompletion(taskId: string): Promise<{ ok: true } |
 
   const nowDone = !wasDone;
   const stamp = nowDone ? new Date().toISOString() : null;
-  await sb.from("task_member_completions").update({ completed_at: stamp }).eq("id", rowId);
+  const { error: doneErr, count } = await sb
+    .from("task_member_completions")
+    .update({ completed_at: stamp }, { count: "exact" })
+    .eq("id", rowId);
+  if (doneErr) return { error: toActionErrorMessage(doneErr, COMPLETION_FAILED) };
+  /* Sayım desteklenmezse `count` null gelir; engel çıkarmayız. Yalnız KESİN
+     sıfır satır hatadır — satır bu arada silinmiştir. */
+  if (count === 0) return { error: COMPLETION_GONE };
   await logTaskActivity(sb, {
     workspaceId: c.workspaceId, taskId, actorId: c.user.id,
     action: nowDone ? ACTIVITY_ACTIONS.PARTICIPANT_COMPLETED : ACTIVITY_ACTIONS.PARTICIPANT_UNCOMPLETED,
   });
-  await recomputeReview(sb, taskId, c.workspaceId, c.user.id);
+  const moveError = await recomputeReview(sb, taskId, c.workspaceId, c.user.id);
   revalidatePath(`/tasks/${taskId}`);
   revalidatePath("/board");
   revalidatePath("/list");
   revalidatePath("/home");
+  /* Önce tazeleme, sonra uyarı: ekran işaretin kaydedildiğini gösterirken
+     satır neyin olmadığını söylesin. */
+  if (moveError) return { error: moveError };
   return { ok: true };
 }
 
@@ -146,7 +189,15 @@ export async function toggleMyCompletion(taskId: string): Promise<{ ok: true } |
  *  responsible participant of). Viewers never. */
 export async function setTaskParticipants(
   taskId: string, memberIds: string[],
-): Promise<{ ok: true } | { error: string }> {
+  /* KISMİ BAŞARI HATA DEĞİLDİR. Ayna alan (`tasks.assignee_id`) yazılamazsa
+     asıl iş — katılımcı satırları — TUTMUŞTUR. Bunu `{ error }` olarak
+     döndürmek yıkıcıydı: createTask (tasks.ts) her hatayı ölümcül sayıp yeni
+     açılan görevi service-role ile SİLİYOR, addTaskNoteWorkflow (notes.ts) ise
+     notu geri alıp teslim tarihini eski hâline çeviriyordu. Yani yalnız
+     "Bana atanan görevler" listesi tazelenemediği için kullanıcının az önce
+     yazdığı görev ya da not yok oluyordu. Artık uyarı ayrı bir alanda döner;
+     `"error" in res` diye bakan geri alma yolları hiç tetiklenmez. */
+): Promise<{ ok: true; warning?: string } | { error: string }> {
   const sb = await createClient();
   const c = await getCtx(sb);
   if (!c) return { error: "Kimlik doğrulama gerekli." };
@@ -268,8 +319,18 @@ export async function setTaskParticipants(
          ?? userIdByMember.get(finalMemberIds[0])
          ?? null);
   }
+  /* assignee_id AYNA alandır: kanonik kayıt (katılımcı satırları) yukarıda
+     başarıyla yazıldı, bu yalnız eski tek kişilik alanı ona eşitliyor. Hatası
+     yutulursa Ana Sayfa'daki "Bana atanan görevler" ile sorumlular listesi
+     ayrışır. Bu yüzden okunuyor — ama günlüğü kesmiyor: katılımcı değişikliği
+     gerçekten oldu, geçmişte durması doğru. Kullanıcıya en sonda söylenir. */
+  let assigneeError: string | null = null;
   if (assigneeUserId !== ((vTask.assignee_id as string | null) ?? null)) {
-    await writer.from("tasks").update({ assignee_id: assigneeUserId }).eq("id", taskId);
+    const { error: asgErr } = await writer
+      .from("tasks")
+      .update({ assignee_id: assigneeUserId })
+      .eq("id", taskId);
+    if (asgErr) assigneeError = MIRROR_FAILED;
   }
 
   // Notify + audit-log the handoff (resolve member_id → user_id so the activity
@@ -307,10 +368,15 @@ export async function setTaskParticipants(
     });
   }
 
+  /* Durum taşıma sinyali burada BİLEREK yutulur: createTask bu fonksiyonun
+     hata dönüşünü "sorumlular yazılamadı" sayıp yeni görevi geri siliyor
+     (lib/actions/tasks.ts), notes.ts de notu geri alıyor. Görev "Kontrol"e
+     geçmedi diye yazılmış bir görevi silmek veri kaybıdır; işaretlemenin
+     kendi çağrıları (aşağıda) zaten uyarıyor. */
   await recomputeReview(sb, taskId, c.workspaceId, c.user.id);
   revalidatePath(`/tasks/${taskId}`);
   revalidatePath("/board");
-  return { ok: true };
+  return assigneeError ? { ok: true, warning: assigneeError } : { ok: true };
 }
 
 /** Admin toggles a specific participant's completion. */
@@ -330,18 +396,25 @@ export async function setParticipantCompletion(
     .eq("member_id", memberId)
     .maybeSingle();
   if (existing) {
-    await sb.from("task_member_completions").update({ completed_at: stamp }).eq("id", existing.id);
+    const { error: upErr, count } = await sb
+      .from("task_member_completions")
+      .update({ completed_at: stamp }, { count: "exact" })
+      .eq("id", existing.id);
+    if (upErr) return { error: toActionErrorMessage(upErr, COMPLETION_FAILED) };
+    if (count === 0) return { error: COMPLETION_GONE };
   } else {
-    await sb.from("task_member_completions").insert({
+    const { error: insErr } = await sb.from("task_member_completions").insert({
       workspace_id: c.workspaceId, task_id: taskId, member_id: memberId, completed_at: stamp,
     });
+    if (insErr) return { error: toActionErrorMessage(insErr, COMPLETION_FAILED) };
   }
   await logTaskActivity(sb, {
     workspaceId: c.workspaceId, taskId, actorId: c.user.id,
     action: done ? ACTIVITY_ACTIONS.PARTICIPANT_COMPLETED : ACTIVITY_ACTIONS.PARTICIPANT_UNCOMPLETED,
   });
-  await recomputeReview(sb, taskId, c.workspaceId, c.user.id);
+  const moveError = await recomputeReview(sb, taskId, c.workspaceId, c.user.id);
   revalidatePath(`/tasks/${taskId}`);
   revalidatePath("/board");
+  if (moveError) return { error: moveError };
   return { ok: true };
 }

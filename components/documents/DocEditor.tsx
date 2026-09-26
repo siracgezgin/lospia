@@ -8,14 +8,20 @@ import {
   AlignLeft, AlignCenter, AlignRight, AlignJustify,
   Link2, Link2Off, Undo2, Redo2, Loader2, Check, FileDown, Printer, Eraser,
   Palette, ImagePlus, Highlighter, Minus, Table as TableIcon,
-  SlidersHorizontal, Rows3, Columns3, Trash2, FolderOpen, type LucideIcon,
+  SlidersHorizontal, Rows3, Columns3, Trash2, FolderOpen, ArchiveRestore,
+  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Button, IconButton } from "@/components/ui/Button";
 import { SelectInput, TextInput } from "@/components/ui/Field";
 import { useConfirm } from "@/components/ui/useConfirm";
-import { saveTeamworkDoc, uploadDocImage } from "@/lib/actions/documents";
+import { saveTeamworkDoc, uploadDocImage, unarchiveOperationDocument } from "@/lib/actions/documents";
 import { sanitizeRichText } from "@/lib/office/sanitize-html";
+/* Yazıya giren görsel de föy görselleriyle AYNI kapıdan geçer: yoksa dosya
+   ham hâlde Server Action gövdesine giriyor, Vercel 4,5 MB'ta kesiyor ve
+   ekrana İngilizce "An unexpected response was received from the server"
+   düşüyordu — sunucudaki nazik Türkçe uyarıya hiç sıra gelmiyordu. */
+import { prepareImageUpload, DOC_IMAGE_TYPES, DOC_IMAGE_ACCEPT } from "@/lib/utils/compress-image";
 import { PresenceBar } from "@/components/ui/PresenceBar";
 import {
   DOC_FONTS, DOC_FONT_SIZES, DOC_LINE_SPACING,
@@ -81,6 +87,8 @@ export function DocEditor({
   const [linkError, setLinkError] = useState<string | null>(null);
   const [showMore, setShowMore] = useState(false);
   const [busyImage, setBusyImage] = useState(false);
+  const [unarchiving, setUnarchiving] = useState(false);
+  const [unarchiveError, setUnarchiveError] = useState<string | null>(null);
   const [counts, setCounts] = useState({ words: 0, chars: 0 });
   const [empty, setEmpty] = useState(true);
 
@@ -583,12 +591,22 @@ export function DocEditor({
 
   /* ── Görsel ─────────────────────────────────────────────────────────── */
 
+  /* Kapı BURADA durur, seçicide değil: yapıştırma yolu (onPaste) da aynı
+     yerden geçsin — panodan gelen ekran görüntüsü de korumasız kalmasın. */
   const insertImage = useCallback(async (file: File) => {
     setError(null);
     setBusyImage(true);
     try {
+      /* YAZI YOLU FÖY YOLUNDAN AYRI AYARLANIR. Föy fotoğrafı için doğru olan
+         (JPEG · 1600px · 0,72) belge görseli için yanlıştı: JPEG'in alfa kanalı
+         olmadığı için saydam PNG — macOS pencere ekran görüntüsü, şeffaf logo —
+         zeminini kaybediyor, 1600px + 0,72 ise yüksek-DPI ekran görüntüsündeki
+         METNİ okunmaz hâle getiriyordu. WEBP saydamlığı taşır; belge görseli
+         okunmak içindir, bu yüzden daha büyük ve daha az bozulmuş kalır. */
+      const prep = await prepareImageUpload(file, { accept: DOC_IMAGE_TYPES, mimeType: "image/webp", maxDim: 2000, quality: 0.85 });
+      if ("error" in prep) { setError(prep.error); return; }
       const fd = new FormData();
-      fd.append("file", file);
+      fd.append("file", prep.file);
       const res = await uploadDocImage(fd);
       if ("error" in res) { setError(res.error); return; }
       focusBody();
@@ -606,6 +624,28 @@ export function DocEditor({
     e.target.value = "";
     if (file) void insertImage(file);
   }
+
+  /* ── Arşivden çıkar ─────────────────────────────────────────────────── */
+
+  /* Arşivli yazı /documents listesinden düşüyor; yani burası onu geri
+     açabileceğin TEK yer. Eskiden bu ekrandaki cümle "bir yöneticinin yazıyı
+     arşivden çıkarması gerekir" diyordu ama öyle bir eylem hiç yoktu:
+     arşivlenen yazı kalıcı olarak donuyordu. Kural sunucuda (yönetici ya da
+     ekleyen); yetkisi olmayana ne yapması gerektiğini söyleyen Türkçe cümle
+     düğmenin yanında çıkar. */
+  const unarchive = useCallback(async () => {
+    setUnarchiveError(null);
+    setUnarchiving(true);
+    try {
+      const res = await unarchiveOperationDocument(docId);
+      if ("error" in res) { setUnarchiveError(res.error); return; }
+      router.refresh();
+    } catch {
+      setUnarchiveError("Arşivden çıkarılamadı. Tekrar deneyin.");
+    } finally {
+      if (mountedRef.current) setUnarchiving(false);
+    }
+  }, [docId, router]);
 
   /* ── Yapıştırma ─────────────────────────────────────────────────────── */
 
@@ -956,16 +996,20 @@ export function DocEditor({
               yanlış kişiye yönlendiriliyordu. Aynı düzeltme tabloda da
               yapılmıştı (SheetDetailView). */}
           {readOnly && (
-            <p className="border-t border-hairline bg-surface-muted px-3 py-2 text-[12.5px] text-muted">
-              Bu yazı arşivlendi — içerik salt okunur. Yeniden düzenlemek için bir yöneticinin yazıyı arşivden çıkarması gerekir.
-            </p>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-hairline bg-surface-muted px-3 py-2 text-[12.5px] text-muted">
+              <span>Bu yazı arşivlendi — içerik salt okunur.</span>
+              <Button size="sm" variant="secondary" onClick={unarchive} loading={unarchiving}>
+                <ArchiveRestore size={14} aria-hidden /> Arşivden çıkar
+              </Button>
+              {unarchiveError && <span role="alert" className="font-medium text-danger">{unarchiveError}</span>}
+            </div>
           )}
         </div>
 
         <input
           ref={imageRef}
           type="file"
-          accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
+          accept={DOC_IMAGE_ACCEPT}
           className="hidden"
           onChange={onPickImage}
         />

@@ -32,6 +32,18 @@ const PICKER_LIMIT = 300;
 
 const AUTH_REQUIRED = "Oturum gerekli.";
 
+/* GÖRSEL SÜZGECİ TÜRE **VE** UZANTIYA BAKAR.
+   Tarayıcı bazı uzantılarda türü boş ya da "octet-stream" yolluyordu ve kayıt
+   öyle açılıyordu; kök neden kayıt anında düzeltildi (resolveFileMime), ESKİ
+   satırları 20240362 göçü tamamlıyor. O göç prod'a uygulanana kadar yalnız
+   `file_mime like 'image/%'` bakan bir süzgeç o kayıtları seçicide GÖRÜNMEZ
+   bırakıyor — kullanıcı için "resmim kayboldu" demek. Uzantı dalı boşluğu
+   şimdiden kapatır, göçten sonra da zararsızdır: aynı satır iki koşulu birden
+   sağlar. Yalnız GENİŞLETİR — bugüne kadar listelenen hiçbir kayıt düşmez. */
+const IMAGE_EXTS = ["png", "jpg", "jpeg", "gif", "webp", "avif", "heic", "heif", "bmp", "tif", "tiff", "svg"];
+/* PostgREST `or` dizgesinde joker `%` değil `*`. */
+const IMAGE_FILTER = ["file_mime.like.image/*", ...IMAGE_EXTS.map((e) => `file_name.ilike.*.${e}`)].join(",");
+
 async function getCtx() {
   const supabase = await createClient();
   const user = await getAuthUser();
@@ -110,7 +122,7 @@ export async function listDriveImages(
       .select("id, title, file_name, file_path, thumb_path, file_mime, file_size, folder_id")
       .eq("workspace_id", workspaceId)
       .not("file_path", "is", null)
-      .like("file_mime", "image/%")
+      .or(IMAGE_FILTER)
       .order("created_at", { ascending: false }),
   ]);
 

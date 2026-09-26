@@ -62,6 +62,14 @@ export interface WebsiteSyncReport {
   /** Hem föyde hem sitede değişmiş metin: hangisinin doğru olduğuna makine
    *  karar veremez, föydeki korunur ve adı raporlanır. */
   conflicts: string[];
+  /** Yazılacaktı ama YAZILAMADI (açılamayan yeni föy + güncellenemeyen föy).
+   *  Bu sayı eskiden hiçbir yere düşmüyordu: güncelleme hatası okunup
+   *  atılıyor, yalnız sayaç artmıyordu. Yarısı yazılamayan bir çekiş ekranda
+   *  "hepsi güncellendi" gibi görünüyor, o föyler eski web bilgisiyle
+   *  kalıyordu. */
+  failed: number;
+  /** İlk birkaç farklı hata metni — "neden yazılamadı" sorusunun cevabı. */
+  failedReasons: string[];
 }
 
 /** Sitesi olan föyün, çekişin dokunmaması gereken üç metni. Tip
@@ -139,7 +147,7 @@ export async function syncCollectionFromWebsite(): Promise<WebsiteSyncReport | {
   const report: WebsiteSyncReport = {
     created: 0, updated: 0, skipped: 0, skippedNames: [],
     membershipFailures: fetched.membershipFailures,
-    kept: 0, conflicts: [],
+    kept: 0, conflicts: [], failed: 0, failedReasons: [],
   };
 
   /* YAZIM TOPLU. İlk çekişte ~150 föy açılıyor; tek tek insert her biri için
@@ -239,21 +247,44 @@ export async function syncCollectionFromWebsite(): Promise<WebsiteSyncReport | {
         .update(job.web)
         .eq("id", job.id)
         .eq("workspace_id", ctx.workspaceId);
-      if (!error) report.updated++;
+      if (!error) { report.updated++; continue; }
+      /* Hata artık YUTULMUYOR. Aynı sebep defalarca tekrar edeceği için
+         metin bir kez saklanır; sayı ise her satır için artar. */
+      report.failed++;
+      const reason = toActionErrorMessage(error);
+      if (report.failedReasons.length < 3 && !report.failedReasons.includes(reason)) {
+        report.failedReasons.push(reason);
+      }
     }
   }));
 
+  /* Paketi yarıda kalan açılışlar da sayıya girer: insert döngüsü ilk hatada
+     duruyor, geride kalan satırlar hiç denenmemiş oluyor — kullanıcı için
+     ikisi de "açılamadı" demektir. */
+  if (insertError) {
+    report.failed += toInsert.length - report.created;
+    report.failedReasons.unshift(insertError);
+    report.failedReasons = report.failedReasons.slice(0, 3);
+  }
+
   /* Paket hatası SESSİZ kalmaz: yarım kalan çekiş raporda söylenir. Tekrar
-     çekmek güvenli — açılanlar web kimliğiyle bulunur, kopya oluşmaz. */
-  if (insertError && report.created === 0 && report.updated === 0) {
-    return { error: insertError };
+     çekmek güvenli — açılanlar web kimliğiyle bulunur, kopya oluşmaz.
+
+     HİÇBİR ŞEY YAZILAMADIYSA bu bir hatadır, "yeni bir şey yok" değil:
+     ekran üç sayı da sıfır olunca "Web sitesinde yeni bir şey yok." diyor
+     ve kullanıcıya yanlış bilgi veriyordu. */
+  if (report.created === 0 && report.updated === 0 && (insertError || report.failed > 0)) {
+    return { error: insertError ?? report.failedReasons[0] ?? "Föyler güncellenemedi." };
   }
 
   await logWorkspaceActivity(supabase, {
     workspaceId: ctx.workspaceId, actorId: ctx.userId,
     action: "collection_web_synced", entityType: "production_sheet",
     entityLabel: "Web sitesi",
-    metadata: { created: report.created, updated: report.updated, skipped: report.skipped },
+    metadata: {
+      created: report.created, updated: report.updated,
+      skipped: report.skipped, failed: report.failed,
+    },
   });
 
   revalidatePath("/collection");
@@ -356,12 +387,12 @@ export async function pendingWebEdits(): Promise<
  */
 export async function saveWebRawDescriptions(
   entries: { webProductId: number; raw: string }[],
-): Promise<{ saved: number } | { error: string }> {
+): Promise<{ saved: number; failed: number } | { error: string }> {
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
   if (ctx.role !== "owner") return { error: SYSTEM_ADMIN_ONLY };
-  if (!entries.length) return { saved: 0 };
+  if (!entries.length) return { saved: 0, failed: 0 };
 
   const { data: rows, error } = await supabase
     .from("production_sheets")
@@ -383,6 +414,13 @@ export async function saveWebRawDescriptions(
 
   /* Altılı havuz — çekişteki güncellemelerle aynı ölçü. */
   let saved = 0;
+  let failed = 0;
+  let firstError: string | null = null;
+  /* MİGRATION DENETİMİ BURADA. Yukarıdaki yoklama `web_raw_description`
+     kolonuna hiç dokunmayan bir select; kolon yokken o sorgu geçiyor, hata
+     ancak UPDATE'te çıkıyor ve yutuluyordu — ekranda sebepsiz "0 föye
+     saklandı" görünürdü. Artık yazmanın hatası okunuyor. */
+  let schemaMissing = false;
   const queue = [...jobs];
   await Promise.all(Array.from({ length: 6 }, async () => {
     for (let job = queue.shift(); job; job = queue.shift()) {
@@ -391,12 +429,21 @@ export async function saveWebRawDescriptions(
         .update({ web_raw_description: job.raw, web_raw_at: now })
         .eq("id", job.sheetId)
         .eq("workspace_id", ctx.workspaceId);
-      if (!upErr) saved++;
+      if (!upErr) { saved++; continue; }
+      failed++;
+      if (isMissingSchemaError(upErr)) schemaMissing = true;
+      firstError ??= toActionErrorMessage(upErr);
     }
   }));
 
+  if (schemaMissing) {
+    return { error: "Veritabanı güncellemesi bekleniyor (20240350). Yönetici `supabase db push` çalıştırmalı." };
+  }
+  /* Tek satır bile saklanamadıysa sessiz bir "0" değil, sebebi söylenir. */
+  if (saved === 0 && failed > 0) return { error: firstError ?? "Ham açıklamalar saklanamadı." };
+
   revalidatePath("/collection");
-  return { saved };
+  return { saved, failed };
 }
 
 /**

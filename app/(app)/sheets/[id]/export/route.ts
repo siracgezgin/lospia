@@ -104,7 +104,7 @@ export async function GET(
 
   const { data, error } = await supabase
     .from("operation_spreadsheets")
-    .select("id, title, snapshot")
+    .select("id, title, snapshot, updated_at")
     .eq("id", id)
     .eq("workspace_id", workspaceId)
     .maybeSingle();
@@ -117,7 +117,7 @@ export async function GET(
   }
   if (!data) return NextResponse.json({ error: "Tablo bulunamadı." }, { status: 404 });
 
-  const row = data as { id: string; title: string; snapshot: unknown };
+  const row = data as { id: string; title: string; snapshot: unknown; updated_at: string | null };
   const wb = fromLegacy(row.snapshot) ?? emptyWorkbook();
 
   // İndirme günlüğe yazılır — dosya sistemin dışına çıkıyor. Günlük
@@ -132,7 +132,17 @@ export async function GET(
     metadata: { format },
   });
 
-  const base = (row.title || "tablo").replace(/[\\/:*?"<>|]+/g, "-").trim() || "tablo";
+  /* DOSYA ADINDA TABLONUN SON DEĞİŞİKLİK ZAMANI. Ad yalnız tablo başlığıydı;
+     aynı tablo ikinci kez indirilince tarayıcı üzerine yazmayıp "… (1).xlsx"
+     diye kaydediyor, kullanıcı İndirilenler klasöründe eski kopyayı açıp
+     "güncel şeklinde indirmiyor" diyordu. Damga tablonun KENDİ zamanı olduğu
+     için değişmeyen tablo tekrar indirilince ad da değişmez. Saat İstanbul'dur
+     (sunucu UTC) ve ":" yerine "." yazar — Windows'ta iki nokta yasak. */
+  const at = new Date(row.updated_at ?? "");
+  const stamp = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Istanbul", dateStyle: "short", timeStyle: "short" })
+    .format(Number.isNaN(at.getTime()) ? new Date() : at).replace(":", ".");
+  const title = (row.title || "tablo").replace(/[\\/:*?"<>|]+/g, "-").trim() || "tablo";
+  const base = `${title} ${stamp}`;
   const ext = format === "csv" ? "csv" : "xlsx";
   const asciiName = `${base.replace(/[^\x20-\x7E]/g, "_")}.${ext}`;
   const utf8Name = encodeURIComponent(`${base}.${ext}`);

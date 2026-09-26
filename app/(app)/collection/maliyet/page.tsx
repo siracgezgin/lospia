@@ -93,5 +93,12 @@ export default async function CostPage({
     (bomBySheet[r.sheet_id] ??= []).push(r);
   }
 
-  return <CostBreakdownTable rows={rows} seasons={seasons} bomBySheet={bomBySheet} />;
+  /* SEZON DEĞİŞİNCE BİLEŞEN YENİDEN MONTE OLUR.
+     Tablo `pricing`/`sizeDist` durumlarını YALNIZ ilk mount'ta prop'tan
+     tohumluyor. SeasonSwitch aynı rotada yalnız `?sezon=` parametresini
+     değiştirdiği için React aynı tipteki bileşeni yerinde koruyor: sunucu yeni
+     sezonun satırlarını gönderse de durum eski sezonunki kalıyor, yeni föyler
+     için hücreler boş görünüyordu ve o boş hâlden kaydetmek diskteki fiyatı
+     siliyordu. `key` sezona bağlanınca durum yeni satırlarla tazeleniyor. */
+  return <CostBreakdownTable key={seasonId ?? "tum"} rows={rows} seasons={seasons} bomBySheet={bomBySheet} />;
 }

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { canManageContacts, type AppRole } from "@/lib/auth/permissions";
+import { canManageContacts, canWriteCrmContacts, type AppRole } from "@/lib/auth/permissions";
 import { toActionErrorMessage } from "@/lib/utils/supabase-errors";
 import { logWorkspaceActivity, WORKSPACE_ACTIONS } from "@/lib/activity/log-workspace-activity";
 import { CRM_EDITABLE_FIELDS, FIHRIST_ID_PREFIX, type CrmFieldKey } from "@/lib/crm/constants";
@@ -11,7 +11,12 @@ import { CRM_EDITABLE_FIELDS, FIHRIST_ID_PREFIX, type CrmFieldKey } from "@/lib/
 // CRM v0 builds on the existing workspace_contacts table (used for task
 // responsible/contact mapping). These actions only touch the additive columns
 // from 20240204000000_crm_contact_fields.sql — the base contact behaviour is
-// untouched. Writes stay owner/admin-only, consistent with canManageContacts.
+// untouched.
+//
+// YETKİ (26.09.2026): CRM kaydına YAZMA üyeye açık (canWriteCrmContacts);
+// SİLME ve kişi↔hesap eşleştirmesi yöneticide (canManageContacts). Veritabanı
+// karşılığı 20240357 — o migration'a kadar RLS zaten üyeye tamamen açıktı,
+// yani buradaki kapı tek başına bir güvenlik sınırı DEĞİLDİ.
 
 const hexUuid = (msg: string) =>
   z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, msg);
@@ -69,6 +74,26 @@ async function requireContactAdmin(
   return { workspaceId: member.workspace_id as string, userId: user.id };
 }
 
+/**
+ * YAZMA kapısı — üye de geçer. Silme ve eşleştirme için
+ * `requireContactAdmin` kullanılmaya devam edilir.
+ */
+async function requireContactWriter(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): Promise<{ workspaceId: string; userId: string } | { error: string }> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Kimlik doğrulama gerekli." };
+  const { data: member } = await supabase
+    .from("workspace_members")
+    .select("workspace_id, role")
+    .eq("user_id", user.id)
+    .limit(1)
+    .maybeSingle();
+  if (!member) return { error: "Çalışma alanı bulunamadı." };
+  if (!canWriteCrmContacts(member.role as AppRole)) return { error: PERM_DENIED };
+  return { workspaceId: member.workspace_id as string, userId: user.id };
+}
+
 // Normalise empty strings → null so we never store "".
 function clean(v: CrmFields) {
   const nn = (s?: string | null) => {
@@ -99,12 +124,17 @@ export async function createCrmContact(
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   const supabase = await createClient();
-  const ctx = await requireContactAdmin(supabase);
+  const ctx = await requireContactWriter(supabase);
   if ("error" in ctx) return { error: ctx.error };
 
+  /* `kind` AÇIKÇA yazılır. `clean()` bu alanı taşımıyor; kayıt bugüne kadar
+     yalnız kolon varsayılanı ('external', 20240322) sayesinde doğru türde
+     doğuyordu. Üyeye yazma açılırken bu şart: RLS politikası
+     `with check (… and kind = 'external')` olduğu için değer gönderilmezse
+     varsayılan bir gün değiştiğinde üyenin insert'i sessizce reddedilirdi. */
   const { data, error } = await supabase
     .from("workspace_contacts")
-    .insert({ workspace_id: ctx.workspaceId, ...clean(parsed.data) })
+    .insert({ workspace_id: ctx.workspaceId, kind: parsed.data.kind ?? "external", ...clean(parsed.data) })
     .select("id")
     .single();
 
@@ -122,7 +152,7 @@ export async function updateCrmContact(
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   const supabase = await createClient();
-  const ctx = await requireContactAdmin(supabase);
+  const ctx = await requireContactWriter(supabase);
   if ("error" in ctx) return { error: ctx.error };
 
   const { data: updated, error } = await supabase
@@ -130,6 +160,14 @@ export async function updateCrmContact(
     .update(clean(parsed.data))
     .eq("id", contactId)
     .eq("workspace_id", ctx.workspaceId)
+    /* EKİP KAYDINA DOKUNMA. `workspace_contacts` iki iş birden yapıyor
+       (20240322): kind='team' Pano'da atanabilir ekip, kind='external' CRM.
+       Süzgeç yalnız SAYFA sorgusundaydı; server action'lar tarayıcıdan
+       adreslenebilir olduğu için listede hiç görünmeyen bir ekip kaydının
+       id'si gönderilebilirdi. RLS de aynı sınırı koyuyor (20240357) ama RLS
+       reddi PostgREST'te hata değil "0 satır" olarak döner — aşağıdaki
+       satır sayısı kontrolü o yüzden anlamlı. */
+    .eq("kind", "external")
     .select("id");
 
   if (error) return { error: toActionErrorMessage(error) };
@@ -185,7 +223,7 @@ export async function updateCrmContactField(
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   const supabase = await createClient();
-  const ctx = await requireContactAdmin(supabase);
+  const ctx = await requireContactWriter(supabase);
   if ("error" in ctx) return { error: ctx.error };
 
   const { data: updated, error } = await supabase
@@ -193,6 +231,14 @@ export async function updateCrmContactField(
     .update({ [field]: parsed.data ?? null })
     .eq("id", contactId)
     .eq("workspace_id", ctx.workspaceId)
+    /* EKİP KAYDINA DOKUNMA. `workspace_contacts` iki iş birden yapıyor
+       (20240322): kind='team' Pano'da atanabilir ekip, kind='external' CRM.
+       Süzgeç yalnız SAYFA sorgusundaydı; server action'lar tarayıcıdan
+       adreslenebilir olduğu için listede hiç görünmeyen bir ekip kaydının
+       id'si gönderilebilirdi. RLS de aynı sınırı koyuyor (20240357) ama RLS
+       reddi PostgREST'te hata değil "0 satır" olarak döner — aşağıdaki
+       satır sayısı kontrolü o yüzden anlamlı. */
+    .eq("kind", "external")
     .select("id");
 
   if (error) return { error: toActionErrorMessage(error) };
@@ -285,6 +331,10 @@ export async function deleteCrmContact(
     .delete()
     .eq("id", contactId)
     .eq("workspace_id", ctx.workspaceId)
+    /* CRM ekranından yalnız CRM kaydı silinir. Ekip kaydı (kind='team')
+       Pano'da atanabilir kişidir ve Ayarlar'dan yönetilir; buradan silinmesi
+       görevlerin "sorumlu" alanını sessizce boşaltırdı. */
+    .eq("kind", "external")
     .select("id");
 
   if (error) return { error: toActionErrorMessage(error) };

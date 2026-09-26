@@ -60,8 +60,18 @@ export async function GET(
 
   const buffer = await buildProductionSheetWorkbook(sheet, memberNames);
 
+  /* DOSYA ADINDA FÖYÜN SON DEĞİŞİKLİK ZAMANI. Ad yalnız föy başlığıydı; aynı
+     föy ikinci kez indirilince tarayıcı üzerine yazmayıp "… (1).xlsx" diye
+     kaydediyor, kullanıcı İndirilenler klasöründe ilk kopyayı açıp "güncel
+     şeklinde indirmiyor" diyordu. Damga föyün KENDİ zamanı: değişmeyen föy
+     tekrar indirilince ad da değişmez, değişen föyde hangi kopyanın yeni
+     olduğu addan okunur. Saat İstanbul'dur (sunucu UTC) ve ":" yerine "."
+     yazar — Windows dosya adında iki nokta yasak. */
+  const at = new Date(sheet.updated_at ?? "");
+  const stamp = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Istanbul", dateStyle: "short", timeStyle: "short" })
+    .format(Number.isNaN(at.getTime()) ? new Date() : at).replace(":", ".");
   // Dosya adı: Türkçe karakterler için RFC 5987 (filename*), ASCII fallback ayrı.
-  const base = (sheet.title || "uretim-foyu").replace(/[\\/:*?"<>|]+/g, "-").trim();
+  const base = `${(sheet.title || "uretim-foyu").replace(/[\\/:*?"<>|]+/g, "-").trim()} ${stamp}`;
   const asciiName = base.replace(/[^\x20-\x7E]/g, "_") + ".xlsx";
   const utf8Name = encodeURIComponent(base + ".xlsx");
 

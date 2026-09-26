@@ -7,6 +7,7 @@ import type { AppRole } from "@/lib/auth/permissions";
 import { toActionErrorMessage } from "@/lib/utils/supabase-errors";
 import { logWorkspaceActivity, WORKSPACE_ACTIONS } from "@/lib/activity/log-workspace-activity";
 import { sanitizeRichText } from "@/lib/office/sanitize-html";
+import { MAX_UPLOAD_BYTES } from "@/lib/utils/compress-image";
 
 // Doküman Merkezi — a link/metadata registry (no file storage). Unlike the
 // admin-only Kreatif Linkler, members participate here: they create drafts and
@@ -175,7 +176,12 @@ export async function updateOperationDocument(
      yazısını böyle kapatabilmemeli. Yönetici ve ekleyen serbest; diğerlerinde
      durum olduğu gibi bırakılır. */
   const mayChangeStatus = isAdmin(ctx) || editable.createdBy === ctx.userId;
-  if (!mayChangeStatus) data.status = editable.status as DocumentInput["status"];
+  /* SESSİZCE GERİ ALMA YOK. Eskiden burada `data.status` eski değerine
+     çevriliyordu: sıradan üye Taslak/Onayda seçip kaydediyor, "kaydedildi"
+     görüyor ama durum hiç değişmemiş oluyordu. Yapılamayan şey söylenir. */
+  if (!mayChangeStatus && data.status !== editable.status) {
+    return { error: "Durumu yalnız kaydı ekleyen kişi ya da bir yönetici değiştirebilir." };
+  }
 
   const { error } = await supabase
     .from("operation_documents")
@@ -207,6 +213,53 @@ export async function archiveOperationDocument(
     .eq("workspace_id", ctx.workspaceId);
 
   if (error) return { error: toActionErrorMessage(error) };
+  revalidatePath("/documents");
+  return { ok: true };
+}
+
+/**
+ * ARŞİVDEN ÇIKAR — arşiv kilidinin TEK deliği.
+ *
+ * `loadEditable` arşivli satırı herkese kapatıyor ("buna artık dokunulmasın")
+ * ama geri açan bir yol yoktu: arşivlenen kayıt kalıcı olarak donuyordu, üstelik
+ * /documents listesi arşivlileri hiç göstermediği için yönetici onu bir daha
+ * bulamıyordu bile. Kilit yalnız burada delinir — kayıt okunurken arşivli
+ * olmasına bakılmaz, tek yaptığı iş durumu geri çevirmek.
+ *
+ * Kural ARŞİVLEYEBİLENLE aynı (yönetici ya da ekleyen, bkz. mayChangeStatus);
+ * yalnız yöneticide olsaydı üye kendi kapattığı yazıyı geri açamazdı.
+ */
+export async function unarchiveOperationDocument(
+  documentId: string,
+): Promise<{ ok: true } | { error: string }> {
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+
+  const { data: row, error: readErr } = await supabase
+    .from("operation_documents")
+    .select("created_by, status")
+    .eq("id", documentId)
+    .eq("workspace_id", ctx.workspaceId)
+    .maybeSingle();
+  if (readErr) return { error: toActionErrorMessage(readErr) };
+  if (!row) return { error: NOT_FOUND };
+  const { created_by: createdBy, status } = row as { created_by: string | null; status: string };
+  if (status !== "archived") return { ok: true };
+  if (!isAdmin(ctx) && createdBy !== ctx.userId) {
+    return { error: "Arşivden çıkarmayı yalnız kaydı ekleyen kişi ya da bir yönetici yapabilir." };
+  }
+
+  /* Durum "onaylandı"ya döner — yeni kayıtların başladığı yer (createTeamworkDoc)
+     ve listede herkese görünen hâl. `archived_at` temizlenir ki kayıt "arşivde
+     duruyor" gibi okunmasın. */
+  const { error } = await supabase
+    .from("operation_documents")
+    .update({ status: "approved", archived_at: null })
+    .eq("id", documentId)
+    .eq("workspace_id", ctx.workspaceId);
+  if (error) return { error: toActionErrorMessage(error) };
+
   revalidatePath("/documents");
   return { ok: true };
 }
@@ -400,8 +453,22 @@ export async function saveTeamworkDoc(
     .eq("workspace_id", ctx.workspaceId);
 
   if (error) return { error: toActionErrorMessage(error) };
-  revalidatePath("/documents");
-  revalidatePath(`/documents/${documentId}`);
+
+  /* revalidatePath BİLEREK ÇAĞRILMIYOR — tablo (sheets.ts) ve föy
+     (production.ts) editörleriyle aynı karar.
+
+     DocEditor son tuştan 1,5 saniye sonra buraya geliyor. Sunucu eyleminden
+     yapılan revalidatePath yola BAKMADAN "bu eylem tazeledi" bayrağını
+     kaldırıyor; yani yalnız `/documents` bırakılsa bile yazının sayfası
+     yeniden çiziliyor ve istemcinin bütün gezinme önbelleği siliniyordu
+     (Next 16 belgesi: "…it also causes all previously visited pages to
+     refresh when navigated to again"). Yazarken her duraksamada bir tam
+     sunucu çizimi demekti; yazıdan Pano'ya geçiş de bu yüzden ağırlaşıyordu.
+
+     Yazının doğruluk kaynağı editörün kendi belleği. Ctrl+S / "Kaydet" yolu
+     zaten router.refresh() çağırıyor, /documents listesi force-dynamic
+     olduğu için bir sonraki gezinmede taze geliyor; sayfadan ayrılırken
+     atılan son kayıt da artık gidişi yavaşlatmıyor. */
   return { ok: true };
 }
 
@@ -415,7 +482,6 @@ export async function saveTeamworkDoc(
  * public bir bucket'ta yaşar (yol UUID içerir). Ayrıntılı gerekçe migration
  * dosyasında.
  */
-const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 /* MIME → uzantı. `file.type` TAMAMEN istemci denetimindedir; bu yüzden hem
    depolanan uzantı hem de yazılan content-type buradan TÜRETİLİR — istemciden
    gelen dosya adı ya da başlık olduğu gibi depoya geçmez (public bucket'ta
@@ -434,8 +500,12 @@ export async function uploadDocImage(
   const file = formData.get("file");
   if (!(file instanceof File)) return { error: "Görsel bulunamadı." };
   if (file.size === 0) return { error: "Görsel boş." };
-  if (file.size > IMAGE_MAX_BYTES) {
-    return { error: `Görsel 5 MB sınırını aşıyor (${(file.size / 1024 / 1024).toFixed(1)} MB).` };
+  /* Tavan istemciyle TEK KAYNAKTAN gelir (4 MB). Burada 5 MB yazıyordu ve
+     Vercel'in 4,5 MB'lık SERT gövde sınırının üstünde kaldığı için bu nazik
+     Türkçe cümle canlıda hiç görünemiyordu: istek taşıma katmanında kesiliyor,
+     ekrana İngilizce bir ağ hatası düşüyordu. */
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return { error: `Görsel ${MAX_UPLOAD_BYTES / 1024 / 1024} MB sınırını aşıyor (${(file.size / 1024 / 1024).toFixed(1)} MB).` };
   }
   const mime = file.type.toLowerCase().split(";")[0].trim();
   const ext = IMAGE_EXT_BY_MIME[mime];

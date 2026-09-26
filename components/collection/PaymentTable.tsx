@@ -63,6 +63,13 @@ function pricingPayload(p: ProductionPricing) {
     notes: p.notes ?? "",
     cost_items: p.cost_items,
     usta_unit_payment: p.usta_unit_payment ?? "",
+    /* ADET KADEMELERİ de taşınır. Aynı tuzak: föyde elle açılan kademeler
+       (50 / 100 / 250) burada yazılmadığı için, Maliyet ya da Ödeme
+       tablosunda HERHANGİ bir hücreye girip çıkmak diskteki diziyi siliyordu.
+       Şemada `optional` olduğu için doğrulama da uyarmıyordu; parmak izi bu
+       eksik şekilden üretildiği için karşılaştırma da "değişti" demiyordu —
+       kayıp hiçbir yerde görünmüyordu. */
+    qty_tiers: p.qty_tiers,
     invoice_no: p.invoice_no ?? "",
     invoice_amount: p.invoice_amount ?? "",
   };
@@ -237,7 +244,21 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
     setPricing((p) => ({ ...p, [id]: { ...p[id], invoice_amount: value } }));
 
   function savePayment(id: string) {
-    const payload = pricingPayload(pricing[id] ?? {});
+    /* DURUMDA KARŞILIĞI OLMAYAN SATIRA YAZMA.
+       `pricing` yalnız ilk mount'ta prop'tan tohumlanıyor. Sezon değiştirmek
+       (SeasonSwitch → router.push(?sezon=…)) aynı rotada yalnız searchParams'ı
+       değiştirdiği için React bileşeni yeniden MONTE ETMİYOR: sunucu yeni
+       sezonun satırlarını gönderiyor, durum eskisinde kalıyor ve yeni föyler
+       için `pricing[id]` undefined oluyor. Bu hâldeyken `pricingPayload({})`
+       tamamen BOŞ bir gövde kurar; sunucu `pricing` JSON'unu bütün olarak
+       değiştirdiği için o föyün kumaş/dikim/kalıp tutarları, üretim adedi ve
+       fatura bilgisi tek bir hücreye girip çıkmakla silinirdi.
+       (Beden tarafı bu kapıyı zaten alıyordu — bkz. saveSizeDist.)
+       Kök neden ayrıca sayfada `key` ile kapatıldı: sezon değişince bileşen
+       yeniden monte olur ve durum tazelenir. Bu kapı ikinci emniyet. */
+    const cur = pricing[id];
+    if (!cur) return;
+    const payload = pricingPayload(cur);
     const snapshot = JSON.stringify(payload);
     if (savedSnapshots.current[id] === snapshot) return;
     setSavingId(id);

@@ -244,6 +244,9 @@ export function PlanningWeekGrid({
             personHex={personHex}
             onOpen={(meetingId) => onOpen(iso, slot, i, undefined, meetingId)}
             onSaved={() => router.refresh()}
+            /* Izgaranın TEK hata şeridi: taşıma da, başlık kaydı da oraya yazıyor
+               — kullanıcı bir şeyin tutmadığını hep aynı yerde okur. */
+            onError={setMoveError}
           />
         );
       })}
@@ -527,7 +530,7 @@ export function PlanningWeekGrid({
  */
 function TitleCell({
   cellId, cell, meta, hasBand, isAdmin, draggable, memberNames, memberPhotos = {}, personHex, onOpen,
-  onSaved,
+  onSaved, onError,
 }: {
   cellId: string;
   cell: PlanningMeetingWithTopics[];
@@ -540,6 +543,7 @@ function TitleCell({
   personHex: Record<string, string>;
   onOpen: (_meetingId?: string) => void;
   onSaved: () => void;
+  onError: (_message: string) => void;
 }) {
   const meeting = cell[0] ?? null;
   const title = cell.map((m) => m.title).filter(Boolean).join(" · ");
@@ -596,17 +600,19 @@ function TitleCell({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(title);
   const [saving, setSaving] = useState(false);
+  /** Son kayıt tutmadı — kutu açık kalır ve çerçevesi kırmızıya döner. */
+  const [saveFailed, setSaveFailed] = useState(false);
 
   function startEdit() {
     setDraft(title);
+    setSaveFailed(false);
     setEditing(true);
   }
 
   async function commit() {
     const next = draft.trim();
-    setEditing(false);
-    if (next === (title ?? "").trim()) return;
-    if (!next && !single) return;              // boş hücreye boş başlık: iş yok
+    if (next === (title ?? "").trim()) return setEditing(false);
+    if (!next && !single) return setEditing(false);   // boş hücreye boş başlık: iş yok
     setSaving(true);
     try {
       const [meeting_date, time_slot] = cellId.split("|");
@@ -615,14 +621,43 @@ function TitleCell({
          taslağı ve gönderimi kodda kaldı. Kutusu olmayan bir alanı her
          yeniden adlandırmada sunucuya yazmak, notun kırpılmış hâlini geri
          kaydetme riskinden başka bir şey getirmiyordu. Not artık konularda. */
-      await setMeetingTitle(
+      const res = await setMeetingTitle(
         single ? { meetingId: single.id } : { meeting_date, time_slot },
         next,
       );
+      /* SUNUCUNUN CEVABI OKUNUR. Dönen nesneye hiç bakılmıyordu: toplantı
+         araya silinmişse (NOT_FOUND — iki sekme, iki yönetici), gece boyu
+         açık kalan sekmede oturum düşmüşse ya da veritabanı hata döndürmüşse
+         hücre SESSİZCE eski başlığa dönüyordu; hangi hücrenin neden geri
+         alındığını söyleyen tek bir işaret yoktu. Artık ızgaranın hata
+         şeridi konuşuyor ve yazılan metin kutuda geri açılıyor — kullanıcı
+         yeniden yazmak zorunda kalmasın. */
+      if ("error" in res) return failed(next, res.error);
+      /* KUTU ANCAK KAYIT TUTUNCA KAPANIR. Önce en başta kapanıyordu; hata
+         gelince `setEditing(true)` ile geri açmak gerekiyordu ve `autoFocus`
+         taşıyan input YENİDEN monte olduğu için odak, kullanıcının o sırada
+         tıkladığı yerden geri çalınıyordu. Kalıcı bir hatada (oturum düşmüş)
+         bu, başka bir hücreye her tıklayışta odağın bozuk hücreye geri
+         sıçraması demekti. Kutu hiç sökülmezse autoFocus bir daha çalışmaz. */
+      setEditing(false);
       onSaved();
+    } catch (err) {
+      /* Server action hata DÖNDÜRMEZ, FIRLATIR: ağ koptuğunda ya da dağıtım
+         anında çağrının kendisi reddedilir. `catch` olmadığı için bu, hiçbir
+         yere düşmeyen sessiz bir hata oluyordu. */
+      failed(next, err instanceof Error ? err.message : "Bağlantı kurulamadı.");
     } finally {
       setSaving(false);
     }
+  }
+
+  /** Kayıt tutmadı: yazılan metin kutuda KALIR, kutu açık kalır, ODAĞA
+   *  DOKUNULMAZ — kullanıcı o an nereye tıkladıysa orada çalışmayı sürdürür.
+   *  Hücrenin kendisi kırmızı çerçeveyle işaretlenir; şerit de nedenini yazar. */
+  function failed(next: string, reason: string) {
+    setDraft(next);
+    setSaveFailed(true);
+    onError(`Başlık kaydedilemedi: ${reason}`);
   }
   /* Hücrenin klavye davranışı TIKLAMAYLA AYNI olmalı: adı yerinde
      değiştirilebiliyorsa Enter de onu açar, değilse pencereyi. Eskiden Enter
@@ -733,20 +768,22 @@ function TitleCell({
             <input
               autoFocus
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={(e) => { setDraft(e.target.value); setSaveFailed(false); }}
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
               onKeyDown={(e) => {
                 e.stopPropagation();
                 if (e.key === "Enter") { e.preventDefault(); void commit(); }
-                if (e.key === "Escape") { e.preventDefault(); setDraft(title); setEditing(false); }
+                if (e.key === "Escape") { e.preventDefault(); setDraft(title); setSaveFailed(false); setEditing(false); }
               }}
               aria-label="Toplantı başlığı"
               placeholder="Başlık…"
               /* `outline-none` YOK: odak halkası globals.css'teki tek kuraldan
                  gelir, burada susturulunca klavyeyle gelen kullanıcı imlecin
                  hangi hücrede olduğunu göremiyordu. */
-              className="w-full rounded-[4px] border border-brand-ring bg-surface px-1 py-0.5 text-[12.5px] font-bold tracking-tight text-ink"
+              /* Kenar rengi cn() DIŞINDA: tailwind-merge iki border sınıfından
+                 birini yutuyor (bkz. CLAUDE.md). Düz koşul güvenli. */
+              className={`w-full rounded-[4px] border bg-surface px-1 py-0.5 text-[12.5px] font-bold tracking-tight text-ink ${saveFailed ? "border-danger" : "border-brand-ring"}`}
             />
             {/* TOPLANTI NOTU KUTUSU KALKTI (18.09.2026). Dün buraya
                 eklenmişti çünkü gövde düzenlenemiyordu; bir gün sonra isteğin
