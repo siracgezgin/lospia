@@ -393,7 +393,13 @@ export function CrmView({
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={colCount}>{emptyState}</td>
+                <td colSpan={colCount} className="p-0">
+                  {/* Tablo ekrandan geniş: hücre bütün sütunları kapsadığı için
+                      ortalanan boş durum tablonun ortasına, yani ekranın sağına
+                      kayıyor ve solda kocaman bir boşluk bırakıyordu. Kolektif
+                      ayrıntı satırıyla AYNI çözüm: görünen genişlikte kal. */}
+                  <div className="sticky left-0 w-[min(calc(100vw-6rem),72rem)]">{emptyState}</div>
+                </td>
               </tr>
             )}
             {rows.map((c, rowIndex) => {

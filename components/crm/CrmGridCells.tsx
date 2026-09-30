@@ -149,13 +149,22 @@ export function CrmCell({
     setErr(null);
   }
 
+  /* Açılır kutuda GÖRÜNEN metin etiket, saklanan değer anahtardır. Balonda
+     `draft` yazınca kullanıcı "kolektif_zanaat" görüyordu. */
+  const gorunen = opts ? (opts.options.find((o) => o.key === draft)?.label ?? "") : draft;
+
+  /* Sınıf ayrı bir değişkende: `shared.className` diye geri okumak, nesne
+     bir ref'e kapanan `onFocus` da taşıdığı için React Compiler'a "render
+     sırasında ref okundu" gibi görünüyordu. */
+  const cellClass = cn(CELL, busy && CELL_SAVING, err && CELL_ERROR, className);
+
   const shared = {
     "data-cell": cellId,
     disabled,
-    title: err ?? (draft || undefined),
+    title: err ?? (gorunen || undefined),
     "aria-invalid": err ? true : undefined,
     "aria-label": column.label,
-    className: cn(CELL, busy && CELL_SAVING, err && CELL_ERROR, className),
+    className: cellClass,
     onFocus: () => { focused.current = true; },
   };
 
@@ -164,6 +173,11 @@ export function CrmCell({
     return (
       <select
         {...shared}
+        /* OKUN YERİ AYRILIR. Ok globals.css'te `padding-right: 1.9rem` ile
+           konumlanıyor, ama hücrenin `px-2`si onu eziyordu: uzun etiket okun
+           altına giriyor, kutudan taşıyor ve ok görünmez oluyordu
+           ("Zanaat ve Kültürel Ü" diye kesiliyordu). */
+        className={cn(cellClass, "pr-7")}
         value={draft}
         /* Ok işareti globals.css'te tanımlı — tüm select'lerle aynı. */
         onChange={(e) => { setDraft(e.target.value); void commit(e.target.value); }}

@@ -221,7 +221,11 @@ export const CRM_GRID_COLUMNS: CrmGridColumn[] = [
   { key: "name",              label: "Ad",            type: "text",    width: 200 },
   { key: "organization",      label: "Kurum",         type: "text",    width: 170 },
   { key: "role_label",        label: "Rol",           type: "text",    width: 150 },
-  { key: "segment",           label: "Segment",       type: "segment", width: 150 },
+  /* 200 px: Kolektif kutusunun etiketleri uzun ("Zanaat ve Kültürel Üretim").
+     En uzunu ("Kamu, Fonlama ve Kalkınma Kuruluşları") yine de kırpılır —
+     tamamı açılır listede ve fare balonunda durur. Sütunu o etikete göre
+     açmak, kısa segmentli diğer bütün kutularda kocaman bir boşluk bırakırdı. */
+  { key: "segment",           label: "Segment",       type: "segment", width: 200 },
   { key: "crm_status",        label: "Durum",         type: "status",  width: 130 },
   { key: "seeding_stage",     label: "Seeding",       type: "seeding", width: 160 },
   { key: "source_channel",    label: "Kaynak",        type: "source",  width: 130 },
