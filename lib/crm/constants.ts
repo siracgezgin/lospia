@@ -28,6 +28,16 @@ export const CRM_SEGMENTS = [
   { key: "uretim", label: "Üretim" },
   { key: "ekibimiz", label: "Ekibimiz" },
   { key: "dernek", label: "Dernekler" },
+  /* 2026-09-28 — Filinta Metodolojisi kolektif başvuruları. Aslı Hanım:
+     "Operasyon dosyasında kolektif diye bir CRM yapıp oraya bunun
+     database'inin girmesi gerekiyor. Adı, soyadı, bütün aldığımız bilgiler."
+     Adlar AF'nin beş kategorisi (27.09.2026) — kısaltılmaz. Kayıtlar
+     /api/kolektif-basvuru üzerinden kendiliğinden gelir. */
+  { key: "kolektif_tasarim", label: "Tasarım, Sanat ve Mimarlık" },
+  { key: "kolektif_zanaat", label: "Zanaat ve Kültürel Üretim" },
+  { key: "kolektif_uretim", label: "Kolektif ve Yerel Üretim" },
+  { key: "kolektif_marka", label: "Markalar ve Özel Sektör" },
+  { key: "kolektif_kamu", label: "Kamu, Fonlama ve Kalkınma Kuruluşları" },
   { key: "diger", label: "Diğer" },
 ] as const;
 
@@ -94,6 +104,13 @@ export const SEGMENT_TONE: Record<string, string> = {
   basin:      "bg-[#c9e2ed] text-[#37545f]",
   dernek:     "bg-[#eceff8] text-[#505a6d]",
   diger:      "bg-[#e7f1f7] text-[#505b62]",
+  /* Kolektif kutusunun beş segmenti: kutunun İÇİNDE birbirinden ayrılsın diye
+     mevcut merdivenden beş ayrı ton (kontrastları yukarıdakilerle aynı). */
+  kolektif_tasarim: "bg-[#e1dafa] text-[#273dca]",
+  kolektif_zanaat:  "bg-[#f2dbbf] text-[#6a4a0f]",
+  kolektif_uretim:  "bg-[#b9e8de] text-[#165a50]",
+  kolektif_marka:   "bg-[#ffd5ca] text-[#9d1c0f]",
+  kolektif_kamu:    "bg-[#c2e2fc] text-[#175575]",
 };
 export const STATUS_TONE: Record<string, string> = {
   aktif: "bg-[#dcf0e0] text-[#1e713d]",
@@ -146,6 +163,7 @@ export const CRM_CATEGORIES: CrmCategory[] = [
   { key: "uretim", label: "Üretim", segments: ["uretim", "wholesale", "konsinye"], primary: "uretim", hint: "Atölye, toptan, konsinye" },
   { key: "ekibimiz", label: "Ekibimiz", segments: ["ekibimiz"], primary: "ekibimiz", hint: "İç ekip kayıtları" },
   { key: "dernek", label: "Dernekler", segments: ["dernek"], primary: "dernek", hint: "Moda Tasarımcılar Derneği gibi kurumlar" },
+  { key: "kolektif", label: "Kolektif", segments: ["kolektif_tasarim", "kolektif_zanaat", "kolektif_uretim", "kolektif_marka", "kolektif_kamu"], primary: "kolektif_zanaat", hint: "Kolektif başvuru formundan gelenler" },
   { key: "diger", label: "Diğer", segments: ["diger"], primary: "diger", hint: "Henüz yerleşmemiş kayıtlar" },
 ];
 

@@ -49,6 +49,11 @@ app/
                         library onun kutucukları — sidebar'da tek satır)
     activity/ archive/ trash/ settings/ profile/ rules/
   api/inbound-email/    email-to-task webhook (feature-flagged)
+  api/kolektif-basvuru/ Filinta Metodolojisi kolektif formu → CRM "Kolektif"
+                        kutusu (HMAC imzalı; KOLEKTIF_CRM_SECRET yoksa 404).
+                        Başvurunun tamamı workspace_contacts.metadata.kolektif
+                        alanında; şema lib/crm/kolektif.ts, CRM satırının
+                        altında KolektifBasvuruDetayi ile açılır
 components/             alan başına klasör (ui/ = paylaşılan primitifler —
                         TileGrid.tsx TEK giriş deseni: Pano kişi kartı dili
                         Collection, AF Teamwork ve Library'de aynen tekrar eder;

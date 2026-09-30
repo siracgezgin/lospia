@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Award, Building2, Crown, Factory, Handshake, Newspaper,
-  Search, Users, UsersRound, CalendarClock, FolderOpen,
+  Search, Users, UsersRound, CalendarClock, FolderOpen, Network,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Tile, TileGrid } from "@/components/ui/TileGrid";
@@ -42,6 +42,7 @@ const CATEGORY_ICON: Record<string, LucideIcon> = {
   uretim: Building2,
   ekibimiz: UsersRound,
   dernek: Users,
+  kolektif: Network,
   diger: FolderOpen,
 };
 
@@ -57,6 +58,7 @@ const CATEGORY_HEX: Record<string, string> = {
   uretim: "#465610",
   ekibimiz: "#165a50",
   dernek: "#505a6d",
+  kolektif: "#0c6d66",
   diger: "#535b60",
 };
 

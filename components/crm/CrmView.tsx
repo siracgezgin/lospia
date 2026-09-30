@@ -1,11 +1,13 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { Fragment, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Search, Users, Trash2, ExternalLink, Eye, UserPlus, AlertCircle, ChevronLeft, Pencil, CornerDownLeft } from "lucide-react";
+import { Search, Users, Trash2, ExternalLink, Eye, UserPlus, AlertCircle, ChevronLeft, ChevronRight, Pencil, CornerDownLeft } from "lucide-react";
 import { deleteCrmContact, createCrmContact, updateCrmContactField } from "@/lib/actions/crm";
 import { isFihristRow } from "@/lib/crm/constants";
+import { kolektifKaydi } from "@/lib/crm/kolektif";
+import { KolektifBasvuruDetayi } from "./KolektifBasvuruDetayi";
 import {
   CRM_SEGMENTS,
   CRM_GRID_COLUMNS,
@@ -115,6 +117,8 @@ export function CrmView({
      "kaydedildi" der ama hiçbir şey değişmemiştir. */
   const [error, setError] = useState<string | null>(null);
   const [showMatching, setShowMatching] = useState(false);
+  /* Kolektif başvurusunun satır altında açık olduğu kişi (tek seferde bir). */
+  const [acikBasvuru, setAcikBasvuru] = useState<string | null>(null);
 
   const category = useMemo(() => crmCategory(categoryKey), [categoryKey]);
 
@@ -398,8 +402,13 @@ export function CrmView({
                  işaret ediyor. Buradan yazmak o bağları koparırdı. */
               const fihrist = isFihristRow(c.id);
               const n = taskCounts[c.id] ?? 0;
+              /* Kolektif formundan gelen kişi: başvurunun tamamı satırın
+                 altında açılır (Aslı Hanım: "bütün aldığımız bilgiler"). */
+              const basvuru = fihrist ? null : kolektifKaydi((c as { metadata?: unknown }).metadata);
+              const basvuruAcik = basvuru != null && acikBasvuru === c.id;
               return (
-                <tr key={c.id} className="group transition-colors duration-150 ease-standard hover:bg-surface-hover">
+                <Fragment key={c.id}>
+                <tr className="group transition-colors duration-150 ease-standard hover:bg-surface-hover">
                   {CRM_GRID_COLUMNS.map((col, i) => (
                     <td
                       key={col.key}
@@ -412,6 +421,18 @@ export function CrmView({
                         /* Ad hücresi kimliği taşır: fotoğraf solda, yazılan ad
                            sağda — aynı insan her ekranda aynı görünür. */
                         <div className="flex min-w-0 items-center gap-1.5">
+                          {basvuru ? (
+                            <button
+                              type="button"
+                              onClick={() => setAcikBasvuru(basvuruAcik ? null : c.id)}
+                              aria-expanded={basvuruAcik}
+                              aria-label={basvuruAcik ? "Başvuruyu kapat" : "Başvuruyu göster"}
+                              title={basvuruAcik ? "Başvuruyu kapat" : "Başvuruyu göster"}
+                              className="tap-target inline-flex size-6 shrink-0 items-center justify-center rounded-control text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
+                            >
+                              <ChevronRight size={14} aria-hidden className={cn("transition-transform duration-150", basvuruAcik && "rotate-90")} />
+                            </button>
+                          ) : null}
                           <PersonAvatar name={c.name} photoUrl={photoOf(c)} size="sm" title={c.name} />
                           {fihrist ? (
                             <span className="min-w-0 flex-1 truncate px-2 text-[13px] text-ink" title={c.name}>{c.name}</span>
@@ -494,6 +515,17 @@ export function CrmView({
                     </td>
                   )}
                 </tr>
+                {basvuruAcik && basvuru ? (
+                  <tr>
+                    <td colSpan={colCount} className="border-b border-line bg-surface-muted p-0">
+                      {/* Tablo yatay kayıyor; ayrıntı görünen genişlikte kalsın. */}
+                      <div className="sticky left-0 w-[min(calc(100vw-6rem),72rem)] px-4 py-3">
+                        <KolektifBasvuruDetayi b={basvuru} />
+                      </div>
+                    </td>
+                  </tr>
+                ) : null}
+                </Fragment>
               );
             })}
 
@@ -624,6 +656,17 @@ export function CrmView({
                     Görevleri aç <ExternalLink size={11} aria-hidden />
                   </Link>
                 )}
+                {(() => {
+                  const basvuru = fihrist ? null : kolektifKaydi((c as { metadata?: unknown }).metadata);
+                  return basvuru ? (
+                    <details className="mt-2 border-t border-hairline pt-2">
+                      <summary className="tap-target cursor-pointer text-[12.5px] font-medium text-brand">Başvuru bilgileri</summary>
+                      <div className="mt-2">
+                        <KolektifBasvuruDetayi b={basvuru} />
+                      </div>
+                    </details>
+                  ) : null;
+                })()}
               </div>
             );
           })
