@@ -242,10 +242,12 @@ type PreviewState = {
   resigned?: boolean;
 };
 
-/** `documents` kovasının sınırının aynısı (20240312). Burada da bakılır ki
- *  40 MB'lık dosya ağa hiç çıkmadan uyarı alsın — ama asıl sınırı Storage
- *  uyguluyor, çünkü baytlar artık doğrudan oraya gidiyor. */
-const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+/* DOSYA BOYUTU TAVANI YOK (03.10.2026, Sıraç: "sınırı kaldıralım").
+   Burada bir sayı tutmuyoruz: baytlar tarayıcıdan doğrudan Storage'a gidiyor,
+   yani tek gerçek tavan Supabase'in proje ayarındaki değer. İstemciye ikinci
+   bir sayı yazmak, bu oturumda üç kez yaşadığımız tuzağı kurardı — birbirinden
+   habersiz iki sınır, arada sessizce reddedilen bir aralık. Depo reddederse
+   `uploadErrorText` bunu Türkçe söyler. */
 
 /**
  * YÜKLEME BAYRAĞI HAKKINDA (2026-09-05).
@@ -335,8 +337,10 @@ function uploadErrorText(err: unknown): string {
   if (m.includes("failed to fetch") || m.includes("networkerror") || m.includes("load failed") || m.includes("network request failed"))
     return "bağlantı koptu, yüklenemedi. Tekrar deneyin.";
   if (m.includes("abort")) return "yükleme yarıda kesildi. Tekrar deneyin.";
+  /* Sayı YAZILMAZ: tavan artık Supabase'in proje ayarında ve buradan
+     görünmüyor. Sabit bir sayı yazmak, ayar değiştiğinde yalan söylerdi. */
   if (m.includes("exceeded the maximum allowed size") || m.includes("payload too large") || m.includes("413"))
-    return "25 MB sınırını aşıyor.";
+    return "depo bu dosyayı kabul etmedi: boyut tavanını aşıyor.";
   if (m.includes("row-level security") || m.includes("unauthorized") || m.includes("403"))
     return "bu klasöre yükleme yetkiniz yok.";
   if (m.includes("jwt") || m.includes("401")) return "oturumunuzun süresi dolmuş. Sayfayı yenileyip tekrar deneyin.";
@@ -1076,11 +1080,6 @@ export function DriveBrowser({
       const queue: File[] = [];
       for (const f of picked) {
         if (f.size === 0) { errors.push(`${f.name}: dosya boş, atlandı.`); continue; }
-        if (f.size > MAX_UPLOAD_BYTES) {
-          const mb = (f.size / 1024 / 1024).toFixed(1).replace(".", ",");
-          errors.push(`${f.name}: 25 MB sınırını aşıyor (${mb} MB).`);
-          continue;
-        }
         queue.push(f);
       }
       if (queue.length === 0) {

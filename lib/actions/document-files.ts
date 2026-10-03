@@ -24,7 +24,8 @@ import { getDisplayNotificationEmail } from "@/lib/utils/notification-email";
 // URL ile — föy görsellerinden (public bucket) bilinçli olarak farklı.
 
 const BUCKET = "documents";
-/* Gerçek sınır artık KOVANIN sınırı (25 MB, 20240312). Sunucu tarafında ayrı
+/* Boyut tavanı YOK (20240364): kovanın kilidi kaldırıldı, tek gerçek tavan
+   Supabase'in proje ayarındaki değer. Sunucu tarafında ayrı
    bir bayt kontrolü yok: dosya buradan geçmiyor, doğrudan Storage'a gidiyor ve
    sınırı Storage uyguluyor. İstemcideki kontrol yalnız erken uyarı içindir. */
 const AUTH_REQUIRED = "Kimlik doğrulama gerekli.";
@@ -233,7 +234,7 @@ export async function deleteFolder(id: string): Promise<{ ok: true } | { error: 
  * taşınıyordu ve gövde tavana çarpıyordu.
  *
  * Üç ayrı sınır vardı ve hiçbiri diğerini bilmiyordu:
- *   · tarayıcı kontrolü     25 MB  (DriveBrowser)
+ *   · tarayıcı kontrolü     25 MB  (DriveBrowser — 20240364'te kaldırıldı)
  *   · Server Action gövdesi  8 MB  (next.config.ts)
  *   · Vercel istek gövdesi  4,5 MB (platform sabiti — next.config EZEMEZ)
  * Aradaki her dosya istemci kontrolünü geçip sunucuda reddediliyordu; geriye
@@ -242,7 +243,7 @@ export async function deleteFolder(id: string): Promise<{ ok: true } | { error: 
  *
  * Bu yüzden bayt akışı tarayıcıdan doğrudan Storage'a gidiyor. Sunucu yalnız
  * iki küçük iş yapıyor: yolu ÜRETMEK ve kaydı AÇMAK. Gerçek sınır artık
- * kovanın kendi sınırı (25 MB) ve dosya yolun sahibi olan çalışma alanına
+ * Supabase'in proje tavanı (20240364) ve dosya yolun sahibi olan çalışma alanına
  * yazılıyor — RLS aynen devrede, servis anahtarı kullanılmıyor.
  *
  * Yol: documents/{workspace_id}/{folder_id|kok}/{uuid}-{ad}  — ad ASCII'ye
@@ -677,10 +678,12 @@ const IMPORT_IMAGE_LIMIT = 300;
    kullanıcı uzun bir beklemenin sonunda anlamsız bir hata görür, sunucuda da iz
    kalmaz. Bu yüzden karar işe GİRİŞMEDEN ÖNCE verilir. */
 const IMPORT_SIZE_LIMIT = 20 * 1024 * 1024;
-/** Kovanın kendi sınırı (20240312). CSV bu tavana kadar denenir: metin okunup
- *  satıra bölünüyor, ağır zip çözücü hiç çalışmıyor — 20 MB'da kesmek bugüne
- *  kadar sorunsuz açılan dosyaları denemeden reddetmek olurdu. */
-const BUCKET_SIZE_LIMIT = 25 * 1024 * 1024;
+/** CSV'nin AKTARIM tavanı. Metin okunup satıra bölünüyor, ağır zip çözücü hiç
+ *  çalışmıyor; bu yüzden xlsx/docx'ten daha cömert. Eskiden kovanın sınırına
+ *  bağlıydı — 20240364 o sınırı kaldırdığı için artık KENDİ sayısı var:
+ *  aktarım bir sunucu işidir ve yüklemeyle aynı tavanı paylaşmak zorunda
+ *  değildir (yükleme tarayıcıdan doğrudan depoya gider, aktarım gitmez). */
+const CSV_IMPORT_LIMIT = 25 * 1024 * 1024;
 
 /** Aktarım hatasını kullanıcının BİR ŞEY YAPABİLECEĞİ cümleye çevirir.
  *  Hepsi tek genel cümleye inince aynı sorun defalarca bildiriliyordu. */
@@ -836,7 +839,7 @@ export async function importUploadedSheet(
     return { error: "Eski .xls biçimi aktarılamıyor. Dosyayı Excel'de açıp .xlsx olarak kaydedip yeniden yükleyin." };
   }
   const isCsv = /\.csv$/i.test(name);
-  if ((rec.file_size ?? 0) > (isCsv ? BUCKET_SIZE_LIMIT : IMPORT_SIZE_LIMIT)) {
+  if ((rec.file_size ?? 0) > (isCsv ? CSV_IMPORT_LIMIT : IMPORT_SIZE_LIMIT)) {
     return { error: `Bu dosya tabloya aktarılamayacak kadar büyük (${humanSize(rec.file_size)}). İndirerek Excel'de açabilirsiniz.` };
   }
 
