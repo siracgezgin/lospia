@@ -672,17 +672,33 @@ export async function sendDocumentByEmail(
  *  Aşılırsa kullanıcıya SÖYLENİR; orijinal dosya zaten Drive'da duruyor. */
 const IMPORT_IMAGE_LIMIT = 300;
 
-/* AKTARIM BOYUT TAVANI — YALNIZ AĞIR BİÇİMLER (xlsx · docx). O boyda bir zip'i
-   sunucuda belleğe açmak fonksiyonu süre aşımına ya da bellek tükenmesine
-   götürüyor ve o iki durumda aşağıdaki `catch` HİÇ ÇALIŞMAZ: istek ölür,
-   kullanıcı uzun bir beklemenin sonunda anlamsız bir hata görür, sunucuda da iz
-   kalmaz. Bu yüzden karar işe GİRİŞMEDEN ÖNCE verilir. */
-const IMPORT_SIZE_LIMIT = 20 * 1024 * 1024;
-/** CSV'nin AKTARIM tavanı. Metin okunup satıra bölünüyor, ağır zip çözücü hiç
- *  çalışmıyor; bu yüzden xlsx/docx'ten daha cömert. Eskiden kovanın sınırına
- *  bağlıydı — 20240364 o sınırı kaldırdığı için artık KENDİ sayısı var:
- *  aktarım bir sunucu işidir ve yüklemeyle aynı tavanı paylaşmak zorunda
- *  değildir (yükleme tarayıcıdan doğrudan depoya gider, aktarım gitmez). */
+/* AKTARIM BOYUT TAVANI — YALNIZ AĞIR BİÇİMLER (xlsx · docx).
+   Gerekçe: zip'i sunucuda belleğe açmak bellek tüketir ve tükenirse aşağıdaki
+   `catch` HİÇ ÇALIŞMAZ — istek ölür, kullanıcı anlamsız bir hata görür. Karar
+   bu yüzden işe GİRİŞMEDEN ÖNCE verilir.
+
+   TAVAN 20 → 60 MB (03.10.2026). Eski sayı bir VARSAYIMA dayanıyordu; ölçüldü
+   ve varsayım yanlış çıktı. DOSYA BOYUTU KÖTÜ BİR ÖLÇÜ — maliyeti belirleyen
+   hücre sayısıdır, bayt değil:
+
+     32 MB · 300 görsel · 1.800 hücre    → zirve 153 MB, 0,17 sn
+      7 MB · görsel yok · 1,2 M hücre    → zirve 651 MB, 1,7 sn
+
+   Yani ekibin görsel ağırlıklı kataloğu (AFCOM deseni: ilk sütun ürün
+   fotoğrafı) 20 MB'da boşuna reddediliyordu; o dosya Vercel'in 1024 MB'lık
+   tavanının yanından bile geçmiyor. Metin ağırlıklı dev bir dosya hâlâ
+   zorlayabilir — ama anlık görüntü zaten 5000×100'de kırpılıp kullanıcıya
+   söylüyor (lib/sheets/model.ts), yani tablo tarafı sınırlı.
+
+   Bir gün metin ağırlıklı bir dosya düşerse çözüm kod değil ayar: Vercel →
+   Settings → Functions → bellek 1024'ten yükseltilir. Süre zaten açık
+   (app/(app)/documents/page.tsx: maxDuration = 300). */
+const IMPORT_SIZE_LIMIT = 60 * 1024 * 1024;
+/** CSV'nin AKTARIM tavanı — xlsx'ten DÜŞÜK, ve bu bilinçli. CSV'de zip çözücü
+ *  çalışmaz ama her satır yine ExcelJS hücresine dönüşür; maliyet hücre
+ *  sayısındadır ve 25 MB düz metin yaklaşık 1 milyon hücre eder, yani ölçülen
+ *  en ağır noktaya zaten yakındır. Görsel taşımadığı için xlsx'in aksine
+ *  boyutundan "ucuz" sayılamaz. */
 const CSV_IMPORT_LIMIT = 25 * 1024 * 1024;
 
 /** Aktarım hatasını kullanıcının BİR ŞEY YAPABİLECEĞİ cümleye çevirir.
