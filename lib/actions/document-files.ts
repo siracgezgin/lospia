@@ -899,6 +899,46 @@ export async function importUploadedSheet(
     snapshot = report.snapshot;
     warnings = report.notes;
 
+    /* HÜCRENİN İÇİNDEKİ GÖRSELLER (Excel 365 "Hücreye Yerleştir", WPS
+       DISPIMG). ExcelJS bunları görmüyor; hücre "#VALUE!" yazısıyla
+       geliyordu. Paketten ayrıca okunur — bkz. lib/sheets/xlsx-cell-images. */
+    const { readInCellImages } = await import("@/lib/sheets/xlsx-cell-images");
+    const inCell = isCsv
+      ? { placements: [], media: new Map<string, Buffer>(), mediaFileCount: 0 }
+      : await readInCellImages(buf);
+    const sheetIndexByName = new Map(
+      (wb.worksheets as { name: string }[]).map((w, i) => [w.name, i] as const),
+    );
+
+    /* Tek bir yükleme kuyruğu: yüzen görsel ExcelJS'in medya kimliğiyle,
+       hücre-içi görsel paket yoluyla anahtarlanır. Aynı bayt iki yoldan da
+       gelse sha256 yolu aynı çıkar; depoda tek kopya kalır. */
+    type ImgSource = { buffer?: Buffer; extension?: string; name?: string };
+    const sources = new Map<string, () => ImgSource>();
+    const placements: { key: string; sheet: number; r: number; c: number; cs: number; rs: number; inCell: boolean }[] = [];
+    for (const im of report.images) {
+      const k = `m:${im.imageId}`;
+      if (!sources.has(k)) {
+        sources.set(k, () => wb.getImage(im.imageId) as unknown as ImgSource);
+      }
+      placements.push({ key: k, sheet: im.sheet, r: im.r, c: im.c, cs: im.cs, rs: im.rs, inCell: false });
+    }
+    for (const p of inCell.placements) {
+      const sheet = sheetIndexByName.get(p.sheetName);
+      if (sheet === undefined) continue;
+      const k = `p:${p.mediaPath}`;
+      if (!sources.has(k)) {
+        const file = p.mediaPath.split("/").pop() ?? "";
+        const dot = file.lastIndexOf(".");
+        sources.set(k, () => ({
+          buffer: inCell.media.get(p.mediaPath),
+          extension: dot > 0 ? file.slice(dot + 1).toLowerCase() : "png",
+          name: dot > 0 ? file.slice(0, dot) : file,
+        }));
+      }
+      placements.push({ key: k, sheet, r: p.r, c: p.c, cs: 1, rs: 1, inCell: true });
+    }
+
     /* ── GÖMÜLÜ GÖRSELLER ────────────────────────────────────────────────
        Sıraç (2026-09-16): "Resimler yok geliyor, resimlerin de gelmesi
        lazımdı." AFCOM'un ilk sütunu ürün fotoğrafı — onlar gelmezse tablo
@@ -913,8 +953,8 @@ export async function importUploadedSheet(
 
        Görseller kendi alt klasörüne konur: yüzlerce fotoğrafı föyün yanına
        dökmek Drive'ı okunmaz hâle getirirdi. */
-    if (report.images.length > 0) {
-      const used = [...new Set(report.images.map((i) => i.imageId))];
+    if (placements.length > 0) {
+      const used = [...sources.keys()];
       const capped = used.slice(0, IMPORT_IMAGE_LIMIT);
       if (used.length > capped.length) {
         warnings.push(
@@ -935,7 +975,7 @@ export async function importUploadedSheet(
       /* Yüklemeler SIRAYLA değil, küçük bir havuzla: yüzlerce görselde
          sıralı yükleme dakikalar sürer, sınırsız paralel ise depolamayı
          boğar. Altı eşzamanlı istek ikisinin arasında duruyor. */
-      const idByMedia = new Map<number, string>();
+      const idByMedia = new Map<string, string>();
       let failed = 0;
       const queue = [...capped];
       const worker = async () => {
@@ -943,12 +983,11 @@ export async function importUploadedSheet(
           const mediaId = queue.shift();
           if (mediaId === undefined) return;
           try {
-            const media = wb.getImage(mediaId) as unknown as {
-              buffer?: Buffer; extension?: string; name?: string;
-            };
+            const media = sources.get(mediaId)!();
             if (!media?.buffer?.length) { failed++; continue; }
-            const ext = (media.extension ?? "png").replace(/[^a-z0-9]/gi, "") || "png";
-            const mime = `image/${ext === "jpg" ? "jpeg" : ext}`;
+            let ext = (media.extension ?? "png").replace(/[^a-z0-9]/gi, "").toLowerCase() || "png";
+            if (ext === "jpg") ext = "jpeg";
+            const mime = `image/${ext}`;
 
             /* AYNI FOTOĞRAF İKİNCİ KEZ YÜKLENMEZ.
                Sıraç (2026-09-16): "Gereksiz yer kaplandı, DB dolmasın."
@@ -970,7 +1009,7 @@ export async function importUploadedSheet(
                dokunmanın hiçbir karşılığı yok. Eski temizleyici "Ürün.png"i
                "_r_n.png" yapıyor, hem başlığı hem dosya adını bozuyordu —
                kural: ANAHTAR ascii, GÖRÜNEN AD ham (bkz. storageSafeName). */
-            const fileName = `${(media.name ?? `gorsel-${mediaId + 1}`).slice(0, 200)}.${ext}`;
+            const fileName = `${(media.name ?? `gorsel-${used.indexOf(mediaId) + 1}`).slice(0, 200)}.${ext}`;
             const path = `${ctx.workspaceId}/aktarilan-gorseller/${sha}.${ext}`;
 
             /* Bu içerik daha önce aktarıldıysa kaydı yeniden kullan. */
@@ -1029,18 +1068,30 @@ export async function importUploadedSheet(
       /* Yerleşimleri hücrelere yaz. */
       const wbSnap = snapshot as { sheets: { cells: Record<string, Record<string, unknown>> }[] };
       let placed = 0;
-      for (const im of report.images) {
-        const docId = idByMedia.get(im.imageId);
+      for (const im of placements) {
+        const docId = idByMedia.get(im.key);
         if (!docId) continue;
-        const sheet = wbSnap.sheets[im.sheet];
+        const sheet = wbSnap.sheets[im.sheet] as typeof wbSnap.sheets[number] & { rows?: number; cols?: number };
         if (!sheet) continue;
+        if (im.r >= (sheet.rows ?? Infinity) || im.c >= (sheet.cols ?? Infinity)) continue;
         const k = `${im.r}:${im.c}`;
         const cell = sheet.cells[k] ?? {};
+        /* Hücre-içi görselde hücrenin "değeri" görselin kendisiydi; ExcelJS
+           onun yerine "#VALUE!" (ya da WPS'te DISPIMG formülü) okudu. O yazı
+           görselin altında kalmasın. */
+        if (im.inCell) { delete cell.v; delete cell.f; }
         cell.img = { id: docId, name: "Görsel", cs: im.cs, rs: im.rs };
         sheet.cells[k] = cell;
         placed++;
       }
       if (failed > 0) warnings.push(`${failed} görsel aktarılamadı.`);
+    } else if (inCell.mediaFileCount > 0) {
+      /* Pakette fotoğraf var ama hiçbirinin YERİ okunamadı. Sessiz kalırsak
+         kullanıcı "resimler açılmıyor" der ve sebebi bilinmez. */
+      warnings.push(
+        `Dosyada ${inCell.mediaFileCount} görsel var ama hücrelere yerleştirilemedi. ` +
+        "Orijinal dosya Drive'da duruyor.",
+      );
     }
   } catch (err) {
     /* HATA ARTIK YUTULMUYOR. Parola korumalı dosya, bozuk arşiv ve ExcelJS'in

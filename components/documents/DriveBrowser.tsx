@@ -37,6 +37,7 @@ import {
 /* Dosyanın baytları Server Action'dan GEÇMİYOR (bkz. prepareDocumentUpload):
    tarayıcı kendi oturumuyla doğrudan Storage'a yazıyor, RLS aynen devrede. */
 import { createClient as createBrowserSupabase } from "@/lib/supabase/client";
+import { shrinkForUpload } from "@/lib/utils/shrink-upload";
 import { createTeamworkDoc, deleteOperationDocument, setOperationDocumentVisibility } from "@/lib/actions/documents";
 import {
   createSheetInFolder, deleteOperationSpreadsheet, renameOperationSpreadsheet,
@@ -1099,13 +1100,27 @@ export function DriveBrowser({
         }
         setUpload({ total: queue.length, done, name: file.name, errors: [...errors], finished: false });
         try {
+          /* 0) Fotoğraf küçülür — tek başına yüklenen de, Excel · Word içine
+                gömülü olan da (lib/utils/shrink-upload.ts). AF: "Bana sadece
+                görüp ne olduğunu anlamaya ihtiyacım var." Küçültülemezse
+                orijinal yüklenir. */
+          const hazir = await shrinkForUpload(file, (k, t) =>
+            setUpload({
+              total: queue.length,
+              done,
+              name: `${file.name} · fotoğraflar küçültülüyor ${k}/${t}`,
+              errors: [...errors],
+              finished: false,
+            }),
+          );
+          const yuklenecek = hazir.file;
           /* 1) Sunucu yolu ÜRETİR — depodaki nesnenin TÜRÜNÜ de o söyler.
                 Tarayıcı .xlsx/.docx'te `file.type`ı boş ya da "octet-stream"
                 bırakıyor; imzalı adres o türle servis edilince PDF önizleme
                 penceresi belgeyi çizmek yerine indirme başlatıyordu. Türetme
                 tek yerde kalsın diye uzantıdan çıkarmayı sunucu yapıyor
                 (resolveFileMime). */
-          const prep = await prepareDocumentUpload(file.name, target, file.type);
+          const prep = await prepareDocumentUpload(yuklenecek.name, target, yuklenecek.type);
           if ("error" in prep) {
             errors.push(`${file.name}: ${prep.error}`);
             done += 1;
@@ -1115,7 +1130,7 @@ export function DriveBrowser({
                 geçseydi Vercel'in 4,5 MB'lık istek sınırına takılırdı. */
           const { error: upErr } = await supabase.storage
             .from(prep.bucket)
-            .upload(prep.path, file, {
+            .upload(prep.path, yuklenecek, {
               contentType: prep.contentType,
               upsert: false,
             });
@@ -1127,9 +1142,9 @@ export function DriveBrowser({
           /* 3) Dosya yerinde — kaydı aç. */
           const res = await registerDocumentFile({
             path: prep.path,
-            name: file.name,
-            size: file.size,
-            mime: file.type || null,
+            name: yuklenecek.name,
+            size: yuklenecek.size,
+            mime: yuklenecek.type || null,
             folder_id: target,
             section,
           });
