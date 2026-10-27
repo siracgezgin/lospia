@@ -54,7 +54,13 @@ export function buildCells(
         if (rows[i]) { used = Math.max(used, i + 1); break; }
       }
     }
-    rowCountOfSlot.set(slot, Math.max(used, DEFAULT_TOPIC_ROWS));
+    /* EN DOLU GÜNÜN ALTINDA HER ZAMAN BİR BOŞ SATIR.
+       Sıraç (2026-10-27): pazartesinin "EF Bol Model Elbise"sini salının
+       dördüncü konusunun altına sürüklemek istedi; salı dolu olduğu için
+       bırakacak hücre yoktu. "+ Konu ekle" satırı bir düğmedir, bırakma
+       hedefi değildir. Artık son dolu satırın altında boş bir "Konu N+1"
+       hep durur; konu oraya sürüklenebilir. */
+    rowCountOfSlot.set(slot, Math.max(used + 1, DEFAULT_TOPIC_ROWS));
   }
 
   return { byCell, topicRows, rowCountOfSlot, extraSlots };
