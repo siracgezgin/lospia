@@ -776,8 +776,8 @@ export function CollectionBrowser({ sheets, isAdmin, isOwner = false, seasons = 
             />
           ) : (
             /* EDİTORYAL DİZİLİM. Kart = görsel + ad; bu kadar.
-               Görsel 3/4 dikey ve object-cover: giysi fotoğrafı bütün
-               koleksiyonda aynı çerçevede durur. Sütun sayısı ekranla büyür
+               Görsel 3/4 dikey çerçevede ve object-contain: çerçeve bütün
+               koleksiyonda aynı, görsel KIRPILMAZ (bkz. SheetCard). Sütun sayısı ekranla büyür
                (2xl'de altı) — geniş monitörde koleksiyon gerçekten yan yana
                görülür. Hover'da kart yer değiştirmez, görsel büyümez: gölge ve
                kenarlık yeter. */
@@ -916,10 +916,16 @@ function SheetCard({
           göre hesaplanmış sabit bir uzaklık (bottom-54px) kullanılıyordu ve
           ürün kodu/cinsi olmayan kartta satır kısaldığı için rozet ADIN
           ÜSTÜNE biniyordu. */}
-      <div className="relative aspect-[3/4] w-full overflow-hidden rounded-t-card bg-surface-muted">
+      {/* GÖRSEL TAM SIĞAR, KIRPILMAZ. Aslı Hanım (Selen aracılığıyla,
+          29.10.2026): "Bunların tam sığmasını istedi." object-cover 3/4
+          çerçeveyi doldurmak için fotoğrafın üstünü altını kesiyordu —
+          askılı bluzun askısı, gecelikin eteği kayboluyordu. Artık görsel
+          bütünüyle görünür; artan boşluk beyaz zemin. Beyaz: teknik
+          çizimlerin ve stüdyo çekimlerinin kendi zemini, bant fark edilmez. */}
+      <div className={cn("relative aspect-[3/4] w-full overflow-hidden rounded-t-card", cover ? "bg-white" : "bg-surface-muted")}>
         {cover ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={cover} alt="" loading="lazy" className="h-full w-full object-cover" />
+          <img src={cover} alt="" loading="lazy" className="h-full w-full object-contain" />
         ) : (
           /* Görselsiz ürün düzeni bozmaz: aynı oran, nötr yüzey, küçük ikon. */
           <div className="grid h-full w-full place-items-center text-subtle">

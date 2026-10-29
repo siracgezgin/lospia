@@ -129,15 +129,16 @@ export function ImageUploader({
            yamuk duruyordu. Genişliği kabı belirler, oranı 3/4 sabit. */
         <div className="w-full">
           {mine.length > 0 ? (
-            <div className="group relative overflow-hidden rounded-card border border-line bg-surface-muted">
+            <div className="group relative overflow-hidden rounded-card border border-line bg-white">
               <button
                 type="button"
                 onClick={() => setLightbox(mine[0]!.url)}
                 className="block w-full cursor-zoom-in"
                 aria-label="Görseli büyüt"
               >
+                {/* Koleksiyon kartıyla aynı kural: kırpılmaz, tam sığar. */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={mine[0]!.url} alt="" className="aspect-[3/4] w-full object-cover" />
+                <img src={mine[0]!.url} alt="" className="aspect-[3/4] w-full object-contain" />
               </button>
               <button
                 type="button"
