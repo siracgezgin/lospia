@@ -53,6 +53,8 @@ export const NAV_SECTIONS: NavSection[] = [
       // ikinci kez kart açmak "her şey her yerde"nin ta kendisi olurdu.
       { href: "/home", label: "Home Page", icon: Home, adminOnly: false },
       link("planning"),
+      // Nisa Hanım (29.10.2026): "takvim gibi" — Calendar'ın hemen altında.
+      link("siparis"),
       link("board"),
       /* LIST — Reports'un yerine.
          Sıraç (2026-08-29): "Reports / size atanan işler ve teslim tarihleri

@@ -64,6 +64,21 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
     access: "all",
     group: "calisma",
   },
+  /* SİPARİŞ DEĞERLENDİRME — Nisa Hanım (29.10.2026): "Bu sistemi takvim gibi
+     operasyon sistemine entegre edebilir miyiz?" Ekibin Excel şablonu
+     (fotoğraf · numune · kritik · Aslı Hanım'ın toplantı notu · karar).
+     "Takvim gibi" = Calendar'ın yanında kendi menü satırı (Sıraç onayı,
+     29.10.2026). Rota Koleksiyon altında kalır; Collection şeridindeki
+     sekmesi de durur. */
+  {
+    key: "siparis",
+    title: "Order Review",
+    description: "Sipariş değerlendirme — fotoğraf, imalatçı numunesi, kritikler, toplantı notları ve karar.",
+    href: "/collection/siparis",
+    icon: ClipboardCheck,
+    access: "all",
+    group: "calisma",
+  },
   {
     key: "board",
     title: "Board",
@@ -117,20 +132,6 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
     description: "Usta başına ödeme — hangi usta hangi ürünü dikti, ne kadar ödenecek.",
     href: "/collection/odeme",
     icon: HandCoins,
-    access: "all",
-    group: "urun",
-  },
-  /* SİPARİŞ DEĞERLENDİRME — Nisa Hanım (29.10.2026): "Bu sistemi takvim gibi
-     operasyon sistemine entegre edebilir miyiz?" Ekibin Excel şablonu
-     (fotoğraf · numune · kritik · Aslı Hanım'ın toplantı notu · karar).
-     Koleksiyon'un sekmesi: Cost ve Payment Table gibi ürün çekirdeğinde
-     yaşar, sol menüye ayrı başlık açmaz. */
-  {
-    key: "siparis",
-    title: "Order Review",
-    description: "Sipariş değerlendirme — fotoğraf, imalatçı numunesi, kritikler, toplantı notları ve karar.",
-    href: "/collection/siparis",
-    icon: ClipboardCheck,
     access: "all",
     group: "urun",
   },
