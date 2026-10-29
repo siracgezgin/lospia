@@ -8,13 +8,14 @@ import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   useDraggable, useDroppable, type DragEndEvent, type DragStartEvent,
 } from "@dnd-kit/core";
-import { CheckCircle2, Plus, Pencil, X, Loader2, XCircle, Copy, Maximize2, AlertTriangle, StickyNote } from "lucide-react";
+import { CheckCircle2, Plus, Pencil, X, Loader2, XCircle, Copy, Maximize2, AlertTriangle, StickyNote, Repeat } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { categoryMeta } from "@/lib/planning/categories";
 import { WEEKDAY_SHORT_EN, WEEKDAY_LONG_TR, type RuntimeBand } from "@/lib/planning/bands";
 import { BandEditor } from "./BandEditor";
 import { istanbulLabel, AWAY_LABEL, HOME_LABEL, normalizeSlot } from "@/lib/planning/timezones";
 import { moveMeeting, moveTopic, duplicateMeeting, setMeetingTitle } from "@/lib/actions/planning";
+import { applyColumnTitleForward } from "@/lib/actions/planning-bands";
 import { KimBadges } from "./KimBadges";
 import type { PlanningMeetingWithTopics, PlanningTopic } from "@/types";
 import { CELL_DROP_TARGET, CELL_INTERACTIVE } from "./cell-style";
@@ -117,6 +118,36 @@ export function PlanningWeekGrid({
   const [isMoving, startMove] = useTransition();
   /** Sürükleme Option/Alt ile mi başladı — kopya kipinin göstergesi. */
   const [copyMode, setCopyMode] = useState(false);
+  /* SON YENİDEN ADLANDIRMA — "sonraki haftalara da uygula" teklifi için.
+     Nisa Hanım (29.10.2026): bir haftada başlığı değiştirince diğer haftaları
+     tek tek düzeltmek zorunda kalıyorlardı. Kayıt her zaman YALNIZ o güne
+     yazılır; ileriye taşımak ayrı, açık bir tıklamadır — bu haftaya özel bir
+     ad (tatil, dış toplantı) sessizce bütün takvime yayılmasın. */
+  const [renamed, setRenamed] = useState<
+    { meeting_date: string; time_slot: string; oldTitle: string; newTitle: string } | null
+  >(null);
+  const [isForwarding, startForward] = useTransition();
+
+  function applyForward() {
+    if (!renamed) return;
+    const r = renamed;
+    startForward(async () => {
+      try {
+        const res = await applyColumnTitleForward(r);
+        if ("error" in res) { setMoveError(`Başlık diğer haftalara uygulanamadı: ${res.error}`); return; }
+        setRenamed(null);
+        const n = res.renamed + res.created;
+        setMoveNote(
+          n > 0
+            ? `“${r.newTitle}” sonraki ${n} haftada da güncellendi; yeni açılan haftalar da bu adla gelecek.`
+            : `Yeni açılan haftalar “${r.newTitle}” adıyla gelecek.`,
+        );
+        router.refresh();
+      } catch (err) {
+        setMoveError(`Başlık diğer haftalara uygulanamadı: ${err instanceof Error ? err.message : "Bağlantı kurulamadı."}`);
+      }
+    });
+  }
 
   const sensors = useSensors(
     // 5px eşiği: hücreye TIKLAMAK hâlâ düzenleyiciyi açar, sürükleme ayrı.
@@ -244,6 +275,10 @@ export function PlanningWeekGrid({
             personHex={personHex}
             onOpen={(meetingId) => onOpen(iso, slot, i, undefined, meetingId)}
             onSaved={() => router.refresh()}
+            onRenamed={(oldTitle, newTitle) => {
+              setMoveNote(null);
+              setRenamed({ meeting_date: iso, time_slot: slot, oldTitle, newTitle });
+            }}
             /* Izgaranın TEK hata şeridi: taşıma da, başlık kaydı da oraya yazıyor
                — kullanıcı bir şeyin tutmadığını hep aynı yerde okur. */
             onError={setMoveError}
@@ -474,7 +509,7 @@ export function PlanningWeekGrid({
           aynı sayfada, aynı z katmanında bottom-4'te duruyor. İkisi aynı anda
           açıkken üst üste biniyor ve telefonda geri almanın TEK yolu olan
           düğme bu kutunun altında kalıyordu. */}
-      {(isMoving || moveError || moveNote) && (
+      {(isMoving || isForwarding || moveError || moveNote || renamed) && (
         <div className="mb-bottom-nav pointer-events-none fixed inset-x-0 bottom-20 z-[110] flex justify-center px-4 md:mb-0">
           <div
             role={moveError ? "alert" : "status"}
@@ -496,10 +531,32 @@ export function PlanningWeekGrid({
                   <X size={15} aria-hidden />
                 </button>
               </>
-            ) : isMoving ? (
+            ) : isMoving || isForwarding ? (
               <span className="flex items-center gap-2 text-[13.5px] text-muted">
-                <Loader2 size={14} className="animate-spin" aria-hidden /> Taşınıyor…
+                <Loader2 size={14} className="animate-spin" aria-hidden /> {isForwarding ? "Sonraki haftalara uygulanıyor…" : "Taşınıyor…"}
               </span>
+            ) : renamed ? (
+              <>
+                <span className="min-w-0 text-[13.5px] text-ink">
+                  <b className="font-semibold">“{renamed.newTitle}”</b> yalnız bu haftaya yazıldı.
+                </span>
+                <button
+                  type="button"
+                  onClick={applyForward}
+                  className="tap-target inline-flex h-8 shrink-0 items-center gap-1.5 rounded-control bg-brand px-3 text-[13px] font-semibold text-white transition-[background-color,transform] duration-150 hover:bg-brand-strong active:scale-[0.98]"
+                >
+                  <Repeat size={14} aria-hidden /> Sonraki haftalara da uygula
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRenamed(null)}
+                  aria-label="Yalnız bu hafta kalsın"
+                  title="Yalnız bu hafta kalsın"
+                  className="tap-target grid size-8 shrink-0 place-items-center rounded-control text-subtle transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
+                >
+                  <X size={15} aria-hidden />
+                </button>
+              </>
             ) : (
               <>
                 <span className="flex min-w-0 items-center gap-2 text-[13.5px] text-ink">
@@ -530,7 +587,7 @@ export function PlanningWeekGrid({
  */
 function TitleCell({
   cellId, cell, meta, hasBand, isAdmin, draggable, memberNames, memberPhotos = {}, personHex, onOpen,
-  onSaved, onError,
+  onSaved, onRenamed, onError,
 }: {
   cellId: string;
   cell: PlanningMeetingWithTopics[];
@@ -543,6 +600,8 @@ function TitleCell({
   personHex: Record<string, string>;
   onOpen: (_meetingId?: string) => void;
   onSaved: () => void;
+  /** Başlık değişti (eski → yeni). Izgara "sonraki haftalara uygula"yı sunar. */
+  onRenamed: (_oldTitle: string, _newTitle: string) => void;
   onError: (_message: string) => void;
 }) {
   const meeting = cell[0] ?? null;
@@ -641,6 +700,7 @@ function TitleCell({
          sıçraması demekti. Kutu hiç sökülmezse autoFocus bir daha çalışmaz. */
       setEditing(false);
       onSaved();
+      if (next) onRenamed((title ?? "").trim(), next);
     } catch (err) {
       /* Server action hata DÖNDÜRMEZ, FIRLATIR: ağ koptuğunda ya da dağıtım
          anında çağrının kendisi reddedilir. `catch` olmadığı için bu, hiçbir

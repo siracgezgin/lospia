@@ -7,6 +7,7 @@ import type { AppRole } from "@/lib/auth/permissions";
 import { PLANNING_BANDS } from "@/lib/planning/bands";
 import { normalizeSlot } from "@/lib/planning/timezones";
 import { toActionErrorMessage } from "@/lib/utils/supabase-errors";
+import { addDaysISO } from "@/lib/utils/today";
 
 /**
  * Takvimin sol sütunu — şerit adı, saat, konu satır sayısı (20240326).
@@ -219,4 +220,139 @@ export async function deletePlanningBand(
   if (error) return { error: toActionErrorMessage(error) };
   revalidate();
   return { ok: true };
+}
+
+/**
+ * GÜN BAŞLIĞINI SONRAKİ HAFTALARA DA UYGULA.
+ *
+ * Nisa Hanım (29.10.2026): "Takvimde bir haftada başlıklarda değişiklik
+ * yaptığımız zaman tümüne nasıl entegre edebiliriz, manuel şekilde düzeltmek
+ * yerine?"
+ *
+ * Başlık hücresi yalnız O GÜNÜN toplantısını yeniden adlandırıyordu. Yeni
+ * haftalar ise şeridin `columns` listesinden kuruluyor ve o liste ekrandan
+ * hiç değişmiyordu — "Ready to Wear" bir kez "AF Team" yapılsa da her yeni
+ * hafta eski adla açılıyor, her hafta elle düzeltiliyordu.
+ *
+ * Bu eylem üç şeyi birden yapar:
+ *   1. Şeridin o güne ait başlığını değiştirir → henüz açılmamış haftalar
+ *      yeni adla kurulur (ensureWeekScaffold).
+ *   2. SONRAKİ haftalarda aynı gün + aynı saatte ESKİ adı taşıyan toplantıları
+ *      yeni ada çevirir. Başka bir ad verilmiş hücreye dokunulmaz — biri o
+ *      haftayı bilerek farklı adlandırdıysa o karar korunur.
+ *   3. Eski başlık BOŞTU (o gün o saatte toplantı yoktu) → zaten açılmış
+ *      sonraki haftalarda o hücreye aynı başlıkla toplantı açar.
+ *
+ * GEÇMİŞE DOKUNULMAZ: yalnız verilen günden SONRASI. Takvim bir arşivdir
+ * (Aslı Hanım, 2026-09-07: "hangi tarihte hangi toplantıyı yaptığımız kalsın").
+ */
+const ForwardSchema = z.object({
+  meeting_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Geçersiz tarih"),
+  time_slot: z.string().min(1).max(10),
+  oldTitle: z.string().max(300),
+  newTitle: z.string().trim().min(1, "Başlık boş olamaz.").max(300),
+});
+
+/** "2026-10-27" → 0 = Pazartesi … 6 = Pazar (şeridin `columns` sırası). */
+function weekdayOf(iso: string): number {
+  const [y, m, d] = iso.split("-").map(Number);
+  return (new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7;
+}
+
+export async function applyColumnTitleForward(
+  input: z.input<typeof ForwardSchema>,
+): Promise<{ ok: true; renamed: number; created: number } | { error: string }> {
+  const parsed = ForwardSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const { meeting_date, newTitle } = parsed.data;
+  const slot = normalizeSlot(parsed.data.time_slot);
+  const oldTitle = parsed.data.oldTitle.trim();
+
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+  if (!isAdmin(ctx.role)) return { error: ADMIN_ONLY };
+
+  const seeded = await ensureBands(supabase, ctx.workspaceId, ctx.userId);
+  if (seeded.error) return { error: seeded.error };
+
+  const weekday = weekdayOf(meeting_date);
+
+  // 1) Şeridin o günkü başlığı. Şeridi olmayan "ek saat" için bu adım yok.
+  const { data: bandRow, error: bandErr } = await supabase
+    .from("planning_bands")
+    .select("id, columns, category")
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("slot", slot)
+    .limit(1)
+    .maybeSingle();
+  if (bandErr) return { error: toActionErrorMessage(bandErr) };
+  const band = bandRow as { id: string; columns: string[] | null; category: string } | null;
+  if (band) {
+    const columns = Array.from({ length: 7 }, (_, i) => band.columns?.[i] ?? "");
+    columns[weekday] = newTitle;
+    const { error } = await supabase
+      .from("planning_bands")
+      .update({ columns, updated_by: ctx.userId, updated_at: new Date().toISOString() })
+      .eq("id", band.id)
+      .eq("workspace_id", ctx.workspaceId);
+    if (error) return { error: toActionErrorMessage(error) };
+  }
+
+  // 2–3) Zaten açılmış SONRAKİ haftalar.
+  const { data: future, error: futErr } = await supabase
+    .from("planning_meetings")
+    .select("id, meeting_date, time_slot, title")
+    .eq("workspace_id", ctx.workspaceId)
+    .gt("meeting_date", meeting_date)
+    .limit(5000);
+  if (futErr) return { error: toActionErrorMessage(futErr) };
+  const rows = (future ?? []) as { id: string; meeting_date: string; time_slot: string; title: string | null }[];
+  const sameCell = (r: (typeof rows)[number]) =>
+    normalizeSlot(r.time_slot) === slot && weekdayOf(r.meeting_date) === weekday;
+
+  let renamed = 0;
+  let created = 0;
+  if (oldTitle) {
+    const ids = rows.filter((r) => sameCell(r) && (r.title ?? "").trim() === oldTitle).map((r) => r.id);
+    if (ids.length) {
+      const { error } = await supabase
+        .from("planning_meetings")
+        .update({ title: newTitle, updated_by: ctx.userId })
+        .eq("workspace_id", ctx.workspaceId)
+        .in("id", ids);
+      if (error) return { error: toActionErrorMessage(error) };
+      renamed = ids.length;
+    }
+  } else {
+    /* Hücre boştu: açılmış her sonraki haftada o güne toplantı aç. "Açılmış
+       hafta" = içinde en az bir toplantı olan hafta; boş haftayı zaten
+       iskelet (artık yeni başlıkla) kuracak. */
+    const weekStarts = new Set(rows.map((r) => addDaysISO(r.meeting_date, -weekdayOf(r.meeting_date))));
+    const taken = new Set(rows.filter(sameCell).map((r) => r.meeting_date));
+    const inserts = [...weekStarts]
+      .map((ws) => addDaysISO(ws, weekday))
+      .filter((d) => d > meeting_date && !taken.has(d))
+      .map((d) => ({
+        workspace_id: ctx.workspaceId,
+        meeting_date: d,
+        time_slot: slot,
+        category: band?.category ?? "other",
+        title: newTitle,
+        content: null,
+        participant_ids: [] as string[],
+        collaborator_ids: [] as string[],
+        position: weekday,
+        created_by: ctx.userId,
+        updated_by: ctx.userId,
+      }));
+    if (inserts.length) {
+      const { error } = await supabase.from("planning_meetings").insert(inserts);
+      if (error) return { error: toActionErrorMessage(error) };
+      created = inserts.length;
+    }
+  }
+
+  revalidate();
+  return { ok: true, renamed, created };
 }
