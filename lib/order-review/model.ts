@@ -74,6 +74,17 @@ export function formatDayMonth(iso: string): string {
 }
 
 /** Depo yolu kökü: production-sheets/{ws}/siparis/{reviewId}/… */
+/* Masaüstü sütunları: No · Orijinal · Numune · Kod · Grup · Kritik · Not ·
+   Kumaş · Renk · Adet · Fiyat · Döviz · Karar · (sil). Editör ve giriş
+   sayfasının boş tablosu aynı başlıkları buradan okur. */
+export const ORDER_REVIEW_GRID =
+  "lg:grid lg:grid-cols-[44px_168px_168px_104px_190px_280px_320px_170px_170px_96px_116px_84px_156px_44px]";
+export const ORDER_REVIEW_HEADERS = [
+  "No", "Ürün Fotoğrafı (Orijinal)", "İmalatçı Numunesi", "Ürün Kodu", "Ürün Grubu",
+  "Ürün Kritikleri / Deneme Notları", "Aslı Notları (Toplantı)", "Kumaş / İçerik",
+  "Önerilen Renkler", "Planlanan Adet", "Birim Fiyat", "Döviz", "Karar / Durum", "",
+];
+
 export const ORDER_REVIEW_BUCKET = "production-sheets";
 export const photoPrefix = (workspaceId: string, reviewId: string) =>
   `${workspaceId}/siparis/${reviewId}/`;

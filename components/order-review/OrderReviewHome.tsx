@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation";
 import { ClipboardCheck, FileSpreadsheet, Plus } from "lucide-react";
 import { createClient as createBrowserSupabase } from "@/lib/supabase/client";
 import { createOrderReview, importOrderReview } from "@/lib/actions/order-reviews";
-import { formatDateTr } from "@/lib/order-review/model";
+import { cn } from "@/lib/utils/cn";
+import {
+  formatDateTr, ORDER_REVIEW_GRID, ORDER_REVIEW_HEADERS, rowNo,
+} from "@/lib/order-review/model";
 import { Button } from "@/components/ui/Button";
-import { EmptyState } from "@/components/ui/EmptyState";
 import { Tile, TileGrid } from "@/components/ui/TileGrid";
 import { CollectionTabs } from "@/components/collection/PaymentTable";
 import { SeasonSwitch, type SwitchSeason } from "@/components/collection/SeasonSwitch";
@@ -122,12 +124,47 @@ export function OrderReviewHome({
       )}
 
       {tiles.length === 0 ? (
-        <EmptyState
-          icon={ClipboardCheck}
-          className="anim-fade-up"
-          title="Henüz sipariş değerlendirmesi yok."
-          description="Yeni bir değerlendirme açın ya da ekibin Excel şablonunu aktarın — fotoğraflar ve notlar birlikte gelir."
-        />
+        /* İLK GİRİŞ = BOŞ TABLO. "Henüz yok" yazısı formatın sistemde
+           olduğunu saklıyordu (Sıraç, 29.10.2026: "formatı sistemde yapmadın
+           mı da onlar girebilsin"). Excel'in sütunları burada görünür; ilk
+           satıra tıklamak değerlendirmeyi açar. */
+        <div className="anim-fade-up">
+          <div className="hidden overflow-x-auto rounded-card border border-line bg-surface shadow-card lg:block">
+            <div className="min-w-max">
+              <div className={cn("border-b border-line-strong bg-surface-muted", ORDER_REVIEW_GRID)} role="row">
+                {ORDER_REVIEW_HEADERS.map((h, i) => (
+                  <div key={i} className="border-r border-hairline px-2 py-2.5 text-[11.5px] font-semibold uppercase leading-tight tracking-[0.04em] text-muted last:border-r-0" role="columnheader">
+                    {h}
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={create}
+                disabled={creating || !!importing}
+                className={cn("w-full text-left transition-colors hover:bg-surface-muted disabled:opacity-60", ORDER_REVIEW_GRID)}
+              >
+                {ORDER_REVIEW_HEADERS.map((_, i) => (
+                  <div key={i} className="h-24 border-r border-hairline px-2 py-2.5 text-[13.5px] text-subtle last:border-r-0">
+                    {i === 0 ? rowNo(0) : i === 1 ? "Yazmaya başlamak için tıklayın" : ""}
+                  </div>
+                ))}
+              </button>
+            </div>
+          </div>
+          <div className="rounded-card border border-line bg-surface p-4 shadow-card lg:hidden">
+            <p className="text-[14px] font-semibold text-ink">Ürün {rowNo(0)}</p>
+            <p className="mt-1 text-[13.5px] text-muted">
+              {ORDER_REVIEW_HEADERS.slice(1, -1).join(" · ")}
+            </p>
+            <Button className="mt-3" onClick={create} loading={creating} disabled={!!importing}>
+              {!creating && <Plus size={15} aria-hidden />} Yazmaya başla
+            </Button>
+          </div>
+          <p className="mt-3 text-[13.5px] text-muted">
+            Elinizde dolu bir Excel varsa sağ üstten “Excel&apos;den aktar” ile fotoğraflarıyla birlikte getirebilirsiniz.
+          </p>
+        </div>
       ) : (
         <TileGrid>
           {tiles.map((t) => (

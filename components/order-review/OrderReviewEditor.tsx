@@ -12,7 +12,8 @@ import {
   updateOrderReview, updateOrderReviewItem, type OrderReviewItemPatch,
 } from "@/lib/actions/order-reviews";
 import {
-  CURRENCIES, DECISIONS, formatDateTr, ORDER_REVIEW_BUCKET, photoPrefix, rowNo,
+  CURRENCIES, DECISIONS, formatDateTr, ORDER_REVIEW_BUCKET, ORDER_REVIEW_GRID,
+  ORDER_REVIEW_HEADERS, photoPrefix, rowNo,
 } from "@/lib/order-review/model";
 import { Button, IconButton } from "@/components/ui/Button";
 import { SelectInput, TextInput } from "@/components/ui/Field";
@@ -33,15 +34,8 @@ import type { OrderReview, OrderReviewItem, OrderReviewNote, OrderReviewPhoto } 
 
 type Season = { id: string; name: string; is_current: boolean };
 
-/* Masaüstü sütunları: No · Orijinal · Numune · Kod · Grup · Kritik · Not ·
-   Kumaş · Renk · Adet · Fiyat · Döviz · Karar · (sil). */
-const GRID =
-  "lg:grid lg:grid-cols-[44px_168px_168px_104px_190px_280px_320px_170px_170px_96px_116px_84px_156px_44px]";
-const HEADERS = [
-  "No", "Ürün Fotoğrafı (Orijinal)", "İmalatçı Numunesi", "Ürün Kodu", "Ürün Grubu",
-  "Ürün Kritikleri / Deneme Notları", "Aslı Notları (Toplantı)", "Kumaş / İçerik",
-  "Önerilen Renkler", "Planlanan Adet", "Birim Fiyat", "Döviz", "Karar / Durum", "",
-];
+const GRID = ORDER_REVIEW_GRID;
+const HEADERS = ORDER_REVIEW_HEADERS;
 
 const todayIso = () => {
   /* İstanbul günü — sunucu ve tarayıcı farklı saat diliminde olabilir. */

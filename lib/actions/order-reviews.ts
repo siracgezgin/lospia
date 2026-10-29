@@ -85,8 +85,19 @@ export async function createOrderReview(
     .select("id")
     .single();
   if (error) return { error: toActionErrorMessage(error) };
+  const id = (data as { id: string }).id;
+  /* İlk satır hazır gelir: tablo açıldığı anda yazılabilir, önce "Ürün ekle"
+     aramak gerekmez. Satır açılamazsa kayıt yine de kullanılabilir. */
+  await supabase.from("order_review_items").insert({
+    workspace_id: ctx.workspaceId,
+    review_id: id,
+    position: 0,
+    code: nextCode([]),
+    created_by: ctx.userId,
+    updated_by: ctx.userId,
+  });
   revalidate();
-  return { id: (data as { id: string }).id };
+  return { id };
 }
 
 export async function updateOrderReview(
