@@ -21,7 +21,7 @@
  */
 
 import type { LucideIcon } from "lucide-react";
-import { Archive, Boxes, Calculator, CalendarRange, Contact, FolderOpen, HandCoins, Kanban, LayoutDashboard, List, ScrollText, Settings, ShieldCheck, Target, Trash2, Wallet } from "lucide-react";
+import { Archive, Boxes, Calculator, CalendarRange, ClipboardCheck, Contact, FolderOpen, HandCoins, Kanban, LayoutDashboard, List, ScrollText, Settings, ShieldCheck, Target, Trash2, Wallet } from "lucide-react";
 
 /** Kim GÖRÜR: "all" = tüm üyeler (düzenleme yetkisi ekran içinde isAdmin ile
  *  daralır — "herkes görsün, yönetici müdahale etsin"), "admin" = yalnız
@@ -117,6 +117,20 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
     description: "Usta başına ödeme — hangi usta hangi ürünü dikti, ne kadar ödenecek.",
     href: "/collection/odeme",
     icon: HandCoins,
+    access: "all",
+    group: "urun",
+  },
+  /* SİPARİŞ DEĞERLENDİRME — Nisa Hanım (29.10.2026): "Bu sistemi takvim gibi
+     operasyon sistemine entegre edebilir miyiz?" Ekibin Excel şablonu
+     (fotoğraf · numune · kritik · Aslı Hanım'ın toplantı notu · karar).
+     Koleksiyon'un sekmesi: Cost ve Payment Table gibi ürün çekirdeğinde
+     yaşar, sol menüye ayrı başlık açmaz. */
+  {
+    key: "siparis",
+    title: "Order Review",
+    description: "Sipariş değerlendirme — fotoğraf, imalatçı numunesi, kritikler, toplantı notları ve karar.",
+    href: "/collection/siparis",
+    icon: ClipboardCheck,
     access: "all",
     group: "urun",
   },

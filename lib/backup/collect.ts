@@ -42,6 +42,8 @@ const WORKSPACE_TABLES = [
   "finance_payments",
   "operation_documents",
   "operation_spreadsheets",
+  "order_review_items",
+  "order_reviews",
   "planning_bands",
   "planning_meetings",
   "planning_open_items",

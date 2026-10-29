@@ -4,7 +4,7 @@ import { useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
-  Wallet, ClipboardList, Check, Loader2, HandCoins, ChevronLeft, Scissors, Boxes,
+  Wallet, ClipboardList, ClipboardCheck, Check, Loader2, HandCoins, ChevronLeft, Scissors, Boxes,
   MapPin, Clock3, Package, Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
@@ -565,7 +565,7 @@ export function PaymentTable({ rows, manufacturers = [], seasons = [] }: Props) 
 export function CollectionTabs({
   active, actions,
 }: {
-  active: "foy" | "maliyet" | "odeme" | "veri";
+  active: "foy" | "maliyet" | "odeme" | "siparis" | "veri";
   /** Sağa sabitlenen aksiyonlar (sezon seçici, indir, yeni föy…). */
   actions?: React.ReactNode;
 }) {
@@ -573,6 +573,7 @@ export function CollectionTabs({
     { key: "foy",     href: "/collection",         label: "Production Sheets", icon: ClipboardList },
     { key: "maliyet", href: "/collection/maliyet", label: "Cost",              icon: Wallet },
     { key: "odeme",   href: "/collection/odeme",   label: "Payment Table",     icon: HandCoins },
+    { key: "siparis", href: "/collection/siparis", label: "Order Review",      icon: ClipboardCheck },
     { key: "veri",    href: "/collection/veri",    label: "Product Data",      icon: Boxes },
   ];
 

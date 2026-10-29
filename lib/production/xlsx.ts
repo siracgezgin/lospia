@@ -58,7 +58,7 @@ function estimateLines(text: string, charsPerLine: number): number {
  * (Aslı Hanım, 2026-08-24: "teknik çizim kısmı böyle olmamalıydı").
  * Okunamayan biçimde null döner ve çağıran kutuyu doldurmaya çalışmaz.
  */
-function imageSize(buf: Buffer): { w: number; h: number } | null {
+export function imageSize(buf: Buffer): { w: number; h: number } | null {
   // PNG: 8 bayt imza + IHDR → 16..24 arası genişlik/yükseklik
   if (buf.length > 24 && buf.readUInt32BE(0) === 0x89504e47) {
     return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
@@ -79,7 +79,7 @@ function imageSize(buf: Buffer): { w: number; h: number } | null {
 }
 
 /** Görseli kutuya SIĞDIRIR (contain): taşmaz, gerilmez, ortalanır. */
-function fitBox(
+export function fitBox(
   buf: Buffer, boxW: number, boxH: number,
 ): { w: number; h: number; dx: number; dy: number } {
   const sz = imageSize(buf);

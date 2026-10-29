@@ -913,3 +913,45 @@ export type TaskActivityType = Database["public"]["Enums"]["task_activity_type"]
 export type NotificationType = Database["public"]["Enums"]["notification_type"];
 export type CustomFieldType = Database["public"]["Enums"]["custom_field_type"];
 export type WebhookSource = Database["public"]["Enums"]["webhook_source"];
+
+// ── Sipariş Değerlendirme (20240365) ─────────────────────────────────────────
+export type OrderReviewDecision = "degerlendirmede" | "onaylandi" | "revize" | "reddedildi";
+export type OrderReviewCurrency = "TL" | "USD" | "EUR" | "GBP";
+
+export type OrderReviewPhoto = { path: string; url: string };
+export type OrderReviewNote = { id: string; date: string; text: string };
+
+export type OrderReview = {
+  id: string;
+  workspace_id: string;
+  title: string;
+  season_id: string | null;
+  review_date: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type OrderReviewItem = {
+  id: string;
+  workspace_id: string;
+  review_id: string;
+  position: number;
+  code: string;
+  product_group: string;
+  critique: string;
+  meeting_notes: OrderReviewNote[];
+  fabric: string;
+  colors: string;
+  planned_qty: number | null;
+  unit_price: number | null;
+  currency: OrderReviewCurrency;
+  decision: OrderReviewDecision;
+  original_photos: OrderReviewPhoto[];
+  sample_photos: OrderReviewPhoto[];
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
