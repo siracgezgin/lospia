@@ -52,6 +52,7 @@ const PAGE_TITLES: { match: (p: string) => boolean; title: string }[] = [
   { match: (p) => p.startsWith("/collection/veri"), title: "Product Data" },
   { match: (p) => p.startsWith("/collection/odeme"), title: "Payment Table" },
   { match: (p) => p.startsWith("/collection/siparis"), title: "Order Review" },
+  { match: (p) => p.startsWith("/collection/upcycle"), title: "Upcycle" },
   { match: (p) => p.startsWith("/collection"), title: "Collection" },
   { match: (p) => p.startsWith("/production"), title: "Production Sheet" },
   { match: (p) => p.startsWith("/finance"), title: "Finance" },

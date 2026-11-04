@@ -55,6 +55,8 @@ export const NAV_SECTIONS: NavSection[] = [
       link("planning"),
       // Nisa Hanım (29.10.2026): "takvim gibi" — Calendar'ın hemen altında.
       link("siparis"),
+      // Gül Hanım'ın upcycle listesi (04.11.2026) — aynı "takvim gibi" isteği.
+      link("upcycle"),
       link("board"),
       /* LIST — Reports'un yerine.
          Sıraç (2026-08-29): "Reports / size atanan işler ve teslim tarihleri

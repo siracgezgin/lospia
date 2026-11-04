@@ -66,6 +66,7 @@ const WORKSPACE_TABLES = [
   "task_notes",
   "tasks",
   "time_entries",
+  "upcycle_items",
   "workspace_activity_logs",
   "workspace_contacts",
   "workspace_departments",
