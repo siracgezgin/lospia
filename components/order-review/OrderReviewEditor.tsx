@@ -12,30 +12,29 @@ import {
   updateOrderReview, updateOrderReviewItem, type OrderReviewItemPatch,
 } from "@/lib/actions/order-reviews";
 import {
-  CURRENCIES, DECISIONS, formatDateTr, ORDER_REVIEW_BUCKET, ORDER_REVIEW_GRID,
-  ORDER_REVIEW_HEADERS, photoPrefix, rowNo,
+  CURRENCIES, DECISIONS, formatDateTr, ORDER_REVIEW_BUCKET, photoPrefix, rowNo,
 } from "@/lib/order-review/model";
 import { Button, IconButton } from "@/components/ui/Button";
 import { SelectInput, TextInput } from "@/components/ui/Field";
 import { Overlay } from "@/components/ui/Overlay";
 import { useConfirm } from "@/components/ui/useConfirm";
-import type { OrderReview, OrderReviewItem, OrderReviewNote, OrderReviewPhoto } from "@/types";
+import type { OrderReview, OrderReviewDecision, OrderReviewItem, OrderReviewNote, OrderReviewPhoto } from "@/types";
 
 /**
- * SİPARİŞ DEĞERLENDİRME — bir değerlendirmenin ürün satırları.
+ * SİPARİŞ DEĞERLENDİRME — bir değerlendirmenin ürünleri.
  *
- * Sütunlar Excel şablonuyla AYNI sırada (Nisa Hanım, 29.10.2026: "eksiksiz
- * olmalı"). Her alan yerinde düzenlenir ve alandan çıkınca kaydolur — ayrı
- * bir "Kaydet" düğmesi yok, Excel'deki gibi.
+ * Alanlar Excel şablonunun TAMAMI (Nisa Hanım, 29.10.2026: "eksiksiz
+ * olmalı"); her alan yerinde düzenlenir ve alandan çıkınca kaydolur — ayrı
+ * bir "Kaydet" düğmesi yok.
  *
- * Masaüstünde tek satır = tek ürün (yatay kaydırılır, Excel gibi). Telefonda
- * her ürün kendi kartında, alanlar adlarıyla alt alta.
+ * TEK ÜRÜN = TEK KART. İlk sürüm Excel'i birebir kopyalıyordu: 14 sütun yan
+ * yana ~2100 px, normal ekranda sağa kayıyordu (Sıraç, 04.11.2026: "ekran
+ * kaymıştı, sağa gidiyordu"). Kartta yatay kaydırma YOK: fotoğraflar solda
+ * büyük, kritik + ürün bilgisi ortada, Aslı Hanım'ın notları sağda; ekran
+ * daraldıkça sütunlar alt alta iner.
  */
 
 type Season = { id: string; name: string; is_current: boolean };
-
-const GRID = ORDER_REVIEW_GRID;
-const HEADERS = ORDER_REVIEW_HEADERS;
 
 const todayIso = () => {
   /* İstanbul günü — sunucu ve tarayıcı farklı saat diliminde olabilir. */
@@ -57,7 +56,18 @@ const fmtNumber = (n: number | null, digits = 0) =>
     ? ""
     : new Intl.NumberFormat("tr-TR", { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(n);
 
-/** İçeriğine göre büyüyen metin kutusu — hücre metni kesilmesin. */
+/* Alanlar HER ZAMAN alan gibi görünür: Excel'deki görünmez kenar "buraya
+   yazılır mı?" sorusunu bıraktırıyordu. */
+const FIELD =
+  "w-full rounded-control border border-line bg-surface px-2.5 text-[13.5px] text-ink placeholder:text-subtle " +
+  "transition-[border-color,box-shadow] duration-150 hover:border-line-strong " +
+  "focus:border-brand-ring focus:outline-none focus:ring-2 focus:ring-brand-ring/40";
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return <span className="mb-1 block text-[11.5px] font-semibold uppercase tracking-[0.05em] text-muted">{children}</span>;
+}
+
+/** İçeriğine göre büyüyen metin kutusu — metin kesilmesin. */
 function AutoText({
   value, onCommit, placeholder, label, className, minRows = 2,
 }: {
@@ -90,17 +100,12 @@ function AutoText({
       placeholder={placeholder}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={() => { if (draft !== value) onCommit(draft); }}
-      className={cn(
-        "block w-full resize-none rounded-control border border-transparent bg-transparent px-2 py-1.5 text-[13.5px] leading-relaxed text-ink",
-        "placeholder:text-subtle hover:border-line focus:border-brand-ring focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand-ring/40",
-        "max-lg:border-line max-lg:bg-surface",
-        className,
-      )}
+      className={cn(FIELD, "block resize-none py-2 leading-relaxed", className)}
     />
   );
 }
 
-/** Tek satırlık alan — çıkınca kaydolur. */
+/** Tek satırlık alan — çıkınca ya da Enter'da kaydolur. */
 function InlineInput({
   value, onCommit, label, placeholder, inputMode, className,
 }: {
@@ -123,29 +128,19 @@ function InlineInput({
       onChange={(e) => setDraft(e.target.value)}
       onBlur={() => { if (draft !== value) onCommit(draft); }}
       onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-      className={cn(
-        "h-9 w-full rounded-control border border-transparent bg-transparent px-2 text-[13.5px] text-ink",
-        "placeholder:text-subtle hover:border-line focus:border-brand-ring focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand-ring/40",
-        "max-lg:border-line max-lg:bg-surface",
-        className,
-      )}
+      className={cn(FIELD, "h-9 pointer-coarse:h-11", className)}
     />
   );
 }
 
-/** Masaüstünde ızgara hücresi, telefonda adı görünen alan. */
-function Cell({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) {
-  return (
-    <div className={cn("min-w-0 lg:border-r lg:border-hairline lg:p-1.5", className)}>
-      <span className="mb-1 block text-[11.5px] font-semibold uppercase tracking-[0.05em] text-muted lg:hidden">{label}</span>
-      {children}
-    </div>
-  );
-}
+// ── FOTOĞRAF ALANI ──────────────────────────────────────────────────────────
 
-// ── FOTOĞRAF HÜCRESİ ────────────────────────────────────────────────────────
-
-function PhotoCell({
+/**
+ * İlk fotoğraf büyük durur (toplantıda bakılan o), diğerleri altında küçük.
+ * Boşken alanın tamamı "fotoğraf ekle" düğmesidir; dosya sürüklenip
+ * bırakılabilir.
+ */
+function PhotoField({
   label, photos, prefix, onChange, onOpen,
 }: {
   label: string;
@@ -190,53 +185,81 @@ function PhotoCell({
   }
 
   async function remove(p: OrderReviewPhoto) {
-    if (!(await ask({ title: "Fotoğraf kaldırılsın mı?", message: "Fotoğraf bu satırdan ve depodan silinir.", confirmLabel: "Kaldır", tone: "danger" }))) return;
+    if (!(await ask({ title: "Fotoğraf kaldırılsın mı?", message: "Fotoğraf bu üründen ve depodan silinir.", confirmLabel: "Kaldır", tone: "danger" }))) return;
     await onChange(photos.filter((x) => x.path !== p.path), p);
   }
 
+  const [main, ...rest] = photos;
+  const pick = () => inputRef.current?.click();
+  const removeBtn = (p: OrderReviewPhoto, small = false) => (
+    <button
+      type="button"
+      onClick={() => remove(p)}
+      aria-label="Fotoğrafı kaldır"
+      title="Kaldır"
+      className={cn(
+        "absolute right-1 top-1 grid place-items-center rounded-full bg-surface/95 text-muted shadow-card transition-opacity duration-150 hover:text-danger",
+        "opacity-0 group-hover/photo:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100",
+        small ? "size-5" : "size-7",
+      )}
+    >
+      <X size={small ? 11 : 14} aria-hidden />
+    </button>
+  );
+
   return (
     <div
+      className="min-w-0"
       onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setOver(true); } }}
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(false); }}
       onDrop={(e) => { e.preventDefault(); setOver(false); if (!busy) upload(e.dataTransfer.files); }}
-      className={cn("rounded-control transition-[box-shadow] duration-150", over && "ring-2 ring-brand-ring")}
     >
-      <div className="grid grid-cols-2 gap-1.5 max-lg:grid-cols-4">
-        {photos.map((p) => (
-          <div key={p.path} className="group/photo relative aspect-[3/4] overflow-hidden rounded-control border border-line bg-white">
-            <button
-              type="button"
-              onClick={() => onOpen(p.url)}
-              className="block h-full w-full cursor-zoom-in"
-              aria-label={`${label} — büyüt`}
-            >
+      <FieldLabel>{label}</FieldLabel>
+      <div className={cn("rounded-control transition-[box-shadow] duration-150", over && "ring-2 ring-brand-ring")}>
+        {main ? (
+          <div className="group/photo relative aspect-[3/4] overflow-hidden rounded-control border border-line bg-white">
+            <button type="button" onClick={() => onOpen(main.url)} className="block h-full w-full cursor-zoom-in" aria-label={`${label} — büyüt`}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={p.url} alt="" loading="lazy" className="h-full w-full object-contain" />
+              <img src={main.url} alt="" loading="lazy" className="h-full w-full object-contain" />
             </button>
+            {removeBtn(main)}
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={pick}
+            disabled={busy}
+            className="flex aspect-[3/4] w-full flex-col items-center justify-center gap-1.5 rounded-control border border-dashed border-line-strong bg-surface-muted/40 px-2 text-center text-subtle transition-colors duration-150 hover:border-brand hover:bg-brand-soft hover:text-brand-strong disabled:opacity-60"
+          >
+            {busy ? <Loader2 size={20} className="animate-spin" aria-hidden /> : <ImagePlus size={20} aria-hidden />}
+            <span className="text-[12.5px] font-medium">{busy ? "Yükleniyor…" : "Fotoğraf ekle"}</span>
+            {!busy && <span className="text-[11.5px] max-sm:hidden">ya da sürükleyip bırakın</span>}
+          </button>
+        )}
+
+        {main && (
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {rest.map((p) => (
+              <div key={p.path} className="group/photo relative size-11 overflow-hidden rounded-control border border-line bg-white">
+                <button type="button" onClick={() => onOpen(p.url)} className="block h-full w-full cursor-zoom-in" aria-label={`${label} — büyüt`}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={p.url} alt="" loading="lazy" className="h-full w-full object-contain" />
+                </button>
+                {removeBtn(p, true)}
+              </div>
+            ))}
             <button
               type="button"
-              onClick={() => remove(p)}
-              aria-label="Fotoğrafı kaldır"
-              title="Kaldır"
-              className="absolute right-0.5 top-0.5 grid size-6 place-items-center rounded-full bg-surface/90 text-muted opacity-0 shadow-card transition-opacity duration-150 hover:text-danger group-hover/photo:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
+              onClick={pick}
+              disabled={busy}
+              aria-label={`${label} — fotoğraf ekle`}
+              title="Fotoğraf ekle"
+              className="grid size-11 place-items-center rounded-control border border-dashed border-line-strong text-subtle transition-colors duration-150 hover:border-brand hover:bg-brand-soft hover:text-brand-strong disabled:opacity-60"
             >
-              <X size={13} aria-hidden />
+              {busy ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Plus size={15} aria-hidden />}
             </button>
           </div>
-        ))}
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          disabled={busy}
-          aria-label={`${label} ekle`}
-          title="Fotoğraf ekle (ya da sürükleyip bırakın)"
-          className={cn(
-            "grid aspect-[3/4] place-items-center rounded-control border border-dashed border-line-strong text-subtle transition-colors duration-150 hover:border-brand hover:bg-brand-soft hover:text-brand-strong",
-            photos.length > 0 && "aspect-auto min-h-10",
-          )}
-        >
-          {busy ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <ImagePlus size={16} aria-hidden />}
-        </button>
+        )}
       </div>
       <input ref={inputRef} type="file" accept={SHEET_IMAGE_ACCEPT} multiple className="hidden" onChange={(e) => upload(e.target.files)} />
       {err && <p className="mt-1 text-[12px] leading-snug text-danger">{err}</p>}
@@ -252,7 +275,7 @@ function PhotoCell({
  * değişiyor, önceki not eziliyordu. Burada her toplantının notu kendi
  * tarihiyle durur, en yenisi en üstte.
  */
-function NotesCell({
+function MeetingNotes({
   notes, onChange,
 }: {
   notes: OrderReviewNote[];
@@ -271,48 +294,66 @@ function NotesCell({
   }
 
   return (
-    <div className="space-y-1.5">
-      {sorted.map((n) => (
-        <div key={n.id} className="group/note rounded-control border border-hairline bg-surface-muted/40 p-1">
-          <div className="flex items-center gap-1">
-            <input
-              type="date"
-              aria-label="Toplantı tarihi"
-              value={n.date}
-              onChange={(e) => { if (e.target.value) update(n.id, { date: e.target.value }); }}
-              className="h-7 rounded-control border border-transparent bg-transparent px-1 text-[12px] font-semibold tabular-nums text-muted hover:border-line focus:border-brand-ring focus:outline-none"
-            />
-            <button
-              type="button"
-              onClick={() => remove(n)}
-              aria-label="Notu sil"
-              title="Notu sil"
-              className="ml-auto grid size-6 place-items-center rounded-control text-subtle opacity-0 transition-opacity duration-150 hover:text-danger group-hover/note:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
-            >
-              <X size={13} aria-hidden />
-            </button>
-          </div>
-          <AutoText
-            label={`${formatDateTr(n.date)} toplantı notu`}
-            value={n.text}
-            placeholder="Toplantıda konuşulan…"
-            onCommit={(text) => update(n.id, { text })}
-          />
+    <section className="min-w-0 rounded-card border border-hairline bg-surface-muted/50 p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h3 className="text-[11.5px] font-semibold uppercase tracking-[0.05em] text-muted">Aslı Hanım&apos;ın notları</h3>
+        <button
+          type="button"
+          onClick={add}
+          className="inline-flex h-8 items-center gap-1 rounded-control px-2 text-[12.5px] font-semibold text-brand-strong transition-colors duration-150 hover:bg-brand-soft pointer-coarse:h-10"
+        >
+          <Plus size={14} aria-hidden /> Toplantı notu
+        </button>
+      </div>
+      {sorted.length === 0 ? (
+        <button
+          type="button"
+          onClick={add}
+          className="w-full rounded-control border border-dashed border-line-strong px-3 py-4 text-[13px] text-subtle transition-colors duration-150 hover:border-brand hover:bg-brand-soft hover:text-brand-strong"
+        >
+          Bu ürün için henüz toplantı notu yok. Eklemek için tıklayın.
+        </button>
+      ) : (
+        <div className="space-y-2">
+          {sorted.map((n) => (
+            <div key={n.id} className="group/note">
+              <div className="mb-1 flex items-center gap-1">
+                <input
+                  type="date"
+                  aria-label="Toplantı tarihi"
+                  value={n.date}
+                  onChange={(e) => { if (e.target.value) update(n.id, { date: e.target.value }); }}
+                  className="h-7 rounded-control border border-transparent bg-transparent px-1 text-[12px] font-semibold tabular-nums text-muted hover:border-line focus:border-brand-ring focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => remove(n)}
+                  aria-label="Notu sil"
+                  title="Notu sil"
+                  className="ml-auto grid size-7 place-items-center rounded-control text-subtle opacity-0 transition-opacity duration-150 hover:text-danger group-hover/note:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
+                >
+                  <X size={14} aria-hidden />
+                </button>
+              </div>
+              <AutoText
+                label={`${formatDateTr(n.date)} toplantı notu`}
+                value={n.text}
+                minRows={3}
+                placeholder="Toplantıda konuşulan…"
+                onCommit={(text) => update(n.id, { text })}
+              />
+            </div>
+          ))}
         </div>
-      ))}
-      <button
-        type="button"
-        onClick={add}
-        className="inline-flex h-7 items-center gap-1 rounded-control px-1.5 text-[12.5px] font-medium text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
-      >
-        <Plus size={13} aria-hidden /> Toplantı notu
-      </button>
+      )}
       {dialog}
-    </div>
+    </section>
   );
 }
 
 // ── DÜZENLEYİCİ ─────────────────────────────────────────────────────────────
+
+type Filter = "all" | OrderReviewDecision;
 
 export function OrderReviewEditor({
   review, initialItems, seasons, workspaceId, userId, isAdmin, importWarnings,
@@ -334,6 +375,7 @@ export function OrderReviewEditor({
   const [pending, setPending] = useState(0);
   const [adding, startAdd] = useTransition();
   const [lightbox, setLightbox] = useState<string | null>(null);
+  const [filter, setFilter] = useState<Filter>("all");
   const prefix = photoPrefix(workspaceId, review.id);
   const canDeleteReview = isAdmin || review.created_by === userId;
 
@@ -361,7 +403,7 @@ export function OrderReviewEditor({
     }
   }
 
-  /** Alan kaydı: ekran hemen güncellenir, sunucu cevabı satırı tazeler. */
+  /** Alan kaydı: ekran hemen güncellenir, sunucu cevabı ürünü tazeler. */
   async function saveItem(id: string, patch: OrderReviewItemPatch) {
     setItems((list) => list.map((it) => (it.id === id ? ({ ...it, ...patch } as OrderReviewItem) : it)));
     setError(null);
@@ -376,20 +418,25 @@ export function OrderReviewEditor({
 
   function addItem() {
     setError(null);
+    /* Yeni ürün "Değerlendirmede" açılır; süzgeç başka karardaysa görünmezdi. */
+    setFilter("all");
     startAdd(async () => {
       try {
         const res = await addOrderReviewItem(review.id);
         if ("error" in res) { setError(res.error); return; }
         setItems((list) => [...list, res.item]);
+        requestAnimationFrame(() =>
+          document.getElementById(`urun-${res.item.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }),
+        );
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Satır eklenemedi.");
+        setError(e instanceof Error ? e.message : "Ürün eklenemedi.");
       }
     });
   }
 
   async function removeItem(it: OrderReviewItem, index: number) {
-    const name = it.code || it.product_group || `${rowNo(index)}. satır`;
-    if (!(await ask({ title: "Ürün satırı silinsin mi?", message: `“${name}” satırı fotoğraflarıyla birlikte silinir.`, confirmLabel: "Sil", tone: "danger" }))) return;
+    const name = it.code || it.product_group || `${rowNo(index)}. ürün`;
+    if (!(await ask({ title: "Ürün silinsin mi?", message: `“${name}” fotoğraflarıyla birlikte silinir.`, confirmLabel: "Sil", tone: "danger" }))) return;
     const res = await track(deleteOrderReviewItem(it.id));
     if ("error" in res) { setError(res.error); return; }
     setItems((list) => list.filter((x) => x.id !== it.id));
@@ -398,7 +445,7 @@ export function OrderReviewEditor({
   async function removeReview() {
     if (!(await ask({
       title: "Değerlendirme silinsin mi?",
-      message: `“${meta.title || "Adsız değerlendirme"}” ve içindeki ${items.length} ürün satırı, fotoğraflarıyla birlikte kalıcı olarak silinir.`,
+      message: `“${meta.title || "Adsız değerlendirme"}” ve içindeki ${items.length} ürün, fotoğraflarıyla birlikte kalıcı olarak silinir.`,
       confirmLabel: "Sil", tone: "danger",
     }))) return;
     const res = await track(deleteOrderReview(review.id));
@@ -406,11 +453,15 @@ export function OrderReviewEditor({
     router.push("/collection/siparis");
   }
 
+  const visible = items
+    .map((it, index) => ({ it, index }))
+    .filter(({ it }) => filter === "all" || it.decision === filter);
+
   return (
     <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
       <h1 className="sr-only">Order Review</h1>
 
-      {/* ÜST BİLGİ — Excel'in 5. satırı: Sezon / Tarih / Sipariş. */}
+      {/* ÜST ŞERİT */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Link
           href="/collection/siparis"
@@ -438,9 +489,10 @@ export function OrderReviewEditor({
         </div>
       </div>
 
+      {/* ÜST BİLGİ — Excel'in 5. satırı: Sipariş / Sezon / Tarih. */}
       <div className="mb-4 grid gap-3 rounded-card border border-line bg-surface p-3 shadow-card sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)] sm:p-4">
         <label className="min-w-0">
-          <span className="mb-1 block text-[12px] font-semibold uppercase tracking-[0.06em] text-muted">Sipariş / Referans</span>
+          <FieldLabel>Sipariş / Referans</FieldLabel>
           <TextInput
             defaultValue={meta.title}
             placeholder="Örn. Resort 2027 — Bayram Bey numuneleri"
@@ -450,7 +502,7 @@ export function OrderReviewEditor({
           />
         </label>
         <label className="min-w-0">
-          <span className="mb-1 block text-[12px] font-semibold uppercase tracking-[0.06em] text-muted">Sezon / Koleksiyon</span>
+          <FieldLabel>Sezon / Koleksiyon</FieldLabel>
           <SelectInput
             value={meta.season_id ?? ""}
             onChange={(e) => saveMeta({ season_id: e.target.value || null })}
@@ -460,7 +512,7 @@ export function OrderReviewEditor({
           </SelectInput>
         </label>
         <label className="min-w-0">
-          <span className="mb-1 block text-[12px] font-semibold uppercase tracking-[0.06em] text-muted">Tarih</span>
+          <FieldLabel>Tarih</FieldLabel>
           <TextInput
             type="date"
             value={meta.review_date ?? ""}
@@ -485,148 +537,189 @@ export function OrderReviewEditor({
         </p>
       )}
 
-      {/* ÜRÜN SATIRLARI */}
-      <div className="lg:overflow-x-auto lg:rounded-card lg:border lg:border-line lg:bg-surface lg:shadow-card">
-        <div className="lg:min-w-max">
-          <div className={cn("hidden border-b border-line-strong bg-surface-muted", GRID)} role="row">
-            {HEADERS.map((h, i) => (
-              <div key={i} className="border-r border-hairline px-2 py-2.5 text-[11.5px] font-semibold uppercase leading-tight tracking-[0.04em] text-muted last:border-r-0" role="columnheader">
-                {h}
-              </div>
+      {/* KARAR SÜZGECİ — toplantıda "yalnız revizeler" gibi bakmak için.
+          Sayı yok: listeyi süzer, kimseyi puanlamaz. */}
+      {items.length > 1 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <div role="group" aria-label="Karara göre süz" className="inline-flex h-9 max-w-full items-center overflow-x-auto rounded-control border border-line bg-surface-muted p-0.5 no-scrollbar pointer-coarse:h-11">
+            {([{ key: "all", label: "Tümü" }, ...DECISIONS] as { key: Filter; label: string }[]).map((d) => (
+              <button
+                key={d.key}
+                type="button"
+                aria-pressed={filter === d.key}
+                onClick={() => setFilter(d.key)}
+                className={cn(
+                  "inline-flex h-8 shrink-0 items-center rounded-md px-3 text-[13px] transition-colors duration-150 pointer-coarse:h-10",
+                  filter === d.key
+                    ? "bg-surface font-semibold text-ink shadow-card ring-1 ring-line/70"
+                    : "font-medium text-muted hover:bg-surface-hover hover:text-ink",
+                )}
+              >
+                {d.label}
+              </button>
             ))}
           </div>
+        </div>
+      )}
 
-          <div className="space-y-3 lg:space-y-0">
-            {items.map((it, i) => {
-              const canDelete = isAdmin || it.created_by === userId;
-              const decisionTone = DECISIONS.find((d) => d.key === it.decision)?.tone ?? "";
-              return (
-                <div
-                  key={it.id}
-                  role="row"
-                  className={cn(
-                    "grid gap-3 rounded-card border border-line bg-surface p-3 shadow-card sm:grid-cols-2",
-                    "lg:gap-0 lg:rounded-none lg:border-0 lg:border-b lg:border-hairline lg:p-0 lg:shadow-none",
-                    GRID,
+      {/* ÜRÜNLER */}
+      <div className="space-y-4">
+        {visible.map(({ it, index }) => {
+          const canDelete = isAdmin || it.created_by === userId;
+          const decisionTone = DECISIONS.find((d) => d.key === it.decision)?.tone ?? "";
+          return (
+            <article
+              key={it.id}
+              id={`urun-${it.id}`}
+              aria-label={`Ürün ${rowNo(index)}${it.code ? ` — ${it.code}` : ""}`}
+              className="scroll-mt-20 rounded-card border border-line bg-surface shadow-card"
+            >
+              {/* Kart başlığı: sıra · kod · grup · karar. Telefonda grup
+                  ikinci satıra iner, karar sağ üstte kalır. */}
+              <header className="flex flex-wrap items-center gap-2 border-b border-hairline px-3 py-2.5 sm:px-4">
+                <span className="grid h-9 min-w-9 place-items-center rounded-control bg-surface-muted px-1.5 text-[13px] font-semibold tabular-nums text-muted pointer-coarse:h-11">
+                  {rowNo(index)}
+                </span>
+                <InlineInput
+                  label="Ürün kodu"
+                  value={it.code}
+                  placeholder="Kod"
+                  onCommit={(v) => saveItem(it.id, { code: v })}
+                  className="min-w-0 flex-1 font-semibold sm:w-28 sm:flex-none"
+                />
+                <InlineInput
+                  label="Ürün grubu"
+                  value={it.product_group}
+                  placeholder="Ürün grubu — ör. Bol model elbise"
+                  onCommit={(v) => saveItem(it.id, { product_group: v })}
+                  className="order-last basis-full sm:order-none sm:w-auto sm:min-w-[12rem] sm:flex-1 sm:basis-auto"
+                />
+                <div className="ml-auto flex shrink-0 items-center gap-1">
+                  <SelectInput
+                    aria-label="Karar / durum"
+                    value={it.decision}
+                    onChange={(e) => saveItem(it.id, { decision: e.target.value as OrderReviewItem["decision"] })}
+                    className={cn("h-9 w-auto rounded-full border-transparent font-semibold", decisionTone)}
+                  >
+                    {DECISIONS.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
+                  </SelectInput>
+                  {canDelete && (
+                    <IconButton variant="ghost" aria-label="Ürünü sil" title="Ürünü sil" onClick={() => removeItem(it, index)}>
+                      <Trash2 size={15} aria-hidden />
+                    </IconButton>
                   )}
-                >
-                  {/* Telefonda kartın başlığı ("Ürün 01" + sil), masaüstünde No sütunu. */}
-                  <div className="flex items-center justify-between sm:col-span-2 lg:col-span-1 lg:block lg:border-r lg:border-hairline lg:p-1.5">
-                    <span className="block text-[13px] font-semibold tabular-nums text-muted lg:pt-2 lg:text-center">
-                      <span className="lg:hidden">Ürün </span>{rowNo(i)}
-                    </span>
-                    {canDelete && (
-                      <IconButton size="sm" variant="ghost" aria-label="Satırı sil" className="lg:hidden" onClick={() => removeItem(it, i)}>
-                        <Trash2 size={14} aria-hidden />
-                      </IconButton>
-                    )}
-                  </div>
-                  <Cell label="Ürün Fotoğrafı (Orijinal)">
-                    <PhotoCell
-                      label="Orijinal fotoğraf"
-                      photos={it.original_photos ?? []}
-                      prefix={prefix}
-                      onOpen={setLightbox}
-                      onChange={async (next, removed) => {
-                        await saveItem(it.id, { original_photos: next });
-                        if (removed) await removeOrderReviewPhoto(review.id, removed.path);
-                      }}
+                </div>
+              </header>
+
+              {/* Gövde: telefonda alt alta; tablette fotoğraflar solda;
+                  geniş ekranda üç sütun — fotoğraf · bilgi · notlar. */}
+              <div className="grid gap-4 p-3 sm:p-4 md:grid-cols-[minmax(0,240px)_minmax(0,1fr)] xl:grid-cols-[minmax(0,300px)_minmax(0,1fr)_minmax(0,1fr)]">
+                <div className="grid grid-cols-2 gap-3 max-md:max-w-sm md:row-span-2 md:self-start xl:row-span-1">
+                  <PhotoField
+                    label="Orijinal"
+                    photos={it.original_photos ?? []}
+                    prefix={prefix}
+                    onOpen={setLightbox}
+                    onChange={async (next, removed) => {
+                      await saveItem(it.id, { original_photos: next });
+                      if (removed) await removeOrderReviewPhoto(review.id, removed.path);
+                    }}
+                  />
+                  <PhotoField
+                    label="Numune"
+                    photos={it.sample_photos ?? []}
+                    prefix={prefix}
+                    onOpen={setLightbox}
+                    onChange={async (next, removed) => {
+                      await saveItem(it.id, { sample_photos: next });
+                      if (removed) await removeOrderReviewPhoto(review.id, removed.path);
+                    }}
+                  />
+                </div>
+
+                <div className="min-w-0 space-y-3">
+                  <label className="block">
+                    <FieldLabel>Ürün kritikleri / deneme notları</FieldLabel>
+                    <AutoText
+                      label="Ürün kritikleri"
+                      value={it.critique}
+                      minRows={4}
+                      placeholder="Kalıp, dikiş, kumaş düşüşü…"
+                      onCommit={(v) => saveItem(it.id, { critique: v })}
                     />
-                  </Cell>
-                  <Cell label="İmalatçı Numunesi">
-                    <PhotoCell
-                      label="İmalatçı numunesi"
-                      photos={it.sample_photos ?? []}
-                      prefix={prefix}
-                      onOpen={setLightbox}
-                      onChange={async (next, removed) => {
-                        await saveItem(it.id, { sample_photos: next });
-                        if (removed) await removeOrderReviewPhoto(review.id, removed.path);
-                      }}
-                    />
-                  </Cell>
-                  <Cell label="Ürün Kodu">
-                    <InlineInput label="Ürün kodu" value={it.code} placeholder="V-001" onCommit={(v) => saveItem(it.id, { code: v })} className="font-semibold" />
-                  </Cell>
-                  <Cell label="Ürün Grubu">
-                    <AutoText label="Ürün grubu" value={it.product_group} onCommit={(v) => saveItem(it.id, { product_group: v })} />
-                  </Cell>
-                  <Cell label="Ürün Kritikleri / Deneme Notları" className="sm:col-span-2 lg:col-span-1">
-                    <AutoText label="Ürün kritikleri" value={it.critique} minRows={3} onCommit={(v) => saveItem(it.id, { critique: v })} />
-                  </Cell>
-                  <Cell label="Aslı Notları (Toplantı)" className="sm:col-span-2 lg:col-span-1">
-                    <NotesCell notes={it.meeting_notes ?? []} onChange={(next) => saveItem(it.id, { meeting_notes: next })} />
-                  </Cell>
-                  <Cell label="Kumaş / İçerik">
-                    <AutoText label="Kumaş / içerik" value={it.fabric} onCommit={(v) => saveItem(it.id, { fabric: v })} />
-                  </Cell>
-                  <Cell label="Önerilen Renkler">
-                    <AutoText label="Önerilen renkler" value={it.colors} onCommit={(v) => saveItem(it.id, { colors: v })} />
-                  </Cell>
-                  <Cell label="Planlanan Adet">
-                    <InlineInput
-                      label="Planlanan adet"
-                      inputMode="numeric"
-                      value={fmtNumber(it.planned_qty)}
-                      className="text-right tabular-nums max-lg:text-left"
-                      onCommit={(v) => {
-                        const n = parseNumber(v);
-                        if (n === undefined) { setError("Planlanan adet bir sayı olmalı."); return; }
-                        saveItem(it.id, { planned_qty: n === null ? null : Math.round(n) });
-                      }}
-                    />
-                  </Cell>
-                  <Cell label="Birim Fiyat">
-                    <InlineInput
-                      label="Birim fiyat"
-                      inputMode="decimal"
-                      value={fmtNumber(it.unit_price, 2)}
-                      className="text-right tabular-nums max-lg:text-left"
-                      onCommit={(v) => {
-                        const n = parseNumber(v);
-                        if (n === undefined) { setError("Birim fiyat bir sayı olmalı."); return; }
-                        saveItem(it.id, { unit_price: n });
-                      }}
-                    />
-                  </Cell>
-                  <Cell label="Döviz">
-                    <SelectInput
-                      aria-label="Döviz"
-                      value={it.currency}
-                      onChange={(e) => saveItem(it.id, { currency: e.target.value as OrderReviewItem["currency"] })}
-                      className="lg:border-transparent lg:bg-transparent lg:px-2 lg:shadow-none"
-                    >
-                      {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                    </SelectInput>
-                  </Cell>
-                  <Cell label="Karar / Durum">
-                    <SelectInput
-                      aria-label="Karar / durum"
-                      value={it.decision}
-                      onChange={(e) => saveItem(it.id, { decision: e.target.value as OrderReviewItem["decision"] })}
-                      className={cn("border-transparent font-semibold", decisionTone)}
-                    >
-                      {DECISIONS.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
-                    </SelectInput>
-                  </Cell>
-                  <div className="hidden pt-1.5 text-center lg:block">
-                    {canDelete && (
-                      <IconButton size="sm" variant="ghost" aria-label="Satırı sil" title="Satırı sil" onClick={() => removeItem(it, i)}>
-                        <Trash2 size={14} aria-hidden />
-                      </IconButton>
-                    )}
+                  </label>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="block min-w-0">
+                      <FieldLabel>Kumaş / içerik</FieldLabel>
+                      <AutoText label="Kumaş / içerik" value={it.fabric} minRows={1} placeholder="Ör. %100 keten" onCommit={(v) => saveItem(it.id, { fabric: v })} />
+                    </label>
+                    <label className="block min-w-0">
+                      <FieldLabel>Önerilen renkler</FieldLabel>
+                      <AutoText label="Önerilen renkler" value={it.colors} minRows={1} placeholder="Ör. Ekru, haki" onCommit={(v) => saveItem(it.id, { colors: v })} />
+                    </label>
+                    <label className="block min-w-0">
+                      <FieldLabel>Planlanan adet</FieldLabel>
+                      <InlineInput
+                        label="Planlanan adet"
+                        inputMode="numeric"
+                        value={fmtNumber(it.planned_qty)}
+                        placeholder="0"
+                        className="tabular-nums"
+                        onCommit={(v) => {
+                          const n = parseNumber(v);
+                          if (n === undefined) { setError("Planlanan adet bir sayı olmalı."); return; }
+                          saveItem(it.id, { planned_qty: n === null ? null : Math.round(n) });
+                        }}
+                      />
+                    </label>
+                    <div className="min-w-0">
+                      <FieldLabel>Birim fiyat</FieldLabel>
+                      <div className="flex gap-1.5">
+                        <InlineInput
+                          label="Birim fiyat"
+                          inputMode="decimal"
+                          value={fmtNumber(it.unit_price, 2)}
+                          placeholder="0,00"
+                          className="min-w-0 flex-1 tabular-nums"
+                          onCommit={(v) => {
+                            const n = parseNumber(v);
+                            if (n === undefined) { setError("Birim fiyat bir sayı olmalı."); return; }
+                            saveItem(it.id, { unit_price: n });
+                          }}
+                        />
+                        <SelectInput
+                          aria-label="Döviz"
+                          value={it.currency}
+                          onChange={(e) => saveItem(it.id, { currency: e.target.value as OrderReviewItem["currency"] })}
+                          className="h-9 w-[5.5rem] shrink-0 pointer-coarse:h-11"
+                        >
+                          {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                        </SelectInput>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              );
-            })}
-          </div>
 
-          <div className="mt-3 lg:mt-0 lg:p-2">
-            <Button variant="secondary" onClick={addItem} loading={adding}>
-              {!adding && <Plus size={15} aria-hidden />} Ürün ekle
-            </Button>
-          </div>
-        </div>
+                <MeetingNotes notes={it.meeting_notes ?? []} onChange={(next) => saveItem(it.id, { meeting_notes: next })} />
+              </div>
+            </article>
+          );
+        })}
+
+        {visible.length === 0 && items.length > 0 && (
+          <p className="rounded-card border border-dashed border-line-strong px-4 py-6 text-center text-[13.5px] text-muted">
+            Bu kararda ürün yok.
+          </p>
+        )}
+
+        <button
+          type="button"
+          onClick={addItem}
+          disabled={adding}
+          className="flex w-full items-center justify-center gap-2 rounded-card border border-dashed border-line-strong bg-surface/60 px-4 py-4 text-[14px] font-semibold text-muted transition-colors duration-150 hover:border-brand hover:bg-brand-soft hover:text-brand-strong disabled:opacity-60"
+        >
+          {adding ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Plus size={16} aria-hidden />} Ürün ekle
+        </button>
       </div>
 
       <Overlay open={!!lightbox} onClose={() => setLightbox(null)} size="lg" floatingClose>

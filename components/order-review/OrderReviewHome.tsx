@@ -2,13 +2,11 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ClipboardCheck, FileSpreadsheet, Plus } from "lucide-react";
+import { ClipboardCheck, FileSpreadsheet, ImagePlus, Loader2, Plus } from "lucide-react";
 import { createClient as createBrowserSupabase } from "@/lib/supabase/client";
 import { createOrderReview, importOrderReview } from "@/lib/actions/order-reviews";
 import { cn } from "@/lib/utils/cn";
-import {
-  formatDateTr, ORDER_REVIEW_GRID, ORDER_REVIEW_HEADERS, rowNo,
-} from "@/lib/order-review/model";
+import { formatDateTr, rowNo } from "@/lib/order-review/model";
 import { Button } from "@/components/ui/Button";
 import { Tile, TileGrid } from "@/components/ui/TileGrid";
 import { CollectionTabs } from "@/components/collection/PaymentTable";
@@ -22,6 +20,18 @@ export type ReviewTile = {
   itemCount: number;
   coverUrl: string | null;
 };
+
+/* Boş kartın alan taslakları — düzenleyicideki alanlarla aynı ölçü. */
+function Label({ children }: { children: React.ReactNode }) {
+  return <span className="mb-1 block text-[11.5px] font-semibold uppercase tracking-[0.05em] text-muted">{children}</span>;
+}
+function Ghost({ className, children }: { className?: string; children?: React.ReactNode }) {
+  return (
+    <span className={cn("flex h-9 items-center rounded-control border border-line bg-surface px-2.5 text-[13.5px] text-subtle", className)}>
+      {children}
+    </span>
+  );
+}
 
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -124,43 +134,54 @@ export function OrderReviewHome({
       )}
 
       {tiles.length === 0 ? (
-        /* İLK GİRİŞ = BOŞ TABLO. "Henüz yok" yazısı formatın sistemde
+        /* İLK GİRİŞ = BOŞ ÜRÜN KARTI. "Henüz yok" yazısı formatın sistemde
            olduğunu saklıyordu (Sıraç, 29.10.2026: "formatı sistemde yapmadın
-           mı da onlar girebilsin"). Excel'in sütunları burada görünür; ilk
-           satıra tıklamak değerlendirmeyi açar. */
+           mı da onlar girebilsin"). Düzenleyicideki kartın aynısı boş hâliyle
+           görünür; tıklamak değerlendirmeyi ilk ürünüyle açar. */
         <div className="anim-fade-up">
-          <div className="hidden overflow-x-auto rounded-card border border-line bg-surface shadow-card lg:block">
-            <div className="min-w-max">
-              <div className={cn("border-b border-line-strong bg-surface-muted", ORDER_REVIEW_GRID)} role="row">
-                {ORDER_REVIEW_HEADERS.map((h, i) => (
-                  <div key={i} className="border-r border-hairline px-2 py-2.5 text-[11.5px] font-semibold uppercase leading-tight tracking-[0.04em] text-muted last:border-r-0" role="columnheader">
-                    {h}
-                  </div>
+          <button
+            type="button"
+            onClick={create}
+            disabled={creating || !!importing}
+            className="group block w-full rounded-card border border-line bg-surface text-left shadow-card transition-[border-color,box-shadow] duration-150 hover:border-brand hover:shadow-pop disabled:opacity-60"
+          >
+            <span className="flex flex-wrap items-center gap-2 border-b border-hairline px-3 py-2.5 sm:px-4">
+              <span className="grid h-9 min-w-9 place-items-center rounded-control bg-surface-muted px-1.5 text-[13px] font-semibold tabular-nums text-muted">{rowNo(0)}</span>
+              <Ghost className="min-w-0 flex-1 sm:w-28 sm:flex-none">Kod</Ghost>
+              <Ghost className="basis-full sm:min-w-[12rem] sm:flex-1 sm:basis-auto max-sm:order-last">Ürün grubu</Ghost>
+              <span className="ml-auto inline-flex h-9 items-center rounded-full bg-surface-sunken px-3 text-[13px] font-semibold text-muted">Değerlendirmede</span>
+            </span>
+            <span className="grid gap-4 p-3 sm:p-4 md:grid-cols-[minmax(0,240px)_minmax(0,1fr)] xl:grid-cols-[minmax(0,300px)_minmax(0,1fr)_minmax(0,1fr)]">
+              <span className="grid grid-cols-2 gap-3 max-md:max-w-sm md:row-span-2 xl:row-span-1">
+                {["Orijinal", "Numune"].map((l) => (
+                  <span key={l} className="min-w-0">
+                    <Label>{l}</Label>
+                    <span className="grid aspect-[3/4] place-items-center rounded-control border border-dashed border-line-strong bg-surface-muted/40 text-subtle">
+                      <ImagePlus size={20} aria-hidden />
+                    </span>
+                  </span>
                 ))}
-              </div>
-              <button
-                type="button"
-                onClick={create}
-                disabled={creating || !!importing}
-                className={cn("w-full text-left transition-colors hover:bg-surface-muted disabled:opacity-60", ORDER_REVIEW_GRID)}
-              >
-                {ORDER_REVIEW_HEADERS.map((_, i) => (
-                  <div key={i} className="h-24 border-r border-hairline px-2 py-2.5 text-[13.5px] text-subtle last:border-r-0">
-                    {i === 0 ? rowNo(0) : i === 1 ? "Yazmaya başlamak için tıklayın" : ""}
-                  </div>
-                ))}
-              </button>
-            </div>
-          </div>
-          <div className="rounded-card border border-line bg-surface p-4 shadow-card lg:hidden">
-            <p className="text-[14px] font-semibold text-ink">Ürün {rowNo(0)}</p>
-            <p className="mt-1 text-[13.5px] text-muted">
-              {ORDER_REVIEW_HEADERS.slice(1, -1).join(" · ")}
-            </p>
-            <Button className="mt-3" onClick={create} loading={creating} disabled={!!importing}>
-              {!creating && <Plus size={15} aria-hidden />} Yazmaya başla
-            </Button>
-          </div>
+              </span>
+              <span className="min-w-0 space-y-3">
+                <span className="block"><Label>Ürün kritikleri / deneme notları</Label><Ghost className="h-24" /></span>
+                <span className="grid gap-3 sm:grid-cols-2">
+                  {["Kumaş / içerik", "Önerilen renkler", "Planlanan adet", "Birim fiyat"].map((l) => (
+                    <span key={l} className="block min-w-0"><Label>{l}</Label><Ghost /></span>
+                  ))}
+                </span>
+              </span>
+              <span className="block min-w-0 rounded-card border border-hairline bg-surface-muted/50 p-3">
+                <Label>Aslı Hanım&apos;ın notları</Label>
+                <span className="block rounded-control border border-dashed border-line-strong px-3 py-4 text-[13px] text-subtle">
+                  Her toplantının notu kendi tarihiyle burada durur.
+                </span>
+              </span>
+            </span>
+            <span className="flex items-center justify-center gap-2 border-t border-hairline px-4 py-3 text-[14px] font-semibold text-brand-strong group-hover:bg-brand-soft">
+              {creating ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Plus size={16} aria-hidden />}
+              İlk ürünü yazmaya başlayın
+            </span>
+          </button>
           <p className="mt-3 text-[13.5px] text-muted">
             Elinizde dolu bir Excel varsa sağ üstten “Excel&apos;den aktar” ile fotoğraflarıyla birlikte getirebilirsiniz.
           </p>
