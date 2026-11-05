@@ -955,32 +955,3 @@ export type OrderReviewItem = {
   created_at: string;
   updated_at: string;
 };
-
-// ── Upcycle yapılacaklar listesi (20240366) ──────────────────────────────────
-export type UpcycleSection = "urun" | "malzeme";
-export type UpcycleSize = "XS" | "S" | "M" | "L" | "XL" | "ONE";
-
-export type UpcycleItem = {
-  id: string;
-  workspace_id: string;
-  section: UpcycleSection;
-  position: number;
-  status_note: string;
-  owners: string;
-  name: string;
-  color: string;
-  code: string;
-  material_type: string;
-  description: string;
-  sizes: Partial<Record<UpcycleSize, number>>;
-  market212: number | null;
-  retail_price: number | null;
-  quantity: number | null;
-  /** Malzemede "Fotoğraf" burada durur. */
-  before_photos: OrderReviewPhoto[];
-  after_photos: OrderReviewPhoto[];
-  created_by: string | null;
-  updated_by: string | null;
-  created_at: string;
-  updated_at: string;
-};

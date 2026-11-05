@@ -21,7 +21,7 @@
  */
 
 import type { LucideIcon } from "lucide-react";
-import { Archive, Boxes, Calculator, CalendarRange, ClipboardCheck, Contact, FolderOpen, HandCoins, Kanban, LayoutDashboard, List, Recycle, ScrollText, Settings, ShieldCheck, Target, Trash2, Wallet } from "lucide-react";
+import { Archive, Boxes, Calculator, CalendarRange, ClipboardCheck, Contact, FolderOpen, HandCoins, Kanban, LayoutDashboard, List, ScrollText, Settings, ShieldCheck, Target, Trash2, Wallet } from "lucide-react";
 
 /** Kim GÖRÜR: "all" = tüm üyeler (düzenleme yetkisi ekran içinde isAdmin ile
  *  daralır — "herkes görsün, yönetici müdahale etsin"), "admin" = yalnız
@@ -76,18 +76,6 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
     description: "Sipariş değerlendirme — fotoğraf, imalatçı numunesi, kritikler, toplantı notları ve karar.",
     href: "/collection/siparis",
     icon: ClipboardCheck,
-    access: "all",
-    group: "calisma",
-  },
-  /* UPCYCLE — Gül Hanım'ın "upcycle yapılacaklar listesi" (04.11.2026);
-     Aslı Hanım "takvim gibi" uygulamada olsun istedi. Order Review gibi
-     Calendar'ın altında kendi menü satırı; Collection şeridinde de sekme. */
-  {
-    key: "upcycle",
-    title: "Upcycle",
-    description: "Upcycle yapılacaklar listesi — öncesi/sonrası görsel, güncel durum, bedenler ve malzeme listesi.",
-    href: "/collection/upcycle",
-    icon: Recycle,
     access: "all",
     group: "calisma",
   },

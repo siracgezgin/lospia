@@ -49,7 +49,7 @@ type Field =
   | "no" | "original" | "sample" | "code" | "group" | "critique" | "note"
   | "fabric" | "colors" | "qty" | "price" | "currency" | "decision";
 
-export const norm = (s: string) =>
+const norm = (s: string) =>
   s.toLocaleLowerCase("tr")
     .replace(/ı/g, "i").replace(/ğ/g, "g").replace(/ü/g, "u")
     .replace(/ş/g, "s").replace(/ö/g, "o").replace(/ç/g, "c")
@@ -76,7 +76,7 @@ function fieldOf(header: string): Field | null {
 }
 
 /** Hücrenin görünen metni — formülde sonuç, zengin metinde düz metin. */
-export function textOf(v: unknown): string {
+function textOf(v: unknown): string {
   if (v === null || v === undefined) return "";
   if (typeof v === "string") return v.trim();
   if (typeof v === "number" || typeof v === "boolean") return String(v);
@@ -91,7 +91,7 @@ export function textOf(v: unknown): string {
 }
 
 /** "1.250" / "12,50" / 12.5 → sayı. Türkçe binlik ayırıcı tanınır. */
-export function numberOf(v: unknown): number | null {
+function numberOf(v: unknown): number | null {
   if (typeof v === "number" && Number.isFinite(v)) return v;
   if (v && typeof v === "object" && "result" in (v as object)) return numberOf((v as { result: unknown }).result);
   let s = textOf(v).replace(/[^\d.,-]/g, "");
@@ -129,7 +129,7 @@ function splitNotes(text: string, fallbackDate: string): { date: string; text: s
 }
 
 /** Hücre değeri → ISO tarih (Date ya da "29.10.2026"). */
-export function isoOf(v: unknown): string | null {
+function isoOf(v: unknown): string | null {
   if (v instanceof Date) return v.toISOString().slice(0, 10);
   const t = textOf(v);
   const m = /^(\d{1,2})[./](\d{1,2})[./](\d{4})$/.exec(t);
@@ -137,7 +137,7 @@ export function isoOf(v: unknown): string | null {
   return /^\d{4}-\d{2}-\d{2}/.test(t) ? t.slice(0, 10) : null;
 }
 
-export type WS = {
+type WS = {
   name: string;
   rowCount: number;
   columnCount: number;
@@ -151,28 +151,28 @@ export type WS = {
     };
   }[];
 };
-export type WB = {
+type WB = {
   worksheets: WS[];
   getImage: (_id: number) => { buffer?: Buffer; extension?: string } | undefined;
 };
 
 const EMU_PER_PX = 9525;
 /** Excel sütun genişliği (karakter) → EMU. Genişlik verilmemişse 8,43. */
-export const colEmu = (ws: WS, c1: number) => {
+const colEmu = (ws: WS, c1: number) => {
   const w = ws.getColumn(c1)?.width ?? 8.43;
   return Math.trunc(w * 7 + 5) * EMU_PER_PX;
 };
 /** Satır yüksekliği (punto) → EMU. Verilmemişse 15pt. */
-export const rowEmu = (ws: WS, r1: number) => (ws.getRow(r1)?.height ?? 15) * 12700;
+const rowEmu = (ws: WS, r1: number) => (ws.getRow(r1)?.height ?? 15) * 12700;
 
 /** Sıfır tabanlı (sütun, ofset) çiftinden mutlak konum. */
-export function absolute(index: number, offset: number, size: (_i1: number) => number): number {
+function absolute(index: number, offset: number, size: (_i1: number) => number): number {
   let x = 0;
   for (let i = 0; i < index; i++) x += size(i + 1);
   return x + offset;
 }
 /** Mutlak konum → sıfır tabanlı dizin. */
-export function indexAt(pos: number, size: (_i1: number) => number, max: number): number {
+function indexAt(pos: number, size: (_i1: number) => number, max: number): number {
   let x = 0;
   for (let i = 0; i < max; i++) {
     x += size(i + 1);
