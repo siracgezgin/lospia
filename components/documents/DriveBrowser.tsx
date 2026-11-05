@@ -929,13 +929,28 @@ export function DriveBrowser({
   );
   const previewIndex = preview ? previewSiblings.indexOf(preview.id) : -1;
 
+  /* KÜÇÜK RESİM ŞERİDİ (Aslı Hanım, 2026-11-05: "fotoğrafları bu düzene benzer
+     şekilde görelim" — örnek: büyük görsel, altında bütün kareler yan yana).
+     Yalnız görseller; PDF'in küçük resmi yok. Sıra yine ekrandaki sıra. */
+  const previewStrip = useMemo(
+    () => items.files.filter((i) => i.previewable && i.thumbUrl),
+    [items.files],
+  );
+  const activeThumb = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    activeThumb.current?.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
+  }, [preview?.id]);
+
+  const openPreviewById = useCallback((id: string) => {
+    const row = files.find((f) => f.id === id);
+    if (row) openPreview(row);
+  }, [files, openPreview]);
+
   const stepPreview = useCallback((delta: number) => {
     if (previewIndex < 0) return;
     const next = previewSiblings[previewIndex + delta];
-    if (!next) return;
-    const row = files.find((f) => f.id === next);
-    if (row) openPreview(row);
-  }, [previewIndex, previewSiblings, files, openPreview]);
+    if (next) openPreviewById(next);
+  }, [previewIndex, previewSiblings, openPreviewById]);
 
   /* Ok tuşları — Drive'da da böyle. Pencere açıkken dinlenir. */
   useEffect(() => {
@@ -2183,7 +2198,9 @@ export function DriveBrowser({
                ileri geri gezinirken pencere her adımda zıplıyordu (Sıraç,
                2026-09-06: "hepsi eşit boyutta açılmıyor"). Çerçeve sabit,
                görsel içine object-contain ile oturur. */
-            <div className="grid h-[60vh] place-items-center overflow-hidden rounded-control bg-surface-sunken">
+            /* Küçük resim şeridi varken çerçeve 50vh: şerit + alt not
+               60vh'lik çerçeveyle 900px ekranda pencereyi taşırıyordu. */
+            <div className={cn("grid place-items-center overflow-hidden rounded-control bg-surface-sunken", previewStrip.length > 1 ? "h-[50vh]" : "h-[60vh]")}>
               {/* SINIR MUTLAK BİRİMDE. Önce `max-h-full` (yüzde) vardı ama grid
                   hücresinde yüzde yükseklik çözülmeyip görsel doğal boyutunda
                   çiziliyor, çerçeve de onu KIRPIYORDU (Sıraç, 2026-09-06:
@@ -2193,7 +2210,7 @@ export function DriveBrowser({
               <img
                 src={preview.url}
                 alt={preview.name}
-                className="max-h-[60vh] max-w-full object-contain"
+                className={cn("max-w-full object-contain", previewStrip.length > 1 ? "max-h-[50vh]" : "max-h-[60vh]")}
                 /* İMZA BİR SAATLİK, PENCERE DAHA UZUN AÇIK KALABİLİYOR.
                    Görselin adresi sayfa sunucuda çizilirken üretiliyor; sekme
                    bir saatten fazla açık/atıl kalınca Storage 400 dönüyor ve
@@ -2233,6 +2250,33 @@ export function DriveBrowser({
               className="h-[65vh] w-full rounded-control border border-line bg-surface-sunken"
             />
           ) : null}
+          {preview.mode === "image" && previewStrip.length > 1 && (
+            <div className="mt-2 flex gap-2 overflow-x-auto p-1" aria-label="Klasördeki görseller">
+              {/* p-1: kaydırma kutusu taşan gölgeyi keser — seçili karenin
+                  çerçevesi kenarda yarım görünüyordu. */}
+              {previewStrip.map((it) => {
+                const active = it.id === preview.id;
+                return (
+                  <button
+                    key={it.key}
+                    ref={active ? activeThumb : undefined}
+                    type="button"
+                    onClick={() => openPreviewById(it.id)}
+                    aria-label={it.name}
+                    aria-current={active ? "true" : undefined}
+                    title={it.name}
+                    className={cn(
+                      "h-16 w-11 shrink-0 overflow-hidden rounded-[4px] bg-surface-sunken transition-opacity duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring",
+                      active ? "opacity-100 ring-2 ring-ink" : "opacity-60 hover:opacity-100",
+                    )}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={it.thumbUrl ?? ""} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <p className="mt-2 text-[12px] text-muted">
             Önizleme adresi kısa sürelidir; dosyayı saklamak için indirin.
           </p>
