@@ -21,7 +21,7 @@
  */
 
 import type { LucideIcon } from "lucide-react";
-import { Archive, Boxes, Calculator, CalendarRange, ClipboardCheck, Contact, FolderOpen, HandCoins, Kanban, LayoutDashboard, List, ScrollText, Settings, ShieldCheck, Target, Trash2, Wallet } from "lucide-react";
+import { Archive, Boxes, Calculator, CalendarRange, Contact, FolderOpen, HandCoins, Kanban, LayoutDashboard, List, ScrollText, Settings, ShieldCheck, Target, Trash2, Wallet } from "lucide-react";
 
 /** Kim GÖRÜR: "all" = tüm üyeler (düzenleme yetkisi ekran içinde isAdmin ile
  *  daralır — "herkes görsün, yönetici müdahale etsin"), "admin" = yalnız
@@ -64,21 +64,8 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
     access: "all",
     group: "calisma",
   },
-  /* SİPARİŞ DEĞERLENDİRME — Nisa Hanım (29.10.2026): "Bu sistemi takvim gibi
-     operasyon sistemine entegre edebilir miyiz?" Ekibin Excel şablonu
-     (fotoğraf · numune · kritik · Aslı Hanım'ın toplantı notu · karar).
-     "Takvim gibi" = Calendar'ın yanında kendi menü satırı (Sıraç onayı,
-     29.10.2026). Rota Koleksiyon altında kalır; Collection şeridindeki
-     sekmesi de durur. */
-  {
-    key: "siparis",
-    title: "Order Review",
-    description: "Sipariş değerlendirme — fotoğraf, imalatçı numunesi, kritikler, toplantı notları ve karar.",
-    href: "/collection/siparis",
-    icon: ClipboardCheck,
-    access: "all",
-    group: "calisma",
-  },
+  /* ORDER REVIEW DİZİNDEN KALKTI (06.11.2026) — föyün "Toplantı notları"
+     sekmesi oldu (bkz. components/production/SheetMeetingNotes). */
   {
     key: "board",
     title: "Board",

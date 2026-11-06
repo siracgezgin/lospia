@@ -8,6 +8,7 @@ import { toActionErrorMessage } from "@/lib/utils/supabase-errors";
 import { logWorkspaceActivity, WORKSPACE_ACTIONS } from "@/lib/activity/log-workspace-activity";
 import { sendEmail } from "@/lib/email/send-email";
 import { buildSheetEmail } from "@/lib/production/sheet-email";
+import { sheetNotesPrefix } from "@/lib/production/meeting-notes";
 import { MAX_UPLOAD_BYTES } from "@/lib/utils/compress-image";
 import type { ProductionSheet, SheetMaterialWithMaterial } from "@/types";
 
@@ -179,6 +180,8 @@ const SheetSchema = z.object({
       z.object({
         id: z.string().max(64),
         color: z.string().max(120).default(""),
+        /* Aksesuar rengi (06.11.2026) — sonradan eklendi: .optional(). */
+        accent_color: z.string().max(120).optional(),
         fabric: z.string().max(160).optional(),
         price: z.string().max(40).optional(),
         currency: z.string().max(10).optional(),
@@ -829,4 +832,81 @@ export async function sendSheetToManufacturer(
 
   revalidatePath(`/production/${sheetId}`);
   return { ok: true, to };
+}
+
+// ── Toplantı notları (20240366) ──────────────────────────────────────────────
+// Aslı Hanım (06.11.2026): "Order review'u bu şeyin içine sokacaksın… toplantı
+// notları olarak çevir." Föyün "Kaydet" düğmesinden BAĞIMSIZ yazılır: alan
+// alan, çıkınca kaydolur. Yalnız GÖNDERİLEN alan yazılır; notlar ve numune
+// fotoğrafları BÜTÜN liste olarak gelir (ekran listenin tamamını tutuyor).
+
+const MeetingNotesPatch = z.object({
+  meeting_notes: z
+    .array(z.object({
+      id: z.string().min(1).max(64),
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Geçersiz not tarihi"),
+      text: z.string().max(8000),
+    }))
+    .max(200)
+    .optional(),
+  review_critique: z.string().max(8000).optional(),
+  review_decision: z.enum(["degerlendirmede", "onaylandi", "revize", "reddedildi"]).nullable().optional(),
+  review_sample_photos: z
+    .array(z.object({ path: z.string().min(1).max(500), url: z.string().max(2000).optional() }))
+    .max(30)
+    .optional(),
+});
+export type SheetMeetingNotesPatch = z.input<typeof MeetingNotesPatch>;
+
+export async function updateSheetMeetingNotes(
+  sheetId: string,
+  patch: SheetMeetingNotesPatch,
+): Promise<{ ok: true; sheet: Pick<ProductionSheet, "meeting_notes" | "review_critique" | "review_decision" | "review_sample_photos"> } | { error: string }> {
+  const parsed = MeetingNotesPatch.safeParse(patch);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+
+  const v = parsed.data;
+  const payload: Record<string, unknown> = { updated_by: ctx.userId };
+  if (v.meeting_notes !== undefined) {
+    payload.meeting_notes = v.meeting_notes.map((n) => ({ id: n.id, date: n.date, text: n.text.trim() }));
+  }
+  if (v.review_critique !== undefined) payload.review_critique = v.review_critique.trim();
+  if (v.review_decision !== undefined) payload.review_decision = v.review_decision;
+  if (v.review_sample_photos !== undefined) {
+    /* Yol föyün kendi klasöründe olmalı; adres yoldan yeniden üretilir. */
+    const prefix = sheetNotesPrefix(ctx.workspaceId, sheetId);
+    const photos: { path: string; url: string }[] = [];
+    for (const p of v.review_sample_photos) {
+      if (!p.path.startsWith(prefix) || p.path.includes("..")) return { error: "Fotoğraf bu föye ait değil." };
+      photos.push({ path: p.path, url: supabase.storage.from(IMAGE_BUCKET).getPublicUrl(p.path).data.publicUrl });
+    }
+    payload.review_sample_photos = photos;
+  }
+
+  const { data, error } = await supabase
+    .from("production_sheets")
+    .update(payload)
+    .eq("id", sheetId)
+    .eq("workspace_id", ctx.workspaceId)
+    .select("meeting_notes, review_critique, review_decision, review_sample_photos")
+    .maybeSingle();
+  if (error) return { error: toActionErrorMessage(error) };
+  if (!data) return { error: "Föy bulunamadı ya da düzenleme yetkiniz yok." };
+  revalidatePath(`/production/${sheetId}`);
+  return { ok: true, sheet: data as Pick<ProductionSheet, "meeting_notes" | "review_critique" | "review_decision" | "review_sample_photos"> };
+}
+
+/** Numuneden kaldırılan fotoğrafın baytı (kayıttan çıkarma ÖNCE yapılır). */
+export async function removeSheetNotesPhoto(sheetId: string, path: string): Promise<{ ok: true } | { error: string }> {
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+  const prefix = sheetNotesPrefix(ctx.workspaceId, sheetId);
+  if (!path.startsWith(prefix) || path.includes("..")) return { error: "Fotoğraf bu föye ait değil." };
+  const { error } = await supabase.storage.from(IMAGE_BUCKET).remove([path]);
+  if (error) return { error: toActionErrorMessage(error) };
+  return { ok: true };
 }

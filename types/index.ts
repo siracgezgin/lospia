@@ -430,10 +430,15 @@ export type SourcingEntry = {
  */
 export type ColorVariant = {
   id: string;
+  /** Ana renk — ürünün (bedenin) rengi. */
   color: string;
+  /** Aksesuar rengi — nakış, düğme, şerit… (Aslı Hanım, 06.11.2026: "ana
+   *  renk, yani beden rengi; aksesuar rengi diye yan yana aç"). */
+  accent_color?: string;
   /** Kumaş adı/kodu — "poplin", "denim". */
   fabric?: string;
-  /** Kumaş birim fiyatı (serbest metin). */
+  /** Kumaş birim fiyatı (serbest metin). Ekrandan kalktı (06.11.2026: "burada
+   *  renk belirliyoruz, fiyata gerek yok"); eski kayıtta duruyorsa korunur. */
   price?: string;
   currency?: string;
   /** İçerik / kompozisyon — "%100 pamuk". */
@@ -514,6 +519,11 @@ export type ProductionSheet = {
   /** Fihristten seçilen kalıpçı ve nakışçı (20240353). */
   pattern_maker_id?: string | null;
   embroiderer_id?: string | null;
+  /** Toplantı notları sekmesi (20240366) — Order Review föyün içine taşındı. */
+  meeting_notes?: OrderReviewNote[] | null;
+  review_critique?: string | null;
+  review_sample_photos?: OrderReviewPhoto[] | null;
+  review_decision?: OrderReviewDecision | null;
 };
 
 /**

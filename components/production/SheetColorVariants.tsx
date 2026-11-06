@@ -1,6 +1,7 @@
 "use client";
 
 import { Plus, Trash2 } from "lucide-react";
+import { cn } from "@/lib/utils/cn";
 import { Button, IconButton } from "@/components/ui/Button";
 import { TextInput } from "@/components/ui/Field";
 import type { ColorVariant } from "@/types";
@@ -18,10 +19,26 @@ import type { ColorVariant } from "@/types";
  * ölçüyü, talimatı ve beden dağılımını dört kez yazdırırdı. Burada tek föy,
  * içinde kumaş listesi.
  *
- * FİYAT BURADA, MALİYET SEKMESİNDE DEĞİL: maliyet tablosu ürünün kendi
- * maliyetini verir; bu liste "hangi kumaş kaça geliyor" sorusunun cevabıdır ve
- * kumaş seçilirken okunur.
+ * FİYAT KALKTI (Aslı Hanım, 06.11.2026): "Burada renk belirliyoruz, fiyata
+ * gerek yok." Fiyat ve para birimi ekrandan çıktı; eski satırda duruyorsa
+ * kayıtta korunur (satır güncellenirken yayılmayla taşınır).
+ *
+ * İKİ RENK: "Ana renk, yani beden rengi; aksesuar rengi diye yan yana aç."
+ * Bir üründe birden çok kumaş/renk olabilir (t-shirt, nakış, aksesuar; bazen
+ * beş kumaş) — her biri ayrı satır, "Renk / kumaş ekle" ile.
  */
+
+/** Etiket alanın ÜSTÜNDE, örnek değer içinde DEĞİL. Aslı Hanım (06.11.2026):
+ *  "Renk boş kalsın… hata yapmamıza sebep vermesin" — "Renk — Beyaz" yazan
+ *  boş alan girilmiş veri sanılıyordu. */
+function Labeled({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) {
+  return (
+    <label className={cn("block min-w-0", className)}>
+      <span className="mb-1 block text-[11.5px] font-semibold text-muted">{label}</span>
+      {children}
+    </label>
+  );
+}
 
 function newId(): string {
   return `cv_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
@@ -43,79 +60,73 @@ export function SheetColorVariants({
     <div className="space-y-2">
       {rows.length === 0 ? (
         <p className="text-[12.5px] text-subtle">
-          Bu kalıp birden çok kumaşta üretiliyorsa her birini ekleyin — renk, kumaş,
-          fiyat, içerik ve asgari sipariş adedi ayrı ayrı tutulur.
+          Bu kalıp birden çok kumaşta ya da renkte üretiliyorsa her birini ekleyin —
+          ana renk, aksesuar rengi, kumaş, içerik ve asgari sipariş adedi ayrı ayrı tutulur.
         </p>
       ) : (
         <ul className="space-y-2">
           {rows.map((r) => (
-            <li key={r.id} className="rounded-card border border-line p-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <TextInput
-                  value={r.color}
-                  disabled={!canEdit}
-                  onChange={(e) => patch(r.id, { color: e.target.value })}
-                  placeholder="Renk — Beyaz"
-                  aria-label="Renk"
-                  className="min-w-[110px] flex-1 basis-[110px]"
-                />
-                <TextInput
-                  value={r.fabric ?? ""}
-                  disabled={!canEdit}
-                  onChange={(e) => patch(r.id, { fabric: e.target.value })}
-                  placeholder="Kumaş — poplin"
-                  aria-label="Kumaş"
-                  className="min-w-[110px] flex-1 basis-[110px]"
-                />
-                <TextInput
-                  value={r.price ?? ""}
-                  disabled={!canEdit}
-                  onChange={(e) => patch(r.id, { price: e.target.value })}
-                  placeholder="Fiyat"
-                  aria-label="Kumaş fiyatı"
-                  inputMode="decimal"
-                  className="min-w-[80px] flex-1 basis-[80px]"
-                />
-                <TextInput
-                  value={r.currency ?? ""}
-                  disabled={!canEdit}
-                  onChange={(e) => patch(r.id, { currency: e.target.value })}
-                  placeholder="TL / $"
-                  aria-label="Para birimi"
-                  className="w-[74px] shrink-0"
-                />
+            <li key={r.id} className="rounded-card border border-line p-2.5">
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_7rem_auto] sm:items-end">
+                <Labeled label="Ana renk (beden)">
+                  <TextInput
+                    value={r.color}
+                    disabled={!canEdit}
+                    onChange={(e) => patch(r.id, { color: e.target.value })}
+                    aria-label="Ana renk (beden rengi)"
+                  />
+                </Labeled>
+                <Labeled label="Aksesuar rengi">
+                  <TextInput
+                    value={r.accent_color ?? ""}
+                    disabled={!canEdit}
+                    onChange={(e) => patch(r.id, { accent_color: e.target.value })}
+                    aria-label="Aksesuar rengi"
+                  />
+                </Labeled>
+                <Labeled label="Kumaş">
+                  <TextInput
+                    value={r.fabric ?? ""}
+                    disabled={!canEdit}
+                    onChange={(e) => patch(r.id, { fabric: e.target.value })}
+                    aria-label="Kumaş"
+                  />
+                </Labeled>
                 {/* ASGARİ SİPARİŞ — "kumaşa göre asgari sipariş adedi de
                     değişiyor". Kumaşın yanında durmalı: sipariş kararı o
                     satırda veriliyor. */}
-                <TextInput
-                  value={r.moq ?? ""}
-                  disabled={!canEdit}
-                  onChange={(e) => patch(r.id, { moq: e.target.value })}
-                  placeholder="Asgari adet"
-                  aria-label="Asgari sipariş adedi"
-                  inputMode="numeric"
-                  className="w-[104px] shrink-0"
-                />
+                <Labeled label="Asgari adet">
+                  <TextInput
+                    value={r.moq ?? ""}
+                    disabled={!canEdit}
+                    onChange={(e) => patch(r.id, { moq: e.target.value })}
+                    placeholder="0"
+                    aria-label="Asgari sipariş adedi"
+                    inputMode="numeric"
+                    className="tabular-nums"
+                  />
+                </Labeled>
                 {canEdit && (
                   <IconButton
                     size="sm"
                     aria-label="Varyantı sil"
                     title="Varyantı sil"
                     onClick={() => onChange(rows.filter((x) => x.id !== r.id))}
-                    className="shrink-0 hover:text-danger"
+                    className="justify-self-end hover:text-danger sm:mb-1.5"
                   >
                     <Trash2 size={13} />
                   </IconButton>
                 )}
               </div>
-              <TextInput
-                value={r.composition ?? ""}
-                disabled={!canEdit}
-                onChange={(e) => patch(r.id, { composition: e.target.value })}
-                placeholder="İçerik — %100 pamuk, en 150 cm"
-                aria-label="İçerik"
-                className="mt-2 w-full"
-              />
+              <Labeled label="İçerik" className="mt-2">
+                <TextInput
+                  value={r.composition ?? ""}
+                  disabled={!canEdit}
+                  onChange={(e) => patch(r.id, { composition: e.target.value })}
+                  aria-label="İçerik"
+                  className="w-full"
+                />
+              </Labeled>
             </li>
           ))}
         </ul>

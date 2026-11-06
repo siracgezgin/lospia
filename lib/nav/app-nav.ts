@@ -53,8 +53,9 @@ export const NAV_SECTIONS: NavSection[] = [
       // ikinci kez kart açmak "her şey her yerde"nin ta kendisi olurdu.
       { href: "/home", label: "Home Page", icon: Home, adminOnly: false },
       link("planning"),
-      // Nisa Hanım (29.10.2026): "takvim gibi" — Calendar'ın hemen altında.
-      link("siparis"),
+      /* ORDER REVIEW MENÜDEN KALKTI (Aslı Hanım, 06.11.2026): "Buradan order
+         review kalkıyor, Collection'ın içine giriyor." Ürünün değerlendirmesi
+         artık föyündeki "Toplantı notları" sekmesinde. */
       link("board"),
       /* LIST — Reports'un yerine.
          Sıraç (2026-08-29): "Reports / size atanan işler ve teslim tarihleri
@@ -129,6 +130,9 @@ export const ROUTE_OWNER: ReadonlyArray<readonly [prefix: string, owner: string]
   ["/sheets", "/documents"],
   // Üretim Föyü editörü Koleksiyon'dan açılır; kendi menü satırı yoktur.
   ["/production", "/collection"],
+  /* Eski Order Review sayfaları — kayıtlar föylere taşınana kadar adresle
+     açılır; menü satırı yok, Collection yanar. */
+  ["/collection/siparis", "/collection"],
   // Pano kuralları — Pano'nun kurallar panelinden açılan alt sayfa.
   ["/rules", "/board"],
   // Görev detayı tam sayfa açılabilir; işlerin listelendiği yüzey List'tir.

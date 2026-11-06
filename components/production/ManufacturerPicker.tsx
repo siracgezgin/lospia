@@ -166,7 +166,6 @@ export function ManufacturerPicker({
               value={draft.name}
               onChange={(e) => set({ name: e.target.value })}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); save(); } }}
-              placeholder="Sabri Yılmaz"
             />
           </Field>
           {/* ROL SABİT DEĞİL AMA HAZIR GELİR: artıya hangi kutudan basıldıysa
@@ -183,7 +182,7 @@ export function ManufacturerPicker({
             </SelectInput>
           </Field>
           <Field label="Telefon">
-            <TextInput value={draft.phone ?? ""} onChange={(e) => set({ phone: e.target.value })} placeholder="0532 000 00 00" inputMode="tel" />
+            <TextInput value={draft.phone ?? ""} onChange={(e) => set({ phone: e.target.value })} inputMode="tel" />
           </Field>
           <Field label="E-posta">
             <TextInput value={draft.email ?? ""} onChange={(e) => set({ email: e.target.value })} placeholder="ad@firma.com" inputMode="email" />
@@ -195,13 +194,13 @@ export function ManufacturerPicker({
             <TextInput value={draft.address ?? ""} onChange={(e) => set({ address: e.target.value })} placeholder="Mahalle, cadde, no" />
           </Field>
           <Field label="Şehir">
-            <TextInput value={draft.city ?? ""} onChange={(e) => set({ city: e.target.value })} placeholder="İstanbul" />
+            <TextInput value={draft.city ?? ""} onChange={(e) => set({ city: e.target.value })} />
           </Field>
           <Field label="Teslim süresi (gün)">
-            <TextInput value={String(draft.lead_time_days ?? "")} onChange={(e) => set({ lead_time_days: e.target.value })} placeholder="30" inputMode="numeric" className="tabular-nums" />
+            <TextInput value={String(draft.lead_time_days ?? "")} onChange={(e) => set({ lead_time_days: e.target.value })} placeholder="0" inputMode="numeric" className="tabular-nums" />
           </Field>
           <Field label="Asgari adet">
-            <TextInput value={String(draft.min_order_qty ?? "")} onChange={(e) => set({ min_order_qty: e.target.value })} placeholder="50" inputMode="numeric" className="tabular-nums" />
+            <TextInput value={String(draft.min_order_qty ?? "")} onChange={(e) => set({ min_order_qty: e.target.value })} placeholder="0" inputMode="numeric" className="tabular-nums" />
           </Field>
           <Field label="Para birimi">
             <TextInput value={draft.currency ?? "TL"} onChange={(e) => set({ currency: e.target.value })} placeholder="TL" />

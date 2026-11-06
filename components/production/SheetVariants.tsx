@@ -132,7 +132,7 @@ export function SheetVariants({ sheetId, colorway, siblings, canEdit, compact = 
                 if (e.key === "Enter") create();
                 if (e.key === "Escape") { setName(""); setAdding(false); }
               }}
-              placeholder="Mavi"
+              placeholder="Renk adı"
               aria-label="Yeni renk adı"
               className="h-8 w-32"
             />

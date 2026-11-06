@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 import {
-  AlertTriangle, CheckCircle2, ClipboardList, Clock, ExternalLink, FileDown, Globe, Layers, Plus, Printer, Ruler, Save, Trash2, Truck, User, Wallet, X,
+  AlertTriangle, CheckCircle2, ClipboardList, Clock, ExternalLink, FileDown, Globe, Layers, MessageSquareText, Plus, Printer, Ruler, Save, Trash2, Truck, User, Wallet, X,
 } from "lucide-react";
 import {
   createProductionSheet, updateProductionSheet, updateProductionSheetImages,
@@ -28,6 +28,7 @@ import { SheetBom, type PickableMaterial } from "./SheetBom";
 import { SheetSourcing } from "./SheetSourcing";
 import { SortableRows, SortableTableRow, arrayMove } from "./SortableRow";
 import { SheetColorVariants } from "./SheetColorVariants";
+import { SheetMeetingNotes } from "./SheetMeetingNotes";
 import { SheetVariants, type SiblingSheet } from "./SheetVariants";
 import { checkSheet } from "@/lib/production/completeness";
 import { COLLECTION_TAXONOMY, type CategoryNode } from "@/lib/collection/taxonomy";
@@ -102,10 +103,15 @@ interface Props {
  * aldığımda tek sayfa görüp kalıbın üstüne yapıştıracağım"); sekmeler yalnız
  * düzenleme ekranıdır.
  */
-type SheetTabId = "urun" | "olcu" | "maliyet" | "sourcing" | "malzeme" | "web";
+type SheetTabId = "urun" | "notlar" | "olcu" | "maliyet" | "sourcing" | "malzeme" | "web";
 
 const SHEET_TABS: { id: SheetTabId; label: string; icon: typeof ClipboardList }[] = [
   { id: "urun",    label: "Ürün",             icon: ClipboardList },
+  /* TOPLANTI NOTLARI — Aslı Hanım (06.11.2026): Order Review ayrı modül
+     olmaktan çıktı, ürünün föyüne girdi ("order review'u bu şeyin içine
+     sokacaksın… toplantı notları olarak çevir"). Yeri "en başta ürünün
+     yanında". */
+  { id: "notlar",  label: "Toplantı notları", icon: MessageSquareText },
   { id: "olcu",    label: "Ölçü & Beden",     icon: Ruler },
   { id: "maliyet", label: "Maliyet",          icon: Wallet },
   /* SOURCING — Aslı Hanım (18.09.2026): "Benim buradaki üretim föyünde
@@ -1223,15 +1229,15 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
             ekran kirilimi 1024'te sutunu 122px'e dusuruyordu. */}
         <div className="@container space-y-3">
         <div className="grid grid-cols-1 gap-x-5 gap-y-2.5 rounded-card border border-line p-3 @[49rem]:grid-cols-2">
-          <LabeledField checkKey="title" label="Föy başlığı *" value={form.title} onChange={(v) => set("title", v)} placeholder="Beyaz Dantel Etek" missing={missingKeys.has("title")} hint={hintOf.get("title")} />
+          <LabeledField checkKey="title" label="Föy başlığı *" value={form.title} onChange={(v) => set("title", v)} missing={missingKeys.has("title")} hint={hintOf.get("title")} />
           <LabeledField label="Ürün kodu" value={form.product_code ?? ""} onChange={(v) => set("product_code", v)} />
-          <LabeledField checkKey="delivery_date" label="Teslim tarihi" value={form.delivery_date ?? ""} onChange={(v) => set("delivery_date", v)} placeholder="21.07.2026" missing={missingKeys.has("delivery_date")} hint={hintOf.get("delivery_date")} />
+          <LabeledField checkKey="delivery_date" label="Teslim tarihi" value={form.delivery_date ?? ""} onChange={(v) => set("delivery_date", v)} placeholder="gg.aa.yyyy" missing={missingKeys.has("delivery_date")} hint={hintOf.get("delivery_date")} />
           {/* `checkKey` YOK: "Ürün tanımı" denetimi hem burayı hem aşağıdaki
               "Ürünün açıklaması"nı kabul ediyor, ama `data-check` iki alanda
               da bulununca "Eksik alana götür" HER ZAMAN ilkine atlıyordu
               (jumpTo querySelector kullanır). İşaret aşağıdaki açıklama
               alanında kalır; uyarı vurgusu burada da görünmeye devam eder. */}
-          <LabeledField label="Ürün cinsi" value={form.product_kind ?? ""} onChange={(v) => set("product_kind", v)} placeholder="Etek" missing={missingKeys.has("description")} hint={hintOf.get("description")} />
+          <LabeledField label="Ürün cinsi" value={form.product_kind ?? ""} onChange={(v) => set("product_kind", v)} missing={missingKeys.has("description")} hint={hintOf.get("description")} />
           {/* RENK — föy kimliğinin üçüncü parçası (model | kumaş | renk),
               Zedonk deseni. Aynı modelin başka rengi için aşağıdaki varyant
               şeridinden "Renk ekle" kullanılır. */}
@@ -1261,7 +1267,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                   .map((v) => (
                     <span
                       key={v.id}
-                      title={[v.fabric, v.composition].filter(Boolean).join(" · ") || undefined}
+                      title={[v.accent_color && `Aksesuar: ${v.accent_color}`, v.fabric, v.composition].filter(Boolean).join(" · ") || undefined}
                       className="rounded-full bg-brand-soft px-2.5 py-0.5 text-[12px] font-medium text-brand-strong"
                     >
                       {v.color}
@@ -1400,7 +1406,11 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               ))}
             </SelectInput>
           </FieldRow>
-          <LabeledField label="1 ürüne giden metraj" value={form.meterage ?? ""} onChange={(v) => set("meterage", v)} placeholder="1.60 CM" />
+          {/* METRAJ METREDİR, ÖRNEK DEĞER YOK. Aslı Hanım (06.11.2026): boş
+              alanda "1.60 CM" yazıyordu — "1.60 deyip sipariş verirler… 0.00
+              de ki girilmediği belli olsun." Birim de yanlıştı: kumaş metreyle
+              sipariş edilir. Kayıtlı eski değerlere dokunulmadı. */}
+          <LabeledField label="1 ürüne giden metraj (m)" value={form.meterage ?? ""} onChange={(v) => set("meterage", v)} placeholder="0,00" />
           <FieldRow checkKey="subcategory" label="Alt kategori" missing={missingKeys.has("subcategory")} hint={hintOf.get("subcategory")}>
             <SelectInput
               value={form.subcategory ?? ""}
@@ -1531,6 +1541,23 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
       </div>
 
       </>)}
+
+      {tab === "notlar" && (
+        <Section title="Toplantı Notları">
+          <SheetMeetingNotes
+            key={sheet?.id ?? "yeni"}
+            sheetId={sheet?.id ?? null}
+            workspaceId={sheet?.workspace_id ?? null}
+            canEdit={canEditSheet}
+            initial={{
+              meeting_notes: sheet?.meeting_notes ?? [],
+              review_critique: sheet?.review_critique ?? "",
+              review_decision: sheet?.review_decision ?? null,
+              review_sample_photos: sheet?.review_sample_photos ?? [],
+            }}
+          />
+        </Section>
+      )}
 
       {tab === "olcu" && (<>
         {/* TEKNİK ÇİZİM — ölçünün yanında (Aslı Hanım, 18.09.2026: "Teknik
@@ -1855,7 +1882,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                       {i + 1}
                     </td>
                     <td className="border border-line p-0">
-                      <CellInput aria-label={`${i + 1}. teslim edilen ürün`} value={row.label} onChange={(e) => updateDelivered(i, { label: e.target.value })} placeholder="Ürün (ör. Karton Etiket)" />
+                      <CellInput aria-label={`${i + 1}. teslim edilen ürün`} value={row.label} onChange={(e) => updateDelivered(i, { label: e.target.value })} placeholder="Ürün adı" />
                     </td>
                     <td className="border border-line p-0">
                       <CellInput className="px-1 text-right tabular-nums" aria-label={`${i + 1}. teslim edilen ürün — adet`} value={row.qty} onChange={(e) => updateDelivered(i, { qty: e.target.value })} inputMode="numeric" />
@@ -2017,7 +2044,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                           if (e.key === "Enter") { e.preventDefault(); commitTier(); }
                           if (e.key === "Escape") { setAddingTier(false); setTierDraft(""); }
                         }}
-                        placeholder="ör. 12"
+                        placeholder="Adet"
                         inputMode="numeric"
                         className="h-8 w-20 rounded-control border border-line bg-surface px-2 text-[12.5px]"
                       />
@@ -2107,7 +2134,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                                   aria-label="Kalem adı"
                                   value={it.label ?? ""}
                                   onChange={(e) => setItem(i, { label: e.target.value })}
-                                  placeholder="Kalem adı — ör. düğme-ilik el işçiliği"
+                                  placeholder="Kalem adı"
                                   className="min-w-0 flex-1"
                                 />
                                 {/* Eklenen satır geri alınabilmeli; tek yönlü
@@ -2256,17 +2283,18 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                     <MoneyInput
                       value={p.web_sale_price ?? ""}
                       onChange={(e) => setP({ web_sale_price: e.target.value })}
-                      placeholder="Sitedeki satış fiyatı"
+                      placeholder="0,00"
                     />
                   </FieldRow>
                   <FieldRow label="Ustaya birim ödeme">
                     <MoneyInput
                       value={p.usta_unit_payment ?? ""}
                       onChange={(e) => setP({ usta_unit_payment: e.target.value })}
-                      placeholder="Ödeme Tablosu’na girer"
+                      placeholder="0,00"
+                      title="Ödeme Tablosu’na girer"
                     />
                   </FieldRow>
-                  <LabeledField label="Not" value={p.notes ?? ""} onChange={(v) => setP({ notes: v })} placeholder="KDV hariç, kargo vb." />
+                  <LabeledField label="Not" value={p.notes ?? ""} onChange={(v) => setP({ notes: v })} />
                 </div>
                 </div>
                 </div>
@@ -2411,7 +2439,6 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
             value={form.designers_note ?? ""}
             onChange={(v) => set("designers_note", v)}
             rows={5}
-            placeholder="At Aslı Filinta, we believe in sharing the light…"
           />
         </Section>
         <Section title="Size & Fit">
@@ -2419,7 +2446,6 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
             value={form.size_fit ?? ""}
             onChange={(v) => set("size_fit", v)}
             rows={4}
-            placeholder={"One Size\nLength 67cm Sleeve 63cm Bust 100cm Shoulder 36cm\nThis item fits between sizes: Small & Medium"}
           />
         </Section>
         <Section title="Details & Care">
@@ -2427,7 +2453,6 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
             value={form.details_care ?? ""}
             onChange={(v) => set("details_care", v)}
             rows={4}
-            placeholder={"100% Cotton\nDry Clean Only\nMade in Turkey"}
           />
         </Section>
       </>)}
@@ -2452,7 +2477,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
 
         {/* YIKAMA TALİMATI */}
         <Section title="Yıkama Talimatı">
-          <TextArea value={form.wash_instruction ?? ""} onChange={(v) => set("wash_instruction", v)} rows={2} placeholder="% 100 Polyester Dry Clean Only…" />
+          <TextArea value={form.wash_instruction ?? ""} onChange={(v) => set("wash_instruction", v)} rows={2} />
         </Section>
 
         {/* KUMAŞ / ASTAR — metin + foto */}
