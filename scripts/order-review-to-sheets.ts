@@ -13,7 +13,7 @@
  *   npx tsx scripts/order-review-to-sheets.ts                  # yerel, rapor
  *   npx tsx scripts/order-review-to-sheets.ts --prod           # canlı, rapor
  *   npx tsx scripts/order-review-to-sheets.ts --prod --uygula  # canlı, yazar
- *   … --harita esleme.json   # elle eşleme: { "<satır id>": "<föy id>" }
+ *   … --harita esleme.json   # elle eşleme: { "<satır id>": "<föy id>" | ["<föy id>", …] }
  *
  * EŞLEME: önce ürün kodu (föyün `product_code`'u), sonra ad (satırın "Ürün
  * Grubu" ile föy başlığı — biri ötekini içeriyorsa). TEK aday çıkarsa eşleşir;
@@ -36,7 +36,9 @@ import * as path from "path";
 const APPLY = process.argv.includes("--uygula");
 const PROD = process.argv.includes("--prod");
 const MAP_ARG = process.argv.indexOf("--harita");
-const MANUAL: Record<string, string> =
+/* Bir satır birden çok föye gidebilir: "Alla Turca Hoodie serisi" için her
+   renk ayrı föy (Sıraç, 07.11.2026: "dördüne de yaz"). */
+const MANUAL: Record<string, string | string[]> =
   MAP_ARG > 0 ? JSON.parse(fs.readFileSync(process.argv[MAP_ARG + 1], "utf8")) : {};
 const BUCKET = "production-sheets";
 
@@ -151,9 +153,11 @@ async function main() {
   for (const it of list) {
     const manual = MANUAL[it.id];
     if (manual) {
-      const s = sheetById.get(manual);
-      if (s) plan.push({ item: it, sheet: s, how: "elle" });
-      else skipped.push({ item: it, why: `haritadaki föy bulunamadı (${manual})` });
+      for (const id of Array.isArray(manual) ? manual : [manual]) {
+        const s = sheetById.get(id);
+        if (s) plan.push({ item: it, sheet: s, how: "elle" });
+        else skipped.push({ item: it, why: `haritadaki föy bulunamadı (${id})` });
+      }
       continue;
     }
     const c = candidates(it, allSheets);
