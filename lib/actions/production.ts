@@ -834,7 +834,7 @@ export async function sendSheetToManufacturer(
   return { ok: true, to };
 }
 
-// ── Toplantı notları (20240366) ──────────────────────────────────────────────
+// ── Toplantı notları (20240367) ──────────────────────────────────────────────
 // Aslı Hanım (06.11.2026): "Order review'u bu şeyin içine sokacaksın… toplantı
 // notları olarak çevir." Föyün "Kaydet" düğmesinden BAĞIMSIZ yazılır: alan
 // alan, çıkınca kaydolur. Yalnız GÖNDERİLEN alan yazılır; notlar ve numune

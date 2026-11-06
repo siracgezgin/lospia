@@ -519,7 +519,7 @@ export type ProductionSheet = {
   /** Fihristten seçilen kalıpçı ve nakışçı (20240353). */
   pattern_maker_id?: string | null;
   embroiderer_id?: string | null;
-  /** Toplantı notları sekmesi (20240366) — Order Review föyün içine taşındı. */
+  /** Toplantı notları sekmesi (20240367) — Order Review föyün içine taşındı. */
   meeting_notes?: OrderReviewNote[] | null;
   review_critique?: string | null;
   review_sample_photos?: OrderReviewPhoto[] | null;

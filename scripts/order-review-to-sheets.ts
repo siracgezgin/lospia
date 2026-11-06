@@ -5,7 +5,7 @@
  * Aslı Hanım (06.11.2026): "Order review'u bu şeyin içine sokacaksın… beyaz
  * t-shirt'ün içine koyacaksın." Order Review'daki her ürün satırı, Collection'
  * daki ürününün föyüne taşınır: karar, kritik, imalatçı numunesi ve tarihli
- * toplantı notları (20240366).
+ * toplantı notları (20240367).
  *
  * VARSAYILAN: YALNIZ OKUR ve rapor verir. Hangi satırın hangi föye gideceğini,
  * hangisinin eşleşmediğini listeler; hiçbir şey yazmaz.
@@ -114,7 +114,7 @@ async function main() {
   ]);
   if (rErr || iErr || sErr) {
     console.error("❌ Okunamadı:", rErr?.message ?? iErr?.message ?? sErr?.message,
-      "\n   (Föy sütunları yoksa önce 20240366 migration'ı uygulanmalı: supabase db push)");
+      "\n   (Föy sütunları yoksa önce 20240367 migration'ı uygulanmalı: supabase db push)");
     process.exit(1);
   }
   const reviewTitle = new Map((reviews ?? []).map((r) => [r.id as string, (r.title as string) || "Adsız değerlendirme"]));
