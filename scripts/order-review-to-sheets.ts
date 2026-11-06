@@ -101,6 +101,29 @@ function candidates(item: Item, sheets: Sheet[]): Sheet[] {
   });
 }
 
+/* ÖNERİ — elle eşleme için: satırın kelimeleriyle föy başlığının ortak
+   kelimeleri. Yazmak için KULLANILMAZ, yalnız raporda gösterilir. */
+const STOP = new Set(["serisi", "için", "olan", "olarak", "daha", "gibi", "bunu", "ürün", "urun", "filinta", "asli"]);
+const words = (t: string) =>
+  new Set(norm(t).split(" ").filter((w) => w.length >= 4 && !STOP.has(w)));
+function suggestions(item: Item, sheets: Sheet[]): Sheet[] {
+  /* Ürün grubu ("T-Shirt serisi") asıl ipucu, üç kat sayılır; kritik/not/renk
+     yalnız destekler — yoksa "beyaz" gibi bir renk her beyaz föyü öne çıkarır. */
+  const group = words(item.product_group);
+  const rest = words(`${item.critique} ${item.colors} ${item.fabric} ${(item.meeting_notes ?? []).map((n) => n.text).join(" ")}`);
+  if (!group.size && !rest.size) return [];
+  return sheets
+    .filter((s) => s.workspace_id === item.workspace_id && s.status !== "archived")
+    .map((s) => {
+      const t = [...words(s.title)];
+      return { s, score: 3 * t.filter((w) => group.has(w)).length + t.filter((w) => rest.has(w)).length };
+    })
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 4)
+    .map((x) => x.s);
+}
+
 async function main() {
   const { url, key, label } = target();
   if (!url || !key) { console.error("❌ Supabase adresi/anahtarı bulunamadı."); process.exit(1); }
@@ -145,7 +168,19 @@ async function main() {
   console.log(`EŞLEŞEN (${plan.length})`);
   for (const p of plan) console.log(`  ✓ ${line(p.item)}  →  "${p.sheet.title}" [${p.how}]`);
   console.log(`\nEŞLEŞMEYEN (${skipped.length}) — "--harita" ile elle bağlanabilir`);
-  for (const s of skipped) console.log(`  ✗ ${line(s.item)}  (satır id: ${s.item.id}) — ${s.why}`);
+  for (const s of skipped) {
+    const it = s.item;
+    console.log(`  ✗ ${line(it)}  (satır id: ${it.id}) — ${s.why}`);
+    const brief = [
+      it.critique && `kritik: "${it.critique.replace(/\s+/g, " ").slice(0, 90)}"`,
+      it.colors && `renk: ${it.colors.replace(/\s+/g, " ").slice(0, 40)}`,
+      it.fabric && `kumaş: ${it.fabric.replace(/\s+/g, " ").slice(0, 40)}`,
+      it.meeting_notes?.length && `${it.meeting_notes.length} not`,
+      `${it.original_photos?.length ?? 0} orijinal / ${it.sample_photos?.length ?? 0} numune fotoğraf`,
+    ].filter(Boolean).join(" · ");
+    console.log(`      ${brief}`);
+    for (const c of suggestions(it, allSheets)) console.log(`      ? "${c.title}"  (föy id: ${c.id})`);
+  }
 
   const leftover = list.filter((it) => it.original_photos?.length || it.fabric || it.colors || it.planned_qty !== null || it.unit_price !== null).length;
   console.log(`\nFöye TAŞINMAYAN alan içeren satır: ${leftover} (orijinal fotoğraf, kumaş, renk, adet, fiyat — föyde kendi alanları var; Order Review kaydında duruyor)`);
