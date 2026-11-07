@@ -1,0 +1,21 @@
+-- UPCYCLE TABLOSU KALKIYOR (07.11.2026).
+--
+-- Upcycle modülü bir isteğin yanlış okunmasıyla yapıldı (d3b75d2) ve geri
+-- alındı (5be6e02): Gül Hanım yalnız Excel'inin AFO'ya yüklenmesini istemişti.
+-- Ama tablo 20240366 ile canlıya uygulanmıştı ve ekip 5 Kasım'da ona 5 ürün
+-- girdi. O satırlar fotoğraflarıyla Excel'e döküldü
+-- (scripts/upcycle-arsiv/export.ts → Upcycle_Kayitlari_2026-11-07.xlsx,
+-- 5 ürün, 13 fotoğraf) ve AF Teamwork'e yüklendi. Sıraç: "Excel olarak ver,
+-- sonra kaldır."
+--
+-- 20240366 canlının geçmişinde `migration repair --status reverted` ile geri
+-- alınmış görünüyor ama TABLO duruyordu; bu dosya onu kaldırır. Yerelde tablo
+-- hiç yok: `if exists` sayesinde iki ortamda da sorunsuz çalışır.
+--
+-- Tabloya başka hiçbir tablo bağlı değil; index, tetikleyici ve RLS
+-- politikaları tabloyla birlikte düşer. Ortak set_updated_at() fonksiyonu
+-- başka tabloların da olduğu için DOKUNULMAZ.
+--
+-- Depodaki fotoğraflar (production-sheets/<ws>/upcycle/…) SİLİNMEZ.
+
+drop table if exists public.upcycle_items;
