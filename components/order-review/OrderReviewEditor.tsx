@@ -31,7 +31,7 @@ import type { OrderReview, OrderReviewDecision, OrderReviewItem } from "@/types"
  * TEK ÜRÜN = TEK KART. İlk sürüm Excel'i birebir kopyalıyordu: 14 sütun yan
  * yana ~2100 px, normal ekranda sağa kayıyordu (Sıraç, 04.11.2026: "ekran
  * kaymıştı, sağa gidiyordu"). Kartta yatay kaydırma YOK: fotoğraflar solda
- * büyük, kritik + ürün bilgisi ortada, Aslı Hanım'ın notları sağda; ekran
+ * büyük, kritik + ürün bilgisi ortada, toplantı notları sağda; ekran
  * daraldıkça sütunlar alt alta iner.
  */
 

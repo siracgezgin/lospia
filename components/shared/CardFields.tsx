@@ -266,12 +266,14 @@ export function PhotoField({
  * tarihiyle durur, en yenisi en üstte.
  */
 export function MeetingNotes({
-  notes, onChange, disabled,
+  notes, onChange, disabled, title = "Toplantı notları",
 }: {
   notes: OrderReviewNote[];
   onChange: (_next: OrderReviewNote[]) => Promise<void>;
   /** Salt-okur: not eklenmez, silinmez, düzenlenmez. */
   disabled?: boolean;
+  /** Kutunun başlığı. "Aslı Hanım'ın notları" DEĞİL (Sıraç, 07.11.2026). */
+  title?: string;
 }) {
   const { ask, dialog } = useConfirm();
   const sorted = [...notes].sort((a, b) => b.date.localeCompare(a.date));
@@ -288,7 +290,7 @@ export function MeetingNotes({
   return (
     <section className="min-w-0 rounded-card border border-hairline bg-surface-muted/50 p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <h3 className="text-[11.5px] font-semibold uppercase tracking-[0.05em] text-muted">Aslı Hanım&apos;ın notları</h3>
+        <h3 className="text-[11.5px] font-semibold uppercase tracking-[0.05em] text-muted">{title}</h3>
         {!disabled && <button
           type="button"
           onClick={add}

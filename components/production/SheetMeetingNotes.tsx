@@ -127,7 +127,9 @@ export function SheetMeetingNotes({
             onCommit={(v) => save({ review_critique: v })}
           />
         </label>
+        {/* Sekmenin adı zaten "Toplantı notları" — kutu ikinci kez demesin. */}
         <MeetingNotes
+          title="Notlar"
           notes={notes.meeting_notes ?? []}
           disabled={!canEdit}
           onChange={(next: OrderReviewNote[]) => save({ meeting_notes: next })}
