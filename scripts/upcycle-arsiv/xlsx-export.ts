@@ -67,21 +67,31 @@ export async function buildUpcycleWorkbook(
   const photoW = (col0: number) => Math.trunc(PRODUCT_HEADERS[col0].width * 7 + 5);
   const photoH = Math.round(PHOTO_ROW_PT * (4 / 3));
 
+  /* HİÇBİR FOTOĞRAF DÜŞMEZ: üçe kadar yan yana; fazlası ikişerli satırlara
+     dizilir ve satır yüksekliği buna göre büyür (bkz. photoRows). Eski
+     sürüm ilk üçünü alıp gerisini sessizce atıyordu. */
+  const perLine = (n: number) => (n <= 3 ? n : 2);
+  const photoRows = (n: number) => (n <= 3 ? 1 : Math.ceil(n / 2));
   async function putPhotos(r: number, col0: number, photos: UpcycleItem["before_photos"]) {
-    const list = photos.slice(0, 3);
+    const list = photos;
     if (!list.length) return;
-    const slotW = Math.floor((photoW(col0) - 6) / list.length);
+    const cols = perLine(list.length);
+    const slotW = Math.floor((photoW(col0) - 6) / cols);
     for (let k = 0; k < list.length; k++) {
+      const cx = k % cols;
+      const cy = Math.floor(k / cols);
       const buf = await opts.fetchPhoto(list[k].path);
       if (!buf) continue;
       const lower = list[k].path.toLowerCase();
       const ext = lower.endsWith(".png") ? "png" : lower.endsWith(".gif") ? "gif" : "jpeg";
       const fit = fitBox(buf, slotW, photoH - 6);
+      /* Satır yüksekliği EMU'da tek satır; alt satırdaki fotoğraf aynı hücrede
+         photoH kadar aşağıda başlar. */
       const id = wb.addImage({ buffer: buf as unknown as ExcelJS.Buffer, extension: ext });
       ws.addImage(id, {
         tl: {
-          nativeCol: col0, nativeColOff: (3 + k * slotW + fit.dx) * EMU,
-          nativeRow: r - 1, nativeRowOff: (3 + fit.dy) * EMU,
+          nativeCol: col0, nativeColOff: (3 + cx * slotW + fit.dx) * EMU,
+          nativeRow: r - 1, nativeRowOff: (3 + cy * photoH + fit.dy) * EMU,
         } as unknown as ExcelJS.Anchor,
         ext: { width: fit.w, height: fit.h },
         editAs: "oneCell",
@@ -111,7 +121,8 @@ export async function buildUpcycleWorkbook(
       sizeTotal(it.sizes), it.market212, it.retail_price,
     ]);
     row.getCell(17).numFmt = "#,##0";
-    row.height = it.before_photos.length || it.after_photos.length ? PHOTO_ROW_PT : 48;
+    const lines = Math.max(photoRows(it.before_photos.length), photoRows(it.after_photos.length));
+    row.height = it.before_photos.length || it.after_photos.length ? PHOTO_ROW_PT * lines : 48;
     await putPhotos(r, 5, it.before_photos);
     await putPhotos(r, 6, it.after_photos);
     r++;
@@ -135,7 +146,7 @@ export async function buildUpcycleWorkbook(
     values[0] = it.status_note; values[1] = it.owners; values[2] = it.name; values[3] = it.color;
     values[4] = it.material_type; values[7] = it.description; values[14] = it.quantity;
     const row = writeRow(r, values);
-    row.height = it.before_photos.length ? PHOTO_ROW_PT : 48;
+    row.height = it.before_photos.length ? PHOTO_ROW_PT * photoRows(it.before_photos.length) : 48;
     await putPhotos(r, 5, it.before_photos);
     r++;
   }

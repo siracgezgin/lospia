@@ -72,7 +72,8 @@ async function main() {
   });
 
   const stamp = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Istanbul" }).format(new Date());
-  const out = path.join(os.homedir(), "Desktop", `Upcycle_Kayitlari_${stamp}.xlsx`);
+  /* Yerel deneme canlı dosyanın ÜSTÜNE yazmasın — adı ayrı. */
+  const out = path.join(os.homedir(), "Desktop", `Upcycle_Kayitlari_${stamp}${PROD ? "" : "_YEREL-DENEME"}.xlsx`);
   fs.writeFileSync(out, buffer);
   console.log(`\n✓ Yazıldı: ${out}${missing ? `\n  ! ${missing} fotoğraf indirilemedi` : ""}`);
   console.log("  Hiçbir şey silinmedi.\n");
