@@ -58,6 +58,7 @@ const PAGE_TITLES: { match: (p: string) => boolean; title: string }[] = [
   { match: (p) => p.startsWith("/modules"), title: "Operation Modules" },
   { match: (p) => p.startsWith("/documents"), title: "AF Teamwork" },
   { match: (p) => p.startsWith("/sheets"), title: "AF Teamwork" },
+  { match: (p) => p.startsWith("/newsletter"), title: "Newsletter Plan" },
   { match: (p) => p.startsWith("/crm"), title: "CRM" },
   { match: (p) => p.startsWith("/activity"), title: "Activity Log" },
   { match: (p) => p.startsWith("/profile"), title: "Profile" },

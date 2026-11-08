@@ -21,7 +21,7 @@
  */
 
 import type { LucideIcon } from "lucide-react";
-import { Archive, Boxes, Calculator, CalendarRange, Contact, FolderOpen, HandCoins, Kanban, LayoutDashboard, List, ScrollText, Settings, ShieldCheck, Target, Trash2, Wallet } from "lucide-react";
+import { Archive, Boxes, Calculator, CalendarRange, Contact, FolderOpen, HandCoins, Kanban, LayoutDashboard, List, Mail, ScrollText, Settings, ShieldCheck, Target, Trash2, Wallet } from "lucide-react";
 
 /** Kim GÖRÜR: "all" = tüm üyeler (düzenleme yetkisi ekran içinde isAdmin ile
  *  daralır — "herkes görsün, yönetici müdahale etsin"), "admin" = yalnız
@@ -151,6 +151,18 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
     description: "Ekibin çalışma dosyaları — klasörler, tablolar ve dış bağlantılar.",
     href: "/documents",
     icon: FolderOpen,
+    access: "all",
+    group: "urun",
+  },
+  /* NEWSLETTER PLAN — haftalık bültenin aylık planı (06.11.2026 toplantısı).
+     AF Teamwork'ün kutucuğudur; sol menüde satırı yok. Gönderim panelde
+     değil (afcom-seo/27_bulten). */
+  {
+    key: "newsletter",
+    title: "Newsletter Plan",
+    description: "Haftalık bülten planı — her pazartesinin sırası, ürünleri ve story'si.",
+    href: "/newsletter",
+    icon: Mail,
     access: "all",
     group: "urun",
   },

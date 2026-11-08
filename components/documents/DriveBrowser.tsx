@@ -21,6 +21,7 @@ import { Overlay } from "@/components/ui/Overlay";
 import { PersonAvatar } from "@/components/ui/PersonAvatar";
 import { personTone } from "@/lib/design/person-colors";
 import { Tile, TileGrid } from "@/components/ui/TileGrid";
+import { getModuleEntry } from "@/lib/modules/registry";
 import { SortHeader } from "@/components/ui/SortHeader";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { MemberMultiSelect, type Member } from "@/components/planning/MemberMultiSelect";
@@ -202,6 +203,8 @@ const BUCKETS: {
 ];
 
 const BUCKET_BY_KEY = new Map(BUCKETS.map((b) => [b.key, b]));
+
+const NEWSLETTER = getModuleEntry("newsletter");
 
 /* Kutu kimliği (ikon + renk) LİSTEDEKİ SİMGELERLE AYNI KAYNAKTAN gelir
    (lib/office/file-kind.ts). Kutuya elle renk yazsaydık "Excel" kutusu yeşil,
@@ -1884,6 +1887,14 @@ export function DriveBrowser({
                 />
               );
             })}
+            {/* NEWSLETTER PLAN (06.11.2026) — dosya kutusu değil, kendi rotası
+                olan bir ekran; adı ve ikonu registry'den (tek isim kuralı). */}
+            <Tile
+              href={NEWSLETTER.href}
+              title={NEWSLETTER.title}
+              metaNode={<span className="block truncate" title="Haftalık bülten planı">Haftalık bülten planı</span>}
+              icon={NEWSLETTER.icon}
+            />
           </TileGrid>
 
           {/* Kökte YALNIZ ad kutusu çizilir; klasör LİSTESİ çizilmez.

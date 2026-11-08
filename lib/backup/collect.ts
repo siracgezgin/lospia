@@ -39,6 +39,7 @@ const WORKSPACE_TABLES = [
   "department_members",
   "document_folders",
   "document_templates",
+  "newsletter_weeks",
   "finance_payments",
   "operation_documents",
   "operation_spreadsheets",

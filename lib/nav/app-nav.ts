@@ -128,6 +128,8 @@ export const ROUTE_OWNER: ReadonlyArray<readonly [prefix: string, owner: string]
   // (Library henüz bir rota DEĞİL — açıldığında buraya "/library" satırı
   //  eklenir; olmayan rota için ölü satır tutmuyoruz.)
   ["/sheets", "/documents"],
+  // Newsletter Plan da AF Teamwork'ün kutucuğu (06.11.2026).
+  ["/newsletter", "/documents"],
   // Üretim Föyü editörü Koleksiyon'dan açılır; kendi menü satırı yoktur.
   ["/production", "/collection"],
   /* Eski Order Review sayfaları — kayıtlar föylere taşınana kadar adresle
