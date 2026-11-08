@@ -1,42 +1,34 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
-import { Eye, Loader2, PenLine, Plus, Search, X } from "lucide-react";
+import { useRef, useState } from "react";
+import { ExternalLink, Loader2, Plus, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import { Field, SelectInput, TextArea, TextInput } from "@/components/ui/Field";
+import { Field, FieldGrid, SelectInput, TextArea, TextInput } from "@/components/ui/Field";
 import { saveNewsletterWeek, searchStoreProducts, type NewsletterPatch } from "@/lib/actions/newsletter";
+import { MailPreview } from "@/components/newsletter/MailPreview";
 import {
-  ACCOUNT_BUTTON, NEWSLETTER_STATUSES, PRODUCTS_BUTTON, SOCIAL_PLATFORMS, STORY_TITLES, WELCOME_HEADING, WELCOME_SIGNOFF,
+  ACCOUNT_BUTTON, NEWSLETTER_STATUSES, PRODUCTS_BUTTON, SOCIAL_PLATFORMS, STORY_TITLES,
+  WELCOME_HEADING, WELCOME_SIGNOFF,
   type NewsletterProduct, type NewsletterStatus, type NewsletterTextField, type NewsletterWeek,
   type SocialPlatform,
 } from "@/lib/newsletter/model";
 
 /**
- * BİR HAFTANIN BÜLTENİ — POSTANIN KENDİSİ GİBİ.
+ * BİR HAFTANIN BÜLTENİ — solda form, sağda posta.
  *
- * Sıraç (08.11.2026, ekran görüntüsüyle): "Tasarım çok çok kötü ve bizim
- * newsletter'a benzemiyor. Format bu şekilde" → AF-Bulten-No01.html.
- * Ekran bir FORM değil, bültenin 600 px'lik çerçevesi: aynı sıra, aynı yazı
- * (başlıklar Georgia, metin Helvetica), aynı siyah düğmeler, iki sütun dekupe.
- * Değişen yazılar postanın ÜZERİNDE yazılır; görsel/bağlantı gibi postada
- * görünmeyen ayarlar taslaktaki TURUNCU NOT SATIRLARIYLA aynı dilde, bölümün
- * hemen üstünde durur. "Önizleme" notları gizler — gidecek posta kalır.
+ * Sıraç (08.11.2026) iki sürümü de geri çevirdi:
+ *   • ilk form: "bizim newsletter'a benzemiyor" + sonradan "orantısız ve
+ *     mantıksızdı" — bölümler iki sütunda zikzak diziliyor (1 sağda, 2 solda),
+ *     kısa kutunun yanında boşluk kalıyordu;
+ *   • postanın üzerinde düzenleme: "daha kötü, anlaşılır durmuyor".
+ * Seçtiği düzen: TEK SÜTUN form, bölümler BÜLTENDEKİ SIRAYLA alt alta, hepsi
+ * aynı genişlikte; yanda yazdıkça güncellenen posta önizlemesi (telefonda
+ * formun altında). Satırlarda alanlar ikişerli; tek kalan alan tam genişlik
+ * (yarım alanın yanında boşluk bırakmamak için).
  *
- * Postadaki bütün başlık ve düğme yazıları o haftaya özel düzenlenir (welcome
- * başlığı, imza, dört düğme — 20240371). Yalnız üst satır + logo ve footer'ın
- * yasal metni sabittir.
- *
- * KAYIT ALAN ALAN: alandan çıkınca o alan yazılır.
+ * KAYIT ALAN ALAN: yazarken önizleme anında değişir, alandan çıkınca kaydolur.
  * Görsel YÜKLENMEZ — sitedeki medya adresi yapıştırılır (depolama kotası).
  */
-
-/* `family-name:` etiketi ŞART: etiketsiz `font-[…]` sınıfını tailwind-merge
-   yazı KALINLIĞI sanıyor ve yanındaki `font-normal` ile birlikte siliyordu —
-   başlık Georgia yerine Inter çiziliyordu (CLAUDE.md'deki border-l tuzağının
-   aynısı). */
-const SERIF = "font-[family-name:Georgia,'Times_New_Roman',serif]";
-const SANS = "font-[family-name:Helvetica,Arial,sans-serif]";
-
 export function NewsletterWeekEditor({
   initial, label, canEdit,
 }: {
@@ -45,10 +37,10 @@ export function NewsletterWeekEditor({
   canEdit: boolean;
 }) {
   const [week, setWeek] = useState<NewsletterWeek>(initial);
+  /* Sunucudaki son hâl — alandan çıkınca yalnız DEĞİŞEN alan gider. */
+  const [saved, setSaved] = useState<NewsletterWeek>(initial);
   const [pending, setPending] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [preview, setPreview] = useState(false);
-  const edit = canEdit && !preview;
 
   async function save(patch: NewsletterPatch) {
     setWeek((w) => ({ ...w, ...patch }));
@@ -56,8 +48,9 @@ export function NewsletterWeekEditor({
     setPending((n) => n + 1);
     try {
       const res = await saveNewsletterWeek(week.send_date, patch);
-      if ("error" in res) setError(`Kaydedilemedi: ${res.error}`);
-      else setWeek((w) => ({ ...w, id: res.week.id }));
+      if ("error" in res) { setError(`Kaydedilemedi: ${res.error}`); return; }
+      setSaved((sv) => ({ ...sv, ...patch }));
+      setWeek((w) => ({ ...w, id: res.week.id }));
     } catch (e) {
       setError(`Kaydedilemedi: ${e instanceof Error ? e.message : "bağlantı kurulamadı"}`);
     } finally {
@@ -65,13 +58,23 @@ export function NewsletterWeekEditor({
     }
   }
 
-  const set = (field: NewsletterTextField) => (v: string) => save({ [field]: v });
+  /** Metin alanı: yazarken yalnız ekranda, çıkınca kaydeder. */
+  const bind = (field: NewsletterTextField) => ({
+    value: week[field],
+    disabled: !canEdit,
+    onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      setWeek((w) => ({ ...w, [field]: e.target.value })),
+    onBlur: () => {
+      if (week[field] !== saved[field]) void save({ [field]: week[field] });
+    },
+  });
+  const enterBlurs = { onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === "Enter") e.currentTarget.blur(); } };
+
   const st = NEWSLETTER_STATUSES.find((s) => s.key === week.status) ?? NEWSLETTER_STATUSES[0];
   const social = SOCIAL_PLATFORMS.find((p) => p.key === week.social_platform) ?? SOCIAL_PLATFORMS[0];
 
   return (
     <div className="anim-fade">
-      {/* ── Üst satır: hafta · durum · önizleme ─────────────────────────── */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <h2 className="text-lg font-semibold capitalize tracking-tight text-ink sm:text-xl">{label}</h2>
         <SelectInput
@@ -83,22 +86,9 @@ export function NewsletterWeekEditor({
         >
           {NEWSLETTER_STATUSES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
         </SelectInput>
-        <span className="inline-flex min-h-5 items-center gap-1.5 text-[12.5px] text-muted" role="status">
+        <span className="ml-auto inline-flex min-h-5 items-center gap-1.5 text-[12.5px] text-muted" role="status">
           {pending > 0 ? <><Loader2 size={13} className="animate-spin" aria-hidden /> Kaydediliyor…</> : week.id ? "Kaydedildi" : null}
         </span>
-        {canEdit && (
-          <button
-            type="button"
-            aria-pressed={preview}
-            onClick={() => setPreview((p) => !p)}
-            className={cn(
-              "ml-auto inline-flex h-9 items-center gap-1.5 rounded-full border px-4 text-[13px] font-medium transition-all",
-              preview ? "border-ink bg-ink text-white" : "border-line-strong bg-surface text-ink hover:bg-surface-hover",
-            )}
-          >
-            {preview ? <><PenLine size={14} aria-hidden /> Düzenle</> : <><Eye size={14} aria-hidden /> Önizleme</>}
-          </button>
-        )}
       </div>
 
       {error && (
@@ -107,383 +97,159 @@ export function NewsletterWeekEditor({
         </p>
       )}
 
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
-        {/* ── POSTA ─────────────────────────────────────────────────────── */}
-        <div className="min-w-0 rounded-card bg-[#f1f1f1] py-4 sm:px-4 sm:py-8">
-          <div className="mx-auto w-full max-w-[600px] bg-white text-[#111] shadow-[0_1px_12px_rgba(0,0,0,.08)]">
-            {/* 0 · Üst satır + logo — sabit */}
-            <p className={cn(SANS, "px-6 pt-[34px] text-center text-[11px] leading-[1.4]")}>
-              Can&apos;t see the images? <span className="underline">View in browser</span>
-            </p>
-            <div className="flex justify-center pb-[30px] pt-[26px]">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/brands/asli-filinta-logo.png" alt="aslıfilinta" className="h-auto w-[220px] max-w-[60%]" />
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
+        {/* ── FORM — bültendeki sırayla ──────────────────────────────────── */}
+        <div className="min-w-0 space-y-4">
+          <Section title="Genel">
+            <FieldGrid>
+              <Field label="Konu satırı"><TextInput {...bind("subject")} {...enterBlurs} /></Field>
+              <Field label="Tema / koleksiyon"><TextInput {...bind("theme")} {...enterBlurs} /></Field>
+            </FieldGrid>
+          </Section>
+
+          <Section n={1} title="Açılış">
+            <div className="space-y-3.5">
+              <Field label="Başlık"><TextInput {...bind("opening_title")} {...enterBlurs} /></Field>
+              <FieldGrid>
+                <Field label="Görsel adresi"><TextInput {...bind("opening_image_url")} {...enterBlurs} /></Field>
+                <Field label="Bağlantı"><TextInput {...bind("opening_link")} {...enterBlurs} /></Field>
+              </FieldGrid>
             </div>
+          </Section>
 
-            {/* 1 · Açılış */}
-            {edit && (
-              <Note n="1" title="Açılış görseli">
-                <NoteInput label="Görsel adresi (4:5)" value={week.opening_image_url} onCommit={set("opening_image_url")} />
-                <NoteInput label="Bağlantı" value={week.opening_link} onCommit={set("opening_link")} />
-                <NoteInput label="Başlık" value={week.opening_title} onCommit={set("opening_title")} />
-              </Note>
-            )}
-            <MailImage src={week.opening_image_url} alt={week.opening_title} ratio="aspect-[4/5]" empty="Açılış görseli · 4:5" caption={week.opening_title} />
-            <div className="h-14" />
-
-            {/* 2 · Welcome */}
-            <InlineText
-              value={week.welcome_heading}
-              onCommit={set("welcome_heading")}
-              disabled={!edit}
-              placeholder={WELCOME_HEADING}
-              pad="px-6 pb-[18px] sm:px-10"
-              text={cn(SERIF, "text-center text-[28px] font-normal leading-[1.25]")}
-            />
-            <InlineText
-              value={week.welcome}
-              onCommit={set("welcome")}
-              disabled={!edit}
-              placeholder="Welcome metni"
-              pad="px-6 sm:px-14"
-              text={cn(SANS, "text-center text-[15px] leading-[1.75]")}
-            />
-            <InlineText
-              value={week.welcome_signoff}
-              onCommit={set("welcome_signoff")}
-              disabled={!edit}
-              placeholder={WELCOME_SIGNOFF}
-              pad="px-6 pb-7 pt-[18px] sm:px-14"
-              text={cn(SANS, "text-center text-[15px] leading-[1.75]")}
-            />
-            <MailButtonText edit={edit} label="Hesap düğmesinin yazısı" value={week.account_button} fallback={ACCOUNT_BUTTON} onCommit={set("account_button")} />
-            <div className="h-10" />
-
-            {/* 3 · Ürünler */}
-            {edit && (
-              <Note n="3" title="Ürünler">
-                <NoteInput label="Düğme bağlantısı" value={week.products_link} onCommit={set("products_link")} />
-                <ProductSearch chosen={week.products} onPick={(p) => save({ products: [...week.products, p] })} />
-              </Note>
-            )}
-            <div className="h-1" />
-            <InlineText
-              value={week.products_title}
-              onCommit={set("products_title")}
-              disabled={!edit}
-              placeholder="Discover … Collection"
-              pad="px-6 pb-8 sm:px-10"
-              text={cn(SERIF, "text-center text-[26px] font-normal leading-[1.25]")}
-            />
-            <div className="grid grid-cols-2 px-2">
-              {week.products.map((p) => (
-                <ProductCard
-                  key={p.id}
-                  product={p}
-                  onRemove={edit ? () => save({ products: week.products.filter((x) => x.id !== p.id) }) : undefined}
-                />
-              ))}
-              {week.products.length < 2 &&
-                Array.from({ length: 2 - week.products.length }).map((_, i) => (
-                  <div key={i} className="px-1 pb-7">
-                    <div className={cn(SANS, "flex aspect-[4/5] items-center justify-center bg-[#f1f1f1] px-3 text-center text-[12px] text-[#888]")}>
-                      Ürün
-                    </div>
-                  </div>
-                ))}
+          <Section n={2} title="Welcome">
+            <div className="space-y-3.5">
+              <Field label="Başlık"><TextInput {...bind("welcome_heading")} placeholder={WELCOME_HEADING} {...enterBlurs} /></Field>
+              <Field label="Metin"><TextArea {...bind("welcome")} rows={9} /></Field>
+              <FieldGrid>
+                <Field label="İmza"><TextArea {...bind("welcome_signoff")} rows={2} placeholder={WELCOME_SIGNOFF} /></Field>
+                <Field label="Düğme yazısı"><TextInput {...bind("account_button")} placeholder={ACCOUNT_BUTTON} {...enterBlurs} /></Field>
+              </FieldGrid>
             </div>
-            <MailButtonText edit={edit} label="Koleksiyon düğmesinin yazısı" value={week.products_button} fallback={PRODUCTS_BUTTON} onCommit={set("products_button")} />
-            <div className="h-10" />
+          </Section>
 
-            {/* 4 · Story */}
-            {edit && (
-              <Note n="4" title="Story">
-                <NoteInput label="Görsel adresi (4:3)" value={week.story_image_url} onCommit={set("story_image_url")} />
-                <NoteInput label="Story sayfası" value={week.story_url} onCommit={set("story_url")} />
-              </Note>
-            )}
-            <MailImage src={week.story_image_url} alt={week.story_title} ratio="aspect-[4/3]" empty="Story görseli · 4:3" />
-            <div className="h-10" />
-            <InlineText
-              value={week.story_text}
-              onCommit={set("story_text")}
-              disabled={!edit}
-              placeholder="Story metni"
-              pad="px-6 pb-6 sm:px-[72px]"
-              text={cn(SANS, "text-center text-[15px] leading-[1.75]")}
-            />
-            <MailButtonText edit={edit} label="Story düğmesinin yazısı" value={week.story_title} fallback="STORY" onCommit={set("story_title")} list="newsletter-story-titles" />
-            <datalist id="newsletter-story-titles">
-              {STORY_TITLES.map((t) => <option key={t} value={t.toUpperCase()} />)}
-            </datalist>
-            <div className="h-10" />
+          <Section n={3} title="Ürünler">
+            <div className="space-y-3.5">
+              <Field label="Bölüm başlığı"><TextInput {...bind("products_title")} {...enterBlurs} /></Field>
+              <ChosenProducts
+                products={week.products}
+                onRemove={canEdit ? (id) => save({ products: week.products.filter((x) => x.id !== id) }) : undefined}
+              />
+              {canEdit && <ProductSearch chosen={week.products} onPick={(p) => save({ products: [...week.products, p] })} />}
+              <FieldGrid>
+                <Field label="Düğme yazısı"><TextInput {...bind("products_button")} placeholder={PRODUCTS_BUTTON} {...enterBlurs} /></Field>
+                <Field label="Düğme bağlantısı"><TextInput {...bind("products_link")} {...enterBlurs} /></Field>
+              </FieldGrid>
+            </div>
+          </Section>
 
-            {/* 6 · Sosyal medya */}
-            {edit && (
-              <Note n="6" title="Haftanın sosyal medyası">
-                <label className="block">
-                  <span className="mb-0.5 block font-semibold">Platform</span>
-                  <select
+          <Section n={4} title="Story">
+            <div className="space-y-3.5">
+              <FieldGrid>
+                <Field label="Görsel adresi"><TextInput {...bind("story_image_url")} {...enterBlurs} /></Field>
+                <Field label="Story sayfası"><TextInput {...bind("story_url")} {...enterBlurs} /></Field>
+              </FieldGrid>
+              <Field label="Metin"><TextArea {...bind("story_text")} rows={3} /></Field>
+              <Field label="Düğme yazısı">
+                <TextInput {...bind("story_title")} list="newsletter-story-titles" {...enterBlurs} />
+              </Field>
+              <datalist id="newsletter-story-titles">
+                {STORY_TITLES.map((t) => <option key={t} value={t.toUpperCase()} />)}
+              </datalist>
+            </div>
+          </Section>
+
+          <Section n={5} title="Sosyal medya">
+            <div className="space-y-3.5">
+              <FieldGrid>
+                <Field label="Platform">
+                  <SelectInput
                     value={week.social_platform}
+                    disabled={!canEdit}
                     onChange={(e) => save({ social_platform: e.target.value as SocialPlatform })}
-                    className="h-8 w-full rounded border border-[#e6cfc3] bg-white px-2 text-[12.5px] text-[#111]"
                   >
                     {SOCIAL_PLATFORMS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
-                  </select>
-                </label>
-                <NoteInput label="Görsel adresi (4:5)" value={week.social_image_url} onCommit={set("social_image_url")} />
-                <NoteInput label="Bağlantı" value={week.social_link} onCommit={set("social_link")} />
-              </Note>
-            )}
-            <MailImage src={week.social_image_url} alt={`Aslı Filinta on ${social.label}`} ratio="aspect-[4/5]" empty={`${social.label} görseli · 4:5`} />
-            <div className="h-8" />
-            {/* Boş bırakılırsa platformun kendi yazısı — platform değişince
-                düğme de değişir. */}
-            <MailButtonText edit={edit} label="Sosyal medya düğmesinin yazısı" value={week.social_button} fallback={social.button} onCommit={set("social_button")} />
-            <div className="h-12" />
+                  </SelectInput>
+                </Field>
+                <Field label="Bağlantı"><TextInput {...bind("social_link")} placeholder={social.url} {...enterBlurs} /></Field>
+                <Field label="Görsel adresi"><TextInput {...bind("social_image_url")} {...enterBlurs} /></Field>
+                <Field label="Düğme yazısı"><TextInput {...bind("social_button")} placeholder={social.button} {...enterBlurs} /></Field>
+              </FieldGrid>
+            </div>
+          </Section>
 
-            {/* 7 · Footer — sabit */}
-            <MailFooter />
-          </div>
+          <Section title="Notlar">
+            <TextArea aria-label="Notlar" {...bind("notes")} rows={4} />
+          </Section>
         </div>
 
-        {/* ── YAN: postada görünmeyen bilgiler ─────────────────────────── */}
-        <aside className="min-w-0 space-y-4 rounded-card border border-line bg-surface p-4 xl:sticky xl:top-4">
-          <Field label="Konu satırı">
-            <SideText value={week.subject} onCommit={set("subject")} disabled={!canEdit} />
-          </Field>
-          <Field label="Tema / koleksiyon">
-            <SideText value={week.theme} onCommit={set("theme")} disabled={!canEdit} />
-          </Field>
-          <Field label="Notlar">
-            <SideText value={week.notes} onCommit={set("notes")} disabled={!canEdit} multiline />
-          </Field>
-        </aside>
+        {/* ── POSTA — yazdıkça güncellenir ───────────────────────────────── */}
+        <div className="min-w-0 xl:sticky xl:top-4">
+          <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-[0.05em] text-muted">Önizleme</h3>
+          <div className="overflow-y-auto rounded-card bg-[#f1f1f1] p-3 xl:max-h-[calc(100dvh-7rem)]">
+            {/* 600 px'lik posta sütuna sığsın diye küçültülür; telefonda
+                kendi genişliğinde akar. */}
+            <div className="mx-auto w-fit max-w-full xl:[zoom:0.625]">
+              <MailPreview week={week} />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-/* ── Postanın parçaları ──────────────────────────────────────────────────── */
-
-/** Taslaktaki turuncu not satırı — postada görünmez, yalnız düzenlerken. */
-function Note({ n, title, children }: { n: string; title: string; children: React.ReactNode }) {
+function Section({ n, title, children }: { n?: number; title: string; children: React.ReactNode }) {
   return (
-    <div className={cn(SANS, "space-y-2 bg-[#fbf3ee] px-3.5 py-2.5 text-[12px] leading-[1.45] text-[#a24a28]")}>
-      <p><b>{n}</b>&nbsp; <b>{title}</b></p>
+    <section className="rounded-card border border-line bg-surface p-4 sm:p-5">
+      <h3 className="mb-3.5 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.05em] text-muted">
+        {n != null && (
+          <span className="inline-flex size-5 items-center justify-center rounded-full bg-ink text-[11px] tabular-nums text-white">{n}</span>
+        )}
+        {title}
+      </h3>
       {children}
-    </div>
+    </section>
   );
 }
 
-function NoteInput({ label, value, onCommit }: { label: string; value: string; onCommit: (_v: string) => void }) {
-  const [draft, setDraft] = useState(value);
+/* ── Ürünler ─────────────────────────────────────────────────────────────── */
+
+function ChosenProducts({ products, onRemove }: { products: NewsletterProduct[]; onRemove?: (_id: number) => void }) {
+  if (!products.length) return null;
   return (
-    <label className="block">
-      <span className="mb-0.5 block font-semibold">{label}</span>
-      <input
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={() => { if (draft.trim() !== value) onCommit(draft.trim()); }}
-        onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
-        className="h-8 w-full min-w-0 rounded border border-[#e6cfc3] bg-white px-2 text-[12.5px] text-[#111] outline-none focus:border-[#a24a28]"
-      />
-    </label>
+    <ul className="grid gap-2 sm:grid-cols-2">
+      {products.map((p) => (
+        <li key={p.id} className="flex min-w-0 items-center gap-3 rounded-control border border-line p-2">
+          {p.image_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={p.image_url} alt="" className="size-14 shrink-0 rounded-control bg-[#f1f1f1] object-cover" loading="lazy" />
+          ) : (
+            <span className="size-14 shrink-0 rounded-control bg-surface-sunken" aria-hidden />
+          )}
+          <div className="min-w-0 flex-1">
+            <a href={p.url} target="_blank" rel="noreferrer" className="flex items-start gap-1 text-[13.5px] font-medium leading-snug text-ink hover:underline">
+              <span className="line-clamp-2">{p.name}</span>
+              <ExternalLink size={12} className="mt-1 shrink-0 text-subtle" aria-hidden />
+            </a>
+            {!p.in_stock && <span className="text-[12px] font-medium text-danger">Tükendi</span>}
+          </div>
+          {onRemove && (
+            <button
+              type="button"
+              aria-label={`${p.name} çıkar`}
+              title="Çıkar"
+              onClick={() => onRemove(p.id)}
+              className="inline-flex size-8 shrink-0 items-center justify-center rounded-control text-muted transition-all hover:bg-surface-hover hover:text-danger"
+            >
+              <X size={15} aria-hidden />
+            </button>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }
-
-function MailImage({ src, alt, ratio, empty, caption }: { src: string; alt: string; ratio: string; empty: string; caption?: string }) {
-  if (/^https?:\/\//.test(src)) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src={src} alt={alt} className="block h-auto w-full" />;
-  }
-  return (
-    <div className={cn(SANS, "flex flex-col items-center justify-center gap-1 bg-[#f1f1f1] px-6 text-center text-[#888]", ratio)}>
-      <span className="text-[13px]">{empty}</span>
-      {caption && <span className={cn(SERIF, "text-[18px] text-[#555]")}>{caption}</span>}
-    </div>
-  );
-}
-
-function MailButton({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex justify-center px-4 pt-1">
-      <span className={cn(SANS, "inline-block max-w-full border border-[#111] bg-[#111] px-10 py-[15px] text-center text-[12px] tracking-[2.5px] text-white")}>
-        {children}
-      </span>
-    </div>
-  );
-}
-
-/** Postadaki siyah düğme; düzenlerken yazısı düğmenin İÇİNDE yazılır.
- *  Boş değer `fallback` ile çizilir (sosyal düğmede platformun yazısı). */
-function MailButtonText({
-  edit, label, value, fallback, onCommit, list,
-}: {
-  edit: boolean;
-  label: string;
-  value: string;
-  fallback: string;
-  onCommit: (_v: string) => void;
-  list?: string;
-}) {
-  return (
-    <MailButton>
-      {edit ? (
-        <ButtonInput label={label} value={value} placeholder={fallback} onCommit={onCommit} list={list} />
-      ) : (
-        (value || fallback).toUpperCase()
-      )}
-    </MailButton>
-  );
-}
-
-function ButtonInput({
-  label, value, placeholder, onCommit, list,
-}: {
-  label: string;
-  value: string;
-  placeholder: string;
-  onCommit: (_v: string) => void;
-  list?: string;
-}) {
-  const [draft, setDraft] = useState(value);
-  /* Genişliği YAZININ KENDİSİ belirler: görünmez bir kopya aynı hücrede
-     durur, kutu onun kadar açılır. Karakter sayısıyla tahmin edilince
-     Helvetica'nın geniş büyük harfleri sonda kırpılıyordu ("…EACH PIECI"). */
-  return (
-    <span className="inline-grid max-w-full">
-      {/* px-3 ≠ input'un px-1'i BİLEREK: Chrome harf aralıklı kutuda metnin
-          sonuna ~16 px ayırıyor; pay verilmezse son harf yine kırpılıyor. */}
-      <span aria-hidden className="invisible col-start-1 row-start-1 whitespace-pre px-3 tracking-[2.5px]">
-        {draft || placeholder}
-      </span>
-      <input
-        aria-label={label}
-        list={list}
-        value={draft}
-        placeholder={placeholder}
-        onChange={(e) => setDraft(e.target.value.toUpperCase())}
-        onBlur={() => { if (draft.trim() !== value) onCommit(draft.trim()); }}
-        onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
-        className="col-start-1 row-start-1 w-full min-w-0 bg-transparent px-1 text-center uppercase tracking-[2.5px] text-white outline-none placeholder:text-white/50"
-      />
-    </span>
-  );
-}
-
-function ProductCard({ product: p, onRemove }: { product: NewsletterProduct; onRemove?: () => void }) {
-  /* Ad iki satır: ürün + ayrıntı ("Silver Wirework / Tulle Headpiece"). */
-  const words = p.name.split(/\s+/).filter(Boolean);
-  const cut = Math.ceil(words.length / 2);
-  return (
-    <div className="relative px-1">
-      <a href={p.url} target="_blank" rel="noreferrer" className="block text-[#111] no-underline">
-        {p.image_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={p.image_url} alt={p.name} className="block aspect-[4/5] w-full bg-[#f1f1f1] object-cover" loading="lazy" />
-        ) : (
-          <div className="aspect-[4/5] bg-[#f1f1f1]" />
-        )}
-        <div className={cn(SERIF, "px-1 pb-0.5 pt-[18px] text-center text-[16px] leading-[1.35]")}>{words.slice(0, cut).join(" ")}</div>
-        <div className={cn(SANS, "px-1 pb-7 text-center text-[12px] leading-[1.5]")}>{words.slice(cut).join(" ")}</div>
-      </a>
-      {!p.in_stock && (
-        <span className={cn(SANS, "absolute left-3 top-2 rounded-full bg-[#a62828] px-2 py-0.5 text-[11px] font-semibold text-white")}>Tükendi</span>
-      )}
-      {onRemove && (
-        <button
-          type="button"
-          onClick={onRemove}
-          aria-label={`${p.name} çıkar`}
-          title="Çıkar"
-          className="absolute right-3 top-2 inline-flex size-7 items-center justify-center rounded-full bg-white/90 text-[#111] shadow transition-all hover:bg-white hover:text-[#a62828]"
-        >
-          <X size={14} aria-hidden />
-        </button>
-      )}
-    </div>
-  );
-}
-
-function MailFooter() {
-  const menu = ["COLLECTIONS", "NEW IN", "STORIES", "ABOUT", "CONTACT"];
-  return (
-    <div className={cn(SANS, "bg-black px-4 pb-10 pt-[52px] text-center sm:px-7")}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/brands/af-mark.png" alt="Aslı Filinta" className="mx-auto mb-[30px] h-auto w-[120px] max-w-[28%]" />
-      <div className="mb-[14px] space-y-[18px]">
-        {menu.map((m) => <p key={m} className="text-[12px] leading-none tracking-[2.5px] text-white">{m}</p>)}
-      </div>
-      <div className="mt-[30px] border-t border-[#2a2a2a] pt-[26px] text-[11px] leading-[1.8] text-[#a6a6a6]">
-        <p>You received this email because you are an Aslı Filinta email subscriber.<br />
-          To be removed from our email list, please click here: <span className="text-[#d9d9d9] underline">unsubscribe</span></p>
-        <p className="pt-4">© 2026 ASLI FILINTA · İstanbul, Türkiye</p>
-      </div>
-    </div>
-  );
-}
-
-/* ── Postanın üzerinde yazılan metin ─────────────────────────────────────── */
-
-function InlineText({
-  value, onCommit, disabled, placeholder, pad, text,
-}: {
-  value: string;
-  onCommit: (_v: string) => void;
-  disabled: boolean;
-  placeholder: string;
-  /** Postadaki iç boşluk — taslaktaki td padding'i. */
-  pad: string;
-  /** Yazı tipi, boyu, hizası. */
-  text: string;
-}) {
-  const [draft, setDraft] = useState(value);
-  const ref = useRef<HTMLTextAreaElement>(null);
-  /* Yükseklik metne göre — postada kaydırma çubuğu olmaz. */
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
-  }, [draft, disabled]);
-
-  if (disabled) {
-    if (!value.trim()) return null;
-    return <div className={cn(pad, text, "whitespace-pre-line")}>{value}</div>;
-  }
-  return (
-    <div className={pad}>
-      <textarea
-        ref={ref}
-        rows={1}
-        value={draft}
-        placeholder={placeholder}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={() => { if (draft !== value) onCommit(draft); }}
-        className={cn(
-          text,
-          "block w-full resize-none overflow-hidden rounded-sm bg-transparent outline-none ring-[#a24a28]/40 transition-all placeholder:text-[#aaa] hover:bg-[#fbf3ee]/60 focus:bg-[#fbf3ee]/60 focus:ring-1",
-        )}
-      />
-    </div>
-  );
-}
-
-/* ── Yan alan ────────────────────────────────────────────────────────────── */
-
-function SideText({ value, onCommit, disabled, multiline }: { value: string; onCommit: (_v: string) => void; disabled: boolean; multiline?: boolean }) {
-  const [draft, setDraft] = useState(value);
-  const commit = () => { if (draft !== value) onCommit(draft); };
-  return multiline ? (
-    <TextArea value={draft} rows={6} disabled={disabled} onChange={(e) => setDraft(e.target.value)} onBlur={commit} />
-  ) : (
-    <TextInput value={draft} disabled={disabled} onChange={(e) => setDraft(e.target.value)} onBlur={commit}
-      onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
-  );
-}
-
-/* ── Siteden ürün arama (not satırının içinde) ───────────────────────────── */
 
 function ProductSearch({ chosen, onPick }: { chosen: NewsletterProduct[]; onPick: (_p: NewsletterProduct) => void }) {
   const [query, setQuery] = useState("");
@@ -509,10 +275,9 @@ function ProductSearch({ chosen, onPick }: { chosen: NewsletterProduct[]; onPick
 
   return (
     <div>
-      <span className="mb-0.5 block font-semibold">Ürün ekle</span>
       <div className="relative">
-        <Search size={14} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2" aria-hidden />
-        <input
+        <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-subtle" aria-hidden />
+        <TextInput
           type="search"
           aria-label="Sitede ürün ara"
           placeholder="Ürün ara (İngilizce ad)"
@@ -523,33 +288,33 @@ function ProductSearch({ chosen, onPick }: { chosen: NewsletterProduct[]; onPick
             if (timer.current) clearTimeout(timer.current);
             timer.current = setTimeout(() => void search(q), 350);
           }}
-          className="h-8 w-full min-w-0 rounded border border-[#e6cfc3] bg-white pl-7 pr-7 text-[12.5px] text-[#111] outline-none focus:border-[#a24a28]"
+          className="pl-9"
         />
-        {busy && <Loader2 size={13} className="absolute right-2 top-1/2 -translate-y-1/2 animate-spin" aria-hidden />}
+        {busy && <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-muted" aria-hidden />}
       </div>
-      {error && <p role="alert" className="mt-1 text-[#a62828]">{error}</p>}
-      {hits && hits.length === 0 && <p className="mt-1">Sitede eşleşen ürün yok.</p>}
+      {error && <p role="alert" className="mt-1.5 text-[12.5px] text-danger">{error}</p>}
+      {hits && hits.length === 0 && <p className="mt-2 text-[13px] text-muted">Sitede eşleşen ürün yok.</p>}
       {hits && hits.length > 0 && (
-        <ul className="mt-1.5 max-h-72 divide-y divide-[#f0e2da] overflow-y-auto rounded border border-[#e6cfc3] bg-white text-[#111]">
+        <ul className="mt-2 max-h-80 divide-y divide-line overflow-y-auto rounded-control border border-line">
           {hits.map((p) => (
             <li key={p.id}>
               <button
                 type="button"
                 disabled={taken.has(p.id)}
                 onClick={() => { onPick(p); setQuery(""); setHits(null); }}
-                className="flex w-full items-center gap-2.5 px-2 py-1.5 text-left transition-all hover:bg-[#fbf3ee] disabled:opacity-50"
+                className="flex w-full items-center gap-3 px-2 py-1.5 text-left transition-all hover:bg-surface-hover disabled:opacity-50"
               >
                 {p.image_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={p.image_url} alt="" className="size-10 shrink-0 bg-[#f1f1f1] object-cover" loading="lazy" />
+                  <img src={p.image_url} alt="" className="size-11 shrink-0 rounded-control bg-[#f1f1f1] object-cover" loading="lazy" />
                 ) : (
-                  <span className="size-10 shrink-0 bg-[#f1f1f1]" aria-hidden />
+                  <span className="size-11 shrink-0 rounded-control bg-surface-sunken" aria-hidden />
                 )}
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px]">{p.name}</span>
-                  {!p.in_stock && <span className="text-[11.5px] font-semibold text-[#a62828]">Tükendi</span>}
+                  <span className="block truncate text-[13.5px] text-ink">{p.name}</span>
+                  {!p.in_stock && <span className="text-[12px] font-medium text-danger">Tükendi</span>}
                 </span>
-                {taken.has(p.id) ? <span className="text-[11.5px] text-[#888]">Seçili</span> : <Plus size={14} className="shrink-0" aria-hidden />}
+                {taken.has(p.id) ? <span className="text-[12px] text-muted">Seçili</span> : <Plus size={15} className="shrink-0 text-muted" aria-hidden />}
               </button>
             </li>
           ))}
