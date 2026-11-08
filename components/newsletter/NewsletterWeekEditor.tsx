@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils/cn";
 import { Field, SelectInput, TextArea, TextInput } from "@/components/ui/Field";
 import { saveNewsletterWeek, searchStoreProducts, type NewsletterPatch } from "@/lib/actions/newsletter";
 import {
-  NEWSLETTER_STATUSES, SOCIAL_PLATFORMS, STORY_TITLES, WELCOME_HEADING,
+  ACCOUNT_BUTTON, NEWSLETTER_STATUSES, PRODUCTS_BUTTON, SOCIAL_PLATFORMS, STORY_TITLES, WELCOME_HEADING, WELCOME_SIGNOFF,
   type NewsletterProduct, type NewsletterStatus, type NewsletterTextField, type NewsletterWeek,
   type SocialPlatform,
 } from "@/lib/newsletter/model";
@@ -22,15 +22,20 @@ import {
  * görünmeyen ayarlar taslaktaki TURUNCU NOT SATIRLARIYLA aynı dilde, bölümün
  * hemen üstünde durur. "Önizleme" notları gizler — gidecek posta kalır.
  *
- * Sabit kısımlar (üst satır + logo, CREATE AN ACCOUNT, imza, footer) taslaktan
- * aynen; her hafta yalnız açılış, ürünler, story ve sosyal medya değişir.
+ * Postadaki bütün başlık ve düğme yazıları o haftaya özel düzenlenir (welcome
+ * başlığı, imza, dört düğme — 20240371). Yalnız üst satır + logo ve footer'ın
+ * yasal metni sabittir.
  *
  * KAYIT ALAN ALAN: alandan çıkınca o alan yazılır.
  * Görsel YÜKLENMEZ — sitedeki medya adresi yapıştırılır (depolama kotası).
  */
 
-const SERIF = "font-[Georgia,'Times_New_Roman',serif]";
-const SANS = "font-[Helvetica,Arial,sans-serif]";
+/* `family-name:` etiketi ŞART: etiketsiz `font-[…]` sınıfını tailwind-merge
+   yazı KALINLIĞI sanıyor ve yanındaki `font-normal` ile birlikte siliyordu —
+   başlık Georgia yerine Inter çiziliyordu (CLAUDE.md'deki border-l tuzağının
+   aynısı). */
+const SERIF = "font-[family-name:Georgia,'Times_New_Roman',serif]";
+const SANS = "font-[family-name:Helvetica,Arial,sans-serif]";
 
 export function NewsletterWeekEditor({
   initial, label, canEdit,
@@ -127,7 +132,14 @@ export function NewsletterWeekEditor({
             <div className="h-14" />
 
             {/* 2 · Welcome */}
-            <p className={cn(SERIF, "px-6 pb-[18px] text-center text-[28px] font-normal leading-[1.25] sm:px-10")}>{WELCOME_HEADING}</p>
+            <InlineText
+              value={week.welcome_heading}
+              onCommit={set("welcome_heading")}
+              disabled={!edit}
+              placeholder={WELCOME_HEADING}
+              pad="px-6 pb-[18px] sm:px-10"
+              text={cn(SERIF, "text-center text-[28px] font-normal leading-[1.25]")}
+            />
             <InlineText
               value={week.welcome}
               onCommit={set("welcome")}
@@ -136,16 +148,21 @@ export function NewsletterWeekEditor({
               pad="px-6 sm:px-14"
               text={cn(SANS, "text-center text-[15px] leading-[1.75]")}
             />
-            <p className={cn(SANS, "px-6 pb-7 pt-[18px] text-center text-[15px] leading-[1.75] sm:px-14")}>
-              With love from Anatolia,<br />Aslı Filinta
-            </p>
-            <MailButton>CREATE AN ACCOUNT</MailButton>
+            <InlineText
+              value={week.welcome_signoff}
+              onCommit={set("welcome_signoff")}
+              disabled={!edit}
+              placeholder={WELCOME_SIGNOFF}
+              pad="px-6 pb-7 pt-[18px] sm:px-14"
+              text={cn(SANS, "text-center text-[15px] leading-[1.75]")}
+            />
+            <MailButtonText edit={edit} label="Hesap düğmesinin yazısı" value={week.account_button} fallback={ACCOUNT_BUTTON} onCommit={set("account_button")} />
             <div className="h-10" />
 
             {/* 3 · Ürünler */}
             {edit && (
               <Note n="3" title="Ürünler">
-                <NoteInput label="VIEW ALL PIECES bağlantısı" value={week.products_link} onCommit={set("products_link")} />
+                <NoteInput label="Düğme bağlantısı" value={week.products_link} onCommit={set("products_link")} />
                 <ProductSearch chosen={week.products} onPick={(p) => save({ products: [...week.products, p] })} />
               </Note>
             )}
@@ -175,7 +192,7 @@ export function NewsletterWeekEditor({
                   </div>
                 ))}
             </div>
-            <MailButton>VIEW ALL PIECES</MailButton>
+            <MailButtonText edit={edit} label="Koleksiyon düğmesinin yazısı" value={week.products_button} fallback={PRODUCTS_BUTTON} onCommit={set("products_button")} />
             <div className="h-10" />
 
             {/* 4 · Story */}
@@ -195,13 +212,7 @@ export function NewsletterWeekEditor({
               pad="px-6 pb-6 sm:px-[72px]"
               text={cn(SANS, "text-center text-[15px] leading-[1.75]")}
             />
-            <MailButton>
-              {edit ? (
-                <ButtonInput value={week.story_title} onCommit={set("story_title")} />
-              ) : (
-                (week.story_title || "STORY").toUpperCase()
-              )}
-            </MailButton>
+            <MailButtonText edit={edit} label="Story düğmesinin yazısı" value={week.story_title} fallback="STORY" onCommit={set("story_title")} list="newsletter-story-titles" />
             <datalist id="newsletter-story-titles">
               {STORY_TITLES.map((t) => <option key={t} value={t.toUpperCase()} />)}
             </datalist>
@@ -226,7 +237,9 @@ export function NewsletterWeekEditor({
             )}
             <MailImage src={week.social_image_url} alt={`Aslı Filinta on ${social.label}`} ratio="aspect-[4/5]" empty={`${social.label} görseli · 4:5`} />
             <div className="h-8" />
-            <MailButton>{social.button}</MailButton>
+            {/* Boş bırakılırsa platformun kendi yazısı — platform değişince
+                düğme de değişir. */}
+            <MailButtonText edit={edit} label="Sosyal medya düğmesinin yazısı" value={week.social_button} fallback={social.button} onCommit={set("social_button")} />
             <div className="h-12" />
 
             {/* 7 · Footer — sabit */}
@@ -302,8 +315,38 @@ function MailButton({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Story düğmesinin yazısı — düğmenin İÇİNDE yazılır. */
-function ButtonInput({ value, onCommit }: { value: string; onCommit: (_v: string) => void }) {
+/** Postadaki siyah düğme; düzenlerken yazısı düğmenin İÇİNDE yazılır.
+ *  Boş değer `fallback` ile çizilir (sosyal düğmede platformun yazısı). */
+function MailButtonText({
+  edit, label, value, fallback, onCommit, list,
+}: {
+  edit: boolean;
+  label: string;
+  value: string;
+  fallback: string;
+  onCommit: (_v: string) => void;
+  list?: string;
+}) {
+  return (
+    <MailButton>
+      {edit ? (
+        <ButtonInput label={label} value={value} placeholder={fallback} onCommit={onCommit} list={list} />
+      ) : (
+        (value || fallback).toUpperCase()
+      )}
+    </MailButton>
+  );
+}
+
+function ButtonInput({
+  label, value, placeholder, onCommit, list,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  onCommit: (_v: string) => void;
+  list?: string;
+}) {
   const [draft, setDraft] = useState(value);
   /* Genişliği YAZININ KENDİSİ belirler: görünmez bir kopya aynı hücrede
      durur, kutu onun kadar açılır. Karakter sayısıyla tahmin edilince
@@ -313,13 +356,13 @@ function ButtonInput({ value, onCommit }: { value: string; onCommit: (_v: string
       {/* px-3 ≠ input'un px-1'i BİLEREK: Chrome harf aralıklı kutuda metnin
           sonuna ~16 px ayırıyor; pay verilmezse son harf yine kırpılıyor. */}
       <span aria-hidden className="invisible col-start-1 row-start-1 whitespace-pre px-3 tracking-[2.5px]">
-        {draft || "DÜĞME YAZISI"}
+        {draft || placeholder}
       </span>
       <input
-        aria-label="Story düğmesinin yazısı"
-        list="newsletter-story-titles"
+        aria-label={label}
+        list={list}
         value={draft}
-        placeholder="DÜĞME YAZISI"
+        placeholder={placeholder}
         onChange={(e) => setDraft(e.target.value.toUpperCase())}
         onBlur={() => { if (draft.trim() !== value) onCommit(draft.trim()); }}
         onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}

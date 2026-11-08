@@ -32,17 +32,23 @@ export interface NewsletterWeek {
   opening_title: string;
   opening_image_url: string;
   opening_link: string;
+  welcome_heading: string;
   welcome: string;
+  welcome_signoff: string;
+  account_button: string;
   products_title: string;
   products: NewsletterProduct[];
   /** VIEW ALL PIECES düğmesinin gittiği koleksiyon sayfası (20240370). */
   products_link: string;
+  products_button: string;
   /** Story düğmesinin yazısı — "THE CRAFT BEHIND EACH PIECE" gibi. */
   story_title: string;
   story_url: string;
   story_image_url: string;
   story_text: string;
   social_platform: SocialPlatform;
+  /** Boşsa platformun kendi yazısı (SOCIAL_PLATFORMS.button). */
+  social_button: string;
   social_image_url: string;
   social_link: string;
   notes: string;
@@ -60,13 +66,14 @@ export const SOCIAL_PLATFORMS: { key: SocialPlatform; label: string; button: str
 ];
 
 export const NEWSLETTER_SELECT =
-  "id, send_date, status, theme, subject, opening_title, opening_image_url, opening_link, welcome, products_title, products, products_link, story_title, story_url, story_image_url, story_text, social_platform, social_image_url, social_link, notes";
+  "id, send_date, status, theme, subject, opening_title, opening_image_url, opening_link, welcome_heading, welcome, welcome_signoff, account_button, products_title, products, products_link, products_button, story_title, story_url, story_image_url, story_text, social_platform, social_button, social_image_url, social_link, notes";
 
 /** Kaydedilebilir metin alanları — tek tek kaydedilir. */
 export const NEWSLETTER_TEXT_FIELDS = [
   "theme", "subject", "opening_title", "opening_image_url", "opening_link",
-  "welcome", "products_title", "products_link", "story_title", "story_url",
-  "story_image_url", "story_text", "social_image_url", "social_link", "notes",
+  "welcome_heading", "welcome", "welcome_signoff", "account_button",
+  "products_title", "products_link", "products_button", "story_title", "story_url",
+  "story_image_url", "story_text", "social_button", "social_image_url", "social_link", "notes",
 ] as const;
 export type NewsletterTextField = (typeof NEWSLETTER_TEXT_FIELDS)[number];
 
@@ -92,6 +99,11 @@ export const STORY_TITLES = [
  * bu metinle doğar, ekip gerekirse o haftada düzenler.
  */
 export const WELCOME_HEADING = "Welcome to the World of Aslı Filinta";
+/* Postanın öteki varsayılan yazıları — 20240371 kolon varsayılanlarıyla aynı.
+   Her hafta değiştirilebilir; bunlar yalnız yeni haftanın başlangıcı. */
+export const WELCOME_SIGNOFF = "With love from Anatolia,\nAslı Filinta";
+export const ACCOUNT_BUTTON = "CREATE AN ACCOUNT";
+export const PRODUCTS_BUTTON = "VIEW ALL PIECES";
 export const DEFAULT_WELCOME = `We are delighted to welcome you to Aslı Filinta, where cultural heritage, craftsmanship, and contemporary design come together.
 
 Rooted in cultural memory and guided by a commitment to social, economic, and ecological sustainability, our work celebrates the knowledge carried across generations and the hands that keep it alive.
@@ -106,7 +118,9 @@ export function emptyWeek(sendDate: string): NewsletterWeek {
   return {
     id: null, send_date: sendDate, status: "taslak",
     theme: "", subject: "", opening_title: "", opening_image_url: "", opening_link: "",
-    welcome: DEFAULT_WELCOME, products_title: "", products: [], products_link: "",
+    welcome_heading: WELCOME_HEADING, welcome: DEFAULT_WELCOME, welcome_signoff: WELCOME_SIGNOFF,
+    account_button: ACCOUNT_BUTTON, products_title: "", products: [], products_link: "",
+    products_button: PRODUCTS_BUTTON, social_button: "",
     story_title: "", story_url: "", story_image_url: "", story_text: "",
     social_platform: "instagram", social_image_url: "", social_link: "", notes: "",
   };
