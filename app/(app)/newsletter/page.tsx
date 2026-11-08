@@ -8,7 +8,7 @@ import { SetupRequiredNotice } from "@/components/modules/SetupRequiredNotice";
 import { maybeDatabaseSetupRequired } from "@/lib/utils/supabase-errors";
 import { NewsletterMonth } from "@/components/newsletter/NewsletterMonth";
 import { NewsletterWeekEditor } from "@/components/newsletter/NewsletterWeekEditor";
-import { emptyWeek, isMonday, mondaysOfMonth, MONTH_RE, type NewsletterWeek } from "@/lib/newsletter/model";
+import { emptyWeek, isMonday, mondaysOfMonth, MONTH_RE, NEWSLETTER_SELECT, type NewsletterWeek } from "@/lib/newsletter/model";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Newsletter Plan" };
@@ -41,7 +41,7 @@ export default async function NewsletterPage({
 
   const res = await supabase
     .from("newsletter_weeks")
-    .select("id, send_date, status, theme, subject, opening_title, opening_image_url, opening_link, welcome, products_title, products, story_title, story_url, social_image_url, social_link, notes")
+    .select(NEWSLETTER_SELECT)
     .eq("workspace_id", workspaceId)
     .in("send_date", week ? [week] : mondays);
 
@@ -52,8 +52,8 @@ export default async function NewsletterPage({
         <ModulePageHeader title="Newsletter Plan" backHref="/documents" />
         <SetupRequiredNotice
           variant="block"
-          title="Bülten planı tablosu henüz oluşturulmadı"
-          message={setup.message ?? "Newsletter Plan için veritabanı güncellemesi bekleniyor (20240369)."}
+          title="Bülten planı için veritabanı güncellemesi bekleniyor"
+          message={setup.message ?? "Newsletter Plan için veritabanı güncellemesi bekleniyor (20240369, 20240370)."}
           technicalDetail={isAdmin ? setup.technicalDetail : null}
         />
       </div>

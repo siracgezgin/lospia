@@ -35,18 +35,38 @@ export interface NewsletterWeek {
   welcome: string;
   products_title: string;
   products: NewsletterProduct[];
+  /** VIEW ALL PIECES düğmesinin gittiği koleksiyon sayfası (20240370). */
+  products_link: string;
+  /** Story düğmesinin yazısı — "THE CRAFT BEHIND EACH PIECE" gibi. */
   story_title: string;
   story_url: string;
+  story_image_url: string;
+  story_text: string;
+  social_platform: SocialPlatform;
   social_image_url: string;
   social_link: string;
   notes: string;
 }
 
+export type SocialPlatform = "instagram" | "youtube" | "linkedin" | "x";
+
+/** Haftanın sosyal medyası — sıra Instagram → YouTube → LinkedIn → X.
+ *  Platform adı yalnız düğmede geçer (taslak No01, not 6). */
+export const SOCIAL_PLATFORMS: { key: SocialPlatform; label: string; button: string; url: string }[] = [
+  { key: "instagram", label: "Instagram", button: "FOLLOW US ON INSTAGRAM", url: "https://www.instagram.com/aslifilinta/" },
+  { key: "youtube", label: "YouTube", button: "WATCH ON YOUTUBE", url: "https://www.youtube.com/@asli_filinta" },
+  { key: "linkedin", label: "LinkedIn", button: "FOLLOW US ON LINKEDIN", url: "https://www.linkedin.com/in/asli-filinta-b88a655" },
+  { key: "x", label: "X", button: "FOLLOW US ON X", url: "https://x.com/aslifilinta" },
+];
+
+export const NEWSLETTER_SELECT =
+  "id, send_date, status, theme, subject, opening_title, opening_image_url, opening_link, welcome, products_title, products, products_link, story_title, story_url, story_image_url, story_text, social_platform, social_image_url, social_link, notes";
+
 /** Kaydedilebilir metin alanları — tek tek kaydedilir. */
 export const NEWSLETTER_TEXT_FIELDS = [
   "theme", "subject", "opening_title", "opening_image_url", "opening_link",
-  "welcome", "products_title", "story_title", "story_url",
-  "social_image_url", "social_link", "notes",
+  "welcome", "products_title", "products_link", "story_title", "story_url",
+  "story_image_url", "story_text", "social_image_url", "social_link", "notes",
 ] as const;
 export type NewsletterTextField = (typeof NEWSLETTER_TEXT_FIELDS)[number];
 
@@ -86,8 +106,9 @@ export function emptyWeek(sendDate: string): NewsletterWeek {
   return {
     id: null, send_date: sendDate, status: "taslak",
     theme: "", subject: "", opening_title: "", opening_image_url: "", opening_link: "",
-    welcome: DEFAULT_WELCOME, products_title: "", products: [],
-    story_title: "", story_url: "", social_image_url: "", social_link: "", notes: "",
+    welcome: DEFAULT_WELCOME, products_title: "", products: [], products_link: "",
+    story_title: "", story_url: "", story_image_url: "", story_text: "",
+    social_platform: "instagram", social_image_url: "", social_link: "", notes: "",
   };
 }
 

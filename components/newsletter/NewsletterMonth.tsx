@@ -35,9 +35,6 @@ export function NewsletterMonth({ month, weeks }: { month: string; weeks: Newsle
           <MonthLink href={`/newsletter?m=${next}`} label="Sonraki ay"><ChevronRight size={16} aria-hidden /></MonthLink>
         </div>
       </div>
-      <p className="-mt-2 mb-4 text-[13px] text-muted">
-        Bülten her pazartesi gider. Bir haftaya girin — içeride o haftanın sırası var.
-      </p>
 
       <TileGrid>
         {weeks.map((w) => {
@@ -48,7 +45,7 @@ export function NewsletterMonth({ month, weeks }: { month: string; weeks: Newsle
               key={w.send_date}
               href={`/newsletter?w=${w.send_date}`}
               title={format(parseISO(w.send_date), "d MMMM", { locale: tr })}
-              meta={line || "Boş"}
+              meta={line || " "}
               photoUrl={w.opening_image_url || null}
               icon={Mail}
               badge={

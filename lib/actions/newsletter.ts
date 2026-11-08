@@ -6,12 +6,12 @@ import type { AppRole } from "@/lib/auth/permissions";
 import { toActionErrorMessage, isMissingSchemaError } from "@/lib/utils/supabase-errors";
 import { decodeEntities, WEBSITE_BASE } from "@/lib/collection/website";
 import {
-  DEFAULT_WELCOME, isMonday, NEWSLETTER_TEXT_FIELDS,
+  DEFAULT_WELCOME, isMonday, NEWSLETTER_SELECT, NEWSLETTER_TEXT_FIELDS,
   type NewsletterProduct, type NewsletterWeek,
 } from "@/lib/newsletter/model";
 
 /**
- * BÜLTEN PLANI (20240369) — bir pazartesinin planını ALAN ALAN kaydeder.
+ * BÜLTEN PLANI (20240369–20240370) — bir pazartesinin planını ALAN ALAN kaydeder.
  *
  * Satır ilk düzenlemede doğar (upsert, workspace + pazartesi tekil). Alan alan
  * kayıt: iki kişi aynı haftanın farklı alanlarını yazarsa biri ötekini ezmez.
@@ -19,7 +19,7 @@ import {
  */
 
 const AUTH_REQUIRED = "Kimlik doğrulama gerekli.";
-const SETUP_PENDING = "Bülten planı için veritabanı güncellemesi bekleniyor (20240369).";
+const SETUP_PENDING = "Bülten planı için veritabanı güncellemesi bekleniyor (20240369–20240370).";
 
 async function getCtx(supabase: Awaited<ReturnType<typeof createClient>>) {
   const { data: { user } } = await supabase.auth.getUser();
@@ -46,12 +46,13 @@ const text = z.string().max(4000);
 const PatchSchema = z.object({
   status: z.enum(["taslak", "onayda", "onaylandi", "duzeltme", "gonderildi"]).optional(),
   products: z.array(ProductSchema).max(12).optional(),
+  social_platform: z.enum(["instagram", "youtube", "linkedin", "x"]).optional(),
   ...Object.fromEntries(NEWSLETTER_TEXT_FIELDS.map((f) => [f, text.optional()])),
 }).strict();
 
 export type NewsletterPatch = Partial<Omit<NewsletterWeek, "id" | "send_date">>;
 
-const SELECT = "id, send_date, status, theme, subject, opening_title, opening_image_url, opening_link, welcome, products_title, products, story_title, story_url, social_image_url, social_link, notes";
+const SELECT = NEWSLETTER_SELECT;
 
 export async function saveNewsletterWeek(
   sendDate: string,
