@@ -940,10 +940,16 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
     const need = visibleImageKey.split(",").filter((id) => !requestedRef.current.has(id));
     if (need.length === 0) return;
     need.forEach((id) => requestedRef.current.add(id));
-    let cancelled = false;
+    /* CEVAP ÇÖPE ATILMAZ (08.11.2026 — "fotoğraflar gelmiyor, bazısı geliyor
+       bazısı gelmiyor"; Volkan Bey'in dosyasında hiçbiri). Eskiden burada bir
+       `cancelled` bayrağı vardı: görünen satırlar istek sürerken değişince
+       (açılışta ekran ölçüsü oturur, kaydırma) cevap atılıyordu — ama kimlikler
+       `requestedRef`'te "istendi" diye işaretli kaldığı için bir daha hiç
+       istenmiyordu. İlk ekrandaki fotoğraflar kalıcı olarak kırık kalıyordu.
+       Adres kimliğe bağlıdır, görünen satıra değil: hangi anda gelirse gelsin
+       birleştirmek doğrudur. */
     (async () => {
       const res = await signSheetImages(need);
-      if (cancelled) return;
       if ("error" in res) {
         /* Başarısız istekler İŞARETTEN DÜŞER: yoksa geçici bir ağ hatası o
            fotoğrafları oturum boyunca kalıcı olarak boş bırakırdı. */
@@ -952,7 +958,6 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
       }
       setImageUrlsState((prev) => ({ ...prev, ...res.urls }));
     })();
-    return () => { cancelled = true; };
   }, [visibleImageKey]);
 
   const colLefts = useMemo(() => {
