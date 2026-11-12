@@ -39,14 +39,16 @@ export function NewsletterMonth({ month, weeks }: { month: string; weeks: Newsle
       <TileGrid>
         {weeks.map((w) => {
           const st = NEWSLETTER_STATUSES.find((s) => s.key === w.status) ?? NEWSLETTER_STATUSES[0];
-          const line = w.theme || w.subject || w.opening_title;
+          const line = w.subject || w.theme || w.blocks.find((b) => b.title)?.title || "";
+          /* Kartın görseli haftanın ilk görselli bloğu (genelde açılış). */
+          const cover = w.blocks.find((b) => b.image_url)?.image_url ?? null;
           return (
             <Tile
               key={w.send_date}
               href={`/newsletter?w=${w.send_date}`}
               title={format(parseISO(w.send_date), "d MMMM", { locale: tr })}
               meta={line || " "}
-              photoUrl={w.opening_image_url || null}
+              photoUrl={cover}
               icon={Mail}
               badge={
                 w.id ? (

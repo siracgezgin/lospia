@@ -1,17 +1,15 @@
 import { cn } from "@/lib/utils/cn";
 import {
-  ACCOUNT_BUTTON, PRODUCTS_BUTTON, SOCIAL_PLATFORMS,
-  type NewsletterProduct, type NewsletterWeek,
+  blockButton, SOCIAL_PLATFORMS,
+  type NewsletterBlock, type NewsletterProduct, type NewsletterWeek,
 } from "@/lib/newsletter/model";
 
 /**
  * POSTA ÖNİZLEMESİ — salt okunur, AF-Bulten-No01.html düzeninde.
  *
- * Sıraç (08.11.2026): ilk form "bizim newsletter'a benzemiyor"; postanın
- * kendisi üzerinde düzenlemek ise "daha kötü, anlaşılır durmuyor". İkisinin
- * arası: yazılar formda yazılır, bu çerçeve yanda sen yazdıkça postanın
- * nasıl görüneceğini gösterir. Aynı sıra, aynı yazılar (başlık Georgia, metin
- * Helvetica), aynı siyah düğmeler, iki sütun dekupe.
+ * Hafta numaralı bloklardan oluşur (8.11 toplantısı); her blok kendi türünün
+ * posta kalıbıyla, SIRAYLA çizilir. Sabit olan yalnız üst satır + logo ve
+ * footer. Başlıklar Georgia, metin Helvetica, düğmeler siyah — taslakla aynı.
  */
 
 /* `family-name:` etiketi ŞART: etiketsiz `font-[…]` sınıfını tailwind-merge
@@ -22,10 +20,8 @@ const SERIF = "font-[family-name:Georgia,'Times_New_Roman',serif]";
 const SANS = "font-[family-name:Helvetica,Arial,sans-serif]";
 
 export function MailPreview({ week }: { week: NewsletterWeek }) {
-  const social = SOCIAL_PLATFORMS.find((p) => p.key === week.social_platform) ?? SOCIAL_PLATFORMS[0];
   return (
     <div className="w-[600px] max-w-full bg-white text-[#111] shadow-[0_1px_12px_rgba(0,0,0,.08)]">
-      {/* 0 · Üst satır + logo */}
       <p className={cn(SANS, "px-6 pt-[34px] text-center text-[11px] leading-[1.4]")}>
         Can&apos;t see the images? <span className="underline">View in browser</span>
       </p>
@@ -34,53 +30,85 @@ export function MailPreview({ week }: { week: NewsletterWeek }) {
         <img src="/brands/asli-filinta-logo.png" alt="aslıfilinta" className="h-auto w-[220px] max-w-[60%]" />
       </div>
 
-      {/* 1 · Açılış */}
-      <MailImage src={week.opening_image_url} alt={week.opening_title} ratio="aspect-[4/5]" empty="Açılış görseli" />
-      <div className="h-14" />
+      {week.blocks.map((b) => (
+        <div key={b.id} className="pb-12">
+          <Block block={b} />
+        </div>
+      ))}
 
-      {/* 2 · Welcome */}
-      <Text className={cn(SERIF, "px-6 pb-[18px] text-[28px] leading-[1.25] sm:px-10")}>{week.welcome_heading}</Text>
-      <Text className={cn(SANS, "px-6 text-[15px] leading-[1.75] sm:px-14")}>{week.welcome}</Text>
-      <Text className={cn(SANS, "px-6 pb-7 pt-[18px] text-[15px] leading-[1.75] sm:px-14")}>{week.welcome_signoff}</Text>
-      <MailButton>{week.account_button || ACCOUNT_BUTTON}</MailButton>
-      <div className="h-10" />
-
-      {/* 3 · Ürünler */}
-      <Text className={cn(SERIF, "px-6 pb-8 text-[26px] leading-[1.25] sm:px-10")}>{week.products_title}</Text>
-      <div className="grid grid-cols-2 px-2">
-        {week.products.map((p) => <ProductCard key={p.id} product={p} />)}
-        {week.products.length < 2 &&
-          Array.from({ length: 2 - week.products.length }).map((_, i) => (
-            <div key={i} className="px-1 pb-7">
-              <div className="aspect-[4/5] bg-[#f1f1f1]" />
-            </div>
-          ))}
-      </div>
-      <MailButton>{week.products_button || PRODUCTS_BUTTON}</MailButton>
-      <div className="h-10" />
-
-      {/* 4 · Story */}
-      <MailImage src={week.story_image_url} alt={week.story_title} ratio="aspect-[4/3]" empty="Story görseli" />
-      <div className="h-10" />
-      <Text className={cn(SANS, "px-6 pb-6 text-[15px] leading-[1.75] sm:px-[72px]")}>{week.story_text}</Text>
-      <MailButton>{week.story_title || "STORY"}</MailButton>
-      <div className="h-10" />
-
-      {/* 6 · Sosyal medya */}
-      <MailImage src={week.social_image_url} alt={`Aslı Filinta on ${social.label}`} ratio="aspect-[4/5]" empty={`${social.label} görseli`} />
-      <div className="h-8" />
-      <MailButton>{week.social_button || social.button}</MailButton>
-      <div className="h-12" />
-
-      {/* 7 · Footer */}
       <MailFooter />
+    </div>
+  );
+}
+
+function Block({ block: b }: { block: NewsletterBlock }) {
+  switch (b.type) {
+    case "gorsel":
+      return <MailImage src={b.image_url} alt={b.title} ratio="aspect-[4/5]" empty="Görsel" />;
+    case "metin":
+      return (
+        <>
+          <Heading size={28}>{b.title}</Heading>
+          <Text className="px-6 sm:px-14">{b.text}</Text>
+        </>
+      );
+    case "urun":
+      return (
+        <>
+          <Heading size={26}>{b.title}</Heading>
+          <div className="grid grid-cols-2 px-2">
+            {b.products.map((p) => <ProductCard key={p.id} product={p} />)}
+            {b.products.length < 2 &&
+              Array.from({ length: 2 - b.products.length }).map((_, i) => (
+                <div key={i} className="px-1 pb-7"><div className="aspect-[4/5] bg-[#f1f1f1]" /></div>
+              ))}
+          </div>
+          <MailButton>{blockButton(b)}</MailButton>
+        </>
+      );
+    case "kategori":
+      return (
+        <>
+          {b.image_url && <div className="pb-8"><MailImage src={b.image_url} alt={b.title} ratio="aspect-[4/5]" empty="" /></div>}
+          <Heading size={26}>{b.title}</Heading>
+          <Text className="px-6 pb-6 sm:px-14">{b.text}</Text>
+          <MailButton>{blockButton(b)}</MailButton>
+        </>
+      );
+    case "story":
+      return (
+        <>
+          <MailImage src={b.image_url} alt={b.title} ratio="aspect-[4/3]" empty="Story görseli" />
+          <div className="h-10" />
+          <Text className="px-6 pb-6 sm:px-[72px]">{b.text}</Text>
+          <MailButton>{blockButton(b)}</MailButton>
+        </>
+      );
+    case "sosyal": {
+      const social = SOCIAL_PLATFORMS.find((p) => p.key === b.platform) ?? SOCIAL_PLATFORMS[0];
+      return (
+        <>
+          <MailImage src={b.image_url} alt={`Aslı Filinta on ${social.label}`} ratio="aspect-[4/5]" empty={`${social.label} görseli`} />
+          <div className="h-8" />
+          <MailButton>{blockButton(b)}</MailButton>
+        </>
+      );
+    }
+  }
+}
+
+function Heading({ size, children }: { size: 26 | 28; children: string }) {
+  if (!children.trim()) return null;
+  return (
+    <div className={cn(SERIF, "whitespace-pre-line px-6 pb-6 text-center font-normal leading-[1.25] sm:px-10", size === 28 ? "text-[28px]" : "text-[26px]")}>
+      {children}
     </div>
   );
 }
 
 function Text({ className, children }: { className: string; children: string }) {
   if (!children.trim()) return null;
-  return <div className={cn("whitespace-pre-line text-center font-normal", className)}>{children}</div>;
+  return <div className={cn(SANS, "whitespace-pre-line text-center text-[15px] leading-[1.75]", className)}>{children}</div>;
 }
 
 function MailImage({ src, alt, ratio, empty }: { src: string; alt: string; ratio: string; empty: string }) {
@@ -96,6 +124,7 @@ function MailImage({ src, alt, ratio, empty }: { src: string; alt: string; ratio
 }
 
 function MailButton({ children }: { children: string }) {
+  if (!children) return null;
   return (
     <div className="flex justify-center px-4 pt-1">
       <span className={cn(SANS, "inline-block max-w-full border border-[#111] bg-[#111] px-10 py-[15px] text-center text-[12px] uppercase tracking-[2.5px] text-white")}>

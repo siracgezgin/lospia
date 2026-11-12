@@ -1,8 +1,13 @@
 /**
  * BÜLTEN PLANI — ortak model (sunucu + istemci).
  *
- * 06.11.2026 toplantısı: bülten haftada bir, PAZARTESİ gider; aylık plan
- * Nisa Hanım'dan, onay Aslı Hanım'dan. Gönderim panelde YOK (afcom-seo/27_bulten).
+ * Bülten haftada bir, PAZARTESİ gider; aylık plan Nisa Hanım'dan, onay Aslı
+ * Hanım'dan. Gönderim panelde YOK (afcom-seo/27_bulten).
+ *
+ * 8.11.2026 toplantısı (Aslı Hanım): hafta sabit bölümlerden değil, NUMARALI
+ * BLOKLARDAN oluşur — "Aynı formatta koy. Yukarıya başlık, altına link,
+ * altına yazı… Çoktan seçmeli: story, kategori, ürün… Metin de; onu başa
+ * koyarsan welcome metni olur… Yerlerini değiştirebilirsin." (20240372)
  */
 
 export type NewsletterStatus = "taslak" | "onayda" | "onaylandi" | "duzeltme" | "gonderildi";
@@ -23,37 +28,6 @@ export interface NewsletterProduct {
   in_stock: boolean;
 }
 
-export interface NewsletterWeek {
-  id: string | null;
-  send_date: string; // yyyy-MM-dd, pazartesi
-  status: NewsletterStatus;
-  theme: string;
-  subject: string;
-  opening_title: string;
-  opening_image_url: string;
-  opening_link: string;
-  welcome_heading: string;
-  welcome: string;
-  welcome_signoff: string;
-  account_button: string;
-  products_title: string;
-  products: NewsletterProduct[];
-  /** VIEW ALL PIECES düğmesinin gittiği koleksiyon sayfası (20240370). */
-  products_link: string;
-  products_button: string;
-  /** Story düğmesinin yazısı — "THE CRAFT BEHIND EACH PIECE" gibi. */
-  story_title: string;
-  story_url: string;
-  story_image_url: string;
-  story_text: string;
-  social_platform: SocialPlatform;
-  /** Boşsa platformun kendi yazısı (SOCIAL_PLATFORMS.button). */
-  social_button: string;
-  social_image_url: string;
-  social_link: string;
-  notes: string;
-}
-
 export type SocialPlatform = "instagram" | "youtube" | "linkedin" | "x";
 
 /** Haftanın sosyal medyası — sıra Instagram → YouTube → LinkedIn → X.
@@ -65,20 +39,96 @@ export const SOCIAL_PLATFORMS: { key: SocialPlatform; label: string; button: str
   { key: "x", label: "X", button: "FOLLOW US ON X", url: "https://x.com/aslifilinta" },
 ];
 
-export const NEWSLETTER_SELECT =
-  "id, send_date, status, theme, subject, opening_title, opening_image_url, opening_link, welcome_heading, welcome, welcome_signoff, account_button, products_title, products, products_link, products_button, story_title, story_url, story_image_url, story_text, social_platform, social_button, social_image_url, social_link, notes";
+/* ── Bloklar ───────────────────────────────────────────────────────────── */
+
+export type BlockType = "gorsel" | "metin" | "urun" | "kategori" | "story" | "sosyal";
+
+export const BLOCK_TYPES: { key: BlockType; label: string }[] = [
+  { key: "gorsel", label: "Görsel" },
+  { key: "metin", label: "Metin" },
+  { key: "urun", label: "Ürün" },
+  { key: "kategori", label: "Kategori" },
+  { key: "story", label: "Story" },
+  { key: "sosyal", label: "Sosyal medya" },
+];
+
+/** Her blok AYNI kalıp; tür yalnız hangi alanın görüneceğini belirler. */
+export interface NewsletterBlock {
+  /** Yalnız ekranda anahtar/sıra için — postaya girmez. */
+  id: string;
+  type: BlockType;
+  title: string;
+  link: string;
+  text: string;
+  /** Postada görünen adres (yüklenen görselde depodaki herkese açık adres). */
+  image_url: string;
+  /** Panele yüklenen görselin depo yolu; siteden gelen görselde boş. */
+  image_path: string;
+  /** Yalnız `urun`. */
+  products: NewsletterProduct[];
+  /** Yalnız `sosyal`. */
+  platform: SocialPlatform | "";
+  /** Düğme yazısı; boşsa türün varsayılanı (BLOCK_BUTTONS). */
+  button: string;
+  /** Siteden seçilen story/kategori kimliği — tekrar uyarısı için. */
+  ref: string;
+}
+
+/** Türün varsayılan düğmesi — boş bırakılan `button` bununla çizilir. */
+export function blockButton(b: Pick<NewsletterBlock, "type" | "button" | "platform">): string {
+  if (b.button.trim()) return b.button.trim().toUpperCase();
+  switch (b.type) {
+    case "urun": return "VIEW ALL PIECES";
+    case "kategori": return "DISCOVER THE COLLECTION";
+    case "story": return "THE CRAFT BEHIND EACH PIECE";
+    case "sosyal": return (SOCIAL_PLATFORMS.find((p) => p.key === b.platform) ?? SOCIAL_PLATFORMS[0]).button;
+    default: return "";
+  }
+}
+
+/** Bu türün bağlantısı postada gerekli mi? (Onaya gönderirken uyarı.) */
+export function blockNeedsLink(type: BlockType): boolean {
+  return type === "gorsel" || type === "kategori" || type === "story" || type === "sosyal" || type === "urun";
+}
+
+export function newBlock(type: BlockType, id: string): NewsletterBlock {
+  return {
+    id, type, title: "", link: "", text: "", image_url: "", image_path: "",
+    products: [], platform: type === "sosyal" ? "instagram" : "", button: "", ref: "",
+  };
+}
+
+/**
+ * YENİ HAFTANIN SIRASI (22.10 + 11.11 kararları): açılış görseli → metin →
+ * ürün → story → sosyal medya. Welcome metni varsayılan olarak GELMEZ.
+ */
+export const DEFAULT_BLOCK_ORDER: BlockType[] = ["gorsel", "metin", "urun", "story", "sosyal"];
+
+export function defaultBlocks(makeId: () => string): NewsletterBlock[] {
+  return DEFAULT_BLOCK_ORDER.map((t) => newBlock(t, makeId()));
+}
+
+/** En fazla blok sayısı — "bir, iki, üç, dört… en çok beş" + pay. */
+export const MAX_BLOCKS = 8;
+
+export interface NewsletterWeek {
+  id: string | null;
+  send_date: string; // yyyy-MM-dd, pazartesi
+  status: NewsletterStatus;
+  subject: string;
+  theme: string;
+  notes: string;
+  blocks: NewsletterBlock[];
+}
+
+export const NEWSLETTER_SELECT = "id, send_date, status, subject, theme, notes, blocks";
 
 /** Kaydedilebilir metin alanları — tek tek kaydedilir. */
-export const NEWSLETTER_TEXT_FIELDS = [
-  "theme", "subject", "opening_title", "opening_image_url", "opening_link",
-  "welcome_heading", "welcome", "welcome_signoff", "account_button",
-  "products_title", "products_link", "products_button", "story_title", "story_url",
-  "story_image_url", "story_text", "social_button", "social_image_url", "social_link", "notes",
-] as const;
+export const NEWSLETTER_TEXT_FIELDS = ["subject", "theme", "notes"] as const;
 export type NewsletterTextField = (typeof NEWSLETTER_TEXT_FIELDS)[number];
 
 /**
- * STORY BAŞLIKLARI — Aslı Hanım'ın listesi. Her hafta farklı olmalı
+ * STORY DÜĞMESİ — Aslı Hanım'ın listesi. Her hafta farklı olmalı
  * ("Discover" tekrarlanmaz). Liste öneri; serbest yazmak da serbest.
  */
 export const STORY_TITLES = [
@@ -93,36 +143,59 @@ export const STORY_TITLES = [
   "Our Heritage",
 ];
 
-/**
- * WELCOME METNİ — Aslı Hanım'ın onaylı metni (29.10.2026, welcometoaslifilinta
- * .docx; afcom-seo/27_bulten/build3.py ile birebir). DEĞİŞTİRİLMEZ: yeni hafta
- * bu metinle doğar, ekip gerekirse o haftada düzenler.
- */
-export const WELCOME_HEADING = "Welcome to the World of Aslı Filinta";
-/* Postanın öteki varsayılan yazıları — 20240371 kolon varsayılanlarıyla aynı.
-   Her hafta değiştirilebilir; bunlar yalnız yeni haftanın başlangıcı. */
-export const WELCOME_SIGNOFF = "With love from Anatolia,\nAslı Filinta";
-export const ACCOUNT_BUTTON = "CREATE AN ACCOUNT";
-export const PRODUCTS_BUTTON = "VIEW ALL PIECES";
-export const DEFAULT_WELCOME = `We are delighted to welcome you to Aslı Filinta, where cultural heritage, craftsmanship, and contemporary design come together.
-
-Rooted in cultural memory and guided by a commitment to social, economic, and ecological sustainability, our work celebrates the knowledge carried across generations and the hands that keep it alive.
-
-Beyond our collections, the Filinta Methodology brings together artisans, women-led collectives, educational institutions, and creative industries to transform traditional knowledge into meaningful opportunities for the future.
-
-As part of our community, you will be among the first to discover our latest collections, unique handcrafted pieces, cultural collaborations, exhibitions, and upcoming projects.
-
-We invite you to explore a world where design becomes a bridge between the past and the future, and where individual creativity contributes to collective progress.`;
-
-export function emptyWeek(sendDate: string): NewsletterWeek {
+export function emptyWeek(sendDate: string, makeId: () => string): NewsletterWeek {
   return {
     id: null, send_date: sendDate, status: "taslak",
-    theme: "", subject: "", opening_title: "", opening_image_url: "", opening_link: "",
-    welcome_heading: WELCOME_HEADING, welcome: DEFAULT_WELCOME, welcome_signoff: WELCOME_SIGNOFF,
-    account_button: ACCOUNT_BUTTON, products_title: "", products: [], products_link: "",
-    products_button: PRODUCTS_BUTTON, social_button: "",
-    story_title: "", story_url: "", story_image_url: "", story_text: "",
-    social_platform: "instagram", social_image_url: "", social_link: "", notes: "",
+    subject: "", theme: "", notes: "", blocks: defaultBlocks(makeId),
+  };
+}
+
+/** Eski/eksik bloğu tam kalıba tamamlar — jsonb'den gelen her satır bundan geçer. */
+export function normalizeBlock(raw: Partial<NewsletterBlock> & { type?: string }, fallbackId: string): NewsletterBlock {
+  const type = (BLOCK_TYPES.some((t) => t.key === raw.type) ? raw.type : "metin") as BlockType;
+  return {
+    ...newBlock(type, raw.id || fallbackId),
+    ...Object.fromEntries(Object.entries(raw).filter(([, v]) => v !== null && v !== undefined)),
+    type,
+    products: Array.isArray(raw.products) ? raw.products : [],
+  } as NewsletterBlock;
+}
+
+/* ── AFCOM-SEO'YA AKTARIM — "Planı indir" (JSON) ────────────────────────
+   afcom-seo-5e'nin biçimi; postayı oradaki üretici yapar. */
+export interface NewsletterExport {
+  send_date: string;
+  subject: string;
+  status: NewsletterStatus;
+  blocks: {
+    no: number;
+    type: BlockType;
+    title: string;
+    link: string;
+    text: string;
+    image_url: string;
+    button: string;
+    products: NewsletterProduct[];
+    platform: SocialPlatform | "";
+  }[];
+}
+
+export function exportWeek(w: NewsletterWeek): NewsletterExport {
+  return {
+    send_date: w.send_date,
+    subject: w.subject,
+    status: w.status,
+    blocks: w.blocks.map((b, i) => ({
+      no: i + 1,
+      type: b.type,
+      title: b.title,
+      link: b.link || (b.type === "sosyal" ? (SOCIAL_PLATFORMS.find((p) => p.key === b.platform)?.url ?? "") : ""),
+      text: b.text,
+      image_url: b.image_url,
+      button: blockButton(b),
+      products: b.type === "urun" ? b.products : [],
+      platform: b.type === "sosyal" ? b.platform : "",
+    })),
   };
 }
 
