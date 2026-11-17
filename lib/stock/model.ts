@@ -72,7 +72,8 @@ const SIZE_RANK = new Map(["XXS", "XS", "S", "M", "L", "XL", "XXL", "ONE SIZE"].
 /** "one size", "One Size", "ONE" → "ONE SIZE"; diğerleri büyük harf. */
 export function normalizeSize(raw: string): string {
   const s = raw.trim().replace(/\s+/g, " ").toLocaleUpperCase("en-US");
-  if (s === "ONE" || s === "ONESIZE" || s === "TEK BEDEN" || s === "STD") return "ONE SIZE";
+  /* "0NE SIZE" (sıfırla yazılmış) eski stok programında gerçekten var. */
+  if (/^[O0]NE ?(SIZE)?$/.test(s) || s === "TEK BEDEN" || s === "STD") return "ONE SIZE";
   return s;
 }
 
