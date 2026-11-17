@@ -303,7 +303,9 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
   const metrics = useRef<{
     rowTops: { tops: number[]; total: number };
     colLefts: { lefts: number[]; total: number };
-  }>({ rowTops: { tops: [], total: 0 }, colLefts: { lefts: [], total: 0 } });
+    frozenCount: number;
+    frozenH: number;
+  }>({ rowTops: { tops: [], total: 0 }, colLefts: { lefts: [], total: 0 }, frozenCount: 0, frozenH: 0 });
 
   /** Hücreyi görünür alana kaydırır (seçime dokunmaz). */
   const reveal = useCallback((rr: number, cc: number) => {
@@ -323,7 +325,10 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
        kendi çiziminde kullandığı `rowTops` tablosunda duruyor. */
     const top = metrics.current.rowTops.tops[rr] ?? rr * ROW_H;
     const h = rowHeight(g, rr);
-    if (top < el.scrollTop) el.scrollTop = top;
+    /* Dondurulmuş satırların ALTINDA kalan hücre de "görünmüyor" sayılır. */
+    const pinned = rr < metrics.current.frozenCount ? 0 : metrics.current.frozenH;
+    if (rr < metrics.current.frozenCount) { /* her zaman ekranda */ }
+    else if (top < el.scrollTop + pinned) el.scrollTop = top - pinned;
     else if (top + h > el.scrollTop + el.clientHeight - HEAD_H) {
       el.scrollTop = top + h - el.clientHeight + HEAD_H;
     }
@@ -949,6 +954,22 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
   const visibleRows: number[] = [];
   for (let r = firstRow; r <= lastRow; r++) visibleRows.push(r);
 
+  /* DONDURULMUŞ BAŞLIK SATIRLARI. Excel'deki "Bölmeleri Dondur" içe aktarımda
+     okunuyordu (`sheet.frozen`) ama HİÇ UYGULANMIYORDU: Volkan Bey'in tablosunda
+     aşağı kaydırınca "Ürün Kodları / Ürün Grubu…" başlığı kayboluyor, hangi
+     sütunun ne olduğu okunmuyordu (17.11.2026 denetimi). Dondurulan satırlar
+     her zaman çizilir ve sütun başlığının altına yapışır.
+     Emniyet: en çok 12 satır ve görünen alanın yarısından kısa — yoksa
+     dondurulan kısım ekranı kaplar, veri görünmez (o durumda dondurma yok
+     sayılır). */
+  const frozenCount = useMemo(() => {
+    const n = Math.min(sheet.frozen ?? 0, sheet.rows, 12);
+    if (n <= 0) return 0;
+    const h = rowTops.tops[n] ?? rowTops.total;
+    return h <= viewH * 0.5 ? n : 0;
+  }, [sheet.frozen, sheet.rows, rowTops, viewH]);
+  const frozenH = frozenCount ? (rowTops.tops[frozenCount] ?? rowTops.total) : 0;
+
   /* GÖRSEL ADRESLERİ YALNIZ GÖRÜNENLER İÇİN ÜRETİLİR.
      Sıraç (2026-09-16): "Donmanın sebebi önceden eklediğim resimlerse onları
      kaldıralım DB'den."
@@ -1044,13 +1065,13 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
      satır/sütun ekleme). Effect içinde: render sırasında ref yazmak React
      Compiler'ın uyardığı bir desen ve gerek yok — klavye olayı her zaman
      bir sonraki boyamadan sonra geliyor. */
-  useEffect(() => { metrics.current = { rowTops, colLefts }; }, [rowTops, colLefts]);
+  useEffect(() => { metrics.current = { rowTops, colLefts, frozenCount, frozenH }; }, [rowTops, colLefts, frozenCount, frozenH]);
 
   /* DÜZENLERKEN KAYDIRMA: satır sanal pencereden düşünce kutu SÖKÜLÜYOR, blur
      olayı gelmiyor ve `editing` takılı kalıyordu — ızgara her tuşu yutuyordu,
      sayfa yenilenene kadar. Hücre pencereden çıktığı an yazılan kaydedilir
      ve düzenleme kapanır. */
-  const editGone = !!editing &&
+  const editGone = !!editing && editing.r >= frozenCount &&
     (editing.r < firstRow || editing.r > lastRow || editing.c < firstCol || editing.c > lastCol);
   useEffect(() => {
     /* fx çubuğundan yazılıyorsa hücre kutusuna gerek yok — dokunma. */
@@ -1261,10 +1282,14 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
           </div>
 
           {/* Satırlar */}
-          {visibleRows.map((r) => {
+          {(() => {
+            /* `pinned`: dondurulmuş satır — yapışkan kabın içinde çizilir, konumu
+               kaba göredir (HEAD_H eklenmez) ve altından geçen satırı örtmesi
+               için zemini doludur. */
+            const renderRow = (r: number, pinned: boolean) => {
             const rh = rowHeight(sheet, r);
             return (
-              <div key={r} className="absolute flex" style={{ top: rowTops.tops[r] + HEAD_H, height: rh, left: 0 }}>
+              <div key={r} className={cn("absolute flex", pinned && "bg-surface")} style={{ top: rowTops.tops[r] + (pinned ? 0 : HEAD_H), height: rh, left: 0 }}>
                 <div
                   onMouseDown={() => setSel({ r1: r, c1: 0, r2: r, c2: sheet.cols - 1 })}
                   onContextMenu={(e) => { e.preventDefault(); setSel({ r1: r, c1: 0, r2: r, c2: sheet.cols - 1 }); setMenu({ x: e.clientX, y: e.clientY, kind: "row", r, c: 0 }); }}
@@ -1546,7 +1571,23 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                 })}
               </div>
             );
-          })}
+            };
+            return (
+              <>
+                {frozenCount > 0 && (
+                  <div className="sticky z-[15]" style={{ top: HEAD_H, height: 0 }}>
+                    {Array.from({ length: frozenCount }, (_, r) => renderRow(r, true))}
+                    <div
+                      aria-hidden
+                      className="pointer-events-none absolute left-0 h-px bg-line-strong shadow-[0_1px_3px_rgba(16,23,28,0.2)]"
+                      style={{ top: frozenH, width: colLefts.total + GUTTER_W }}
+                    />
+                  </div>
+                )}
+                {visibleRows.filter((r) => r >= frozenCount).map((r) => renderRow(r, false))}
+              </>
+            );
+          })()}
         </div>
       </div>
 
