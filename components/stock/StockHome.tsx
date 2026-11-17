@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ChevronRight, Globe, Layers, Store, Warehouse } from "lucide-react";
 import { Tile, TileGrid } from "@/components/ui/TileGrid";
 import { useLiveRefresh } from "@/components/stock/useLiveRefresh";
+import { SiteSync } from "@/components/stock/SiteSync";
 import type { StockLevel, StockLocation } from "@/lib/stock/model";
 
 /**
@@ -17,7 +18,7 @@ import type { StockLevel, StockLocation } from "@/lib/stock/model";
  */
 const ICON = { store: Store, online: Globe, warehouse: Warehouse } as const;
 
-export function StockHome({ locations, levels }: { locations: StockLocation[]; levels: StockLevel[] }) {
+export function StockHome({ locations, levels, canEdit }: { locations: StockLocation[]; levels: StockLevel[]; canEdit: boolean }) {
   useLiveRefresh();
   const productsAt = (locationId: string | null) => {
     const ids = new Set<string>();
@@ -29,6 +30,7 @@ export function StockHome({ locations, levels }: { locations: StockLocation[]; l
 
   return (
     <div className="anim-fade">
+      {canEdit && <SiteSync />}
       <TileGrid>
         {locations.map((l) => (
           <Tile key={l.id} href={`/stock?l=${l.id}`} title={l.name} meta={meta(productsAt(l.id))} icon={ICON[l.kind] ?? Store} />

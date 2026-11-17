@@ -48,6 +48,9 @@ export const MOVEMENT_KINDS: { key: MovementKind; label: string; sign: 1 | -1 | 
   { key: "cikis", label: "Çıkış", sign: -1, tone: "bg-danger/10 text-danger" },
 ];
 
+/** Site eşitlemesinin yazdığı sayım hareketinin notu — kişi değil, site yazdı. */
+export const SITE_NOTE = "Site";
+
 export const movementLabel = (k: string) => MOVEMENT_KINDS.find((m) => m.key === k)?.label ?? k;
 
 export interface StockMovement {

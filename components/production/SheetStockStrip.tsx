@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Package } from "lucide-react";
 import { sortSizes } from "@/lib/stock/model";
+import { formatMoney } from "@/lib/collection/cost";
 
 /**
  * FÖYDE STOK — ürünün eldeki adedi, föyden çıkmadan.
@@ -9,12 +10,16 @@ import { sortSizes } from "@/lib/stock/model";
  * toplayalım… bir arada olması gerekenleri birbiriyle entegre et."
  * Föy ile stok kaydı ÜRÜN KODU üzerinden eşleşir (föydeki "Ürün kodu" =
  * stoktaki kod). Eşleşme varsa yer yer, beden beden eldeki adet burada
- * görünür; tıklayınca Stock'ta o ürün açılır. Stok şimdilik yalnız
- * yöneticiye açık olduğu için bu şerit de yalnız yöneticide çizilir.
+ * görünür; tıklayınca Stock'ta o ürün açılır. Yanında bugüne kadar satılan
+ * adet ve ciro durur — maliyet aynı föyde, satış da burada. Stok şimdilik
+ * yalnız yöneticiye açık olduğu için bu şerit de yalnız yöneticide çizilir.
  */
 export interface SheetStock {
   code: string;
   rows: { location: string; size: string; qty: number }[];
+  /** Bugüne kadar satılan adet ve ciro (₺) — Stock'taki satış raporuyla aynı hesap. */
+  sold: number;
+  revenue: number;
 }
 
 export function SheetStockStrip({ stock }: { stock: SheetStock }) {
@@ -48,8 +53,16 @@ export function SheetStockStrip({ stock }: { stock: SheetStock }) {
           </span>
         ))
       )}
-      <span className="ml-auto tabular-nums text-muted">
-        Toplam <b className="font-semibold text-ink">{total}</b> adet
+      <span className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1 tabular-nums text-muted">
+        {stock.sold > 0 && (
+          <span>
+            Satılan <b className="font-semibold text-ink">{stock.sold}</b>
+            {stock.revenue > 0 && <> · {formatMoney(stock.revenue)}</>}
+          </span>
+        )}
+        <span>
+          Toplam <b className="font-semibold text-ink">{total}</b> adet
+        </span>
       </span>
     </Link>
   );

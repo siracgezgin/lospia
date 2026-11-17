@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle, ArrowDown, ArrowUp, Download, ExternalLink, ImagePlus, Loader2, Plus, Search, Trash2, X,
 } from "lucide-react";
@@ -46,7 +46,7 @@ const LINK_STATUSES: NewsletterStatus[] = ["onayda", "onaylandi"];
 const linkMissing = (b: NewsletterBlock) => blockNeedsLink(b.type) && b.type !== "sosyal" && !b.link.trim();
 
 export function NewsletterWeekEditor({
-  initial, label, canEdit, workspaceId, usedProducts, usedStories,
+  initial, label, canEdit, workspaceId, usedProducts, usedStories, productStock,
 }: {
   initial: NewsletterWeek;
   label: string;
@@ -54,6 +54,8 @@ export function NewsletterWeekEditor({
   workspaceId: string;
   /** Ürün kimliği → daha önce kullanıldığı bülten tarihi. */
   usedProducts: Record<string, string>;
+  /** Site ürün kimliği → panelde eldeki toplam adet (stok kaydı olanlar). */
+  productStock: Record<string, number>;
   /** Story adresi → son 4 haftada kullanıldığı bülten tarihi. */
   usedStories: Record<string, string>;
 }) {
@@ -63,6 +65,9 @@ export function NewsletterWeekEditor({
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const { ask, dialog } = useConfirm();
+  /* Açılışta sayfanın okuduğu adetler; aramada görülen ürünlerinki eklenir. */
+  const [stock, setStock] = useState(productStock);
+  const addStock = useCallback((more: Record<string, number>) => setStock((s) => ({ ...s, ...more })), []);
 
   /* Siteden seçim listeleri — hafta açılınca bir kez. */
   const [stories, setStories] = useState<SiteStory[] | null>(null);
@@ -231,6 +236,8 @@ export function NewsletterWeekEditor({
               workspaceId={workspaceId}
               stories={stories}
               categories={categories}
+              stock={stock}
+              onStock={addStock}
               onEdit={(patch) => editBlock(b.id, patch)}
               onCommitEdit={(patch) => editBlock(b.id, patch, true)}
               onBlurCommit={commitBlocks}
@@ -296,7 +303,7 @@ async function removeUpload(path: string) {
 /* ── Blok kartı ──────────────────────────────────────────────────────────── */
 
 function BlockCard({
-  no, block: b, first, last, canEdit, warnings, workspaceId, stories, categories,
+  no, block: b, first, last, canEdit, warnings, workspaceId, stories, categories, stock, onStock,
   onEdit, onCommitEdit, onBlurCommit, onType, onMove, onRemove,
 }: {
   no: number;
@@ -308,6 +315,8 @@ function BlockCard({
   workspaceId: string;
   stories: SiteStory[] | null;
   categories: SiteCategory[] | null;
+  stock: Record<string, number>;
+  onStock: (_stock: Record<string, number>) => void;
   onEdit: (_p: Partial<NewsletterBlock>) => void;
   onCommitEdit: (_p: Partial<NewsletterBlock>) => void;
   onBlurCommit: () => void;
@@ -407,9 +416,10 @@ function BlockCard({
             <Field label="Başlık"><TextInput {...text("title")} {...enter} /></Field>
             <ChosenProducts
               products={b.products}
+              stock={stock}
               onRemove={canEdit ? (id) => onCommitEdit({ products: b.products.filter((p) => p.id !== id) }) : undefined}
             />
-            {canEdit && <ProductSearch chosen={b.products} onPick={(p) => onCommitEdit({ products: [...b.products, p] })} />}
+            {canEdit && <ProductSearch chosen={b.products} onStock={onStock} onPick={(p) => onCommitEdit({ products: [...b.products, p] })} />}
             <FieldGrid>
               {categoryPick((c) => onCommitEdit({ link: c.url, ref: c.id }))}
               {linkField("Bağlantı")}
@@ -600,7 +610,19 @@ function BlockImage({
 
 /* ── Ürünler ─────────────────────────────────────────────────────────────── */
 
-function ChosenProducts({ products, onRemove }: { products: NewsletterProduct[]; onRemove?: (_id: number) => void }) {
+/** Sitedeki "tükendi" ve panelin kendi adedi — ikisi tek satırda. */
+function ProductStock({ p, stock }: { p: NewsletterProduct; stock: Record<string, number> }) {
+  const n = stock[String(p.id)];
+  if (p.in_stock && n == null) return null;
+  return (
+    <span className="flex flex-wrap items-center gap-x-2 text-[12px]">
+      {!p.in_stock && <span className="font-medium text-danger">Tükendi</span>}
+      {n != null && <span className="tabular-nums text-muted">Stok {n}</span>}
+    </span>
+  );
+}
+
+function ChosenProducts({ products, stock, onRemove }: { products: NewsletterProduct[]; stock: Record<string, number>; onRemove?: (_id: number) => void }) {
   if (!products.length) return null;
   return (
     <ul className="grid gap-2 sm:grid-cols-2">
@@ -617,7 +639,7 @@ function ChosenProducts({ products, onRemove }: { products: NewsletterProduct[];
               <span className="line-clamp-2">{p.name}</span>
               <ExternalLink size={12} className="mt-1 shrink-0 text-subtle" aria-hidden />
             </a>
-            {!p.in_stock && <span className="text-[12px] font-medium text-danger">Tükendi</span>}
+            <ProductStock p={p} stock={stock} />
           </div>
           {onRemove && (
             <button
@@ -636,9 +658,14 @@ function ChosenProducts({ products, onRemove }: { products: NewsletterProduct[];
   );
 }
 
-function ProductSearch({ chosen, onPick }: { chosen: NewsletterProduct[]; onPick: (_p: NewsletterProduct) => void }) {
+function ProductSearch({ chosen, onPick, onStock }: {
+  chosen: NewsletterProduct[];
+  onPick: (_p: NewsletterProduct) => void;
+  onStock: (_stock: Record<string, number>) => void;
+}) {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<NewsletterProduct[] | null>(null);
+  const [hitStock, setHitStock] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const seq = useRef(0);
@@ -653,7 +680,7 @@ function ProductSearch({ chosen, onPick }: { chosen: NewsletterProduct[]; onPick
     if (n !== seq.current) return; // daha yeni bir arama başladı
     setBusy(false);
     if ("error" in res) { setError(res.error); setHits(null); }
-    else { setError(null); setHits(res.products); }
+    else { setError(null); setHits(res.products); setHitStock(res.stock); onStock(res.stock); }
   }
 
   const taken = new Set(chosen.map((p) => p.id));
@@ -697,7 +724,7 @@ function ProductSearch({ chosen, onPick }: { chosen: NewsletterProduct[]; onPick
                 )}
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13.5px] text-ink">{p.name}</span>
-                  {!p.in_stock && <span className="text-[12px] font-medium text-danger">Tükendi</span>}
+                  <ProductStock p={p} stock={hitStock} />
                 </span>
                 {taken.has(p.id) ? <span className="text-[12px] text-muted">Seçili</span> : <Plus size={15} className="shrink-0 text-muted" aria-hidden />}
               </button>

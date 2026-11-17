@@ -9,7 +9,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { useConfirm } from "@/components/ui/useConfirm";
 import { deleteStockMovement } from "@/lib/actions/stock";
 import { StockTabs } from "@/components/stock/StockList";
-import { fmtPrice, MOVEMENT_KINDS, type StockLocation, type StockMovement } from "@/lib/stock/model";
+import { fmtPrice, MOVEMENT_KINDS, SITE_NOTE, type StockLocation, type StockMovement } from "@/lib/stock/model";
 
 /**
  * HAREKETLER — defterin kendisi, en yeni üstte. Stok rakamının NEDEN öyle
@@ -63,7 +63,9 @@ export function StockMovements({
             const meta = [
               new Date(r.created_at).toLocaleString("tr-TR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }),
               locName.get(r.location_id),
-              r.created_by ? names[r.created_by] : null,
+              /* Site eşitlemesi kimin ekranı açıksa onun adına yazılır; o kişi
+                 bir şey yapmadı — ad gösterilmez, not "Site" der. */
+              r.created_by && r.note !== SITE_NOTE ? names[r.created_by] : null,
               r.unit_price != null && (r.kind === "satis" || r.kind === "iade") ? fmtPrice(r.unit_price) : null,
               r.note || null,
             ].filter(Boolean).join(" · ");

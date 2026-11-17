@@ -14,6 +14,7 @@ import {
   type NewsletterBlock, type NewsletterWeek,
 } from "@/lib/newsletter/model";
 
+import { stockBySiteProduct } from "@/lib/stock/queries";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Newsletter Plan" };
 
@@ -98,6 +99,13 @@ export default async function NewsletterPage({
       }
     }
 
+    /* BÜLTEN ↔ STOK: bu haftanın ürünlerinin panelde eldeki adedi. */
+    const current = rows.get(week);
+    const productStock = await stockBySiteProduct(
+      supabase, workspaceId,
+      (current?.blocks ?? []).flatMap((b) => (b.type === "urun" ? b.products.map((p) => p.id) : [])),
+    );
+
     return (
       <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
         <ModulePageHeader
@@ -115,6 +123,7 @@ export default async function NewsletterPage({
           canEdit={canEdit}
           workspaceId={workspaceId}
           usedProducts={usedProducts}
+          productStock={productStock}
           usedStories={usedStories}
         />
       </div>

@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { AppRole } from "@/lib/auth/permissions";
 import { toActionErrorMessage, isMissingSchemaError } from "@/lib/utils/supabase-errors";
 import { decodeEntities, WEBSITE_BASE } from "@/lib/collection/website";
+import { stockBySiteProduct } from "@/lib/stock/queries";
 import {
   defaultBlocks, isMonday, MAX_BLOCKS,
   type NewsletterProduct, type NewsletterWeek,
@@ -130,12 +131,13 @@ type StoreHit = {
 
 export async function searchStoreProducts(
   query: string,
-): Promise<{ ok: true; products: NewsletterProduct[] } | { error: string }> {
+): Promise<{ ok: true; products: NewsletterProduct[]; stock: Record<string, number> } | { error: string }> {
   const q = query.trim();
-  if (q.length < 2) return { ok: true, products: [] };
+  if (q.length < 2) return { ok: true, products: [], stock: {} };
   if (q.length > 100) return { error: "Arama çok uzun." };
   const supabase = await createClient();
-  if (!(await getCtx(supabase))) return { error: AUTH_REQUIRED };
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
 
   const hits = await getJson<StoreHit[]>(
     `${WEBSITE_BASE}/wp-json/wc/store/v1/products?search=${encodeURIComponent(q)}&per_page=20&wmc-currency=USD`,
@@ -143,6 +145,9 @@ export async function searchStoreProducts(
   if ("error" in hits) return hits;
   return {
     ok: true,
+    /* BÜLTEN ↔ STOK: sitedeki "stokta var" bilgisinin yanına panelin kendi
+       adedi (bütün yerlerin toplamı). Stok kaydı olmayan ürün haritada yok. */
+    stock: await stockBySiteProduct(supabase, ctx.workspaceId, hits.map((p) => p.id)),
     products: hits.map((p) => ({
       id: p.id,
       name: decodeEntities(p.name ?? "").trim(),

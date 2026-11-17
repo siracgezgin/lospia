@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Download, FileText, ImagePlus, Loader2, Package, Plus, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { useLiveRefresh } from "@/components/stock/useLiveRefresh";
+import { SiteSync } from "@/components/stock/SiteSync";
 import { Button } from "@/components/ui/Button";
 import { Field, FieldGrid, SelectInput, TextInput } from "@/components/ui/Field";
 import { Overlay } from "@/components/ui/Overlay";
@@ -107,7 +108,8 @@ export function StockList({
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <h2 className="text-lg font-semibold tracking-tight text-ink sm:text-xl">{scopeName}</h2>
         <StockTabs scope={scope} active="stok" />
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+          {canEdit && <SiteSync button={!locationId || locations.find((l) => l.id === locationId)?.kind === "online"} />}
           <ExcelLink href={`/stock/export?l=${scope}&v=stok`} />
           {canEdit && (
             <Button size="sm" onClick={() => setDialog({ type: "product", product: null })}>

@@ -12,6 +12,9 @@ import { fetchSales, isSalesPeriod, summarizeSales } from "@/lib/stock/queries";
 import type { StockLevel, StockLocation, StockProduct } from "@/lib/stock/model";
 
 export const dynamic = "force-dynamic";
+/* Site stoğu eşitlemesi (syncSiteStock) bu sayfadan çağrılır; siteden ~12
+   sayfa okur. Varsayılan süre yetmeyebilir. */
+export const maxDuration = 60;
 export const metadata = { title: "Stock" };
 
 /**
@@ -80,7 +83,7 @@ export default async function StockPage({
     return (
       <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
         <ModulePageHeader title="Stock" />
-        <StockHome locations={locations} levels={levels} />
+        <StockHome locations={locations} levels={levels} canEdit={role !== "viewer"} />
       </div>
     );
   }

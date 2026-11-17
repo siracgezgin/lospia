@@ -118,3 +118,41 @@ export function summarizeSales(rows: SaleRow[]): SalesSummary {
     top: [...products.values()].sort((a, b) => b.sold - a.sold || b.revenue - a.revenue).slice(0, 10),
   };
 }
+
+/* ── Site ürünü → eldeki adet ──────────────────────────────────────────── */
+
+/**
+ * Site ürün kimliği → bütün yerlerdeki toplam adet. Yalnız stok kaydı siteye
+ * bağlı (web_product_id) ürünler döner; kaydı olmayan ürün haritada YOKTUR
+ * (0 değil — "bilinmiyor"). Stok okunamıyorsa (yetki, tablo yok) boş döner:
+ * çağıran ekran stok bilgisi olmadan çalışmaya devam eder.
+ */
+export async function stockBySiteProduct(
+  supabase: Sb, workspaceId: string, siteIds: number[],
+): Promise<Record<string, number>> {
+  const ids = [...new Set(siteIds.filter((n) => Number.isFinite(n)))].slice(0, 300);
+  if (!ids.length) return {};
+  const { data: products, error } = await supabase
+    .from("stock_products")
+    .select("id, web_product_id")
+    .eq("workspace_id", workspaceId)
+    .eq("active", true)
+    .in("web_product_id", ids);
+  if (error || !products?.length) return {};
+  const siteOf = new Map((products as { id: string; web_product_id: number }[]).map((p) => [p.id, String(p.web_product_id)]));
+  const levels = await fetchAllRows<{ product_id: string; qty: number }>((a, b) =>
+    supabase
+      .from("stock_levels")
+      .select("product_id, qty")
+      .eq("workspace_id", workspaceId)
+      .in("product_id", [...siteOf.keys()])
+      .order("product_id")
+      .range(a, b));
+  const out: Record<string, number> = {};
+  for (const siteId of siteOf.values()) out[siteId] ??= 0;
+  for (const l of levels) {
+    const siteId = siteOf.get(l.product_id);
+    if (siteId) out[siteId] += l.qty;
+  }
+  return out;
+}

@@ -5,6 +5,7 @@ import { AccessDenied } from "@/components/modules/AccessDenied";
 import { ProductionSheetEditor } from "@/components/production/ProductionSheetEditor";
 import { getCategoryTree } from "@/lib/collection/category-tree";
 import type { SheetStock } from "@/components/production/SheetStockStrip";
+import { fetchAllRows, summarizeSales, type SaleRow } from "@/lib/stock/queries";
 import type { ProductionSheet, Manufacturer, SheetMaterialWithMaterial, Supplier } from "@/types";
 import type { PickableMaterial } from "@/components/production/SheetBom";
 import type { PortalLinkRow } from "@/components/production/ManufacturerAccess";
@@ -181,16 +182,29 @@ export default async function ProductionSheetPage({
       .limit(1)
       .maybeSingle();
     if (sp) {
-      const [{ data: lv }, { data: locs }] = await Promise.all([
-        supabase.from("stock_levels").select("location_id, size, qty").eq("workspace_id", workspaceId).eq("product_id", (sp as { id: string }).id),
+      const productId = (sp as { id: string }).id;
+      const [{ data: lv }, { data: locs }, sales] = await Promise.all([
+        supabase.from("stock_levels").select("location_id, size, qty").eq("workspace_id", workspaceId).eq("product_id", productId),
         supabase.from("stock_locations").select("id, name, position").eq("workspace_id", workspaceId).order("position"),
+        fetchAllRows<SaleRow>((a, b) =>
+          supabase
+            .from("stock_movements")
+            .select("id, product_id, location_id, size, kind, qty, unit_price, created_at")
+            .eq("workspace_id", workspaceId)
+            .eq("product_id", productId)
+            .in("kind", ["satis", "iade"])
+            .order("created_at", { ascending: false })
+            .range(a, b)),
       ]);
+      const sold = summarizeSales(sales);
       const name = new Map(((locs ?? []) as { id: string; name: string }[]).map((l) => [l.id, l.name]));
       stock = {
         code: (sp as { code: string }).code,
         rows: ((lv ?? []) as { location_id: string; size: string; qty: number }[])
           .filter((r) => r.qty !== 0)
           .map((r) => ({ location: name.get(r.location_id) ?? "", size: r.size, qty: r.qty })),
+        sold: Math.max(0, sold.sold - sold.returned),
+        revenue: Math.max(0, sold.revenue),
       };
     }
   }
