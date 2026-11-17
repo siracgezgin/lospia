@@ -1,5 +1,5 @@
 import { redirectToSignIn } from "@/lib/auth/session-redirect";
-import { requireModuleMember } from "@/lib/modules/context";
+import { requireModuleAdmin } from "@/lib/modules/context";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
 import { SetupRequiredNotice } from "@/components/modules/SetupRequiredNotice";
@@ -27,7 +27,9 @@ export default async function StockPage({
 }: {
   searchParams: Promise<{ l?: string; v?: string }>;
 }) {
-  const { supabase, user, workspaceId, isAdmin, role, gate } = await requireModuleMember();
+  /* Şimdilik yalnız yönetici — Aslı Hanım onaylayınca ekibe açılacak
+     (bkz. registry'deki not ve 20240376). */
+  const { supabase, user, workspaceId, isAdmin, role, gate } = await requireModuleAdmin();
   if (gate === "login") redirectToSignIn();
   if (gate !== "ok" || !workspaceId || !user) return <AccessDenied />;
   const sp = await searchParams;

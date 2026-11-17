@@ -175,7 +175,11 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
     description: "Market 212 İstanbul, Çeşme ve online stok tek yerde — satış, giriş, transfer, sayım.",
     href: "/stock",
     icon: Package,
-    access: "all",
+    /* ŞİMDİLİK YALNIZ YÖNETİCİ (Sıraç, 17.11.2026): "Aslı Hanım görüp
+       onayladıktan sonra diğerlerine açabiliriz." Veri düzeyinde de kapalı
+       (20240376). Açarken: burası "all", sayfa requireModuleMember,
+       lib/actions/stock.ts STOCK_ADMIN_ONLY=false + yeni RLS migration'ı. */
+    access: "admin",
     group: "urun",
   },
   {

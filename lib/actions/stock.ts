@@ -22,6 +22,9 @@ const AUTH_REQUIRED = "Kimlik doğrulama gerekli.";
 const READ_ONLY = "İzleyici rolü stoğu değiştiremez.";
 const ADMIN_ONLY = "Bu işlem yöneticiye açık.";
 const SETUP_PENDING = "Stok için veritabanı güncellemesi bekleniyor (20240373).";
+/** Stok şimdilik yalnız yöneticiye açık (17.11.2026) — ekibe açılırken false yapılır. */
+const STOCK_ADMIN_ONLY = true;
+const NOT_OPEN = "Stok şimdilik yalnız yöneticilere açık.";
 
 type Sb = Awaited<ReturnType<typeof createClient>>;
 
@@ -67,6 +70,7 @@ export async function createStockProduct(input: StockProductInput): Promise<{ ok
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
+  if (STOCK_ADMIN_ONLY && !ctx.isAdmin) return { error: NOT_OPEN };
   if (ctx.role === "viewer") return { error: READ_ONLY };
 
   const { data, error } = await supabase
@@ -88,6 +92,7 @@ export async function updateStockProduct(
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
+  if (STOCK_ADMIN_ONLY && !ctx.isAdmin) return { error: NOT_OPEN };
   if (ctx.role === "viewer") return { error: READ_ONLY };
 
   const { error } = await supabase
@@ -130,6 +135,7 @@ export async function recordStockMovement(input: StockMovementInput): Promise<{ 
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
   if (!ctx) return { error: AUTH_REQUIRED };
+  if (STOCK_ADMIN_ONLY && !ctx.isAdmin) return { error: NOT_OPEN };
   if (ctx.role === "viewer") return { error: READ_ONLY };
 
   /* Eldeki adet — defterden. */
@@ -226,7 +232,9 @@ export async function searchSiteProductsForStock(query: string): Promise<{ ok: t
   if (q.length < 2) return { ok: true, products: [] };
   if (q.length > 100) return { error: "Arama çok uzun." };
   const supabase = await createClient();
-  if (!(await getCtx(supabase))) return { error: AUTH_REQUIRED };
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+  if (STOCK_ADMIN_ONLY && !ctx.isAdmin) return { error: NOT_OPEN };
   try {
     const res = await fetch(
       `${WEBSITE_BASE}/wp-json/wc/store/v1/products?search=${encodeURIComponent(q)}&per_page=12&wmc-currency=USD`,
