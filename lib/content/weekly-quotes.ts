@@ -19,7 +19,11 @@
 // Beşinci turda seçim bize değil kullanıcıya ait: liste elle derlendi, editoryal
 // ölçüt (emek, zanaat, sadelik, estetik, yaratıcılık, kültür, dönüşüm,
 // sürdürülebilirlik) kaynak dosyanın başında yazılı. Bu yüzden burada söz
-// EKLENMEZ, ÇIKARILMAZ ve DÜZENLENMEZ; değişiklik önce o dosyada yapılır.
+// EKLENMEZ ve DÜZENLENMEZ; değişiklik önce o dosyada yapılır.
+//
+// ALTINCI TUR (18.11.2026): Sıraç karta çıkan bir sözü "alakasız, boş" buldu
+// ve benzerlerinin kaldırılmasını istedi. Otuz beş söz karttan çekildi
+// (aşağıda OFF_CARD) — metinleri burada durur, rotasyona girmezler.
 //
 // Kaynak notu editoryal doğrulama içindir, arayüzde gösterilmez (kaynak
 // dosyanın kendi kuralı: "Kart kullanım standardı: Alıntı + isim").
@@ -677,16 +681,52 @@ function spreadByAuthor(quotes: WeeklyQuote[]): WeeklyQuote[] {
   return out;
 }
 
-/** Haftalık rotasyon sırası. Yüz sözün TAMAMI gösterilir — kaynak listesi
- *  zaten editoryal olarak seçilmiş, burada ikinci bir eleme yapılmaz. */
-export const APPROVED_WEEKLY_QUOTES: WeeklyQuote[] = spreadByAuthor(WEEKLY_QUOTES);
+/**
+ * KARTA ÇIKMAYAN SÖZLER (Sıraç, 18.11.2026).
+ *
+ * "‘Sanatı birkaç kişi için istemiyorum; eğitimi ya da…’ gibi alakasız boş
+ * sözleri kaldır." Şikâyetin iki kökü vardı, ikisi de burada kapanır:
+ *
+ * 1. SIĞMAYAN SÖZ YARIDA KESİLİYORDU. Kart kısa ekranda üç satır çizer;
+ *    sığmayan söz "…" ile biter ve geriye anlamsız bir yarım cümle kalır.
+ *    Aşağıdaki dokuz söz, kartın gerçek genişliğinde (ve %12 dar payla)
+ *    ölçüldüğünde dört satır tutuyor — karta hiç çıkmaz. YENİ SÖZ EKLERKEN
+ *    aynı ölçüm yapılır; karakter sayısı yetmez (88 karakter sığarken 78
+ *    karakter sığmayabiliyor — harf genişliği).
+ *
+ * 2. İŞLE İLGİSİ OLMAYAN SÖZ. Kartı bir atölye/ofis ekibi iş başında okur.
+ *    Emeğe, zanaata, sadeliğe, özene, öğrenmeye, karaktere dokunan söz kalır.
+ *    Çıkanlar: sanat siyaseti · aşk, keder, acı · tasavvuf ve doğa imgesi ·
+ *    yazarlığa özel öğüt · bağlamı olmadan anlaşılmayan parça · intikam,
+ *    hakaret, ölüm.
+ *
+ * Sözler DOSYADAN SİLİNMEDİ (kaynak liste Sıraç'ın derlemesi); yalnız kartın
+ * rotasyonuna girmezler. Birini geri almak = numarasını buradan çıkarmak.
+ */
+const TOO_LONG_FOR_CARD = ["001", "002", "003", "006", "015", "021", "026", "028", "074"];
+const OFF_TOPIC = [
+  "002", "003",                      // sanat kimin için — siyaset
+  "009", "010", "068", "069",        // bağlamı olmadan yarım kalan parça
+  "011", "073",                      // yazarlığa özel öğüt
+  "014", "016", "022", "023", "024", "100", // soyut / tasavvufi
+  "015", "025", "026", "027", "099", // aşk, keder, acı, ölüm
+  "028", "030", "076", "082", "086", "092", // doğa imgesi
+  "038", "081",                      // intikam, hakaret
+  "046", "075", "078", "095",        // tek başına bir şey söylemeyen
+];
+const OFF_CARD = new Set([...TOO_LONG_FOR_CARD, ...OFF_TOPIC].map((n) => `quote_${n}`));
+
+/** Haftalık rotasyon sırası — karta çıkan sözler. */
+export const APPROVED_WEEKLY_QUOTES: WeeklyQuote[] = spreadByAuthor(
+  WEEKLY_QUOTES.filter((q) => !OFF_CARD.has(q.id)),
+);
 
 /**
  * Deterministik haftalık söz seçimi.
  *
  * Sabit bir referans haftasından itibaren geçen tam hafta sayısına göre modulo
  * ile seçer. Böylece aynı hafta boyunca herkes aynı sözü görür, sayfa
- * yenilenince söz değişmez, havuz bitince başa döner (yüz söz ≈ iki yıl).
+ * yenilenince söz değişmez, havuz bitince başa döner (65 söz ≈ 15 ay).
  */
 export function getWeeklyQuote(now: Date = new Date()): WeeklyQuote {
   const approved = APPROVED_WEEKLY_QUOTES;

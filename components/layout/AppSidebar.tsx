@@ -187,13 +187,17 @@ export function AppSidebar({
            logo tamamen kayboldu ("sen bozmuşsun"). Doğrusu tersi: eşik eski
            yerinde (47.5rem), kısa ekranda (<60rem) menü satırları ve kart
            biraz SIKIŞIR, ikisi de sığar. */
+        /* SÖZ YARIDA KESİLMEZ (18.11.2026). Kısa ekranda kart iki satıra
+           inmişti; uzun söz "…" ile bitiyor, geriye anlamsız bir yarım cümle
+           kalıyordu. Kart en az ÜÇ satır çizer ve havuzda üç satıra sığmayan
+           söz yoktur (bkz. weekly-quotes.ts → TOO_LONG_FOR_CARD). */
         <div className="hidden shrink-0 space-y-2.5 px-3 pb-3 pt-1 [@media(min-height:47.5rem)]:block [@media(max-height:60rem)]:space-y-1.5 [@media(max-height:60rem)]:pb-2">
           <div className="rounded-card border border-hairline bg-surface-sunken px-3.5 py-3 [@media(max-height:60rem)]:py-2">
             <p className="select-none text-[12px] font-semibold uppercase tracking-[0.08em] text-brand-strong">
               Haftanın Sözü
             </p>
             <p
-              className="mt-1.5 line-clamp-4 text-[12.5px] italic leading-[1.55] text-ink/80 [@media(max-height:60rem)]:mt-1 [@media(max-height:60rem)]:line-clamp-2"
+              className="mt-1.5 line-clamp-4 text-[12.5px] italic leading-[1.55] text-ink/80 [@media(max-height:60rem)]:mt-1 [@media(max-height:60rem)]:line-clamp-3"
               title={`${weeklyQuote.quoteTr} — ${weeklyQuote.author}`}
             >
               “{weeklyQuote.quoteTr}”

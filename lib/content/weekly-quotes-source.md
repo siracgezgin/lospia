@@ -5,6 +5,8 @@
 
 > **Çeviri notu:** Yabancı dildeki alıntılar, kartta doğal ve kısa okunabilmesi için kaynak metne anlam sadakati gözetilerek Türkçeleştirilmiştir. Bunlar belirli bir yayınevinin Türkçe baskısından birebir alıntı değildir.
 
+> **18.11.2026 — karta çıkmayanlar.** Şu sözler listede durur ama kartta gösterilmez (karta sığmadığı ya da işle ilgisi olmadığı için): 001, 002, 003, 006, 009, 010, 011, 014, 015, 016, 021, 022, 023, 024, 025, 026, 027, 028, 030, 038, 046, 068, 069, 073, 074, 075, 076, 078, 081, 082, 086, 092, 095, 099, 100. Birini geri almak için numarası `lib/content/weekly-quotes.ts` içindeki listeden çıkarılır.
+
 **Arayüz standardı:** Kartta yalnızca söz + isim gösterilsin. `Kaynak notu` editoryal kontrol içindir; kullanıcı arayüzünde gösterilmesi gerekmez.
 
 ---
