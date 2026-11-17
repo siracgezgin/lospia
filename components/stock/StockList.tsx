@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ImagePlus, Loader2, Package, Plus, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { useLiveRefresh } from "@/components/stock/useLiveRefresh";
 import { Button } from "@/components/ui/Button";
 import { Field, FieldGrid, SelectInput, TextInput } from "@/components/ui/Field";
 import { Overlay } from "@/components/ui/Overlay";
@@ -70,6 +71,7 @@ export function StockList({
   canEdit: boolean;
   workspaceId: string;
 }) {
+  useLiveRefresh();
   const [query, setQuery] = useState("");
   /* Bir yerde varsayılan: o yere girmiş ürünler. "Tüm ürünler" başka yerdeki
      ürüne buradan giriş yapabilmek için. */

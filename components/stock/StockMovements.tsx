@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { History, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { useLiveRefresh } from "@/components/stock/useLiveRefresh";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useConfirm } from "@/components/ui/useConfirm";
 import { deleteStockMovement } from "@/lib/actions/stock";
@@ -27,6 +28,7 @@ export function StockMovements({
   names: Record<string, string>;
   isAdmin: boolean;
 }) {
+  useLiveRefresh();
   const router = useRouter();
   const { ask, dialog } = useConfirm();
   const [error, setError] = useState<string | null>(null);

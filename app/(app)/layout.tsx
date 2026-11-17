@@ -5,7 +5,9 @@ import { createClient, getAuthUser, getMembership, getProfile } from "@/lib/supa
 import { getAppBrandForHost } from "@/lib/branding";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { AppHeader } from "@/components/layout/AppHeader";
+import { Suspense } from "react";
 import { MobileNav } from "@/components/layout/MobileNav";
+import { NavMemory } from "@/components/layout/NavMemory";
 import { pickDisplayEmail } from "@/lib/utils/display-identity";
 import { AlertTriangle, Lock } from "lucide-react";
 import type { Workspace, Notification, WorkspaceRole } from "@/types";
@@ -189,6 +191,9 @@ export default async function AppLayout({
         {/* pb-bottom-nav keeps content clear of the fixed mobile bottom nav (incl.
             iOS safe-area inset); overflow-x-hidden stops stray wide children from
             producing a horizontal page scroll on phones. */}
+        {/* Sorgu YOK — yalnız tarayıcıda çalışan, hiçbir şey çizmeyen bir
+            izleyici: "geri" üst sayfanın son görünümüne dönebilsin diye. */}
+        <Suspense fallback={null}><NavMemory /></Suspense>
         <main className="flex-1 overflow-y-auto overflow-x-hidden pb-bottom-nav">
           {noAccess ? (
             <div className="flex min-h-full items-center justify-center p-6 sm:p-8">

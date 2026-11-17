@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { routeCrumbs, routeLabelOf } from "@/lib/nav/breadcrumbs";
 import { parentPathOf } from "@/lib/nav/parent-path";
+import { useRememberedViews } from "@/lib/nav/nav-memory";
 
 /**
  * Sayfanın hiyerarşi satırı — artık "← Geri" DEĞİL, TAM ZİNCİR.
@@ -30,6 +31,10 @@ export function BackLink({
   href?: string;
 }) {
   const pathname = usePathname();
+  /* Üst sayfaya dönerken oradaki SON görünüme (kategori, yer, klasör) dön —
+     bkz. lib/nav/nav-memory.ts. Sorgulu elle hedef (`?from=`) bundan önce gelir. */
+  const views = useRememberedViews();
+  const resume = (target: string) => (target.includes("?") ? target : views[target] ?? target);
 
   /* Elle hedef verildiyse iki halkalı basit bir zincir kurulur: verilen üst +
      bulunulan sayfa. Türetme kuralı bunu bilemez, çağıran bilir. */
@@ -37,11 +42,11 @@ export function BackLink({
     const parentLabel = routeLabelOf(href);
     const selfLabel = routeLabelOf(pathname);
     if (!parentLabel || !selfLabel) return null;
-    return <Breadcrumbs items={[{ label: parentLabel, href }, { label: selfLabel }]} />;
+    return <Breadcrumbs items={[{ label: parentLabel, href: resume(href) }, { label: selfLabel }]} />;
   }
 
   /* Üstü olmayan sayfada çizecek bir şey yok — erken çıkış, boş <nav>
      oluşmasın. */
   if (!parentPathOf(pathname)) return null;
-  return <Breadcrumbs items={routeCrumbs(pathname)} />;
+  return <Breadcrumbs items={routeCrumbs(pathname).map((c) => (c.href ? { ...c, href: resume(c.href) } : c))} />;
 }

@@ -2,6 +2,7 @@
 
 import { Globe, Layers, Store, Warehouse } from "lucide-react";
 import { Tile, TileGrid } from "@/components/ui/TileGrid";
+import { useLiveRefresh } from "@/components/stock/useLiveRefresh";
 import type { StockLevel, StockLocation } from "@/lib/stock/model";
 
 /**
@@ -11,6 +12,7 @@ import type { StockLevel, StockLocation } from "@/lib/stock/model";
 const ICON = { store: Store, online: Globe, warehouse: Warehouse } as const;
 
 export function StockHome({ locations, levels }: { locations: StockLocation[]; levels: StockLevel[] }) {
+  useLiveRefresh();
   const productsAt = (locationId: string | null) => {
     const ids = new Set<string>();
     for (const l of levels) if (l.qty > 0 && (!locationId || l.location_id === locationId)) ids.add(l.product_id);
