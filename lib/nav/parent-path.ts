@@ -37,7 +37,7 @@ import { ROUTE_OWNER } from "@/lib/nav/app-nav";
 const ROOTS = new Set([
   "/home", "/planning", "/board", "/list",
   "/collection", "/documents", "/crm",
-  "/modules", "/admin-board", "/settings", "/finance", "/profile",
+  "/modules", "/admin-board", "/settings", "/profile",
 ]);
 
 /**

@@ -154,8 +154,6 @@ export const ROUTE_OWNER: ReadonlyArray<readonly [prefix: string, owner: string]
      Eşleme olmadan masaüstünde hiçbir satır, telefonda ise "Menu" sekmesi de
      yanmıyordu (menuActive activeHref'e bağlı). */
   ["/activity", "/settings"],
-  // Finance'in menü satırı yok (dizinden açılır); yönetici yüzeyi → Settings yanar.
-  ["/finance", "/settings"],
   ["/archive", "/settings"],
   ["/trash", "/settings"],
 ];

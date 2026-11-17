@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Pencil, Info, Loader2, Check, AlertCircle, RotateCw, Download, Copy, Trash2, CloudOff, Maximize2, Minimize2,
@@ -124,6 +124,29 @@ export function SheetDetailView({
      kalmaz, yalnız tarayıcı çubuğu görünür kalır. */
   const [fullscreen, setFullscreen] = useState(false);
   const fsRef = useRef<HTMLDivElement>(null);
+
+  /* TABLO EKRANIN ALTINA KADAR İNER (18.11.2026: "Excel neden yarım çıkıyor").
+     Yükseklik sabit bir çıkarmayla (100dvh − 17.5rem) hesaplanıyordu; üstteki
+     satırlar o kadar yer tutmadığı için tablonun altında ~110 piksel boş
+     kalıyor, ekranda üç-dört satır görünüyordu. Masaüstünde (alt gezinme
+     yok, ≥768 px) kabın üst kenarı ÖLÇÜLÜR ve kalan yüksekliğin tamamı
+     verilir; uyarı şeridi çıkınca (üst kap büyür) ya da pencere değişince
+     yeniden ölçülür.
+     Telefonda sınıftaki sabit hesap geçerli kalır (alt gezinme payı). */
+  useLayoutEffect(() => {
+    const el = fsRef.current;
+    if (!el) return;
+    const fit = () => {
+      if (fullscreen || !window.matchMedia("(min-width: 768px)").matches) { el.style.height = ""; return; }
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      el.style.height = `${Math.max(360, window.innerHeight - top - 16)}px`;
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    const ro = typeof ResizeObserver !== "undefined" && el.parentElement ? new ResizeObserver(fit) : null;
+    if (ro && el.parentElement) ro.observe(el.parentElement);
+    return () => { window.removeEventListener("resize", fit); ro?.disconnect(); };
+  }, [fullscreen]);
 
   const enterFullscreen = useCallback(() => {
     setFullscreen(true);

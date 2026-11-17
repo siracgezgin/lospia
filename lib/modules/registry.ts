@@ -21,7 +21,7 @@
  */
 
 import type { LucideIcon } from "lucide-react";
-import { Archive, Boxes, Calculator, CalendarRange, Contact, FolderOpen, HandCoins, Kanban, LayoutDashboard, List, Mail, Package, ScrollText, Settings, ShieldCheck, Target, Trash2, Wallet } from "lucide-react";
+import { Archive, Boxes, Calculator, CalendarRange, Contact, FolderOpen, HandCoins, Kanban, LayoutDashboard, List, Mail, Package, ScrollText, Settings, ShieldCheck, Target, Trash2 } from "lucide-react";
 
 /** Kim GÖRÜR: "all" = tüm üyeler (düzenleme yetkisi ekran içinde isAdmin ile
  *  daralır — "herkes görsün, yönetici müdahale etsin"), "admin" = yalnız
@@ -222,15 +222,9 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
     access: "admin",
     group: "yonetim",
   },
-  {
-    key: "finance",
-    title: "Finance",
-    description: "Ödeme takibi — kime, ne kadar, ne zaman.",
-    href: "/finance",
-    icon: Wallet,
-    access: "admin",
-    group: "yonetim",
-  },
+  /* Finance KALDIRILDI (Sıraç, 17–18.11.2026: "Finance kısmı gereksiz, boşa
+     düştü… bu hâlen var"). Ödemeler Collection → Payment Table'da izleniyor;
+     /finance oraya yönlenir. `finance_payments` tablosu ve yedeği DURUR. */
   {
     key: "activity",
     title: "Activity Log",

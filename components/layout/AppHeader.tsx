@@ -54,7 +54,6 @@ const PAGE_TITLES: { match: (p: string) => boolean; title: string }[] = [
   { match: (p) => p.startsWith("/collection/siparis"), title: "Order Review" },
   { match: (p) => p.startsWith("/collection"), title: "Collection" },
   { match: (p) => p.startsWith("/production"), title: "Production Sheet" },
-  { match: (p) => p.startsWith("/finance"), title: "Finance" },
   { match: (p) => p.startsWith("/modules"), title: "Operation Modules" },
   { match: (p) => p.startsWith("/documents"), title: "AF Teamwork" },
   { match: (p) => p.startsWith("/sheets"), title: "AF Teamwork" },

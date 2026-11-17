@@ -42,7 +42,8 @@ app/
     dashboard/          analytics ("Raporlar")
     collection/         Koleksiyon: föy tarayıcı + maliyet (/collection/maliyet)
     production/[id]/    Üretim Föyü editörü (+ XLSX export routes)
-    finance/            ödeme takibi (admin-only, RLS dahil)
+    finance/            KALDIRILDI (18.11.2026) — /collection/odeme'ye yönlenir;
+                        finance_payments tablosu ve yedeği durur
     modules/            Operasyon Modülleri hub (Çekirdek + departman kartları)
     crm/ creative/      contacts + kreatif link registry (admin)
     documents/ sheets/ library/     AF Teamwork (documents = giriş; sheets ve

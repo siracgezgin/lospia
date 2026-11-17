@@ -22,7 +22,7 @@
  *  • Geri al/ileri al: kitap anlık görüntüsü yığını (hücreler seyrek, ucuz).
  */
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight,
   Undo2, Redo2, Sigma, Plus, WrapText,
@@ -42,6 +42,7 @@ import {
 } from "@/lib/sheets/model";
 import { evaluateSheet, isError, parseNumber, shiftFormula, type Scalar } from "@/lib/sheets/formula";
 import { alignOf, formatValue, NUMBER_FORMAT_LABELS } from "@/lib/sheets/format";
+import { fitRowHeights, fontsReady, fontsReadyOnServer, subscribeFontsReady } from "@/lib/sheets/autofit";
 
 export interface SheetEditorApi {
   getSnapshot: () => WorkbookSnapshot;
@@ -247,6 +248,20 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
   const values = evaluated.values;
   const valueAt = useCallback((r: number, c: number): Scalar => values.get(key(r, c)) ?? "", [values]);
 
+  /* SATIR İÇERİĞE GÖRE UZAR (bkz. lib/sheets/autofit.ts). Kayıtlı yükseklik
+     alt sınır; kaydırılan metin sığmıyorsa satır gerektiği kadar çizilir.
+     Ölçüm yazı tipi yüklendikten sonra, yalnız tarayıcıda yapılır. */
+  const measurable = useSyncExternalStore(subscribeFontsReady, fontsReady, fontsReadyOnServer);
+  const fitted = useMemo(
+    () => (measurable
+      ? fitRowHeights(sheet, (r, c, cell) => formatValue(values.get(key(r, c)) ?? "", cell.s))
+      : new Map<number, number>()),
+    [measurable, sheet, values],
+  );
+  const rowH = useCallback((r: number) => Math.max(rowHeight(sheet, r), fitted.get(r) ?? 0), [sheet, fitted]);
+  const rowHRef = useRef(rowH);
+  useEffect(() => { rowHRef.current = rowH; }, [rowH]);
+
   // ── Değişiklik kaydı ──────────────────────────────────────────────────────
   const commitWb = useCallback((next: WorkbookSnapshot) => {
     if (readOnly) return;
@@ -324,7 +339,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
        kullanıcı hiçbir şey olmadığını görüyordu. Doğru konum, ızgaranın
        kendi çiziminde kullandığı `rowTops` tablosunda duruyor. */
     const top = metrics.current.rowTops.tops[rr] ?? rr * ROW_H;
-    const h = rowHeight(g, rr);
+    const h = rowHRef.current(rr);
     /* Dondurulmuş satırların ALTINDA kalan hücre de "görünmüyor" sayılır. */
     const pinned = rr < metrics.current.frozenCount ? 0 : metrics.current.frozenH;
     if (rr < metrics.current.frozenCount) { /* her zaman ekranda */ }
@@ -923,9 +938,9 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
   const rowTops = useMemo(() => {
     const tops: number[] = [];
     let y = 0;
-    for (let r = 0; r < sheet.rows; r++) { tops.push(y); y += rowHeight(sheet, r); }
+    for (let r = 0; r < sheet.rows; r++) { tops.push(y); y += rowH(r); }
     return { tops, total: y };
-  }, [sheet]);
+  }, [sheet, rowH]);
 
   const firstRow = useMemo(() => {
     const target = scrollTop - OVERSCAN_PX;
@@ -1287,7 +1302,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                kaba göredir (HEAD_H eklenmez) ve altından geçen satırı örtmesi
                için zemini doludur. */
             const renderRow = (r: number, pinned: boolean) => {
-            const rh = rowHeight(sheet, r);
+            const rh = rowH(r);
             return (
               <div key={r} className={cn("absolute flex", pinned && "bg-surface")} style={{ top: rowTops.tops[r] + (pinned ? 0 : HEAD_H), height: rh, left: 0 }}>
                 <div
@@ -1305,7 +1320,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                   {r + 1}
                   {!readOnly && (
                   <span
-                    onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); resizeRef.current = { kind: "row", i: r, start: e.clientY, startSize: rowHeight(sheetRef.current, r) }; }}
+                    onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); resizeRef.current = { kind: "row", i: r, start: e.clientY, startSize: rowHRef.current(r) }; }}
                     style={{ touchAction: "none" }}
                     title={`${r + 1}. satır yüksekliği`}
                     className="absolute bottom-0 left-0 h-2.5 w-full cursor-row-resize hover:bg-brand/40"
@@ -1343,7 +1358,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                     ? Array.from({ length: mg.rect.c2 - mg.rect.c1 + 1 }, (_, i) => colWidth(sheet, mg.rect.c1 + i)).reduce((a, b) => a + b, 0)
                     : colWidth(sheet, c);
                   const h = mg
-                    ? Array.from({ length: mg.rect.r2 - mg.rect.r1 + 1 }, (_, i) => rowHeight(sheet, mg.rect.r1 + i)).reduce((a, b) => a + b, 0)
+                    ? Array.from({ length: mg.rect.r2 - mg.rect.r1 + 1 }, (_, i) => rowH(mg.rect.r1 + i)).reduce((a, b) => a + b, 0)
                     : rh;
 
                   const isEditing = editing?.r === r && editing?.c === c;
@@ -1419,7 +1434,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                         ).reduce((a, b) => a + b, 0),
                         h: Array.from(
                           { length: Math.max(1, cell.img.rs ?? 1) },
-                          (_, i) => rowHeight(sheet, r + i),
+                          (_, i) => rowH(r + i),
                         ).reduce((a, b) => a + b, 0),
                       }
                     : null;

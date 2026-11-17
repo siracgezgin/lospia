@@ -1,45 +1,15 @@
+import { redirect } from "next/navigation";
 
-import { redirectToSignIn } from "@/lib/auth/session-redirect";
-import { AccessDenied } from "@/components/modules/AccessDenied";
-import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
-import { SetupRequiredNotice } from "@/components/modules/SetupRequiredNotice";
-import { maybeDatabaseSetupRequired } from "@/lib/utils/supabase-errors";
-import { requireModuleAdmin } from "@/lib/modules/context";
-import { FinanceView } from "@/components/finance/FinanceView";
-import type { FinancePayment } from "@/types";
-
-export const dynamic = "force-dynamic";
-export const metadata = { title: "Finance" };
-
-// Finans — Ödeme Takibi. Excel "Finans Ödeme Tablo" sekmesinin sistemdeki
-// karşılığı; okuma dahil admin-only (RLS + sayfa kapısı).
-export default async function FinancePage() {
-  const { supabase, workspaceId, gate } = await requireModuleAdmin();
-  if (gate === "login") redirectToSignIn();
-  if (gate !== "ok" || !workspaceId) return <AccessDenied />;
-
-  const res = await supabase
-    .from("finance_payments")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .order("status", { ascending: true }) // bekliyor önce
-    .order("due_date", { ascending: true, nullsFirst: false })
-    .order("created_at", { ascending: false });
-
-  const setup = maybeDatabaseSetupRequired(res.error);
-  if (setup.setupRequired) {
-    /* Uyarı ekranı — dar kolon serbest (bilgi ekranı). */
-    return (
-      <div className="mx-auto w-full max-w-3xl px-4 py-4 sm:px-6 lg:px-8">
-        <ModulePageHeader title="Finance" />
-        <SetupRequiredNotice
-          variant="block"
-          title="Finans tablosu henüz oluşturulmadı"
-          message={setup.message ?? "Finans için veritabanı güncellemesi bekleniyor."}
-        />
-      </div>
-    );
-  }
-
-  return <FinanceView payments={(res.data ?? []) as unknown as FinancePayment[]} />;
+/**
+ * FINANCE KALDIRILDI (Sıraç, 17–18.11.2026: "Finance kısmı gereksiz, boşa
+ * düştü… bu hâlen var"). Ayrı bir ödeme ekranı ikinci bir doğruydu; ödemeler
+ * Collection → Payment Table'da izleniyor. Eski adres (yer imi, bildirim)
+ * boşa düşmesin diye oraya yönlenir.
+ *
+ * VERİ SİLİNMEDİ: `finance_payments` tablosu, RLS'i ve yedekteki yeri durur
+ * (lib/backup/collect.ts). Eski ekranın bileşeni (components/finance) ve
+ * eylemleri (lib/actions/finance.ts) artık hiçbir yerden çağrılmıyor.
+ */
+export default function FinancePage() {
+  redirect("/collection/odeme");
 }
