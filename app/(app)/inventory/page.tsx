@@ -1,8 +1,6 @@
 import { redirect } from "next/navigation";
 
-// Stok/kumaş görünürlüğü bugün Koleksiyon & Üretim föylerinde yaşıyor;
-// ayrı bir stok vitrini yok. Gerçek stok hareketi modülü veri ihtiyacı
-// doğduğunda açılır (isim-only modül bırakmama kararı).
+// Eski adres — stok artık kendi modülünde (20240373).
 export default function InventoryPage() {
-  redirect("/collection");
+  redirect("/stock");
 }

@@ -130,6 +130,9 @@ export const ROUTE_OWNER: ReadonlyArray<readonly [prefix: string, owner: string]
   ["/sheets", "/documents"],
   // Newsletter Plan da AF Teamwork'ün kutucuğu (06.11.2026).
   ["/newsletter", "/documents"],
+  // Stock'un menü satırı yok (hub'dan açılır); ürünle ilgili olduğu için
+  // Collection yanar.
+  ["/stock", "/collection"],
   // Üretim Föyü editörü Koleksiyon'dan açılır; kendi menü satırı yoktur.
   ["/production", "/collection"],
   /* Eski Order Review sayfaları — kayıtlar föylere taşınana kadar adresle
