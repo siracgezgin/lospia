@@ -128,14 +128,14 @@ export function AppSidebar({
       <nav
         aria-label="Ana gezinme"
         className={cn(
-          "flex-1 overflow-y-auto overflow-x-hidden py-3",
+          "flex-1 overflow-y-auto overflow-x-hidden py-3 [@media(max-height:60rem)]:py-2",
           collapsed ? "px-2" : "px-2.5",
         )}
       >
         {sections.map((section, i) => (
-          <div key={section.title} className={i > 0 ? "mt-4 pt-4 border-t border-hairline" : ""}>
+          <div key={section.title} className={i > 0 ? "mt-4 border-t border-hairline pt-4 [@media(max-height:60rem)]:mt-2 [@media(max-height:60rem)]:pt-2" : ""}>
             {collapsed ? null : (
-              <p className="mb-1.5 px-2.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle select-none">
+              <p className="mb-1.5 px-2.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-subtle select-none [@media(max-height:60rem)]:mb-0.5">
                 {section.title}
               </p>
             )}
@@ -156,7 +156,7 @@ export function AppSidebar({
             İÇİNDE değil ama listenin AKIŞINDA: bölümler arası ayracın aynısıyla
             (mt-4 pt-4) son bölümün hemen altında durur. Menü uzasa da kısalsa
             da satır yerinden oynamaz; mobil menüde de dizilim böyledir. */}
-        <div className="mt-4 border-t border-hairline pt-4">
+        <div className="mt-4 border-t border-hairline pt-4 [@media(max-height:60rem)]:mt-2 [@media(max-height:60rem)]:pt-2">
           <SidebarLink
             item={NAV_DIRECTORY}
             active={NAV_DIRECTORY.href === activeHref}
@@ -181,21 +181,19 @@ export function AppSidebar({
           YAZAR DA YAZAR: atıfsız bir söz fal kağıdı gibi okunuyordu. Sözü
           anlamlı kılan, kimin söylediği. */}
       {!collapsed && (
-        /* EŞİK ROLE GÖRE: yöneticinin menüsü üç satır daha uzun. Tek eşik
-           (47.5rem) menü kısayken ayarlanmıştı; satırlar eklendikçe 900 px'lik
-           ekranda kart "Operation Modules"ün üstüne biniyordu (17.11.2026). */
-        <div
-          className={cn(
-            "hidden shrink-0 space-y-2.5 px-3 pb-3 pt-1",
-            isAdmin ? "[@media(min-height:60rem)]:block" : "[@media(min-height:51rem)]:block",
-          )}
-        >
-          <div className="rounded-card border border-hairline bg-surface-sunken px-3.5 py-3">
+        /* KART VE LOGO GÖRÜNÜR KALIR; SIKIŞAN MENÜ OLUR (17.11.2026).
+           Menü uzayınca kart "Operation Modules"ün üstüne biniyordu. İlk
+           düzeltme kartın eşiğini yükseltmekti — Sıraç'ın ekranında kart ve
+           logo tamamen kayboldu ("sen bozmuşsun"). Doğrusu tersi: eşik eski
+           yerinde (47.5rem), kısa ekranda (<60rem) menü satırları ve kart
+           biraz SIKIŞIR, ikisi de sığar. */
+        <div className="hidden shrink-0 space-y-2.5 px-3 pb-3 pt-1 [@media(min-height:47.5rem)]:block [@media(max-height:60rem)]:space-y-1.5 [@media(max-height:60rem)]:pb-2">
+          <div className="rounded-card border border-hairline bg-surface-sunken px-3.5 py-3 [@media(max-height:60rem)]:py-2">
             <p className="select-none text-[12px] font-semibold uppercase tracking-[0.08em] text-brand-strong">
               Haftanın Sözü
             </p>
             <p
-              className="mt-1.5 line-clamp-4 text-[12.5px] italic leading-[1.55] text-ink/80"
+              className="mt-1.5 line-clamp-4 text-[12.5px] italic leading-[1.55] text-ink/80 [@media(max-height:60rem)]:mt-1 [@media(max-height:60rem)]:line-clamp-2"
               title={`${weeklyQuote.quoteTr} — ${weeklyQuote.author}`}
             >
               “{weeklyQuote.quoteTr}”
@@ -208,7 +206,7 @@ export function AppSidebar({
             </p>
           </div>
 
-          <div className="flex justify-center border-t border-hairline pb-1 pt-4">
+          <div className="flex justify-center border-t border-hairline pb-1 pt-4 [@media(max-height:60rem)]:pb-0 [@media(max-height:60rem)]:pt-2.5">
             <img
               src={brand.logo}
               alt={brand.name}
@@ -259,7 +257,7 @@ function SidebarLink({
       className={cn(
         "group relative flex items-center gap-2.5 rounded-lg text-[13.5px] transition-colors duration-150 ease-standard",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring",
-        collapsed ? "justify-center px-0 py-2.5" : "px-2.5 py-[9px]",
+        collapsed ? "justify-center px-0 py-2.5" : "px-2.5 py-[9px] [@media(max-height:60rem)]:py-[6px]",
         active
           ? "bg-brand-soft font-semibold text-brand-strong"
           : cn(
