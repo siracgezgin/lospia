@@ -7,8 +7,8 @@ import { redirect } from "next/navigation";
  * boşa düşmesin diye oraya yönlenir.
  *
  * VERİ SİLİNMEDİ: `finance_payments` tablosu, RLS'i ve yedekteki yeri durur
- * (lib/backup/collect.ts). Eski ekranın bileşeni (components/finance) ve
- * eylemleri (lib/actions/finance.ts) artık hiçbir yerden çağrılmıyor.
+ * (lib/backup/collect.ts). Eski ekranın bileşeni ve eylemleri silindi
+ * (18.11.2026); git geçmişinde durur.
  */
 export default function FinancePage() {
   redirect("/collection/odeme");
