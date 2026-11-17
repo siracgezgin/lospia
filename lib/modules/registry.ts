@@ -168,7 +168,7 @@ export const MODULE_DIRECTORY: ModuleEntry[] = [
   },
   /* STOCK — üç yerin stoğu tek yerde (9.11.2026, Aslı Hanım: "çok önemli").
      Eski stok programının (Dynamics) defter mantığı: her işlem bir hareket,
-     eldeki adet hareketlerin toplamı. Sol menüde satırı yok. */
+     eldeki adet hareketlerin toplamı. Sol menüde Product & Office altında. */
   {
     key: "stock",
     title: "Stock",
