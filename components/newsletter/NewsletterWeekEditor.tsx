@@ -5,7 +5,7 @@ import {
   AlertTriangle, ArrowDown, ArrowUp, Download, ExternalLink, ImagePlus, Loader2, Plus, Search, Trash2, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import { Field, FieldGrid, SelectInput, TextArea, TextInput } from "@/components/ui/Field";
+import { Field, SelectInput, TextArea, TextInput } from "@/components/ui/Field";
 import { useConfirm } from "@/components/ui/useConfirm";
 import { createClient as createBrowserSupabase } from "@/lib/supabase/client";
 import { prepareImageUpload, SHEET_IMAGE_ACCEPT, SHEET_IMAGE_TYPES } from "@/lib/utils/compress-image";
@@ -151,7 +151,7 @@ export function NewsletterWeekEditor({
         if (!p.in_stock) out.push(`Tükendi: ${p.name}`);
         const used = usedProducts[String(p.id)];
         if (used) out.push(`${p.name} · ${fmtDate(used)} bülteninde kullanıldı`);
-        if (openingLinks.has(p.url.replace(/\/+$/, ""))) out.push(`${p.name} açılış görselinde de var`);
+        if (openingLinks.has(p.url.replace(/\/+$/, ""))) out.push(`${p.name} açılış resminde de var`);
       }
     }
     if (b.type === "story" && b.link && usedStories[b.link]) out.push(`Bu story ${fmtDate(usedStories[b.link])} bülteninde kullanıldı`);
@@ -211,16 +211,19 @@ export function NewsletterWeekEditor({
         <div className="min-w-0 space-y-4">
           {/* ── Genel ─────────────────────────────────────────────────── */}
           <section className="rounded-card border border-line bg-surface p-4 sm:p-5">
-            <Field label="Konu satırı">
+            <Field label="E-posta konusu">
               <TextInput {...bind("subject")} onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
             </Field>
-            <details className="mt-3">
-              <summary className="cursor-pointer select-none text-[12.5px] font-medium text-muted hover:text-ink">Tema ve notlar</summary>
-              <div className="mt-3 space-y-3.5">
-                <Field label="Tema / koleksiyon"><TextInput {...bind("theme")} /></Field>
-                <Field label="Notlar"><TextArea {...bind("notes")} rows={3} /></Field>
+            {/* "Tema ve notlar" postada karşılığı olmayan bir ekti (Sıraç,
+                18.11.2026: "araya ek bir şey koyunca kafa karışıyor"). Yeni
+                haftada çizilmez; eskiden yazılmış olan kaybolmasın diye
+                yalnız DOLU ise düz alan olarak durur. */}
+            {(initial.theme || initial.notes) && (
+              <div className="mt-3.5 space-y-3.5">
+                {initial.theme && <Field label="Tema"><TextInput {...bind("theme")} /></Field>}
+                {initial.notes && <Field label="Not"><TextArea {...bind("notes")} rows={3} /></Field>}
               </div>
-            </details>
+            )}
           </section>
 
           {/* ── Bloklar ───────────────────────────────────────────────── */}
@@ -343,22 +346,49 @@ function BlockCard({
       }}
     />
   );
-  const linkField = (label: string) => (
-    <Field label={label}><TextInput type="url" {...text("link")} {...enter} /></Field>
-  );
-  const categoryPick = (onPick: (_c: SiteCategory) => void) => (
-    <Field label="Kategori">
-      <SelectInput
-        value={categories?.some((c) => c.id === b.ref) ? b.ref : ""}
-        disabled={!canEdit || !categories}
-        onChange={(e) => { const c = categories?.find((x) => x.id === e.target.value); if (c) onPick(c); }}
-      >
-        <option value="">{categories ? "Seçin" : "Yükleniyor…"}</option>
-        {(categories ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-      </SelectInput>
+  /* BLOK ALANLARI POSTADAKİ SIRAYLA ve HER BLOKTA AYNI ADLA durur:
+     Resim · Bağlantı · Başlık · Açıklama · Düğme yazısı (Sıraç, 18.11.2026:
+     "ilk şey resim, hemen altında başlık, hemen altında açıklaması, hemen
+     altında 2 ürün… o mantıkta kur ki Aslı Hanım da anlasın"). BAĞLANTI
+     RESMİN HEMEN ALTINDADIR: "resme tıklayınca linke gidecek." Postada
+     karşılığı olmayan alan çizilmez. */
+  const title = <Field label="Başlık"><TextInput {...text("title")} {...enter} /></Field>;
+  const body = (rows = 4) => <Field label="Açıklama"><TextArea {...text("text")} rows={rows} /></Field>;
+  /** Bağlantı — elle yazılır ya da sitedeki kategorilerden seçilir (aynı alan). */
+  const link = (pick?: (_c: SiteCategory) => void) => (
+    <Field label="Bağlantı">
+      <div className="flex flex-wrap gap-2">
+        <TextInput type="url" {...text("link")} {...enter} className="min-w-0 flex-1 basis-56" />
+        {pick && (
+          <SelectInput
+            aria-label="Bağlantıyı siteden seç"
+            value={categories?.find((c) => c.id === b.ref && c.url === b.link)?.id ?? ""}
+            disabled={!canEdit || !categories}
+            onChange={(e) => { const c = categories?.find((x) => x.id === e.target.value); if (c) pick(c); }}
+            className="w-auto max-w-full"
+          >
+            <option value="">{categories ? "Siteden seç" : "Yükleniyor…"}</option>
+            {(categories ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </SelectInput>
+        )}
+      </div>
     </Field>
   );
-  const buttonField = b.type === "urun" || b.type === "kategori" || b.type === "story" || b.type === "sosyal";
+  const button = (
+    <Field label="Düğme yazısı">
+      <TextInput
+        {...text("button")}
+        {...enter}
+        placeholder={blockButton({ ...b, button: "" })}
+        list={b.type === "story" ? `story-titles-${b.id}` : undefined}
+      />
+      {b.type === "story" && (
+        <datalist id={`story-titles-${b.id}`}>
+          {STORY_TITLES.map((t) => <option key={t} value={t.toUpperCase()} />)}
+        </datalist>
+      )}
+    </Field>
+  );
 
   return (
     <section className="rounded-card border border-line bg-surface p-4 sm:p-5">
@@ -396,46 +426,45 @@ function BlockCard({
         {b.type === "gorsel" && (
           <>
             {image}
-            <FieldGrid>
-              {categoryPick((c) => onCommitEdit({ link: c.url, ref: c.id }))}
-              {linkField("Bağlantı")}
-            </FieldGrid>
-            <Field label="Başlık"><TextInput {...text("title")} {...enter} /></Field>
+            {/* Görsel bloğunda başlık postada görünmez; yalnız eskiden
+                yazılmışsa durur. */}
+            {link((c) => onCommitEdit({ link: c.url, ref: c.id }))}
+            {b.title && title}
           </>
         )}
 
         {b.type === "metin" && (
           <>
-            <Field label="Başlık"><TextInput {...text("title")} {...enter} /></Field>
-            <Field label="Yazı"><TextArea {...text("text")} rows={4} /></Field>
+            {title}
+            {body()}
           </>
         )}
 
         {b.type === "urun" && (
           <>
-            <Field label="Başlık"><TextInput {...text("title")} {...enter} /></Field>
-            <ChosenProducts
-              products={b.products}
-              stock={stock}
-              onRemove={canEdit ? (id) => onCommitEdit({ products: b.products.filter((p) => p.id !== id) }) : undefined}
-            />
-            {canEdit && <ProductSearch chosen={b.products} onStock={onStock} onPick={(p) => onCommitEdit({ products: [...b.products, p] })} />}
-            <FieldGrid>
-              {categoryPick((c) => onCommitEdit({ link: c.url, ref: c.id }))}
-              {linkField("Bağlantı")}
-            </FieldGrid>
+            {title}
+            <Field label="Ürünler">
+              <div className="space-y-2">
+                <ChosenProducts
+                  products={b.products}
+                  stock={stock}
+                  onRemove={canEdit ? (id) => onCommitEdit({ products: b.products.filter((p) => p.id !== id) }) : undefined}
+                />
+                {canEdit && <ProductSearch chosen={b.products} onStock={onStock} onPick={(p) => onCommitEdit({ products: [...b.products, p] })} />}
+              </div>
+            </Field>
+            {link((c) => onCommitEdit({ link: c.url, ref: c.id }))}
+            {button}
           </>
         )}
 
         {b.type === "kategori" && (
           <>
-            <FieldGrid>
-              {categoryPick((c) => onCommitEdit({ link: c.url, ref: c.id, title: b.title || c.name }))}
-              {linkField("Bağlantı")}
-            </FieldGrid>
-            <Field label="Başlık"><TextInput {...text("title")} {...enter} /></Field>
-            <Field label="Yazı"><TextArea {...text("text")} rows={3} /></Field>
             {image}
+            {link((c) => onCommitEdit({ link: c.url, ref: c.id, title: b.title || c.name }))}
+            {title}
+            {body(3)}
+            {button}
           </>
         )}
 
@@ -457,53 +486,27 @@ function BlockCard({
               </SelectInput>
             </Field>
             {image}
-            <Field label="Yazı"><TextArea {...text("text")} rows={4} /></Field>
-            {b.link && (
-              <a href={b.link} target="_blank" rel="noreferrer" className="inline-flex max-w-full items-center gap-1 text-[12.5px] text-muted hover:text-ink hover:underline">
-                <ExternalLink size={12} className="shrink-0" aria-hidden />
-                <span className="truncate">{b.link.replace(/^https?:\/\/(www\.)?/, "")}</span>
-              </a>
-            )}
+            {link()}
+            {body()}
+            {button}
           </>
         )}
 
         {b.type === "sosyal" && (
           <>
-            <FieldGrid>
-              <Field label="Platform">
-                <SelectInput
-                  value={b.platform || "instagram"}
-                  disabled={!canEdit}
-                  onChange={(e) => onCommitEdit({ platform: e.target.value as SocialPlatform })}
-                >
-                  {SOCIAL_PLATFORMS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
-                </SelectInput>
-              </Field>
-              {linkField("Gönderi bağlantısı")}
-            </FieldGrid>
+            <Field label="Platform">
+              <SelectInput
+                value={b.platform || "instagram"}
+                disabled={!canEdit}
+                onChange={(e) => onCommitEdit({ platform: e.target.value as SocialPlatform })}
+              >
+                {SOCIAL_PLATFORMS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+              </SelectInput>
+            </Field>
             {image}
+            {link()}
+            {button}
           </>
-        )}
-
-        {buttonField && (
-          <details className="pt-1">
-            <summary className="cursor-pointer select-none text-[12.5px] font-medium text-muted hover:text-ink">Gelişmiş</summary>
-            <div className="mt-3">
-              <Field label="Düğme yazısı">
-                <TextInput
-                  {...text("button")}
-                  {...enter}
-                  placeholder={blockButton({ ...b, button: "" })}
-                  list={b.type === "story" ? `story-titles-${b.id}` : undefined}
-                />
-              </Field>
-              {b.type === "story" && (
-                <datalist id={`story-titles-${b.id}`}>
-                  {STORY_TITLES.map((t) => <option key={t} value={t.toUpperCase()} />)}
-                </datalist>
-              )}
-            </div>
-          </details>
         )}
       </div>
     </section>
@@ -555,11 +558,11 @@ function BlockImage({
       const path = `${prefix}${crypto.randomUUID()}.${ext}`;
       const supabase = createBrowserSupabase();
       const { error } = await supabase.storage.from(BUCKET).upload(path, prep.file, { contentType: prep.file.type, upsert: false });
-      if (error) { setErr(`Görsel yüklenemedi: ${error.message}`); return; }
+      if (error) { setErr(`Resim yüklenemedi: ${error.message}`); return; }
       /* Kova herkese açık: adres postada ve afcom-seo'da süresiz okunur. */
       onChange(supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl, path);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Görsel yüklenemedi.");
+      setErr(e instanceof Error ? e.message : "Resim yüklenemedi.");
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -573,7 +576,7 @@ function BlockImage({
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(false); }}
       onDrop={(e) => { e.preventDefault(); setOver(false); if (!busy && !disabled) void upload(e.dataTransfer.files[0]); }}
     >
-      <span className="mb-1 block text-[12.5px] font-medium text-muted">Görsel</span>
+      <span className="mb-1 block text-[12.5px] font-medium text-muted">Resim</span>
       {b.image_url ? (
         <div className={cn("flex items-center gap-3 rounded-control border border-line p-2", over && "ring-2 ring-brand-ring")}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -599,10 +602,10 @@ function BlockImage({
             over && "border-brand ring-2 ring-brand-ring",
           )}
         >
-          {busy ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <ImagePlus size={16} aria-hidden />} Görsel yükle
+          {busy ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <ImagePlus size={16} aria-hidden />} Resim yükle
         </button>
       )}
-      <input ref={inputRef} type="file" accept={SHEET_IMAGE_ACCEPT} aria-label="Görsel dosyası" className="hidden" onChange={(e) => void upload(e.target.files?.[0])} />
+      <input ref={inputRef} type="file" accept={SHEET_IMAGE_ACCEPT} aria-label="Resim dosyası" className="hidden" onChange={(e) => void upload(e.target.files?.[0])} />
       {err && <p role="alert" className="mt-1.5 text-[12.5px] text-danger">{err}</p>}
     </div>
   );

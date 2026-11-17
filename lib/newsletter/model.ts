@@ -44,9 +44,9 @@ export const SOCIAL_PLATFORMS: { key: SocialPlatform; label: string; button: str
 export type BlockType = "gorsel" | "metin" | "urun" | "kategori" | "story" | "sosyal";
 
 export const BLOCK_TYPES: { key: BlockType; label: string }[] = [
-  { key: "gorsel", label: "Görsel" },
-  { key: "metin", label: "Metin" },
-  { key: "urun", label: "Ürün" },
+  { key: "gorsel", label: "Resim" },
+  { key: "metin", label: "Başlık ve açıklama" },
+  { key: "urun", label: "Ürünler" },
   { key: "kategori", label: "Kategori" },
   { key: "story", label: "Story" },
   { key: "sosyal", label: "Sosyal medya" },

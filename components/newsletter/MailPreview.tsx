@@ -44,7 +44,7 @@ export function MailPreview({ week }: { week: NewsletterWeek }) {
 function Block({ block: b }: { block: NewsletterBlock }) {
   switch (b.type) {
     case "gorsel":
-      return <MailImage src={b.image_url} alt={b.title} ratio="aspect-[4/5]" empty="Görsel" />;
+      return <MailImage src={b.image_url} alt={b.title} ratio="aspect-[4/5]" empty="Resim" href={b.link} />;
     case "metin":
       return (
         <>
@@ -63,34 +63,34 @@ function Block({ block: b }: { block: NewsletterBlock }) {
                 <div key={i} className="px-1 pb-7"><div className="aspect-[4/5] bg-[#f1f1f1]" /></div>
               ))}
           </div>
-          <MailButton>{blockButton(b)}</MailButton>
+          <MailButton href={b.link}>{blockButton(b)}</MailButton>
         </>
       );
     case "kategori":
       return (
         <>
-          {b.image_url && <div className="pb-8"><MailImage src={b.image_url} alt={b.title} ratio="aspect-[4/5]" empty="" /></div>}
+          {b.image_url && <div className="pb-8"><MailImage src={b.image_url} alt={b.title} ratio="aspect-[4/5]" empty="" href={b.link} /></div>}
           <Heading size={26}>{b.title}</Heading>
           <Text className="px-6 pb-6 sm:px-14">{b.text}</Text>
-          <MailButton>{blockButton(b)}</MailButton>
+          <MailButton href={b.link}>{blockButton(b)}</MailButton>
         </>
       );
     case "story":
       return (
         <>
-          <MailImage src={b.image_url} alt={b.title} ratio="aspect-[4/3]" empty="Story görseli" />
+          <MailImage src={b.image_url} alt={b.title} ratio="aspect-[4/3]" empty="Story resmi" href={b.link} />
           <div className="h-10" />
           <Text className="px-6 pb-6 sm:px-[72px]">{b.text}</Text>
-          <MailButton>{blockButton(b)}</MailButton>
+          <MailButton href={b.link}>{blockButton(b)}</MailButton>
         </>
       );
     case "sosyal": {
       const social = SOCIAL_PLATFORMS.find((p) => p.key === b.platform) ?? SOCIAL_PLATFORMS[0];
       return (
         <>
-          <MailImage src={b.image_url} alt={`Aslı Filinta on ${social.label}`} ratio="aspect-[4/5]" empty={`${social.label} görseli`} />
+          <MailImage src={b.image_url} alt={`Aslı Filinta on ${social.label}`} ratio="aspect-[4/5]" empty={`${social.label} resmi`} href={b.link} />
           <div className="h-8" />
-          <MailButton>{blockButton(b)}</MailButton>
+          <MailButton href={b.link}>{blockButton(b)}</MailButton>
         </>
       );
     }
@@ -111,10 +111,16 @@ function Text({ className, children }: { className: string; children: string }) 
   return <div className={cn(SANS, "whitespace-pre-line text-center text-[15px] leading-[1.75]", className)}>{children}</div>;
 }
 
-function MailImage({ src, alt, ratio, empty }: { src: string; alt: string; ratio: string; empty: string }) {
+/** Bağlantı girilmişse sarar — önizlemede tıklanan şey postada da oraya gider. */
+function Linked({ href, children }: { href?: string; children: React.ReactNode }) {
+  if (!href || !/^https?:\/\//.test(href)) return <>{children}</>;
+  return <a href={href} target="_blank" rel="noreferrer" className="block">{children}</a>;
+}
+
+function MailImage({ src, alt, ratio, empty, href }: { src: string; alt: string; ratio: string; empty: string; href?: string }) {
   if (/^https?:\/\//.test(src)) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={src} alt={alt} className="block h-auto w-full" />;
+    return <Linked href={href}><img src={src} alt={alt} className="block h-auto w-full" /></Linked>;
   }
   return (
     <div className={cn(SANS, "flex items-center justify-center bg-[#f1f1f1] text-[13px] text-[#999]", ratio)}>
@@ -123,13 +129,15 @@ function MailImage({ src, alt, ratio, empty }: { src: string; alt: string; ratio
   );
 }
 
-function MailButton({ children }: { children: string }) {
+function MailButton({ children, href }: { children: string; href?: string }) {
   if (!children) return null;
   return (
     <div className="flex justify-center px-4 pt-1">
-      <span className={cn(SANS, "inline-block max-w-full border border-[#111] bg-[#111] px-10 py-[15px] text-center text-[12px] uppercase tracking-[2.5px] text-white")}>
-        {children}
-      </span>
+      <Linked href={href}>
+        <span className={cn(SANS, "inline-block max-w-full border border-[#111] bg-[#111] px-10 py-[15px] text-center text-[12px] uppercase tracking-[2.5px] text-white")}>
+          {children}
+        </span>
+      </Linked>
     </div>
   );
 }
