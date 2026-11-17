@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ImagePlus, Loader2, Package, Plus, Search, X } from "lucide-react";
+import { Download, ImagePlus, Loader2, Package, Plus, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { useLiveRefresh } from "@/components/stock/useLiveRefresh";
 import { Button } from "@/components/ui/Button";
@@ -32,13 +32,17 @@ import {
  */
 
 const BUCKET = "production-sheets";
+/** Ürün · bedenler · toplam · işlem — başlık ve satır aynı sütunları kullanır. */
+const ROW_GRID = "grid grid-cols-1 gap-x-4 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_5.5rem_12.5rem]";
 type Dialog =
   | { type: "move"; product: StockProduct; kind: MovementKind }
   | { type: "product"; product: StockProduct | null }
   | null;
 
-export function StockTabs({ scope, active }: { scope: string; active: "stok" | "hareketler" }) {
-  const tab = (key: "stok" | "hareketler", label: string, href: string) => (
+export type StockTab = "stok" | "satislar" | "hareketler";
+
+export function StockTabs({ scope, active }: { scope: string; active: StockTab }) {
+  const tab = (key: StockTab, label: string, href: string) => (
     <Link
       href={href}
       aria-current={active === key ? "page" : undefined}
@@ -53,6 +57,7 @@ export function StockTabs({ scope, active }: { scope: string; active: "stok" | "
   return (
     <div className="flex items-center gap-1">
       {tab("stok", "Stok", `/stock?l=${scope}`)}
+      {tab("satislar", "Satışlar", `/stock?l=${scope}&v=satislar`)}
       {tab("hareketler", "Hareketler", `/stock?l=${scope}&v=hareketler`)}
     </div>
   );
@@ -79,6 +84,7 @@ export function StockList({
   const [dialog, setDialog] = useState<Dialog>(null);
 
   const bySize = useMemo(() => levelsByProduct(levels, locationId), [levels, locationId]);
+  /* Masaüstünde satır ve başlık AYNI ızgarayı kullanır — sütunlar hizalı durur. */
   const shown = useMemo(() => {
     const q = query.trim().toLocaleLowerCase("tr");
     return products.filter((p) => {
@@ -87,17 +93,24 @@ export function StockList({
       return [p.name, p.code, p.barcode].some((v) => v.toLocaleLowerCase("tr").includes(q));
     });
   }, [products, query, onlyHere, bySize]);
+  const units = useMemo(
+    () => shown.reduce((n, p) => n + [...(bySize.get(p.id)?.values() ?? [])].reduce((a, b) => a + b, 0), 0),
+    [shown, bySize],
+  );
 
   return (
     <div className="anim-fade">
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <h2 className="text-lg font-semibold tracking-tight text-ink sm:text-xl">{scopeName}</h2>
         <StockTabs scope={scope} active="stok" />
-        {canEdit && (
-          <Button size="sm" onClick={() => setDialog({ type: "product", product: null })} className="ml-auto">
-            <Plus size={14} aria-hidden /> Yeni ürün
-          </Button>
-        )}
+        <div className="ml-auto flex items-center gap-2">
+          <ExcelLink href={`/stock/export?l=${scope}&v=stok`} />
+          {canEdit && (
+            <Button size="sm" onClick={() => setDialog({ type: "product", product: null })}>
+              <Plus size={14} aria-hidden /> Yeni ürün
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -123,7 +136,9 @@ export function StockList({
             <option value="all">Tüm ürünler</option>
           </SelectInput>
         )}
-        <span className="text-[12.5px] tabular-nums text-muted">{shown.length} ürün</span>
+        <span className="text-[12.5px] tabular-nums text-muted">
+          {shown.length} ürün · {units.toLocaleString("tr-TR")} adet
+        </span>
       </div>
 
       {shown.length === 0 ? (
@@ -137,6 +152,17 @@ export function StockList({
           }
         />
       ) : (
+        <>
+        {/* SÜTUN BAŞLIKLARI — eski programdaki ızgara gibi: satırdaki her şeyin
+            NE olduğu yazsın. Sıraç (17.11.2026, canlı ekran): "Çok anlamadım,
+            böyle mi olacak?" — başlıksız satırda yuvarlak içindeki "M 1"in
+            beden ve adet olduğu okunmuyordu. */}
+        <div className={cn(ROW_GRID, "mb-1.5 hidden px-3 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-muted md:grid")}>
+          <span>Ürün</span>
+          <span>Beden · eldeki adet</span>
+          <span className="text-right">Toplam</span>
+          <span className="text-right">İşlem</span>
+        </div>
         <ul className="space-y-2">
           {shown.map((p) => (
             <ProductRow
@@ -149,6 +175,7 @@ export function StockList({
             />
           ))}
         </ul>
+        </>
       )}
 
       {dialog?.type === "move" && (
@@ -201,48 +228,69 @@ function ProductRow({
 }) {
   const order = sortSizes([...(sizes?.keys() ?? [])]);
   const total = order.reduce((n, s) => n + (sizes?.get(s) ?? 0), 0);
+  /* Eski programda çoğu ürünün ADI kodunun aynısı ("AF_AP_04") — iki satırda
+     aynı şeyi yazmak yerine kod bir kez görünür. */
+  const sameAsCode = p.name.trim().toLocaleLowerCase("tr") === p.code.trim().toLocaleLowerCase("tr");
+  const sub = [sameAsCode ? null : p.code, p.barcode ? `Barkod ${p.barcode}` : null, fmtPrice(p.price)].filter(Boolean).join(" · ");
   return (
-    <li className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-card border border-line bg-surface p-3">
-      <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 basis-56 items-center gap-3 text-left">
+    <li className={cn(ROW_GRID, "items-center gap-y-3 rounded-card border border-line bg-surface p-3")}>
+      <button type="button" onClick={onOpen} className="flex min-w-0 items-center gap-3 text-left">
         <Thumb src={p.image_url} className="size-14" />
         <span className="min-w-0">
           <span className="block truncate text-[14px] font-semibold text-ink">{p.name}</span>
-          <span className="block truncate text-[12.5px] text-muted">
-            {[p.code, p.barcode, fmtPrice(p.price)].filter(Boolean).join(" · ")}
-          </span>
+          {sub && <span className="block truncate text-[12.5px] text-muted">{sub}</span>}
         </span>
       </button>
 
       <div className="flex flex-wrap items-center gap-1.5">
         {order.length === 0 ? (
-          <span className="text-[12.5px] text-subtle">Stok yok</span>
+          <span className="text-[12.5px] text-subtle">Bu yerde stok yok</span>
         ) : (
           order.map((s) => {
             const n = sizes!.get(s) ?? 0;
             return (
               <span
                 key={s}
+                title={`${s} bedenden ${n} adet`}
                 className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12.5px] tabular-nums",
-                  n > 0 ? "border-line-strong text-ink" : "border-line text-subtle",
+                  "inline-flex items-center overflow-hidden rounded-control border text-[12.5px] tabular-nums",
+                  n > 0 ? "border-line-strong" : "border-line opacity-60",
                 )}
               >
-                <span className="font-medium">{s}</span>
-                <span className={cn("font-semibold", n < 0 && "text-danger")}>{n}</span>
+                <span className="bg-surface-sunken px-2 py-1 font-medium text-muted">{s}</span>
+                <span className={cn("min-w-7 px-2 py-1 text-center font-semibold", n < 0 ? "text-danger" : "text-ink")}>{n}</span>
               </span>
             );
           })
         )}
       </div>
 
+      <div className="text-[13px] tabular-nums md:text-right">
+        <span className="text-muted md:hidden">Toplam </span>
+        <span className={cn("font-semibold", total > 0 ? "text-ink" : "text-subtle")}>{total}</span>
+        <span className="text-muted"> adet</span>
+      </div>
+
       {canEdit && (
-        <div className="ml-auto flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 md:justify-end">
           <Button size="sm" disabled={total <= 0} onClick={() => onMove("satis")}>Satış</Button>
           <Button size="sm" variant="secondary" onClick={() => onMove("giris")}>Giriş</Button>
           <Button size="sm" variant="ghost" onClick={() => onMove("transfer")}>Diğer</Button>
         </div>
       )}
     </li>
+  );
+}
+
+/** Excel'e indir — liste ve satışlar aynı düğmeyi kullanır. */
+export function ExcelLink({ href }: { href: string }) {
+  return (
+    <a
+      href={href}
+      className="inline-flex h-8 items-center gap-1.5 rounded-control border border-line-strong bg-surface px-3 text-[13px] font-medium text-ink transition-all hover:bg-surface-hover pointer-coarse:h-10"
+    >
+      <Download size={14} aria-hidden /> Excel
+    </a>
   );
 }
 

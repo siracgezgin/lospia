@@ -7,6 +7,8 @@ import { maybeDatabaseSetupRequired } from "@/lib/utils/supabase-errors";
 import { StockHome } from "@/components/stock/StockHome";
 import { StockList } from "@/components/stock/StockList";
 import { StockMovements, type MovementRow } from "@/components/stock/StockMovements";
+import { StockSales } from "@/components/stock/StockSales";
+import { fetchSales, isSalesPeriod, summarizeSales } from "@/lib/stock/queries";
 import type { StockLevel, StockLocation, StockProduct } from "@/lib/stock/model";
 
 export const dynamic = "force-dynamic";
@@ -20,12 +22,12 @@ export const metadata = { title: "Stock" };
  * listesi; satış/giriş/transfer/sayım oradan yapılır. Eldeki adet defterdeki
  * hareketlerin toplamıdır (20240373).
  *
- * Görünüm durumu ADRESTE: `?l=<yer|all>` · `&v=hareketler`.
+ * Görünüm durumu ADRESTE: `?l=<yer|all>` · `&v=satislar&d=<dönem>` · `&v=hareketler`.
  */
 export default async function StockPage({
   searchParams,
 }: {
-  searchParams: Promise<{ l?: string; v?: string }>;
+  searchParams: Promise<{ l?: string; v?: string; d?: string }>;
 }) {
   /* Şimdilik yalnız yönetici — Aslı Hanım onaylayınca ekibe açılacak
      (bkz. registry'deki not ve 20240376). */
@@ -87,6 +89,18 @@ export default async function StockPage({
   const scopeName = locationId ? locations.find((l) => l.id === locationId)!.name : "Tüm stok";
   const canEdit = role !== "viewer";
   const crumbs = [{ label: "Stock", href: "/stock" }, { label: scopeName }];
+
+  // ── Satışlar (rapor) ──────────────────────────────────────────────────────
+  if (sp.v === "satislar") {
+    const period = isSalesPeriod(sp.d) ? sp.d : "yil";
+    const sales = await fetchSales(supabase, workspaceId, locationId, period);
+    return (
+      <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
+        <ModulePageHeader title="Stock" crumbs={crumbs} />
+        <StockSales scope={scope} scopeName={scopeName} period={period} rows={sales} summary={summarizeSales(sales)} locations={locations} />
+      </div>
+    );
+  }
 
   // ── Hareketler ────────────────────────────────────────────────────────────
   if (sp.v === "hareketler") {
