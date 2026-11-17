@@ -43,7 +43,7 @@ interface Props {
 }
 
 /** Kaydetme durumu — kullanıcıya TEK bir cümleyle söylenir. */
-type SaveState = "clean" | "dirty" | "saving" | "saved" | "error";
+type SaveState = "clean" | "dirty" | "saving" | "saved" | "error" | "conflict";
 
 /** Yazma durduktan sonra kaydetmeye kadar beklenen süre. */
 const SAVE_DEBOUNCE_MS = 900;
@@ -203,6 +203,13 @@ export function SheetDetailView({
   const runSaveRef = useRef<() => Promise<void>>(async () => {});
   /** Tablo silindi — bundan sonra hiçbir şey gönderilmez. */
   const abandonedRef = useRef(false);
+  /* ÇAKIŞMA DENETİMİ (20240374). `revRef` bu sekmenin üstüne yazdığı sürüm;
+     başka sekme/kişi araya girdiyse sunucu kaydı reddeder ve otomatik kayıt
+     DURUR — kullanıcı "yenile" ya da "benimkini kaydet" diyene kadar hiçbir
+     şey ezilmez. */
+  const revRef = useRef<number | null>(typeof sheet.snapshot_rev === "number" ? sheet.snapshot_rev : null);
+  const conflictRef = useRef(false);
+  const forceRef = useRef(false);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -211,7 +218,7 @@ export function SheetDetailView({
 
   const runSave = useCallback(async () => {
     const api = apiRef.current;
-    if (!api || readOnly || abandonedRef.current) return;
+    if (!api || readOnly || abandonedRef.current || conflictRef.current) return;
     // Uçmakta olan bir kayıt varsa bunu kuyruğa al — iki eşzamanlı yazma
     // birbirinin üstüne binerse eski hâl geri gelebiliyordu.
     if (savingRef.current) { queuedRef.current = true; return; }
@@ -226,9 +233,17 @@ export function SheetDetailView({
     savingRef.current = true;
     if (mountedRef.current) setSaveState("saving");
 
-    const result = await saveSpreadsheetSnapshot(sheet.id, json);
+    const force = forceRef.current;
+    forceRef.current = false;
+    const result = await saveSpreadsheetSnapshot(sheet.id, json, force ? null : revRef.current ?? undefined);
     savingRef.current = false;
 
+    if ("error" in result && result.conflict) {
+      conflictRef.current = true;
+      queuedRef.current = false;
+      if (mountedRef.current) { setSaveError(result.error); setSaveState("conflict"); }
+      return;
+    }
     if ("error" in result) {
       // Kayıt başarısız — "kirli" bayrağı DURUYOR ki sonraki deneme veriyi
       // yeniden göndersin. Kuyruk temizlenir: bekleyen istek zaten aynı
@@ -239,6 +254,7 @@ export function SheetDetailView({
       return;
     }
 
+    if (result.rev !== null) revRef.current = result.rev;
     lastSavedRef.current = json;
     /* Boy her kayıtta ÖLÇÜLÜR, tahmin edilmez: tablo büyüdükçe aralık
        kendiliğinden uzar, satır silinince kısalır. */
@@ -608,6 +624,7 @@ export function SheetDetailView({
           error={saveError}
           savedClock={savedClock}
           onRetry={() => { void runSaveRef.current(); }}
+          onOverwrite={() => { conflictRef.current = false; forceRef.current = true; void runSaveRef.current(); }}
         />
       </div>
 
@@ -730,13 +747,14 @@ export function SheetDetailView({
  * Hata hâlinde SESSİZ KALMAZ: sebebi yazar ve elle tekrar denetir.
  */
 function SaveStatus({
-  readOnly, state, error, savedClock, onRetry,
+  readOnly, state, error, savedClock, onRetry, onOverwrite,
 }: {
   readOnly: boolean;
   state: SaveState;
   error: string | null;
   savedClock: string | null;
   onRetry: () => void;
+  onOverwrite: () => void;
 }) {
   if (readOnly) {
     return (
@@ -748,6 +766,23 @@ function SaveStatus({
         {/* Telefonda yalnız simge kalır (satırda yer yok); anlamı `title` ve
             ekran okuyucu metni taşır. */}
         <span className="sr-only sm:not-sr-only">Salt okunur</span>
+      </span>
+    );
+  }
+
+  if (state === "conflict") {
+    const btn = "tap-target inline-flex h-8 items-center rounded-control border px-2.5 text-[12.5px] font-medium transition-colors duration-150 pointer-coarse:h-10";
+    return (
+      <span className="flex shrink-0 flex-wrap items-center justify-end gap-1.5" role="alert">
+        <span className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-warning">
+          <AlertCircle size={13} aria-hidden /> Başka bir yerde değişti
+        </span>
+        <button type="button" onClick={() => window.location.reload()} className={cn(btn, "border-line-strong text-ink hover:bg-surface-hover")}>
+          Yenile
+        </button>
+        <button type="button" onClick={onOverwrite} className={cn(btn, "border-warning/40 text-warning hover:bg-warning/10")}>
+          Benimkini kaydet
+        </button>
       </span>
     );
   }

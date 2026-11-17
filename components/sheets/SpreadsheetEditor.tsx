@@ -22,7 +22,7 @@
  *  • Geri al/ileri al: kitap anlık görüntüsü yığını (hücreler seyrek, ucuz).
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight,
   Undo2, Redo2, Sigma, Plus, WrapText,
@@ -55,7 +55,9 @@ interface Props {
 }
 
 type Sel = { r1: number; c1: number; r2: number; c2: number };
-type EditState = { r: number; c: number; draft: string };
+/** `quick`: düzenleme YAZARAK başladı (çift tık/F2 değil) — Excel'deki gibi ok
+ *  tuşları imleci değil hücreyi yürütür: onaylar ve o yöne geçer. */
+type EditState = { r: number; c: number; draft: string; quick?: boolean };
 
 /** Pano izni reddedildiğinde gösterilir — sessizce hiçbir şey yapmasın. */
 const CLIPBOARD_WRITE_HINT = "Tarayıcı panoya yazamadı — ⌘C / Ctrl+C (kesmek için ⌘X / Ctrl+X) kullanın.";
@@ -153,7 +155,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
   const undoStack = useRef<WorkbookSnapshot[]>([]);
   const redoStack = useRef<WorkbookSnapshot[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const editRef = useRef<HTMLInputElement>(null);
+  const editRef = useRef<HTMLTextAreaElement>(null);
 
   /* KAYDIRMA ÇİZİM HIZINA KISILIR.
      Her `scroll` olayı doğrudan `setScrollTop` çağırıyordu; tarayıcı saniyede
@@ -299,11 +301,9 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
     colLefts: { lefts: number[]; total: number };
   }>({ rowTops: { tops: [], total: 0 }, colLefts: { lefts: [], total: 0 } });
 
-  const moveTo = useCallback((r: number, c: number, extend = false) => {
+  /** Hücreyi görünür alana kaydırır (seçime dokunmaz). */
+  const reveal = useCallback((rr: number, cc: number) => {
     const g = sheetRef.current;
-    const rr = Math.max(0, Math.min(g.rows - 1, r));
-    const cc = Math.max(0, Math.min(g.cols - 1, c));
-    setSel((s) => (extend ? { ...s, r2: rr, c2: cc } : { r1: rr, c1: cc, r2: rr, c2: cc }));
     const el = scrollRef.current;
     if (!el) return;
 
@@ -335,29 +335,73 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
     }
   }, []);
 
-  const startEdit = useCallback((r: number, c: number, initial?: string) => {
+  const moveTo = useCallback((r: number, c: number, extend = false) => {
+    const g = sheetRef.current;
+    const rr = Math.max(0, Math.min(g.rows - 1, r));
+    const cc = Math.max(0, Math.min(g.cols - 1, c));
+    setSel((s) => (extend ? { ...s, r2: rr, c2: cc } : { r1: rr, c1: cc, r2: rr, c2: cc }));
+    reveal(rr, cc);
+  }, [reveal]);
+
+  const startEdit = useCallback((r0: number, c0: number, initial?: string) => {
     if (readOnly) return;
+    /* BİRLEŞİK HÜCRENİN GİZLİ PARÇASI düzenlenemez: o hücre çizilmiyor, kutu
+       hiç açılmıyor ve `editing` takılı kalıp klavyeyi kilitliyordu
+       (17.11.2026 denetimi). Düzenleme her zaman ÇAPA hücrede açılır. */
+    const mg = mergeAt(sheetRef.current, r0, c0);
+    const r = mg ? mg.rect.r1 : r0;
+    const c = mg ? mg.rect.c1 : c0;
     const cell = getCell(sheetRef.current, r, c);
-    setEditing({ r, c, draft: initial !== undefined ? initial : (cell?.f ?? cell?.v ?? "") });
-  }, [readOnly, setEditing]);
+    /* Fareyle uzağa kaydırıp yazmaya başlayınca hücre çizim penceresinin
+       dışında olabilir — önce görünüme getir, yoksa kutu yine açılmaz. */
+    reveal(r, c);
+    setEditing({ r, c, draft: initial !== undefined ? initial : (cell?.f ?? cell?.v ?? ""), quick: initial !== undefined });
+  }, [readOnly, setEditing, reveal]);
 
+  /* Kutu AÇILDIĞINDA odaklanır ve imleç SONA gider; sonraki tuşlarda imlece
+     dokunulmaz (metnin ortasında düzeltme yapılabilsin). */
+  const editKey = editing ? `${editing.r}:${editing.c}` : null;
   useEffect(() => {
-    if (!editing) return;
+    if (!editKey) return;
     if (document.activeElement === formulaRef.current) return;
-    editRef.current?.focus();
-  }, [editing]);
+    const el = editRef.current;
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    el.setSelectionRange(el.value.length, el.value.length);
+  }, [editKey]);
 
-  const stopEdit = useCallback((save: boolean, move?: "down" | "right") => {
+  /* Kutunun boyu metne göre — çok satırlı hücre tek satıra sıkışmasın. */
+  const editDraft = editing?.draft;
+  useLayoutEffect(() => {
+    const el = editRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight + 4}px`;
+  }, [editDraft, editKey]);
+
+  /**
+   * Düzenlemeyi kapatır. `refocus`: KLAVYEYLE kapandıysa (Enter, Tab, Esc, ok)
+   * odak ızgaraya döner — yoksa odak <body>'ye düşüyor ve sonraki her tuş
+   * boşa gidiyordu ("Excel rahatlığında çalışamıyoruz"un asıl nedeni:
+   * her hücreden sonra fareyle tıklamak gerekiyordu). Fareyle başka yere
+   * tıklanarak kapandıysa odak tıklanan yerde kalır.
+   */
+  const stopEdit = useCallback((save: boolean, move?: "down" | "right" | "up" | "left", refocus = false) => {
     const e = editingRef.current;
     if (!e) return;
     setEditing(null);
+    if (refocus) scrollRef.current?.focus({ preventScroll: true });
     /* DEĞİŞMEDİYSE yazma. fx çubuğuna tıklayıp başka yere geçmek de burayı
        çağırıyor; her seferinde geri-al yığınına boş bir adım eklemesin ve
        belgeyi kirli işaretleyip gereksiz kayıt tetiklemesin. */
     const cur = getCell(sheetRef.current, e.r, e.c);
     if (save && e.draft !== (cur?.f ?? cur?.v ?? "")) applyEdit(e.r, e.c, e.draft);
-    if (move === "down") moveTo(e.r + 1, e.c);
-    if (move === "right") moveTo(e.r, e.c + 1);
+    /* Birleşik hücreden çıkarken birleşmenin SONUNDAN devam edilir. */
+    const mg = mergeAt(sheetRef.current, e.r, e.c);
+    if (move === "down") moveTo((mg ? mg.rect.r2 : e.r) + 1, e.c);
+    if (move === "right") moveTo(e.r, (mg ? mg.rect.c2 : e.c) + 1);
+    if (move === "up") moveTo(e.r - 1, e.c);
+    if (move === "left") moveTo(e.r, e.c - 1);
   }, [applyEdit, moveTo, setEditing]);
 
   /* Seçim DEĞİL, dolu hücreler taranır: ⌘A 5.000×100 = 500.000 hücre seçer ve
@@ -998,6 +1042,17 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
      bir sonraki boyamadan sonra geliyor. */
   useEffect(() => { metrics.current = { rowTops, colLefts }; }, [rowTops, colLefts]);
 
+  /* DÜZENLERKEN KAYDIRMA: satır sanal pencereden düşünce kutu SÖKÜLÜYOR, blur
+     olayı gelmiyor ve `editing` takılı kalıyordu — ızgara her tuşu yutuyordu,
+     sayfa yenilenene kadar. Hücre pencereden çıktığı an yazılan kaydedilir
+     ve düzenleme kapanır. */
+  const editGone = !!editing &&
+    (editing.r < firstRow || editing.r > lastRow || editing.c < firstCol || editing.c > lastCol);
+  useEffect(() => {
+    /* fx çubuğundan yazılıyorsa hücre kutusuna gerek yok — dokunma. */
+    if (editGone && document.activeElement !== formulaRef.current) stopEdit(true);
+  }, [editGone, stopEdit]);
+
   const colPadLeft = colLefts.lefts[firstCol] ?? 0;
 
   // ── Durum çubuğu ──────────────────────────────────────────────────────────
@@ -1141,8 +1196,8 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
           readOnly={readOnly}
           onChange={(e) => setEditing({ r: active.r, c: active.c, draft: e.target.value })}
           onKeyDown={(e) => {
-            if (e.key === "Enter") { e.preventDefault(); stopEdit(true, "down"); }
-            if (e.key === "Escape") { e.preventDefault(); stopEdit(false); }
+            if (e.key === "Enter") { e.preventDefault(); stopEdit(true, "down", true); }
+            if (e.key === "Escape") { e.preventDefault(); stopEdit(false, undefined, true); }
           }}
           onFocus={() => { if (!editing && !readOnly) startEdit(active.r, active.c); }}
           onBlur={() => { if (!readOnly) stopEdit(true); }}
@@ -1278,27 +1333,50 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                   if (isEditing) {
                     return (
                       <div key={c} className="relative shrink-0" style={{ width: w, height: h }}>
-                        <input
+                        {/* ÇOK SATIRLI KUTU. Tek satırlık <input> hücredeki satır
+                            sonlarını SİLİYORDU (üç satırlık not tek harf
+                            eklenince tek satıra iniyordu) ve uzun metnin
+                            yalnız sonu görünüyordu. Alt+Enter (ya da ⌘/Ctrl+
+                            Enter) satır başı; Enter onaylar. */}
+                        <textarea
                           ref={editRef}
+                          rows={1}
                           value={editing.draft}
-                          onChange={(e) => setEditing({ r, c, draft: e.target.value })}
+                          onChange={(e) => setEditing({ ...editing, draft: e.target.value })}
                           onBlur={() => stopEdit(true)}
                           onKeyDown={(e) => {
-                            if (e.key === "Enter") { e.preventDefault(); stopEdit(true, "down"); }
-                            else if (e.key === "Tab") { e.preventDefault(); stopEdit(true, "right"); }
-                            else if (e.key === "Escape") { e.preventDefault(); stopEdit(false); }
+                            if (e.key === "Enter" && (e.altKey || e.metaKey || e.ctrlKey)) {
+                              e.preventDefault();
+                              const el = e.currentTarget;
+                              const at = el.selectionStart;
+                              const next = el.value.slice(0, at) + "\n" + el.value.slice(el.selectionEnd);
+                              setEditing({ ...editing, draft: next });
+                              requestAnimationFrame(() => el.setSelectionRange(at + 1, at + 1));
+                            }
+                            else if (e.key === "Enter") { e.preventDefault(); stopEdit(true, e.shiftKey ? "up" : "down", true); }
+                            else if (e.key === "Tab") { e.preventDefault(); stopEdit(true, e.shiftKey ? "left" : "right", true); }
+                            else if (e.key === "Escape") { e.preventDefault(); stopEdit(false, undefined, true); }
+                            else if (editing.quick && e.key.startsWith("Arrow")) {
+                              e.preventDefault();
+                              stopEdit(true, ({ ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" } as const)[e.key as "ArrowUp"], true);
+                            }
                           }}
                           aria-label="Hücre"
-                          className="absolute inset-0 z-40 w-full border-2 border-brand bg-surface px-1.5 text-[13.5px] tabular-nums text-ink shadow-pop outline-none"
-                          style={{ minWidth: w }}
+                          className="absolute left-0 top-0 z-40 resize-none overflow-hidden whitespace-pre-wrap break-words border-2 border-brand bg-surface px-1.5 py-[3px] text-[13.5px] leading-[1.35] tabular-nums text-ink shadow-pop outline-none"
+                          style={{ width: Math.max(w, 160), minHeight: h }}
                         />
                       </div>
                     );
                   }
 
                   /* Sağdaki hücre boşsa metin oraya taşabilir (bkz. className). */
-                  const textSpill =
-                    !st?.w && !cell?.img && formatValue(val, st) !== "" && !getCell(sheet, r, c + 1);
+                  /* Komşu "boş" = DEĞERİ yok. Yalnız biçim taşıyan (kenarlık,
+                     dolgu) boş hücre dolu sayılıyordu; Excel'den gelen
+                     başlık "ASLI FİLİNTA…" ilk sütunda "ASLI F" diye
+                     kesiliyordu. */
+                  const right = getCell(sheet, r, c + 1);
+                  const rightEmpty = !right || ((right.v ?? "") === "" && (right.f ?? "") === "" && !right.img);
+                  const textSpill = !st?.w && !cell?.img && formatValue(val, st) !== "" && rightEmpty;
 
                   /* GÖRSEL YAYILMASI — Excel'de görsel hücrenin içinde değil
                      ÜSTÜNDE yüzer ve birden çok hücreyi kaplar. Hücreler
@@ -1413,7 +1491,11 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                             loading="lazy"
                             draggable={false}
                             className={cn(
-                              "pointer-events-none absolute left-0 top-0 object-contain p-0.5",
+                              /* max-w-none ŞART: Tailwind'in `img{max-width:100%}`
+                                 kuralı görseli hücrenin genişliğine kilitliyordu —
+                                 birden çok sütuna yayılan görsel tek sütunda
+                                 kalıyor, "Görseli büyüt" yalnız boyu uzatıyordu. */
+                              "pointer-events-none absolute left-0 top-0 max-w-none object-contain p-0.5",
                               /* Sınır HER ZAMAN görünür: görselin nerede
                                  başlayıp bittiği, dolayısıyla hangi hücreye
                                  ait olduğu ızgaradan okunabilsin. */
@@ -1607,7 +1689,11 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
         </div>
       )}
       {/* Drive görsel seçici — hücreye kimlik yazar, bayt değil. */}
-      <ImagePicker open={pickerOpen} onClose={() => setPickerOpen(false)} onPick={putImage} />
+      <ImagePicker
+        open={pickerOpen}
+        onClose={() => { setPickerOpen(false); requestAnimationFrame(() => scrollRef.current?.focus({ preventScroll: true })); }}
+        onPick={putImage}
+      />
       {dialog}
     </div>
   );
@@ -1662,7 +1748,9 @@ function TBtn({
   return (
     <button
       type="button"
-      onMouseDown={stop ? (e) => e.stopPropagation() : undefined}
+      /* preventDefault: düğme odağı ızgaradan ALMASIN — kalın yapıp yazmaya
+         devam edilebilsin (yoksa sonraki tuşlar boşa gidiyordu). */
+      onMouseDown={(e) => { e.preventDefault(); if (stop) e.stopPropagation(); }}
       onClick={onClick}
       title={title}
       aria-label={title}

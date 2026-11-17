@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import type { AppRole } from "@/lib/auth/permissions";
-import { toActionErrorMessage } from "@/lib/utils/supabase-errors";
+import { isMissingSchemaError, toActionErrorMessage } from "@/lib/utils/supabase-errors";
 import { logWorkspaceActivity, WORKSPACE_ACTIONS } from "@/lib/activity/log-workspace-activity";
 
 // Tablo Merkezi — embedded spreadsheets persisted as JSONB snapshots (no file
@@ -205,10 +205,17 @@ export async function updateOperationSpreadsheetMeta(
  * Persist the cell snapshot (engine-tagged JSON — see lib/utils/sheet-snapshot).
  * Also appends a best-effort version row so a bad save never loses history.
  */
+/**
+ * `baseRev`: düzenleyicinin üstüne yazdığını sandığı sürüm (20240374).
+ *   sayı  → yalnız tablo HÂLÂ o sürümdeyse yazar; değilse `conflict` döner.
+ *   null  → bilerek üzerine yaz ("Benimkini kaydet").
+ *   yok   → sürüm denetimi yapılmaz (kolonu olmayan eski kurulum).
+ */
 export async function saveSpreadsheetSnapshot(
   sheetId: string,
   snapshotJson: string,
-): Promise<{ ok: true } | { error: string }> {
+  baseRev?: number | null,
+): Promise<{ ok: true; rev: number | null } | { error: string; conflict?: true }> {
   if (snapshotJson.length > MAX_SNAPSHOT_CHARS) {
     return { error: "Tablo içeriği çok büyük — lütfen veriyi bölerek kaydedin." };
   }
@@ -232,13 +239,48 @@ export async function saveSpreadsheetSnapshot(
   if (editable.status === "locked") return { error: LOCKED };
   if (editable.status === "archived") return { error: ARCHIVED };
 
-  const { error } = await supabase
-    .from("operation_spreadsheets")
-    .update({ snapshot })
-    .eq("id", sheetId)
-    .eq("workspace_id", ctx.workspaceId);
-
-  if (error) return { error: toActionErrorMessage(error) };
+  /* BAŞKASININ YAZDIĞINI EZME. Tablo iki sekmede ya da iki kişide açıkken geç
+     kaydeden, ötekinin değişikliğini sessizce siliyordu (anlık görüntünün
+     tamamı koşulsuz yazılıyordu). Sürüm tutuyorsa yazılır ve bir artar;
+     tutmuyorsa hiçbir satır güncellenmez → çakışma, karar kullanıcıda. */
+  let rev: number | null = null;
+  let written = false;
+  if (typeof baseRev === "number") {
+    const res = await supabase
+      .from("operation_spreadsheets")
+      .update({ snapshot, snapshot_rev: baseRev + 1 })
+      .eq("id", sheetId)
+      .eq("workspace_id", ctx.workspaceId)
+      .eq("snapshot_rev", baseRev)
+      .select("snapshot_rev");
+    if (res.error && !isMissingSchemaError(res.error)) return { error: toActionErrorMessage(res.error) };
+    if (!res.error) {
+      if (!res.data?.length) {
+        return { error: "Bu tablo başka bir sekmede ya da başka biri tarafından değiştirildi.", conflict: true };
+      }
+      rev = baseRev + 1;
+      written = true;
+    }
+  }
+  if (!written) {
+    /* Bilerek üzerine yazma ya da sürüm kolonu yok. */
+    const cur = await supabase
+      .from("operation_spreadsheets")
+      .select("snapshot_rev")
+      .eq("id", sheetId)
+      .eq("workspace_id", ctx.workspaceId)
+      .maybeSingle();
+    const curRev = !cur.error && typeof (cur.data as { snapshot_rev?: number } | null)?.snapshot_rev === "number"
+      ? (cur.data as { snapshot_rev: number }).snapshot_rev
+      : null;
+    const { error } = await supabase
+      .from("operation_spreadsheets")
+      .update(curRev === null ? { snapshot } : { snapshot, snapshot_rev: curRev + 1 })
+      .eq("id", sheetId)
+      .eq("workspace_id", ctx.workspaceId);
+    if (error) return { error: toActionErrorMessage(error) };
+    rev = curRev === null ? null : curRev + 1;
+  }
 
   /* SÜRÜM GEÇMİŞİ — kısıtlı.
      Otomatik kaydetme yazma durduktan ~1 sn sonra çalışıyor; her kayıtta bir
@@ -271,7 +313,7 @@ export async function saveSpreadsheetSnapshot(
      sunucuda çiziliyor (departmanlar + 300 görev + kişiler sorgusu) ve
      düzenleyici yazarken donuyordu. Anlık görüntünün doğruluk kaynağı zaten
      tarayıcıdaki düzenleyici; sayfa bir sonraki gezinmede tazelenir. */
-  return { ok: true };
+  return { ok: true, rev };
 }
 
 /**

@@ -106,6 +106,12 @@ function valueOf(v: unknown): string {
 }
 
 /** Dosyada gömülü bir görselin YERLEŞİMİ — baytı burada değil, kimliği var. */
+/** ExcelJS çapası: tam hücre + hücre içi EMU ofseti (`native*`) ve eski kesirli değer. */
+type RawAnchor = {
+  col: number; row: number;
+  nativeCol?: number; nativeRow?: number; nativeColOff?: number; nativeRowOff?: number;
+};
+
 export interface ImagePlacement {
   /** ExcelJS media dizinindeki sıra; aynı görsel birden çok yerde olabilir. */
   imageId: number;
@@ -147,9 +153,10 @@ export function workbookToSnapshot(wb: unknown): ImportReport {
       getColumn: (_c: number) => { width?: number };
       model?: { merges?: string[] };
       views?: { ySplit?: number }[];
+      properties?: { defaultColWidth?: number; defaultRowHeight?: number };
       getImages?: () => {
         imageId: string | number;
-        range: { tl?: { col: number; row: number }; br?: { col: number; row: number } };
+        range: { tl?: RawAnchor; br?: RawAnchor; ext?: { width?: number; height?: number } };
       }[];
     };
 
@@ -230,20 +237,63 @@ export function workbookToSnapshot(wb: unknown): ImportReport {
        bir aralığı kaplar; modelin CellImage'i de aynı şeyi yapıyor (cs/rs).
        Bayt BURADA taşınmaz — bu modül saf dönüşüm, yükleme çağıranın işi. */
     const sheetIndex = sheets.length;
+    /* GÖRSELİN HÜCRESİ, ÇAPANIN TAM SAYISINDAN — kesrinden değil.
+       Eskiden `Math.round(tl.col)` kullanılıyordu. ExcelJS'in kesirli değeri
+       sütun içi girintiyi yanlış birimle hesaplıyor; sütuna ~23 px'ten fazla
+       girintili her görsel BİR SAĞDAKİ sütuna düşüyordu (Volkan Bey'in
+       dosyasında 05–07 numaralı ürün fotoğrafları "İmalatçı numunesi"
+       sütununa kaymıştı — 17.11.2026). Artık çapa hücresi ve EMU ofseti
+       okunur; görsel, alanının ÇOĞUNUN durduğu hücreye yazılır:
+         • başlangıç hücresinin yarısından sonra başlıyor ve sonrakine
+           uzanıyorsa SONRAKİ hücreden başlar,
+         • bitiş hücresine yalnız birkaç piksel taşıyorsa o hücre sayılmaz. */
+    const EMU_PER_PX = 9525;
+    const colPx = (c0: number) => {
+      const w = ws.getColumn(c0 + 1)?.width;
+      /* Genişliği yazılmamış sütun SAYFANIN varsayılanını kullanır (Google
+         Sheets dışa aktarımında 12,63 karakter ≈ 93 px). 64 px varsayınca
+         100 px'lik fotoğraf yan sütuna taşıyor sanılıp yandaki fotoğrafın
+         üstüne yayılıyordu. */
+      const d = ws.properties?.defaultColWidth;
+      return typeof w === "number" && w > 0 ? w * 7 + 5 : typeof d === "number" && d > 0 ? d * 7 + 5 : 64;
+    };
+    const rowPx = (r0: number) => {
+      const h = ws.getRow(r0 + 1)?.height;
+      const d = ws.properties?.defaultRowHeight;
+      return typeof h === "number" && h > 0 ? h * (4 / 3) : typeof d === "number" && d > 0 ? d * (4 / 3) : 20;
+    };
+    const axis = (
+      from: number, fromOff: number, to: number | null, toOff: number,
+      extPx: number | null, size: (_i: number) => number,
+    ): [start: number, count: number] => {
+      let end = to;
+      let endOff = toOff;
+      if (end === null) {
+        /* Tek çapalı görsel: bitiş, boyutundan (ext) yürünerek bulunur. */
+        if (!extPx || extPx <= 0) return [from, 1];
+        let left = fromOff + extPx;
+        end = from;
+        while (left > size(end) && end - from < 200) { left -= size(end); end++; }
+        endOff = left;
+      }
+      let start = from;
+      if (end > from && fromOff > size(from) * 0.5) start = from + 1;
+      if (end > start && endOff < Math.max(6, size(end) * 0.15)) end -= 1;
+      return [start, Math.max(1, end - start + 1)];
+    };
     for (const im of ws.getImages?.() ?? []) {
       const tl = im.range?.tl;
       if (!tl) continue;
-      const r = Math.round(tl.row);
-      const c = Math.round(tl.col);
+      const br = im.range?.br ?? null;
+      const cell = (a: RawAnchor, k: "Col" | "Row") => {
+        const native = a[`native${k}`];
+        return typeof native === "number" ? native : Math.floor(k === "Col" ? a.col : a.row);
+      };
+      const off = (a: RawAnchor, k: "Col" | "Row") => (a[`native${k}Off`] ?? 0) / EMU_PER_PX;
+      const [c, cs] = axis(cell(tl, "Col"), off(tl, "Col"), br ? cell(br, "Col") : null, br ? off(br, "Col") : 0, im.range.ext?.width ?? null, colPx);
+      const [r, rs] = axis(cell(tl, "Row"), off(tl, "Row"), br ? cell(br, "Row") : null, br ? off(br, "Row") : 0, im.range.ext?.height ?? null, rowPx);
       if (r < 0 || c < 0 || r >= rows || c >= cols) continue;
-      const br = im.range?.br;
-      images.push({
-        imageId: Number(im.imageId),
-        sheet: sheetIndex,
-        r, c,
-        cs: br ? Math.max(1, Math.round(br.col) - c) : 1,
-        rs: br ? Math.max(1, Math.round(br.row) - r) : 1,
-      });
+      images.push({ imageId: Number(im.imageId), sheet: sheetIndex, r, c, cs, rs });
     }
 
     sheets.push({

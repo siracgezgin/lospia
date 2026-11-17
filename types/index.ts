@@ -180,6 +180,8 @@ export type SpreadsheetStatus = "draft" | "active" | "locked" | "archived";
 export type OperationSpreadsheet = {
   id: string;
   workspace_id: string;
+  /** Anlık görüntünün sürümü (20240374) — çakışma denetimi. Eski kurulumda yok. */
+  snapshot_rev?: number;
   /** Yaşadığı AF Teamwork klasörü (20240329). null = kök. */
   folder_id: string | null;
   title: string;
