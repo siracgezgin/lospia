@@ -188,7 +188,7 @@ export default async function DocumentsPage() {
      migration'sız kurulumda Drive'daki TÜM tablolar görünmez oluyordu. */
   const sheetsSectioned = await supabase
     .from("operation_spreadsheets")
-    .select("id, title, folder_id, created_by, updated_at, visibility")
+    .select("id, title, folder_id, created_by, updated_at, visibility, source_document_id")
     .eq("workspace_id", workspaceId)
     .eq("section", "teamwork")
     .neq("status", "archived")
@@ -196,7 +196,7 @@ export default async function DocumentsPage() {
   const sheetsRes = sheetsSectioned.error
     ? await supabase
         .from("operation_spreadsheets")
-        .select("id, title, folder_id, created_by, updated_at, visibility")
+        .select("id, title, folder_id, created_by, updated_at, visibility, source_document_id")
         .eq("workspace_id", workspaceId)
         .neq("status", "archived")
         .order("updated_at", { ascending: false })
@@ -255,9 +255,25 @@ export default async function DocumentsPage() {
   /* ARŞİVLENEN kayıt Drive'da görünmez. Bağlantılarda bu süzgeç zaten vardı
      (DocumentsView); dosya ve yazıda yoktu — arşivlenmiş bir dosya klasörde
      durmaya devam ediyordu. */
+  /* AYNI DOSYA İKİ SATIR GÖRÜNMESİN (Sıraç, 17.11.2026: "ikişer tane
+     kaydediliyor dosya"). Yüklenen Excel/Word ilk açılışta tabloya/yazıya
+     aktarılır; listede hem yüklenen dosya ("Sipariş.xlsx") hem ondan doğan
+     tablo ("Sipariş") duruyordu — tek dosya iki kayıt gibi okunuyordu.
+     Aktarılmış dosyanın KENDİSİ listeden gizlenir, görünen tek satır
+     üzerinde çalışılan tablo/yazıdır. Dosya SİLİNMEZ: depoda durur; tablo
+     silinirse yeniden görünür. */
+  const importedSourceIds = new Set<string>();
+  for (const sh of sheets as unknown as { source_document_id?: string | null }[]) {
+    if (sh.source_document_id) importedSourceIds.add(sh.source_document_id);
+  }
+  for (const d of documents as unknown as { document_type?: string; status?: string; source_document_id?: string | null }[]) {
+    if (d.document_type === "doc" && d.status !== "archived" && d.source_document_id) importedSourceIds.add(d.source_document_id);
+  }
+
   const files: FileRow[] = openDocuments
     .filter((d) => (d as { document_type?: string }).document_type === "file")
     .filter((d) => d.status !== "archived")
+    .filter((d) => !importedSourceIds.has(d.id))
     .map((d) => {
       const r = d as unknown as Record<string, unknown>;
       return {
