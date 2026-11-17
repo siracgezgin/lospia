@@ -60,7 +60,9 @@ function usedRange(sheet: Sheet): { rows: number; cols: number } {
     const [r, c] = k.split(":").map(Number);
     const cell = sheet.cells[k];
     if (!Number.isFinite(r) || !Number.isFinite(c)) continue;
-    if (!cell || (!cell.v && !cell.f && !cell.s)) continue;
+    /* Yalnız GÖRSEL taşıyan hücre de kullanılan alandır — yoksa son satırdaki
+       fotoğraf dışa aktarımın dışında kalır. */
+    if (!cell || (!cell.v && !cell.f && !cell.s && !cell.img)) continue;
     if (r > maxR) maxR = r;
     if (c > maxC) maxC = c;
   }
@@ -89,6 +91,10 @@ function cellValue(raw: Scalar, style: CellStyle | undefined): string | number |
 function csvEscape(value: string): string {
   return /[",;\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 }
+
+const IMAGE_BUCKET = "documents";
+/** Tek dosyaya gömülecek en çok görsel — bellek ve süre sınırı. */
+const EXPORT_IMAGE_LIMIT = 300;
 
 export async function GET(
   req: Request,
@@ -176,6 +182,43 @@ export async function GET(
   const book = new ExcelJS.Workbook();
   book.created = new Date();
 
+  /* ── GÖRSELLER ───────────────────────────────────────────────────────────
+     Dışa aktarılan dosyada fotoğraf YOKTU (17.11.2026 denetimi: 9 ve 30
+     görselli iki dosya 0 görselle iniyordu) — ekip tabloyu Excel'e alınca
+     ürün fotoğrafları kayboluyordu. Hücre görselin kimliğini tutar; baytlar
+     Drive'dan (documents kovası) indirilip dosyaya gömülür. Excel yalnız
+     JPEG/PNG/GIF gömer; başka tür (WebP, HEIC) atlanır. */
+  const imageIds = new Set<string>();
+  for (const sh of wb.sheets) for (const cell of Object.values(sh.cells)) if (cell?.img?.id) imageIds.add(cell.img.id);
+  const embedded = new Map<string, number>(); // doküman kimliği → çalışma kitabındaki görsel
+  if (imageIds.size > 0) {
+    const ids = [...imageIds].slice(0, EXPORT_IMAGE_LIMIT);
+    const { data: docs } = await supabase
+      .from("operation_documents")
+      .select("id, file_path, file_mime, file_name")
+      .eq("workspace_id", workspaceId)
+      .in("id", ids);
+    const queue = [...((docs ?? []) as { id: string; file_path: string | null; file_mime: string | null; file_name: string | null }[])];
+    const worker = async () => {
+      for (;;) {
+        const d = queue.shift();
+        if (!d) return;
+        const kind = `${d.file_mime ?? ""} ${d.file_name ?? ""}`.toLowerCase();
+        const extension = /png/.test(kind) ? "png" : /jpe?g/.test(kind) ? "jpeg" : /gif/.test(kind) ? "gif" : null;
+        if (!d.file_path || !extension) continue;
+        try {
+          const { data: blob } = await supabase.storage.from(IMAGE_BUCKET).download(d.file_path);
+          if (!blob) continue;
+          const buffer = Buffer.from(await blob.arrayBuffer());
+          embedded.set(d.id, book.addImage({ buffer: buffer as unknown as ExcelJS.Buffer, extension }));
+        } catch {
+          /* Tek görselin indirilememesi dosyayı düşürmez — o hücre görselsiz iner. */
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: 6 }, worker));
+  }
+
   wb.sheets.forEach((sheet, index) => {
     // Excel sayfa adı: 31 karakter ve : \ / ? * [ ] yasak.
     const safeName =
@@ -186,8 +229,10 @@ export async function GET(
     const { rows, cols } = usedRange(sheet);
 
     for (let c = 0; c < Math.max(cols, 1); c++) {
-      // px → Excel karakter genişliği (≈ 7px/karakter + 5px kenar boşluğu).
-      ws.getColumn(c + 1).width = Math.max(4, ((colWidth(sheet, c) || DEFAULT_COL_W) - 5) / 7);
+      /* px → Excel karakter genişliği. İçe aktarım `karakter × 7` kullanıyor;
+         burada `(px − 5) / 7` vardı ve dosya her içe-dışa turunda sütun başına
+         ~0,7 karakter DARALIYORDU. İkisi artık birbirinin tersi. */
+      ws.getColumn(c + 1).width = Math.max(4, (colWidth(sheet, c) || DEFAULT_COL_W) / 7);
     }
 
     for (let r = 0; r < rows; r++) {
@@ -254,6 +299,22 @@ export async function GET(
 
     if (sheet.frozen && sheet.frozen > 0) {
       ws.views = [{ state: "frozen", ySplit: sheet.frozen }];
+    }
+
+    /* Görseller hücrenin ÜSTÜNE, kapladığı aralık kadar yerleşir (içe
+       aktarımdaki cs/rs ile aynı ölçü). Kenardan az pay: çizgiye yapışmasın. */
+    for (const [k, cell] of Object.entries(sheet.cells)) {
+      const imageId = cell?.img?.id ? embedded.get(cell.img.id) : undefined;
+      if (imageId === undefined || !cell?.img) continue;
+      const [r, c] = k.split(":").map(Number);
+      if (!Number.isFinite(r) || !Number.isFinite(c)) continue;
+      const cs = Math.max(1, cell.img.cs ?? 1);
+      const rs = Math.max(1, cell.img.rs ?? 1);
+      ws.addImage(imageId, {
+        tl: { col: c + 0.04, row: r + 0.04 } as ExcelJS.Anchor,
+        br: { col: c + cs - 0.04, row: r + rs - 0.04 } as ExcelJS.Anchor,
+        editAs: "oneCell",
+      });
     }
   });
 

@@ -202,7 +202,14 @@ export function workbookToSnapshot(wb: unknown): ImportReport {
            desteklenmeyen bir fonksiyon varsa hücre hata gösterir ama ham
            metin kaybolmaz — `v` son bilinen sonucu taşır. */
         const f = raw.formula ? `=${raw.formula}` : undefined;
-        const s = styleOf(raw);
+        let s = styleOf(raw);
+        /* EXCEL'DE METİN OLAN SAYI METİN KALIR. "01", "0532…", barkod gibi
+           değerler dosyada metin hücresidir; model onları sayıya çevirip
+           baştaki sıfırı atıyordu ("01" ekranda "1"). Hücre Excel'de metin
+           tipindeyse ve sayı gibi görünüyorsa biçimi "Metin" yapılır. */
+        if (!f && typeof raw.value === "string" && /^\s*[+-]?\d[\d.,]*\s*$/.test(raw.value) && s?.n === undefined) {
+          s = { ...(s ?? {}), n: "text" };
+        }
         if (!v && !f && !s) continue;   // seyrek model: boş hücre yazılmaz
         const cell: Cell = {};
         if (v) cell.v = v;

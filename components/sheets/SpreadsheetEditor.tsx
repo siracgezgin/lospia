@@ -59,6 +59,10 @@ type Sel = { r1: number; c1: number; r2: number; c2: number };
  *  tuşları imleci değil hücreyi yürütür: onaylar ve o yöne geçer. */
 type EditState = { r: number; c: number; draft: string; quick?: boolean };
 
+/** Hücre kenarlığı — Excel'in ince çizgisi. 1,5 px mürekkep siyahı tabloyu
+ *  olduğundan ağır gösteriyordu; ızgara çizgisinden (hairline) yine belirgin. */
+const CELL_BORDER = "1px solid var(--color-line-strong)";
+
 /** Pano izni reddedildiğinde gösterilir — sessizce hiçbir şey yapmasın. */
 const CLIPBOARD_WRITE_HINT = "Tarayıcı panoya yazamadı — ⌘C / Ctrl+C (kesmek için ⌘X / Ctrl+X) kullanın.";
 const norm = (s: Sel) => ({
@@ -1467,10 +1471,10 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                         lineHeight: st?.w ? undefined : `${h - 1}px`,
                         background: st?.bg || undefined,
                         color: st?.fg || undefined,
-                        borderTop: st?.bd?.includes("t") ? "1.5px solid var(--color-ink)" : undefined,
-                        borderBottom: st?.bd?.includes("b") ? "1.5px solid var(--color-ink)" : undefined,
-                        borderLeft: st?.bd?.includes("l") ? "1.5px solid var(--color-ink)" : undefined,
-                        borderRight: st?.bd?.includes("r") ? "1.5px solid var(--color-ink)" : undefined,
+                        borderTop: st?.bd?.includes("t") ? CELL_BORDER : undefined,
+                        borderBottom: st?.bd?.includes("b") ? CELL_BORDER : undefined,
+                        borderLeft: st?.bd?.includes("l") ? CELL_BORDER : undefined,
+                        borderRight: st?.bd?.includes("r") ? CELL_BORDER : undefined,
                       }}
                       title={
                         cell?.img
