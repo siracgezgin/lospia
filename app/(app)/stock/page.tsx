@@ -86,7 +86,7 @@ export default async function StockPage({
   }
 
   const locationId = scope === "all" ? null : scope;
-  const scopeName = locationId ? locations.find((l) => l.id === locationId)!.name : "Tüm stok";
+  const scopeName = locationId ? locations.find((l) => l.id === locationId)!.name : "Tüm yerlerin toplamı";
   const canEdit = role !== "viewer";
   const crumbs = [{ label: "Stock", href: "/stock" }, { label: scopeName }];
 

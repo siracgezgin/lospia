@@ -330,7 +330,11 @@ export function PlanningWeekGrid({
     const next = rowCountOfSlot.get(slot) ?? 0;
     return (
       <div className="grid border-b border-hairline" style={{ gridTemplateColumns: cols }}>
-        <RowLabel>Konu {next + 1}</RowLabel>
+        {/* ETİKET YOK. Burada "Konu 4" yazıyordu ve henüz EKLENMEMİŞ satır
+            dördüncü bir konu varmış gibi okunuyordu (Sıraç, 17.11.2026:
+            "4 konu var şeklinde algılanıyor"). Numara, konu eklenince kendi
+            satırında görünür; ekleme satırının sol hücresi boş kalır. */}
+        <RowLabel><span className="sr-only">Konu ekle</span></RowLabel>
         {weekDays.map((iso, i) => (
           <button
             key={iso}
