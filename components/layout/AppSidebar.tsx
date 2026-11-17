@@ -181,7 +181,15 @@ export function AppSidebar({
           YAZAR DA YAZAR: atıfsız bir söz fal kağıdı gibi okunuyordu. Sözü
           anlamlı kılan, kimin söylediği. */}
       {!collapsed && (
-        <div className="hidden shrink-0 space-y-2.5 px-3 pb-3 pt-1 [@media(min-height:47.5rem)]:block">
+        /* EŞİK ROLE GÖRE: yöneticinin menüsü üç satır daha uzun. Tek eşik
+           (47.5rem) menü kısayken ayarlanmıştı; satırlar eklendikçe 900 px'lik
+           ekranda kart "Operation Modules"ün üstüne biniyordu (17.11.2026). */
+        <div
+          className={cn(
+            "hidden shrink-0 space-y-2.5 px-3 pb-3 pt-1",
+            isAdmin ? "[@media(min-height:60rem)]:block" : "[@media(min-height:51rem)]:block",
+          )}
+        >
           <div className="rounded-card border border-hairline bg-surface-sunken px-3.5 py-3">
             <p className="select-none text-[12px] font-semibold uppercase tracking-[0.08em] text-brand-strong">
               Haftanın Sözü
