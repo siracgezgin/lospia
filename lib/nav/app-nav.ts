@@ -81,7 +81,10 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     // Üyede bu bölüm HİÇ çizilmez (aşağıdaki filtre boş bölümü düşürür).
     title: MODULE_GROUP_TITLES.yonetim,
-    items: [link("admin-board"), link("finance"), link("settings")],
+    /* FINANCE MENÜDEN KALKTI (Sıraç, 17.11.2026: "Finance kısmı gereksiz,
+       boşa düştü"). Ekran ve veri duruyor; Operation Modules dizininden
+       açılır. Satış ve ciro artık Stock → Satışlar'da. */
+    items: [link("admin-board"), link("settings")],
   },
 ];
 
@@ -151,6 +154,8 @@ export const ROUTE_OWNER: ReadonlyArray<readonly [prefix: string, owner: string]
      Eşleme olmadan masaüstünde hiçbir satır, telefonda ise "Menu" sekmesi de
      yanmıyordu (menuActive activeHref'e bağlı). */
   ["/activity", "/settings"],
+  // Finance'in menü satırı yok (dizinden açılır); yönetici yüzeyi → Settings yanar.
+  ["/finance", "/settings"],
   ["/archive", "/settings"],
   ["/trash", "/settings"],
 ];

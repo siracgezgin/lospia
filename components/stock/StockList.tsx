@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Download, ImagePlus, Loader2, Package, Plus, Search, X } from "lucide-react";
+import { Download, FileText, ImagePlus, Loader2, Package, Plus, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { useLiveRefresh } from "@/components/stock/useLiveRefresh";
 import { Button } from "@/components/ui/Button";
@@ -64,8 +64,12 @@ export function StockTabs({ scope, active }: { scope: string; active: StockTab }
 }
 
 export function StockList({
-  scope, scopeName, locationId, locations, products, levels, canEdit, workspaceId,
+  scope, scopeName, locationId, locations, products, levels, canEdit, workspaceId, initialQuery = "", sheetByCode = {},
 }: {
+  /** Adresten gelen arama (`?q=`) — föydeki stok şeridi ürünü böyle açar. */
+  initialQuery?: string;
+  /** Ürün kodu (küçük harf) → föy kimliği. */
+  sheetByCode?: Record<string, string>;
   scope: string;
   scopeName: string;
   /** null = bütün yerlerin toplamı. */
@@ -77,7 +81,7 @@ export function StockList({
   workspaceId: string;
 }) {
   useLiveRefresh();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   /* Bir yerde varsayılan: o yere girmiş ürünler. "Tüm ürünler" başka yerdeki
      ürüne buradan giriş yapabilmek için. */
   const [onlyHere, setOnlyHere] = useState(locationId !== null);
@@ -193,6 +197,10 @@ export function StockList({
         <ProductDialog
           key={dialog.product?.id ?? "new"}
           product={dialog.product}
+          sheetHref={(() => {
+            const id = dialog.product ? sheetByCode[dialog.product.code.trim().toLowerCase()] : undefined;
+            return id ? `/production/${id}?from=${encodeURIComponent(`/stock?l=${scope}`)}` : null;
+          })()}
           locations={locations}
           levels={levels}
           canEdit={canEdit}
@@ -471,8 +479,10 @@ function MovementDialog({
 /* ── Ürün penceresi: yeni ürün · düzenle · yerlere göre dağılım ───────────── */
 
 function ProductDialog({
-  product, locations, levels, canEdit, workspaceId, onClose,
+  product, locations, levels, canEdit, workspaceId, onClose, sheetHref = null,
 }: {
+  /** Aynı ürün kodunu taşıyan föy (varsa). */
+  sheetHref?: string | null;
   product: StockProduct | null;
   locations: StockLocation[];
   levels: StockLevel[];
@@ -567,6 +577,11 @@ function ProductDialog({
               <a href={web.url} target="_blank" rel="noreferrer" className="block truncate text-[12.5px] text-muted hover:text-ink hover:underline">
                 {web.url.replace(/^https?:\/\/(www\.)?/, "")}
               </a>
+            )}
+            {sheetHref && (
+              <Link href={sheetHref} className="inline-flex items-center gap-1.5 text-[13px] font-medium text-brand hover:underline">
+                <FileText size={14} aria-hidden /> Üretim föyünü aç
+              </Link>
             )}
           </div>
         </div>

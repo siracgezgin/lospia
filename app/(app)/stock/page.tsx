@@ -27,7 +27,7 @@ export const metadata = { title: "Stock" };
 export default async function StockPage({
   searchParams,
 }: {
-  searchParams: Promise<{ l?: string; v?: string; d?: string }>;
+  searchParams: Promise<{ l?: string; v?: string; d?: string; q?: string }>;
 }) {
   /* Şimdilik yalnız yönetici — Aslı Hanım onaylayınca ekibe açılacak
      (bkz. registry'deki not ve 20240376). */
@@ -134,10 +134,25 @@ export default async function StockPage({
   const products = await fetchAll<StockProduct>(
     "stock_products", "id, code, barcode, name, price, image_url, web_url, web_product_id, active", "name",
   );
+  /* STOK ↔ FÖY: aynı ürün koduna sahip föy varsa ürün penceresinden açılır. */
+  const { data: sheetRows } = await supabase
+    .from("production_sheets")
+    .select("id, product_code")
+    .eq("workspace_id", workspaceId)
+    .not("product_code", "is", null)
+    .limit(5000);
+  const sheetByCode: Record<string, string> = {};
+  for (const r of (sheetRows ?? []) as { id: string; product_code: string | null }[]) {
+    const c = (r.product_code ?? "").trim().toLowerCase();
+    if (c && !sheetByCode[c]) sheetByCode[c] = r.id;
+  }
+
   return (
     <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
       <ModulePageHeader title="Stock" crumbs={crumbs} />
       <StockList
+        initialQuery={(sp.q ?? "").slice(0, 120)}
+        sheetByCode={sheetByCode}
         scope={scope}
         scopeName={scopeName}
         locationId={locationId}

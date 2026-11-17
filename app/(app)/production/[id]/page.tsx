@@ -4,6 +4,7 @@ import { requireModuleMember } from "@/lib/modules/context";
 import { AccessDenied } from "@/components/modules/AccessDenied";
 import { ProductionSheetEditor } from "@/components/production/ProductionSheetEditor";
 import { getCategoryTree } from "@/lib/collection/category-tree";
+import type { SheetStock } from "@/components/production/SheetStockStrip";
 import type { ProductionSheet, Manufacturer, SheetMaterialWithMaterial, Supplier } from "@/types";
 import type { PickableMaterial } from "@/components/production/SheetBom";
 import type { PortalLinkRow } from "@/components/production/ManufacturerAccess";
@@ -163,8 +164,40 @@ export default async function ProductionSheetPage({
     id: string; body: string; author_name: string | null; created_at: string;
   }[];
 
+  /* FÖY ↔ STOK. Ürün kodu stoktaki bir ürünle eşleşiyorsa eldeki adet föyde
+     görünür (Sıraç, 17.11.2026: "bir arada olması gerekenleri entegre et").
+     Stok şimdilik yalnız yöneticiye açık; üyede sorgu hiç atılmaz. Hata olursa
+     (tablo yok, kod eşleşmiyor) şerit çizilmez — föy bundan etkilenmez. */
+  let stock: SheetStock | null = null;
+  const sheetCode = ((data as { product_code?: string | null }).product_code ?? "").trim();
+  if (isAdmin && sheetCode) {
+    const { data: sp } = await supabase
+      .from("stock_products")
+      .select("id, code")
+      .eq("workspace_id", workspaceId)
+      .eq("active", true)
+      /* `_` ve `%` ILIKE'ta jokerdir; kodlarda alt çizgi çok (AF_S008). */
+      .ilike("code", sheetCode.replace(/[\\%_]/g, "\\$&"))
+      .limit(1)
+      .maybeSingle();
+    if (sp) {
+      const [{ data: lv }, { data: locs }] = await Promise.all([
+        supabase.from("stock_levels").select("location_id, size, qty").eq("workspace_id", workspaceId).eq("product_id", (sp as { id: string }).id),
+        supabase.from("stock_locations").select("id, name, position").eq("workspace_id", workspaceId).order("position"),
+      ]);
+      const name = new Map(((locs ?? []) as { id: string; name: string }[]).map((l) => [l.id, l.name]));
+      stock = {
+        code: (sp as { code: string }).code,
+        rows: ((lv ?? []) as { location_id: string; size: string; qty: number }[])
+          .filter((r) => r.qty !== 0)
+          .map((r) => ({ location: name.get(r.location_id) ?? "", size: r.size, qty: r.qty })),
+      };
+    }
+  }
+
   return (
     <ProductionSheetEditor
+      stock={stock}
       sheet={data as unknown as ProductionSheet}
       portalLinks={portalLinks}
       portalNotes={portalNotes}

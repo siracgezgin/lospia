@@ -29,6 +29,7 @@ import { SheetSourcing } from "./SheetSourcing";
 import { SortableRows, SortableTableRow, arrayMove } from "./SortableRow";
 import { SheetColorVariants } from "./SheetColorVariants";
 import { SheetMeetingNotes } from "./SheetMeetingNotes";
+import { SheetStockStrip, type SheetStock } from "@/components/production/SheetStockStrip";
 import { SheetVariants, type SiblingSheet } from "./SheetVariants";
 import { checkSheet } from "@/lib/production/completeness";
 import { COLLECTION_TAXONOMY, type CategoryNode } from "@/lib/collection/taxonomy";
@@ -89,6 +90,8 @@ interface Props {
   /** Geri dönülecek adres (`?from=`) — Koleksiyon'daki kategori/arama korunur.
    *  Verilmezse zincir yoldan türer ve Koleksiyon köküne iner. */
   backHref?: string;
+  /** Ürün koduyla eşleşen stok kaydı (yalnız yöneticide dolu). */
+  stock?: SheetStock | null;
 }
 
 /**
@@ -425,7 +428,7 @@ function Section({ title, children, className, checkKey }: {
   );
 }
 
-export function ProductionSheetEditor({ sheet, initialCategory = null, initialSubcategory = null, memberNames, manufacturers = [], seasons = [], materials = [], suppliers = [], bom = [], siblings = [], isAdmin, currentUserId, categories, portalLinks = [], portalNotes = [], backHref }: Props) {
+export function ProductionSheetEditor({ sheet, initialCategory = null, initialSubcategory = null, memberNames, manufacturers = [], seasons = [], materials = [], suppliers = [], bom = [], siblings = [], isAdmin, currentUserId, categories, portalLinks = [], portalNotes = [], backHref, stock = null }: Props) {
   /* FİHRİSTE FÖYDEN EKLENENLER. Föyden açılan usta sayfa yenilenmeden
      seçilebilir olmalı; sunucudan gelen `manufacturers` ancak bir sonraki
      gezinmede tazelenir.
@@ -983,6 +986,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
               </span>
             </div>
           )}
+          {!isNew && stock && <SheetStockStrip stock={stock} />}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {canDelete && (
