@@ -40,6 +40,7 @@
  *   … --afr-yer "Market 212 Çeşme"     AFR stoğunu var olan bir yere yaz
  *   … --afr-ad "AFR Çeşme"             o yerin adını değiştir
  *   … --tam-sayim m212|afr|hepsi       dosyada olmayan ürünleri o yerde sıfırla
+ *   … --koru <dosya>                   sıfırlanmayacak kod/barkod listesi (takı gibi)
  *   … --kod "Market212 Stok#3=26_KD001_PS"   kodu yazılmamış satıra kod ver
  *   … --dosya <yol>
  */
@@ -55,7 +56,7 @@ const args = (name: string) => process.argv.flatMap((a, i) => (a === name && pro
    bayrak sessizce yok sayılıp varsayılan kipte yazmaya yol açmasın. */
 {
   const flags = new Set(["--uygula", "--prod", "--fotograf"]);
-  const valued = new Set(["--m212-yer", "--afr-yer", "--afr-ad", "--tam-sayim", "--kod", "--dosya"]);
+  const valued = new Set(["--m212-yer", "--afr-yer", "--afr-ad", "--tam-sayim", "--koru", "--kod", "--dosya"]);
   const argv = process.argv.slice(2);
   for (let i = 0; i < argv.length; i++) {
     if (flags.has(argv[i])) continue;
@@ -70,6 +71,13 @@ const PHOTOS = process.argv.includes("--fotograf");
 const M212_LOCATION = arg("--m212-yer") ?? "Market 212 İstanbul";
 const AFR_LOCATION = arg("--afr-yer") ?? "AFR";
 const FULL = arg("--tam-sayim") ?? "";
+/** `--tam-sayim` sıfırlarken DOKUNULMAYACAK ürünler: her satırında bir kod ya
+ *  da barkod olan dosya. Dosyada hiç sayfası olmayan türler (takı) "yok" değil
+ *  "sayılmamış"tır — Kısmet Hanım teyit edene kadar sıfırlanmaz. */
+const KEEP = new Set(
+  (arg("--koru") ? fs.readFileSync(arg("--koru")!.replace(/^~/, os.homedir()), "utf8").split(/\r?\n/) : [])
+    .map((l) => l.split("\t")[0].trim().toLocaleUpperCase("en-US")).filter((l) => l && !l.startsWith("#")),
+);
 /** AFR stoğunun yazıldığı yerin YENİ adı (isteğe bağlı). Eski stok programının
  *  tek mağazası "AFR Çeşme Marina"ydı; o stok panelde "Market 212 Çeşme" adıyla
  *  duruyor. AFR sayfaları aynı defterin güncel hâliyse yer adı da düzelir. */
@@ -434,9 +442,16 @@ async function main() {
     }
     absent[k].sort((a, b) => total(b.sizes) - total(a.sizes));
     const zero = FULL === k || FULL === "hepsi";
-    list(`"${loc[k].name}" yerinde stoğu var, dosyada YOK — ${zero ? "SIFIRLANACAK (--tam-sayim)" : "dokunulmuyor"} · ${sum(absent[k].map((a) => total(a.sizes)))} adet`,
-      absent[k].map((a) => `${a.p.code || "(kodsuz)"}  ${a.p.name}  ${sizesText(a.sizes)}`), 60);
-    if (zero) for (const a of absent[k]) for (const [size, q] of a.sizes) if (q) {
+    const kept = (a: { p: Product }) => KEEP.has(a.p.code.trim().toLocaleUpperCase("en-US")) || (!!a.p.barcode && KEEP.has(a.p.barcode.trim().toLocaleUpperCase("en-US")));
+    const protectedOnes = zero ? absent[k].filter(kept) : [];
+    const toZero = zero ? absent[k].filter((a) => !kept(a)) : [];
+    list(`"${loc[k].name}" yerinde stoğu var, dosyada YOK — ${zero ? "SIFIRLANACAK (--tam-sayim)" : "dokunulmuyor"} · ${sum((zero ? toZero : absent[k]).map((a) => total(a.sizes)))} adet`,
+      (zero ? toZero : absent[k]).map((a) => `${a.p.code || "(kodsuz)"}  ${a.p.name}  ${sizesText(a.sizes)}`), 400);
+    if (protectedOnes.length) {
+      list(`"${loc[k].name}" yerinde stoğu var, dosyada YOK — KORUNUYOR (--koru) · ${sum(protectedOnes.map((a) => total(a.sizes)))} adet`,
+        protectedOnes.map((a) => `${a.p.code || "(kodsuz)"}  ${a.p.name}  ${sizesText(a.sizes)}`), 400);
+    }
+    if (zero) for (const a of toZero) for (const [size, q] of a.sizes) if (q) {
       moves.push({ item: null, productId: a.p.id, k, size, qty: -q, note: `Excel sayımı (${src.kaynak}, ${src.alinma}) · dosyada yok`, refKey: "" });
     }
   }
