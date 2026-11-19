@@ -26,7 +26,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import {
   Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight,
   Undo2, Redo2, Sigma, Plus, WrapText,
-  PaintBucket, Baseline, Square, Combine, X, Pencil, ImagePlus, ImageOff,
+  PaintBucket, Baseline, Square, Combine, X, Pencil, ImagePlus, ImageOff, Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { useConfirm } from "@/components/ui/useConfirm";
@@ -43,6 +43,8 @@ import {
 import { evaluateSheet, isError, parseNumber, shiftFormula, type Scalar } from "@/lib/sheets/formula";
 import { alignOf, formatValue, NUMBER_FORMAT_LABELS } from "@/lib/sheets/format";
 import { fitRowHeights, fontsReady, fontsReadyOnServer, subscribeFontsReady } from "@/lib/sheets/autofit";
+import { isImageFile, uploadSheetImage } from "@/lib/sheets/upload-image";
+import { parseClipboardGrid } from "@/lib/sheets/clipboard";
 
 export interface SheetEditorApi {
   getSnapshot: () => WorkbookSnapshot;
@@ -458,15 +460,62 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
   const DEFAULT_IMG_CS = 3;
   const DEFAULT_IMG_RS = 4;
 
-  const putImage = useCallback((image: { id: string; name: string }) => {
-    if (readOnly) return;
+  /* SATIR ZATEN YÜKSEKSE GÖRSEL HÜCRENİN İÇİNE OTURUR. Fotoğraf sütunu olan
+     tabloda (Excel'den gelen sipariş formu: satırlar ~170 px) 3×4 hücreye
+     yayılan görsel yandaki ve alttaki hücreleri örtüyordu. */
+  const IN_CELL_MIN_H = 80;
+  /** Birden çok fotoğraf eklenince satırların alacağı en az yükseklik. */
+  const PHOTO_ROW_H = 120;
+
+  /**
+   * Görsel(ler)i koyar. Tek görsel `at` hücresine (yoksa seçili hücreye);
+   * birden çok görsel aynı sütunda AŞAĞI DOĞRU, her satıra bir tane, hücrenin
+   * içinde — kısa satırlar fotoğraf görünecek kadar yükseltilir.
+   */
+  const putImages = useCallback((images: { id: string; name: string }[], at?: { r: number; c: number }) => {
+    if (readOnly || !images.length) return;
     const g0 = sheetRef.current;
-    const prev = getCell(g0, active.r, active.c);
-    commit(setCell(g0, active.r, active.c, {
-      ...(prev ?? {}),
-      img: { id: image.id, name: image.name, cs: DEFAULT_IMG_CS, rs: DEFAULT_IMG_RS },
+    const r0 = at?.r ?? active.r, c0 = at?.c ?? active.c;
+    if (images.length === 1) {
+      const inCell = rowHRef.current(r0) >= IN_CELL_MIN_H;
+      const prev = getCell(g0, r0, c0);
+      commit(setCell(g0, r0, c0, {
+        ...(prev ?? {}),
+        img: { id: images[0].id, name: images[0].name, cs: inCell ? 1 : DEFAULT_IMG_CS, rs: inCell ? 1 : DEFAULT_IMG_RS },
+      }));
+      return;
+    }
+    const rows = Math.min(MAX_ROWS, Math.max(g0.rows, r0 + images.length));
+    const rowH = { ...(g0.rowH ?? {}) };
+    images.forEach((_, i) => { if (r0 + i < rows && (rowH[r0 + i] ?? ROW_H) < PHOTO_ROW_H) rowH[r0 + i] = PHOTO_ROW_H; });
+    commit(withCells({ ...g0, rows, rowH }, (put) => {
+      images.forEach((im, i) => {
+        if (r0 + i >= rows) return;
+        put(r0 + i, c0, { ...(getCell(g0, r0 + i, c0) ?? {}), img: { id: im.id, name: im.name, cs: 1, rs: 1 } });
+      });
     }));
   }, [readOnly, active.r, active.c, commit]);
+  const putImage = useCallback((image: { id: string; name: string }) => putImages([image]), [putImages]);
+
+  /* BİLGİSAYARDAN GÖRSEL — sürükle-bırak ve yapıştır (seçicideki "Bilgisayardan
+     yükle" aynı yükleyiciyi kullanır). Sırayla yüklenir; olmayan dosyanın
+     nedeni alt şeritte yazar, olanlar yine yerleşir. */
+  const [uploading, setUploading] = useState<{ done: number; total: number } | null>(null);
+  const uploadImages = useCallback(async (files: File[], at?: { r: number; c: number }) => {
+    if (readOnly || !files.length) return;
+    setUploading({ done: 0, total: files.length });
+    const ok: { id: string; name: string }[] = [];
+    let firstError: string | null = null;
+    for (const [i, file] of files.entries()) {
+      const res = await uploadSheetImage(file);
+      if ("error" in res) firstError ??= res.error;
+      else ok.push(res);
+      setUploading({ done: i + 1, total: files.length });
+    }
+    setUploading(null);
+    putImages(ok, at);
+    if (firstError) setNotice(firstError);
+  }, [readOnly, putImages]);
 
   /** Seçili hücredeki görseli büyütür/küçültür (en az 1 hücre). */
   const resizeImage = useCallback((delta: number) => {
@@ -625,18 +674,27 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
   }, [editing, active.r, active.c, sel, sheet.rows, sheet.cols, moveTo, startEdit, clearRange, undo, redo, readOnly]);
 
   // ── Kopyala / kes / yapıştır ──────────────────────────────────────────────
+  /* PANELDEN KOPYALANAN SON SEÇİM — nereden kopyalandığı. Aynı metin panele
+     geri yapıştırılırsa formüller Excel'deki gibi KAYAR (=A1*B1 iki satır
+     aşağı → =A3*B3); dışarıdan gelen metinde (Excel, e-posta) kaydırma yok. */
+  const clipRef = useRef<{ text: string; r1: number; c1: number } | null>(null);
   const selectionTsv = useCallback((): string => {
     const n = norm(sel);
     const lines: string[] = [];
+    /* Satır sonu / sekme / baştaki tırnak içeren hücre Excel kuralıyla
+       tırnağa alınır — yoksa çok satırlı hücre yapıştırılınca satırlara dağılır. */
+    const quote = (t: string) => (/[\t\n]/.test(t) || t.startsWith('"') ? `"${t.replace(/"/g, '""')}"` : t);
     for (let r = n.r1; r <= n.r2; r++) {
       const row: string[] = [];
       for (let c = n.c1; c <= n.c2; c++) {
         const cell = getCell(sheet, r, c);
-        row.push(cell?.f ?? cell?.v ?? "");
+        row.push(quote(String(cell?.f ?? cell?.v ?? "")));
       }
       lines.push(row.join("\t"));
     }
-    return lines.join("\n");
+    const text = lines.join("\n");
+    clipRef.current = { text, r1: n.r1, c1: n.c1 };
+    return text;
   }, [sel, sheet]);
 
   /**
@@ -670,28 +728,36 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
   }, [editing, readOnly, selectionTsv, sel, clearRange]);
 
   function pasteText(text: string) {
-    const rows = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
-    if (rows.length && rows[rows.length - 1] === "") rows.pop();
+    /* Çok satırlı hücreyi (Alt+Enter) tek hücre olarak okur — bkz. clipboard.ts. */
+    const rows = parseClipboardGrid(text);
     if (rows.length === 0) return;   // Math.max(...[]) = -Infinity → bozuk seçim
     let g = sheetRef.current;
     const needRows = active.r + rows.length;
-    const needCols = active.c + Math.max(...rows.map((r) => r.split("\t").length));
+    const needCols = active.c + Math.max(...rows.map((r) => r.length));
     if (needRows > g.rows) g = { ...g, rows: Math.min(MAX_ROWS, needRows) };
     if (needCols > g.cols) g = { ...g, cols: Math.min(MAX_COLS, needCols) };
+    /* Panelin kendi kopyasıysa formüller hedefe göre kayar. */
+    const norml = (t: string) => t.replace(/\r\n?/g, "\n").replace(/\n$/, "");
+    const own = clipRef.current && norml(clipRef.current.text) === norml(text) ? clipRef.current : null;
+    const dr = own ? active.r - own.r1 : 0;
+    const dc = own ? active.c - own.c1 : 0;
     // Tek harita kopyası: hücre başına writeCell çağırmak 5.000 hücrelik bir
     // yapıştırmayı O(n²) yapıyordu.
     const base = g;
     g = withCells(base, (put) => {
-      rows.forEach((line, dr) => {
-        line.split("\t").forEach((cellText, dc) => {
-          const r = active.r + dr;
-          const c = active.c + dc;
+      rows.forEach((line, dr0) => {
+        line.forEach((cellText, dc0) => {
+          const r = active.r + dr0;
+          const c = active.c + dc0;
           if (r >= base.rows || c >= base.cols) return;   // ızgara sınırını aşma
           const prev = getCell(base, r, c);
           const isFormula = cellText.trim().startsWith("=");
+          /* Çok satırlı metin "metni kaydır" ile gelir; yoksa tek satıra
+             sıkışıp yalnız ilk satırı görünürdü. */
+          const style = cellText.includes("\n") ? { ...(prev?.s ?? {}), w: true } : prev?.s;
           put(r, c, {
-            ...(prev?.s ? { s: prev.s } : {}),
-            ...(isFormula ? { f: cellText } : cellText !== "" ? { v: cellText } : {}),
+            ...(style ? { s: style } : {}),
+            ...(isFormula ? { f: own ? shiftFormula(cellText, dr, dc) : cellText } : cellText !== "" ? { v: cellText } : {}),
           });
         });
       });
@@ -707,7 +773,16 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
   function onPaste(e: React.ClipboardEvent) {
     if (editing || readOnly) return;
     const text = e.clipboardData.getData("text/plain");
-    if (!text) return;
+    if (!text) {
+      /* Metin yoksa panodaki GÖRSEL yapıştırılır (ekran görüntüsü, kopyalanan
+         fotoğraf). Metin varsa o önceliklidir: Excel hücre kopyalarken panoya
+         metnin yanında hücrelerin RESMİNİ de koyar. */
+      const files = [...e.clipboardData.files].filter(isImageFile);
+      if (!files.length) return;
+      e.preventDefault();
+      void uploadImages(files);
+      return;
+    }
     e.preventDefault();
     pasteText(text);
   }
@@ -1193,7 +1268,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
           <TBtn onClick={toggleMerge} active={!!mergeAt(sheet, active.r, active.c)} title="Hücreleri birleştir / çöz"><Combine size={15} /></TBtn>
           {/* GÖRSEL: hücreye dosya YÜKLENMEZ, Drive'da duran bir görsel SEÇİLİR
               — aynı fotoğraf her yerde tek kopya (Sıraç, 2026-09-06). */}
-          <TBtn onClick={() => setPickerOpen(true)} title="Görsel ekle (Drive'dan seç)"><ImagePlus size={15} /></TBtn>
+          <TBtn onClick={() => setPickerOpen(true)} title="Görsel ekle"><ImagePlus size={15} /></TBtn>
           {getCell(sheet, active.r, active.c)?.img && (
             <TBtn onClick={clearImages} title="Görseli kaldır"><ImageOff size={15} /></TBtn>
           )}
@@ -1257,6 +1332,18 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
         onCut={onCut}
         onPaste={onPaste}
         onMouseUp={() => setDragging(false)}
+        onDragOver={(e) => { if (!readOnly && e.dataTransfer.types.includes("Files")) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; } }}
+        onDrop={(e) => {
+          if (readOnly || !e.dataTransfer.types.includes("Files")) return;
+          e.preventDefault();
+          const files = [...e.dataTransfer.files].filter(isImageFile);
+          if (!files.length) return;
+          /* Bırakılan hücre: imlecin altındaki. Bulunamazsa seçili hücre. */
+          const cell = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest<HTMLElement>("[data-cell-r]");
+          const at = cell ? { r: Number(cell.dataset.cellR), c: Number(cell.dataset.cellC) } : undefined;
+          if (at) setSel({ r1: at.r, c1: at.c, r2: at.r, c2: at.c });
+          void uploadImages(files, at);
+        }}
         role="grid"
         aria-label="Hücreler"
         aria-readonly={readOnly || undefined}
@@ -1669,8 +1756,10 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
       {/* ── Durum çubuğu ─────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between gap-3 border-t border-hairline px-3 py-1.5 text-[12px] text-subtle">
         <span className="tabular-nums">{sheet.rows} satır · {sheet.cols} sütun</span>
-        {notice
-          ? <span role="status" className="min-w-0 truncate font-medium text-ink">{notice}</span>
+        {uploading
+          ? <span role="status" className="inline-flex min-w-0 items-center gap-1.5 font-medium tabular-nums text-ink"><Loader2 size={12} className="animate-spin" aria-hidden /> Görsel yükleniyor {uploading.done}/{uploading.total}</span>
+          : notice
+          ? <span role="status" className="min-w-0 truncate font-medium text-ink" title={notice}>{notice}</span>
           : evaluated.failed
             ? <span className="truncate font-medium text-danger">Tablo hesaplanamadı</span>
             : summary && <span className="truncate font-medium tabular-nums text-muted">{summary}</span>}
@@ -1753,6 +1842,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
         open={pickerOpen}
         onClose={() => { setPickerOpen(false); requestAnimationFrame(() => scrollRef.current?.focus({ preventScroll: true })); }}
         onPick={putImage}
+        onPickMany={putImages}
       />
       {dialog}
     </div>

@@ -208,3 +208,105 @@ export async function signSheetImages(
   }
   return { urls };
 }
+
+/* ── Bilgisayardan yükleme ─────────────────────────────────────────────────
+   Ekip (18.11.2026): "Fotoğraf rahatlıkla ekleyemiyoruz." Tabloya görsel
+   koymak için önce AF Teamwork'e yükleyip sonra seçiciden bulmak gerekiyordu.
+   Artık seçiciden, sürükleyerek ya da yapıştırarak DOĞRUDAN yüklenir; model
+   değişmez — hücre yine Drive kaydının kimliğini tutar.
+
+   Baytlar sunucudan GEÇMEZ (Vercel gövde sınırı 4,5 MB; bkz.
+   prepareDocumentUpload): tarayıcı önce küçültür, yolu buradan alır, doğrudan
+   depoya yazar, sonra kaydı açtırır. Yol içeriğin ÖZETİNDEN türer — aynı
+   fotoğraf ikinci kez yüklenmez, var olan kayıt geri döner. */
+
+const UPLOAD_FOLDER = "Tablo görselleri";
+const SHA_RE = /^[0-9a-f]{64}$/;
+const EXT_MIME: Record<string, string> = { jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif" };
+
+const mainPath = (ws: string, sha: string, ext: string) => `${ws}/tablo-gorselleri/${sha}.${ext}`;
+const thumbPath = (ws: string, sha: string) => `${ws}/thumbs/${sha}.jpeg`;
+
+export async function beginSheetImageUpload(input: {
+  sha: string;
+  ext: string;
+}): Promise<{ existing: { id: string; name: string } } | { path: string; thumbPath: string; contentType: string } | { error: string }> {
+  if (!SHA_RE.test(input.sha) || !EXT_MIME[input.ext]) return { error: "Geçersiz görsel." };
+  const ctx = await getCtx();
+  if (!ctx) return { error: AUTH_REQUIRED };
+  const path = mainPath(ctx.workspaceId, input.sha, input.ext);
+  const { data: dup } = await ctx.supabase
+    .from("operation_documents")
+    .select("id, file_name, title")
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("file_path", path)
+    .limit(1)
+    .maybeSingle();
+  if (dup) {
+    const d = dup as { id: string; file_name: string | null; title: string | null };
+    return { existing: { id: d.id, name: d.file_name ?? d.title ?? "Görsel" } };
+  }
+  return { path, thumbPath: thumbPath(ctx.workspaceId, input.sha), contentType: EXT_MIME[input.ext] };
+}
+
+export async function finishSheetImageUpload(input: {
+  sha: string;
+  ext: string;
+  name: string;
+  size: number;
+  hasThumb: boolean;
+}): Promise<{ id: string; name: string } | { error: string }> {
+  if (!SHA_RE.test(input.sha) || !EXT_MIME[input.ext]) return { error: "Geçersiz görsel." };
+  const ctx = await getCtx();
+  if (!ctx) return { error: AUTH_REQUIRED };
+  const { supabase, workspaceId } = ctx;
+  const user = await getAuthUser();
+  if (!user) return { error: AUTH_REQUIRED };
+  const path = mainPath(workspaceId, input.sha, input.ext);
+  const name = (input.name.trim() || "gorsel").slice(0, 300);
+
+  /* Klasör — varsa bulunur, yoksa açılır; açılamazsa görsel köke düşer
+     (yüklemeyi bir klasör yüzünden geri çevirmek doğru olmaz). */
+  const findFolder = async () => {
+    const { data } = await supabase
+      .from("document_folders")
+      .select("id")
+      .eq("workspace_id", workspaceId)
+      .eq("name", UPLOAD_FOLDER)
+      .is("parent_id", null)
+      .limit(1)
+      .maybeSingle();
+    return data ? (data as { id: string }).id : null;
+  };
+  let folderId = await findFolder();
+  if (!folderId) {
+    const { data: created } = await supabase
+      .from("document_folders")
+      .insert({ workspace_id: workspaceId, name: UPLOAD_FOLDER, parent_id: null, section: "teamwork", visibility: "all", created_by: user.id, updated_by: user.id })
+      .select("id")
+      .single();
+    folderId = created ? (created as { id: string }).id : await findFolder();
+  }
+
+  const { data, error } = await supabase
+    .from("operation_documents")
+    .insert({
+      workspace_id: workspaceId,
+      title: name,
+      document_type: "file",
+      folder_id: folderId,
+      file_path: path,
+      thumb_path: input.hasThumb ? thumbPath(workspaceId, input.sha) : null,
+      file_name: name,
+      file_size: Math.max(0, Math.floor(input.size)),
+      file_mime: EXT_MIME[input.ext],
+      section: "teamwork",
+      status: "approved",
+      owner_id: user.id,
+      created_by: user.id,
+    })
+    .select("id")
+    .single();
+  if (error || !data) return { error: "Görsel kaydedilemedi." };
+  return { id: (data as { id: string }).id, name };
+}
