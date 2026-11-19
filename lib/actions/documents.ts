@@ -7,6 +7,7 @@ import type { AppRole } from "@/lib/auth/permissions";
 import { toActionErrorMessage } from "@/lib/utils/supabase-errors";
 import { logWorkspaceActivity, WORKSPACE_ACTIONS } from "@/lib/activity/log-workspace-activity";
 import { sanitizeRichText } from "@/lib/office/sanitize-html";
+import { bodyRev } from "@/components/documents/doc-rev";
 import { MAX_UPLOAD_BYTES } from "@/lib/utils/compress-image";
 
 // Doküman Merkezi — a link/metadata registry (no file storage). Unlike the
@@ -428,10 +429,20 @@ export async function createTeamworkDoc(
   return { id: (row as { id: string }).id };
 }
 
+const DOC_CONFLICT = "Başka bir yerde değişti";
+
+/**
+ * `baseRev` = editörün bildiği son SUNUCU gövdesinin parmak izi (bodyRev).
+ * Verilirse ve sunucudaki gövde ondan farklıysa (başkası araya girmiş)
+ * yazılmaz, `conflict` döner — kullanıcı "Yenile" ya da "Benimkini kaydet"
+ * der. Verilmezse (benimkini kaydet, eski istemci) koşulsuz yazar. Dönen
+ * `rev` temizlenmiş, kaydedilen gövdenin parmak izidir.
+ */
 export async function saveTeamworkDoc(
   documentId: string,
   input: { title: string; body?: string | null },
-): Promise<{ ok: true } | { error: string }> {
+  baseRev?: string,
+): Promise<{ ok: true; rev: string } | { error: string; conflict?: boolean }> {
   const parsed = DocBodySchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
@@ -442,17 +453,45 @@ export async function saveTeamworkDoc(
   const gate = await loadEditable(supabase, ctx, documentId);
   if ("error" in gate) return { error: gate.error };
 
-  const { error } = await supabase
-    .from("operation_documents")
-    .update({
-      title: parsed.data.title.trim(),
-      // Temizlik SUNUCUDA — istemciden gelen HTML'e asla güvenilmez.
-      body: sanitizeRichText(parsed.data.body),
-    })
-    .eq("id", documentId)
-    .eq("workspace_id", ctx.workspaceId);
+  // Temizlik SUNUCUDA — istemciden gelen HTML'e asla güvenilmez.
+  const body = sanitizeRichText(parsed.data.body);
+  const rev = bodyRev(body);
+  const guard = baseRev !== undefined;
 
-  if (error) return { error: toActionErrorMessage(error) };
+  for (let attempt = 0; ; attempt++) {
+    let stamp: string | null = null;
+    if (guard) {
+      const { data: row, error: readErr } = await supabase
+        .from("operation_documents")
+        .select("body, updated_at")
+        .eq("id", documentId)
+        .eq("workspace_id", ctx.workspaceId)
+        .maybeSingle();
+      if (readErr) return { error: toActionErrorMessage(readErr) };
+      if (!row) return { error: NOT_FOUND };
+      const current = bodyRev((row as { body: string | null }).body);
+      /* Sunucudaki zaten benim yazacağımla aynıysa çakışma değildir. */
+      if (current !== baseRev && current !== rev) return { error: DOC_CONFLICT, conflict: true };
+      stamp = (row as { updated_at: string }).updated_at;
+    }
+
+    let q = supabase
+      .from("operation_documents")
+      .update({ title: parsed.data.title.trim(), body })
+      .eq("id", documentId)
+      .eq("workspace_id", ctx.workspaceId);
+    /* OKU–KARŞILAŞTIR–YAZ ATOMİK DEĞİL: iki kişi aynı saniyede kaydederse
+       ikisi de yukarıdaki kontrolü geçer. Yazma, okuduğumuz satır HÂLÂ o
+       satırsa (updated_at aynıysa) olur; değilse baştan okunur — araya giren
+       yalnız adı/klasörü değiştirdiyse gövde aynıdır, ikinci denemede yazılır;
+       gövdeyi değiştirdiyse çakışmadır. */
+    if (stamp) q = q.eq("updated_at", stamp);
+    const { data, error } = await q.select("id");
+    if (error) return { error: toActionErrorMessage(error) };
+    if (data?.length) break;
+    if (!guard) return { error: "Kaydedilemedi." };
+    if (attempt >= 2) return { error: DOC_CONFLICT, conflict: true };
+  }
 
   /* revalidatePath BİLEREK ÇAĞRILMIYOR — tablo (sheets.ts) ve föy
      (production.ts) editörleriyle aynı karar.
@@ -469,7 +508,7 @@ export async function saveTeamworkDoc(
      zaten router.refresh() çağırıyor, /documents listesi force-dynamic
      olduğu için bir sonraki gezinmede taze geliyor; sayfadan ayrılırken
      atılan son kayıt da artık gidişi yavaşlatmıyor. */
-  return { ok: true };
+  return { ok: true, rev };
 }
 
 /**

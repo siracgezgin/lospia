@@ -1517,10 +1517,102 @@ export function shiftRefs(
   if (delta === 0) return formula;
   return rewriteRefs(formula, (r, c) => {
     const idx = axis === "row" ? r : c;
-    if (delta < 0 && idx === at) return null;      // başvurduğu satır/sütun silindi
+    /* Silme BİRDEN ÇOK satır/sütun olabilir (delta = −N): [at, at+N) aralığına
+       bakan başvuru ölür, ötesindekiler N kadar geri gelir. */
+    if (delta < 0 && idx >= at && idx < at - delta) return null;   // başvurduğu satır/sütun silindi
     const moved = idx >= at ? idx + delta : idx;
     return axis === "row" ? { r: moved, c } : { r, c: moved };
   });
+}
+
+/* ── Excel'e aktarım: formülü Excel'in DOSYA diline çevirir ────────────────
+   Panel Türkçe adları (TOPLA, EĞER…), noktalı virgül ayracını ve formül
+   içinde ondalık virgülü kabul eder; .xlsx dosyası ise İngilizce ad, virgül
+   ayraç ve noktalı ondalık ister. Eskiden formüller dosyaya yalnız DEĞER
+   olarak yazılıyordu: Excel'de açılan tabloda toplamlar donuk sayıydı,
+   bir hücre değişince hiçbir şey yeniden hesaplanmıyordu.
+
+   Belirteç düzeyinde çevrilir (ağaç değil): $A$1'deki sabitleme işaretleri
+   ve sayfa önekleri olduğu gibi kalır. Çevrilemeyen formül (tanınmayan ad,
+   #BAŞV! içeren başvuru) için `null` döner — çağıran o hücreyi DEĞER olarak
+   yazar; yanlış formül yazmaktansa doğru sayı. */
+const XL_NAMES: Record<string, string> = {
+  TOPLA: "SUM", "ÇARPIM": "PRODUCT", "TOPLA.ÇARPIM": "SUMPRODUCT", ORTALAMA: "AVERAGE", ORTANCA: "MEDIAN",
+  "ENKÜÇÜK": "MIN", "ENBÜYÜK": "MAX", SAY: "COUNT", DOLUSAY: "COUNTA", "BOŞLUKSAY": "COUNTBLANK",
+  "BÜYÜK": "LARGE", "KÜÇÜK": "SMALL", "RANKEŞİT": "RANK", "RANK.EŞİT": "RANK", STDSAPMA: "STDEV", STDSAPMAS: "STDEVP",
+  YUVARLA: "ROUND", YUKARIYUVARLA: "ROUNDUP", "AŞAĞIYUVARLA": "ROUNDDOWN", TAVANAYUVARLA: "CEILING",
+  TABANAYUVARLA: "FLOOR", TAMSAYI: "INT", NSAT: "TRUNC", "MODÜLO": "MOD", MUTLAK: "ABS", "İŞARET": "SIGN",
+  "KAREKÖK": "SQRT", KUVVET: "POWER",
+  "EĞER": "IF", "ÇOKEĞER": "IFS", "EĞERHATA": "IFERROR", "EĞERYOKSA": "IFNA", VE: "AND", YADA: "OR", VEYA: "OR",
+  "DEĞİL": "NOT", "DOĞRU": "TRUE", "YANLIŞ": "FALSE", YOKSAY: "NA",
+  ESAYIYSA: "ISNUMBER", "EMETİNSE": "ISTEXT", "EBOŞSA": "ISBLANK", EHATALIYSA: "ISERROR",
+  ETOPLA: "SUMIF", ETOPORTALAMA: "AVERAGEIF", "EĞERSAY": "COUNTIF", "ÇOKETOPLA": "SUMIFS",
+  "ÇOKEĞERSAY": "COUNTIFS", "ÇOKETOPORTALAMA": "AVERAGEIFS",
+  "DÜŞEYARA": "VLOOKUP", YATAYARA: "HLOOKUP", "KAÇINCI": "MATCH", "İNDİS": "INDEX",
+  SATIR: "ROW", "SÜTUN": "COLUMN", SATIRSAY: "ROWS", "SÜTUNSAY": "COLUMNS",
+  UZUNLUK: "LEN", "BÜYÜKHARF": "UPPER", "KÜÇÜKHARF": "LOWER", "YAZIM.DÜZENİ": "PROPER", KIRP: "TRIM",
+  SOLDAN: "LEFT", "SAĞDAN": "RIGHT", "PARÇAAL": "MID", ORTADAN: "MID", BUL: "FIND", MBUL: "SEARCH",
+  "YERİNEKOY": "SUBSTITUTE", "DEĞİŞTİR": "REPLACE", "YİNELE": "REPT", "ÖZDEŞ": "EXACT",
+  "BİRLEŞTİR": "CONCATENATE", "METİNBİRLEŞTİR": "TEXTJOIN", "SAYIYAÇEVİR": "VALUE", "METNEÇEVİR": "TEXT",
+  "BUGÜN": "TODAY", "ŞİMDİ": "NOW", "TARİH": "DATE", YIL: "YEAR", AY: "MONTH", "GÜN": "DAY",
+  "HAFTANINGÜNÜ": "WEEKDAY", "GÜNSAY": "DAYS", "SERİTARİH": "EDATE", "SERİAY": "EOMONTH", "TAMİŞGÜNÜ": "NETWORKDAYS",
+};
+/** Excel'in dosyada tanıdığı (ve motorun hesapladığı) İngilizce adlar. */
+const XL_KNOWN = new Set([
+  ...Object.values(XL_NAMES),
+  "VAR", "VARP", "EXP", "LN", "LOG10", "LOG", "PI", "XOR", "CONCAT",
+]);
+/** Excel 2007'den SONRA gelenler dosyada `_xlfn.` önekiyle yazılır. */
+const XL_FUTURE = new Set(["IFS", "IFNA", "XOR", "CONCAT", "TEXTJOIN", "DAYS"]);
+
+export function toExcelFormula(formula: string, sheetName?: (_name: string) => string | null): string | null {
+  if (!formula.startsWith("=")) return null;
+  const toks = tokenize(formula.slice(1));
+  if (!toks || toks.length === 0) return null;
+  /* Yazımı doğru ama HESAPLANAMAYAN formül ("=A1+" gibi) dosyaya yazılmaz. */
+  if (!new Parser(toks).parse()) return null;
+  const prefix = (sheet?: string): string | null => {
+    if (!sheet) return "";
+    const name = sheetName ? sheetName(sheet) : sheet;
+    if (!name) return null;
+    return /^[A-Za-z_][A-Za-z0-9_.]*$/.test(name) ? `${name}!` : `'${name.replace(/'/g, "''")}'!`;
+  };
+  let out = "";
+  for (let i = 0; i < toks.length; i++) {
+    const t = toks[i];
+    switch (t.t) {
+      case "num": out += String(t.v); break;
+      case "str": out += `"${t.v.replace(/"/g, '""')}"`; break;
+      case "ref": {
+        const p = prefix(t.sheet);
+        if (p === null) return null;
+        out += p + t.v.toUpperCase();
+        break;
+      }
+      case "name": {
+        const call = toks[i + 1]?.t === "(";
+        /* JS `toUpperCase` "i"yi "I" yapar; Türkçe adlar "İ" ile yazılır. */
+        const en = XL_NAMES[t.v] ?? XL_NAMES[t.v.replace(/I/g, "İ")] ?? t.v;
+        if (call) {
+          if (!XL_KNOWN.has(en)) return null;
+          out += (XL_FUTURE.has(en) ? "_xlfn." : "") + en;
+        } else if (en === "TRUE" || en === "FALSE") {
+          out += en;
+        } else if (COL_ONLY.test(t.v) || ROW_ONLY.test(t.v)) {
+          const p = prefix(t.sheet);
+          if (p === null) return null;
+          out += p + t.v;                       // A:A ya da 3:3'ün yarısı
+        } else {
+          return null;                          // tanımsız ad
+        }
+        break;
+      }
+      case "op": out += t.v; break;
+      case ",": out += ","; break;
+      default: out += t.t;                      // ( ) :
+    }
+  }
+  return out;
 }
 
 function colToIndex(name: string): number {

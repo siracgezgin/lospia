@@ -17,6 +17,7 @@ import { SelectInput, TextInput } from "@/components/ui/Field";
 import { useConfirm } from "@/components/ui/useConfirm";
 import { saveTeamworkDoc, uploadDocImage, unarchiveOperationDocument } from "@/lib/actions/documents";
 import { sanitizeRichText } from "@/lib/office/sanitize-html";
+import { bodyRev } from "@/components/documents/doc-rev";
 /* Yazıya giren görsel de föy görselleriyle AYNI kapıdan geçer: yoksa dosya
    ham hâlde Server Action gövdesine giriyor, Vercel 4,5 MB'ta kesiyor ve
    ekrana İngilizce "An unexpected response was received from the server"
@@ -81,6 +82,9 @@ export function DocEditor({
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* ÇAKIŞMA: yazı açıkken başkası kaydetmiş. Kayıt durur (üzerine yazmaz),
+     kullanıcı seçer — tablodaki düzenin aynısı. */
+  const [conflict, setConflict] = useState(false);
   const [fmt, setFmt] = useState<Fmt>(NO_FMT);
   const [panel, setPanel] = useState<Panel>(null);
   const [linkUrl, setLinkUrl] = useState("");
@@ -103,6 +107,12 @@ export function DocEditor({
   const savedTimer = useRef<number | null>(null);
   const rangeRef = useRef<Range | null>(null);
   const flushRef = useRef<() => void>(() => {});
+  /** Editörün bildiği son SUNUCU gövdesinin parmak izi. */
+  const revRef = useRef(bodyRev(initialBody));
+  const conflictRef = useRef(false);
+  const forceRef = useRef(false);
+  /** "Yenile" denince tarayıcının "kaydedilmemiş değişiklik" sorusu çıkmasın. */
+  const leavingRef = useRef(false);
 
   /* ── Sayaç ve boşluk durumu ─────────────────────────────────────────── */
 
@@ -135,6 +145,7 @@ export function DocEditor({
     const el = bodyRef.current;
     if (!el) return;
     if (savingRef.current) { queuedRef.current = true; return; }
+    if (conflictRef.current && !forceRef.current) return;   // çözülene kadar yazma
     savingRef.current = true;
     queuedRef.current = false;
     dirtyRef.current = false;             // buradan sonraki her tuş yeniden kirletir
@@ -144,13 +155,23 @@ export function DocEditor({
       const res = await saveTeamworkDoc(docId, {
         title: titleRef.current.trim() || "Adsız yazı",
         body: el.innerHTML,
-      });
+      }, forceRef.current ? undefined : revRef.current);
       if ("error" in res) {
         dirtyRef.current = true;
+        if (res.conflict) {
+          conflictRef.current = true;
+          queuedRef.current = false;
+          if (mountedRef.current) { setConflict(true); setDirty(true); }
+          return;
+        }
         if (mountedRef.current) { setError(res.error); setDirty(true); }
         return;
       }
+      revRef.current = res.rev;
+      forceRef.current = false;
+      conflictRef.current = false;
       if (mountedRef.current) {
+        setConflict(false);
         setDirty(dirtyRef.current);
         if (!dirtyRef.current) {
           setSaved(true);
@@ -186,6 +207,14 @@ export function DocEditor({
     scheduleCount();
   }, [readOnly, scheduleSave, scheduleCount]);
 
+  /** "Benimkini kaydet" — sunucudakinin üzerine bilerek yazar. */
+  const overwrite = useCallback(() => {
+    if (readOnly) return;
+    forceRef.current = true;
+    if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    void flush(true);
+  }, [flush, readOnly]);
+
   /** Ctrl+S / "Kaydet" — bekleyen zamanlayıcıyı iptal edip hemen yazar. */
   const saveNow = useCallback(() => {
     if (readOnly) return;
@@ -207,18 +236,20 @@ export function DocEditor({
       if (saveTimer.current) window.clearTimeout(saveTimer.current);
       if (countTimer.current) window.clearTimeout(countTimer.current);
       if (savedTimer.current) window.clearTimeout(savedTimer.current);
-      if (dirtyRef.current && el && !readOnly) {
+      /* Çakışma çözülmeden çıkılıyorsa yazılmaz: kullanıcı uyarıyı gördü ve
+         "Benimkini kaydet" demedi. Aksi hâlde korumalı son yazma denenir. */
+      if (dirtyRef.current && el && !readOnly && !conflictRef.current) {
         void saveTeamworkDoc(docId, {
           title: titleRef.current.trim() || "Adsız yazı",
           body: el.innerHTML,
-        }).catch(() => { /* ekran gitti; uyarıyı gösterecek yer yok */ });
+        }, revRef.current).catch(() => { /* ekran gitti; uyarıyı gösterecek yer yok */ });
       }
     };
   }, [docId, readOnly]);
 
   useEffect(() => {
     if (!dirty || readOnly) return;
-    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    const warn = (e: BeforeUnloadEvent) => { if (leavingRef.current) return; e.preventDefault(); e.returnValue = ""; };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty, readOnly]);
@@ -717,25 +748,44 @@ export function DocEditor({
 
   /* ── Word olarak indir ──────────────────────────────────────────────── */
 
-  function downloadWord() {
-    const html =
-      `<html xmlns:o="urn:schemas-microsoft-com:office:office" ` +
-      `xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">` +
-      `<head><meta charset="utf-8"><title>${escapeHtml(title)}</title>` +
-      `<style>${WORD_EXPORT_CSS}</style></head>` +
-      `<body><h1>${escapeHtml(title)}</h1>${bodyRef.current?.innerHTML ?? ""}</body></html>`;
-    const blob = new Blob(["﻿", html], { type: "application/msword" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${(title || "yazi").replace(/[^\p{L}\p{N} _-]/gu, "").trim() || "yazi"}.doc`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    /* İptal bir sonraki tick'e ERTELENİR: Safari/Firefox indirmeyi senkron
-       başlatmadığı için aynı blokta iptal edilen blob URL'inde düğme sessizce
-       hiçbir şey yapmamış görünüyordu. Tek atımlık, temizlik gerektirmez. */
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  /* GERÇEK .docx (bkz. docx-export.ts). Eskiden HTML `.doc` uzantısıyla
+     iniyordu: Word "biçim ile uzantı uyuşmuyor" diye soruyor, görseller
+     dosyaya girmiyordu. Paket kurulamazsa (çok eski tarayıcı) eski yol
+     yedektir — indirme hiçbir durumda boş dönmez. */
+  const [busyWord, setBusyWord] = useState(false);
+  async function downloadWord() {
+    if (busyWord) return;
+    const name = (title || "yazi").replace(/[^\p{L}\p{N} _-]/gu, "").trim() || "yazi";
+    const save = (blob: Blob, ext: string) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${name}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      /* İptal bir sonraki tick'e ERTELENİR: Safari/Firefox indirmeyi senkron
+         başlatmadığı için aynı blokta iptal edilen blob URL'inde düğme sessizce
+         hiçbir şey yapmamış görünüyordu. Tek atımlık, temizlik gerektirmez. */
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    };
+    setBusyWord(true);
+    try {
+      const el = bodyRef.current;
+      if (!el) return;
+      const { buildDocx } = await import("@/components/documents/docx-export");
+      save(await buildDocx(title, el), "docx");
+    } catch {
+      const html =
+        `<html xmlns:o="urn:schemas-microsoft-com:office:office" ` +
+        `xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">` +
+        `<head><meta charset="utf-8"><title>${escapeHtml(title)}</title>` +
+        `<style>${WORD_EXPORT_CSS}</style></head>` +
+        `<body><h1>${escapeHtml(title)}</h1>${bodyRef.current?.innerHTML ?? ""}</body></html>`;
+      save(new Blob(["\uFEFF", html], { type: "application/msword" }), "doc");
+    } finally {
+      setBusyWord(false);
+    }
   }
 
   /* ── Görünüm ────────────────────────────────────────────────────────── */
@@ -804,6 +854,25 @@ export function DocEditor({
           {error}
         </p>
       )}
+      {conflict && (
+        <div role="alert" className="no-print anim-fade-down flex flex-wrap items-center gap-2 rounded-control border border-warning/40 bg-warning/10 px-3 py-2 text-[12.5px] font-medium text-warning">
+          <span className="mr-auto">Başka bir yerde değişti</span>
+          <button
+            type="button"
+            onClick={() => { leavingRef.current = true; window.location.reload(); }}
+            className="inline-flex h-8 items-center rounded-control border border-line-strong bg-surface px-2.5 text-ink transition-colors hover:bg-surface-hover pointer-coarse:h-10"
+          >
+            Yenile
+          </button>
+          <button
+            type="button"
+            onClick={overwrite}
+            className="inline-flex h-8 items-center rounded-control border border-warning/40 px-2.5 text-warning transition-colors hover:bg-warning/10 pointer-coarse:h-10"
+          >
+            Benimkini kaydet
+          </button>
+        </div>
+      )}
 
       <div className="doc-shell overflow-hidden rounded-card border border-line bg-surface shadow-card">
         {/* Araç çubuğu — telefonda temel satır görünür, gerisi "Daha fazla"
@@ -842,7 +911,7 @@ export function DocEditor({
               </>
             )}
             <span className="ml-auto flex items-center gap-0.5">
-              <Btn icon={FileDown} label="Word olarak indir (.doc)" onClick={downloadWord} />
+              <Btn icon={FileDown} label="Word olarak indir (.docx)" onClick={() => void downloadWord()} busy={busyWord} />
               <Btn icon={Printer} label="Yazdır / PDF olarak kaydet" onClick={() => window.print()} />
             </span>
           </div>

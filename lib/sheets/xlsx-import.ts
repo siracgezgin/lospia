@@ -123,6 +123,12 @@ export interface ImagePlacement {
   /** Kaç sütuna / satıra yayılıyor. */
   cs: number;
   rs: number;
+  /** 17.11.2026'dan ÖNCEKİ aktarımın bu görseli koyduğu yer (çapanın kesirli
+   *  değerini yuvarlıyordu; sütuna girintili görsel bir sağa düşüyordu).
+   *  Yalnız eski tabloları düzelten betik okur
+   *  (scripts/sheets-fix-image-anchors.ts) — hangi hücrenin "eski yerinde,
+   *  dokunulmamış" durduğunu buradan anlar. */
+  legacy?: { r: number; c: number; cs: number; rs: number };
 }
 
 export interface ImportReport {
@@ -300,7 +306,15 @@ export function workbookToSnapshot(wb: unknown): ImportReport {
       const [c, cs] = axis(cell(tl, "Col"), off(tl, "Col"), br ? cell(br, "Col") : null, br ? off(br, "Col") : 0, im.range.ext?.width ?? null, colPx);
       const [r, rs] = axis(cell(tl, "Row"), off(tl, "Row"), br ? cell(br, "Row") : null, br ? off(br, "Row") : 0, im.range.ext?.height ?? null, rowPx);
       if (r < 0 || c < 0 || r >= rows || c >= cols) continue;
-      images.push({ imageId: Number(im.imageId), sheet: sheetIndex, r, c, cs, rs });
+      const lr = Math.round(tl.row), lc = Math.round(tl.col);
+      images.push({
+        imageId: Number(im.imageId), sheet: sheetIndex, r, c, cs, rs,
+        legacy: {
+          r: lr, c: lc,
+          cs: br ? Math.max(1, Math.round(br.col) - lc) : 1,
+          rs: br ? Math.max(1, Math.round(br.row) - lr) : 1,
+        },
+      });
     }
 
     sheets.push({

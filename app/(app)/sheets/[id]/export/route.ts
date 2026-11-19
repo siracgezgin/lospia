@@ -12,9 +12,15 @@
  * satır yükseklikleri, birleştirmeler ve dondurulmuş başlık satırı korunur.
  * csv: yalnız ETKİN sayfa — CSV tek ızgaradır, biçim taşımaz.
  *
- * Formüller DEĞER olarak yazılır. Uygulamanın formül dili Türkçe adları da
- * kabul ediyor (TOPLA, EĞER…); bunları Excel'e formül diye yazmak dosyayı
- * bozardı. Hesaplanmış sonuç her yerde doğru açılır.
+ * Formüller FORMÜL olarak yazılır (sonucuyla birlikte). Uygulamanın formül
+ * dili Türkçe adları, noktalı virgülü ve ondalık virgülü kabul ediyor;
+ * dosyaya Excel'in kendi diline çevrilerek girer (bkz. toExcelFormula).
+ * Çevrilemeyen formül (tanınmayan ad, #BAŞV!) DEĞER olarak iner — yanlış
+ * formül yazmaktansa doğru sayı. Eskiden hepsi değerdi: Excel'de açılan
+ * tabloda toplamlar donuk sayıydı.
+ *
+ * Tarihler TARİH olarak yazılır: panelde "12.03.2026" metni duran hücre
+ * Excel'de gerçek tarih hücresidir (sıralanır, süzülür, hesaba girer).
  */
 import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
@@ -24,7 +30,7 @@ import {
   fromLegacy, emptyWorkbook, activeSheet, mergesOf, colWidth, rowHeight,
   DEFAULT_COL_W, ROW_H, key, type Sheet, type CellStyle,
 } from "@/lib/sheets/model";
-import { evaluateSheet, isError, type Scalar } from "@/lib/sheets/formula";
+import { evaluateSheet, isError, toExcelFormula, type Scalar } from "@/lib/sheets/formula";
 import { formatValue, alignOf } from "@/lib/sheets/format";
 
 export const dynamic = "force-dynamic";
@@ -85,6 +91,29 @@ function cellValue(raw: Scalar, style: CellStyle | undefined): string | number |
     // "Metin" biçimi seçilmişse sayı da metin olarak dışarı çıkar.
     return style?.n === "text" ? String(raw) : raw;
   }
+  return raw;
+}
+
+/** "12.03.2026" / "12/03/2026" → UTC gece yarısı; geçersiz tarih null.
+ *  "Metin" biçimli hücre ve iki haneli yıl çevrilmez. */
+function dateOf(raw: Scalar, style: CellStyle | undefined): Date | null {
+  if (typeof raw !== "string" || style?.n === "text") return null;
+  if (style?.n !== undefined && style.n !== "auto" && style.n !== "date") return null;
+  const m = /^\s*(\d{1,2})[./](\d{1,2})[./](\d{4})\s*$/.exec(raw);
+  if (!m) return null;
+  const d = Number(m[1]), mo = Number(m[2]), y = Number(m[3]);
+  if (y < 1900 || y > 9999) return null;
+  const date = new Date(Date.UTC(y, mo - 1, d));
+  return date.getUTCFullYear() === y && date.getUTCMonth() === mo - 1 && date.getUTCDate() === d ? date : null;
+}
+
+/** Formülün dosyadaki önbellek sonucu. Hata değeri Excel'in diline çevrilir. */
+const XL_ERRORS: Record<string, string> = {
+  "#BÖL/0!": "#DIV/0!", "#AD?": "#NAME?", "#DEĞER!": "#VALUE!", "#BAŞV!": "#REF!", "#DÖNGÜ!": "#REF!", "#YOK": "#N/A",
+};
+function formulaResult(raw: Scalar): ExcelJS.CellFormulaValue["result"] {
+  if (raw === "" || raw === null || raw === undefined) return "";
+  if (isError(raw)) return { error: (XL_ERRORS[raw] ?? "#VALUE!") as ExcelJS.CellErrorValue["error"] };
   return raw;
 }
 
@@ -181,6 +210,26 @@ export async function GET(
 
   const book = new ExcelJS.Workbook();
   book.created = new Date();
+  /* Excel açılışta formülleri KENDİ motoruyla yeniden hesaplasın: dosyadaki
+     önbellek sonucu bizim motorumuzun sonucudur. */
+  book.calcProperties.fullCalcOnLoad = true;
+
+  // Excel sayfa adı: 31 karakter ve : \ / ? * [ ] yasak. Formüller başka
+  // sayfaya bu (temizlenmiş) adla başvurur.
+  const used = new Set<string>();
+  const safeNames = wb.sheets.map((sheet, index) => {
+    const base =
+      (sheet.name || `Sayfa${index + 1}`).replace(/[:\\/?*[\]]/g, " ").slice(0, 31).trim()
+      || `Sayfa${index + 1}`;
+    let name = base;
+    for (let n = 2; used.has(name.toLowerCase()); n++) name = `${base.slice(0, 28)} ${n}`;
+    used.add(name.toLowerCase());
+    return name;
+  });
+  const safeNameOf = (name: string): string | null => {
+    const i = wb.sheets.findIndex((x) => x.name.toLocaleLowerCase("tr") === name.toLocaleLowerCase("tr"));
+    return i >= 0 ? safeNames[i] : null;
+  };
 
   /* ── GÖRSELLER ───────────────────────────────────────────────────────────
      Dışa aktarılan dosyada fotoğraf YOKTU (17.11.2026 denetimi: 9 ve 30
@@ -220,11 +269,7 @@ export async function GET(
   }
 
   wb.sheets.forEach((sheet, index) => {
-    // Excel sayfa adı: 31 karakter ve : \ / ? * [ ] yasak.
-    const safeName =
-      (sheet.name || `Sayfa${index + 1}`).replace(/[:\\/?*[\]]/g, " ").slice(0, 31).trim()
-      || `Sayfa${index + 1}`;
-    const ws = book.addWorksheet(safeName);
+    const ws = book.addWorksheet(safeNames[index]);
     const values = evaluateSheet(wb, sheet);
     const { rows, cols } = usedRange(sheet);
 
@@ -246,10 +291,14 @@ export async function GET(
         const target = ws.getCell(r + 1, c + 1);
 
         const v = cellValue(raw, style);
-        if (v !== null) target.value = v;
-        if (!style && v === null) continue;
+        const xf = src?.f ? toExcelFormula(src.f, safeNameOf) : null;
+        const date = xf ? null : dateOf(raw, style);
+        if (xf) target.value = { formula: xf, result: formulaResult(raw) } as ExcelJS.CellFormulaValue;
+        else if (date) target.value = date;
+        else if (v !== null) target.value = v;
+        if (!style && v === null && !xf) continue;
 
-        const fmt = numFmtOf(style);
+        const fmt = date ? "dd.mm.yyyy" : numFmtOf(style);
         if (fmt) target.numFmt = fmt;
 
         const fg = argb(style?.fg);
@@ -267,7 +316,7 @@ export async function GET(
           target.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bg } };
         }
 
-        const horizontal = alignOf(raw, style);
+        const horizontal = date && !style?.a ? "right" : alignOf(raw, style);
         if (horizontal !== "left" || style?.w) {
           target.alignment = {
             horizontal,

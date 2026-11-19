@@ -20,7 +20,7 @@
  * kayıtlı hiçbir tablo okunamaz hâle gelmez.
  */
 
-import { shiftRefs } from "./formula";
+import { shiftFormula, shiftRefs } from "./formula";
 
 export type NumberFormat = "auto" | "text" | "number" | "money" | "percent" | "date";
 
@@ -417,81 +417,131 @@ function withShiftedRefs(cell: Cell, axis: "row" | "col", at: number, delta: num
   return cell.f ? { ...cell, f: shiftRefs(cell.f, axis, at, delta) } : cell;
 }
 
-export function insertRow(g: Sheet, at: number): Sheet {
+/* TEK GEÇİŞTE N SATIR/SÜTUN. Çoklu silme tek tek `deleteRow` çağırarak
+   yapılsaydı her adım bütün hücre haritasını yeniden kurardı (100 satır ×
+   20.000 hücre). Tekli sürümler aynı işlevin count = 1 hâlidir. */
+function shiftAxis(g: Sheet, axis: "row" | "col", at: number, delta: number): Sheet {
   const cells: Record<string, Cell> = {};
+  const gone = (i: number) => delta < 0 && i >= at && i < at - delta;
+  const moved = (i: number) => (i >= at ? i + delta : i);
   for (const [k, cell] of Object.entries(g.cells)) {
     const [r, c] = k.split(":").map(Number);
-    cells[key(r >= at ? r + 1 : r, c)] = withShiftedRefs(cell, "row", at, +1);
+    const i = axis === "row" ? r : c;
+    if (gone(i)) continue;
+    cells[axis === "row" ? key(moved(r), c) : key(r, moved(c))] = withShiftedRefs(cell, axis, at, delta);
   }
-  const rowH: Record<number, number> = {};
-  for (const [r, h] of Object.entries(g.rowH ?? {})) {
-    const ri = Number(r);
-    rowH[ri >= at ? ri + 1 : ri] = h;
+  const sizes: Record<number, number> = {};
+  for (const [i, v] of Object.entries((axis === "row" ? g.rowH : g.colW) ?? {})) {
+    const n = Number(i);
+    if (gone(n)) continue;
+    sizes[moved(n)] = v;
   }
-  return { ...g, rows: Math.min(MAX_ROWS, g.rows + 1), cells, rowH, merges: shiftMerges(g, "row", at, +1) };
+  const merges = shiftMerges(g, axis, at, delta);
+  return axis === "row"
+    ? { ...g, rows: Math.max(1, Math.min(MAX_ROWS, g.rows + delta)), cells, rowH: sizes, merges }
+    : { ...g, cols: Math.max(1, Math.min(MAX_COLS, g.cols + delta)), cells, colW: sizes, merges };
 }
 
-export function deleteRow(g: Sheet, at: number): Sheet {
-  const cells: Record<string, Cell> = {};
-  for (const [k, cell] of Object.entries(g.cells)) {
-    const [r, c] = k.split(":").map(Number);
-    if (r === at) continue;
-    cells[key(r > at ? r - 1 : r, c)] = withShiftedRefs(cell, "row", at, -1);
-  }
-  const rowH: Record<number, number> = {};
-  for (const [r, h] of Object.entries(g.rowH ?? {})) {
-    const ri = Number(r);
-    if (ri === at) continue;
-    rowH[ri > at ? ri - 1 : ri] = h;
-  }
-  return { ...g, rows: Math.max(1, g.rows - 1), cells, rowH, merges: shiftMerges(g, "row", at, -1) };
+export function insertRows(g: Sheet, at: number, count: number): Sheet {
+  const n = Math.max(0, Math.min(count, MAX_ROWS - g.rows));
+  return n ? shiftAxis(g, "row", at, n) : g;
+}
+/** En az bir satır kalır. */
+export function deleteRows(g: Sheet, at: number, count: number): Sheet {
+  const n = Math.max(0, Math.min(count, g.rows - at, g.rows - 1));
+  return n ? shiftAxis(g, "row", at, -n) : g;
+}
+export function insertCols(g: Sheet, at: number, count: number): Sheet {
+  const n = Math.max(0, Math.min(count, MAX_COLS - g.cols));
+  return n ? shiftAxis(g, "col", at, n) : g;
+}
+/** En az bir sütun kalır. */
+export function deleteCols(g: Sheet, at: number, count: number): Sheet {
+  const n = Math.max(0, Math.min(count, g.cols - at, g.cols - 1));
+  return n ? shiftAxis(g, "col", at, -n) : g;
 }
 
-export function insertCol(g: Sheet, at: number): Sheet {
-  const cells: Record<string, Cell> = {};
-  for (const [k, cell] of Object.entries(g.cells)) {
-    const [r, c] = k.split(":").map(Number);
-    cells[key(r, c >= at ? c + 1 : c)] = withShiftedRefs(cell, "col", at, +1);
-  }
-  const colW: Record<number, number> = {};
-  for (const [c, w] of Object.entries(g.colW ?? {})) {
-    const ci = Number(c);
-    colW[ci >= at ? ci + 1 : ci] = w;
-  }
-  return { ...g, cols: Math.min(MAX_COLS, g.cols + 1), cells, colW, merges: shiftMerges(g, "col", at, +1) };
-}
-
-export function deleteCol(g: Sheet, at: number): Sheet {
-  const cells: Record<string, Cell> = {};
-  for (const [k, cell] of Object.entries(g.cells)) {
-    const [r, c] = k.split(":").map(Number);
-    if (c === at) continue;
-    cells[key(r, c > at ? c - 1 : c)] = withShiftedRefs(cell, "col", at, -1);
-  }
-  const colW: Record<number, number> = {};
-  for (const [c, w] of Object.entries(g.colW ?? {})) {
-    const ci = Number(c);
-    if (ci === at) continue;
-    colW[ci > at ? ci - 1 : ci] = w;
-  }
-  return { ...g, cols: Math.max(1, g.cols - 1), cells, colW, merges: shiftMerges(g, "col", at, -1) };
-}
+export const insertRow = (g: Sheet, at: number): Sheet => insertRows(g, at, 1);
+export const deleteRow = (g: Sheet, at: number): Sheet => deleteRows(g, at, 1);
+export const insertCol = (g: Sheet, at: number): Sheet => insertCols(g, at, 1);
+export const deleteCol = (g: Sheet, at: number): Sheet => deleteCols(g, at, 1);
 
 /** Satır/sütun eklenip silinince birleşmeleri kaydırır; kapsanan birleşme düşer. */
 function shiftMerges(g: Sheet, axis: "row" | "col", at: number, delta: number): string[] {
   const out: string[] = [];
+  const end = at - delta;          // silmede: silinen aralığın bir sonrası
   for (const m of mergesOf(g)) {
     const a1 = axis === "row" ? m.r1 : m.c1;
     const a2 = axis === "row" ? m.r2 : m.c2;
-    if (delta < 0 && at >= a1 && at <= a2 && a1 === a2) continue; // tek satırlık birleşme silindi
-    const n1 = a1 >= at ? a1 + delta : a1;
-    const n2 = a2 >= at ? a2 + delta : a2;
-    if (n2 < n1) continue;
-    out.push(mergeKey(axis === "row"
+    let n1: number, n2: number;
+    if (delta > 0) {
+      n1 = a1 >= at ? a1 + delta : a1;
+      n2 = a2 >= at ? a2 + delta : a2;
+    } else {
+      /* Silinen aralık birleşmenin BAŞINI yiyorsa birleşme `at`ten başlar
+         (eskiden bir satır YUKARI taşıp üstteki hücreyi de yutuyordu). */
+      n1 = a1 >= end ? a1 + delta : Math.min(a1, at);
+      n2 = a2 >= end ? a2 + delta : Math.min(a2, at - 1);
+    }
+    if (n2 < n1) continue;         // birleşmenin tamamı silindi
+    const rect = axis === "row"
       ? { r1: n1, c1: m.c1, r2: n2, c2: m.c2 }
-      : { r1: m.r1, c1: n1, r2: m.r2, c2: n2 }));
+      : { r1: m.r1, c1: n1, r2: m.r2, c2: n2 };
+    if (rect.r1 === rect.r2 && rect.c1 === rect.c2) continue;   // tek hücre birleşme değildir
+    out.push(mergeKey(rect));
   }
   return out;
+}
+
+/* ── Sıralama ─────────────────────────────────────────────────────────────
+   [r1..r2] satırları `order`a göre yeniden dizilir: order[i] = hedef r1+i
+   satırına gelecek KAYNAK satır. Satır BÜTÜN olarak taşınır — hücreler,
+   biçim, görsel ve satır yüksekliği birlikte. Taşınan formülün göreli
+   başvuruları satır farkı kadar kayar (Excel'in davranışı: =B5*C5 üçüncü
+   satıra çıkınca =B3*C3 olur). Birleşme kontrolü çağırana aittir. */
+export function reorderRows(g: Sheet, r1: number, r2: number, order: number[]): Sheet {
+  const target = new Map<number, number>();    // kaynak satır → hedef satır
+  order.forEach((src, i) => target.set(src, r1 + i));
+  const cells: Record<string, Cell> = {};
+  for (const [k, cell] of Object.entries(g.cells)) {
+    const [r, c] = k.split(":").map(Number);
+    if (r < r1 || r > r2) { cells[k] = cell; continue; }
+    const to = target.get(r);
+    if (to === undefined) continue;
+    cells[key(to, c)] = cell.f && to !== r ? { ...cell, f: shiftFormula(cell.f, to - r, 0) } : cell;
+  }
+  const rowH: Record<number, number> = {};
+  for (const [r, h] of Object.entries(g.rowH ?? {})) {
+    const ri = Number(r);
+    if (ri < r1 || ri > r2) rowH[ri] = h;
+    else { const to = target.get(ri); if (to !== undefined) rowH[to] = h; }
+  }
+  return { ...g, cells, rowH };
+}
+
+/** İçinde değer, formül ya da görsel olan satırlar. */
+export function usedRows(g: Sheet): Set<number> {
+  const out = new Set<number>();
+  for (const [k, cell] of Object.entries(g.cells)) {
+    if ((cell.v ?? "") === "" && (cell.f ?? "") === "" && !cell.img) continue;
+    out.add(Number(k.slice(0, k.indexOf(":"))));
+  }
+  return out;
+}
+
+/**
+ * VERİ BLOĞU — Excel'in "geçerli bölge"si: `from` satırından başlayan, ilk
+ * TAMAMEN BOŞ satıra kadar süren bitişik satırlar. Altta bir boş satırla
+ * ayrılmış "Toplam" satırı bloğa girmez; sıralama onu veriyle karıştırmaz.
+ */
+export function dataBlock(g: Sheet, from: number): { r1: number; r2: number } | null {
+  const used = usedRows(g);
+  let r1 = from;
+  while (r1 < g.rows && !used.has(r1)) r1++;
+  if (r1 >= g.rows) return null;
+  let r2 = r1;
+  while (r2 + 1 < g.rows && used.has(r2 + 1)) r2++;
+  return { r1, r2 };
 }
 
 /**

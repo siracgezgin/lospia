@@ -1196,6 +1196,11 @@ export async function importUploadedDoc(
     const result = await mammoth.convertToHtml(
       { buffer: buf },
       {
+        /* Mammoth varsayılanda ALTI ÇİZİLİYİ atar ve Word'ün "Title" /
+           "Subtitle" stillerini düz paragraf yapar — belgenin başlığı
+           içe aktarınca kayboluyordu. Renk, punto ve hizalama mammoth'un
+           sınırı; bu üçü geri gelir. */
+        styleMap: ["u => u", "p[style-name='Title'] => h1:fresh", "p[style-name='Subtitle'] => h2:fresh"],
         convertImage: mammoth.images.imgElement(async (image) => {
           if (imageCount >= IMPORT_IMAGE_LIMIT) { imageFailed++; return { src: "" }; }
           try {

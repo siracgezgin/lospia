@@ -126,20 +126,34 @@ export function SheetDetailView({
   const fsRef = useRef<HTMLDivElement>(null);
 
   /* TABLO EKRANIN ALTINA KADAR İNER (18.11.2026: "Excel neden yarım çıkıyor").
-     Yükseklik sabit bir çıkarmayla (100dvh − 17.5rem) hesaplanıyordu; üstteki
-     satırlar o kadar yer tutmadığı için tablonun altında ~110 piksel boş
-     kalıyor, ekranda üç-dört satır görünüyordu. Masaüstünde (alt gezinme
-     yok, ≥768 px) kabın üst kenarı ÖLÇÜLÜR ve kalan yüksekliğin tamamı
-     verilir; uyarı şeridi çıkınca (üst kap büyür) ya da pencere değişince
-     yeniden ölçülür.
-     Telefonda sınıftaki sabit hesap geçerli kalır (alt gezinme payı). */
+     Yükseklik sabit bir çıkarmayla (100dvh − 17.5rem, telefonda − 23rem)
+     hesaplanıyordu; üstteki satırlar o kadar yer tutmadığı için tablonun
+     altında boşluk kalıyordu (masaüstünde ~110 px, telefonda alt gezinmenin
+     üstünde ~75 px — ızgaraya 260 px kalıyordu). Kabın üst kenarı ÖLÇÜLÜR ve
+     kalan yüksekliğin tamamı verilir: masaüstünde pencerenin altına, telefonda
+     ALT GEZİNMENİN üstüne kadar. Uyarı şeridi çıkınca (üst kap büyür) ya da
+     pencere değişince yeniden ölçülür. Sayfa `main` içinde kayar; ölçüm
+     kaydırılmamış konuma göredir. Sınıftaki sabit hesap yalnız ilk çizim
+     (ölçümden önce) içindir. */
   useLayoutEffect(() => {
     const el = fsRef.current;
     if (!el) return;
     const fit = () => {
-      if (fullscreen || !window.matchMedia("(min-width: 768px)").matches) { el.style.height = ""; return; }
-      const top = el.getBoundingClientRect().top + window.scrollY;
-      el.style.height = `${Math.max(360, window.innerHeight - top - 16)}px`;
+      if (fullscreen) { el.style.height = ""; return; }
+      const main = el.closest("main");
+      const top = el.getBoundingClientRect().top + (main?.scrollTop ?? 0);
+      const nav = document.querySelector<HTMLElement>('nav[aria-label="Alt gezinme"]');
+      const navTop = nav && nav.getClientRects().length ? nav.getBoundingClientRect().top : null;
+      const bottom = navTop !== null ? navTop - 12 : window.innerHeight - 16;
+      const min = navTop !== null ? 320 : 360;
+      let h = Math.max(min, Math.floor(bottom - top));
+      el.style.height = `${h}px`;
+      /* Sayfanın alt payları (sarmalayıcı dolgusu, alt gezinme payı) hesaba
+         katılmadan verilen yükseklik sayfayı birkaç piksel KAYDIRILIR yapıyordu
+         — tablo zaten kendi içinde kayıyor, ikinci kaydırma olmamalı. Taşma
+         ölçülür ve o kadar geri alınır. */
+      const over = main ? main.scrollHeight - main.clientHeight : 0;
+      if (over > 0 && h > min) { h = Math.max(min, h - over); el.style.height = `${h}px`; }
     };
     fit();
     window.addEventListener("resize", fit);

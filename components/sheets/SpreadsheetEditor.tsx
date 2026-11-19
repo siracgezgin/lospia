@@ -27,6 +27,7 @@ import {
   Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight,
   Undo2, Redo2, Sigma, Plus, WrapText,
   PaintBucket, Baseline, Square, Combine, X, Pencil, ImagePlus, ImageOff, Loader2,
+  Search, ChevronUp, ChevronDown, ListFilter,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { useConfirm } from "@/components/ui/useConfirm";
@@ -35,8 +36,8 @@ import { ImagePicker } from "./ImagePicker";
 import { signSheetImages } from "@/lib/actions/sheet-images";
 import {
   GUTTER_W, HEAD_H, ROW_H, MAX_COLS, MAX_ROWS,
-  activeSheet, colName, colWidth, deleteCol, deleteRow, emptySheet, emptyWorkbook,
-  getCell, insertCol, insertRow, key, mergeAt, mergeKey, mergesOf, newSheetId,
+  activeSheet, colName, colWidth, deleteCols, deleteRows, emptySheet, emptyWorkbook,
+  dataBlock, getCell, insertCols, insertRows, key, mergeAt, mergeKey, mergesOf, newSheetId, reorderRows,
   rowHeight, setCell, toA1, uniqueSheetName, withCells, withSheet,
   type Cell, type CellStyle, type NumberFormat, type Sheet, type WorkbookSnapshot,
 } from "@/lib/sheets/model";
@@ -67,6 +68,7 @@ type EditState = { r: number; c: number; draft: string; quick?: boolean };
 const CELL_BORDER = "1px solid var(--color-line-strong)";
 
 /** Pano izni reddedildiğinde gösterilir — sessizce hiçbir şey yapmasın. */
+const FILTER_BLOCKS = "Süzgeç açıkken yapılamaz — önce süzgeci kaldırın";
 const CLIPBOARD_WRITE_HINT = "Tarayıcı panoya yazamadı — ⌘C / Ctrl+C (kesmek için ⌘X / Ctrl+X) kullanın.";
 const norm = (s: Sel) => ({
   r1: Math.min(s.r1, s.r2), c1: Math.min(s.c1, s.c2),
@@ -126,6 +128,8 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
   const [viewH, setViewH] = useState(600);
   const [viewW, setViewW] = useState(1200);
   const [dragging, setDragging] = useState(false);
+  /* Başlıktan sürükleyerek birden çok satır/sütun seçme. */
+  const [hdrDrag, setHdrDrag] = useState<"row" | "col" | null>(null);
   /* SÜRÜKLEME PENCEREDE BİTER. Bırakma yalnız ızgaranın kendi `onMouseUp`'ında
      dinleniyordu: fare araç çubuğunun, sayfa sekmelerinin ya da pencerenin
      DIŞINDA bırakılınca `dragging` true kalıyor ve kullanıcı bir daha herhangi
@@ -133,7 +137,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
      ediyordu. Doldurma tutamağı bu sorunu zaten pencere seviyesinde çözmüştü;
      seçim sürüklemesi aynı çözümü almamıştı. */
   useEffect(() => {
-    const stop = () => setDragging(false);
+    const stop = () => { setDragging(false); setHdrDrag(null); };
     window.addEventListener("pointerup", stop);
     window.addEventListener("pointercancel", stop);
     return () => {
@@ -214,6 +218,32 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
   const sheet = activeSheet(wb);
   const sheetRef = useRef(sheet);
   useEffect(() => { sheetRef.current = sheet; }, [sheet]);
+  const selRef = useRef(sel);
+  useEffect(() => { selRef.current = sel; }, [sel]);
+
+  /* BUL (⌘F). Izgara sanallaştırılmış: tarayıcının kendi araması ekranda
+     ÇİZİLMEYEN satırları görmez. */
+  const [find, setFind] = useState<{ query: string; index: number } | null>(null);
+  const findRef = useRef<HTMLInputElement>(null);
+  const openFind = useCallback(() => {
+    setFind((f) => f ?? { query: "", index: 0 });
+    requestAnimationFrame(() => { findRef.current?.focus(); findRef.current?.select(); });
+  }, []);
+  const closeFind = useCallback(() => {
+    setFind(null);
+    requestAnimationFrame(() => scrollRef.current?.focus({ preventScroll: true }));
+  }, []);
+
+  /* SÜZGEÇ — yalnız GÖRÜNÜM. Gizlenen satırlar kaydedilmez, tabloya yazılmaz;
+     uygulandığı andaki satırları gizler (Excel gibi: sonradan yazılan değer
+     kendiliğinden kaybolmaz). Satır sayısı değişince ya da başka sayfaya
+     geçilince satır numaraları kayacağı için süzgeç KALKAR. */
+  const [filter, setFilter] = useState<{ sheetId: string; rows: number; c: number; hidden: Set<number> } | null>(null);
+  const [filterPanel, setFilterPanel] = useState<{ c: number; x: number; y: number } | null>(null);
+  if (filter && (filter.sheetId !== sheet.id || filter.rows !== sheet.rows)) setFilter(null);
+  const hidden = filter && filter.sheetId === sheet.id && filter.rows === sheet.rows ? filter.hidden : null;
+  const hiddenRef = useRef<Set<number> | null>(null);
+  useEffect(() => { hiddenRef.current = hidden; }, [hidden]);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -230,12 +260,12 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
 
   // Menü/paletleri dışarı tıklayınca kapat
   useEffect(() => {
-    if (!menu && !popover) return;
-    const close = () => { setMenu(null); setPopover(null); };
+    if (!menu && !popover && !filterPanel) return;
+    const close = () => { setMenu(null); setPopover(null); setFilterPanel(null); };
     window.addEventListener("mousedown", close);
     window.addEventListener("resize", close);
     return () => { window.removeEventListener("mousedown", close); window.removeEventListener("resize", close); };
-  }, [menu, popover]);
+  }, [menu, popover, filterPanel]);
 
   /* Hesaplama render sırasında çalışıyor: burada atılan bir istisna (çok derin
      formül zinciri yığını taşırıyordu) tüm ekranı beyaza çeviriyor ve
@@ -260,7 +290,10 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
       : new Map<number, number>()),
     [measurable, sheet, values],
   );
-  const rowH = useCallback((r: number) => Math.max(rowHeight(sheet, r), fitted.get(r) ?? 0), [sheet, fitted]);
+  const rowH = useCallback(
+    (r: number) => (hidden?.has(r) ? 0 : Math.max(rowHeight(sheet, r), fitted.get(r) ?? 0)),
+    [sheet, fitted, hidden],
+  );
   const rowHRef = useRef(rowH);
   useEffect(() => { rowHRef.current = rowH; }, [rowH]);
 
@@ -363,8 +396,18 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
 
   const moveTo = useCallback((r: number, c: number, extend = false) => {
     const g = sheetRef.current;
-    const rr = Math.max(0, Math.min(g.rows - 1, r));
+    let rr = Math.max(0, Math.min(g.rows - 1, r));
     const cc = Math.max(0, Math.min(g.cols - 1, c));
+    /* Süzgeçte gizli satıra inilmez: aynı yönde ilk görünen satıra geçilir. */
+    const hid = hiddenRef.current;
+    if (hid?.has(rr)) {
+      const from = extend ? selRef.current.r2 : selRef.current.r1;
+      const dir = rr >= from ? 1 : -1;
+      let t = rr;
+      while (t >= 0 && t < g.rows && hid.has(t)) t += dir;
+      if (t < 0 || t >= g.rows) { t = rr; while (t >= 0 && t < g.rows && hid.has(t)) t -= dir; }
+      if (t >= 0 && t < g.rows) rr = t;
+    }
     setSel((s) => (extend ? { ...s, r2: rr, c2: cc } : { r1: rr, c1: cc, r2: rr, c2: cc }));
     reveal(rr, cc);
   }, [reveal]);
@@ -441,6 +484,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
         const r = Number(k.slice(0, sep));
         const c = Number(k.slice(sep + 1));
         if (r < n.r1 || r > n.r2 || c < n.c1 || c > n.c2) continue;
+        if (hiddenRef.current?.has(r)) continue;   // süzgeçte görünmeyen satır silinmez
         const prev = g0.cells[k];
         put(r, c, !alsoStyle && prev?.s ? { s: prev.s } : undefined);
       }
@@ -485,13 +529,18 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
       }));
       return;
     }
-    const rows = Math.min(MAX_ROWS, Math.max(g0.rows, r0 + images.length));
+    /* Süzgeç açıkken yalnız GÖRÜNEN satırlara dizilir. */
+    const hid = hiddenRef.current;
+    const targets: number[] = [];
+    for (let r = r0; targets.length < images.length && r < MAX_ROWS; r++) if (!hid?.has(r)) targets.push(r);
+    const rows = hid ? g0.rows : Math.min(MAX_ROWS, Math.max(g0.rows, r0 + images.length));
     const rowH = { ...(g0.rowH ?? {}) };
-    images.forEach((_, i) => { if (r0 + i < rows && (rowH[r0 + i] ?? ROW_H) < PHOTO_ROW_H) rowH[r0 + i] = PHOTO_ROW_H; });
+    targets.forEach((r) => { if (r < rows && (rowH[r] ?? ROW_H) < PHOTO_ROW_H) rowH[r] = PHOTO_ROW_H; });
     commit(withCells({ ...g0, rows, rowH }, (put) => {
       images.forEach((im, i) => {
-        if (r0 + i >= rows) return;
-        put(r0 + i, c0, { ...(getCell(g0, r0 + i, c0) ?? {}), img: { id: im.id, name: im.name, cs: 1, rs: 1 } });
+        const r = targets[i];
+        if (r === undefined || r >= rows) return;
+        put(r, c0, { ...(getCell(g0, r, c0) ?? {}), img: { id: im.id, name: im.name, cs: 1, rs: 1 } });
       });
     }));
   }, [readOnly, active.r, active.c, commit]);
@@ -535,6 +584,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
     const g0 = sheetRef.current;
     commit(withCells(g0, (put) => {
       for (let r = n.r1; r <= n.r2; r++) {
+        if (hiddenRef.current?.has(r)) continue;
         for (let c = n.c1; c <= n.c2; c++) {
           const prev = getCell(g0, r, c);
           if (!prev?.img) continue;
@@ -568,12 +618,15 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
           const r = Number(k.slice(0, sep));
           const c = Number(k.slice(sep + 1));
           if (r < n.r1 || r > n.r2 || c < n.c1 || c > n.c2) continue;
+          if (hiddenRef.current?.has(r)) continue;
           put(r, c, styled(g0.cells[k]));
         }
         return;
       }
-      for (let r = n.r1; r <= n.r2; r++)
+      for (let r = n.r1; r <= n.r2; r++) {
+        if (hiddenRef.current?.has(r)) continue;
         for (let c = n.c1; c <= n.c2; c++) put(r, c, styled(getCell(g0, r, c)));
+      }
     }));
     setPopover(null);
   }, [readOnly, sel, commit]);
@@ -595,6 +648,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
     if (meta && e.key.toLowerCase() === "z") { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
     if (meta && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); return; }
     if (meta && e.key.toLowerCase() === "a") { e.preventDefault(); setSel({ r1: 0, c1: 0, r2: sheet.rows - 1, c2: sheet.cols - 1 }); return; }
+    if (meta && e.key.toLowerCase() === "f") { e.preventDefault(); openFind(); return; }
     /* BİÇİM O ANKİ HÜCREDEN OKUNUR, kapanıştan değil. `activeStyle` render
        sırasında türetiliyor ama bu geri çağırımın bağımlılıklarında YOK
        (yukarıdaki eslint-disable); biçim değiştikten sonra kapanış eski
@@ -671,7 +725,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
 
     if (!meta && !e.altKey && e.key.length === 1) { e.preventDefault(); startEdit(active.r, active.c, e.key); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editing, active.r, active.c, sel, sheet.rows, sheet.cols, moveTo, startEdit, clearRange, undo, redo, readOnly]);
+  }, [editing, active.r, active.c, sel, sheet.rows, sheet.cols, moveTo, startEdit, clearRange, undo, redo, readOnly, openFind]);
 
   // ── Kopyala / kes / yapıştır ──────────────────────────────────────────────
   /* PANELDEN KOPYALANAN SON SEÇİM — nereden kopyalandığı. Aynı metin panele
@@ -685,6 +739,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
        tırnağa alınır — yoksa çok satırlı hücre yapıştırılınca satırlara dağılır. */
     const quote = (t: string) => (/[\t\n]/.test(t) || t.startsWith('"') ? `"${t.replace(/"/g, '""')}"` : t);
     for (let r = n.r1; r <= n.r2; r++) {
+      if (hiddenRef.current?.has(r)) continue;   // süzgeçte yalnız görünen satırlar kopyalanır
       const row: string[] = [];
       for (let c = n.c1; c <= n.c2; c++) {
         const cell = getCell(sheet, r, c);
@@ -732,22 +787,30 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
     const rows = parseClipboardGrid(text);
     if (rows.length === 0) return;   // Math.max(...[]) = -Infinity → bozuk seçim
     let g = sheetRef.current;
-    const needRows = active.r + rows.length;
+    /* SÜZGEÇ AÇIKKEN yalnız GÖRÜNEN satırlara yazılır: bitişik yazmak gizli
+       satırların üstüne sessizce yazardı. Sığmayan satırlar yapıştırılmaz. */
+    const hid = hiddenRef.current;
+    const targets: number[] = [];
+    if (hid) {
+      for (let r = active.r; targets.length < rows.length && r < g.rows; r++) if (!hid.has(r)) targets.push(r);
+    } else {
+      for (let i = 0; i < rows.length; i++) targets.push(active.r + i);
+    }
+    const needRows = (targets[targets.length - 1] ?? active.r) + 1;
     const needCols = active.c + Math.max(...rows.map((r) => r.length));
     if (needRows > g.rows) g = { ...g, rows: Math.min(MAX_ROWS, needRows) };
     if (needCols > g.cols) g = { ...g, cols: Math.min(MAX_COLS, needCols) };
     /* Panelin kendi kopyasıysa formüller hedefe göre kayar. */
     const norml = (t: string) => t.replace(/\r\n?/g, "\n").replace(/\n$/, "");
     const own = clipRef.current && norml(clipRef.current.text) === norml(text) ? clipRef.current : null;
-    const dr = own ? active.r - own.r1 : 0;
-    const dc = own ? active.c - own.c1 : 0;
     // Tek harita kopyası: hücre başına writeCell çağırmak 5.000 hücrelik bir
     // yapıştırmayı O(n²) yapıyordu.
     const base = g;
     g = withCells(base, (put) => {
       rows.forEach((line, dr0) => {
+        const r = targets[dr0];
+        if (r === undefined) return;
         line.forEach((cellText, dc0) => {
-          const r = active.r + dr0;
           const c = active.c + dc0;
           if (r >= base.rows || c >= base.cols) return;   // ızgara sınırını aşma
           const prev = getCell(base, r, c);
@@ -757,15 +820,18 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
           const style = cellText.includes("\n") ? { ...(prev?.s ?? {}), w: true } : prev?.s;
           put(r, c, {
             ...(style ? { s: style } : {}),
-            ...(isFormula ? { f: own ? shiftFormula(cellText, dr, dc) : cellText } : cellText !== "" ? { v: cellText } : {}),
+            ...(isFormula
+              ? { f: own ? shiftFormula(cellText, r - (own.r1 + dr0), c - (own.c1 + dc0)) : cellText }
+              : cellText !== "" ? { v: cellText } : {}),
           });
         });
       });
     });
     commit(g);
+    if (targets.length < rows.length) setNotice(`Süzgeç açık: ${rows.length} satırın ${targets.length} tanesi yapıştırıldı`);
     setSel({
       r1: active.r, c1: active.c,
-      r2: Math.min(g.rows - 1, active.r + rows.length - 1),
+      r2: Math.min(g.rows - 1, needRows - 1),
       c2: Math.min(g.cols - 1, needCols - 1),
     });
   }
@@ -790,6 +856,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
   /** Seçimi birleştir / birleşmeyi çöz. */
   const toggleMerge = () => {
     if (readOnly) return;
+    if (hiddenRef.current) { setNotice(FILTER_BLOCKS); return; }
     const n = norm(sel);
     const g = sheetRef.current;
     const existing = mergeAt(g, n.r1, n.c1);
@@ -822,6 +889,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
    */
   const doFill = useCallback((from: Sel, to: { r: number; c: number }) => {
     if (readOnly) return;
+    if (hiddenRef.current) { setNotice(FILTER_BLOCKS); return; }
     const n = norm(from);
     const g0 = sheetRef.current;
     const down = to.r > n.r2;
@@ -932,10 +1000,165 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
   }, [doFill]);
 
   // ── Satır / sütun ─────────────────────────────────────────────────────────
-  const doInsertRow = (at: number) => commit(insertRow(sheetRef.current, at));
-  const doDeleteRow = (at: number) => commit(deleteRow(sheetRef.current, at));
-  const doInsertCol = (at: number) => commit(insertCol(sheetRef.current, at));
-  const doDeleteCol = (at: number) => commit(deleteCol(sheetRef.current, at));
+  /* SEÇİLİ BÜTÜN satırlar/sütunlar birlikte eklenir, silinir (Excel gibi).
+     Eskiden kaç satır seçilirse seçilsin yalnız İLKİ siliniyordu. Süzgeç
+     açıkken gizli satırlar SAYILMAZ ve silinmez. */
+  const selRows = (n: Sel) => {
+    const out: number[] = [];
+    for (let r = n.r1; r <= n.r2; r++) if (!hidden?.has(r)) out.push(r);
+    return out;
+  };
+  const doInsertRows = (at: number, count: number) => commit(insertRows(sheetRef.current, at, count));
+  const doDeleteRows = (n: Sel) => {
+    const rows = selRows(n);
+    if (!rows.length) return;
+    let g = sheetRef.current;
+    /* Alttan yukarı, bitişik öbekler hâlinde: üstteki indeksler kaymaz. */
+    for (let i = rows.length - 1; i >= 0; ) {
+      let j = i;
+      while (j > 0 && rows[j - 1] === rows[j] - 1) j--;
+      g = deleteRows(g, rows[j], i - j + 1);
+      i = j - 1;
+    }
+    commit(g);
+    const r = Math.min(n.r1, g.rows - 1);
+    setSel({ r1: r, c1: n.c1, r2: r, c2: n.c1 });
+  };
+  const doInsertCols = (at: number, count: number) => { setFilter(null); commit(insertCols(sheetRef.current, at, count)); };
+  const doDeleteCols = (n: Sel) => {
+    setFilter(null);
+    const g = deleteCols(sheetRef.current, n.c1, n.c2 - n.c1 + 1);
+    commit(g);
+    const c = Math.min(n.c1, g.cols - 1);
+    setSel({ r1: n.r1, c1: c, r2: n.r1, c2: c });
+  };
+
+  // ── Sıralama · süzgeç · bul ───────────────────────────────────────────────
+  /** Başlık sayılan üst satırlar: dondurulmuşsa onlar; değilse ilk satırın
+   *  dolu hücrelerinin HEPSİ kalınsa o satır (içe aktarılan tablolarda başlık
+   *  böyle gelir); o da değilse Excel'in yaptığı tahmin — ilk satır tamamen
+   *  METİN ve altındaki satırlarda en az bir sütun SAYI ise başlıktır ("Ürün ·
+   *  Adet" düz yazılmış olsa da sıralamada verinin arasına karışmasın).
+   *  Sıralama ve süzgeç bu satırlara dokunmaz. */
+  const headRows = (g: Sheet): number => {
+    if ((g.frozen ?? 0) > 0) return Math.min(g.frozen ?? 0, g.rows);
+    const filled: number[] = [];
+    for (let c = 0; c < g.cols; c++) {
+      const cell = getCell(g, 0, c);
+      if (cell && ((cell.v ?? "") !== "" || (cell.f ?? "") !== "")) filled.push(c);
+    }
+    if (!filled.length) return 0;
+    if (filled.every((c) => getCell(g, 0, c)?.s?.b)) return 1;
+    const isNum = (r: number, c: number) => {
+      const v = getCell(g, r, c)?.v;
+      return typeof v === "number" || (typeof v === "string" && v.trim() !== "" && parseNumber(v) !== null);
+    };
+    if (filled.some((c) => isNum(0, c) || (getCell(g, 0, c)?.f ?? "") !== "")) return 0;
+    for (const c of filled) for (let r = 1; r < Math.min(g.rows, 6); r++) if (isNum(r, c)) return 1;
+    return 0;
+  };
+  /** Sıralanacak / süzülecek satır aralığı. Birden çok satır seçiliyse o
+   *  satırlar; değilse başlığın altındaki veri bloğu (ilk boş satıra kadar —
+   *  boş satırla ayrılmış "Toplam" satırı karışmaz). */
+  const dataRange = (g: Sheet, n: Sel): { r1: number; r2: number } | null => {
+    const whole = n.r1 === 0 && n.r2 === g.rows - 1;
+    if (n.r2 > n.r1 && !whole) return { r1: n.r1, r2: n.r2 };
+    return dataBlock(g, headRows(g));
+  };
+  const multiRowMerge = (g: Sheet, r1: number, r2: number) =>
+    mergesOf(g).some((m) => m.r2 >= r1 && m.r1 <= r2 && (m.r1 !== m.r2 || m.r1 < r1 || m.r2 > r2));
+
+  const sortBy = (c: number, dir: 1 | -1) => {
+    if (readOnly) return;
+    const g = sheetRef.current;
+    const range = dataRange(g, norm(sel));
+    if (!range || range.r2 <= range.r1) return;
+    if (multiRowMerge(g, range.r1, range.r2)) { setNotice("Birleştirilmiş hücre varken sıralanamaz"); return; }
+    /* Sayılar önce (küçükten büyüğe), sonra metin (Türkçe sıra), boşlar HER
+       İKİ yönde en sonda. "12.03.2026" gibi yazılmış tarih, tarih gibi sıralanır. */
+    const keyOf = (r: number): { rank: number; n: number; t: string } => {
+      const v = valueAt(r, c);
+      if (v === "" || v === null || v === undefined) return { rank: 2, n: 0, t: "" };
+      if (typeof v === "number") return { rank: 0, n: v, t: "" };
+      if (typeof v === "boolean") return { rank: 1, n: 0, t: v ? "DOĞRU" : "YANLIŞ" };
+      const d = /^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})$/.exec(v.trim());
+      if (d) return { rank: 0, n: Date.UTC(Number(d[3].length === 2 ? `20${d[3]}` : d[3]), Number(d[2]) - 1, Number(d[1])) / 86400000 + 25569, t: "" };
+      return { rank: 1, n: 0, t: v };
+    };
+    const rows = Array.from({ length: range.r2 - range.r1 + 1 }, (_, i) => range.r1 + i);
+    const keys = new Map(rows.map((r) => [r, keyOf(r)]));
+    const order = [...rows].sort((a, b) => {
+      const ka = keys.get(a)!, kb = keys.get(b)!;
+      if (ka.rank === 2 || kb.rank === 2) return ka.rank === kb.rank ? a - b : ka.rank - kb.rank;
+      if (ka.rank !== kb.rank) return (ka.rank - kb.rank) * dir;
+      const d = ka.rank === 0 ? ka.n - kb.n : ka.t.localeCompare(kb.t, "tr", { numeric: true, sensitivity: "base" });
+      return d !== 0 ? d * dir : a - b;
+    });
+    if (order.every((r, i) => r === rows[i])) return;
+    setFilter(null);
+    commit(reorderRows(g, range.r1, range.r2, order));
+  };
+
+  /** Süzgeç penceresinin listeleyeceği değerler (sütundaki farklı görünen metinler). */
+  const filterValues = (g: Sheet, c: number): { range: { r1: number; r2: number }; values: { text: string; rows: number[] }[] } | null => {
+    const range = dataRange(g, { r1: 0, c1: c, r2: g.rows - 1, c2: c });
+    if (!range) return null;
+    const by = new Map<string, number[]>();
+    for (let r = range.r1; r <= range.r2; r++) {
+      const t = formatValue(valueAt(r, c), getCell(g, r, c)?.s).trim();
+      by.set(t, [...(by.get(t) ?? []), r]);
+    }
+    const values = [...by.entries()]
+      .map(([text, rows]) => ({ text, rows }))
+      .sort((a, b) => (a.text === "" ? 1 : b.text === "" ? -1 : a.text.localeCompare(b.text, "tr", { numeric: true, sensitivity: "base" })));
+    return { range, values };
+  };
+  const openFilter = (c: number, x: number, y: number) => {
+    const g = sheetRef.current;
+    const range = dataRange(g, { r1: 0, c1: c, r2: g.rows - 1, c2: c });
+    if (!range) return;
+    if (multiRowMerge(g, range.r1, range.r2)) { setNotice("Birleştirilmiş hücre varken süzülemez"); return; }
+    setFilterPanel({ c, x, y });
+  };
+  const applyFilter = (c: number, hiddenRows: number[]) => {
+    setFilterPanel(null);
+    if (!hiddenRows.length) { setFilter(null); return; }
+    const g = sheetRef.current;
+    setFilter({ sheetId: g.id, rows: g.rows, c, hidden: new Set(hiddenRows) });
+    /* Seçim gizlenen satırda kalmasın. */
+    const head = headRows(g);
+    let r = Math.max(head, 0);
+    const hid = new Set(hiddenRows);
+    while (r < g.rows - 1 && hid.has(r)) r++;
+    setSel({ r1: r, c1: c, r2: r, c2: c });
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  };
+
+  const matchesFor = (query: string): { r: number; c: number }[] => {
+    const q = query.trim().toLocaleLowerCase("tr-TR");
+    if (!q) return [];
+    const out: { r: number; c: number }[] = [];
+    for (const [k, cell] of Object.entries(sheet.cells)) {
+      const sep = k.indexOf(":");
+      const r = Number(k.slice(0, sep)), c = Number(k.slice(sep + 1));
+      if (hidden?.has(r)) continue;
+      const shown = formatValue(values.get(k) ?? "", cell.s);
+      const raw = String(cell.f ?? cell.v ?? "");
+      if (shown.toLocaleLowerCase("tr-TR").includes(q) || raw.toLocaleLowerCase("tr-TR").includes(q)) out.push({ r, c });
+    }
+    return out.sort((a, b) => a.r - b.r || a.c - b.c);
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const findMatches = useMemo(() => matchesFor(find?.query ?? ""), [find?.query, sheet.cells, values, hidden]);
+  const findKeys = useMemo(() => new Set(findMatches.map((m) => key(m.r, m.c))), [findMatches]);
+  /** Eşleşmeye gider; `step` = ±1 (sonraki/önceki) ya da 0 (ilk eşleşme). */
+  const gotoMatch = (matches: { r: number; c: number }[], index: number) => {
+    if (!matches.length) return;
+    const i = ((index % matches.length) + matches.length) % matches.length;
+    setFind((f) => (f ? { ...f, index: i } : f));
+    setSel({ r1: matches[i].r, c1: matches[i].c, r2: matches[i].r, c2: matches[i].c });
+    reveal(matches[i].r, matches[i].c);
+  };
 
   // ── Sayfa sekmeleri ───────────────────────────────────────────────────────
   const addSheet = () => {
@@ -1292,6 +1515,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
           <TBtn onClick={() => stepDecimals(-1)} title="Ondalık azalt"><span className="text-[12px] font-semibold tabular-nums">.0−</span></TBtn>
           <TBtn onClick={() => stepDecimals(1)} title="Ondalık artır"><span className="text-[12px] font-semibold tabular-nums">.00+</span></TBtn>
           <TBtn onClick={autoSum} title="Otomatik toplam"><Sigma size={15} /></TBtn>
+          <TBtn onClick={openFind} title="Bul (⌘F)" active={!!find}><Search size={15} /></TBtn>
         </div>
       )}
 
@@ -1321,6 +1545,37 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
           className="h-8 min-w-0 flex-1 bg-transparent px-2.5 text-[13.5px] text-ink placeholder:text-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-ring/40"
         />
       </div>
+
+      {/* ── Bul ──────────────────────────────────────────────────────────── */}
+      {find && (
+        <div role="search" className="flex items-center gap-1.5 border-b border-hairline bg-surface-muted px-2 py-1.5">
+          <Search size={14} className="ml-1 shrink-0 text-subtle" aria-hidden />
+          <input
+            ref={findRef}
+            value={find.query}
+            onChange={(e) => {
+              const query = e.target.value;
+              setFind({ query, index: 0 });
+              const first = matchesFor(query)[0];
+              if (first) { setSel({ r1: first.r, c1: first.c, r2: first.r, c2: first.c }); reveal(first.r, first.c); }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { e.preventDefault(); gotoMatch(findMatches, find.index + (e.shiftKey ? -1 : 1)); }
+              else if (e.key === "Escape") { e.preventDefault(); closeFind(); }
+              else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") { e.preventDefault(); e.currentTarget.select(); }
+            }}
+            placeholder="Tabloda bul"
+            aria-label="Tabloda bul"
+            className="h-8 min-w-0 flex-1 rounded-control border border-line bg-surface px-2.5 text-[13.5px] text-ink placeholder:text-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring/40 sm:max-w-xs"
+          />
+          <span className="min-w-[3.5rem] shrink-0 text-center text-[12.5px] tabular-nums text-muted" aria-live="polite">
+            {find.query.trim() ? (findMatches.length ? `${Math.min(find.index, findMatches.length - 1) + 1}/${findMatches.length}` : "0") : ""}
+          </span>
+          <TBtn onClick={() => gotoMatch(findMatches, find.index - 1)} title="Önceki (⇧Enter)"><ChevronUp size={15} /></TBtn>
+          <TBtn onClick={() => gotoMatch(findMatches, find.index + 1)} title="Sonraki (Enter)"><ChevronDown size={15} /></TBtn>
+          <TBtn onClick={closeFind} title="Kapat (Esc)"><X size={15} /></TBtn>
+        </div>
+      )}
 
       {/* ── Izgara ───────────────────────────────────────────────────────── */}
       <div
@@ -1357,8 +1612,20 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
             {visibleCols.map((c) => (
               <div
                 key={c}
-                onMouseDown={() => setSel({ r1: 0, c1: c, r2: sheet.rows - 1, c2: c })}
-                onContextMenu={(e) => { e.preventDefault(); setSel({ r1: 0, c1: c, r2: sheet.rows - 1, c2: c }); setMenu({ x: e.clientX, y: e.clientY, kind: "col", r: 0, c }); }}
+                /* Shift+tık ve sürükleme ile BİRDEN ÇOK sütun seçilir; seçili
+                   sütunlardan birine sağ tıklamak seçimi bozmaz. */
+                onMouseDown={(e) => {
+                  if (e.button === 2) return;
+                  if (e.shiftKey) setSel((s) => ({ r1: 0, c1: s.c1, r2: sheet.rows - 1, c2: c }));
+                  else { setSel({ r1: 0, c1: c, r2: sheet.rows - 1, c2: c }); setHdrDrag("col"); }
+                }}
+                onMouseEnter={() => { if (hdrDrag === "col") setSel((s) => ({ ...s, c2: c })); }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  const wholeCols = selN.r1 === 0 && selN.r2 === sheet.rows - 1;
+                  if (!(wholeCols && c >= selN.c1 && c <= selN.c2)) setSel({ r1: 0, c1: c, r2: sheet.rows - 1, c2: c });
+                  setMenu({ x: e.clientX, y: e.clientY, kind: "col", r: 0, c });
+                }}
                 className={cn(
                   "relative shrink-0 cursor-pointer select-none border-b border-r border-line-strong text-center text-[12px] font-semibold tabular-nums text-muted",
                   c >= selN.c1 && c <= selN.c2
@@ -1369,6 +1636,9 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                 title={`${colName(c)} sütunu — sağ tık: ekle / sil`}
               >
                 {colName(c)}
+                {filter && hidden && filter.c === c && (
+                  <ListFilter size={11} className="absolute left-1 top-1/2 -translate-y-1/2 text-brand-strong" aria-label="Süzgeç" />
+                )}
                 {/* Tutamak yalnız düzenlenebilir tabloda: çizilip hiçbir şey
                     yapmayan bir kontrol "bozuk" diye okunur. */}
                 {!readOnly && (
@@ -1391,12 +1661,26 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
             const renderRow = (r: number, pinned: boolean) => {
             const rh = rowH(r);
             return (
-              <div key={r} className={cn("absolute flex", pinned && "bg-surface")} style={{ top: rowTops.tops[r] + (pinned ? 0 : HEAD_H), height: rh, left: 0 }}>
+              /* SATIR KUTUSU TIKLAMAYI GEÇİRİR, hücreler alır. Dikey birleşmede
+                 çapa hücresinin gövdesi alt satırlara taşar; alt satırın kutusu
+                 (saydam yer tutucusuyla birlikte) onun ÜSTÜNDE durduğu için
+                 birleşik hücrenin alt yarısına tıklamak hiçbir şey seçmiyordu. */
+              <div key={r} className={cn("pointer-events-none absolute flex", pinned && "bg-surface")} style={{ top: rowTops.tops[r] + (pinned ? 0 : HEAD_H), height: rh, left: 0 }}>
                 <div
-                  onMouseDown={() => setSel({ r1: r, c1: 0, r2: r, c2: sheet.cols - 1 })}
-                  onContextMenu={(e) => { e.preventDefault(); setSel({ r1: r, c1: 0, r2: r, c2: sheet.cols - 1 }); setMenu({ x: e.clientX, y: e.clientY, kind: "row", r, c: 0 }); }}
+                  onMouseDown={(e) => {
+                    if (e.button === 2) return;
+                    if (e.shiftKey) setSel((s) => ({ r1: s.r1, c1: 0, r2: r, c2: sheet.cols - 1 }));
+                    else { setSel({ r1: r, c1: 0, r2: r, c2: sheet.cols - 1 }); setHdrDrag("row"); }
+                  }}
+                  onMouseEnter={() => { if (hdrDrag === "row") setSel((s) => ({ ...s, r2: r })); }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    const wholeRows = selN.c1 === 0 && selN.c2 === sheet.cols - 1;
+                    if (!(wholeRows && r >= selN.r1 && r <= selN.r2)) setSel({ r1: r, c1: 0, r2: r, c2: sheet.cols - 1 });
+                    setMenu({ x: e.clientX, y: e.clientY, kind: "row", r, c: 0 });
+                  }}
                   className={cn(
-                    "sticky left-0 z-10 shrink-0 cursor-pointer select-none border-b border-r border-line text-center text-[12px] tabular-nums",
+                    "pointer-events-auto sticky left-0 z-10 shrink-0 cursor-pointer select-none border-b border-r border-line text-center text-[12px] tabular-nums",
                     r >= selN.r1 && r <= selN.r2
                       ? "bg-brand-soft font-semibold text-brand-strong"
                       : "bg-surface-muted text-subtle transition-colors duration-150 ease-standard hover:bg-surface-sunken hover:text-muted",
@@ -1463,7 +1747,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
 
                   if (isEditing) {
                     return (
-                      <div key={c} className="relative shrink-0" style={{ width: w, height: h }}>
+                      <div key={c} className="pointer-events-auto relative shrink-0" style={{ width: w, height: h }}>
                         {/* ÇOK SATIRLI KUTU. Tek satırlık <input> hücredeki satır
                             sonlarını SİLİYORDU (üç satırlık not tek harf
                             eklenince tek satıra iniyordu) ve uzun metnin
@@ -1567,7 +1851,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                         setMenu({ x: e.clientX, y: e.clientY, kind: "cell", r, c });
                       }}
                       className={cn(
-                        "relative shrink-0 select-none border-b border-r border-hairline px-1.5 text-[13.5px] tabular-nums",
+                        "pointer-events-auto relative shrink-0 select-none border-b border-r border-hairline px-1.5 text-[13.5px] tabular-nums",
                         /* TAŞMA — Excel davranışı. Uzun bir metin, sağındaki
                            hücre BOŞSA onun üzerine taşar; Excel'de de böyledir.
                            Önce her hücre overflow-hidden'dı ve uzun başlıklar
@@ -1578,6 +1862,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                         st?.w ? "whitespace-pre-wrap break-words leading-[1.35]" : "whitespace-nowrap",
                         selected ? "bg-brand-soft/50" : "bg-surface",
                         inFill && "bg-brand-soft/30",
+                        find && findKeys.has(key(r, c)) && "ring-2 ring-inset ring-warning/70",
                         /* Yayılan görselde seçim çerçevesi hücreye DEĞİL
                            görselin kendisine çizilir (aşağıda): küçük çapa
                            hücresinin etrafındaki kutu, kocaman bir görselin
@@ -1686,7 +1971,7 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
                     />
                   </div>
                 )}
-                {visibleRows.filter((r) => r >= frozenCount).map((r) => renderRow(r, false))}
+                {visibleRows.filter((r) => r >= frozenCount && !hidden?.has(r)).map((r) => renderRow(r, false))}
               </>
             );
           })()}
@@ -1755,7 +2040,19 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
 
       {/* ── Durum çubuğu ─────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between gap-3 border-t border-hairline px-3 py-1.5 text-[12px] text-subtle">
-        <span className="tabular-nums">{sheet.rows} satır · {sheet.cols} sütun</span>
+        <span className="flex min-w-0 items-center gap-2 tabular-nums">
+          <span className="shrink-0">{sheet.rows} satır · {sheet.cols} sütun</span>
+          {filter && hidden && (
+            <button
+              type="button"
+              onClick={() => setFilter(null)}
+              title="Süzgeci kaldır"
+              className="inline-flex h-6 shrink-0 items-center gap-1 rounded-full bg-brand-soft px-2 text-[12px] font-semibold text-brand-strong transition-all hover:bg-brand-soft/70 pointer-coarse:h-9"
+            >
+              <ListFilter size={12} aria-hidden /> Süzgeç · {colName(filter.c)} <X size={12} aria-hidden />
+            </button>
+          )}
+        </span>
         {uploading
           ? <span role="status" className="inline-flex min-w-0 items-center gap-1.5 font-medium tabular-nums text-ink"><Loader2 size={12} className="animate-spin" aria-hidden /> Görsel yükleniyor {uploading.done}/{uploading.total}</span>
           : notice
@@ -1802,22 +2099,54 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
               setNotice("Tarayıcı panoya erişemedi — yapıştırmak için ⌘V / Ctrl+V kullanın.");
             } finally { setMenu(null); }
           }}>Yapıştır</MenuItem>
-          <MenuSep />
-          <MenuItem onClick={() => { doInsertRow(selN.r1); setMenu(null); }}>Üste satır ekle</MenuItem>
-          <MenuItem onClick={() => { doInsertRow(selN.r2 + 1); setMenu(null); }}>Alta satır ekle</MenuItem>
-          {/* HANGİ satır/sütun olduğu YAZILIR. "Satırı sil" derken kullanıcı
-              hangisinin gideceğini kestirmek zorunda kalıyordu — kocaman bir
-              görselin altında seçim iyice belirsizleşiyor (Sıraç, 2026-09-06).
-              Silinen satırdaki görsel de ayrıca söylenir. */}
-          <MenuItem onClick={() => { doDeleteRow(selN.r1); setMenu(null); }} danger>
-            {selN.r1 + 1}. satırı sil
-          </MenuItem>
-          <MenuSep />
-          <MenuItem onClick={() => { doInsertCol(selN.c1); setMenu(null); }}>Sola sütun ekle</MenuItem>
-          <MenuItem onClick={() => { doInsertCol(selN.c2 + 1); setMenu(null); }}>Sağa sütun ekle</MenuItem>
-          <MenuItem onClick={() => { doDeleteCol(selN.c1); setMenu(null); }} danger>
-            {colName(selN.c1)} sütununu sil
-          </MenuItem>
+          {/* SATIR ve SÜTUN bölümleri SEÇİMİN TAMAMINA uygulanır (Excel gibi).
+              Sütun başlığı menüsünde satır işlemleri, satır başlığı menüsünde
+              sütun işlemleri çıkmaz: bütün sütun seçiliyken "satırı sil" her
+              satırı kapsardı. */}
+          {(() => {
+            const allRows = selN.r1 === 0 && selN.r2 === sheet.rows - 1 && sheet.rows > 1;
+            const allCols = selN.c1 === 0 && selN.c2 === sheet.cols - 1 && sheet.cols > 1;
+            const showRows = menu.kind === "row" || (menu.kind === "cell" && !allRows);
+            const showCols = menu.kind === "col" || (menu.kind === "cell" && !allCols);
+            const nR = selRows(selN).length;
+            const nC = selN.c2 - selN.c1 + 1;
+            return (
+              <>
+                {showRows && nR > 0 && (
+                  <>
+                    <MenuSep />
+                    <MenuItem onClick={() => { doInsertRows(selN.r1, nR); setMenu(null); }}>{nR > 1 ? `Üste ${nR} satır ekle` : "Üste satır ekle"}</MenuItem>
+                    <MenuItem onClick={() => { doInsertRows(selN.r2 + 1, nR); setMenu(null); }}>{nR > 1 ? `Alta ${nR} satır ekle` : "Alta satır ekle"}</MenuItem>
+                    {/* HANGİ satır/sütun olduğu YAZILIR. "Satırı sil" derken kullanıcı
+                        hangisinin gideceğini kestirmek zorunda kalıyordu — kocaman bir
+                        görselin altında seçim iyice belirsizleşiyor (Sıraç, 2026-09-06). */}
+                    <MenuItem onClick={() => { doDeleteRows(selN); setMenu(null); }} danger>
+                      {nR > 1 ? `${nR} satırı sil (${selN.r1 + 1}–${selN.r2 + 1})` : `${selRows(selN)[0] + 1}. satırı sil`}
+                    </MenuItem>
+                  </>
+                )}
+                {showCols && (
+                  <>
+                    <MenuSep />
+                    <MenuItem onClick={() => { doInsertCols(selN.c1, nC); setMenu(null); }}>{nC > 1 ? `Sola ${nC} sütun ekle` : "Sola sütun ekle"}</MenuItem>
+                    <MenuItem onClick={() => { doInsertCols(selN.c2 + 1, nC); setMenu(null); }}>{nC > 1 ? `Sağa ${nC} sütun ekle` : "Sağa sütun ekle"}</MenuItem>
+                    <MenuItem onClick={() => { doDeleteCols(selN); setMenu(null); }} danger>
+                      {nC > 1 ? `${nC} sütunu sil (${colName(selN.c1)}–${colName(selN.c2)})` : `${colName(selN.c1)} sütununu sil`}
+                    </MenuItem>
+                  </>
+                )}
+                {menu.kind !== "row" && (
+                  <>
+                    <MenuSep />
+                    <MenuItem onClick={() => { sortBy(menu.c, 1); setMenu(null); }}>{colName(menu.c)} sütununa göre sırala: A → Z</MenuItem>
+                    <MenuItem onClick={() => { sortBy(menu.c, -1); setMenu(null); }}>{colName(menu.c)} sütununa göre sırala: Z → A</MenuItem>
+                    <MenuItem onClick={() => { const m = menu; setMenu(null); openFilter(m.c, m.x, m.y); }}>{colName(menu.c)} sütununu süz…</MenuItem>
+                    {filter && hidden && <MenuItem onClick={() => { setFilter(null); setMenu(null); }}>Süzgeci kaldır</MenuItem>}
+                  </>
+                )}
+              </>
+            );
+          })()}
           <MenuSep />
           <MenuItem onClick={() => { toggleMerge(); setMenu(null); }}>Hücreleri birleştir / çöz</MenuItem>
           <MenuSep />
@@ -1837,6 +2166,22 @@ export function SpreadsheetEditor({ initialSnapshot, readOnly = false, onReady, 
           <MenuItem onClick={() => { clearRange(norm(sel), true); setMenu(null); }} danger>İçeriği ve biçimi temizle</MenuItem>
         </div>
       )}
+      {filterPanel && (() => {
+        const data = filterValues(sheet, filterPanel.c);
+        if (!data) return null;
+        return (
+          <FilterPanel
+            key={`${sheet.id}:${filterPanel.c}`}
+            x={filterPanel.x}
+            y={filterPanel.y}
+            title={`${colName(filterPanel.c)} sütunu`}
+            values={data.values}
+            initiallyHidden={filter && hidden && filter.c === filterPanel.c ? hidden : null}
+            onApply={(rows) => applyFilter(filterPanel.c, rows)}
+            onClose={() => setFilterPanel(null)}
+          />
+        );
+      })()}
       {/* Drive görsel seçici — hücreye kimlik yazar, bayt değil. */}
       <ImagePicker
         open={pickerOpen}
@@ -1879,6 +2224,10 @@ function MenuItem({ onClick, danger, children }: { onClick: () => void; danger?:
     <button
       type="button"
       role="menuitem"
+      /* preventDefault: odak IZGARADA kalsın. Menüden bir iş yapıldıktan
+         sonra odak silinen düğmeyle birlikte kayboluyor, ⌘Z ve ok tuşları
+         ızgaraya tıklanana kadar çalışmıyordu. */
+      onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
       className={cn(
         "block w-full px-3 py-1.5 text-left text-[13.5px] transition-colors duration-150",
@@ -1891,6 +2240,92 @@ function MenuItem({ onClick, danger, children }: { onClick: () => void; danger?:
 }
 
 const MenuSep = () => <span className="my-1 block h-px bg-hairline" />;
+
+/**
+ * SÜZGEÇ PENCERESİ — sütundaki farklı değerler; işaretli olanlar görünür.
+ * Yalnız görünümü değiştirir (bkz. `filter` durumu).
+ */
+function FilterPanel({
+  x, y, title, values, initiallyHidden, onApply, onClose,
+}: {
+  x: number;
+  y: number;
+  title: string;
+  values: { text: string; rows: number[] }[];
+  initiallyHidden: Set<number> | null;
+  onApply: (_hiddenRows: number[]) => void;
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [off, setOff] = useState<Set<string>>(
+    () => new Set(initiallyHidden ? values.filter((v) => v.rows.every((r) => initiallyHidden.has(r))).map((v) => v.text) : []),
+  );
+  const q = query.trim().toLocaleLowerCase("tr-TR");
+  const shown = q ? values.filter((v) => v.text.toLocaleLowerCase("tr-TR").includes(q)) : values;
+  const setAll = (on: boolean) => setOff((prev) => {
+    const next = new Set(prev);
+    for (const v of shown) { if (on) next.delete(v.text); else next.add(v.text); }
+    return next;
+  });
+  const link = "rounded-control px-1.5 py-1 text-[12.5px] font-medium text-muted transition-colors hover:bg-surface-hover hover:text-ink";
+  return (
+    <div
+      role="dialog"
+      aria-label={`${title} süzgeci`}
+      onMouseDown={(e) => e.stopPropagation()}
+      onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } }}
+      className="anim-fade fixed z-[70] flex w-64 flex-col gap-2 rounded-card border border-line bg-surface p-2.5 shadow-pop"
+      style={{
+        left: Math.max(8, Math.min(x, (typeof window !== "undefined" ? window.innerWidth : 9999) - 272)),
+        top: Math.max(8, Math.min(y, (typeof window !== "undefined" ? window.innerHeight : 9999) - 420)),
+      }}
+    >
+      <input
+        autoFocus
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder={title}
+        aria-label="Değer ara"
+        className="h-9 w-full rounded-control border border-line bg-surface px-2.5 text-[13.5px] text-ink placeholder:text-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring/40"
+      />
+      <div className="flex items-center justify-between">
+        <button type="button" className={link} onClick={() => setAll(true)}>Tümünü seç</button>
+        <button type="button" className={link} onClick={() => setAll(false)}>Hiçbiri</button>
+      </div>
+      <ul className="max-h-60 overflow-y-auto rounded-control border border-hairline py-1">
+        {shown.map((v) => (
+          <li key={v.text}>
+            <label className="flex cursor-pointer items-center gap-2 px-2.5 py-1.5 text-[13.5px] text-ink hover:bg-surface-hover">
+              <input
+                type="checkbox"
+                className="size-4 shrink-0 accent-[var(--color-brand)]"
+                checked={!off.has(v.text)}
+                onChange={(e) => setOff((prev) => {
+                  const next = new Set(prev);
+                  if (e.target.checked) next.delete(v.text); else next.add(v.text);
+                  return next;
+                })}
+              />
+              <span className={cn("min-w-0 flex-1 truncate", v.text === "" && "text-muted")}>{v.text === "" ? "(Boş)" : v.text}</span>
+              <span className="shrink-0 text-[12px] tabular-nums text-subtle">{v.rows.length}</span>
+            </label>
+          </li>
+        ))}
+        {shown.length === 0 && <li className="px-2.5 py-2 text-[13px] text-muted">Eşleşen değer yok</li>}
+      </ul>
+      <div className="flex justify-end gap-2">
+        <button type="button" onClick={onClose} className="h-8 rounded-control px-3 text-[13px] font-medium text-muted transition-colors hover:bg-surface-hover hover:text-ink pointer-coarse:h-10">Vazgeç</button>
+        <button
+          type="button"
+          onClick={() => onApply(values.filter((v) => off.has(v.text)).flatMap((v) => v.rows))}
+          className="h-8 rounded-control bg-ink px-3.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 pointer-coarse:h-10"
+        >
+          Uygula
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function TBtn({
   onClick, title, active, stop, children,
