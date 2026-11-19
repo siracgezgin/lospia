@@ -256,13 +256,19 @@ function Thumb({ src, className }: { src: string; className: string }) {
 }
 
 /**
- * Yer adlarının KISA hâli: ortak baştaki kelimeler atılır ("Market 212
- * İstanbul" + "Market 212 Çeşme" → "İstanbul", "Çeşme"). Satırda yer adı
- * her üründe tekrar eder; uzun hâli sütunu doldurup bedenleri alta itiyordu.
+ * Yer adlarının KISA hâli — satırda yer adı her üründe tekrar eder; uzun hâli
+ * sütunu doldurup bedenleri alta itiyordu. Son kelimeler birbirinden farklıysa
+ * son kelime ("Market 212 İstanbul" → "İstanbul", "AFR Çeşme" → "Çeşme");
+ * değilse ortak baştaki kelimeler atılır.
  */
 export function shortPlaceNames(locations: StockLocation[]): Map<string, string> {
   const words = locations.map((l) => l.name.trim().split(/\s+/));
+  const last = words.map((w) => w[w.length - 1] ?? "");
   const out = new Map<string, string>();
+  if (new Set(last).size === last.length && last.every(Boolean)) {
+    locations.forEach((l, i) => out.set(l.id, last[i]));
+    return out;
+  }
   locations.forEach((l, i) => {
     let cut = 0;
     for (const other of words) {
