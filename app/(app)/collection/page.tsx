@@ -83,6 +83,9 @@ export default async function CollectionPage({
      bağımsız uygulanabilir, o yüzden kademe kademe geriye düşülür. Her
      kademede yalnız o özellik kaybolur, ekran ayakta kalır. */
   const attempts: [columns: string, manualOrder: boolean][] = [
+    /* `meeting_notes`: "Sıra" görünümünde ürünün yanında son notlar yazar
+       (8.11.2026). Kolon yoksa bir alt kademeye düşülür. */
+    [`${LIST_COLUMNS}, web_images, web_url, web_product_id, list_order, manual_order, meeting_notes`, true],
     [`${LIST_COLUMNS}, web_images, web_url, web_product_id, list_order, manual_order`, true],
     [`${LIST_COLUMNS}, web_images, web_url, web_product_id`, false],
     [LIST_COLUMNS, false],

@@ -10,7 +10,7 @@ import { CSS } from "@dnd-kit/utilities";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  Boxes, ChevronLeft, ClipboardList, ExternalLink, FileDown, FileSpreadsheet, FolderInput, FolderPlus, Footprints, Globe, GripVertical, Handbag, Image as ImageIcon, Loader2, Pencil, Plus, Printer, RotateCcw, Scissors, Search, ShieldCheck, Shirt, SwatchBook, Trash2, Upload, X,
+  Boxes, ChevronLeft, ClipboardList, ExternalLink, FileDown, FileSpreadsheet, FolderInput, FolderPlus, Footprints, Globe, GripVertical, Handbag, Image as ImageIcon, LayoutGrid, Loader2, Pencil, Plus, Printer, RotateCcw, Rows3, Scissors, Search, ShieldCheck, Shirt, SwatchBook, Trash2, Upload, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { deleteProductionSheet } from "@/lib/actions/production";
@@ -58,6 +58,8 @@ export type CollectionItem = Pick<
    * Migration uygulanmadan önce alan hiç gelmez, `undefined` olur.
    */
   manual_order?: number | null;
+  /** Toplantı notları — "Sıra" görünümünde ürünün yanında yazar. */
+  meeting_notes?: { id: string; date: string; text: string }[] | null;
 };
 
 interface Props {
@@ -297,6 +299,18 @@ export function CollectionBrowser({ sheets, isAdmin, isOwner = false, seasons = 
     const qs = next.toString();
     /* scroll:false — kategori değiştirmek sayfanın başına atmasın; Drive'da da
        liste yerinde kalır. */
+    router.push(qs ? `?${qs}` : "?", { scroll: false });
+  }, [params, router]);
+  /* SIRA GÖRÜNÜMÜ (Aslı Hanım, 8.11.2026): "Ne tasarladığımızı sırayla alt
+     alta bir koleksiyon yapısı olarak görmek istiyorum; içindeki her şey
+     kendi ürününün içine gitsin." Kartların yanında ikinci bir bakış: solda
+     resim, ortada ürün, sağda notlar — sıra kartlardaki sıranın AYNISI
+     (sürükleyerek kartlarda değişir). Görünüm adreste: `?g=sira`. */
+  const listMode = params.get("g") === "sira";
+  const setListMode = useCallback((on: boolean) => {
+    const next = new URLSearchParams(params.toString());
+    if (on) next.set("g", "sira"); else next.delete("g");
+    const qs = next.toString();
     router.push(qs ? `?${qs}` : "?", { scroll: false });
   }, [params, router]);
   /* Sarmalayıcı MEMOİZE EDİLMEZ: `selCat` artık adresten türeyen koşullu bir
@@ -701,7 +715,27 @@ export function CollectionBrowser({ sheets, isAdmin, isOwner = false, seasons = 
               </Button>
               <h2 className="truncate text-[15px] font-semibold tracking-tight text-ink">{headingLabel}</h2>
             </div>
-            {search}
+            <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+              {search}
+              <div className="flex shrink-0 rounded-control border border-line-strong bg-surface p-0.5" role="group" aria-label="Görünüm">
+                {([[false, LayoutGrid, "Kartlar"], [true, Rows3, "Sıra"]] as const).map(([on, Icon, label]) => (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => setListMode(on)}
+                    aria-pressed={listMode === on}
+                    title={label}
+                    aria-label={label}
+                    className={cn(
+                      "inline-flex size-8 items-center justify-center rounded-[5px] transition-all pointer-coarse:size-10",
+                      listMode === on ? "bg-ink text-white" : "text-muted hover:bg-surface-hover hover:text-ink",
+                    )}
+                  >
+                    <Icon size={15} aria-hidden />
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           {/* Alt kategoriler — ağaç değil, tek satır çip.
@@ -787,6 +821,11 @@ export function CollectionBrowser({ sheets, isAdmin, isOwner = false, seasons = 
                 {coverError}
               </p>
             )}
+            {listMode ? (
+              <ol className="divide-y divide-line overflow-hidden rounded-card border border-line bg-surface">
+                {ordered.map((s, i) => <SheetRow key={s.id} sheet={s} no={i + 1} backTo={backTo} />)}
+              </ol>
+            ) : (
             <DndContext
               sensors={dragSensors}
               collisionDetection={closestCenter}
@@ -811,11 +850,58 @@ export function CollectionBrowser({ sheets, isAdmin, isOwner = false, seasons = 
                 </div>
               </SortableContext>
             </DndContext>
+            )}
             </>
           )}
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * SIRA GÖRÜNÜMÜNÜN SATIRI — solda resim, ortada ürün, sağda notlar.
+ * Satırın tamamı föye gider. Notlar föydeki "Toplantı notları"ndan: en yeni
+ * iki not; yoksa sağ taraf boş kalır. Karar/durum rozeti yok (sadelik kuralı).
+ */
+function SheetRow({ sheet: s, no, backTo }: { sheet: CollectionItem; no: number; backTo: string }) {
+  const cover = coverImage(s);
+  const sub = [s.product_code, s.product_kind].filter(Boolean).join(" · ");
+  const notes = (Array.isArray(s.meeting_notes) ? s.meeting_notes : [])
+    .filter((n) => n?.text?.trim())
+    .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))
+    .slice(0, 2);
+  const day = (iso: string) => {
+    const d = new Date(`${iso}T00:00:00`);
+    return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("tr-TR", { day: "numeric", month: "short" });
+  };
+  return (
+    <li>
+      <Link
+        href={`/production/${s.id}?from=${encodeURIComponent(backTo)}`}
+        className="grid grid-cols-[1.5rem_4.5rem_minmax(0,1fr)] items-start gap-x-3 gap-y-2 p-3 transition-all hover:bg-surface-hover md:grid-cols-[1.75rem_6rem_minmax(0,1fr)_minmax(0,1.4fr)] md:gap-x-4"
+      >
+        <span className="pt-0.5 text-right text-[12.5px] tabular-nums text-subtle">{no}</span>
+        <span className={cn("block aspect-[3/4] w-full overflow-hidden rounded-control", cover ? "bg-white" : "bg-surface-muted")}>
+          {cover && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={cover} alt="" loading="lazy" className="h-full w-full object-contain" />
+          )}
+        </span>
+        <span className="min-w-0">
+          <span className="block text-[14.5px] font-semibold leading-snug text-ink">{s.title}</span>
+          {sub && <span className="mt-0.5 block truncate text-[12.5px] tabular-nums text-muted">{sub}</span>}
+        </span>
+        <span className="col-span-3 min-w-0 space-y-1.5 md:col-span-1">
+          {notes.map((n) => (
+            <span key={n.id} className="block text-[13px] leading-snug text-muted">
+              {day(n.date) && <span className="mr-1.5 tabular-nums text-subtle">{day(n.date)}</span>}
+              <span className="line-clamp-3 inline">{n.text.trim()}</span>
+            </span>
+          ))}
+        </span>
+      </Link>
+    </li>
   );
 }
 
