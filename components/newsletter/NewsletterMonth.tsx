@@ -52,7 +52,7 @@ export function NewsletterMonth({ month, weeks }: { month: string; weeks: Newsle
               icon={Mail}
               badge={
                 w.id ? (
-                  <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", st.tone)}>{st.label}</span>
+                  <span className={cn("rounded-full px-2 py-0.5 text-[12px] font-semibold", st.tone)}>{st.label}</span>
                 ) : undefined
               }
             />

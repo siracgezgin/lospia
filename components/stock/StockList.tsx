@@ -30,6 +30,12 @@ import {
  * satır (orada beden başına ayrı satırdı), bedenler satırın içinde adetleriyle
  * durur. "Satış" ve "Giriş" en sık iki iş olduğu için satırda; iade, transfer,
  * sayım ve çıkış aynı pencerede tür seçilerek yapılır.
+ *
+ * SADE SATIR (Aslı Hanım, 18.11.2026: "biraz karışık görünüyor"). İlk bakışta
+ * okunacak beş şey: FOTOĞRAF · AD · KOD · ADET · HANGİ YERDE. Barkod ve fiyat
+ * satırdan çıktı (ürün penceresinde durur, arama barkodu yine bulur); toplam
+ * görünümünde stok YER YER yazar; satırdaki üç düğme sessizleşti — ekranda
+ * tek dolu düğme "Yeni ürün". Hiç stoğu olmamış ürün varsayılan listede yok.
  */
 
 const BUCKET = "production-sheets";
@@ -85,19 +91,40 @@ export function StockList({
   const [query, setQuery] = useState(initialQuery);
   /* Bir yerde varsayılan: o yere girmiş ürünler. "Tüm ürünler" başka yerdeki
      ürüne buradan giriş yapabilmek için. */
-  const [onlyHere, setOnlyHere] = useState(locationId !== null);
+  const [onlyHere, setOnlyHere] = useState(true);
   const [dialog, setDialog] = useState<Dialog>(null);
 
   const bySize = useMemo(() => levelsByProduct(levels, locationId), [levels, locationId]);
+  /* Toplam görünümünde stok yer yer yazar: ürün → [yer, beden → adet]. */
+  const places = useMemo(() => shortPlaceNames(locations), [locations]);
+  const byPlace = useMemo(() => {
+    const out = new Map<string, Map<string, Map<string, number>>>();
+    if (locationId) return out;
+    for (const l of levels) {
+      if (l.qty === 0) continue;
+      const perLoc = out.get(l.product_id) ?? new Map<string, Map<string, number>>();
+      const sizes = perLoc.get(l.location_id) ?? new Map<string, number>();
+      sizes.set(l.size, (sizes.get(l.size) ?? 0) + l.qty);
+      perLoc.set(l.location_id, sizes);
+      out.set(l.product_id, perLoc);
+    }
+    return out;
+  }, [levels, locationId]);
   /* Masaüstünde satır ve başlık AYNI ızgarayı kullanır — sütunlar hizalı durur. */
   const shown = useMemo(() => {
     const q = query.trim().toLocaleLowerCase("tr");
     return products.filter((p) => {
-      if (onlyHere && !bySize.has(p.id)) return false;
+      /* Bir yerde: o yere girmiş her ürün (tükenen de — yeniden giriş yapılır).
+         Toplamda: şu an stoğu olanlar. */
+      if (onlyHere) {
+        const sizes = bySize.get(p.id);
+        if (!sizes) return false;
+        if (!locationId && [...sizes.values()].reduce((a, b) => a + b, 0) <= 0) return false;
+      }
       if (!q) return true;
       return [p.name, p.code, p.barcode].some((v) => v.toLocaleLowerCase("tr").includes(q));
     });
-  }, [products, query, onlyHere, bySize]);
+  }, [products, query, onlyHere, bySize, locationId]);
   const units = useMemo(
     () => shown.reduce((n, p) => n + [...(bySize.get(p.id)?.values() ?? [])].reduce((a, b) => a + b, 0), 0),
     [shown, bySize],
@@ -120,7 +147,7 @@ export function StockList({
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="relative min-w-0 flex-1 sm:max-w-sm">
+        <div className="relative w-full min-w-0 sm:w-auto sm:max-w-sm sm:flex-1">
           <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-subtle" aria-hidden />
           <TextInput
             type="search"
@@ -131,17 +158,15 @@ export function StockList({
             className="pl-9"
           />
         </div>
-        {locationId && (
-          <SelectInput
-            aria-label="Hangi ürünler"
-            value={onlyHere ? "here" : "all"}
-            onChange={(e) => setOnlyHere(e.target.value === "here")}
-            className="w-auto"
-          >
-            <option value="here">Bu yerdekiler</option>
-            <option value="all">Tüm ürünler</option>
-          </SelectInput>
-        )}
+        <SelectInput
+          aria-label="Hangi ürünler"
+          value={onlyHere ? "here" : "all"}
+          onChange={(e) => setOnlyHere(e.target.value === "here")}
+          className="w-auto"
+        >
+          <option value="here">{locationId ? "Bu yerdekiler" : "Stoğu olanlar"}</option>
+          <option value="all">Tüm ürünler</option>
+        </SelectInput>
         <span className="text-[12.5px] tabular-nums text-muted">
           {shown.length} ürün · {units.toLocaleString("tr-TR")} adet
         </span>
@@ -163,9 +188,9 @@ export function StockList({
             NE olduğu yazsın. Sıraç (17.11.2026, canlı ekran): "Çok anlamadım,
             böyle mi olacak?" — başlıksız satırda yuvarlak içindeki "M 1"in
             beden ve adet olduğu okunmuyordu. */}
-        <div className={cn(ROW_GRID, "mb-1.5 hidden px-3 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-muted md:grid")}>
+        <div className={cn(ROW_GRID, "mb-1.5 hidden px-3 text-[12px] font-semibold uppercase tracking-[0.05em] text-muted md:grid")}>
           <span>Ürün</span>
-          <span>Beden · eldeki adet</span>
+          <span>{locationId ? "Beden · eldeki adet" : "Yer · beden · adet"}</span>
           <span className="text-right">Toplam</span>
           <span className="text-right">İşlem</span>
         </div>
@@ -175,6 +200,9 @@ export function StockList({
               key={p.id}
               product={p}
               sizes={bySize.get(p.id)}
+              places={locationId ? undefined : locations
+                .filter((l) => byPlace.get(p.id)?.has(l.id))
+                .map((l) => ({ id: l.id, name: places.get(l.id) ?? l.name, sizes: byPlace.get(p.id)!.get(l.id)! }))}
               canEdit={canEdit}
               onOpen={() => setDialog({ type: "product", product: p })}
               onMove={(kind) => setDialog({ type: "move", product: p, kind })}
@@ -227,53 +255,96 @@ function Thumb({ src, className }: { src: string; className: string }) {
   );
 }
 
+/**
+ * Yer adlarının KISA hâli: ortak baştaki kelimeler atılır ("Market 212
+ * İstanbul" + "Market 212 Çeşme" → "İstanbul", "Çeşme"). Satırda yer adı
+ * her üründe tekrar eder; uzun hâli sütunu doldurup bedenleri alta itiyordu.
+ */
+export function shortPlaceNames(locations: StockLocation[]): Map<string, string> {
+  const words = locations.map((l) => l.name.trim().split(/\s+/));
+  const out = new Map<string, string>();
+  locations.forEach((l, i) => {
+    let cut = 0;
+    for (const other of words) {
+      if (other === words[i]) continue;
+      let k = 0;
+      while (k < words[i].length - 1 && k < other.length && other[k] === words[i][k]) k++;
+      cut = Math.max(cut, k);
+    }
+    out.set(l.id, words[i].slice(cut).join(" ") || l.name);
+  });
+  return out;
+}
+
+function SizeChips({ sizes, hideZero = false }: { sizes: Map<string, number>; hideZero?: boolean }) {
+  const order = sortSizes([...sizes.keys()]).filter((s) => !hideZero || (sizes.get(s) ?? 0) !== 0);
+  return (
+    <>
+      {order.map((s) => {
+        const n = sizes.get(s) ?? 0;
+        return (
+          <span
+            key={s}
+            title={`${s} bedenden ${n} adet`}
+            className={cn(
+              "inline-flex items-center overflow-hidden rounded-control border text-[12.5px] tabular-nums",
+              n > 0 ? "border-line-strong" : "border-line opacity-60",
+            )}
+          >
+            <span className="bg-surface-sunken px-2 py-1 font-medium text-muted">{s}</span>
+            <span className={cn("min-w-7 px-2 py-1 text-center font-semibold", n < 0 ? "text-danger" : "text-ink")}>{n}</span>
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
 function ProductRow({
-  product: p, sizes, canEdit, onOpen, onMove,
+  product: p, sizes, places, canEdit, onOpen, onMove,
 }: {
   product: StockProduct;
   sizes: Map<string, number> | undefined;
+  /** Toplam görünümünde: stoğu olan yerler, her biri kendi bedenleriyle. */
+  places?: { id: string; name: string; sizes: Map<string, number> }[];
   canEdit: boolean;
   onOpen: () => void;
   onMove: (_k: MovementKind) => void;
 }) {
-  const order = sortSizes([...(sizes?.keys() ?? [])]);
-  const total = order.reduce((n, s) => n + (sizes?.get(s) ?? 0), 0);
+  const total = [...(sizes?.values() ?? [])].reduce((a, b) => a + b, 0);
   /* Eski programda çoğu ürünün ADI kodunun aynısı ("AF_AP_04") — iki satırda
      aynı şeyi yazmak yerine kod bir kez görünür. */
   const sameAsCode = p.name.trim().toLocaleLowerCase("tr") === p.code.trim().toLocaleLowerCase("tr");
-  const sub = [sameAsCode ? null : p.code, p.barcode ? `Barkod ${p.barcode}` : null, fmtPrice(p.price)].filter(Boolean).join(" · ");
+  const code = sameAsCode ? "" : p.code;
   return (
-    <li className={cn(ROW_GRID, "items-center gap-y-3 rounded-card border border-line bg-surface p-3")}>
+    <li className={cn(ROW_GRID, "items-center gap-y-2.5 rounded-card border border-line bg-surface p-3")}>
       <button type="button" onClick={onOpen} className="flex min-w-0 items-center gap-3 text-left">
         <Thumb src={p.image_url} className="size-14" />
         <span className="min-w-0">
           <span className="block truncate text-[14px] font-semibold text-ink">{p.name}</span>
-          {sub && <span className="block truncate text-[12.5px] text-muted">{sub}</span>}
+          {code && <span className="block truncate text-[12.5px] tabular-nums text-muted">{code}</span>}
         </span>
       </button>
 
-      <div className="flex flex-wrap items-center gap-1.5">
-        {order.length === 0 ? (
-          <span className="text-[12.5px] text-subtle">Bu yerde stok yok</span>
+      {places ? (
+        places.length === 0 ? (
+          <span className="text-[12.5px] text-subtle">Stok yok</span>
         ) : (
-          order.map((s) => {
-            const n = sizes!.get(s) ?? 0;
-            return (
-              <span
-                key={s}
-                title={`${s} bedenden ${n} adet`}
-                className={cn(
-                  "inline-flex items-center overflow-hidden rounded-control border text-[12.5px] tabular-nums",
-                  n > 0 ? "border-line-strong" : "border-line opacity-60",
-                )}
-              >
-                <span className="bg-surface-sunken px-2 py-1 font-medium text-muted">{s}</span>
-                <span className={cn("min-w-7 px-2 py-1 text-center font-semibold", n < 0 ? "text-danger" : "text-ink")}>{n}</span>
-              </span>
-            );
-          })
-        )}
-      </div>
+          <div className="space-y-1.5">
+            {places.map((pl) => (
+              <div key={pl.id} className="flex items-start gap-1.5">
+                <span className="w-16 shrink-0 truncate pt-1.5 text-[12.5px] font-medium text-muted" title={pl.name}>{pl.name}</span>
+                {/* Alt satıra geçen beden, yer adının değil bedenlerin altına hizalanır. */}
+                <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5"><SizeChips sizes={pl.sizes} hideZero /></span>
+              </div>
+            ))}
+          </div>
+        )
+      ) : (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {!sizes?.size ? <span className="text-[12.5px] text-subtle">Stok yok</span> : <SizeChips sizes={sizes} />}
+        </div>
+      )}
 
       <div className="text-[13px] tabular-nums md:text-right">
         <span className="text-muted md:hidden">Toplam </span>
@@ -282,9 +353,9 @@ function ProductRow({
       </div>
 
       {canEdit && (
-        <div className="flex items-center gap-1.5 md:justify-end">
-          <Button size="sm" disabled={total <= 0} onClick={() => onMove("satis")}>Satış</Button>
-          <Button size="sm" variant="secondary" onClick={() => onMove("giris")}>Giriş</Button>
+        <div className="flex items-center gap-1 md:justify-end">
+          <Button size="sm" variant="secondary" disabled={total <= 0} onClick={() => onMove("satis")}>Satış</Button>
+          <Button size="sm" variant="ghost" onClick={() => onMove("giris")}>Giriş</Button>
           <Button size="sm" variant="ghost" onClick={() => onMove("transfer")}>Diğer</Button>
         </div>
       )}

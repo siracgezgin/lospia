@@ -205,7 +205,7 @@ function NoteCardContent({
           <button
             {...dragHandleProps}
             type="button"
-            className="mt-0.5 shrink-0 cursor-grab touch-manipulation rounded p-0.5 text-subtle/70 transition-colors duration-150 hover:text-muted active:cursor-grabbing"
+            className="tap-target mt-0.5 shrink-0 cursor-grab touch-manipulation rounded p-0.5 text-subtle/70 transition-colors duration-150 hover:text-muted active:cursor-grabbing"
             aria-label="Sürükle"
             title="Sürükleyerek sırasını değiştirin — dokunmatikte basılı tutun"
             tabIndex={-1}

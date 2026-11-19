@@ -221,7 +221,7 @@ export function PlanningMonthView({
                       <span
                         key={m.id}
                         className={cn(
-                          "block truncate rounded-[4px] px-1 py-px text-[11.5px] font-medium leading-tight",
+                          "block truncate rounded-[4px] px-1 py-px text-[12px] font-medium leading-tight",
                           meta.chip,
                           allDone && "line-through opacity-70",
                         )}
@@ -231,7 +231,7 @@ export function PlanningMonthView({
                     );
                   })}
                   {list.length > 3 && (
-                    <span className="px-1 text-[11px] tabular-nums text-subtle">+{list.length - 3}</span>
+                    <span className="px-1 text-[12px] tabular-nums text-subtle">+{list.length - 3}</span>
                   )}
                 </button>
               );

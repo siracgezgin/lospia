@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment } from "react";
+import { Fragment, useEffect, useRef } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   LayoutList,
@@ -85,13 +85,51 @@ const ACTIVE_TAB = "bg-brand-soft text-brand-strong border-brand-ring shadow-car
 const INACTIVE_TAB =
   "text-muted border-transparent hover:bg-surface-hover hover:text-ink";
 
+/* DAR EKRANDA ŞERİT KAYAR — seçili sekme ekranda olmalı, devamı olduğu belli
+   olmalı. Telefonda Reports açıkken şerit baştan başlıyor, seçili sekme
+   ekranın dışında kalıyordu; kaydırma çubuğu gizli olduğu için sağda başka
+   sekme olduğu da anlaşılmıyordu. Seçili sekme ortalanır; taşan kenar
+   soluklaşır. Şeridi çizen iki bileşen (ViewTabs, SurfaceTabs) aynı kancayı
+   ve aynı sınıfı kullanır. */
+export const TAB_STRIP = cn(
+  "flex items-center gap-1 overflow-x-auto no-scrollbar",
+  "data-[fade=r]:[mask-image:linear-gradient(to_right,#000_calc(100%-32px),transparent)]",
+  "data-[fade=l]:[mask-image:linear-gradient(to_left,#000_calc(100%-32px),transparent)]",
+  "data-[fade=lr]:[mask-image:linear-gradient(to_right,transparent,#000_32px,#000_calc(100%-32px),transparent)]",
+);
+
+export function useTabStrip(activeKey: string) {
+  const strip = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = strip.current;
+    if (!el) return;
+    const active = el.querySelector<HTMLElement>('[aria-current="page"], [aria-pressed="true"]');
+    if (active && el.scrollWidth > el.clientWidth) {
+      const left = active.getBoundingClientRect().left - el.getBoundingClientRect().left + el.scrollLeft;
+      el.scrollLeft = Math.max(0, left - (el.clientWidth - active.offsetWidth) / 2);
+    }
+    const update = () => {
+      const l = el.scrollLeft > 4, r = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
+      el.dataset.fade = l && r ? "lr" : l ? "l" : r ? "r" : "";
+    };
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(update) : null;
+    ro?.observe(el);
+    return () => { el.removeEventListener("scroll", update); ro?.disconnect(); };
+  }, [activeKey]);
+  return strip;
+}
+
 /**
  * ViewTabs — segmented, Monday-style toolbar of the six task views, shared by
  * Board and List so the two surfaces are visually and semantically identical.
  */
 export function ViewTabs({ items, getHref, onSelect, className, iconsEverywhere, trailing }: Props) {
+  const strip = useTabStrip(items.find((i) => i.active)?.slug ?? "");
+
   return (
-    <div className={cn("flex items-center gap-1 overflow-x-auto no-scrollbar", className)}>
+    <div ref={strip} className={cn(TAB_STRIP, className)}>
       {items.map((item) => {
         const Icon = item.icon;
         const showIcon = Icon && (iconsEverywhere || item.dividerBefore);

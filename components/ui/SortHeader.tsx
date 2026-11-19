@@ -41,7 +41,7 @@ export function SortHeader({
           : "Bu sütuna göre sırala"
       }
       className={cn(
-        "group/sort inline-flex max-w-full items-center gap-1 whitespace-nowrap text-[12px] font-semibold uppercase tracking-[0.08em] transition-colors",
+        "group/sort inline-flex max-w-full items-center gap-1 whitespace-nowrap pointer-coarse:min-h-9 pointer-coarse:min-w-9 text-[12px] font-semibold uppercase tracking-[0.08em] transition-colors",
         active ? "text-ink" : "text-subtle hover:text-ink",
         align === "right" && "justify-end",
         className,

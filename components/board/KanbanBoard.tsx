@@ -965,7 +965,7 @@ function QuickAssigneeSelect({
         // Görünmez seçici: avatarın üstünde saydam <select>, tıklayınca
         // tarayıcının kendi listesi açılır — Field primitifi burada çizim
         // yapmadığı için gereksiz.
-        className="absolute inset-0 w-full cursor-pointer opacity-0"
+        className="absolute inset-0 w-full cursor-pointer opacity-0 pointer-coarse:-left-1.5 pointer-coarse:-top-2 pointer-coarse:h-[calc(100%+1rem)] pointer-coarse:w-[calc(100%+0.75rem)]"
         aria-label="Sorumlu değiştir"
       >
         <option value="">— Atanmamış</option>
@@ -1140,7 +1140,7 @@ function CardContent({
         title={task.title}
         draggable={false}
         className={cn(
-          "text-[13.5px] font-semibold line-clamp-4 block leading-snug tracking-[-0.005em] break-words",
+          "text-[13.5px] font-semibold line-clamp-4 block leading-snug tracking-[-0.005em] break-words pointer-coarse:-my-1.5 pointer-coarse:py-1.5",
           markers.shouldStrike
             ? "text-success/90 line-through decoration-success/40"
             : "text-ink hover:text-brand",

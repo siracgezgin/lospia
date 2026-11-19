@@ -149,7 +149,11 @@ export function DeliveryTable({
         />
       ) : (
         /* Geniş tablo KENDİ kabında kayar — sayfa gövdesi yatayda kaymaz. */
-        <div className="overflow-x-auto">
+        <div className="relative overflow-x-auto">
+          {/* `relative` ŞART: satırlardaki `sr-only` etiketler mutlak konumludur.
+              Konumlanmış bir atası yokken kaydırma kabının kırpmasından KAÇIYOR,
+              tablonun görünmeyen sağ ucundaki yerleriyle SAYFANIN genişliğini
+              390 → 569 px'e çıkarıyordu (ölçümlerdeki "Reports 179 px taşıyor"). */}
           <table className={cn("w-full text-left text-sm", showWho ? "min-w-[600px]" : "min-w-[420px]")}>
             <thead>
               <tr>

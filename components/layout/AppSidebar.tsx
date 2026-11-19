@@ -228,7 +228,7 @@ export function AppSidebar({
           menünün sağ kenarına sabitli. */}
       <button
         onClick={toggle}
-        className="absolute -right-3 top-1/2 z-20 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full border border-line bg-surface text-subtle opacity-60 shadow-card transition-[border-color,color,opacity,box-shadow,scale] duration-150 ease-standard hover:border-line-strong hover:text-muted hover:opacity-100 hover:shadow-card-hover focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-brand-ring active:scale-95"
+        className="absolute -right-3 top-1/2 z-20 grid h-6 w-6 -translate-y-1/2 place-items-center pointer-coarse:-right-4 pointer-coarse:h-8 pointer-coarse:w-8 rounded-full border border-line bg-surface text-subtle opacity-60 shadow-card transition-[border-color,color,opacity,box-shadow,scale] duration-150 ease-standard hover:border-line-strong hover:text-muted hover:opacity-100 hover:shadow-card-hover focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-brand-ring active:scale-95"
         aria-label={collapsed ? "Kenar çubuğunu genişlet" : "Kenar çubuğunu daralt"}
         title={collapsed ? "Genişlet" : "Daralt"}
       >

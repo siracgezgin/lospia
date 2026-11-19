@@ -69,7 +69,7 @@ export function Breadcrumbs({
            beliriyor ve ilk halka geri oku taşıyor: zincirin başı aynı zamanda
            "çıkış" kapısıdır. */
         const shared =
-          "inline-flex h-7 shrink-0 items-center gap-1 rounded-control px-1.5 transition-[background-color,color] duration-150 ease-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring";
+          "inline-flex h-7 shrink-0 items-center gap-1 rounded-control px-1.5 pointer-coarse:h-9 transition-[background-color,color] duration-150 ease-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring";
         const clickable = cn(shared, "text-muted hover:bg-surface-muted hover:text-ink");
         const inner = (
           <>

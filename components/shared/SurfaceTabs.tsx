@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { LayoutDashboard } from "lucide-react";
-import { VIEW_ORDER, VIEW_META, tabClass } from "@/components/shared/ViewTabs";
+import { TAB_STRIP, VIEW_ORDER, VIEW_META, tabClass, useTabStrip } from "@/components/shared/ViewTabs";
 
 /**
  * LİSTE + RAPORLAR — TEK ŞERİT.
@@ -28,8 +28,9 @@ import { VIEW_ORDER, VIEW_META, tabClass } from "@/components/shared/ViewTabs";
  * hata sınırına düşüyordu. Bileşenin kendi verisi yok, yalnız bağlantı çizer.
  */
 export function SurfaceTabs() {
+  const strip = useTabStrip("reports");
   return (
-    <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+    <div ref={strip} className={TAB_STRIP}>
       {VIEW_ORDER.map((slug) => {
         const meta = VIEW_META[slug];
         const Icon = meta.icon;

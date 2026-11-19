@@ -298,7 +298,7 @@ function StatusCell({
         onChange={(e) => handleChange(e.target.value as TaskStatus)}
         onClick={(e) => e.stopPropagation()}
         disabled={isPending}
-        className="absolute inset-0 opacity-0 cursor-pointer w-full disabled:cursor-wait"
+        className="absolute inset-0 opacity-0 cursor-pointer w-full disabled:cursor-wait pointer-coarse:-top-2.5 pointer-coarse:h-[calc(100%+1.25rem)]"
         aria-label={`Durum değiştir — ${task.title}`}
       >
         {options.map((o) => (
@@ -818,7 +818,7 @@ export function TaskListView({ tasks, savedViews, workspaceId, userId, profiles,
               href={`/tasks/${t.id}`}
               title={info.getValue()}
               className={cn(
-                "font-medium text-[14px] line-clamp-2 block leading-snug break-words transition-colors duration-150 hover:text-brand",
+                "font-medium text-[14px] line-clamp-2 block leading-snug break-words transition-colors duration-150 hover:text-brand pointer-coarse:-my-1.5 pointer-coarse:py-1.5",
                 done ? "text-muted line-through" : "text-ink",
               )}
             >
