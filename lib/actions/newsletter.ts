@@ -8,7 +8,7 @@ import { toActionErrorMessage, isMissingSchemaError } from "@/lib/utils/supabase
 import { decodeEntities, WEBSITE_BASE } from "@/lib/collection/website";
 import { stockBySiteProduct } from "@/lib/stock/queries";
 import {
-  defaultBlocks, isMonday, MAX_BLOCKS,
+  blocksFingerprint, defaultBlocks, isMonday, MAX_BLOCKS, NEWSLETTER_SELECT, normalizeWeek,
   type NewsletterProduct, type NewsletterWeek,
 } from "@/lib/newsletter/model";
 
@@ -69,10 +69,23 @@ const PatchSchema = z.object({
 
 export type NewsletterPatch = Partial<Pick<NewsletterWeek, "status" | "subject" | "theme" | "notes" | "blocks">>;
 
+const CONFLICT = "Başka bir yerde değişti";
+
+export type SaveNewsletterResult =
+  | { ok: true; id: string }
+  | { error: string; conflict?: boolean };
+
+/**
+ * `baseBlocks` = ekranın bildiği son sunucu bloklarının parmak izi. Bloklar
+ * kaydedilirken sunucudaki bloklar bundan FARKLIYSA (başkası araya girmiş)
+ * yazılmaz, `conflict` döner — kullanıcı "Yenile" ya da "Benimkini kaydet"
+ * der. Verilmezse (benimkini kaydet) koşulsuz yazar.
+ */
 export async function saveNewsletterWeek(
   sendDate: string,
   patch: NewsletterPatch,
-): Promise<{ ok: true; id: string } | { error: string }> {
+  baseBlocks?: string,
+): Promise<SaveNewsletterResult> {
   if (!isMonday(sendDate)) return { error: "Bülten tarihi pazartesi olmalı." };
   const parsed = PatchSchema.safeParse(patch);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Geçersiz alan." };
@@ -82,26 +95,72 @@ export async function saveNewsletterWeek(
   if (!ctx) return { error: AUTH_REQUIRED };
   if (ctx.role === "viewer") return { error: "İzleyici rolü planı değiştiremez." };
 
-  const { data: existing, error: readErr } = await supabase
-    .from("newsletter_weeks")
-    .select("id")
-    .eq("workspace_id", ctx.workspaceId)
-    .eq("send_date", sendDate)
-    .maybeSingle();
-  if (readErr) return { error: isMissingSchemaError(readErr) ? SETUP_PENDING : toActionErrorMessage(readErr) };
-
   const values = { ...parsed.data, updated_by: ctx.userId };
-  const res = existing
-    ? await supabase.from("newsletter_weeks").update(values).eq("id", existing.id).select("id").single()
-    : await supabase
+  /* Blok kaydı korumalıdır (alan alan kaydedilen konu/durum değil — onlar
+     ayrı sütun, birbirini ezmez). */
+  const guard = !!parsed.data.blocks && baseBlocks !== undefined;
+
+  for (let attempt = 0; ; attempt++) {
+    const { data: existing, error: readErr } = await supabase
+      .from("newsletter_weeks")
+      .select("id, send_date, blocks, updated_at")
+      .eq("workspace_id", ctx.workspaceId)
+      .eq("send_date", sendDate)
+      .maybeSingle();
+    if (readErr) return { error: isMissingSchemaError(readErr) ? SETUP_PENDING : toActionErrorMessage(readErr) };
+    if (!existing) break; // satır yok → aşağıda açılır
+
+    const row = existing as { id: string; send_date: string; blocks: NewsletterWeek["blocks"]; updated_at: string };
+    if (guard) {
+      const current = blocksFingerprint(normalizeWeek(row).blocks);
+      /* Sunucudaki zaten benim yazacağımla aynıysa çakışma değildir. */
+      if (current !== baseBlocks && current !== blocksFingerprint(parsed.data.blocks as NewsletterWeek["blocks"])) {
+        return { error: CONFLICT, conflict: true };
+      }
+    }
+    let q = supabase.from("newsletter_weeks").update(values).eq("id", row.id);
+    /* OKU–KARŞILAŞTIR–YAZ ATOMİK DEĞİL: iki kişi aynı saniyede kaydederse
+       ikisi de yukarıdaki kontrolü geçer. Yazma, okuduğumuz satır HÂLÂ o
+       satırsa (updated_at aynıysa) olur; değilse hiçbir satır değişmez ve
+       baştan okunur — araya giren yalnız durumu/konuyu değiştirdiyse bloklar
+       aynıdır, ikinci denemede yazılır; blokları değiştirdiyse çakışmadır. */
+    if (guard) q = q.eq("updated_at", row.updated_at);
+    const { data, error } = await q.select("id");
+    if (error) return { error: isMissingSchemaError(error) ? SETUP_PENDING : toActionErrorMessage(error) };
+    if (data?.length) return { ok: true, id: row.id };
+    if (!guard) return { error: "Kaydedilemedi." };
+    if (attempt >= 2) return { error: CONFLICT, conflict: true };
+  }
+
+  const res = await supabase
         .from("newsletter_weeks")
         /* Yeni hafta, ekranda gördüğü hazır blok sırasıyla doğar — yalnız
            konu satırı yazılsa bile bloklar boş liste olarak kaydolmasın. */
         .insert({ blocks: defaultBlocks(randomUUID), ...values, workspace_id: ctx.workspaceId, send_date: sendDate, created_by: ctx.userId })
         .select("id")
         .single();
-  if (res.error) return { error: isMissingSchemaError(res.error) ? SETUP_PENDING : toActionErrorMessage(res.error) };
+  if (res.error) {
+    /* İki kişi aynı boş haftayı aynı anda açıp yazdı: satırı öteki açtı. */
+    if (res.error.code === "23505") return { error: CONFLICT, conflict: true };
+    return { error: isMissingSchemaError(res.error) ? SETUP_PENDING : toActionErrorMessage(res.error) };
+  }
   return { ok: true, id: (res.data as { id: string }).id };
+}
+
+/** Haftanın sunucudaki güncel hâli — açık ekran başkasının değişikliğini alsın. */
+export async function fetchNewsletterWeek(sendDate: string): Promise<{ ok: true; week: NewsletterWeek | null } | { error: string }> {
+  if (!isMonday(sendDate)) return { error: "Bülten tarihi pazartesi olmalı." };
+  const supabase = await createClient();
+  const ctx = await getCtx(supabase);
+  if (!ctx) return { error: AUTH_REQUIRED };
+  const { data, error } = await supabase
+    .from("newsletter_weeks")
+    .select(NEWSLETTER_SELECT)
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("send_date", sendDate)
+    .maybeSingle();
+  if (error) return { error: isMissingSchemaError(error) ? SETUP_PENDING : toActionErrorMessage(error) };
+  return { ok: true, week: data ? normalizeWeek(data as NewsletterWeek) : null };
 }
 
 /* ── Siteden okuma ────────────────────────────────────────────────────────

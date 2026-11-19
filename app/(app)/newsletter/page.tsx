@@ -10,7 +10,7 @@ import { maybeDatabaseSetupRequired } from "@/lib/utils/supabase-errors";
 import { NewsletterMonth } from "@/components/newsletter/NewsletterMonth";
 import { NewsletterWeekEditor } from "@/components/newsletter/NewsletterWeekEditor";
 import {
-  emptyWeek, isMonday, mondaysOfMonth, MONTH_RE, NEWSLETTER_SELECT, normalizeBlock,
+  emptyWeek, isMonday, mondaysOfMonth, MONTH_RE, NEWSLETTER_SELECT, normalizeWeek,
   type NewsletterBlock, type NewsletterWeek,
 } from "@/lib/newsletter/model";
 
@@ -67,13 +67,7 @@ export default async function NewsletterPage({
 
   /* jsonb'den gelen her blok tam kalıba tamamlanır — eski/eksik alan
      ekranda `undefined` olarak patlamasın. */
-  const toWeek = (r: NewsletterWeek): NewsletterWeek => ({
-    ...r,
-    subject: r.subject ?? "", theme: r.theme ?? "", notes: r.notes ?? "",
-    blocks: (Array.isArray(r.blocks) ? r.blocks : []).map((b, i) =>
-      normalizeBlock(b as Partial<NewsletterBlock>, `${r.send_date}-${i}`)),
-  });
-  const rows = new Map(((res.data ?? []) as NewsletterWeek[]).map((r) => [r.send_date, toWeek(r)]));
+  const rows = new Map(((res.data ?? []) as NewsletterWeek[]).map((r) => [r.send_date, normalizeWeek(r)]));
   const canEdit = role !== "viewer";
 
   if (week) {

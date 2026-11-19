@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  AlertTriangle, ArrowDown, ArrowUp, Download, ExternalLink, ImagePlus, Loader2, Plus, Search, Trash2, X,
+  AlertTriangle, ArrowDown, ArrowUp, Check, CloudOff, Download, ExternalLink, ImagePlus, Loader2, Plus, RotateCw,
+  Search, Trash2, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Field, SelectInput, TextArea, TextInput } from "@/components/ui/Field";
@@ -10,12 +11,13 @@ import { useConfirm } from "@/components/ui/useConfirm";
 import { createClient as createBrowserSupabase } from "@/lib/supabase/client";
 import { prepareImageUpload, SHEET_IMAGE_ACCEPT, SHEET_IMAGE_TYPES } from "@/lib/utils/compress-image";
 import {
-  listSiteCategories, listSiteStories, saveNewsletterWeek, searchStoreProducts,
-  type NewsletterPatch, type SiteCategory, type SiteStory,
+  fetchNewsletterWeek, saveNewsletterWeek,
+  type searchStoreProducts, type NewsletterPatch, type SaveNewsletterResult, type SiteCategory, type SiteStory,
 } from "@/lib/actions/newsletter";
 import { MailPreview } from "@/components/newsletter/MailPreview";
 import {
-  BLOCK_TYPES, blockButton, blockNeedsLink, exportWeek, MAX_BLOCKS, NEWSLETTER_STATUSES, newBlock,
+  BLOCK_TYPES, blockButton, blockNeedsLink, blocksFingerprint, exportWeek, MAX_BLOCKS, mergeBlocks,
+  NEWSLETTER_STATUSES, newBlock,
   SOCIAL_PLATFORMS, STORY_TITLES,
   type BlockType, type NewsletterBlock, type NewsletterProduct, type NewsletterStatus,
   type NewsletterTextField, type NewsletterWeek, type SocialPlatform,
@@ -36,9 +38,22 @@ import {
  * açıklama cümlesi yok (Aslı Hanım: "amatörce"), yalnız alan adları ve
  * gerçek bir sorun olduğunda uyarı.
  *
- * KAYIT: konu satırı/tema/not alandan çıkınca; bloklar her yapısal
- * değişiklikte (ekle, taşı, sil, seç, yükle) ve yazı alanından çıkınca.
+ * KAYIT KENDİLİĞİNDEN ve GÖRÜNÜR (Aslı Hanım, 18.11.2026: "Bunu
+ * kaydedebiliyor musun?"). Yazarken yazma durduktan bir saniye sonra,
+ * yapısal değişiklikte (ekle, taşı, sil, seç, yükle) hemen kaydeder; üst
+ * satırda "Kaydediliyor / Kaydedildi 14:32" yazar. Kayıtlar SIRAYLA gider
+ * (eski bir kayıt yenisinin üstüne düşmez); kaydedilmemiş yazı varken sekme
+ * kapanmak isterse tarayıcı sorar. İki kişi aynı haftayı açarsa biri
+ * ötekinin yazdığını SİLEMEZ: sunucudaki bloklar değişmişse kayıt durur,
+ * "Yenile / Benimkini kaydet" sorulur; boşta duran ekran başkasının
+ * değişikliğini kendiliğinden alır.
  */
+
+type SaveState = "idle" | "dirty" | "saving" | "saved" | "error" | "conflict";
+const TYPING_MS = 1000;
+const RETRY_MS = 8000;
+const SYNC_MS = 30_000;
+const fmtTime = (d: Date) => d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
 
 const BUCKET = "production-sheets";
 const LINK_STATUSES: NewsletterStatus[] = ["onayda", "onaylandi"];
@@ -60,8 +75,9 @@ export function NewsletterWeekEditor({
   usedStories: Record<string, string>;
 }) {
   const [week, setWeek] = useState<NewsletterWeek>(initial);
-  const [saved, setSaved] = useState<NewsletterWeek>(initial);
-  const [pending, setPending] = useState(0);
+  /* Kayıtlı bir hafta açıldığında da "Kaydedildi" yazar — soru sorulmasın. */
+  const [state, setState] = useState<SaveState>(initial.id ? "saved" : "idle");
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const { ask, dialog } = useConfirm();
@@ -74,70 +90,207 @@ export function NewsletterWeekEditor({
   const [categories, setCategories] = useState<SiteCategory[] | null>(null);
   useEffect(() => {
     let alive = true;
+    /* `fetch`, Server Action değil: kayıt kuyruğunu tıkamasın
+       (bkz. app/api/newsletter/site/route.ts). */
     (async () => {
-      const [s, c] = await Promise.all([listSiteStories(), listSiteCategories()]);
+      const res = await fetch("/api/newsletter/site", { cache: "no-store" })
+        .then((r) => (r.ok ? (r.json() as Promise<{ stories: SiteStory[]; categories: SiteCategory[] }>) : null))
+        .catch(() => null);
       if (!alive) return;
-      setStories("error" in s ? [] : s.stories);
-      setCategories("error" in c ? [] : c.categories);
+      setStories(res?.stories ?? []);
+      setCategories(res?.categories ?? []);
     })();
     return () => { alive = false; };
   }, []);
 
-  async function save(patch: NewsletterPatch) {
-    setWeek((w) => ({ ...w, ...patch }));
-    setError(null);
-    setPending((n) => n + 1);
-    try {
-      const res = await saveNewsletterWeek(week.send_date, patch);
-      if ("error" in res) { setError(`Kaydedilemedi: ${res.error}`); return; }
-      setSaved((sv) => ({ ...sv, ...patch }));
-      setWeek((w) => ({ ...w, id: res.id }));
-    } catch (e) {
-      setError(`Kaydedilemedi: ${e instanceof Error ? e.message : "bağlantı kurulamadı"}`);
-    } finally {
-      setPending((n) => n - 1);
+  /* ── Kayıt kuyruğu ───────────────────────────────────────────────────── */
+  const sendDate = initial.send_date;
+  /** Henüz gönderilmemiş değişiklikler (alan alan; aynı alanın yenisi eskisini ezer). */
+  const queue = useRef<NewsletterPatch>({});
+  const inFlight = useRef(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retry = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Satır veritabanında var mı? Yoksa ilk kayıt blokları da taşır. */
+  const rowExists = useRef(initial.id !== null);
+  /** Ekranın bildiği son SUNUCU blokları (birleştirme ve çakışma kontrolü için). */
+  const base = useRef(initial.blocks);
+  const force = useRef(false);
+  const blocked = useRef(false); // çakışma çözülene kadar kayıt durur
+  const alive = useRef(true);
+  const weekRef = useRef(week);
+  useEffect(() => { weekRef.current = week; }, [week]);
+
+  const flush = useCallback(async () => {
+    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+    if (retry.current) { clearTimeout(retry.current); retry.current = null; }
+    if (inFlight.current || blocked.current || !Object.keys(queue.current).length) return;
+    let merges = 0;
+    while (Object.keys(queue.current).length) {
+      const patch: NewsletterPatch = rowExists.current
+        ? queue.current
+        : { blocks: weekRef.current.blocks, ...queue.current };
+      queue.current = {};
+      inFlight.current = true;
+      if (alive.current) setState("saving");
+      let res: SaveNewsletterResult;
+      try {
+        res = await saveNewsletterWeek(sendDate, patch, patch.blocks && !force.current ? blocksFingerprint(base.current) : undefined);
+      } catch (e) {
+        res = { error: e instanceof Error && e.message ? e.message : "bağlantı kurulamadı" };
+      }
+      if ("error" in res && res.conflict && merges++ < 3) {
+        /* BAŞKASI ARAYA GİRMİŞ. Farklı bloklara / alanlara yazıldıysa iki
+           taraf kendiliğinden birleşir ve kayıt yeniden gider; kullanıcıya
+           yalnız AYNI alan iki tarafta farklı değiştiyse sorulur. */
+        const fresh = await fetchNewsletterWeek(sendDate).catch(() => null);
+        const theirs = fresh && "ok" in fresh ? fresh.week : null;
+        const merged = theirs ? mergeBlocks(base.current, weekRef.current.blocks, theirs.blocks) : null;
+        if (theirs && merged) {
+          const queued = { ...patch, ...queue.current };
+          base.current = theirs.blocks;
+          rowExists.current = true;
+          queue.current = { ...queued, blocks: merged };
+          if (alive.current) {
+            setWeek((w) => ({
+              ...w, id: theirs.id, blocks: merged,
+              status: "status" in queued ? w.status : theirs.status,
+              subject: "subject" in queued ? w.subject : theirs.subject,
+              theme: "theme" in queued ? w.theme : theirs.theme,
+              notes: "notes" in queued ? w.notes : theirs.notes,
+            }));
+          }
+          weekRef.current = { ...weekRef.current, blocks: merged };
+          inFlight.current = false;
+          continue;
+        }
+      }
+      inFlight.current = false;
+      if ("error" in res) {
+        queue.current = { ...patch, ...queue.current }; // sonradan yazılan kazanır
+        if (res.conflict) {
+          blocked.current = true;
+          if (alive.current) { setError(null); setState("conflict"); }
+        } else if (alive.current) {
+          setError(res.error);
+          setState("error"); // yeniden deneme aşağıdaki etkide
+        }
+        return;
+      }
+      force.current = false;
+      rowExists.current = true;
+      if (patch.blocks) base.current = patch.blocks;
+      const id = res.id;
+      if (alive.current) setWeek((w) => (w.id === id ? w : { ...w, id }));
     }
-  }
+    if (alive.current) { setError(null); setState("saved"); setSavedAt(new Date()); }
+  }, [sendDate]);
+
+  /* Bağlantı koptuysa kendiliğinden yeniden dener. */
+  useEffect(() => {
+    if (state !== "error") return;
+    retry.current = setTimeout(() => void flush(), RETRY_MS);
+    return () => { if (retry.current) clearTimeout(retry.current); };
+  }, [state, flush]);
+
+  /** Değişikliği kuyruğa koyar. `now` = hemen; değilse yazma durunca. */
+  const push = useCallback((patch: NewsletterPatch, now = false) => {
+    queue.current = { ...queue.current, ...patch };
+    if (!blocked.current) setState((s) => (s === "saving" ? s : "dirty"));
+    if (timer.current) clearTimeout(timer.current);
+    if (now) void flush();
+    else timer.current = setTimeout(() => void flush(), TYPING_MS);
+  }, [flush]);
+
+  const save = (patch: NewsletterPatch) => {
+    setWeek((w) => ({ ...w, ...patch }));
+    push(patch, true);
+  };
+
+  /** Sunucudaki hâli al. `discard` = kendi bekleyen değişikliğimi bırak ("Yenile"). */
+  const sync = useCallback(async (discard = false) => {
+    const busy = () => inFlight.current || Object.keys(queue.current).length > 0;
+    if (!discard && (busy() || blocked.current)) return;
+    const res = await fetchNewsletterWeek(sendDate).catch(() => null);
+    if (!alive.current || !res || "error" in res) return;
+    if (!discard && (busy() || blocked.current)) return; // beklerken yazmaya başladı
+    if (discard) {
+      queue.current = {};
+      blocked.current = false;
+      force.current = false;
+      if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+    }
+    if (res.week) {
+      const next = res.week;
+      rowExists.current = true;
+      base.current = next.blocks;
+      setWeek((w) => (JSON.stringify(w) === JSON.stringify(next) ? w : next));
+    }
+    if (discard) { setError(null); setState(res.week ? "saved" : "idle"); setSavedAt(null); }
+  }, [sendDate]);
+
+  useEffect(() => {
+    alive.current = true;
+    const onHide = () => { if (document.visibilityState === "hidden") void flush(); else void sync(); };
+    const onFocus = () => void sync();
+    /* Kaydedilmemiş yazı varken sekme kapanmasın — tarayıcı sorar. */
+    const onLeave = (e: BeforeUnloadEvent) => {
+      if (!inFlight.current && !Object.keys(queue.current).length) return;
+      void flush();
+      e.preventDefault();
+    };
+    const every = window.setInterval(() => { if (document.visibilityState === "visible") void sync(); }, SYNC_MS);
+    document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("beforeunload", onLeave);
+    return () => {
+      /* Sayfadan (panel içinde) çıkılırken bekleyen yazı gönderilir. */
+      void flush();
+      alive.current = false;
+      window.clearInterval(every);
+      document.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("beforeunload", onLeave);
+    };
+  }, [sync, flush]);
+
+  const overwrite = () => { blocked.current = false; force.current = true; void flush(); };
 
   /* ── Bloklar ─────────────────────────────────────────────────────────── */
   const blocks = week.blocks;
   const saveBlocks = (next: NewsletterBlock[]) => save({ blocks: next });
-  /** Yazarken yalnız ekranda; `commit` ile kaydolur. */
+  /** Yazarken yazma durunca, `commit` ile hemen kaydolur. */
   const editBlock = (id: string, patch: Partial<NewsletterBlock>, commit = false) => {
     const next = blocks.map((b) => (b.id === id ? { ...b, ...patch } : b));
-    if (commit) void saveBlocks(next);
-    else setWeek((w) => ({ ...w, blocks: next }));
+    setWeek((w) => ({ ...w, blocks: next }));
+    push({ blocks: next }, commit);
   };
-  const commitBlocks = () => {
-    if (JSON.stringify(blocks) !== JSON.stringify(saved.blocks)) void saveBlocks(blocks);
-  };
+  /** Alandan çıkınca bekleyen yazı hemen gider. */
+  const commitBlocks = () => void flush();
   const move = (i: number, d: -1 | 1) => {
     const j = i + d;
     if (j < 0 || j >= blocks.length) return;
     const next = [...blocks];
     [next[i], next[j]] = [next[j], next[i]];
-    void saveBlocks(next);
+    saveBlocks(next);
   };
   const remove = async (b: NewsletterBlock, i: number) => {
     const type = BLOCK_TYPES.find((t) => t.key === b.type)?.label ?? "";
     if (!(await ask({ title: `${i + 1}. blok silinsin mi?`, message: type, confirmLabel: "Sil", tone: "danger" }))) return;
-    void saveBlocks(blocks.filter((x) => x.id !== b.id));
+    saveBlocks(weekRef.current.blocks.filter((x) => x.id !== b.id));
     if (b.image_path) void removeUpload(b.image_path);
   };
   const add = (type: BlockType) => {
     setAdding(false);
-    void saveBlocks([...blocks, newBlock(type, crypto.randomUUID())]);
+    saveBlocks([...blocks, newBlock(type, crypto.randomUUID())]);
   };
   const changeType = (b: NewsletterBlock, type: BlockType) =>
     editBlock(b.id, { type, platform: type === "sosyal" ? (b.platform || "instagram") : b.platform }, true);
 
   /* ── Metin alanları ──────────────────────────────────────────────────── */
-  const bind = (field: NewsletterTextField) => ({
-    value: week[field],
-    disabled: !canEdit,
-    onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setWeek((w) => ({ ...w, [field]: e.target.value })),
-    onBlur: () => { if (week[field] !== saved[field]) void save({ [field]: week[field] }); },
-  });
+  const onText = (field: NewsletterTextField, value: string) => {
+    setWeek((w) => ({ ...w, [field]: value }));
+    push({ [field]: value });
+  };
 
   /* ── Uyarılar (engellemez) ───────────────────────────────────────────── */
   const linkCheck = LINK_STATUSES.includes(week.status);
@@ -185,21 +338,29 @@ export function NewsletterWeekEditor({
         >
           {NEWSLETTER_STATUSES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
         </SelectInput>
-        <span className="inline-flex min-h-5 items-center gap-1.5 text-[12.5px] text-muted" role="status">
-          {pending > 0 ? <><Loader2 size={13} className="animate-spin" aria-hidden /> Kaydediliyor…</> : week.id ? "Kaydedildi" : null}
-        </span>
-        <button
-          type="button"
-          onClick={downloadPlan}
-          className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-full border border-line-strong bg-surface px-4 text-[13px] font-medium text-ink transition-all hover:bg-surface-hover"
-        >
-          <Download size={14} aria-hidden /> Planı indir
-        </button>
+        <SaveBadge state={state} savedAt={savedAt} error={error} onRetry={() => void flush()} onReload={() => void sync(true)} onOverwrite={overwrite} />
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {/* TASLAK BİTTİ — tek adım (18.11.2026: ekip tamamlayınca haber
+              verecek). Durumu "Onayda" yapar; ay görünümünde hafta öyle görünür. */}
+          {canEdit && (week.status === "taslak" || week.status === "duzeltme") && (
+            <button
+              type="button"
+              onClick={() => save({ status: "onayda" })}
+              className="inline-flex h-9 items-center gap-1.5 rounded-full bg-ink px-4 text-[13px] font-semibold text-white transition-all hover:opacity-90 pointer-coarse:h-11"
+            >
+              <Check size={14} aria-hidden /> Bitti
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={downloadPlan}
+            className="inline-flex h-9 items-center gap-1.5 rounded-full border border-line-strong bg-surface px-4 text-[13px] font-medium text-ink transition-all hover:bg-surface-hover pointer-coarse:h-11"
+          >
+            <Download size={14} aria-hidden /> Planı indir
+          </button>
+        </div>
       </div>
 
-      {error && (
-        <p role="alert" className="mb-4 rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-[13.5px] font-medium text-danger">{error}</p>
-      )}
       {linkCheck && missingLink.length > 0 && (
         <p role="alert" className="mb-4 flex items-center gap-2 rounded-control border border-warning/30 bg-warning/10 px-3 py-2 text-[13.5px] font-medium text-warning">
           <AlertTriangle size={15} aria-hidden />
@@ -212,7 +373,13 @@ export function NewsletterWeekEditor({
           {/* ── Genel ─────────────────────────────────────────────────── */}
           <section className="rounded-card border border-line bg-surface p-4 sm:p-5">
             <Field label="E-posta konusu">
-              <TextInput {...bind("subject")} onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
+              <TextInput
+                value={week.subject}
+                disabled={!canEdit}
+                onChange={(e) => onText("subject", e.target.value)}
+                onBlur={commitBlocks}
+                onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+              />
             </Field>
             {/* "Tema ve notlar" postada karşılığı olmayan bir ekti (Sıraç,
                 18.11.2026: "araya ek bir şey koyunca kafa karışıyor"). Yeni
@@ -220,8 +387,16 @@ export function NewsletterWeekEditor({
                 yalnız DOLU ise düz alan olarak durur. */}
             {(initial.theme || initial.notes) && (
               <div className="mt-3.5 space-y-3.5">
-                {initial.theme && <Field label="Tema"><TextInput {...bind("theme")} /></Field>}
-                {initial.notes && <Field label="Not"><TextArea {...bind("notes")} rows={3} /></Field>}
+                {initial.theme && (
+                  <Field label="Tema">
+                    <TextInput value={week.theme} disabled={!canEdit} onChange={(e) => onText("theme", e.target.value)} onBlur={commitBlocks} />
+                  </Field>
+                )}
+                {initial.notes && (
+                  <Field label="Not">
+                    <TextArea value={week.notes} disabled={!canEdit} onChange={(e) => onText("notes", e.target.value)} onBlur={commitBlocks} rows={3} />
+                  </Field>
+                )}
               </div>
             )}
           </section>
@@ -293,6 +468,57 @@ export function NewsletterWeekEditor({
       </div>
       {dialog}
     </div>
+  );
+}
+
+/** Kayıt durumu — üst satırda, her an görünür. */
+function SaveBadge({
+  state, savedAt, error, onRetry, onReload, onOverwrite,
+}: {
+  state: SaveState;
+  savedAt: Date | null;
+  error: string | null;
+  onRetry: () => void;
+  onReload: () => void;
+  onOverwrite: () => void;
+}) {
+  const btn = "inline-flex h-8 items-center gap-1 rounded-control border px-2.5 text-[12.5px] font-medium transition-all pointer-coarse:h-10";
+  if (state === "conflict") {
+    return (
+      <span className="flex flex-wrap items-center gap-1.5" role="alert">
+        <span className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-warning">
+          <AlertTriangle size={13} aria-hidden /> Başka bir yerde değişti
+        </span>
+        <button type="button" onClick={onReload} className={cn(btn, "border-line-strong text-ink hover:bg-surface-hover")}>Yenile</button>
+        <button type="button" onClick={onOverwrite} className={cn(btn, "border-warning/40 text-warning hover:bg-warning/10")}>Benimkini kaydet</button>
+      </span>
+    );
+  }
+  if (state === "error") {
+    return (
+      <span className="flex flex-wrap items-center gap-1.5" role="alert" title={error ?? undefined}>
+        <span className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-danger">
+          <CloudOff size={13} aria-hidden /> Kaydedilemedi
+        </span>
+        <button type="button" onClick={onRetry} className={cn(btn, "border-danger/40 text-danger hover:bg-danger/10")}>
+          <RotateCw size={12} aria-hidden /> Tekrar dene
+        </button>
+      </span>
+    );
+  }
+  if (state === "idle") return <span role="status" className="min-h-5" />;
+  const busy = state === "dirty" || state === "saving";
+  return (
+    <span
+      role="status"
+      className={cn(
+        "inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[12.5px] font-medium tabular-nums",
+        busy ? "bg-surface-sunken text-muted" : "bg-success/12 text-success",
+      )}
+    >
+      {busy ? <Loader2 size={13} className="animate-spin" aria-hidden /> : <Check size={13} aria-hidden />}
+      {busy ? "Kaydediliyor" : savedAt ? `Kaydedildi ${fmtTime(savedAt)}` : "Kaydedildi"}
+    </span>
   );
 }
 
@@ -392,19 +618,21 @@ function BlockCard({
 
   return (
     <section className="rounded-card border border-line bg-surface p-4 sm:p-5">
-      <header className="mb-4 flex flex-wrap items-center gap-2">
+      {/* Telefonda tür seçimi ile taşı/sil düğmeleri TEK satırda kalır
+          (alt satıra düşünce her kartta boş bir şerit açılıyordu). */}
+      <header className="mb-4 flex items-center gap-2">
         <span className="inline-flex size-7 items-center justify-center rounded-full bg-ink text-[13px] font-semibold tabular-nums text-white">{no}</span>
         <SelectInput
           aria-label={`${no}. bloğun türü`}
           value={b.type}
           disabled={!canEdit}
           onChange={(e) => onType(e.target.value as BlockType)}
-          className="h-9 w-auto font-semibold"
+          className="h-9 w-auto min-w-0 shrink font-semibold"
         >
           {BLOCK_TYPES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
         </SelectInput>
         {canEdit && (
-          <div className="ml-auto flex items-center gap-1">
+          <div className="ml-auto flex shrink-0 items-center gap-1">
             <IconBtn label="Yukarı taşı" disabled={first} onClick={() => onMove(-1)}><ArrowUp size={15} /></IconBtn>
             <IconBtn label="Aşağı taşı" disabled={last} onClick={() => onMove(1)}><ArrowDown size={15} /></IconBtn>
             <IconBtn label="Sil" danger onClick={onRemove}><Trash2 size={15} /></IconBtn>
@@ -679,7 +907,9 @@ function ProductSearch({ chosen, onPick, onStock }: {
     const n = ++seq.current;
     if (q.trim().length < 2) { setHits(null); setError(null); setBusy(false); return; }
     setBusy(true);
-    const res = await searchStoreProducts(q);
+    const res = await fetch(`/api/newsletter/site?q=${encodeURIComponent(q)}`, { cache: "no-store" })
+      .then((r) => r.json() as ReturnType<typeof searchStoreProducts>)
+      .catch(() => ({ error: "Siteye bağlanılamadı." }));
     if (n !== seq.current) return; // daha yeni bir arama başladı
     setBusy(false);
     if ("error" in res) { setError(res.error); setHits(null); }

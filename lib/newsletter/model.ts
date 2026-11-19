@@ -161,6 +161,108 @@ export function normalizeBlock(raw: Partial<NewsletterBlock> & { type?: string }
   } as NewsletterBlock;
 }
 
+/** Veritabanı satırını ekranın beklediği tam kalıba tamamlar (sayfa ve
+ *  kayıt eylemi AYNI işlevi kullanır — parmak izi iki yerde aynı çıksın). */
+export function normalizeWeek(r: Partial<NewsletterWeek> & { send_date: string }): NewsletterWeek {
+  return {
+    id: r.id ?? null,
+    send_date: r.send_date,
+    status: (NEWSLETTER_STATUSES.some((s) => s.key === r.status) ? r.status : "taslak") as NewsletterStatus,
+    subject: r.subject ?? "", theme: r.theme ?? "", notes: r.notes ?? "",
+    blocks: (Array.isArray(r.blocks) ? r.blocks : []).map((b, i) =>
+      normalizeBlock(b as Partial<NewsletterBlock>, `${r.send_date}-${i}`)),
+  };
+}
+
+/* ── Parmak izi — "ben açtıktan sonra başkası değiştirdi mi?" ───────────────
+   Bloklar tek parça (jsonb) kaydedilir: iki kişi aynı haftayı açıp ayrı
+   bloklara yazarsa SON KAYDEDEN ötekinin yazdığını silerdi. Kayıt, ekranın
+   bildiği son sunucu hâlinin parmak izini taşır; sunucudaki farklıysa yazmaz.
+   Anahtarlar SIRALANIR: jsonb anahtar sırasını korumaz. */
+function stableStringify(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(stableStringify).join(",")}]`;
+  if (v && typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    return `{${Object.keys(o).sort().map((k) => `${JSON.stringify(k)}:${stableStringify(o[k])}`).join(",")}}`;
+  }
+  return JSON.stringify(v) ?? "null";
+}
+
+export function blocksFingerprint(blocks: NewsletterBlock[]): string {
+  const text = stableStringify(blocks);
+  /* cyrb53 — kısa, yeterince dağınık; güvenlik için değil, eşitlik için. */
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return `${text.length}:${(4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36)}`;
+}
+
+/* ── İki kişinin değişikliğini birleştirme ────────────────────────────────
+   Ekip aynı haftayı AYNI ANDA dolduruyor (biri ürünleri, öteki yazıyı).
+   Bloklar tek parça kaydedildiği için ikinci kaydeden "başka bir yerde
+   değişti" uyarısına takılır; uyarı her seferinde bir tarafın yazdığını
+   feda ettirir. Çoğu zaman gerek yok: farklı bloklara — hatta aynı bloğun
+   farklı alanlarına — yazılmıştır.
+
+   `base`  ekranı açtığımda sunucudaki hâl
+   `mine`  benim ekranımdaki hâl
+   `theirs` sunucudaki şimdiki hâl
+   Dönen: birleşmiş bloklar; AYNI alan iki tarafta FARKLI değiştiyse `null`
+   (o zaman kullanıcıya sorulur). Hiçbir tarafın yazdığı sessizce atılmaz. */
+const same = (a: unknown, b: unknown) => stableStringify(a) === stableStringify(b);
+
+export function mergeBlocks(
+  base: NewsletterBlock[], mine: NewsletterBlock[], theirs: NewsletterBlock[],
+): NewsletterBlock[] | null {
+  const B = new Map(base.map((b) => [b.id, b]));
+  const M = new Map(mine.map((b) => [b.id, b]));
+  const T = new Map(theirs.map((b) => [b.id, b]));
+
+  /* İçerik: blok blok, alan alan. */
+  const content = new Map<string, NewsletterBlock>();
+  for (const id of new Set([...M.keys(), ...T.keys()])) {
+    const b = B.get(id), m = M.get(id), t = T.get(id);
+    if (m && t) {
+      if (!b) { if (!same(m, t)) return null; content.set(id, m); continue; }
+      const out = { ...t } as Record<string, unknown>;
+      for (const f of Object.keys(m) as (keyof NewsletterBlock)[]) {
+        const mineChanged = !same(m[f], b[f]), theirsChanged = !same(t[f], b[f]);
+        if (mineChanged && theirsChanged && !same(m[f], t[f])) return null;
+        if (mineChanged) out[f] = m[f];
+      }
+      content.set(id, out as unknown as NewsletterBlock);
+    } else if (m) {
+      /* Bende var, onlarda yok: ben ekledim → kalır. Onlar sildi → ben
+         dokunmadıysam gider, dokunduysam yazdığım kalır. */
+      if (!b || !same(m, b)) content.set(id, m);
+    } else if (t) {
+      /* Onlarda var, bende yok: onlar ekledi → kalır. Ben sildim → onlar
+         dokunmadıysa gider, dokunduysa yazdıkları kalır. */
+      if (!b || !same(t, b)) content.set(id, t);
+    }
+  }
+
+  /* Sıra: ben sırayı değiştirdiysem benimki, değilse onlarınki; öteki
+     tarafın eklediği blok kendi listesindeki komşusunun ardına girer. */
+  const common = (list: NewsletterBlock[]) => list.map((x) => x.id).filter((id) => B.has(id) && M.has(id) && T.has(id));
+  const iReordered = !same(common(mine), common(base));
+  const [lead, other] = iReordered ? [mine, theirs] : [theirs, mine];
+  const order = lead.map((x) => x.id).filter((id) => content.has(id));
+  other.forEach((x, i) => {
+    if (!content.has(x.id) || order.includes(x.id)) return;
+    const prev = other.slice(0, i).reverse().find((y) => order.includes(y.id));
+    order.splice(prev ? order.indexOf(prev.id) + 1 : 0, 0, x.id);
+  });
+
+  const merged = order.map((id) => content.get(id)!);
+  return merged.length > MAX_BLOCKS ? null : merged;
+}
+
 /* ── AFCOM-SEO'YA AKTARIM — "Planı indir" (JSON) ────────────────────────
    afcom-seo-5e'nin biçimi; postayı oradaki üretici yapar. */
 export interface NewsletterExport {
