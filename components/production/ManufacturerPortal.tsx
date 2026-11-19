@@ -5,6 +5,7 @@ import { CheckCircle2, Loader2, Printer, Send } from "lucide-react";
 import { addManufacturerNote, type PortalPayload } from "@/lib/actions/manufacturer-portal";
 import { Button } from "@/components/ui/Button";
 import { Field, TextArea, TextInput } from "@/components/ui/Field";
+import { measurementLine } from "@/lib/production/measurements";
 
 /**
  * ÜRETİCİNİN GÖRDÜĞÜ EKRAN.
@@ -122,11 +123,13 @@ export function ManufacturerPortal({ token, data }: { token: string; data: Porta
 
         {measurements.length > 0 && (
           <Section title="Ölçüler">
-            <ul className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+            <ul className="grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-2">
               {measurements.map((m, i) => (
                 <li key={i} className="flex gap-2 text-[13.5px]">
                   <span className="min-w-0 flex-1 truncate text-muted">{String(m.label ?? "—")}</span>
-                  <span className="shrink-0 font-medium tabular-nums text-ink">{String(m.value ?? "")}</span>
+                  {/* Bedenli ölçü de okunur ("S 70 · M 74"): yalnız eski tek
+                      değer yazılıyordu, bedenli föyde karşısı boş kalıyordu. */}
+                  <span className="shrink-0 text-right font-medium tabular-nums text-ink">{measurementLine(m as { label: string; value: string; values?: Record<string, string> })}</span>
                 </li>
               ))}
             </ul>

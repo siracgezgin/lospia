@@ -238,9 +238,22 @@ export const DIVIDED_COST_KEYS: ReadonlySet<CostItemKey> = new Set(
   COST_ITEM_DEFS.filter((d) => d.dividedByQty).map((d) => d.key),
 );
 
-const COST_ITEM_LABEL: Record<string, string> = Object.fromEntries(
-  COST_ITEM_DEFS.map((d) => [d.key, d.label]),
-);
+const COST_ITEM_LABEL: Record<string, string> = {
+  /* Listeden çıkan kalemlerin ADI durur: eski bir föyde DOLU kalan satır
+     ekranda "Kalem" diye adsız çiziliyordu. */
+  fermuar: "Fermuar",
+  astar: "Astar",
+  kalite_kontrol: "Kalite Kontrol",
+  ...Object.fromEntries(COST_ITEM_DEFS.map((d) => [d.key, d.label])),
+};
+
+const CURRENT_COST_KEYS: ReadonlySet<string> = new Set(COST_ITEM_DEFS.map((d) => d.key));
+
+/** Kaleme bir tutar yazılmış mı? (temel tutar ya da herhangi bir kademe) */
+function costItemFilled(it: CostItem): boolean {
+  if ((it.amount ?? "").trim()) return true;
+  return Object.values(it.tiers ?? {}).some((v) => (v ?? "").trim() !== "");
+}
 
 /** Kalemin altında görünen kısa açıklama (varsa). */
 export function costItemHint(key: CostItemKey): string | null {
@@ -264,9 +277,14 @@ export function costItemLabel(item: CostItem): string {
  *
  * "diger" satırları serbesttir ve kaç tane olursa olsun korunur.
  */
-export function mergeCostItems(existing?: CostItem[] | null): CostItem[] {
+export function mergeCostItems(
+  existing?: CostItem[] | null,
+  /** Reçeteden tutar gelen kalemler — listeden çıkmış olsa da satırı çizilir. */
+  bomKeys?: Iterable<string> | null,
+): CostItem[] {
   const rows = Array.isArray(existing) ? existing : [];
   if (!rows.length) return emptyCostItems();
+  const fromBom = new Set(bomKeys ?? []);
 
   /* KAYITLI SIRA KORUNUR. Sıraç (24.09.2026): "Numuneyi kalıp serinin üzerine
      alıyorum gitmiyor ama kaydedildi diyor, yeniledim hâlâ aynı."
@@ -283,6 +301,12 @@ export function mergeCostItems(existing?: CostItem[] | null): CostItem[] {
   for (const it of rows) {
     if (it.key === "diger") { free.push(it); continue; }
     if (seen.has(it.key)) continue;              // aynı kalem iki kez yazılmaz
+    /* LİSTEDEN ÇIKAN KALEM YALNIZ DOLUYSA ÇİZİLİR. 24.09.2026'da kayıtlı sıra
+       korunsun diye bu döngü "kayıtta ne varsa" çizer hâle geldi ve yukarıda
+       yazan kuralı (astar / fermuar / kalite kontrol: doluysa görünür, boşsa
+       görünmez) düşürdü: eski föylerde BOŞ "Fermuar" satırı adsız ("Kalem")
+       olarak geri gelmişti. Reçeteden tutar gelen kalem boş sayılmaz. */
+    if (!CURRENT_COST_KEYS.has(it.key) && !costItemFilled(it) && !fromBom.has(it.key)) continue;
     seen.add(it.key);
     fixed.push(it);
   }

@@ -40,6 +40,10 @@ export function SortableRows({
     <DndContext
       sensors={sensors}
       collisionDetection={closestCenter}
+      /* dnd-kit ekran okuyucu metinlerini bulunduğu yere `<div>` olarak
+         basar; burası bir `<table>`ın içi olduğu için geçersiz HTML'di
+         ("<div> cannot be a child of <table>"). Gövdeye taşınır. */
+      accessibility={{ container: typeof document === "undefined" ? undefined : document.body }}
       onDragEnd={(e: DragEndEvent) => {
         const { active, over } = e;
         if (!over || active.id === over.id) return;
@@ -103,6 +107,56 @@ export function SortableTableRow({
         </button>
       </td>
       {children}
+    </tr>
+  );
+}
+
+/**
+ * Sürüklenebilir `<tr>` — tutamaç AYRI SÜTUN AÇMAZ.
+ *
+ * Beden + ölçü tablosunda başlık, grup, adet ve toplam satırları da aynı
+ * sütunları paylaşıyor; ölçü satırları için en başa bir tutamaç sütunu açmak
+ * hepsine boş bir hücre eklemek ve tabloyu sağa itmek demekti. Tutamaç
+ * çağırana verilir, o da kendi ilk hücresinin içine (sıra numarasının önüne)
+ * koyar.
+ */
+export function SortableInlineRow({
+  id,
+  children,
+  className,
+}: {
+  id: string;
+  children: (_handle: React.ReactNode) => React.ReactNode;
+  className?: string;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const handle = (
+    <button
+      type="button"
+      {...attributes}
+      {...listeners}
+      aria-label="Satırı taşı"
+      title="Sürükleyip bırakarak sırasını değiştir"
+      className={cn(
+        "grid h-8 w-5 shrink-0 touch-none place-items-center text-subtle transition-colors duration-150 hover:text-ink",
+        isDragging ? "cursor-grabbing" : "cursor-grab",
+      )}
+    >
+      <GripVertical size={13} aria-hidden />
+    </button>
+  );
+  return (
+    <tr
+      ref={setNodeRef}
+      style={{
+        position: "relative",
+        transform: CSS.Translate.toString(transform),
+        transition,
+        zIndex: isDragging ? 10 : undefined,
+      }}
+      className={cn(isDragging && "bg-surface shadow-card", className)}
+    >
+      {children(handle)}
     </tr>
   );
 }

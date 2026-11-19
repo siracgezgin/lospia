@@ -17,6 +17,8 @@
  * kendi birim ödemesi ödeme tablosunun konusudur, föyün değil.
  */
 
+import { orderSizes, quantityBySize, totalQuantity } from "@/lib/collection/cost";
+import { measurementLine, measurementTable } from "@/lib/production/measurements";
 import type { ProductionSheet, SheetMaterialWithMaterial } from "@/types";
 
 export type SheetEmailContext = {
@@ -41,39 +43,27 @@ function dateTR(v: string | null | undefined): string {
   return isNaN(d.getTime()) ? "" : d.toLocaleDateString("tr-TR", { day: "numeric", month: "long", year: "numeric" });
 }
 
+/* BEDEN VE ÖLÇÜ FÖYÜN KENDİ OKUYUCULARINDAN GELİR.
+   Buradaki eski yardımcılar veriyi düz bir sözlük sanıyordu ({ S: 4, M: 6 });
+   oysa beden dağılımı { sizes, rows }, ölçüler de satır dizisidir. Sonuç:
+   üreticiye giden postada beden dağılımı ve toplam adet HİÇ çıkmıyor, ölçüler
+   "0: NO 1 · LABEL Bel · VALUES [object Object]" diye yazıyordu. Aynı veriyi
+   ekran, Excel ve kâğıt okuyan işlevler burada da kullanılır. */
+
 /** Beden dağılımı → "S: 4 · M: 6 · L: 2" */
-function sizeLine(dist: unknown): string {
-  if (!dist || typeof dist !== "object") return "";
-  return Object.entries(dist as Record<string, unknown>)
-    .filter(([, qty]) => Number(qty) > 0)
-    .map(([size, qty]) => `${size.toUpperCase()}: ${qty}`)
+function sizeLine(sd: ProductionSheet["size_distribution"]): string {
+  const by = quantityBySize(sd);
+  return orderSizes(Object.keys(by))
+    .filter((size) => (by[size] ?? 0) > 0)
+    .map((size) => `${size}: ${by[size]}`)
     .join(" · ");
 }
 
-function totalQty(dist: unknown): number {
-  if (!dist || typeof dist !== "object") return 0;
-  return Object.values(dist as Record<string, unknown>)
-    .reduce<number>((a, q) => a + (Number(q) || 0), 0);
-}
-
-/** Ölçü tablosu → satır listesi. */
-function measureRows(m: unknown): [string, string][] {
-  if (!m || typeof m !== "object") return [];
-  const out: [string, string][] = [];
-  for (const [k, v] of Object.entries(m as Record<string, unknown>)) {
-    if (!has(v)) continue;
-    if (typeof v === "object") {
-      // { S: 40, M: 42 } biçimi → tek satırda topla
-      const inner = Object.entries(v as Record<string, unknown>)
-        .filter(([, x]) => has(x))
-        .map(([sz, x]) => `${sz.toUpperCase()} ${x}`)
-        .join(" · ");
-      if (inner) out.push([k, inner]);
-    } else {
-      out.push([k, String(v)]);
-    }
-  }
-  return out;
+/** Ölçü tablosu → [ad, "70" | "S 70 · M 74"] satırları. */
+function measureRows(m: ProductionSheet["measurements"]): [string, string][] {
+  return measurementTable(m).rows
+    .map((r): [string, string] => [r.label || `${r.no}. ölçü`, measurementLine({ label: r.label, value: r.value, values: r.bySize })])
+    .filter(([, v]) => v !== "");
 }
 
 export function buildSheetEmail(ctx: SheetEmailContext): { subject: string; text: string; html: string } {
@@ -98,7 +88,7 @@ export function buildSheetEmail(ctx: SheetEmailContext): { subject: string; text
   push("Dikim teslim", dateTR(sheet.sewing_delivery_date));
 
   const sizes = sizeLine(sheet.size_distribution);
-  const qty = totalQty(sheet.size_distribution);
+  const qty = totalQuantity(sheet.size_distribution);
   if (sizes) facts.push(["Beden dağılımı", sizes]);
   if (qty > 0) facts.push(["Toplam adet", String(qty)]);
 

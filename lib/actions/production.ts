@@ -323,12 +323,29 @@ export async function createProductionSheet(
   return { id: (row as { id: string }).id };
 }
 
+/**
+ * `changed` = bu ekranda GERÇEKTEN değişen alanların adları.
+ *
+ * Föy her kayıtta FORMUN TAMAMINI yazıyordu. Aynı föy iki yerde açıkken
+ * (iki kişi, iki sekme, ya da föy + Maliyet tablosu) eski ekran tek bir alana
+ * dokunup kaydettiğinde, ötekinin değiştirdiği BÜTÜN alanları da kendi eski
+ * değerleriyle eziyordu — 21.09.2026'da ekibin gördüğü buydu: "Ürün kodunu
+ * düzeltiyoruz, bir şekilde eski modele dönüyor… bak geri döndü ama."
+ *
+ * Liste verilirse yalnız o sütunlar yazılır; verilmezse (eski sürümü açık
+ * kalmış sekme) eskisi gibi tamamı yazılır — o sekme yenilenene kadar davranış
+ * değişmez, hiçbir şey kırılmaz. Form yine BÜTÜN olarak doğrulanır.
+ */
 export async function updateProductionSheet(
   sheetId: string,
   input: ProductionSheetInput,
+  changed?: string[],
 ): Promise<{ ok: true } | { error: string }> {
   const parsed = SheetSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const only = Array.isArray(changed)
+    ? new Set(changed.filter((k) => typeof k === "string" && k.length <= 60).slice(0, 100))
+    : null;
 
   const supabase = await createClient();
   const ctx = await getCtx(supabase);
@@ -351,12 +368,19 @@ export async function updateProductionSheet(
      mevcut değerde sabitleniyordu; arşivleme üyeye açılınca bu satır aynı işi
      ters yönden engelliyordu — arşivden çıkarmak yine yöneticiyi bekletirdi. */
 
+  const values: Record<string, unknown> = only
+    ? Object.fromEntries(Object.entries(data).filter(([k]) => only.has(k)))
+    : data;
+  if (only && Object.keys(values).length === 0) return { ok: true };   // yazılacak fark yok
+
   const { error } = await supabase
     .from("production_sheets")
     .update({
-      ...data,
+      ...values,
       updated_by: ctx.userId,
-      archived_at: data.status === "archived" ? new Date().toISOString() : null,
+      /* Arşiv damgası DURUMLA birlikte yazılır; durumu taşımayan kayıt ona
+         dokunmaz (eski ekran arşivlenmiş föyü geri açmasın). */
+      ...("status" in values ? { archived_at: data.status === "archived" ? new Date().toISOString() : null } : {}),
     })
     .eq("id", sheetId)
     .eq("workspace_id", ctx.workspaceId);

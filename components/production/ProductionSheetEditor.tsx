@@ -26,7 +26,7 @@ import { ImageUploader } from "./ImageUploader";
 import { SheetReadiness } from "./SheetReadiness";
 import { SheetBom, type PickableMaterial } from "./SheetBom";
 import { SheetSourcing } from "./SheetSourcing";
-import { SortableRows, SortableTableRow, arrayMove } from "./SortableRow";
+import { SortableRows, SortableTableRow, SortableInlineRow, arrayMove } from "./SortableRow";
 import { SheetColorVariants } from "./SheetColorVariants";
 import { SheetMeetingNotes } from "./SheetMeetingNotes";
 import { SheetStockStrip, type SheetStock } from "@/components/production/SheetStockStrip";
@@ -38,7 +38,7 @@ import { flattenSubs } from "@/lib/collection/taxonomy";
 import {
   totalQuantity, parseMoney, formatMoney, STANDARD_SIZES, normalizeToStandardSizes, quantityBySize, orderSizes,
   DEFAULT_SIZE_GROUPS, emptyCostItems, costItemLabel, bomCostByKey,
-  productionQtyOf, DIVIDED_COST_KEYS, QTY_TIERS, amountForQty, mergeCostItems, costItemHint,
+  productionQtyOf, DIVIDED_COST_KEYS, QTY_TIERS, amountForQty, mergeCostItems, costItemHint, costAmountsOf,
 } from "@/lib/collection/cost";
 import type {
   CostItem, DeliveredItemRow, Manufacturer, ManufacturerRole, MeasurementRow, ProductionCategory, ProductionSheet, SheetMaterialWithMaterial, SizeDistribution, Supplier,
@@ -197,6 +197,26 @@ function emptyState(): ProductionSheetInput {
       invoice_no: "", invoice_amount: "",
     },
   };
+}
+
+/**
+ * Bir alanın KARŞILAŞTIRMA biçimi — "sunucudakiyle aynı mı?" sorusu için.
+ *
+ * Düz JSON yetmez, iki sebeple yanlış alarm verir: jsonb anahtar sırasını
+ * korumaz (aynı nesne sunucudan başka sırayla döner), sunucu da metni kırparak
+ * yazar ("Beyaz " → "Beyaz"). İkincisi tehlikeliydi: yazarken sondaki boşluk
+ * "sunucuda değişmiş" sayılıp geri alınır, bir sonraki kelime öncekine
+ * yapışırdı. Anahtarlar sıralanır; üst düzey metin kırpılır, boş ile null aynıdır.
+ */
+function canon(v: unknown, top = true): string {
+  if (v === null || v === undefined) return top ? '""' : "null";
+  if (typeof v === "string") return JSON.stringify(top ? v.trim() : v);
+  if (Array.isArray(v)) return `[${v.map((x) => canon(x, false)).join(",")}]`;
+  if (typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    return `{${Object.keys(o).filter((k) => o[k] !== undefined).sort().map((k) => `${JSON.stringify(k)}:${canon(o[k], false)}`).join(",")}}`;
+  }
+  return JSON.stringify(v);
 }
 
 function fromSheet(s: ProductionSheet): ProductionSheetInput {
@@ -474,6 +494,15 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
     setAddedPeople((xs) =>
       xs.some((x) => x.id === p.id) ? xs : [...xs, { ...p, is_active: true } as SheetManufacturer],
     );
+  /* Toplantı notlarının gönderilebileceği kişiler — adı olan üyeler. */
+  const noteRecipients = useMemo(
+    () =>
+      Object.entries(memberNames)
+        .filter(([, name]) => !!name && name !== "—")
+        .map(([id, name]) => ({ id, name }))
+        .sort((a, b) => a.name.localeCompare(b.name, "tr")),
+    [memberNames],
+  );
   const tree = categories && categories.length > 0 ? categories : COLLECTION_TAXONOMY;
   const { ask, dialog } = useConfirm();
   const router = useRouter();
@@ -496,6 +525,12 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
       season_id: current?.id ?? blank.season_id,
       season: current?.name ?? blank.season,
     };
+  });
+  /* Sunucunun bildiği ilk hâl, alan alan (bkz. aşağıda "ALAN ALAN KAYIT"). */
+  const [initialBase] = useState<Record<string, string>>(() => {
+    if (!sheet) return {};
+    const first = fromSheet(sheet) as unknown as Record<string, unknown>;
+    return Object.fromEntries(Object.keys(first).map((k) => [k, canon(first[k])]));
   });
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -698,22 +733,41 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
    * ölçüye göre değişiyor ("ikişer dörder"), tahminin yanlış olanı kullanıcı
    * düzeltir; hiç doldurmamak ise her hücreyi elle yazdırırdı.
    */
+  /* OTOMATİK DOLAN HÜCRELER YAZARKEN GÜNCEL KALIR.
+     Doldurma her tuşta çalışıyor ve "boş hücreyi doldur" kuralı İLK TUŞTA
+     tetikleniyordu: M'ye 52 yazarken "5" basıldığı anda S'ye 3, L'ye 7
+     yazılıyor, ardından gelen "2" onları artık DOLU bulduğu için dokunmuyordu
+     — ekranda M 52, S 3, L 7 kalıyordu. Aynı hücreye yazıldığı sürece o
+     hücrenin doldurdukları "elle yazılmış" sayılmaz, her tuşta yeniden
+     hesaplanır; hücre boşaltılırsa onlar da boşalır. Başka bir ölçü hücresine
+     geçilince oturum kapanır ve değerler olduğu gibi kalır. */
+  const autoFill = useRef<{ row: number; size: string; filled: Set<string> } | null>(null);
   const setMeasureValue = (i: number, size: string, raw: string) => {
     const row = form.measurements[i];
     if (!row) return;
-    if (size === "cm") { updateMeasurement(i, { value: raw }); return; }
+    if (size === "cm") { autoFill.current = null; updateMeasurement(i, { value: raw }); return; }
 
+    const session = autoFill.current?.row === i && autoFill.current.size === size
+      ? autoFill.current
+      : { row: i, size, filled: new Set<string>() };
     const next: Record<string, string> = { ...(row.values ?? {}), [size]: raw };
     const base = parseFloat(raw.replace(",", "."));
-    if (Number.isFinite(base)) {
-      const from = measureSizes.indexOf(size);
-      measureSizes.forEach((sz, ix) => {
-        if (ix === from) return;
-        if ((next[sz] ?? "").trim()) return;          // elle yazılan korunur
-        const step = (ix - from) * 2;
-        next[sz] = String(Math.round((base + step) * 10) / 10);
-      });
-    }
+    const from = measureSizes.indexOf(size);
+    measureSizes.forEach((sz, ix) => {
+      if (ix === from) return;
+      const ours = session.filled.has(sz);
+      if (!ours && (next[sz] ?? "").trim()) return;   // elle yazılan korunur
+      if (Number.isFinite(base)) {
+        /* Ondalık işareti yazılanla aynı: "52,5" yazana "50.5" doldurmak
+           aynı satırda iki ayrı yazım bırakıyordu. */
+        const filled = String(Math.round((base + (ix - from) * 2) * 10) / 10);
+        next[sz] = raw.includes(",") ? filled.replace(".", ",") : filled;
+        session.filled.add(sz);
+      } else if (ours) {
+        next[sz] = "";
+      }
+    });
+    autoFill.current = session;
     updateMeasurement(i, { values: next });
   };
 
@@ -818,11 +872,85 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
      kaydı geçerse eski hâl yeninin üstüne düşer. Zincir hem sırayı korur hem de
      "bekleyen ne varsa bitsin" sorusunu tek `await`e indirir. */
   const writes = useRef<Promise<unknown>>(Promise.resolve());
+  /* ALAN ALAN KAYIT — eski ekran başkasının değişikliğini EZMEZ.
+     Föy formun tamamını yazıyordu; aynı föy iki yerde açıkken eski ekranın
+     tek bir alana dokunması, ötekinin değiştirdiği her şeyi (ürün kodu dahil)
+     geri alıyordu (21.09.2026: "Ürün kodunu düzeltiyoruz, eski modele dönüyor").
+     `base` sunucunun bildiği son hâli ALAN ALAN tutar; kayıt yalnız ondan
+     farklı alanları gönderir (bkz. updateProductionSheet `changed`). */
+  const base = useRef<Record<string, string>>(initialBase);
+  /** Sıraya giren her yazma bunu artırır — yazma varken okunan hâl çöpe gider. */
+  const writeSeq = useRef(0);
   const queueWrite = useCallback((id: string, payload: ProductionSheetInput) => {
-    const p = writes.current.then(() => updateProductionSheet(id, payload));
+    writeSeq.current++;
+    const p = writes.current.then(async () => {
+      const fields = payload as unknown as Record<string, unknown>;
+      /* Fark, yazma SIRASI GELDİĞİNDE hesaplanır: önceki yazma `base`i
+         güncellemiş olur. */
+      const keys = Object.keys(fields).filter((k) => canon(fields[k]) !== base.current[k]);
+      if (!keys.length) return { ok: true } as const;
+      const res = await updateProductionSheet(id, payload, keys);
+      if (!("error" in res)) for (const k of keys) base.current[k] = canon(fields[k]);
+      return res;
+    });
     writes.current = p.catch(() => undefined);
     return p;
   }, []);
+
+  /* BAŞKA OTURUMDAKİ DEĞİŞİKLİK AÇIK EKRANA GELİR. Pencereye dönüldüğünde ve
+     dakikada birkaç kez föyün sunucudaki hâli okunur; bu ekranda DOKUNULMAMIŞ
+     alanlar yeni değeri alır, yazılmakta olan alanlara dokunulmaz (o alanı en
+     son yazan kazanır — ama yalnız o alanı). Yazma sürerken okunan hâl
+     kullanılmaz: kendi az önceki kaydımızı eski değerle ezmesin. */
+  const pull = useCallback(async () => {
+    const id = sheet?.id;
+    if (!id) return;
+    await writes.current;
+    const seq = writeSeq.current;
+    const res = await fetch(`/production/${id}/state`, { cache: "no-store" })
+      .then((r) => (r.ok ? (r.json() as Promise<{ sheet?: ProductionSheet }>) : null))
+      .catch(() => null);
+    if (!res?.sheet || seq !== writeSeq.current) return;
+    const fresh = fromSheet(res.sheet) as unknown as Record<string, unknown>;
+    /* Sunucuda değişen alanlar ve BİZİM bildiğimiz eski hâlleri. */
+    const changed: Record<string, { known: string; value: unknown }> = {};
+    for (const k of Object.keys(fresh)) {
+      const theirs = canon(fresh[k]);
+      if (theirs === base.current[k]) continue;          // sunucuda değişmemiş
+      changed[k] = { known: base.current[k], value: fresh[k] };
+      base.current[k] = theirs;
+    }
+    if (!Object.keys(changed).length) return;
+    /* Alan, güncelleyicinin gördüğü EN SON hâlde hâlâ dokunulmamışsa alınır —
+       okuma ile yazma arasına giren tuş kaybolmaz. Dokunulmuş alan olduğu
+       gibi kalır; `base` artık sunucudakini gösterdiği için bir sonraki
+       kayıtta yalnız o alan yazılır. `dirty` DEĞİŞMEZ: gelen değer zaten
+       diskte. */
+    setForm((f) => {
+      const cur = f as unknown as Record<string, unknown>;
+      const next: Record<string, unknown> = { ...cur };
+      let any = false;
+      for (const [k, c] of Object.entries(changed)) {
+        if (canon(cur[k]) !== c.known) continue;
+        next[k] = c.value;
+        any = true;
+      }
+      return any ? (next as unknown as ProductionSheetInput) : f;
+    });
+  }, [sheet?.id]);
+
+  useEffect(() => {
+    if (!sheet?.id) return;
+    const onVisible = () => { if (document.visibilityState === "visible") void pull(); };
+    const every = window.setInterval(onVisible, 40_000);
+    window.addEventListener("focus", onVisible);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(every);
+      window.removeEventListener("focus", onVisible);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [sheet?.id, pull]);
 
   useEffect(() => {
     if (!dirty || isNew || !sheet?.id || isSaving) return;
@@ -1553,6 +1681,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
             sheetId={sheet?.id ?? null}
             workspaceId={sheet?.workspace_id ?? null}
             canEdit={canEditSheet}
+            members={noteRecipients}
             initial={{
               meeting_notes: sheet?.meeting_notes ?? [],
               review_critique: sheet?.review_critique ?? "",
@@ -1769,6 +1898,16 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                     </tbody>
 
                     {/* ── 2 · ÖLÇÜ ────────────────────────────────────────── */}
+                    {/* ÖLÇÜ SATIRLARI ELLE TAŞINIR. Aslı Hanım (21.09.2026):
+                        "Elimizle taşıyabilelim yukarı. Her birine… bu satırlar
+                        arası yer değiştirebiliyor olman lazım." Ölçüler tek
+                        tabloya alınırken (24.09) sürükleme düşmüştü; numaralar
+                        teknik çizimdeki numaralarla eşleştiği için sıra
+                        önemli. Tutamaç ayrı sütun açmaz, numaranın önündedir. */}
+                    <SortableRows
+                      ids={form.measurements.map((_, i) => `m${i}`)}
+                      onReorder={(from, to) => set("measurements", renumber(arrayMove(form.measurements, from, to)))}
+                    >
                     <tbody>
                       <tr className="bg-surface-muted">
                         <td className={cn(TH_CLS, "text-left")} colSpan={cols.length + 3}>
@@ -1776,10 +1915,12 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                         </td>
                       </tr>
                       {form.measurements.map((row, i) => (
-                        <tr key={`m${i}`}>
+                        <SortableInlineRow key={`m${i}`} id={`m${i}`}>
+                          {(handle) => (<>
                           <td className="border border-line p-0">
                             <span className="flex items-center">
-                              <span className="w-7 shrink-0 text-center text-[12px] font-semibold tabular-nums text-muted">
+                              {handle}
+                              <span className="w-5 shrink-0 text-center text-[12px] font-semibold tabular-nums text-muted">
                                 {i + 1}
                               </span>
                               <CellInput
@@ -1830,7 +1971,8 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                           <td className="text-center align-middle">
                             <RowDelete onClick={() => removeMeasurement(i)} label={`${i + 1}. ölçü satırını sil`} />
                           </td>
-                        </tr>
+                          </>)}
+                        </SortableInlineRow>
                       ))}
                       <tr>
                         <td className="border border-line px-2 py-1" colSpan={cols.length + 3}>
@@ -1840,6 +1982,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                         </td>
                       </tr>
                     </tbody>
+                    </SortableRows>
                   </table>
                 </div>
 
@@ -1866,7 +2009,7 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
           <div className="overflow-x-auto">
             <table className="w-full min-w-[380px] max-w-[560px] table-fixed border-collapse text-[13px]">
               <colgroup>
-                <col className="w-10" />
+                <col className="w-12" />
                 <col />
                 <col className="w-24" />
                 <col className="w-9" />
@@ -1879,11 +2022,22 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                   <th className="w-9 bg-surface" />
                 </tr>
               </thead>
+              {/* TESLİM SATIRLARI DA ELLE TAŞINIR (Aslı Hanım, 21.09.2026: "Bu
+                  satırlar arası yer değiştirebiliyor olman lazım… her yer için
+                  geçerli"). Tutamaç numaranın yanında; sütun eklenmez. */}
+              <SortableRows
+                ids={form.delivered_items.map((_, i) => `d${i}`)}
+                onReorder={(from, to) => set("delivered_items", renumber(arrayMove(form.delivered_items, from, to)))}
+              >
               <tbody>
                 {form.delivered_items.map((row, i) => (
-                  <tr key={i}>
-                    <td className="border border-line bg-surface-muted/60 px-1 py-1.5 text-center text-[12px] font-semibold tabular-nums text-muted">
-                      {i + 1}
+                  <SortableInlineRow key={i} id={`d${i}`}>
+                    {(handle) => (<>
+                    <td className="border border-line bg-surface-muted/60 p-0 text-center text-[12px] font-semibold tabular-nums text-muted">
+                      <span className="flex items-center justify-center">
+                        {handle}
+                        <span className="w-4 text-center">{i + 1}</span>
+                      </span>
                     </td>
                     <td className="border border-line p-0">
                       <CellInput aria-label={`${i + 1}. teslim edilen ürün`} value={row.label} onChange={(e) => updateDelivered(i, { label: e.target.value })} placeholder="Ürün adı" />
@@ -1894,9 +2048,11 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
                     <td className="text-center align-middle">
                       <RowDelete onClick={() => removeDelivered(i)} label={`${i + 1}. teslim satırını sil`} />
                     </td>
-                  </tr>
+                    </>)}
+                  </SortableInlineRow>
                 ))}
               </tbody>
+              </SortableRows>
             </table>
           </div>
           <Button variant="ghost" size="sm" onClick={addDelivered} className="mt-2 -ml-2 text-brand hover:bg-surface-muted hover:text-brand-strong">
@@ -1922,34 +2078,31 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
             const prodQty = productionQtyOf(p, form.size_distribution);
             /* Kayıtlı kalemler GÜNCEL listeyle birleştirilir: sonradan eklenen
                kalem eski föyde de görünür, listeden çıkan dolu kalem kaybolmaz. */
-            const items = mergeCostItems(p.cost_items);
             // Reçeteden gelen kalemler ELLE GİRİLEMEZ: tutar hesaplanır ve
             // elle girilenin YERİNE geçer. İkisi toplanırsa maliyet iki katına
             // çıkardı. Reçetede olmayan kalemler (dikim, ütü/paket, kalıp,
             // genel gider) elle kalır — onlar malzeme değil.
             const fromBom = bom.length ? bomCostByKey(bom) : {};
+            const items = mergeCostItems(p.cost_items, Object.keys(fromBom));
             /* Elle girilen tutar SEÇİLİ ADEDE göre okunur: 150 için ayrı
                fiyat yazılmamışsa 100'ünki, o da yoksa temel tutar geçerli. */
             const rawOf = (it: CostItem) =>
               fromBom[it.key] != null ? fromBom[it.key]! : parseMoney(amountForQty(it, prodQty));
-            /* Kalıp ve numune TOPLAM girilir, birim maliyete payı düşer. */
-            const amountOf = (it: CostItem) => {
-              const raw = rawOf(it);
-              return DIVIDED_COST_KEYS.has(it.key) && prodQty > 0 ? raw / prodQty : raw;
-            };
-            const unitCost = items.reduce((a, it) => a + amountOf(it), 0);
+            /* TOPLAM TEK HESAPTAN (lib/collection/cost.ts → costAmountsOf):
+               Maliyet tablosu ve Excel aynı işlevi kullanıyor. Burada ayrı bir
+               toplama vardı ve iki uç durumda onlardan ayrılıyordu — reçetede
+               parası olup kalem satırı olmayan anahtar (listeden çıkan
+               "fermuar") hiç sayılmıyor, reçeteden gelen "Diğer" tutarı iki
+               serbest satır varsa iki kez sayılıyordu. Kalıp ve numunenin adede
+               bölünmesi de o işlevin içinde. Satır başına gösterilen tutar
+               (`rawOf`) aynı kalır. */
+            const unitCost = costAmountsOf(items, fromBom, prodQty).total;
             /* HER KADEMENİN KENDİ BİRİM MALİYETİ. Aslı Hanım (21.09.2026):
                "Burada adetlerde toplam adet mesela elli ya — onun altında
                toplamının yazması gerekiyor, yani maliyetteki gibi, karşısında."
                Tek bir birim rakamı, dört sütunlu tablonun altında hangi adede
                ait olduğunu söylemiyordu. */
-            const unitAt = (tier: string) => {
-              const q = Number(tier) || 0;
-              return items.reduce((a, it) => {
-                const raw = fromBom[it.key] != null ? fromBom[it.key]! : parseMoney(amountForQty(it, q));
-                return a + (DIVIDED_COST_KEYS.has(it.key) && q > 0 ? raw / q : raw);
-              }, 0);
-            };
+            const unitAt = (tier: string) => costAmountsOf(items, fromBom, Number(tier) || 0).total;
             /* SERBEST ADET GERÇEK BİR KOLON. Sıraç (23.09.2026): "Burada
                'veya yaz' kısmı var ama yazınca hiçbir şey değişmiyor."
                Doğruydu: yazılan sayı yalnız en alttaki özet satırını

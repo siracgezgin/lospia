@@ -7,6 +7,8 @@ import ExcelJS from "exceljs";
 import type { ProductionSheet, MaterialCategory, CostItemKey } from "@/types";
 import { COLLECTION_TAXONOMY, type CategoryNode } from "@/lib/collection/taxonomy";
 import { labelOf, subLabelOf } from "@/lib/collection/category-tree";
+import { measurementTable } from "@/lib/production/measurements";
+import { printableSizes } from "@/lib/production/sizes";
 import {
   COST_ITEM_DEFS, MATERIAL_COST_KEY, STANDARD_SIZES, canonicalSize, costAmountsOf, formatMoney, mergeCostItems, orderSizes, parseMoney, productionQtyOf, quantityBySize,
 } from "@/lib/collection/cost";
@@ -220,7 +222,10 @@ async function addProductionSheet(
 
   // ── 7. ÖLÇÜLER başlığı + sağda TEKNİK ÇİZİM alanı ─────────────────────────
   const MEAS_HEAD = 7;
-  const ROWS_PER_TABLE = 9; // orijinalde 9 numaralı satır — boşlar elle doldurulur
+  /* Orijinal föyde 9 numaralı satır var — boşlar elle doldurulur. DAHA FAZLA
+     ölçü ya da teslim kalemi varsa tablo UZAR: eskiden ilk dokuzdan sonrası
+     dosyaya hiç yazılmıyordu (on ikinci ölçü sessizce kayboluyordu). */
+  const MIN_ROWS = 9;
   const th = (addr: string, merge: string | null, text: string, center = false) => {
     if (merge) ws.mergeCells(merge);
     const c = ws.getCell(addr);
@@ -229,27 +234,43 @@ async function addProductionSheet(
     c.alignment = { vertical: "middle", horizontal: center ? "center" : "left", indent: center ? 0 : 1 };
     c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: TH } };
   };
+
+  /* ÖLÇÜLER BEDENLİ DE OLABİLİR (24.09.2026'dan beri beden başına giriliyor).
+     Dosya yalnız eski tek değeri (`value`) yazıyordu: bedenli föyde "(Cm)"
+     sütunu BOŞ çıkıyordu. Üç hâl:
+       • bedensiz           → eskisi gibi: No · ÖLÇÜLER · (Cm)
+       • tek beden          → aynı düzen, sütun başlığı bedenin adı
+       • birden çok beden   → burada yalnız ad (çizimdeki numaraların karşılığı),
+                              değerler aşağıda "ÖLÇÜLER (CM)" tablosunda bedene göre */
+  const mt = measurementTable(sheet.measurements);
+  const oneSize = mt.sizes.length === 1 && !mt.legacy ? mt.sizes[0] : null;
+  const sizedTable = mt.sizes.length > 0 && !oneSize;
+  const MEAS_ROWS = Math.max(MIN_ROWS, mt.rows.length);
+
   th(`A${MEAS_HEAD}`, null, "No", true);
-  th(`B${MEAS_HEAD}`, `B${MEAS_HEAD}:C${MEAS_HEAD}`, "ÖLÇÜLER");
-  th(`D${MEAS_HEAD}`, null, "(Cm)", true);
+  if (sizedTable) {
+    th(`B${MEAS_HEAD}`, `B${MEAS_HEAD}:D${MEAS_HEAD}`, "ÖLÇÜLER");
+  } else {
+    th(`B${MEAS_HEAD}`, `B${MEAS_HEAD}:C${MEAS_HEAD}`, "ÖLÇÜLER");
+    th(`D${MEAS_HEAD}`, null, oneSize ? `${oneSize} (Cm)` : "(Cm)", true);
+  }
   th(`E${MEAS_HEAD}`, `E${MEAS_HEAD}:I${MEAS_HEAD}`, "TEKNİK ÇİZİM", true);
   boxRow(MEAS_HEAD);
   ws.getRow(MEAS_HEAD).height = 18;
 
-  const measurements = (sheet.measurements ?? []).filter((m) => txt(m.label) || txt(m.value));
-  for (let i = 0; i < ROWS_PER_TABLE; i++) {
+  for (let i = 0; i < MEAS_ROWS; i++) {
     const r = MEAS_HEAD + 1 + i;
-    const m = measurements[i];
+    const m = mt.rows[i];
     ws.getCell(`A${r}`).value = i + 1;
     ws.getCell(`A${r}`).alignment = { vertical: "middle", horizontal: "center" };
-    ws.mergeCells(`B${r}:C${r}`);
-    ws.getCell(`B${r}`).value = m ? txt(m.label) : "";
-    ws.getCell(`D${r}`).value = m ? txt(m.value) : "";
+    ws.mergeCells(sizedTable ? `B${r}:D${r}` : `B${r}:C${r}`);
+    ws.getCell(`B${r}`).value = m ? m.label : "";
+    if (!sizedTable) ws.getCell(`D${r}`).value = m ? (oneSize ? m.bySize[oneSize] ?? "" : m.value) : "";
     for (const c of ["A", "B", "C", "D"]) {
       const cell = ws.getCell(`${c}${r}`);
       cell.border = border;
       if (c !== "A") cell.font = { size: 10.5 };
-      cell.alignment = { vertical: "middle", horizontal: c === "A" || c === "D" ? "center" : "left", indent: c === "B" ? 1 : 0 };
+      cell.alignment = { vertical: "middle", horizontal: c === "A" || (c === "D" && !sizedTable) ? "center" : "left", indent: c === "B" ? 1 : 0 };
     }
     // Çizim alanının çerçevesi (görsel gelmese de yer belli olsun).
     for (let c = 5; c <= COLS; c++) ws.getCell(r, c).border = border;
@@ -257,7 +278,7 @@ async function addProductionSheet(
   }
 
   // ── TESLİM EDİLEN ÜRÜNLER ─────────────────────────────────────────────────
-  const DELIV_HEAD = MEAS_HEAD + ROWS_PER_TABLE + 1;
+  const DELIV_HEAD = MEAS_HEAD + MEAS_ROWS + 1;
   /* TAM GENİŞLİK. Orijinal föyde bu tablo da A:D idi ve sağı boş kalıyordu;
      Aslı Hanım (2026-08-24): "Alt tarafı neden boşluk?" Teknik çizim yalnız
      ölçülerin sağında duruyor, altında boş bir sütun bırakmanın karşılığı yok —
@@ -269,7 +290,8 @@ async function addProductionSheet(
   ws.getRow(DELIV_HEAD).height = 18;
 
   const delivered = (sheet.delivered_items ?? []).filter((d) => txt(d.label) || txt(d.qty));
-  for (let i = 0; i < ROWS_PER_TABLE; i++) {
+  const DELIV_ROWS = Math.max(MIN_ROWS, delivered.length);
+  for (let i = 0; i < DELIV_ROWS; i++) {
     const r = DELIV_HEAD + 1 + i;
     const d = delivered[i];
     ws.getCell(`A${r}`).value = i + 1;
@@ -288,58 +310,93 @@ async function addProductionSheet(
   }
 
   // ── BEDEN DAĞILIMI — tek satır başlık, altında etiket ve adet ─────────────
-  let r = DELIV_HEAD + ROWS_PER_TABLE + 1;
+  let r = DELIV_HEAD + DELIV_ROWS + 1;
   const sd = sheet.size_distribution;
   const rawSizes = sd?.sizes ?? [];
   const dataRows = sd?.rows ?? [];
   const groups = sd?.groups ?? {};
 
-  /* BOŞ BEDEN KOLONU ÇİZİLMEZ. Föyde XS · XS-S · S · S-M · M · M-L gibi yedi
-     kolon çıkıyordu; çoğu tamamen boştu (Aslı Hanım, 2026-08-24: "optimum bir
-     Excel formatı değil bu"). Bir bedende ne adet ne grup etiketi varsa o
-     kolonun kâğıtta yeri yok. */
-  const usedRaw = rawSizes
-    .map((sz, i) => ({ sz, i }))
-    .filter(({ sz, i }) =>
-      dataRows.some((row) => txt(row.values?.[i])) || txt(groups[sz]));
-  const sizes = orderSizes(usedRaw.map((x) => x.sz)).slice(0, COLS - 3);
-  const srcIndex = sizes.map((sz) => rawSizes.findIndex((x) => canonicalSize(x) === sz));
+  /* BOŞ BEDEN KOLONU ÇİZİLMEZ, DOLU OLAN KESİLMEZ. Föyde XS · XS-S · S · S-M ·
+     M · M-L gibi sütunlar çıkıyordu; çoğu tamamen boştu (Aslı Hanım,
+     2026-08-24: "optimum bir Excel formatı değil bu"). Hangi bedenin çizileceği
+     tek yerde: lib/production/sizes.ts. Altı sütundan fazlası İKİNCİ tabloya
+     taşar — eskiden `.slice` ile kesiliyor, adedi olan beden dosyadan
+     düşüyordu. */
   const FIRST_SIZE = 3;
-  const totalCol = FIRST_SIZE + sizes.length;
+  const PER_BLOCK = COLS - 3;
+  const allSizes = printableSizes(sd);
 
-  const sizeRow = (label: string, values: string[], total: string, head = false) => {
-    ws.mergeCells(r, 1, r, 2);
-    ws.getCell(r, 1).value = label;
-    values.forEach((v, i) => { ws.getCell(r, FIRST_SIZE + i).value = v; });
-    ws.getCell(r, totalCol).value = total;
-    // Kenarlık TOPLAM kolonunda biter; sağdaki boş hücreler çizilmez.
-    for (let c = 1; c <= totalCol; c++) {
-      const cell = ws.getCell(r, c);
-      cell.border = border;
-      cell.font = { bold: head || c <= 2, size: 10.5, color: { argb: INK } };
-      if (head) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: TH } };
-      cell.alignment = { vertical: "middle", horizontal: c <= 2 ? "left" : "center", indent: c <= 2 ? 1 : 0 };
-    }
-    ws.getRow(r).height = 18;
-    r++;
-  };
+  if (allSizes.length) {
+    for (let start = 0; start < allSizes.length; start += PER_BLOCK) {
+      const sizes = allSizes.slice(start, start + PER_BLOCK);
+      const lastBlock = start + PER_BLOCK >= allSizes.length;
+      const srcIndex = sizes.map((sz) => rawSizes.findIndex((x) => canonicalSize(x) === sz));
+      const totalCol = FIRST_SIZE + sizes.length;
 
-  if (sizes.length) {
-    sizeRow("BEDEN DAĞILIMI", sizes, "TOPLAM", true);
-    /* "BEDEN ETİKETİ" İKİ KEZ yazılıyordu: biri size_distribution.groups'tan,
-       biri de rows içinde aynı adla duran satırdan. Grup satırı yalnız rows'ta
-       karşılığı YOKSA yazılır. */
-    const hasLabelRow = dataRows.some((row) =>
-      /beden\s*etiket/i.test(txt(row.label)));
-    if (!hasLabelRow && Object.keys(groups).length) {
-      sizeRow("BEDEN ETİKETİ", sizes.map((sz, i) => groups[sz] ?? groups[rawSizes[srcIndex[i]]] ?? ""), "");
+      const sizeRow = (label: string, values: string[], total: string, head = false) => {
+        ws.mergeCells(r, 1, r, 2);
+        ws.getCell(r, 1).value = label;
+        values.forEach((v, i) => { ws.getCell(r, FIRST_SIZE + i).value = v; });
+        ws.getCell(r, totalCol).value = total;
+        // Kenarlık TOPLAM kolonunda biter; sağdaki boş hücreler çizilmez.
+        for (let c = 1; c <= totalCol; c++) {
+          const cell = ws.getCell(r, c);
+          cell.border = border;
+          cell.font = { bold: head || c <= 2, size: 10.5, color: { argb: INK } };
+          if (head) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: TH } };
+          cell.alignment = { vertical: "middle", horizontal: c <= 2 ? "left" : "center", indent: c <= 2 ? 1 : 0 };
+        }
+        ws.getRow(r).height = 18;
+        r++;
+      };
+
+      sizeRow("BEDEN DAĞILIMI", sizes, lastBlock ? "TOPLAM" : "", true);
+      /* "BEDEN ETİKETİ" İKİ KEZ yazılıyordu: biri size_distribution.groups'tan,
+         biri de rows içinde aynı adla duran satırdan. Grup satırı yalnız rows'ta
+         karşılığı YOKSA yazılır. */
+      const hasLabelRow = dataRows.some((row) =>
+        /beden\s*etiket/i.test(txt(row.label)));
+      if (!hasLabelRow && Object.keys(groups).length) {
+        sizeRow("BEDEN ETİKETİ", sizes.map((sz, i) => groups[sz] ?? groups[rawSizes[srcIndex[i]]] ?? ""), "");
+      }
+      for (const row of dataRows) {
+        sizeRow(
+          (row.label || "ÜRETİM ADETİ").toLocaleUpperCase("tr-TR"),
+          srcIndex.map((si) => (si >= 0 ? txt(row.values?.[si]) : "")),
+          lastBlock ? txt(row.total) : "",
+        );
+      }
     }
-    for (const row of dataRows) {
-      sizeRow(
-        (row.label || "ÜRETİM ADETİ").toLocaleUpperCase("tr-TR"),
-        srcIndex.map((si) => (si >= 0 ? txt(row.values?.[si]) : "")),
-        txt(row.total),
-      );
+  }
+
+  /* ── ÖLÇÜLER — BEDENE GÖRE ────────────────────────────────────────────────
+     Beden dağılımının hemen altında, aynı sütun düzeniyle: üreticinin gözü
+     adetten ölçüye aynı sütunda iner. Yedi sütundan fazlası ikinci tabloya
+     taşar (kesilmez). Bedensiz tek değer taşıyan eski satırlar "CM" sütununda. */
+  if (sizedTable) {
+    const mCols = [...mt.sizes, ...(mt.legacy ? ["cm"] : [])];
+    const PER = COLS - 2;
+    for (let start = 0; start < mCols.length; start += PER) {
+      const chunk = mCols.slice(start, start + PER);
+      const last = FIRST_SIZE + chunk.length - 1;
+      const line = (label: string, values: string[], head = false) => {
+        ws.mergeCells(r, 1, r, 2);
+        ws.getCell(r, 1).value = label;
+        values.forEach((v, i) => { ws.getCell(r, FIRST_SIZE + i).value = v; });
+        for (let c = 1; c <= last; c++) {
+          const cell = ws.getCell(r, c);
+          cell.border = border;
+          cell.font = { bold: head, size: 10.5, color: { argb: INK } };
+          if (head) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: TH } };
+          cell.alignment = { vertical: "middle", horizontal: c <= 2 ? "left" : "center", indent: c <= 2 ? 1 : 0, wrapText: c <= 2 };
+        }
+        ws.getRow(r).height = Math.max(18, estimateLines(label, 20) * 13 + 5);
+        r++;
+      };
+      line("ÖLÇÜLER (CM)", chunk.map((c) => (c === "cm" ? "CM" : c)), true);
+      for (const m of mt.rows) {
+        line(`${m.no}. ${m.label}`, chunk.map((c) => (c === "cm" ? m.value : m.bySize[c] ?? "")));
+      }
     }
   }
 
@@ -462,7 +519,7 @@ async function addProductionSheet(
        iki katı büyüklükte ve okunur oluyor.
        Görseller kutuya SIĞDIRILIR (contain): en-boy oranı korunur, ortalanır. */
     const drawFirst = MEAS_HEAD + 1;
-    const drawLast = MEAS_HEAD + ROWS_PER_TABLE;
+    const drawLast = MEAS_HEAD + MEAS_ROWS;
     const boxH = (drawLast - drawFirst + 1) * 17 - 8;   // satır yüksekliği 17pt
     const half = 175;                                    // E:I ≈ 2 × 175px
     const put = (img: { buf: Buffer; ext: "jpeg" | "png" | "gif" }, colBase: number) => {

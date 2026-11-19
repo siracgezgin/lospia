@@ -90,6 +90,7 @@ const ACTION_META: Record<string, ActionMeta> = {
   sheet_printed:        { verb: "föyün çıktısını aldı",           tone: "info",     icon: Download },
   file_downloaded:      { verb: "dosya indirdi",                  tone: "info",     icon: Download },
   sheet_sent:           { verb: "föyü üreticiye gönderdi",        tone: "approval", icon: Users },
+  sheet_notes_sent:     { verb: "toplantı notlarını e-postayla gönderdi", tone: "approval", icon: Users },
   sheet_deleted:        { verb: "föyü sildi",                     tone: "danger",   icon: Trash2 },
   sheet_archived:       { verb: "föyü arşivledi",                 tone: "neutral",  icon: Archive },
   category_created:     { verb: "kategori açtı",                  tone: "info",     icon: Plus },

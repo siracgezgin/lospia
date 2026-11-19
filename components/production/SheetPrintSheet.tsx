@@ -4,9 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Printer, Tag, TagIcon } from "lucide-react";
 import {
-  formatMoney, orderSizes, quantityBySize, totalQuantity, unitCostOf,
+  formatMoney, quantityBySize, totalQuantity, unitCostOf,
   bomLineCost, parseMoney, productionQtyOf,
 } from "@/lib/collection/cost";
+import { measurementTable, type MeasurementTable } from "@/lib/production/measurements";
+import { printableSizes } from "@/lib/production/sizes";
 import type {
   ProductionSheet, ProductionImage, SheetMaterialWithMaterial,
 } from "@/types";
@@ -151,6 +153,52 @@ function NumberedRows({
   );
 }
 
+/**
+ * ÖLÇÜ TABLOSU — bedenli ölçüler sütun sütun.
+ *
+ * Ölçüler 24.09.2026'dan beri beden başına giriliyor ama kâğıt yalnız eski tek
+ * değeri (`value`) basıyordu: bedenli girilen föyde satır adı çıkıyor, karşısı
+ * BOŞ kalıyordu. Üreticiye giden kâğıtta ölçünün olmaması, föyün varlık
+ * sebebini ortadan kaldırır. Sütunlar değeri olan bedenlerdir (föydeki beden
+ * sırasıyla); bedensiz tek değer taşıyan eski satırlar için sona "cm" sütunu
+ * gelir.
+ */
+function MeasureTable({ table }: { table: MeasurementTable }) {
+  const cols = [...table.sizes, ...(table.legacy ? ["cm"] : [])];
+  const cell = "border border-[#d9dce1] py-[0.35mm] text-center text-[6.6pt] font-semibold tabular-nums text-[#111827]";
+  return (
+    <table className="w-full table-fixed border-collapse">
+      <colgroup>
+        <col className="w-[5mm]" />
+        <col />
+        {cols.map((c) => <col key={c} style={{ width: cols.length > 6 ? "8.5mm" : "10.5mm" }} />)}
+      </colgroup>
+      <thead>
+        <tr>
+          <th className="border border-[#d9dce1] bg-[#f3f4f6]" />
+          <th className="border border-[#d9dce1] bg-[#f3f4f6]" />
+          {cols.map((c) => (
+            <th key={c} className="border border-[#d9dce1] bg-[#f3f4f6] py-[0.4mm] text-[5.8pt] font-bold uppercase text-[#374151]">
+              {c}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {table.rows.map((m) => (
+          <tr key={m.no}>
+            <td className="border border-[#d9dce1] py-[0.35mm] text-center text-[6pt] tabular-nums text-[#9ca3af]">{m.no}</td>
+            <td className="border border-[#d9dce1] px-[1mm] py-[0.35mm] text-[6.8pt] leading-[1.25] text-[#111827]">{m.label}</td>
+            {cols.map((c) => (
+              <td key={c} className={cell}>{c === "cm" ? m.value : m.bySize[c] ?? ""}</td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 /* ── Ana bileşen ─────────────────────────────────────────────────────────── */
 
 export function SheetPrintSheet({
@@ -209,10 +257,13 @@ export function SheetPrintSheet({
   const front = pick("technical_drawing_front") ?? pick("technical_drawing");
   const back = pick("technical_drawing_back");
 
-  const measurements = (sheet.measurements ?? []).filter((m) => m.label?.trim() || m.value?.trim());
+  /* Adı ya da herhangi bir değeri (tek / bedenli) olan satırlar. */
+  const measures = measurementTable(sheet.measurements);
   const delivered = (sheet.delivered_items ?? []).filter((d) => d.label?.trim() || d.qty?.trim());
   const sd = sheet.size_distribution;
-  const sizes = orderSizes(sd?.sizes ?? []);
+  /* Yalnız dolu bedenler: on iki standart sütunun hepsi 74 mm'ye sıkışıyor,
+     "TOPLAM" başlığı bile kesiliyordu (bkz. lib/production/sizes.ts). */
+  const sizes = printableSizes(sd);
   const bySize = quantityBySize(sd);
   const total = totalQuantity(sd);
   /* ADET DE VERİLİR: kalıp ve numune adede BÖLÜNEREK girer (Aslı Hanım,
@@ -333,9 +384,11 @@ export function SheetPrintSheet({
 
             {/* ── Orta blok: ölçüler | beden dağılımı + teslim edilenler ──── */}
             <div className="flex gap-[3mm]">
-              {measurements.length > 0 && (
+              {measures.rows.length > 0 && (
                 <Box title="Ölçüler (cm)" className="flex-1">
-                  <NumberedRows rows={measurements} twoColAt={14} />
+                  {measures.sizes.length > 0
+                    ? <MeasureTable table={measures} />
+                    : <NumberedRows rows={measures.rows} twoColAt={14} />}
                 </Box>
               )}
 

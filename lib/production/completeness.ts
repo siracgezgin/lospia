@@ -1,4 +1,5 @@
 import { totalQuantity } from "@/lib/collection/cost";
+import { measurementHasValue } from "@/lib/production/measurements";
 import type { ProductionSheet } from "@/types";
 
 /**
@@ -40,7 +41,9 @@ export function checkSheet(s: CheckableSheet): SheetCheck[] {
         p.section === "technical_drawing_back" ||
         p.section === "technical_drawing"),
   );
-  const measured = (s.measurements ?? []).filter((m) => filled(m.label) && filled(m.value)).length;
+  /* Bedenli girilen ölçü de ölçüdür (bkz. lib/production/measurements.ts):
+     yalnız eski tek değer sayılıyordu, bedenli föy "ölçü eksik" kalıyordu. */
+  const measured = (s.measurements ?? []).filter((m) => filled(m.label) && measurementHasValue(m)).length;
 
   return [
     { key: "title", label: "Ürün adı", ok: filled(s.title) },

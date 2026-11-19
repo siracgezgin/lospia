@@ -24,6 +24,7 @@ export function workspaceActivityMessage(row: {
     case WORKSPACE_ACTIONS.SHEET_DELETED:     return withName("Föyü sildi");
     case WORKSPACE_ACTIONS.SHEET_ARCHIVED:    return withName("Föyü arşivledi");
     case WORKSPACE_ACTIONS.SHEET_SENT:        return withName("Föyü üreticiye gönderdi");
+    case "sheet_notes_sent":                  return withName("Toplantı notlarını e-postayla gönderdi");
     case WORKSPACE_ACTIONS.CATEGORY_CREATED:  return withName("Kategori açtı");
     case WORKSPACE_ACTIONS.CATEGORY_RENAMED:  return withName("Kategoriyi yeniden adlandırdı");
     case WORKSPACE_ACTIONS.CATEGORY_DELETED:  return withName("Kategoriyi sildi");
