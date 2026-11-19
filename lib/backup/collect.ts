@@ -36,6 +36,10 @@ export interface TableResult {
 const WORKSPACE_TABLES = [
   "creative_assets",
   "custom_field_definitions",
+  /* Müşteri CRM'i — RLS izin listesine bakar: listede olmayan yöneticinin
+     yedeğine bu tablolardan TEK SATIR girmez (KVKK). */
+  "customer_sends",
+  "customers",
   "department_members",
   "document_folders",
   "document_templates",

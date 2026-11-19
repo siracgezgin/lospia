@@ -60,6 +60,7 @@ const PAGE_TITLES: { match: (p: string) => boolean; title: string }[] = [
   { match: (p) => p.startsWith("/newsletter"), title: "Newsletter Plan" },
   { match: (p) => p.startsWith("/stock"), title: "Stock" },
   { match: (p) => p.startsWith("/crm"), title: "CRM" },
+  { match: (p) => p.startsWith("/customers"), title: "Customers" },
   { match: (p) => p.startsWith("/activity"), title: "Activity Log" },
   { match: (p) => p.startsWith("/profile"), title: "Profile" },
   { match: (p) => p.startsWith("/rules"), title: "Rules" },

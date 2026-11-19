@@ -135,6 +135,8 @@ export const ROUTE_OWNER: ReadonlyArray<readonly [prefix: string, owner: string]
   ["/sheets", "/documents"],
   // Newsletter Plan da AF Teamwork'ün kutucuğu (06.11.2026).
   ["/newsletter", "/documents"],
+  // Müşteri CRM'i (yalnız izinli dört kişi) CRM'in kutusundan açılır.
+  ["/customers", "/crm"],
   // Üretim Föyü editörü Koleksiyon'dan açılır; kendi menü satırı yoktur.
   ["/production", "/collection"],
   /* Eski Order Review sayfaları — kayıtlar föylere taşınana kadar adresle

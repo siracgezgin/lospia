@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Award, Building2, Crown, Factory, Handshake, Newspaper,
   Search, Users, UsersRound, CalendarClock, FolderOpen, Network,
+  UserRound,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Tile, TileGrid } from "@/components/ui/TileGrid";
@@ -70,7 +71,11 @@ function norm(s: string): string {
     .replace(/İ/g, "i");
 }
 
-export function CrmCategoryGrid({ contacts }: { contacts: WorkspaceContact[] }) {
+export function CrmCategoryGrid({ contacts, showCustomers = false }: {
+  contacts: WorkspaceContact[];
+  /** Müşteri CRM'inin kutusu — YALNIZ izin listesindeki kişiye çizilir (KVKK). */
+  showCustomers?: boolean;
+}) {
   const router = useRouter();
   const [query, setQuery] = useState("");
 
@@ -122,6 +127,9 @@ export function CrmCategoryGrid({ contacts }: { contacts: WorkspaceContact[] }) 
       </div>
 
       <TileGrid>
+        {showCustomers && !query.trim() && (
+          <Tile onClick={() => router.push("/customers")} title="Customers" icon={UserRound} colorHex="#535b60" />
+        )}
         {visible.map((cat) => {
           const n = counts[cat.key] ?? 0;
           return (

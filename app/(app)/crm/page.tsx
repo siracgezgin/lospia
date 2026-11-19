@@ -6,6 +6,7 @@ import { AccessDenied } from "@/components/modules/AccessDenied";
 import { CrmView } from "@/components/crm/CrmView";
 import { CrmCategoryGrid } from "@/components/crm/CrmCategoryGrid";
 import { ModulePageHeader } from "@/components/modules/ModulePageHeader";
+import { hasCustomerAccess } from "@/lib/customers/access";
 import { crmCategoryOfSegment, FIHRIST_ID_PREFIX } from "@/lib/crm/constants";
 import { Contact } from "lucide-react";
 import { contactDescriptor, taskMatchesPerson, type PersonMatchTask } from "@/lib/utils/task-person-match";
@@ -170,7 +171,7 @@ export default async function CrmPage({
     return (
       <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
         <ModulePageHeader title="CRM" icon={Contact} />
-        <CrmCategoryGrid contacts={contacts} />
+        <CrmCategoryGrid contacts={contacts} showCustomers={await hasCustomerAccess()} />
       </div>
     );
   }
