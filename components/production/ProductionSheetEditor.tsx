@@ -1116,7 +1116,11 @@ export function ProductionSheetEditor({ sheet, initialCategory = null, initialSu
           )}
           {!isNew && stock && <SheetStockStrip stock={stock} />}
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        {/* DAR EKRANDA DÜĞMELER ALT SATIRA GEÇER. Bu öbek `shrink-0` ve tek
+            satırdı: telefonda ve tablette ekrandan uzundu, sağdaki düğmeler
+            (çıktı, Excel, Kaydet) ekranın DIŞINDA kalıyor, kaydırılarak da
+            ulaşılamıyordu (ölçüm: Kaydet telefonda x=579, ekran 390). */}
+        <div className="flex max-w-full flex-wrap items-center justify-end gap-2">
           {canDelete && (
             /* Yıkıcı eylem sessiz durur; kırmızı yalnız hover'da. */
             <Button
