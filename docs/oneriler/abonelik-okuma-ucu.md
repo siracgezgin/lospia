@@ -61,3 +61,16 @@ Kolektif başvuru ucundaki düzenin aynısı, yön ters:
 
 - Tabloda "değişme zamanı" sütunu var mı? Yoksa `since` için eklenmesi gerekir (durum değişince güncellenen bir zaman damgası).
 - Abonelikten çıkan kayıt tablodan siliniyor mu, yoksa durumu mu değişiyor? Siliniyorsa panel çıkışı göremez.
+
+## Uygulanan sözleşme (20.11.2026 — afcom-seo snippet 75)
+
+Yukarıdaki tasarımdan farkları; panel tarafı bunlara göre yazıldı:
+
+- Tablo `wp_af_abone`; değişme zamanı sütunu `guncelleme` (UTC). Çıkan kayıt **silinmez**, durumu değişir.
+- Durumlar: `aktif` · `cikti` · `beklemede`. **`hatali` sitede yoktur** — adres hatası gönderim kayıtlarından gelir (`customers-import.ts`'in ana adımı).
+  - `beklemede` = çift onay bağlantısına basılmamış → panelde e-posta izni **yok**.
+- `since` eşitliği dahil eder (aynı kayıt iki kez gelebilir; panel e-postaya göre tekilleştirir). `cursor` verilirse `since` yok sayılır.
+- İmza: `x-af-zaman` (unix saniye) + `x-af-imza` = hex(HMAC-SHA256(sır, "<zaman>\n<yol ve sorgu>")); yol ve sorgu **gönderilen dizginin aynısı** (ham REQUEST_URI). Pencere ±300 sn. Sır en az 32 karakter.
+- Hatalar: 401 imza/zaman · 400 bozuk `since`/`cursor` · 503 tablo yok · 404 sır tanımlı değil.
+
+Panel tarafı: `npx tsx scripts/customers-import.ts --site --prod` (rapor) → `--uygula`. Sır `.env.prod` içinde `SITE_ABONELIK_SECRET`. Yerelde yalnız sahte uçla denenir; gerçek siteden okuma `--prod` ister. Site canlıda doğrulanmadan gerçek veriye karşı çalıştırılmaz.

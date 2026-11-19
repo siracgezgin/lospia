@@ -24,8 +24,26 @@
  *   npx tsx scripts/customers-import.ts --prod                # canlı, RAPOR
  *   npx tsx scripts/customers-import.ts --prod --uygula       # canlı, yazar
  *   … --dosya <xlsx>   … --gonderim <klasör>   … --konu no01="Konu satırı"
+ *
+ * SİTEDEKİ ABONELİK KAYITLARI (--site) — ayrı adım, ana listeye dokunmaz.
+ * Kaynak: aslifilinta.com/wp-json/af/v1/aboneler (afcom-seo snippet 75;
+ * sözleşme docs/oneriler/abonelik-okuma-ucu.md). E-POSTA İZNİNİN TEK KAYNAĞI
+ * SİTEDİR: bu adım izni ve "abonelikten çıktı" durumunu siteye göre yazar —
+ * panelde elle değiştirilmiş olsa bile. Ad, telefon, katman, not EZİLMEZ.
+ *   onayli ("aktif")  → izin VAR (onay günüyle); "çıktı" işareti kalkar
+ *   beklemede         → izin YOK (çift onay bağlantısına basılmamış)
+ *   cikti             → izin YOK + abonelikten çıktı
+ * Listede olmayan kişi C katmanında açılır (store-ipad → mağaza, diğerleri →
+ * site). "Adres hatalı" sitede tutulmaz; o bilgi gönderim kayıtlarından gelir.
+ * İmza sırrı SITE_ABONELIK_SECRET (.env.prod; repoya girmez). Gerçek siteden
+ * okuma YALNIZ --prod ile: gerçek abone verisi yerel veritabanına yazılmaz.
+ *
+ *   npx tsx scripts/customers-import.ts --site --prod              # RAPOR
+ *   npx tsx scripts/customers-import.ts --site --prod --uygula     # yazar
+ *   … --since 2026-11-12T00:00:00Z   (yalnız o andan sonra değişenler)
  */
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createHmac } from "crypto";
 import ExcelJS from "exceljs";
 import * as fs from "fs";
 import * as os from "os";
@@ -41,6 +59,22 @@ const newest = () => fs.existsSync(VERI)
   : undefined;
 const FILE = arg("--dosya") ?? (newest() ? path.join(VERI, newest()!) : "");
 const SENDS = arg("--gonderim") ?? path.join(VERI, "gonderim");
+/* TANINMAYAN BAYRAK = DUR. 20.11.2026'da kabukta tırnaksız bir değişken
+   bütün bayrakları TEK argüman olarak geçirdi; betik `--site`i görmedi,
+   varsayılan kipe düştü ve gerçek ana listeyi YEREL veritabanına yazdı
+   (hemen silindi). Tanımadığı şeyi yok saymak yerine durur. */
+const FLAGS = new Set(["--uygula", "--prod", "--site"]);
+const VALUE_FLAGS = new Set(["--dosya", "--gonderim", "--konu", "--alan", "--site-url", "--site-secret", "--since"]);
+for (let i = 0; i < args.length; i++) {
+  if (FLAGS.has(args[i])) continue;
+  if (VALUE_FLAGS.has(args[i]) && args[i + 1] !== undefined) { i++; continue; }
+  console.error(`❌ Tanınmayan bayrak: "${args[i]}"`);
+  process.exit(1);
+}
+const SITE = args.includes("--site");
+const SITE_URL = (arg("--site-url") ?? "https://www.aslifilinta.com").replace(/\/+$/, "");
+const SITE_LOCAL = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(SITE_URL);
+const SINCE = arg("--since");
 const SUBJECTS = new Map(args.flatMap((a, i) => (a === "--konu" && args[i + 1]?.includes("=") ? [args[i + 1].split(/=([\s\S]*)/).slice(0, 2) as [string, string]] : [])));
 
 function readEnvFile(name: string): Record<string, string> {
@@ -123,8 +157,156 @@ function csvRows(file: string): Record<string, string>[] {
   return lines.slice(1).map((l) => Object.fromEntries(parse(l).map((v, i) => [head[i] ?? `c${i}`, v.trim()])));
 }
 
+/* ── Sitedeki abonelik kayıtları (--site) ─────────────────────────────────── */
+
+type SiteRow = {
+  id: number; eposta: string; ad?: string | null; soyad?: string | null; dil?: string | null;
+  kaynak?: string | null; onay_surumu?: string | null; onay_zamani?: string | null;
+  durum: string; degisti?: string | null;
+};
+
+async function fetchSiteRows(secret: string): Promise<SiteRow[]> {
+  const out: SiteRow[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < 400; page++) {
+    /* İMZALANAN METİN GÖNDERİLEN YOL VE SORGUNUN AYNISIDIR (sunucu ham
+       REQUEST_URI'yi imzalar). Sorgu burada elle kurulur ve hem imzaya hem
+       isteğe AYNI dizgi gider — URL kütüphanesine sıralatılmaz. */
+    const query = ["limit=500", cursor ? `cursor=${encodeURIComponent(cursor)}` : SINCE ? `since=${encodeURIComponent(SINCE)}` : ""]
+      .filter(Boolean).join("&");
+    const pathAndQuery = `/wp-json/af/v1/aboneler?${query}`;
+    const zaman = String(Math.floor(Date.now() / 1000));
+    const imza = createHmac("sha256", secret).update(`${zaman}\n${pathAndQuery}`).digest("hex");
+    const res = await fetch(SITE_URL + pathAndQuery, {
+      headers: { "x-af-zaman": zaman, "x-af-imza": imza, Accept: "application/json" },
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!res.ok) {
+      const why = res.status === 401 ? "imza ya da saat tutmuyor (sır aynı mı, bilgisayarın saati doğru mu?)"
+        : res.status === 404 ? "uç yok (snippet 75 yapıştırıldı mı, sitede sır tanımlı mı?)"
+        : res.status === 400 ? "since / cursor biçimi geçersiz"
+        : res.status === 503 ? "sitede abonelik tablosu yok"
+        : `HTTP ${res.status}`;
+      throw new Error(`Site yanıt vermedi — ${why}.`);
+    }
+    const body = (await res.json()) as { kayitlar?: SiteRow[]; next_cursor?: string | null };
+    out.push(...(body.kayitlar ?? []));
+    if (!body.next_cursor) return out;
+    cursor = body.next_cursor;
+  }
+  throw new Error("Site listesi bitmedi (400 sayfa) — durduruldu.");
+}
+
+async function siteStep(db: SupabaseClient, workspace_id: string, secret: string) {
+  const fetched = await fetchSiteRows(secret);
+  /* Aynı kayıt iki kez gelebilir (`since` eşitliği dahil eder) — e-postaya
+     göre en son değişen kalır. */
+  const byEmail = new Map<string, SiteRow>();
+  let invalid = 0;
+  for (const r of fetched) {
+    const e = emailOf(r.eposta);
+    if (!e) { invalid++; continue; }
+    const prev = byEmail.get(e);
+    if (!prev || (r.degisti ?? "") >= (prev.degisti ?? "")) byEmail.set(e, r);
+  }
+  console.log(`  SİTE: ${fetched.length} kayıt · ayrı e-posta ${byEmail.size}${invalid ? ` · biçimi bozuk e-posta ${invalid}` : ""}`);
+  console.log(`    durum: ${show(count([...byEmail.values()], (r) => r.durum))}`);
+  console.log(`    kaynak: ${show(count([...byEmail.values()], (r) => r.kaynak ?? ""))}`);
+
+  type Cur = { id: string; source_ref: string | null; full_name: string; email: string; email_consent: string; email_consent_at: string | null; email_status: string };
+  const existing = new Map<string, Cur>();
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await db.from("customers")
+      .select("id, source_ref, full_name, email, email_consent, email_consent_at, email_status")
+      .eq("workspace_id", workspace_id).neq("email", "").order("id").range(from, from + 999);
+    if (error) { console.error(`❌ customers okunamadı — ${error.message} (20240379 uygulandı mı?)`); process.exit(1); }
+    for (const r of (data ?? []) as Cur[]) existing.set(r.email, r);
+    if (!data || data.length < 1000) break;
+  }
+
+  const inserts: Record<string, unknown>[] = [];
+  const updates: { id: string; patch: Record<string, unknown> }[] = [];
+  const changes: Record<string, number> = {};
+  const note = (k: string) => { changes[k] = (changes[k] ?? 0) + 1; };
+  let unknown = 0, same = 0;
+  for (const [email, r] of byEmail) {
+    const state = r.durum === "aktif" ? "aktif" : r.durum === "cikti" ? "cikti" : r.durum === "beklemede" ? "beklemede" : null;
+    if (!state) { unknown++; continue; }
+    const consent = state === "aktif" ? "var" : "yok";
+    const consentAt = state === "aktif" ? day(r.onay_zamani) : null;
+    const name = [text(r.ad), text(r.soyad)].filter(Boolean).join(" ").slice(0, 200);
+    const cur = existing.get(email);
+    if (!cur) {
+      inserts.push({
+        workspace_id, full_name: name, email, tier: "C", source: r.kaynak === "store-ipad" ? "magaza" : "site",
+        email_consent: consent, email_consent_at: consentAt, email_status: state === "cikti" ? "cikti" : "ok",
+        source_ref: `e:${email}`,
+      });
+      continue;
+    }
+    const patch: Record<string, unknown> = {};
+    if (cur.email_consent !== consent) { patch.email_consent = consent; note(`izin ${cur.email_consent} → ${consent}`); }
+    /* İzin günü yalnız izin VARKEN anlamlıdır; izin kalktıysa gün de kalkar. */
+    if ((cur.email_consent_at ?? null) !== consentAt) patch.email_consent_at = consentAt;
+    if (state === "cikti" && cur.email_status !== "cikti") { patch.email_status = "cikti"; note("abonelikten çıktı"); }
+    /* Yeniden abone olan kişinin "çıktı" işareti kalkar; "adres hatalı" kalmaz
+       değil — o, gönderim kayıtlarının bilgisidir, site onu bilmez. */
+    if (state === "aktif" && cur.email_status === "cikti") { patch.email_status = "ok"; note("yeniden abone"); }
+    if (!cur.full_name && name) patch.full_name = name;
+    if (!cur.source_ref) patch.source_ref = `e:${email}`;
+    if (Object.keys(patch).length) updates.push({ id: cur.id, patch }); else same++;
+  }
+  console.log(`\n  PANEL: e-postası olan ${existing.size} kişi · açılacak ${inserts.length} · güncellenecek ${updates.length} · aynı kalan ${same}${unknown ? ` · durumu tanınmayan ${unknown} (atlandı)` : ""}`);
+  if (Object.keys(changes).length) console.log(`    değişiklikler: ${show(changes)}`);
+  if (inserts.length) console.log(`    açılacaklar: ${show(count(inserts, (r) => `${r.source} · izin ${r.email_consent}${r.email_status === "cikti" ? " · çıktı" : ""}`))}`);
+
+  if (!APPLY) { console.log("\n  Yazmak için: --uygula\n"); return; }
+  for (const part of chunk(inserts, 500)) {
+    const { error } = await db.from("customers").upsert(part, { onConflict: "workspace_id,source_ref", ignoreDuplicates: true });
+    if (error) { console.error(`❌ kişi yazılamadı — ${error.message}`); process.exit(1); }
+  }
+  for (const part of chunk(updates, 20)) {
+    const results = await Promise.all(part.map((u) => db.from("customers").update(u.patch).eq("id", u.id).eq("workspace_id", workspace_id)));
+    const failed = results.find((x) => x.error);
+    if (failed?.error) { console.error(`❌ güncellenemedi — ${failed.error.message}`); process.exit(1); }
+  }
+  const latest = [...byEmail.values()].map((r) => r.degisti ?? "").sort().pop();
+  console.log(`\n  ✓ ${inserts.length} kişi açıldı · ${updates.length} güncellendi${latest ? ` · bir sonraki sefer: --since ${latest}` : ""}\n`);
+}
+
+async function resolveWorkspace(db: SupabaseClient): Promise<string> {
+  const { data: wsRows, error: wsErr } = await db.from("workspaces").select("id, slug");
+  if (wsErr || !wsRows?.length) { console.error(`❌ çalışma alanı okunamadı — ${wsErr?.message ?? "yok"}`); process.exit(1); }
+  const slug = arg("--alan");
+  const candidates = slug ? wsRows.filter((w) => w.slug === slug) : wsRows;
+  if (candidates.length !== 1) { console.error(`❌ ${candidates.length} çalışma alanı (${wsRows.map((w) => w.slug).join(", ")}); --alan <slug> ile seçin.`); process.exit(1); }
+  return candidates[0].id as string;
+}
+
 async function main() {
+  if (SITE) {
+    /* Gerçek abone verisi yerel geliştirme veritabanına YAZILMAZ ve oraya
+       karşı okunmaz (KVKK). Yerelde yalnız sahte uçla denenir (--site-url). */
+    if (!PROD && !SITE_LOCAL) { console.error("❌ Gerçek siteden okuma yalnız --prod ile yapılır."); process.exit(1); }
+    const secret = arg("--site-secret") ?? process.env.SITE_ABONELIK_SECRET ?? readEnvFile(PROD ? ".env.prod" : ".env.local").SITE_ABONELIK_SECRET ?? "";
+    if (secret.length < 32) { console.error(`❌ SITE_ABONELIK_SECRET tanımlı değil ya da kısa (${PROD ? ".env.prod" : ".env.local"}).`); process.exit(1); }
+    const t = target();
+    const db = createClient(t.url, t.key, { auth: { persistSession: false } });
+    console.log(`\n▸ ${t.label} · ${APPLY ? "YAZAR" : "RAPOR (yazmaz)"} · kaynak ${SITE_URL.replace(/^https?:\/\//, "")} abonelik kayıtları${SINCE ? ` (${SINCE} sonrası)` : ""}`);
+    await siteStep(db, await resolveWorkspace(db), secret);
+    return;
+  }
   if (!FILE || !fs.existsSync(FILE)) { console.error(`❌ Ana liste bulunamadı${FILE ? `: ${FILE}` : ""} (--dosya ile verin).`); process.exit(1); }
+  /* GERÇEK LİSTE YEREL VERİTABANINA YAZILMAZ (KVKK: geliştirme sahte veriyle).
+     Yerelde yazmak için gerçek veri klasörünün DIŞINDA bir (sahte) dosya
+     `--dosya` ile verilmelidir; gönderim kayıtları da yalnız açıkça verilirse
+     okunur. Canlıya yazma `--prod --uygula` iledir. */
+  const inRealDir = (p: string) => path.resolve(p).startsWith(path.resolve(VERI) + path.sep);
+  if (APPLY && !PROD && (!arg("--dosya") || inRealDir(FILE) || (arg("--gonderim") && inRealDir(SENDS)))) {
+    console.error("❌ Gerçek müşteri listesi yerel veritabanına yazılmaz. Yerelde denemek için --dosya ile SAHTE bir dosya verin; canlı için --prod.");
+    process.exit(1);
+  }
+  const sendsDir = PROD || arg("--gonderim") ? SENDS : "";
   const t = target();
   const db = createClient(t.url, t.key, { auth: { persistSession: false } });
   console.log(`\n▸ ${t.label} · ${APPLY ? "YAZAR" : "RAPOR (yazmaz)"} · kaynak ${path.basename(FILE)}`);
@@ -189,12 +371,7 @@ async function main() {
   if (Object.keys(unknownLabels).length) console.log(`    ⚠ katmanı okunamayan etiket (C sayıldı): ${show(unknownLabels)}`);
 
   // ── Hedef ─────────────────────────────────────────────────────────────────
-  const { data: wsRows, error: wsErr } = await db.from("workspaces").select("id, slug");
-  if (wsErr || !wsRows?.length) { console.error(`❌ çalışma alanı okunamadı — ${wsErr?.message ?? "yok"}`); process.exit(1); }
-  const slug = arg("--alan");
-  const candidates = slug ? wsRows.filter((w) => w.slug === slug) : wsRows;
-  if (candidates.length !== 1) { console.error(`❌ ${candidates.length} çalışma alanı (${wsRows.map((w) => w.slug).join(", ")}); --alan <slug> ile seçin.`); process.exit(1); }
-  const workspace_id = candidates[0].id as string;
+  const workspace_id = await resolveWorkspace(db);
 
   type Existing = Row & { id: string; updated_by: string | null };
   const existing = new Map<string, Existing>();
@@ -238,16 +415,16 @@ async function main() {
   type Send = { key: string; sent_on: string; subject: string; result: string; source_ref: string };
   const sends: Send[] = [];
   const marks = new Map<string, "hatali" | "cikti">();
-  if (fs.existsSync(SENDS)) {
-    for (const f of fs.readdirSync(SENDS).filter((n) => /-gonderilen\.csv$/.test(n)).sort()) {
+  if (sendsDir && fs.existsSync(sendsDir)) {
+    for (const f of fs.readdirSync(sendsDir).filter((n) => /-gonderilen\.csv$/.test(n)).sort()) {
       const campaign = f.replace(/-gonderilen\.csv$/, "");
-      for (const r of csvRows(path.join(SENDS, f))) {
+      for (const r of csvRows(path.join(sendsDir, f))) {
         const e = emailOf(r["E-posta"]); const d = day(r["Zaman"]);
         if (e && d) sends.push({ key: `e:${e}`, sent_on: d, subject: SUBJECTS.get(campaign) ?? campaign, result: "gitti", source_ref: `${campaign}:${e}` });
       }
     }
     for (const [file, result, mark] of [["gecersiz.csv", "dondu", "hatali"], ["cikanlar.csv", "cikti", "cikti"]] as const) {
-      for (const r of csvRows(path.join(SENDS, file))) {
+      for (const r of csvRows(path.join(sendsDir, file))) {
         const e = emailOf(r["E-posta"]); const d = day(r["Zaman"]);
         if (!e) continue;
         marks.set(`e:${e}`, mark);
