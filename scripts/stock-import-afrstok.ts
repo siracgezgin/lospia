@@ -41,7 +41,7 @@
  *   … --afr-ad "AFR Çeşme"             o yerin adını değiştir
  *   … --tam-sayim m212|afr|hepsi       dosyada olmayan ürünleri o yerde sıfırla
  *   … --koru <dosya>                   sıfırlanmayacak kod/barkod listesi (takı gibi)
- *   … --kod "Market212 Stok#3=26_KD001_PS"   kodu yazılmamış satıra kod ver
+ *   … --kod "Market212 Stok#3=26_KD001_PS"   satıra kod ver (kodsuz satır ya da yanlış kod; AFR sayfaları da olur)
  *   … --dosya <yol>
  */
 import { createClient } from "@supabase/supabase-js";
@@ -176,7 +176,10 @@ async function main() {
   /* AFR satırları: kimlik barkod + kod. İkisi de aynı olan satırlar (aynı
      ürünün renkleri tek kodla yazılmış) tek üründür, adetler toplanır. */
   const afrByKey = new Map<string, Item>();
-  for (const r of src.satirlar.filter((x) => x.tur === "afr")) {
+  for (const r0 of src.satirlar.filter((x) => x.tur === "afr")) {
+    /* --kod AFR satırına da kod verir: dosyadaki kod panelde başka ürünün
+       olduğunda satır, panelde zaten duran asıl kaydına bağlanır. */
+    const r = CODE_FOR.has(ref(r0)) ? { ...r0, kod: CODE_FOR.get(ref(r0))! } : r0;
     const key = `${r.barkod}|${up(r.kod)}`;
     const sizes = toSizes(r.afr);
     const hit = key !== "|" ? afrByKey.get(key) : undefined;
@@ -258,6 +261,10 @@ async function main() {
     mByCode.set(up(code), fresh);
     if (total(copy)) copyOnly.push(`${code}  ${ref(r)}: sayfada AFR ${sizesText(copy)} yazıyor ama AFR sayfalarında bu kod yok — AFR'ye yazılmadı`);
   }
+
+  const knownRefs = new Set(src.satirlar.map(ref));
+  const unknownRefs = [...CODE_FOR.keys()].filter((k) => !knownRefs.has(k));
+  if (unknownRefs.length) { console.error(`❌ --kod: dosyada böyle satır yok → ${unknownRefs.join(", ")} (biçim "Sayfa#satır=KOD")`); process.exit(1); }
 
   const fileM = sum(items.map((i) => total(i.m212))), fileA = sum(items.map((i) => total(i.afr)));
   console.log(`  DOSYA: ${src.satirlar.length} satır → ${items.length} ürün · Market 212 ${fileM} adet (${items.filter((i) => i.m212).length} ürün) · AFR ${fileA} adet (${items.filter((i) => i.afr).length} ürün)`);
